@@ -1,0 +1,6 @@
+{
+  "name": "@maestro/authority",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts"
+}

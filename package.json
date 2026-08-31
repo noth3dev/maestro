@@ -1,0 +1,26 @@
+{
+  "name": "maestro",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b",
+    "check": "npm run typecheck && npm test"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  }
+}

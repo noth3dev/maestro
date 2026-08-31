@@ -1,0 +1,17 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/domain"
+    },
+    {
+      "path": "packages/authority"
+    }
+  ],
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true
+  }
+}
