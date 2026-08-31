@@ -60,3 +60,16 @@ export function evaluateAction(
     ? { effect: "require_approval", reason: "critical_action" }
     : { effect: "deny", reason: "no_grant" };
 }
+
+export async function runAuthorized<T>(
+  request: ActionRequest,
+  records: readonly AuthorityRecord[],
+  now: Date,
+  effect: () => Promise<T>,
+): Promise<T> {
+  const decision = evaluateAction(request, records, now);
+  if (decision.effect !== "allow") {
+    throw new Error(`Action not allowed: ${decision.reason}`);
+  }
+  return effect();
+}

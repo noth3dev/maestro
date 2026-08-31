@@ -60,4 +60,32 @@ describe("evaluateAction", () => {
     expect(evaluateAction(ordinary, [], new Date("2029-01-01T00:00:00Z"))).toEqual({ effect: "deny", reason: "no_grant" });
     expect(evaluateAction(ordinary, [grant], new Date("2029-01-01T00:00:00Z"))).toEqual({ effect: "allow", reason: "exact_grant" });
   });
+  it("never invokes an effect when authority is not allowed", async () => {
+    let calls = 0;
+    const { runAuthorized } = await import("./authority.js");
+    await expect(
+      runAuthorized(request, [], new Date("2029-01-01T00:00:00Z"), async () => {
+        calls += 1;
+        return "pushed";
+      }),
+    ).rejects.toThrow("Action not allowed: critical_action");
+    expect(calls).toBe(0);
+  });
+
+  it("invokes an exactly approved effect once", async () => {
+    let calls = 0;
+    const { runAuthorized } = await import("./authority.js");
+    const result = await runAuthorized(
+      request,
+      [exactApproval],
+      new Date("2029-01-01T00:00:00Z"),
+      async () => {
+        calls += 1;
+        return "pushed";
+      },
+    );
+    expect(result).toBe("pushed");
+    expect(calls).toBe(1);
+  });
+
 });
