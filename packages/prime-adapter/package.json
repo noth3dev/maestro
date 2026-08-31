@@ -1,0 +1,9 @@
+{
+  "name": "@maestro/prime-adapter",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "prime-agent": "0.8.0"
+  }
+}
