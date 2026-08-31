@@ -9,6 +9,12 @@
     },
     {
       "path": "packages/prime-adapter"
+    },
+    {
+      "path": "apps/control-plane"
+    },
+    {
+      "path": "packages/persistence"
     }
   ],
   "compilerOptions": {

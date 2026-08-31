@@ -13,6 +13,8 @@ test.skipIf(!runLive)(
       rlmMaxDepth: 1,
     });
     let rootText = "";
+    let childOff: () => void = () => undefined;
+    let childTimer: ReturnType<typeof setTimeout> | undefined;
     const unsubscribe = session.subscribe((event) => {
       if (
         event.type === "message_update" &&
@@ -27,22 +29,24 @@ test.skipIf(!runLive)(
         "Reply with exactly LUNA_ROOT_OK. Do not call tools or add punctuation.",
       );
       expect(rootText).toContain("LUNA_ROOT_OK");
+      expect(session.model?.provider).toBeTruthy();
+      expect(session.model?.id).toBeTruthy();
 
       const childAnswer = new Promise<string>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          off();
+        childTimer = setTimeout(() => {
+          childOff();
           reject(new Error("Timed out waiting for Prime Agent child"));
         }, 120_000);
-        const off = session.subscribe((event) => {
+        childOff = session.subscribe((event) => {
           if (event.type !== "rlm_child_update") return;
           if (event.child.sessionName !== "luna-sdk-child") return;
           if (event.child.status === "done") {
-            clearTimeout(timer);
-            off();
+            if (childTimer) clearTimeout(childTimer);
+            childOff();
             resolve(event.child.answerPreview ?? "");
           } else if (event.child.status === "error") {
-            clearTimeout(timer);
-            off();
+            if (childTimer) clearTimeout(childTimer);
+            childOff();
             reject(new Error(event.child.error ?? "Prime Agent child failed"));
           }
         });
@@ -55,6 +59,8 @@ test.skipIf(!runLive)(
       expect(handle.rlm_child_id).toBeTruthy();
       await expect(childAnswer).resolves.toContain("LUNA_CHILD_OK");
     } finally {
+      if (childTimer) clearTimeout(childTimer);
+      childOff();
       unsubscribe();
       if (session.isStreaming) await session.abort();
       await session.disposeAsync();

@@ -14,9 +14,21 @@ export type GoalState =
   | "failed"
   | "recovering";
 
+export class InvalidGoalTransitionError extends Error {
+  readonly from: GoalState;
+  readonly to: GoalState;
+
+  constructor(from: GoalState, to: GoalState) {
+    super(`Invalid Goal transition: ${from} -> ${to}`);
+    this.name = "InvalidGoalTransitionError";
+    this.from = from;
+    this.to = to;
+  }
+}
+
 const allowedTransitions: Readonly<Record<GoalState, readonly GoalState[]>> = {
-  draft: ["ready_for_confirmation"],
-  ready_for_confirmation: ["draft", "launched"],
+  draft: ["ready_for_confirmation", "recovering"],
+  ready_for_confirmation: ["draft", "launched", "recovering"],
   launched: ["active", "recovering"],
   active: ["pausing", "stopping", "blocked", "certifying", "recovering"],
   pausing: ["paused", "blocked", "recovering"],
@@ -33,7 +45,7 @@ const allowedTransitions: Readonly<Record<GoalState, readonly GoalState[]>> = {
 
 export function transitionGoal(from: GoalState, to: GoalState): GoalState {
   if (!allowedTransitions[from].includes(to)) {
-    throw new Error(`Invalid Goal transition: ${from} -> ${to}`);
+    throw new InvalidGoalTransitionError(from, to);
   }
   return to;
 }
