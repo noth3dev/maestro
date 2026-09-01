@@ -256,3 +256,11 @@
 - Verified: full `npm run check` against the disposable PostgreSQL 17 container: **415 passed, 1 intentional live-Prime skip, 0 failed.**
 - Merged (fast-forward) into `phase3/integration`, now HEAD `689665e`. Removed the superseded worktree/branch.
 - **Phase 3 status: work-sequence steps 1-8 of 11 done.** Remaining: Sane milestone/final reporting (9), adversarial fixtures (10), full live release scenario (11).
+
+
+## 2026-09-01 (continued) — P3S9 (Sane final report) implemented and accepted; user confirms Luna-max subagents available again
+- Branched `phase3/p3s9-final-report` from `phase3/integration` (689665e). `evaluateCertificationCompleteness` (pure, the ONLY input to success -- real certification verdicts/identities/unwaived-critical flags and open-challenge count; no plan-item completion or worker self-report signal exists in its input at all). Migration `0036_sane_final_reports.sql`: immutable, with a CHECK constraint making `success=true` with any recorded blocker a database-level contradiction, not just an app-level one. `generateSaneFinalReport` assembles every plan-required field from real durable state and derives required certification kinds from real risk facts (reusing step 6), recording a real evidence bundle (step 8) alongside.
+- Verified: full `npm run check` against the disposable PostgreSQL 17 container: **427 passed, 1 intentional live-Prime skip, 0 failed.**
+- Merged (fast-forward) into `phase3/integration`, now HEAD `3717413`. Removed the superseded worktree/branch.
+- **Phase 3 status: work-sequence steps 1-9 of 11 done.** Remaining: adversarial fixtures (10), full live release scenario (11).
+- User confirmed a `openai-codex/gpt-5.6-luna` (thinking max) subagent is available again after being unavailable for most of this session's back half. Next: dispatch independent review of the full P3S1-P3S9 surface (self-reviewed only so far) before continuing to steps 10-11.
