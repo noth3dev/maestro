@@ -227,3 +227,10 @@
 - Verified: full `npm run check` against the disposable PostgreSQL 17 container: **378 passed, 1 intentional live-Prime skip, 0 failed.**
 - Merged (fast-forward) into `phase3/integration`, now HEAD `b90bfa5`. Removed the superseded worktree/branch.
 - **Phase 3 status: work-sequence steps 1-4 of 11 done.** Remaining: Department acceptance + independent Quality missions (5), conditional Security/Safety certification (6), certification conflict adjudication + bounded waivers (7), evidence-bundle assembly (8), Sane milestone/final reporting (9), adversarial fixtures (10), full live release scenario (11).
+
+
+## 2026-09-01 (continued) — P3S5 (Department acceptance + independent Quality certification) implemented and accepted
+- Branched `phase3/p3s5-quality` from `phase3/integration` (b90bfa5). `packages/domain/src/certification.ts` + `packages/persistence/src/certification.ts` + migration `0032_certifications.sql`: acceptDepartmentWorkerOutput (Executing Head only, requires real terminated-succeeded worker + real integration commit, idempotent), certifyQuality (producing Department structurally barred from self-certifying via both an app check and a DB CHECK constraint `certified_by_department <> producing_department`; certifying Department must itself be a captured active Council Head; binds exact contract identity + exact commit sha from real durable rows). Validation directly enforces two plan sentences: a `passed` verdict requires real test evidence (a worker's green output alone is not certification) and can never carry a critical finding (no waiving critical findings to close the Goal).
+- Verified: full `npm run check` against the disposable PostgreSQL 17 container: **390 passed, 1 intentional live-Prime skip, 0 failed.**
+- Merged (fast-forward) into `phase3/integration`, now HEAD `c975afe`. Removed the superseded worktree/branch.
+- **Phase 3 status: work-sequence steps 1-5 of 11 done.** Remaining: conditional Security/Safety certification (6), certification conflict adjudication + bounded waivers (7), evidence-bundle assembly (8), Sane milestone/final reporting (9), adversarial fixtures (10), full live release scenario (11).
