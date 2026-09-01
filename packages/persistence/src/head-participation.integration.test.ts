@@ -12,7 +12,7 @@ const describeDatabase = databaseUrl ? describe : describe.skip;
 const migrations = [
   "0001_phase1_core.sql", "0002_goal_leases.sql", "0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql",
   "0005_authority_records.sql", "0006_evidence.sql", "0007_goal_control.sql", "0008_goal_pause_stop.sql",
-  "0009_reconciliation_leader_lease.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql",
+  "0009_reconciliation_leader_lease.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0018_role_identity_hardening.sql",
 ];
 
 describeDatabase("Goal Head participation with PostgreSQL", () => {

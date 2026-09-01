@@ -12,8 +12,9 @@ describeDatabase("permanent organization with PostgreSQL", () => {
   const pool = new Pool({ connectionString: databaseUrl });
 
   beforeAll(async () => {
-    const migration = await readFile(fileURLToPath(new URL("../migrations/0010_permanent_organization.sql", import.meta.url)), "utf8");
-    await pool.query(migration);
+    for (const name of ["0010_permanent_organization.sql", "0018_role_identity_hardening.sql"]) {
+      await pool.query(await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8"));
+    }
   });
   afterAll(async () => { await pool.end(); });
 
@@ -30,5 +31,8 @@ describeDatabase("permanent organization with PostgreSQL", () => {
     await expect(getPermanentRole(pool, "sane")).resolves.toMatchObject({
       roleId: "sane", persona: SANE_PERSONA_BASELINE, activeSessionId: null, goalContext: null,
     });
+    await expect(listPermanentRoles(pool)).resolves.toEqual(
+      [...PERMANENT_ROLES].sort((a, b) => a.roleId.localeCompare(b.roleId)),
+    );
   });
 });

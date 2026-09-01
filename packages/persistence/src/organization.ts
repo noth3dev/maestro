@@ -1,12 +1,16 @@
 import {
   PERMANENT_DEPARTMENTS,
   PERMANENT_GROUPS,
+  PERMANENT_ROLES,
   PERSONA_AXES,
-  SANE_ROLE,
+  PermanentRoleKindSchema,
   parsePersonaProfile,
+  parseRoleCapabilityBoundary,
+  parseRoleProvenance,
   type PermanentDepartment,
   type PermanentGroup,
   type PermanentRole,
+  type PermanentRoleKind,
   type PersonaAxis,
   type PersonaProfile,
 } from "@maestro/domain";
@@ -40,17 +44,24 @@ export async function bootstrapPermanentOrganization(pool: Pool): Promise<void> 
         [department.departmentId, department.groupId, department.displayName, department.status],
       );
     }
-    await client.query(
-      `INSERT INTO permanent_roles (role_id, display_name, status, department_id)
-       VALUES ($1, $2, $3, NULL) ON CONFLICT (role_id) DO NOTHING`,
-      [SANE_ROLE.roleId, SANE_ROLE.displayName, SANE_ROLE.status],
-    );
-    for (const axis of PERSONA_AXES) {
+    for (const role of PERMANENT_ROLES) {
       await client.query(
-        `INSERT INTO role_persona_axes (role_id, axis, value)
-         VALUES ($1, $2, $3) ON CONFLICT (role_id, axis) DO NOTHING`,
-        [SANE_ROLE.roleId, axis, SANE_ROLE.persona[axis]],
+        `INSERT INTO permanent_roles
+           (role_id, display_name, status, department_id, role_kind, role_charter, capability_boundary, provenance)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (role_id) DO NOTHING`,
+        [
+          role.roleId, role.displayName, role.status, role.departmentId, role.roleKind, role.charter,
+          role.capabilityBoundary, role.provenance,
+        ],
       );
+      for (const axis of PERSONA_AXES) {
+        await client.query(
+          `INSERT INTO role_persona_axes (role_id, axis, value)
+           VALUES ($1, $2, $3) ON CONFLICT (role_id, axis) DO NOTHING`,
+          [role.roleId, axis, role.persona[axis]],
+        );
+      }
     }
     await client.query("COMMIT");
   } catch (error) {
@@ -77,17 +88,54 @@ export async function listPermanentOrganization(pool: Pool): Promise<PermanentOr
   };
 }
 
+interface PermanentRoleRow {
+  role_id: string;
+  display_name: string;
+  status: "standing";
+  role_kind: PermanentRoleKind;
+  department_id: string | null;
+  role_charter: string;
+  capability_boundary: unknown;
+  provenance: unknown;
+}
+
+export async function listPermanentRoles(pool: Pool): Promise<readonly PermanentRole[]> {
+  const result = await pool.query<PermanentRoleRow>(
+    `SELECT role_id, display_name, status, role_kind, department_id, role_charter, capability_boundary, provenance
+       FROM permanent_roles ORDER BY role_id`,
+  );
+  return Promise.all(result.rows.map(async (row) => toPermanentRole(row, await getPersona(pool, row.role_id))));
+}
+
 export async function getPermanentRole(pool: Pool, roleId: string): Promise<PermanentRole | undefined> {
-  const role = await pool.query<{ role_id: string; display_name: string; status: "standing"; department_id: null }>(
-    "SELECT role_id, display_name, status, department_id FROM permanent_roles WHERE role_id = $1", [roleId],
+  const role = await pool.query<PermanentRoleRow>(
+    `SELECT role_id, display_name, status, role_kind, department_id, role_charter, capability_boundary, provenance
+       FROM permanent_roles WHERE role_id = $1`, [roleId],
   );
   if (role.rowCount !== 1) return undefined;
-  const persona = await getPersona(pool, roleId);
   const row = role.rows[0]!;
-  return {
-    roleId: row.role_id, displayName: row.display_name, status: row.status, departmentId: row.department_id,
-    persona, activeSessionId: null, goalContext: null,
-  };
+  return toPermanentRole(row, await getPersona(pool, roleId));
+}
+
+function toPermanentRole(row: PermanentRoleRow, persona: PersonaProfile): PermanentRole {
+  const boundary = parseRoleCapabilityBoundary(row.capability_boundary);
+  const provenance = parseRoleProvenance(row.provenance);
+  return Object.freeze({
+    roleId: row.role_id,
+    displayName: row.display_name,
+    roleKind: PermanentRoleKindSchema.parse(row.role_kind),
+    status: row.status,
+    departmentId: row.department_id,
+    charter: row.role_charter,
+    capabilityBoundary: Object.freeze({
+      allowed: Object.freeze([...boundary.allowed]),
+      forbidden: Object.freeze([...boundary.forbidden]),
+    }),
+    provenance: Object.freeze({ ...provenance }),
+    persona: Object.freeze({ ...persona }),
+    activeSessionId: null,
+    goalContext: null,
+  });
 }
 
 async function getPersona(pool: Queryable, roleId: string): Promise<PersonaProfile> {
