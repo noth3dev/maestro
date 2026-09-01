@@ -172,14 +172,22 @@ describe("control-plane real process kill-and-restart", () => {
       expect(created.status).toBe(201);
       expect(await created.json()).toMatchObject({ goalId, projectId, state: "draft", version: 1 });
 
-      const transitionResponse = await fetch(`http://127.0.0.1:${portA}/v1/goals/${goalId}/transitions`, {
-        method: "POST",
-        headers: { ...headers, "idempotency-key": randomUUID() },
-        body: JSON.stringify({ projectId, expectedVersion: 1, to: "ready_for_confirmation" }),
-      });
-      expect(transitionResponse.status).toBe(200);
-      const committedResult = await transitionResponse.json();
-      expect(committedResult).toMatchObject({ goalId, projectId, state: "ready_for_confirmation", version: 2 });
+      // Follow the legal domain path draft -> ready_for_confirmation ->
+      // launched -> active before injecting the process crash.
+      let expectedVersion = 1;
+      let committedResult: { goalId: string; projectId: string; state: string; version: number } | undefined;
+      for (const to of ["ready_for_confirmation", "launched", "active"] as const) {
+        const transitionResponse = await fetch(`http://127.0.0.1:${portA}/v1/goals/${goalId}/transitions`, {
+          method: "POST",
+          headers: { ...headers, "idempotency-key": randomUUID() },
+          body: JSON.stringify({ projectId, expectedVersion, to }),
+        });
+        expect(transitionResponse.status).toBe(200);
+        committedResult = await transitionResponse.json();
+        expectedVersion += 1;
+        expect(committedResult).toMatchObject({ goalId, projectId, state: to, version: expectedVersion });
+      }
+      expect(committedResult).toMatchObject({ goalId, projectId, state: "active", version: 4 });
 
       // Kill immediately after the HTTP response is received: the durable
       // write already committed, but process A never gets to release its
@@ -192,16 +200,19 @@ describe("control-plane real process kill-and-restart", () => {
       expect(exitA.signal).toBe("SIGKILL");
       timings.processAKillToExitMs = Date.now() - killedAt;
 
-      // Durable evidence right after the kill: exactly the two committed
-      // events (CreateGoal, TransitionGoal), nothing more, nothing less.
+      // Durable evidence right after the kill: exactly the four committed
+      // events (CreateGoal plus the three legal transitions), nothing more,
+      // nothing less.
       const eventsAfterKill = await setupPool.query<{ event_type: string }>(
         "SELECT event_type FROM goal_events WHERE goal_id = $1 ORDER BY global_position", [goalId],
       );
-      expect(eventsAfterKill.rows.map((row) => row.event_type)).toEqual(["GoalCreated", "GoalTransitioned"]);
+      expect(eventsAfterKill.rows.map((row) => row.event_type)).toEqual([
+        "GoalCreated", "GoalTransitioned", "GoalTransitioned", "GoalTransitioned",
+      ]);
       const goalRowAfterKill = await setupPool.query<{ state: string; version: string }>(
         "SELECT state, version FROM goals WHERE goal_id = $1", [goalId],
       );
-      expect(goalRowAfterKill.rows[0]).toMatchObject({ state: "ready_for_confirmation", version: "2" });
+      expect(goalRowAfterKill.rows[0]).toMatchObject({ state: "active", version: "4" });
 
       // The dangling goal_leases row left by process A's in-flight (never
       // released) lease. It must still be unexpired -- that's exactly the
@@ -237,14 +248,16 @@ describe("control-plane real process kill-and-restart", () => {
         expect(leaderLease.rows[0]!.owner_id).toBe(instanceIdB);
 
         // (a) + (b): no duplicate or lost transition. Durable evidence is
-        // byte-for-byte the same two committed events as right after the
+        // byte-for-byte the same four committed events as right after the
         // kill -- reconciliation did not force a phantom transition here,
         // because it correctly refused to steal process A's still-live
         // (dangling) goal lease instead of silently continuing.
         const eventsAfterRestart = await setupPool.query<{ event_type: string }>(
           "SELECT event_type FROM goal_events WHERE goal_id = $1 ORDER BY global_position", [goalId],
         );
-        expect(eventsAfterRestart.rows.map((row) => row.event_type)).toEqual(["GoalCreated", "GoalTransitioned"]);
+        expect(eventsAfterRestart.rows.map((row) => row.event_type)).toEqual([
+          "GoalCreated", "GoalTransitioned", "GoalTransitioned", "GoalTransitioned",
+        ]);
 
         // (b) Read the Goal back over real HTTP against the *new* process:
         // durable state after restart matches exactly what A's last
@@ -269,7 +282,7 @@ describe("control-plane real process kill-and-restart", () => {
         const newWorkAttempt = await fetch(`http://127.0.0.1:${portB}/v1/goals/${goalId}/transitions`, {
           method: "POST",
           headers: { ...headers, "idempotency-key": randomUUID() },
-          body: JSON.stringify({ projectId, expectedVersion: 2, to: "launched" }),
+          body: JSON.stringify({ projectId, expectedVersion: 4, to: "pausing" }),
         });
         expect(newWorkAttempt.status).toBe(423);
         expect((await newWorkAttempt.json()).error.code).toBe("lease_unavailable");
@@ -280,11 +293,13 @@ describe("control-plane real process kill-and-restart", () => {
         const finalGoalRow = await setupPool.query<{ state: string; version: string }>(
           "SELECT state, version FROM goals WHERE goal_id = $1", [goalId],
         );
-        expect(finalGoalRow.rows[0]).toMatchObject({ state: "ready_for_confirmation", version: "2" });
+        expect(finalGoalRow.rows[0]).toMatchObject({ state: "active", version: "4" });
         const finalEvents = await setupPool.query<{ event_type: string }>(
           "SELECT event_type FROM goal_events WHERE goal_id = $1 ORDER BY global_position", [goalId],
         );
-        expect(finalEvents.rows.map((row) => row.event_type)).toEqual(["GoalCreated", "GoalTransitioned"]);
+        expect(finalEvents.rows.map((row) => row.event_type)).toEqual([
+          "GoalCreated", "GoalTransitioned", "GoalTransitioned", "GoalTransitioned",
+        ]);
       } finally {
         childB.kill("SIGKILL");
         await new Promise<void>((resolve) => {
