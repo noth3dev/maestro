@@ -1,0 +1,77 @@
+# Progress Log
+
+## 2026-08-31
+- Re-read `plan1.md`, `plan/phase1.md`, and `plan/phase2.md` in full.
+- Confirmed existing isolated worktree and clean baseline.
+- Verified baseline with `npm run check`: pass (14 tests); 4 environment-gated skips.
+- Created persistent execution records.
+- Next: sequential Phase 1 reconciliation subagent, then test-first lease/fencing implementation.
+
+- Sequential Phase 1 reconciliation complete.
+- Decision: implement lease/fencing as the next test-first slice; then rerun focused and full checks.
+- Lease/fencing implementation worker was stopped after its external PostgreSQL environment probe did not return. Partial changes were preserved for independent review; no success claim made.
+- Independent lease/fencing review completed. Partial code retained; identified P0 renew and bigint precision defects plus append-only migration violation.
+- Next: one repair worker will use test-first changes for exact tokens, renew, migration 0002, and missing stale/concurrency cases.
+- Lease/fencing repair completed without commit. Parent verification: `npm run check` passed (14 passed, 11 environment-gated skips).
+- Started independent no-edit validation before accepting the slice.
+- Lease/fencing validation found one blocker: unsigned-length-only token validation permits out-of-range PostgreSQL bigint strings.
+- Next: narrowly repair signed bigint boundary validation with test-first proof; then rerun independent check.
+- Lease/fencing slice accepted at code level after independent review and bigint-boundary repair. `npm run check` passed (19 passed, 11 environment-gated skips); `git diff --check` passed.
+- Real PostgreSQL proof remains an explicit Phase 1 environment gate. Started scoped API-slice design before implementation.
+- API slice design completed. Found a necessary first repair: separate audit actor from lease-owning control-plane instance in persistence command validation.
+- Next: repair that one semantic boundary with tests, then implement Fastify contracts/Goal API.
+- Actor/lease-owner separation repaired and independently reported: focused unit 6 passed; full check passed (20 passed, 13 environment-gated skips); diff check passed.
+- Next: implement the constrained Fastify/shared-contract Goal API slice; no UI, CLI, Prime calls, authority CRUD, recovery scheduler, or full OpenAPI generator.
+- Fastify/shared-contract Goal API slice implemented (create, transition, query), with no UI/CLI/SSE/Prime/scheduler scope. Parent verification is next; then independent HTTP contract review.
+- Independent API review found three durability/contract blockers. No acceptance claim for the API slice.
+- Next: TDD repair of same-owner acquire-or-renew, request Idempotency-Key, and malformed JSON 400 mapping.
+- Fastify API repair worker ended without report. Parent check found the patch incomplete: server route tests 4 failing, goal-service tests 2 failing, and build fails due to service signature mismatch. Changes remain as RED evidence; do not accept them.
+- Next: repair only these explicitly failing API durability tests and TypeScript call signatures.
+- API durability repair completed and parent verification is running: Idempotency-Key, malformed JSON mapping, and same-owner lease renewal were repaired.
+- Final API validation found one remaining blocker: CommandIdReuseError is incorrectly mapped as durability 503.
+- Next: narrowly map it to stable 409 command_id_reused with test-first proof, then final verify.
+- Idempotency conflict repair reported complete; parent verification now confirms HTTP 409 command_id_reused behavior before accepting the API slice.
+- Docker became available. Started dedicated disposable PostgreSQL 17 test container at 127.0.0.1:55432.
+- Real persistence integration is now verified: 12/12; full check with DB: 51 passed, only Prime live test skipped.
+- API slice accepted. Next: Prime execution-kernel port and adapter, using the existing live probe only when MAESTRO_LIVE_PRIME is explicitly enabled.
+- Parallel design completed for Phase 1 SSE and local auth/authority. Order confirmed: Prime port → auth/durable authority → authenticated SSE → evidence/recovery.
+- Prime adapter independent review found two blockers: opaque SDK ID leakage/root lifecycle gap and missing tool-event/usage port surface.
+- Next: narrowly repair adapter-private SDK mapping, root registration, normalized event/usage contract, and regressions.
+- Prime adapter final validation found fail-closed truthfulness defects for absent snapshots/root idle status.
+- Next: add explicit observation-unavailable semantics and tests; do not claim terminal success without evidence.
+- Prime execution-kernel port/adapter accepted after independent validation; no SDK identifiers/types cross domain and unavailable observations fail closed.
+- Full verification with disposable PostgreSQL: 58 passed, live Prime probe 1 explicit skip.
+- Started next required security vertical slice: database-backed local operator authentication, then durable authority gateway.
+- Local auth security review found revocation reversibility and unbounded scrypt DoS blockers.
+- Next: narrow DB one-way-revocation/verifier-immutability and bounded credential/secret/scrypt-concurrency repair, with real PostgreSQL regression tests.
+- Local operator auth slice accepted after real PostgreSQL verification and independent security review.
+- Next: add a narrow control-plane composition root that wires Pool, durable Goal service, and DB authenticator into the Fastify server, then test real loopback HTTP.
+- Replacement composition review found one test-gating blocker: DB integration module loads an undefined DB URL even when skipped.
+- Next: narrow test-only lazy setup repair, then verify both no-DB and disposable-DB modes.
+- Composition test gating repaired and verified in both no-DB clean-skip and disposable-DB real-loopback modes.
+- Composition root accepted at this bounded level. Next: durable authority records + exact-scope authorized effect executor before any effect adapter is introduced.
+- Durable authority gateway accepted as a pre-effect foundation; independent review confirms exact scope and audit-before-effect boundary.
+- Next: authenticated durable event query/SSE from goal_events global cursor, with polling replay and cleanup.
+- Authenticated SSE implementation reached real PostgreSQL/loopback verification but is NOT accepted: SSE replay/resume/disconnect integration test timed out at 5 seconds.
+- Parent check: 91 passed, 1 SSE timeout failure, 1 live Prime skip; diff check passed.
+- Next: inspect the timeout and repair stream lifecycle/read test or implementation with a deterministic bounded completion condition.
+- Documented deferred multi-runtime adapter standardization: Prime-only through Phase 1–2; Codex CLI/Hermes-Ollama/OpenRouter candidates must meet the same authority/audit/lease/cancel/recovery contract after first certified Prime-backed Goal.
+- SSE review found a shutdown deadlock risk with open raw streams, alongside the existing real loopback timeout.
+- Next: one narrow SSE lifecycle/framing repair with deterministic open-stream app.close and replay/resume/disconnect tests; no timeout-only workaround.
+- User requested checkpoint commits. Adopted policy: commit every independently reviewed, fully verified vertical slice; branch new isolated worktrees from the checkpoint.
+- SSE final review blocked acceptance: ambiguous write-after-cleanup error path and real-time polling test flakiness.
+- Next: narrow deterministic scheduler/lifecycle repair before checkpoint commit.
+- Authenticated SSE slice accepted after direct lifecycle/frame repair. Focused loopback tests and full disposable-PostgreSQL check passed (98 passed, 1 live-Prime skip).
+- Preparing the first local Phase 1 checkpoint commit; exclude unrelated designsystem.html modification.
+- All three parallel Phase 1 worktrees now committed: evidence e0b85fd, client-cli d89399a, recovery f83fe29 (after direct control-latch ordering repair).
+- Next: merge the three branches into phase1/control-plane sequentially, resolve the 0006 migration numbering collision, and re-run full check with real PostgreSQL.
+- All three parallel Phase 1 slices merged into phase1/control-plane and fully re-verified with real PostgreSQL: 115 passed, 1 live-Prime skip.
+- Ready to remove the now-merged isolated worktrees and continue with remaining Phase 1 work (pause/stop/resume beyond emergency-stop, restart reconciliation, Secretary app shell, live Prime verification).
+- Found and fixed a cross-suite database cleanup defect (shared retention_class type dropped by one integration suite, breaking another suite's column). Confirmed stable over 3 consecutive real-PostgreSQL full runs (115 passed).
+- Live Prime parent/child verification passed for real in this runtime; fixed a genuine SDK-observation honesty gap (answer text) discovered through that live run, not simulated.
+- Full check now: 115 passed via disposable PostgreSQL, plus the live Prime test passing when explicitly enabled (no longer only a skip).
+
+- phase1-reconciliation worktree: added durable reconciler-leader lease (migration 0008) and reconcileOnStartup Goal-consistency scaffold (leader election + goal_leases/goal_controls consistency check -> durable 'recovering' transition, no session reconciliation yet). Fixed a second cross-suite shared-table test race by serializing integration test file execution. Verified stable over 3 consecutive real-PostgreSQL check runs (131 passed, 1 live-Prime skip).
+
+- Added fast-check property-based fencing tests (Tests #3 requirement). Full check: 145 passed, stable over 2 runs.
+- Next: kill-and-restart acceptance test against a real running control-plane process, and wiring AuthorizedEffectExecutor to one concrete critical-action call site.

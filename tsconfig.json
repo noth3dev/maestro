@@ -1,0 +1,41 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/evidence"
+    },
+    {
+      "path": "packages/contracts"
+    },
+    {
+      "path": "packages/api-client"
+    },
+    {
+      "path": "packages/domain"
+    },
+    {
+      "path": "packages/authority"
+    },
+    {
+      "path": "packages/prime-adapter"
+    },
+    {
+      "path": "apps/cli"
+    },
+    {
+      "path": "apps/secretary"
+    },
+    {
+      "path": "apps/control-plane"
+    },
+    {
+      "path": "packages/persistence"
+    }
+  ],
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true
+  }
+}

@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Turn the durable foundation into the complete execution hierarchy for one local software Goal. Sane conducts intake, the Initiator Crew produces one Task Contract, the CEO confirms once, only required Heads wake, each Head writes a Department Plan, and bounded Scout and Execution workers deliver isolated Git results.
+Turn the durable foundation into the complete execution hierarchy for one local software Goal. Sane conducts intake, the Overture Crew produces one Task Contract, the CEO confirms once, only required Heads wake, each Head writes a Department Plan, and bounded Scout and Execution workers deliver isolated Git results.
 
 Overwatch certification is completed in Phase 3, so Phase 2 cannot yet report a Goal as fully successful.
 
@@ -33,7 +33,7 @@ Groups are containers, not agents. Sane convenes Goal-scoped Department Heads di
 ## Sane and Task Contract flow
 
 1. CEO states an outcome in plain language through app or CLI.
-2. Sane creates a draft Goal and activates the smallest required Initiator Crew roles.
+2. Sane creates a draft Goal and activates the smallest required Overture Crew roles.
 3. Project Context Scout reads authorized project evidence.
 4. External Research Scout activates only when current outside evidence is needed.
 5. Requirements Analyst identifies outcomes, non-goals, priorities, edge cases, and acceptance behavior.
@@ -196,7 +196,7 @@ Overwatch policy produces an initial range using task uncertainty, historical ev
 ## Work sequence
 
 1. Implement permanent organization and durable role/persona records.
-2. Implement Sane session binding and Initiator Crew selection.
+2. Implement Sane session binding and Overture Crew selection.
 3. Implement Task Contract editor, content identity, amendment, and confirmation.
 4. Implement Head activation, sleep/resume, duplicate prevention, and bounded Head-to-Head calls.
 5. Implement sealed independent briefs and Council discussion rounds.
@@ -500,11 +500,11 @@ Accepted worker commits flow to the responsible Department branch, then accepted
 
 The CEO-facing coordination layer is a permanent **Secretary Office**.
 
-- **Sane** is the current primary Secretary identity and the CEO's continuous conversational interface. Sane receives requests, maintains continuity, coordinates the Initiator Crew, presents the final Task Contract, launches approved Goals, reports outcomes, and surfaces only critical interruptions.
-- **Initiator Crew** is a selectively activated intake and task-definition team. It works with the CEO in a `grill-me`-style conversation and produces one canonical `task.md` before orchestration begins.
-- The Initiator Crew is not a flat always-on chat room. Sane wakes only the roles needed for the request.
+- **Sane** is the current primary Secretary identity and the CEO's continuous conversational interface. Sane receives requests, maintains continuity, coordinates the Overture Crew, presents the final Task Contract, launches approved Goals, reports outcomes, and surfaces only critical interruptions.
+- **Overture Crew** (or **Overture**) is a selectively activated intake and task-definition team. It works with the CEO in a `grill-me`-style conversation and produces one canonical `task.md` before orchestration begins.
+- The Overture Crew is not a flat always-on chat room. Sane wakes only the roles needed for the request.
 
-Initial Initiator Crew roles:
+Initial Overture Crew roles:
 
 - **Conversation Lead** — speaks with the CEO in plain language, asks one intent question at a time, and maintains the shared understanding.
 - **Project Context Scout** — inspects the current project, existing decisions, files, state, and constraints so the CEO is not asked questions the system can answer itself.
@@ -517,7 +517,7 @@ The Crew may later gain another role through the same evidence and Overwatch Cou
 
 ### 36. `task.md` as the Goal launch contract
 
-The Initiator Crew produces one versioned `task.md` containing:
+The Overture Crew produces one versioned `task.md` containing:
 
 - CEO intent and desired outcome.
 - User-visible behavior and success criteria.
@@ -543,7 +543,7 @@ Once launched, the Task Contract becomes the stable source of intent for Sane, t
 
 - Selection is quality-gated and then cost-optimized: among models demonstrated capable of meeting the mission's quality and safety requirements, choose the lowest-cost suitable option.
 - Sane uses a stable high-quality model appropriate for persistent CEO interaction and judgment continuity.
-- The Initiator Conversation Lead and Task Editor use models capable of accurately preserving intent and resolving contradictions.
+- The Overture Conversation Lead and Task Editor use models capable of accurately preserving intent and resolving contradictions.
 - Project and External Scouts prefer lower-cost retrieval and synthesis models and escalate only when evidence conflict or complexity requires it.
 - Department Heads use strong reasoning models appropriate for planning, delegation, negotiation, and evidence synthesis.
 - Workers receive the smallest model demonstrated capable of their specific mission. Model size is not inherited automatically from the Head.

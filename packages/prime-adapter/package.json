@@ -1,0 +1,17 @@
+{
+  "name": "@maestro/prime-adapter",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@maestro/domain": "file:../domain",
+    "prime-agent": "https://pub-728493de92a943e2a9b2d17b4719f318.r2.dev/releases/v0.8.0/prime-agent-0.8.0.tgz"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts"
+}
