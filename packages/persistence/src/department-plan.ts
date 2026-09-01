@@ -110,6 +110,17 @@ export async function createDepartmentPlan(pool: Pool, request: CreateDepartment
     if (council.state !== "resolved" || council.decisionPacket === null || !isExecutableDecisionPacket(council.decisionPacket)) {
       throw new DepartmentPlanError("A Department Plan requires a resolved, executable Council decision");
     }
+    // `readHeadCouncil` used a separate connection with no lock. Re-verify the
+    // exact resolved state/hashes inside this transaction (which already
+    // holds the Goal lease/control lock) before writing, so a concurrent
+    // change between that read and this write cannot be silently trusted.
+    const anchor = await client.query<{ state: string; decision_packet: unknown; snapshot_hash: string }>(
+      "SELECT state, decision_packet, snapshot_hash FROM head_councils WHERE council_id = $1 FOR KEY SHARE",
+      [request.councilId],
+    );
+    if (anchor.rowCount !== 1 || anchor.rows[0]!.state !== "resolved" || anchor.rows[0]!.snapshot_hash.trim() !== council.snapshotHash || canonicalJson(anchor.rows[0]!.decision_packet) !== canonicalJson(council.decisionPacket)) {
+      throw new DepartmentPlanError("Council resolved state changed between read and Department Plan creation");
+    }
     const { headRoleId } = await assertAuthorizedPlanOwner(client, council, request.departmentId, context);
     const contentHash = departmentPlanSubstanceContentHash(request.substance);
     const existing = await client.query<DepartmentPlanRow>(planSelectSql() + " WHERE council_id = $1 AND department_id = $2 FOR UPDATE", [request.councilId, request.departmentId]);
@@ -174,6 +185,17 @@ export async function reviseDepartmentPlan(
     await assertAuthorizedPlanOwner(client, council, departmentId, context);
     const contentHash = departmentPlanSubstanceContentHash(newSubstance);
     if (plan.current_version === expectedVersion && plan.content_hash.trim() === contentHash) { await client.query("COMMIT"); open = false; return mapPlan(plan); }
+    if (plan.current_version === expectedVersion + 1) {
+      // A retry whose response was lost: the revision this call would have
+      // produced may already be the current version. Compare against the
+      // durable revision history, not just current content, since current
+      // content could coincidentally differ for an unrelated reason.
+      const priorRevision = await client.query<{ content_hash: string }>(
+        "SELECT content_hash FROM department_plan_revisions WHERE council_id = $1 AND department_id = $2 AND version = $3",
+        [councilId, departmentId, plan.current_version],
+      );
+      if (priorRevision.rowCount === 1 && priorRevision.rows[0]!.content_hash.trim() === contentHash) { await client.query("COMMIT"); open = false; return mapPlan(plan); }
+    }
     if (plan.current_version !== expectedVersion) throw new DepartmentPlanError(`Department Plan version conflict: expected ${expectedVersion}, current is ${plan.current_version}`);
     const nextVersion = plan.current_version + 1;
     const previousItems = new Set((plan.substance.items ?? []).map((item) => item.itemId));

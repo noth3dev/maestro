@@ -7,7 +7,7 @@ import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubsta
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
-import { createDepartmentPlan, DepartmentPlanError, listDepartmentPlansForCouncil, readDepartmentPlan, reviseDepartmentPlan } from "./department-plan.js";
+import { createDepartmentPlan, DepartmentPlanError, DepartmentPlanNotFoundError, listDepartmentPlansForCouncil, readDepartmentPlan, reviseDepartmentPlan } from "./department-plan.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -131,5 +131,29 @@ describeDatabase("Department Plans with PostgreSQL", () => {
     expect(revisions.rows.map((row: { version: number }) => row.version)).toEqual([1, 2]);
     await expect(pool.query("UPDATE department_plan_revisions SET reason = $1 WHERE council_id = $2 AND department_id = $3 AND version = 1", ["tampered", council.councilId, "product"])).rejects.toThrow();
     expect(v1.version).toBe(1);
+  });
+
+  it("throws DepartmentPlanNotFoundError for a plan that does not exist", async () => {
+    await expect(readDepartmentPlan(pool, randomUUID(), "product")).rejects.toBeInstanceOf(DepartmentPlanNotFoundError);
+  });
+
+  it("rejects direct tampering with the immutable Council/Contract binding", async () => {
+    const { council, proof } = await setupResolvedCouncil(["product"]);
+    await createDepartmentPlan(pool, { councilId: council.councilId, departmentId: "product", substance: substance() }, proof, headContext("product"));
+    await expect(pool.query("UPDATE department_plans SET council_snapshot_hash = $1 WHERE council_id = $2 AND department_id = $3", ["0".repeat(64), council.councilId, "product"])).rejects.toThrow();
+    await expect(pool.query("UPDATE department_plans SET decision_packet_hash = $1 WHERE council_id = $2 AND department_id = $3", ["0".repeat(64), council.councilId, "product"])).rejects.toThrow();
+  });
+
+  it("makes a lost-response revision retry idempotent instead of a false version conflict", async () => {
+    const { council, proof } = await setupResolvedCouncil(["product"]);
+    await createDepartmentPlan(pool, { councilId: council.councilId, departmentId: "product", substance: substance() }, proof, headContext("product"));
+    const revised = { ...substance(), contribution: "revised once" };
+    const applied = await reviseDepartmentPlan(pool, council.councilId, "product", 1, revised, "evidence changed", proof, headContext("product"));
+    expect(applied.version).toBe(2);
+    // Simulate a lost response: caller retries the exact same call with the same expectedVersion (1).
+    const retried = await reviseDepartmentPlan(pool, council.councilId, "product", 1, revised, "evidence changed", proof, headContext("product"));
+    expect(retried).toEqual(applied);
+    const revisions = await pool.query("SELECT version FROM department_plan_revisions WHERE council_id = $1 AND department_id = $2 ORDER BY version", [council.councilId, "product"]);
+    expect(revisions.rows.map((row: { version: number }) => row.version)).toEqual([1, 2]);
   });
 });
