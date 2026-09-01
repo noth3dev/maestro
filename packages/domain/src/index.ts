@@ -4,3 +4,4 @@ export * from "./persona.js";
 export * from "./organization.js";
 export * from "./task-contract.js";
 export * from "./head-participation.js";
+export * from "./sealed-submission.js";
