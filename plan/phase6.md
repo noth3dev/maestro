@@ -400,11 +400,10 @@ Correctness, safety, and authority are hard floors. Cost or speed cannot compens
 
 Phase behavior:
 
-- **Phase 1:** profiles are versioned; evidence is collected; candidates are proposed; live auto-application is disabled.
-- **Phase 2–3:** environment, incident, and concurrency task classes add evidence; auto-application remains disabled.
-- **Phase 4:** validated low-risk adaptive changes may apply automatically within an enabled class.
-- **Phase 5:** CEO can inspect all axes, explanations, history, evidence, and safe proposed changes in the app.
-- **Phase 6:** long-run tests verify that adaptation does not collapse diversity or drift from role duty.
+- **Phases 1–5:** profiles are versioned; evidence is collected; candidates may be proposed; live auto-application is disabled. Phase 2 establishes static role baselines and expiry-bound worker overlays. Earlier phases may add outcome evidence and CEO-visible candidate history, but do not apply adaptive traits.
+- **Phase 6:** this phase implements the guarded adaptive lifecycle: replay, synthetic and zero-authority shadow evaluation; independent Council judgment; bounded rollout; monitoring; and automatic rollback within an explicitly enabled low-risk class. Long-run tests must verify that adaptation neither collapses diversity nor drifts from role duty.
+
+The legacy requirement text that mentions “Phase 4” is preserved below for design provenance only. It does not authorize adaptive-trait application before this Phase 6 lifecycle exists.
 
 ## CEO controls
 
