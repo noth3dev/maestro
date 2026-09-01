@@ -34,6 +34,7 @@ export const StableApiErrorCodeSchema = z.enum([
   "validation_error", "version_conflict", "invalid_transition", "goal_not_found",
   "stale_lease", "lease_unavailable", "command_id_reused", "durable_store_unavailable",
   "authentication_required", "authentication_unavailable", "credential_forbidden",
+  "critical_action_denied", "critical_action_requires_approval",
 ]);
 export const StableApiErrorSchema = z.object({
   error: z.object({ code: StableApiErrorCodeSchema, message: z.string().min(1) }).strict(),
@@ -77,3 +78,26 @@ export const GoalEventPageSchema = z.object({
   nextCursor: EventCursorSchema,
 }).strict();
 export type GoalEventPage = z.infer<typeof GoalEventPageSchema>;
+
+export const ActionClassificationSchema = z.enum(["ordinary", "critical", "forbidden", "ambiguous"]);
+export type ActionClassification = z.infer<typeof ActionClassificationSchema>;
+
+/** Body for the single critical-action gateway call site (Phase 1 exit gate). */
+export const CriticalActionInputSchema = z.object({
+  projectId: UuidSchema,
+  action: z.string().min(1),
+  target: z.string().min(1),
+  policyVersion: z.number().int().min(0),
+  budgetEffectCents: z.number().int(),
+}).strict();
+export type CriticalActionInput = z.infer<typeof CriticalActionInputSchema>;
+
+/** Only an "allow" decision reaches a 200 response; deny/require_approval map to stable API errors. */
+export const CriticalActionResultSchema = z.object({
+  goalId: UuidSchema,
+  effect: z.literal("allow"),
+  reason: z.string().min(1),
+  classification: ActionClassificationSchema,
+  recordId: UuidSchema.optional(),
+}).strict();
+export type CriticalActionResult = z.infer<typeof CriticalActionResultSchema>;
