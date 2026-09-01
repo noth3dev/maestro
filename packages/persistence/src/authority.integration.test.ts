@@ -19,7 +19,7 @@ describeDatabase("durable authorized effects with PostgreSQL", () => {
 
   beforeAll(async () => {
     const authorityMigration = await readFile(fileURLToPath(new URL("../migrations/0005_authority_records.sql", import.meta.url)), "utf8");
-    const controlMigration = await readFile(fileURLToPath(new URL("../migrations/0006_goal_control.sql", import.meta.url)), "utf8");
+    const controlMigration = await readFile(fileURLToPath(new URL("../migrations/0007_goal_control.sql", import.meta.url)), "utf8");
     await pool.query(authorityMigration);
     await pool.query(controlMigration);
   });
