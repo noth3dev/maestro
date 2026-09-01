@@ -95,3 +95,9 @@ Dispatch parallel Sonnet subagents, one per isolated worktree, to implement the 
   - Agent B: independent no-edit review of the sealed-submission/council slice already committed, so it can be marked accepted or sent back for repair.
   - Agent C: finish and verify the in-progress canonical Overture role rename in `phase2-overture-role-refresh` (`task-contract.ts`), run `npm run build && npm test`, then commit — this must land before Department Plans/mission bundles reference role IDs by name.
 - Steps 7-12 should be dispatched only after step 6 lands and is independently reviewed, since mission bundles/workers/Git integration all read the Department Plan.
+
+
+## User sequencing decision — 2026-09-01
+- After Phase 2 reaches its actual exit gate (not merely self-verified code), proceed directly into Phase 3.
+- Phase 3 start gate: all required Phase 2 slices independently reviewed and real-PostgreSQL verified; one bounded local Goal has durable Contract/Council/Plan/worker/Git/budget/evidence lineage and stops at the Phase 2 boundary (`awaiting certification` rather than a claimed success); no unresolved safety/authority/recovery blocker.
+- Phase 3 scope then begins with Overwatch/Sentinel, independent certification, durable evidence bundle, and Sane final report. Do not begin Phase 3 implementation while Phase 2’s current Council/Head/Contract acceptance blockers remain open.
