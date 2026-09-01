@@ -4,3 +4,4 @@ export * from "./authority.js";
 export * from "./events.js";
 export * from "./evidence.js";
 export * from "./reconciliation.js";
+export * from "./organization.js";
