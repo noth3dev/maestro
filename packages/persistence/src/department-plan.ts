@@ -122,6 +122,9 @@ export async function createDepartmentPlan(pool: Pool, request: CreateDepartment
     if (anchor.rowCount !== 1 || anchor.rows[0]!.state !== "resolved" || anchor.rows[0]!.snapshot_hash.trim() !== council.snapshotHash || canonicalJson(anchor.rows[0]!.decision_packet) !== canonicalJson(council.decisionPacket)) {
       throw new DepartmentPlanError("Council resolved state changed between read and Department Plan creation");
     }
+    if (!council.decisionPacket.departmentOwnership.some((ownership) => ownership.departmentId === request.departmentId)) {
+      throw new DepartmentPlanError("The Council decision did not assign ownership to this Department");
+    }
     const { headRoleId } = await assertAuthorizedPlanOwner(client, council, request.departmentId, context);
     const contentHash = departmentPlanSubstanceContentHash(request.substance);
     const existing = await client.query<DepartmentPlanRow>(planSelectSql() + " WHERE council_id = $1 AND department_id = $2 FOR UPDATE", [request.councilId, request.departmentId]);

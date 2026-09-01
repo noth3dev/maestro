@@ -86,6 +86,9 @@ export async function reserveDepartmentBudget(pool: Pool, councilId: string, dep
       ? isAuthorizedHeadCouncilActor(context, captured)
       : context.actorId === captured.participantId && context.sessionRef === captured.sessionRef;
     if (!authorized) throw new BudgetReservationError("Actor is not bound to the captured Head identity and session");
+    if (council.state !== "resolved" || council.decisionPacket === null || !council.decisionPacket.departmentOwnership.some((ownership) => ownership.departmentId === departmentId)) {
+      throw new BudgetReservationError("The Council decision must be resolved and assign ownership to this Department before it may allocate budget");
+    }
     const goalReservation = await client.query<ReservationRow>(reservationSelectSql() + " WHERE goal_id = $1 AND scope = 'goal' ORDER BY created_at DESC LIMIT 1 FOR UPDATE", [council.goalId]);
     if (goalReservation.rowCount !== 1) throw new BudgetReservationError("Goal budget envelope must be reserved before a Department allocation");
     const goalRow = goalReservation.rows[0]!;

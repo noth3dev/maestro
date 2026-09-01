@@ -30,7 +30,7 @@ const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`
 describeDatabase("Budget reservations with PostgreSQL", () => {
   const pool = new Pool({ connectionString: databaseUrl });
 
-  async function setupResolvedCouncil(departments = ["product"]) {
+  async function setupResolvedCouncil(departments = ["product"], ownedDepartments = departments) {
     const goalId = randomUUID(), contractId = randomUUID(), projectId = randomUUID();
     const contractContent = buildContractContent(projectId);
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
@@ -48,7 +48,7 @@ describeDatabase("Budget reservations with PostgreSQL", () => {
     await revealCouncilBriefs(pool, council.councilId, proof, context("reveal"));
     const packet: DecisionPacket = {
       outcome: "decided", executionDisposition: "executable", selectedDirection: "proceed",
-      rejectedAlternatives: [], departmentOwnership: departments.map((departmentId) => ({ departmentId, responsibility: "own it" })),
+      rejectedAlternatives: [], departmentOwnership: ownedDepartments.map((departmentId) => ({ departmentId, responsibility: "own it" })),
       workerPlan: [], completionCriteria: ["done"], failureCriteria: ["fail"], dissent: [], uncertainty: [],
       criticalActions: [], unresolvedConflicts: [], evidenceReferences: [],
     };
@@ -103,6 +103,14 @@ describeDatabase("Budget reservations with PostgreSQL", () => {
     const listed = await listBudgetForecasts(pool, goalReservation.reservationId);
     expect(listed.length).toBe(1);
     await expect(pool.query("UPDATE budget_reservations SET amount_cents = 1 WHERE reservation_id = $1", [goalReservation.reservationId])).rejects.toThrow();
+  });
+
+  it("rejects Department budget allocation for a captured Department the Council did not assign ownership to", async () => {
+    const { goalId, council, proof } = await setupResolvedCouncil(["product", "engineering"], ["product"]);
+    await reserveGoalBudget(pool, goalId, 100_000, "initial envelope", proof, context("secretary"));
+    await expect(reserveDepartmentBudget(pool, council.councilId, "engineering", 1_000, "unowned", proof, headContext("engineering"))).rejects.toBeInstanceOf(BudgetReservationError);
+    const owned = await reserveDepartmentBudget(pool, council.councilId, "product", 1_000, "owned", proof, headContext("product"));
+    expect(owned.departmentId).toBe("product");
   });
 
   it("throws BudgetReservationNotFoundError for a missing reservation", async () => {

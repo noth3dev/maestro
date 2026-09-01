@@ -63,6 +63,9 @@ export async function recordDepartmentBranch(pool: Pool, git: GitPort, councilId
       ? isAuthorizedHeadCouncilActor(context, captured)
       : context.actorId === captured.participantId && context.sessionRef === captured.sessionRef;
     if (!authorized) throw new GitIntegrationError("Actor is not bound to the captured Head identity and session");
+    if (council.state !== "resolved" || council.decisionPacket === null || !council.decisionPacket.departmentOwnership.some((ownership) => ownership.departmentId === departmentId)) {
+      throw new GitIntegrationError("The Council decision must be resolved and assign ownership to this Department before it may create a Department branch");
+    }
     const goalBranch = await client.query<{ repository_path: string; branch_name: string }>("SELECT repository_path, branch_name FROM goal_integration_branches WHERE goal_id = $1 FOR KEY SHARE", [council.goalId]);
     if (goalBranch.rowCount !== 1) throw new GitIntegrationError("Goal integration branch must exist before a Department branch");
     const { repository_path: repositoryPath, branch_name: baseBranchName } = goalBranch.rows[0]!;

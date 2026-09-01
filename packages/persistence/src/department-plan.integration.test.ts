@@ -39,7 +39,7 @@ const substance = (overrides: Partial<DepartmentPlanSubstance> = {}): Department
 describeDatabase("Department Plans with PostgreSQL", () => {
   const pool = new Pool({ connectionString: databaseUrl });
 
-  async function setupResolvedCouncil(departments = ["product"]) {
+  async function setupResolvedCouncil(departments = ["product"], ownedDepartments = departments) {
     const goalId = randomUUID(), contractId = randomUUID(), projectId = randomUUID();
     const contractContent = buildContractContent(projectId);
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
@@ -57,7 +57,7 @@ describeDatabase("Department Plans with PostgreSQL", () => {
     await revealCouncilBriefs(pool, council.councilId, proof, context("reveal"));
     const packet: DecisionPacket = {
       outcome: "decided", executionDisposition: "executable", selectedDirection: "proceed",
-      rejectedAlternatives: [], departmentOwnership: departments.map((departmentId) => ({ departmentId, responsibility: "own it" })),
+      rejectedAlternatives: [], departmentOwnership: ownedDepartments.map((departmentId) => ({ departmentId, responsibility: "own it" })),
       workerPlan: [], completionCriteria: ["done"], failureCriteria: ["fail"], dissent: [], uncertainty: [],
       criticalActions: [], unresolvedConflicts: [], evidenceReferences: [],
     };
@@ -131,6 +131,13 @@ describeDatabase("Department Plans with PostgreSQL", () => {
     expect(revisions.rows.map((row: { version: number }) => row.version)).toEqual([1, 2]);
     await expect(pool.query("UPDATE department_plan_revisions SET reason = $1 WHERE council_id = $2 AND department_id = $3 AND version = 1", ["tampered", council.councilId, "product"])).rejects.toThrow();
     expect(v1.version).toBe(1);
+  });
+
+  it("rejects Department Plan creation for a captured Department the Council did not assign ownership to", async () => {
+    const { council, proof } = await setupResolvedCouncil(["product", "engineering"], ["product"]);
+    await expect(createDepartmentPlan(pool, { councilId: council.councilId, departmentId: "engineering", substance: substance() }, proof, headContext("engineering"))).rejects.toBeInstanceOf(DepartmentPlanError);
+    const owned = await createDepartmentPlan(pool, { councilId: council.councilId, departmentId: "product", substance: substance() }, proof, headContext("product"));
+    expect(owned.departmentId).toBe("product");
   });
 
   it("denies Department Plan writes once the Goal is paused", async () => {

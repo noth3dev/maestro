@@ -83,7 +83,7 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     rmSync(repositoryPath, { recursive: true, force: true });
   });
 
-  async function setupPlan(departments = ["product"]) {
+  async function setupPlan(departments = ["product"], ownedDepartments = departments) {
     const goalId = randomUUID(), contractId = randomUUID(), projectId = randomUUID();
     const contractContent = buildContractContent(projectId, repositoryPath);
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
@@ -101,7 +101,7 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     await revealCouncilBriefs(pool, council.councilId, proof, context("reveal"));
     const packet: DecisionPacket = {
       outcome: "decided", executionDisposition: "executable", selectedDirection: "proceed",
-      rejectedAlternatives: [], departmentOwnership: departments.map((departmentId) => ({ departmentId, responsibility: "own it" })),
+      rejectedAlternatives: [], departmentOwnership: ownedDepartments.map((departmentId) => ({ departmentId, responsibility: "own it" })),
       workerPlan: [], completionCriteria: ["done"], failureCriteria: ["fail"], dissent: [], uncertainty: [],
       criticalActions: [], unresolvedConflicts: [], evidenceReferences: [],
     };
@@ -161,6 +161,14 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     const worktreePath = join(repositoryPath, "..", `maestro-worker-${randomUUID()}`);
     worktreePaths.push(worktreePath);
     await expect(recordWorkerWorktree(pool, localGitPort, worker.workerId, worktreePath, proof, context("not-the-head"))).rejects.toBeInstanceOf(GitIntegrationError);
+  });
+
+  it("rejects a Department branch for a captured Department the Council did not assign ownership to", async () => {
+    const { goalId, council, proof } = await setupPlan(["product", "engineering"], ["product"]);
+    await recordGoalIntegrationBranch(pool, localGitPort, goalId, repositoryPath, "goal/integration", baseRevision, proof);
+    await expect(recordDepartmentBranch(pool, localGitPort, council.councilId, "engineering", proof, headContext("engineering"))).rejects.toBeInstanceOf(GitIntegrationError);
+    const owned = await recordDepartmentBranch(pool, localGitPort, council.councilId, "product", proof, headContext("product"));
+    expect(owned.departmentId).toBe("product");
   });
 
   it("rejects direct tampering with append-only Git integration evidence", async () => {
