@@ -9,6 +9,8 @@ export interface ActionRequest {
   target: string;
   policyVersion: number;
   budgetEffectCents: number;
+  /** Monotonic Goal control version captured before effect execution. */
+  controlEpoch: string;
 }
 
 export interface AuthorityRecord {
@@ -138,9 +140,15 @@ export interface AuthorityDecisionAudit {
 }
 
 /** Durable storage boundary. The authority package has no database or provider dependency. */
+export type ControlRecheck =
+  | { effect: "allow" }
+  | { effect: "deny"; reason: "emergency_stop" | "stale_control_epoch" };
+
 export interface AuthorityRepository {
   load(request: ActionRequest): Promise<readonly AuthorityRecord[]>;
   appendDecision(audit: AuthorityDecisionAudit): Promise<void>;
+  /** Last durable control check immediately before an effect callback. */
+  recheckControl(request: ActionRequest): Promise<ControlRecheck>;
 }
 
 /**
@@ -169,15 +177,28 @@ export class AuthorizedEffectExecutor {
       return decision;
     }
 
+    // A Goal control latch (emergency stop / superseded epoch) dominates the
+    // grant/approval evaluation above: it must block a stale-epoch or already
+    // emergency-stopped Goal even if a still-active grant would otherwise allow.
+    let control: ControlRecheck;
     try {
-      await this.repository.appendDecision({ decision, decidedAt: this.clock() });
+      control = await this.repository.recheckControl(request);
+    } catch {
+      return unavailableDecision(request);
+    }
+    const final: AuthorityDecision =
+      control.effect === "deny" ? { ...decision, effect: "deny", reason: control.reason } : decision;
+
+    try {
+      await this.repository.appendDecision({ decision: final, decidedAt: this.clock() });
     } catch {
       return unavailableDecision(request);
     }
 
-    if (decision.effect !== "allow") return decision;
+    if (final.effect !== "allow") return final;
+
     await effect();
-    return decision;
+    return final;
   }
 }
 

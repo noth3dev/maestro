@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateAction, type ActionRequest, type AuthorityRecord } from "./authority.js";
+import { AuthorizedEffectExecutor, evaluateAction, type ActionRequest, type AuthorityRecord, type AuthorityRepository } from "./authority.js";
 
 const request: ActionRequest = {
   commandId: "command-1",
@@ -10,6 +10,7 @@ const request: ActionRequest = {
   target: "origin/main",
   policyVersion: 1,
   budgetEffectCents: 0,
+  controlEpoch: "1",
 };
 
 const exactApproval: AuthorityRecord = {
@@ -89,3 +90,63 @@ describe("evaluateAction", () => {
     expect(evaluateAction(ordinary, [grant], now)).toMatchObject({ effect: "deny", reason: "no_grant" });
     expect(evaluateAction({ ...request, budgetEffectCents: 1 }, [exactApproval], now)).toMatchObject({ effect: "require_approval", reason: "critical_action" });
   });
+
+
+describe("AuthorizedEffectExecutor control recheck", () => {
+  it("does not call the effect when emergency stop latches after the audit", async () => {
+    const ordinary: ActionRequest = {
+      ...request,
+      commandId: "edit-1",
+      action: "project.file.edit",
+      target: "/repo",
+    };
+    const grant: AuthorityRecord = {
+      ...exactApproval,
+      recordId: "grant-1",
+      kind: "grant",
+      commandId: null,
+      action: ordinary.action,
+      target: ordinary.target,
+    };
+    const repository: AuthorityRepository = {
+      load: async () => [grant],
+      appendDecision: async () => {},
+      recheckControl: async () => ({ effect: "deny", reason: "emergency_stop" }),
+    };
+    let calls = 0;
+
+    await expect(new AuthorizedEffectExecutor(repository, () => now).execute(ordinary, async () => {
+      calls += 1;
+    })).resolves.toMatchObject({ effect: "deny", reason: "emergency_stop" });
+    expect(calls).toBe(0);
+  });
+
+  it("does not call the effect when its control epoch is stale", async () => {
+    const ordinary: ActionRequest = {
+      ...request,
+      commandId: "edit-1",
+      action: "project.file.edit",
+      target: "/repo",
+      controlEpoch: "4",
+    };
+    const grant: AuthorityRecord = {
+      ...exactApproval,
+      recordId: "grant-1",
+      kind: "grant",
+      commandId: null,
+      action: ordinary.action,
+      target: ordinary.target,
+    };
+    const repository: AuthorityRepository = {
+      load: async () => [grant],
+      appendDecision: async () => {},
+      recheckControl: async () => ({ effect: "deny", reason: "stale_control_epoch" }),
+    };
+    let calls = 0;
+
+    await expect(new AuthorizedEffectExecutor(repository, () => now).execute(ordinary, async () => {
+      calls += 1;
+    })).resolves.toMatchObject({ effect: "deny", reason: "stale_control_epoch" });
+    expect(calls).toBe(0);
+  });
+});
