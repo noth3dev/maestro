@@ -75,6 +75,60 @@ describe("sealed submission snapshots", () => {
     expect(() => freezeSealedSubmissionSnapshot(malformed)).toThrow(InvalidSealedSubmissionSnapshotError);
   });
 
+  it.each(["__proto__", "prototype"]) ("rejects own %s keys in JSON payloads", (key) => {
+    const input = validInput();
+    const payload = JSON.parse(`{${JSON.stringify(key)}:{"nested":true}}`) as Record<string, unknown>;
+    expect(Object.hasOwn(payload, key)).toBe(true);
+    (input.evidence as Record<string, unknown>).payload = payload;
+
+    expect(() => freezeSealedSubmissionSnapshot(input)).toThrow(/dangerous JSON key/);
+  });
+
+  it("rejects sparse arrays instead of changing their meaning during persistence", () => {
+    const input = validInput();
+    const sparse: unknown[] = [];
+    sparse.length = 1;
+    (input.evidence as Record<string, unknown>).values = sparse;
+
+    expect(() => freezeSealedSubmissionSnapshot(input)).toThrow(/sparse array/);
+  });
+
+  it.each(["2030-01-02", "2030-01-02T03:04:05"]) ("rejects timezone-less deadline %s", (deadline) => {
+    const input = validInput();
+    input.deadline = deadline;
+
+    expect(() => freezeSealedSubmissionSnapshot(input)).toThrow(/explicit timezone/);
+  });
+
+  it("normalizes an explicitly zoned deadline before hashing", () => {
+    const input = validInput();
+    input.deadline = "2030-01-02T05:04:05+02:00";
+
+    const snapshot = freezeSealedSubmissionSnapshot(input);
+    expect(snapshot.deadline).toBe("2030-01-02T03:04:05.000Z");
+    expect(hydrateSealedSubmissionSnapshot(JSON.parse(JSON.stringify(snapshot)))).toEqual(snapshot);
+  });
+
+  it("validates extra contract and participant fields before copying them", () => {
+    const invalidContract = validInput();
+    (invalidContract.contract as Record<string, unknown>).metadata = { bad: undefined };
+    expect(() => freezeSealedSubmissionSnapshot(invalidContract)).toThrow(InvalidSealedSubmissionSnapshotError);
+
+    const invalidParticipant = validInput();
+    (invalidParticipant.participants[0] as Record<string, unknown>).metadata = { bad: undefined };
+    expect(() => freezeSealedSubmissionSnapshot(invalidParticipant)).toThrow(InvalidSealedSubmissionSnapshotError);
+  });
+
+  it("validates snapshots before independently computing their hash", () => {
+    const persisted = JSON.parse(JSON.stringify(freezeSealedSubmissionSnapshot(validInput()))) as Record<string, unknown>;
+    const evidence = persisted.evidence as Record<string, unknown>;
+    const sparse: unknown[] = [];
+    sparse.length = 1;
+    evidence.values = sparse;
+
+    expect(() => sealedSubmissionSnapshotHash(persisted as never)).toThrow(/sparse array/);
+  });
+
   it("rejects non-finite evidence numbers and invalid contract identity", () => {
     const nonFinite = validInput();
     (nonFinite.evidence as Record<string, unknown>).bad = Number.NaN;
