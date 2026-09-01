@@ -18,3 +18,4 @@ export * from "./sentinel.js";
 export * from "./sentinel-challenge.js";
 export * from "./semantic-review.js";
 export * from "./overwatch-council.js";
+export * from "./certification.js";
