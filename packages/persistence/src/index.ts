@@ -7,3 +7,4 @@ export * from "./reconciliation.js";
 export * from "./organization.js";
 export * from "./task-contract.js";
 export * from "./head-participation.js";
+export * from "./council.js";

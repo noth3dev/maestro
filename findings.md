@@ -172,3 +172,16 @@ Against plan/phase1.md's exit gate and Tests section, still missing:
 ## 2026-09-01 — Fencing property tests (Tests #3)
 - Added fast-check generative property tests covering stale/forged fencing tokens and goalId/ownerId mismatches against every state-changing Goal command path (CreateGoal, TransitionGoal) and renewGoalLease, proving zero durable writes (receipts/events/goals/outbox unchanged) on every generated case, then that the real current proof still works afterward (forging never corrupts a lease).
 - Verified stable across two consecutive real-PostgreSQL runs: 145 passed.
+
+
+## 2026-09-01 — Cross-phase plan consistency corrections
+- Preserved the deterministic-rule-first principle explicitly across Phase 3 Sentinel, Phase 5 Scheduler, and Phase 6 evaluation guards: model judgment is reserved for ambiguity and cannot write durable constrained state directly.
+- Corrected Phase 6 main-body timing ambiguity: static persona baselines and evidence/candidates may exist earlier, but replay/synthetic/shadow evaluation and any adaptive live application begin only in Phase 6. The retained “Phase 4” wording is legacy design provenance, not delivery authorization.
+- Added the required `(HeadRoleId, GoalId)` runtime-context partitioning constraint to Phase 2 and a durable hierarchy projection-read-model contract for Phase 7.
+- Reframed Phase 8 Purpose as certification/hardening rather than a duplicate organization-definition section.
+
+
+## 2026-09-01 — P2W5 Council re-scope after Luna-max audit
+- The uncommitted Council code is a persistence sketch, not a safe reusable sealed-submission boundary. Do not accept it as a narrow brief feature.
+- P2W5 is decomposed without advancing Phase 3: first a generic sealed-submission primitive with immutable frozen participant/session/contract/evidence identity, idempotency, deadline/disposition policy, reveal, append-only audit/event truth, and control/lease checks; then the Head Council-specific consumer with evidence-tagged complete rounds, durable novelty/stopping, and a non-executable escalation outcome.
+- Phase 3 will reuse the primitive for independent reviewer judgments and Sentinel will consume its durable event/evidence lineage. This adds no reviewer spawning or Sentinel implementation in Phase 2.

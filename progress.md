@@ -75,3 +75,6 @@
 
 - Added fast-check property-based fencing tests (Tests #3 requirement). Full check: 145 passed, stable over 2 runs.
 - Next: kill-and-restart acceptance test against a real running control-plane process, and wiring AuthorizedEffectExecutor to one concrete critical-action call site.
+
+
+- Updated canonical Phase 2/6/7/8 plans from cross-phase review: Head runtime contexts are Goal-partitioned; Phase 6 is the first adaptive-persona application phase; hierarchy-owning phases must preserve durable projection facts for Phase 7 radial views; Phase 8 Purpose now matches hardening/certification scope.

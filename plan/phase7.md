@@ -37,6 +37,10 @@ Default home:
 
 The UI never writes database state directly. All actions call the same typed API as the CLI and receive accepted durable versions. Optimistic presentation may show pending state but cannot claim completion before server acceptance.
 
+### Projection-read-model contract
+
+Before Phase 7, every hierarchy-owning phase must preserve durable, queryable projection facts rather than requiring the UI to reconstruct them from prose or live sessions: stable node identity and version; parent/child and Goal/sector membership; node kind and current lifecycle state; ownership and bounded cross-links; and source revision/event cursor. Phase 7's radial projection API may compose these facts into organization, Goal, Git, context, improvement, and incident views, but must not invent relationships or join hidden transcript state. Add indexed read projections only when a concrete Phase 7 traversal proves they are needed.
+
 ## Visual system
 
 Use the approved Warm Earth direction:

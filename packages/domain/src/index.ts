@@ -5,3 +5,4 @@ export * from "./organization.js";
 export * from "./task-contract.js";
 export * from "./head-participation.js";
 export * from "./sealed-submission.js";
+export * from "./council.js";

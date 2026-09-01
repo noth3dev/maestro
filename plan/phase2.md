@@ -33,10 +33,10 @@ Groups are containers, not agents. Sane convenes Goal-scoped Department Heads di
 ## Sane and Task Contract flow
 
 1. CEO states an outcome in plain language through app or CLI.
-2. Sane creates a draft Goal and activates the smallest required Overture Crew roles.
-3. Project Context Scout reads authorized project evidence.
+2. Sane creates a draft Goal and activates the smallest required Overture Crew roles from the six-role candidate pool.
+3. Architecture Analyst reads authorized project evidence, codebase structure, dependencies, and system topology.
 4. External Research Scout activates only when current outside evidence is needed.
-5. Requirements Analyst identifies outcomes, non-goals, priorities, edge cases, and acceptance behavior.
+5. Conversation Lead and Task Editor identify outcomes, non-goals, priorities, edge cases, and acceptance behavior; Security Evaluator records material risk, budget, and critical-action boundaries.
 6. Design & Mock Specialist creates disposable previews only when seeing an option is necessary.
 7. Task Editor maintains one versioned `task.md`.
 8. Sane presents the complete contract, expected effects, initial budget range, and authority boundary.
@@ -65,7 +65,7 @@ Nothing may spawn an execution worker before step 9.
 
 ### Activation
 
-Sane activates the smallest likely set. An active Head may request another existing Head by supplying Goal, reason, evidence, requested contribution, urgency, context scope, and budget effect. The control plane prevents duplicate and cyclic activation. New Departments remain outside this phase and require later Council approval.
+Sane activates the smallest likely set. An active Head may request another existing Head by supplying Goal, reason, evidence, requested contribution, urgency, context scope, and budget effect. The control plane prevents duplicate and cyclic activation. Each Head participation and Prime session binding is keyed by `(HeadRoleId, GoalId)`; a persistent Head never receives two Goals in one runtime context. New Departments remain outside this phase and require later Council approval.
 
 ### Independent briefs
 
@@ -199,8 +199,8 @@ Overwatch policy produces an initial range using task uncertainty, historical ev
 2. Implement Sane session binding and Overture Crew selection.
 3. Implement Task Contract editor, content identity, amendment, and confirmation.
 4. Implement Head activation, sleep/resume, duplicate prevention, and bounded Head-to-Head calls.
-5. Implement sealed independent briefs and Council discussion rounds.
-6. Implement Department Plan schema, reconciliation, revisions, and worker linkage.
+5. Implement the reusable sealed-submission primitive, then the Head Council consumer: immutable frozen participant/session/contract/evidence snapshot; idempotent sealed submission; deadline/absence policy; reveal; append-only events/audit; evidence-tagged complete discussion rounds; novelty and stopping; and a non-executable escalation outcome distinct from an executable resolved decision.
+6. Implement Department Plan schema, reconciliation, revisions, and worker linkage only after a resolved Council packet bound to the exact frozen contract/evidence snapshot is durable.
 7. Implement mission bundles and least-privilege capability selection.
 8. Implement Scout and Execution worker lifecycles through Prime Agent native hierarchy.
 9. Implement worker request-for-help and bounded team-lead exception.
@@ -504,16 +504,16 @@ The CEO-facing coordination layer is a permanent **Secretary Office**.
 - **Overture Crew** (or **Overture**) is a selectively activated intake and task-definition team. It works with the CEO in a `grill-me`-style conversation and produces one canonical `task.md` before orchestration begins.
 - The Overture Crew is not a flat always-on chat room. Sane wakes only the roles needed for the request.
 
-Initial Overture Crew roles:
+Overture candidate pool (six selectively activated roles):
 
-- **Conversation Lead** — speaks with the CEO in plain language, asks one intent question at a time, and maintains the shared understanding.
-- **Project Context Scout** — inspects the current project, existing decisions, files, state, and constraints so the CEO is not asked questions the system can answer itself.
-- **External Research Scout** — finds and verifies outside sources when the request requires current or domain evidence.
-- **Requirements & Edge-Case Analyst** — identifies missing outcomes, boundaries, acceptance conditions, priorities, and real-world failure cases.
-- **Design & Mock Specialist** — creates disposable design explorations, visual options, or other previews when seeing a candidate is necessary to clarify intent. A preview is not production implementation.
+- **Conversation Lead** — speaks with the CEO in plain language, asks one intent question at a time, maintains shared understanding, and surfaces missing outcomes, boundaries, priorities, edge cases, and acceptance behavior for the Task Editor.
+- **Architecture Analyst** — inspects authorized project evidence, current codebase structure, dependency graph, system topology, existing decisions, files, state, and constraints so the CEO is not asked questions the system can answer itself.
+- **External Research Scout** — finds and verifies outside sources when the request requires current external evidence, library guidance, trends, or security advisories.
+- **Security Evaluator** — records material risks, budget concerns, critical-action expectations, forbidden effects, and security boundary gaps before launch; it does not grant authority or approve a critical action.
+- **Design & Mock Specialist** — creates disposable design explorations, visual options, or other previews only when seeing a candidate is necessary to clarify intent. A preview is not production implementation.
 - **Task Editor** — maintains the canonical Task Contract, resolves contradictions, cites evidence and approved previews, and ensures the document is ready to launch.
 
-The Crew may later gain another role through the same evidence and Overwatch Council process used for organizational capability expansion.
+A domain-specific specialist is not an always-on Overture role. When the Architecture Analyst identifies a bounded domain question, Sane may create a read-only bounded Scout under the existing Scout-worker rules, with an explicit question, evidence scope, and termination condition. The Crew may later gain another permanent role only through the same evidence and Overwatch Council process used for organizational capability expansion.
 
 ### 36. `task.md` as the Goal launch contract
 

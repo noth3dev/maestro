@@ -6,8 +6,7 @@ Prove the complete clean-slate Maestro under sustained operation, adversarial fa
 
 ## Purpose
 
-Define Maestro as a selective, hierarchical organization rather than a flat roster of peer agents.
-Department Heads act like functional directors: they discuss cross-domain work, spawn bounded workers, review their departments' results, and return to standby when the goal is complete. Overwatch remains outside the command chain and improves the orchestration system by observing it end to end.
+Certify that the already implemented selective, hierarchical organization withstands sustained operation, adversarial failure, security review, data-lifecycle checks, and representative live scenarios. This phase hardens and verifies the system; it does not redefine its organization model.
 
 ## Release candidate freeze
 
