@@ -122,6 +122,10 @@ export function assertValidDecisionPacket(value: unknown): asserts value is Deci
     if ((value.criticalActions as readonly unknown[]).length > 0) throw new InvalidCouncilPayloadError("Escalated decision cannot contain critical actions");
   } else if (value.executionDisposition !== "executable") {
     throw new InvalidCouncilPayloadError("Resolved decision must be executable");
+  } else if ((value.criticalActions as readonly unknown[]).length > 0) {
+    // Executable packets bypass no separate CEO/authority approval boundary yet;
+    // critical actions must not be auto-approved through Council resolution alone.
+    throw new InvalidCouncilPayloadError("Executable decision cannot contain critical actions without a CEO approval boundary");
   }
 }
 
