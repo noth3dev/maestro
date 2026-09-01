@@ -1,4 +1,4 @@
-import type { EvidenceRecord } from "@maestro/evidence";
+import { verifyEvidenceRecord, type EvidenceContentReader, type EvidenceRecord } from "@maestro/evidence";
 import type { Pool } from "pg";
 
 export type EvidenceMetadataInput = Omit<EvidenceRecord, "createdAt">;
@@ -16,10 +16,14 @@ export async function appendEvidenceMetadata(pool: Pool, input: EvidenceMetadata
   return toEvidenceRecord(result.rows[0]!);
 }
 
-export async function getEvidenceMetadata(pool: Pool, evidenceId: string): Promise<EvidenceRecord | undefined> {
+/** Retrieves evidence only after its durable metadata matches the immutable artifact. */
+export async function getEvidenceMetadata(pool: Pool, evidenceId: string, content: EvidenceContentReader): Promise<EvidenceRecord | undefined> {
   const result = await pool.query<StoredEvidenceRecord>("SELECT * FROM evidence_records WHERE evidence_id = $1", [evidenceId]);
   const row = result.rows[0];
-  return row === undefined ? undefined : toEvidenceRecord(row);
+  if (row === undefined) return undefined;
+  const record = toEvidenceRecord(row);
+  await verifyEvidenceRecord(record, content);
+  return record;
 }
 
 type StoredEvidenceRecord = {

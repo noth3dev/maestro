@@ -28,6 +28,11 @@ export interface CaptureEvidenceInput {
   mediaType: string;
 }
 
+/** Reads the immutable bytes addressed by an evidence SHA-256. */
+export interface EvidenceContentReader {
+  read(sha256: string): Promise<Uint8Array>;
+}
+
 export class EvidenceIntegrityError extends Error {
   constructor(message: string) { super(message); this.name = "EvidenceIntegrityError"; }
 }
@@ -38,6 +43,19 @@ const mediaTypePattern = /^[a-z]+\/[a-z0-9.+-]+(?:;[a-z0-9._-]+=[a-z0-9._-]+)*$/
 
 export function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+/** Fails closed unless stored bytes still match durable evidence metadata. */
+export async function verifyEvidenceRecord(record: EvidenceRecord, content: EvidenceContentReader): Promise<void> {
+  if (!hashPattern.test(record.sha256)) throw new EvidenceIntegrityError("Evidence SHA-256 must be lowercase hex");
+  let bytes: Uint8Array;
+  try {
+    bytes = await content.read(record.sha256);
+  } catch {
+    throw new EvidenceIntegrityError(`Evidence artifact is unavailable: ${record.sha256}`);
+  }
+  if (bytes.byteLength !== record.byteLength) throw new EvidenceIntegrityError(`Evidence artifact byte length mismatch: ${record.sha256}`);
+  if (sha256Hex(bytes) !== record.sha256) throw new EvidenceIntegrityError(`Evidence artifact hash mismatch: ${record.sha256}`);
 }
 
 /** Local, content-addressed evidence store. It never exposes mutation or deletion. */
@@ -69,12 +87,15 @@ export class FileEvidenceStore {
     });
   }
 
-  async verify(sha256: string): Promise<void> {
+  async read(sha256: string): Promise<Uint8Array> {
     const path = this.objectPath(sha256);
-    let stored: Buffer;
-    try { stored = await readFile(path); }
+    try { return await readFile(path); }
     catch { throw new EvidenceIntegrityError(`Evidence artifact is unavailable: ${sha256}`); }
-    if (sha256Hex(stored) !== sha256) throw new EvidenceIntegrityError(`Evidence artifact hash mismatch: ${sha256}`);
+  }
+
+  async verify(sha256: string): Promise<void> {
+    const bytes = await this.read(sha256);
+    if (sha256Hex(bytes) !== sha256) throw new EvidenceIntegrityError(`Evidence artifact hash mismatch: ${sha256}`);
   }
 
   private objectPath(sha256: string): string {
