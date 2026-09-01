@@ -216,12 +216,20 @@ BEGIN
 END;
 $$;
 ALTER TABLE council_participants
-  ALTER COLUMN head_role_id SET NOT NULL,
-  ADD CONSTRAINT council_participants_head_role_nonblank CHECK (btrim(head_role_id) <> '');
-ALTER TABLE council_participants
-  ADD CONSTRAINT council_participants_head_role_fk
-  FOREIGN KEY (head_role_id, department_id)
-  REFERENCES permanent_head_roles (head_role_id, department_id);
+  ALTER COLUMN head_role_id SET NOT NULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'council_participants'::regclass AND conname = 'council_participants_head_role_nonblank') THEN
+    ALTER TABLE council_participants ADD CONSTRAINT council_participants_head_role_nonblank CHECK (btrim(head_role_id) <> '');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'council_participants'::regclass AND conname = 'council_participants_head_role_fk') THEN
+    ALTER TABLE council_participants
+      ADD CONSTRAINT council_participants_head_role_fk
+      FOREIGN KEY (head_role_id, department_id)
+      REFERENCES permanent_head_roles (head_role_id, department_id);
+  END IF;
+END;
+$$;
 CREATE UNIQUE INDEX IF NOT EXISTS council_participants_head_role_unique
   ON council_participants (council_id, head_role_id);
 

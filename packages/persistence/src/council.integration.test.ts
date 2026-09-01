@@ -10,7 +10,7 @@ import { CouncilBriefIdempotencyError, CouncilBriefsSealedError, CouncilProtocol
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
-const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql", "0005_authority_records.sql", "0006_evidence.sql", "0007_goal_control.sql", "0008_goal_pause_stop.sql", "0009_reconciliation_leader_lease.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql", "0014_head_activation_runtime_safety.sql", "0015_council_protocol.sql", "0016_council_hardening.sql", "0018_role_identity_hardening.sql", "0019_council_authority_hardening.sql", "0020_head_role_identity_hardening.sql"];
+const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql", "0005_authority_records.sql", "0006_evidence.sql", "0007_goal_control.sql", "0008_goal_pause_stop.sql", "0009_reconciliation_leader_lease.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql", "0014_head_activation_runtime_safety.sql", "0015_council_protocol.sql", "0016_council_hardening.sql", "0018_role_identity_hardening.sql", "0019_council_authority_hardening.sql", "0020_head_role_identity_hardening.sql", "0021_council_round_idempotency.sql"];
 function buildContractContent(projectId: string): TaskContractSubstance {
   return {
     desiredOutcome: "deliver safely",
@@ -287,6 +287,34 @@ const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`
     expect(replay.decisionPacket).toEqual(first.decisionPacket);
     const different = { ...decided, selectedDirection: "proceed differently" };
     await expect(recordCouncilDecisionPacket(pool, council.councilId, different, proof, context("decision-conflict"))).rejects.toBeInstanceOf(CouncilProtocolError);
+  });
+
+  it("stops after two contextless rounds with identical content instead of treating the second as a replay", async () => {
+    const { council, proof } = await setup(["product"]);
+    await submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"));
+    await revealCouncilBriefs(pool, council.councilId, proof, context("reveal"));
+    const repeated = { summary: "no new evidence", newEvidence: [], distinctArguments: [] };
+    const first = await recordCouncilRound(pool, council.councilId, [{ departmentId: "product", contribution: repeated, submittedBy: headContext("product") }], proof);
+    expect(first.noNewEvidenceStreak).toBe(1);
+    expect(first.state).toBe("revealed");
+    const second = await recordCouncilRound(pool, council.councilId, [{ departmentId: "product", contribution: repeated, submittedBy: headContext("product") }], proof);
+    expect(second.noNewEvidenceStreak).toBe(2);
+    expect(second.state).toBe("stopped_no_new_evidence");
+    expect((await pool.query("SELECT count(*)::int AS count FROM council_rounds WHERE council_id = $1", [council.councilId])).rows[0]!.count).toBe(2);
+  });
+
+  it("makes a round retry idempotent only when the caller supplies an explicit identity, and rejects a differing retry", async () => {
+    const { council, proof } = await setup(["product"]);
+    await submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"));
+    await revealCouncilBriefs(pool, council.councilId, proof, context("reveal"));
+    const contribution = { summary: "first pass", newEvidence: [evidence.references[0]], distinctArguments: ["argument-1"] };
+    const roundContext = { actorId: "secretary", sessionRef: "session:secretary", idempotencyKey: "round-retry-1" };
+    const first = await recordCouncilRound(pool, council.councilId, [{ departmentId: "product", contribution, submittedBy: headContext("product") }], proof, roundContext);
+    const replay = await recordCouncilRound(pool, council.councilId, [{ departmentId: "product", contribution, submittedBy: headContext("product") }], proof, roundContext);
+    expect(replay).toEqual(first);
+    expect((await pool.query("SELECT count(*)::int AS count FROM council_rounds WHERE council_id = $1", [council.councilId])).rows[0]!.count).toBe(1);
+    const different = { summary: "different pass", newEvidence: [], distinctArguments: ["different"] };
+    await expect(recordCouncilRound(pool, council.councilId, [{ departmentId: "product", contribution: different, submittedBy: headContext("product") }], proof, roundContext)).rejects.toBeInstanceOf(CouncilProtocolError);
   });
 
   it("redacts sealed brief content from the protocol event stream before reveal", async () => {

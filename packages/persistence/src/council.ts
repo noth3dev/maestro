@@ -184,6 +184,7 @@ export async function createHeadCouncil(pool: Pool, request: CreateHeadCouncilRe
       throw new CouncilProtocolError("Task Contract project identity does not match the Goal's project");
     }
     await assertDurableEvidenceReferences(client, request.goalId, goalRow.rows[0]!.project_id, request.evidence, "Frozen Council evidence");
+    await assertDurableEvidenceReferences(client, request.goalId, goalRow.rows[0]!.project_id, { evidenceReferences: contractContent.evidenceReferences }, "Frozen Task Contract evidence");
     const participants = await client.query<{ department_id: string; head_role_id: string; active_session_ref: string }>(
       `SELECT department_id, head_role_id, active_session_ref
        FROM goal_head_participations
@@ -204,14 +205,17 @@ export async function createHeadCouncil(pool: Pool, request: CreateHeadCouncilRe
       evidence: request.evidence,
       deadline: request.briefDeadline,
     });
-    const deadlineCheck = await client.query<{ inFuture: boolean }>("SELECT clock_timestamp() < $1::timestamptz AS \"inFuture\"", [snapshot.deadline]);
-    if (deadlineCheck.rowCount !== 1 || !deadlineCheck.rows[0]!.inFuture) throw new CouncilProtocolError("Head Council brief deadline must be in the future");
+    // Check for an existing Council by durable identity first: a retry whose
+    // original deadline has since elapsed while its response was lost must
+    // still return the prior Council, not fail on a now-past deadline.
     const existingByIdentity = await client.query<CouncilRow>(`SELECT council_id, goal_id, contract_id, brief_deadline, state, no_new_evidence_streak, decision_packet, snapshot_hash, snapshot_payload FROM head_councils WHERE goal_id = $1 AND contract_id = $2`, [request.goalId, request.contractId]);
     if ((existingByIdentity.rowCount ?? 0) > 0) {
       const prior = existingByIdentity.rows[0]!;
       if (prior.snapshot_hash.trim() === snapshot.snapshotHash) { await client.query("COMMIT"); open = false; return mapCouncil(prior); }
       throw new CouncilProtocolError("A Head Council already exists for this Goal and Task Contract");
     }
+    const deadlineCheck = await client.query<{ inFuture: boolean }>("SELECT clock_timestamp() < $1::timestamptz AS \"inFuture\"", [snapshot.deadline]);
+    if (deadlineCheck.rowCount !== 1 || !deadlineCheck.rows[0]!.inFuture) throw new CouncilProtocolError("Head Council brief deadline must be in the future");
     const councilId = request.councilId ?? randomUUID();
     const inserted = await client.query<CouncilRow>(`INSERT INTO head_councils (council_id, goal_id, contract_id, brief_deadline, state, snapshot_hash, snapshot_payload) VALUES ($1, $2, $3, $4, 'collecting', $5, $6::jsonb) RETURNING council_id, goal_id, contract_id, brief_deadline, state, no_new_evidence_streak, decision_packet, snapshot_hash, snapshot_payload`, [councilId, request.goalId, request.contractId, snapshot.deadline, snapshot.snapshotHash, JSON.stringify(snapshot)]);
     for (const participant of participants.rows) {
@@ -283,7 +287,7 @@ export async function markMissingCouncilParticipantsAbsent(pool: Pool, councilId
     for (const row of missing.rows) {
       const reason = reasons[row.department_id]!.trim();
       await client.query("UPDATE council_participants SET absence_reason = $3, absent_at = clock_timestamp() WHERE council_id = $1 AND department_id = $2", [councilId, row.department_id, reason]);
-      await insertProtocolEvent(client, council, "participant_absent", actorContext, { departmentId: row.department_id, reason }, `absence:${councilId}:${row.department_id}` , row.session_ref);
+      await insertProtocolEvent(client, council, "participant_absent", actorContext, { departmentId: row.department_id, reason, capturedSessionRef: row.session_ref }, `absence:${councilId}:${row.department_id}`);
     }
   });
 }
@@ -306,6 +310,7 @@ export async function readRevealedCouncilBriefs(pool: Pool, councilId: string): 
   if (council.state === "collecting") throw new CouncilBriefsSealedError("Independent briefs are sealed before reveal");
   const rows = await pool.query<{ department_id: string; payload: IndependentBrief; payload_hash: string; submitted_at: Date }>("SELECT department_id, payload, payload_hash, submitted_at FROM independent_briefs WHERE council_id = $1 ORDER BY submitted_at, department_id", [councilId]);
   return rows.rows.map((row) => {
+    assertValidIndependentBrief(row.payload);
     if (briefPayloadHash(row.payload) !== row.payload_hash.trim()) throw new CouncilProtocolError(`Revealed brief content does not match its recorded hash: ${row.department_id}`);
     return { departmentId: row.department_id, brief: row.payload, submittedAt: row.submitted_at.toISOString() };
   });
@@ -315,9 +320,34 @@ export async function readRevealedCouncilBriefs(pool: Pool, councilId: string): 
 export async function recordCouncilRound(pool: Pool, councilId: string, contributions: readonly RoundInput[], proof: GoalLeaseProof, context?: CouncilActorContext): Promise<HeadCouncil> {
   const seen = new Set<string>();
   for (const entry of contributions) { if (seen.has(entry.departmentId)) throw new CouncilProtocolError("A participant may contribute once per round"); seen.add(entry.departmentId); assertValidCouncilRoundContribution(entry.contribution); }
-  return mutateCouncil(pool, councilId, proof, context, `round:${councilId}`, async (client, council, actorContext) => {
-    requireState(council, "revealed");
+  const canonicalContributions = (input: readonly RoundInput[]): string =>
+    canonicalJson([...input].sort((a, b) => (a.departmentId < b.departmentId ? -1 : a.departmentId > b.departmentId ? 1 : 0)).map((entry) => ({ departmentId: entry.departmentId, contribution: entry.contribution })));
+  // Idempotent replay is opt-in via an explicit commandId/idempotencyKey.
+  // Two genuinely distinct rounds are allowed to carry identical content
+  // (e.g. deliberately repeating a round to trigger the no-new-evidence
+  // stop rule), so a content-derived fallback would wrongly deduplicate
+  // them; a contextless call always records a new round.
+  const explicitIdentity = context?.commandId ?? context?.idempotencyKey;
+  const fallbackIdentity = `round:${councilId}:${randomUUID()}`;
+  return mutateCouncil(pool, councilId, proof, context, fallbackIdentity, async (client, council, actorContext) => {
+    // Authorize every contributor before consulting any replay identity: a
+    // caller who merely guesses/replays an identity must not observe a
+    // result without itself being an authorized captured Head.
     for (const entry of contributions) await assertAuthorizedCapturedActor(client, council, entry.departmentId, entry.submittedBy);
+    if (explicitIdentity !== undefined) {
+      const existingRound = await client.query<{ payload: Record<string, unknown> }>(
+        "SELECT payload FROM council_protocol_events WHERE council_id = $1 AND event_type = 'round_recorded' AND command_or_idempotency_id = $2 FOR KEY SHARE",
+        [councilId, explicitIdentity],
+      );
+      if ((existingRound.rowCount ?? 0) > 0) {
+        const priorContributions = existingRound.rows[0]!.payload.contributions as readonly RoundInput[];
+        if (canonicalContributions(priorContributions) !== canonicalContributions(contributions)) throw new CouncilProtocolError("Council round idempotency identity was reused with different content");
+        // Idempotent retry: `council` was freshly loaded by mutateCouncil and
+        // already reflects this round's effects (and any later operations).
+        return council;
+      }
+    }
+    requireState(council, "revealed");
     const present = await client.query<{ department_id: string }>("SELECT department_id FROM council_participants WHERE council_id = $1 AND absent_at IS NULL ORDER BY department_id FOR KEY SHARE", [councilId]);
     const expected = present.rows.map((row) => row.department_id);
     const actual = [...seen].sort();
@@ -335,7 +365,7 @@ export async function recordCouncilRound(pool: Pool, councilId: string, contribu
     const stopped = streak >= 2;
     const updated = await client.query<CouncilRow>(`UPDATE head_councils SET no_new_evidence_streak = $2, state = CASE WHEN $3 THEN 'stopped_no_new_evidence' ELSE state END, closed_at = CASE WHEN $3 THEN transaction_timestamp() ELSE closed_at END WHERE council_id = $1 RETURNING council_id, goal_id, contract_id, brief_deadline, state, no_new_evidence_streak, decision_packet, snapshot_hash, snapshot_payload`, [councilId, streak, stopped]);
     const next = mapCouncil(updated.rows[0]!);
-    await insertProtocolEvent(client, council, "round_recorded", actorContext, { roundId, roundNumber: number, material, contributions }, `round:${councilId}:${number}`);
+    await insertProtocolEvent(client, council, "round_recorded", actorContext, { roundId, roundNumber: number, material, contributions }, explicitIdentity ?? fallbackIdentity);
     if (stopped) await insertProtocolEvent(client, next, "council_stopped", actorContext, { reason: "two consecutive rounds added no new evidence or argument", roundNumber: number }, `stop:${councilId}:${number}`);
     return next;
   });
@@ -574,20 +604,29 @@ async function lockGoal(client: PoolClient, proof: GoalLeaseProof): Promise<void
 
 /** A valid lease alone does not authorize Council writes once a Goal is paused, stopping, stopped, or emergency-stopped. */
 async function assertGoalControlOpen(client: PoolClient, goalId: string): Promise<void> {
-  const result = await client.query<{ paused_at: Date | null; stopping_at: Date | null; stopped_at: Date | null; emergency_stopped_at: Date | null }>(
-    `SELECT gc.paused_at, gc.stopping_at, gc.stopped_at, gc.emergency_stopped_at
-       FROM goals g
-       LEFT JOIN goal_controls gc ON gc.project_id = g.project_id AND gc.goal_id = g.goal_id
-      WHERE g.goal_id = $1
-      FOR UPDATE OF g`,
-    [goalId],
+  const goalRow = await client.query<{ project_id: string; state: string }>("SELECT project_id, state FROM goals WHERE goal_id = $1 FOR KEY SHARE", [goalId]);
+  if (goalRow.rowCount !== 1) throw new CouncilProtocolError("Goal not found for Council authority check");
+  const { project_id: projectId, state } = goalRow.rows[0]!;
+  if (state !== "active") throw new CouncilProtocolError(`Goal is ${state}, not active; Council writes are denied`);
+  // A Goal with no explicit control action yet is implicitly open, matching
+  // authority.ts's recheckControl default. Ensure the row exists so the lock
+  // below is against durable truth, not an absent row a concurrent writer
+  // could still insert.
+  await client.query("INSERT INTO goal_controls (project_id, goal_id) VALUES ($1, $2) ON CONFLICT (project_id, goal_id) DO NOTHING", [projectId, goalId]);
+  const result = await client.query<{ pause_requested_at: Date | null; paused_at: Date | null; stopping_at: Date | null; stopped_at: Date | null; emergency_stopped_at: Date | null }>(
+    "SELECT pause_requested_at, paused_at, stopping_at, stopped_at, emergency_stopped_at FROM goal_controls WHERE project_id = $1 AND goal_id = $2 FOR UPDATE",
+    [projectId, goalId],
   );
-  if (result.rowCount !== 1) throw new CouncilProtocolError("Goal not found for Council authority check");
+  if (result.rowCount !== 1) throw new CouncilProtocolError("Goal control state not found for Council authority check");
   const control = result.rows[0]!;
+  // Same precedence as authority.ts's recheckControl: terminal/dominant
+  // latches first, then a pause request denies writes immediately, matching
+  // the documented "pause request denies effects immediately" policy.
   if (control.emergency_stopped_at !== null) throw new CouncilProtocolError("Goal is emergency-stopped; Council writes are denied");
   if (control.stopped_at !== null) throw new CouncilProtocolError("Goal is stopped; Council writes are denied");
   if (control.stopping_at !== null) throw new CouncilProtocolError("Goal is stopping; Council writes are denied");
   if (control.paused_at !== null) throw new CouncilProtocolError("Goal is paused; Council writes are denied");
+  if (control.pause_requested_at !== null) throw new CouncilProtocolError("Goal pause is requested; Council writes are denied");
 }
 async function settlementCounts(client: PoolClient, councilId: string): Promise<{ participants: number; briefs: number; absent: number }> { const result = await client.query<{ participants: number; briefs: number; absent: number }>(`SELECT (SELECT count(*)::int FROM council_participants WHERE council_id = $1) participants, (SELECT count(*)::int FROM independent_briefs WHERE council_id = $1) briefs, (SELECT count(*)::int FROM council_participants WHERE council_id = $1 AND absent_at IS NOT NULL) absent`, [councilId]); return result.rows[0]!; }
 async function knownEvidenceReferences(client: PoolClient, council: HeadCouncil, prior: readonly CouncilRoundContribution[]): Promise<Set<string>> {
