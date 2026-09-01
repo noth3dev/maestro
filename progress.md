@@ -248,3 +248,11 @@
 - Verified: full `npm run check` against the disposable PostgreSQL 17 container: **410 passed, 1 intentional live-Prime skip, 0 failed.**
 - Merged (fast-forward) into `phase3/integration`, now HEAD `8cfb5ea`. Removed the superseded worktree/branch.
 - **Phase 3 status: work-sequence steps 1-7 of 11 done.** Remaining: evidence-bundle assembly (8), Sane milestone/final reporting (9), adversarial fixtures (10), full live release scenario (11).
+
+
+## 2026-09-01 (continued) — P3S8 (evidence-bundle assembly + integrity) implemented and accepted
+- Branched `phase3/p3s8-evidence-bundle` from `phase3/integration` (8cfb5ea). `evidenceBundleContentHash`/`assertEvidenceBundleIntegrity` (fails closed on hash mismatch, directly implementing "Evidence artifact hash changes: reject the bundle"). Migration `0035_evidence_bundles.sql`: immutable evidence_bundles. `assembleEvidenceBundle` reads a read-only aggregation across every subsystem accepted so far (Task Contract, Council, Department Plans, workers, full Git integration chain, Quality/conditional certifications + acceptances, Sentinel findings/challenges, Overwatch rounds/syntheses, budget reservations). `recordEvidenceBundle`/`verifyStoredEvidenceBundle`/`readEvidenceBundle`.
+- The integration test runs the ENTIRE Phase 2+3 chain built this session end-to-end and then assembles/records/verifies a real evidence bundle spanning all of it -- concrete proof every accepted subsystem is genuinely queryable and composable together, not just individually tested.
+- Verified: full `npm run check` against the disposable PostgreSQL 17 container: **415 passed, 1 intentional live-Prime skip, 0 failed.**
+- Merged (fast-forward) into `phase3/integration`, now HEAD `689665e`. Removed the superseded worktree/branch.
+- **Phase 3 status: work-sequence steps 1-8 of 11 done.** Remaining: Sane milestone/final reporting (9), adversarial fixtures (10), full live release scenario (11).
