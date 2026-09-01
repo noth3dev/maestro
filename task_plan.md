@@ -21,7 +21,7 @@ Complete the remaining Phase 1 durable control-plane safety foundations, then im
 - [complete_with_environment_gate] 3. Complete remaining Phase 1 command/recovery/evidence boundaries required by Phase 2. Tag `phase1-accepted` at `541ce7d`.
 - [in_progress] 4. Implement Phase 2 Task Contract and Secretary intake vertical slice. Organization/personas (`2e8e5a5`), Overture Task Contract (`c653760`/`c89042d`), Head activation (`b835564`/`ac65c8d`) done on branches, not yet merged to `main`.
 - [complete] 5. Head Council sealed-submission slice (P2S5) accepted after independent review and real-PostgreSQL verification on `phase2/p2s5-integration` (7a627a2): 254 passed, 1 intentional skip, 0 failed. See "Phase 2 detailed status" below for accepted boundary. Department Plans (P2S6) and beyond not started; in_progress.
-- [in_progress] 6. Department Plans, Mission Bundles, worker lifecycle, team-lead grants, Git integration, and budget reservations (P2S6-P2S11, work-sequence steps 6-11) accepted on `phase2/p2s5-integration` (69efe08): 327 passed, 0 failed. Work-sequence step 12 (first real Goal run end-to-end) remains.
+- [complete_pending_independent_review] 6. Full Phase 2 work-sequence (steps 6-12: Department Plans, Mission Bundles, worker lifecycle, team-lead grants, Git integration, budget reservations, first real local Goal end-to-end) implemented on `phase2/p2s5-integration` (1f91fd2): 328 passed, 0 failed. P2S5/P2S6 independently reviewed; P2S7-P2S12 self-reviewed only pending a dispatched independent review (see progress.md Phase 3 start gate note).
 - [pending] 7. Run Phase 1–2 acceptance scenarios, document gaps, and report.
 
 ## Next step
