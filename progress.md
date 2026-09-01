@@ -155,3 +155,12 @@
 - Verified: full `npm run check` against the disposable PostgreSQL 17 container: **301 passed, 1 intentional live-Prime skip, 0 failed.**
 - Merged (fast-forward) into `phase2/p2s5-integration`, now HEAD `fa97e4b`. Removed the superseded worktree/branch.
 - **Phase 2 work-sequence status: steps 1-8 done. Steps 9-12 remain**: worker request-for-help/bounded team-lead exception, Git branch/worktree/commit/integration evidence, budget reservations/forecasts, and one real local Goal run through to `awaiting certification`.
+
+
+## 2026-09-01 (continued) — P2S9 (worker request-for-help / bounded team-lead) implemented and accepted
+- Branched `phase2/p2s9-request-for-help` from `phase2/p2s5-integration` (fa97e4b). Continued direct implementation + self-review (subagent spawns still failing immediately).
+- `packages/domain/src/team-lead-grant.ts` + `packages/persistence/src/team-lead-grant.ts` + migration `0025_team_lead_grants.sql`: grantTeamLead (Head-only, one active grant per worker, rejects granting to a terminal or already-helper worker -- structurally preventing recursive spawning), revokeTeamLeadGrant (one-way, idempotent), spawnHelperWorker (bounded by maxHelpers, spawns via `ExecutionKernelPort` parented to the team lead's own execution, persists `parent_worker_id`/`grant_id`).
+- Self-review caught a real design defect before commit: an early draft derived a helper worker's `attempt` number from the same `max(attempt)` sequence as the mission's own retry attempts, which would have let helper spawns silently consume the mission's `retryCeiling` budget. Fixed with two properly-scoped partial unique indexes (mission attempts scoped to `grant_id IS NULL`; helper attempts scoped to their own `grant_id`), replacing 0024's plain unique constraint.
+- Verified: full `npm run check` against the disposable PostgreSQL 17 container: **310 passed, 1 intentional live-Prime skip, 0 failed.**
+- Merged (fast-forward) into `phase2/p2s5-integration`, now HEAD `ec4b5f0`. Removed the superseded worktree/branch.
+- **Phase 2 work-sequence status: steps 1-9 done. Steps 10-12 remain**: Git branch/worktree/commit/integration evidence (real `child_process.spawn` operations, argument arrays, no shell interpolation, per plan/phase2.md's "Git execution model"), budget reservations/forecasts, and one real local Goal run through to `awaiting certification`. Step 10 is a distinct subsystem (real filesystem/process operations, not pure persistence) and needs its own design pass.
