@@ -8,3 +8,4 @@ export * from "./organization.js";
 export * from "./task-contract.js";
 export * from "./head-participation.js";
 export * from "./council.js";
+export * from "./department-plan.js";
