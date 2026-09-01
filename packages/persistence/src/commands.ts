@@ -53,6 +53,15 @@ export class CommandIdReuseError extends Error {
   }
 }
 
+/**
+ * Test-only checkpoint. It is intentionally an explicit call-site dependency,
+ * never read from configuration or installed by an application composition root.
+ */
+export interface ExecuteGoalCommandTestHooks {
+  /** Runs after all durable writes and before the transaction commits. */
+  beforeCommit?(): void | Promise<void>;
+}
+
 function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -120,6 +129,7 @@ export async function executeGoalCommand(
   pool: Pool,
   command: GoalCommand,
   proof: GoalLeaseProof,
+  testHooks?: ExecuteGoalCommandTestHooks,
 ): Promise<CommandResult> {
   if (proof.goalId !== command.goalId || !isValidLeaseProof(proof)) {
     throw new StaleGoalLeaseError(command.goalId);
@@ -232,6 +242,7 @@ export async function executeGoalCommand(
       [eventId, JSON.stringify({ eventId })],
     );
     await client.query("SELECT pg_notify('maestro_outbox', $1)", [eventId]);
+    await testHooks?.beforeCommit?.();
     await client.query("COMMIT");
     transactionOpen = false;
     return result;

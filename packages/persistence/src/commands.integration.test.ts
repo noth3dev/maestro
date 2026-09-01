@@ -121,6 +121,25 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
     await expect(executeGoalCommand(pool, command, proof)).rejects.toMatchObject({ code: "stale_lease" });
   });
 
+  it("rolls back a pre-commit injected failure and retries CreateGoal exactly once", async () => {
+    const command = {
+      commandId: randomUUID(), projectId: randomUUID(), goalId: randomUUID(),
+      actorId: "sane", type: "CreateGoal", expectedVersion: 0,
+    } as const;
+    const proof = await lease(command.goalId, command.actorId);
+    const injectedFailure = new Error("test pre-commit failure");
+
+    await expect(executeGoalCommand(pool, command, proof, {
+      beforeCommit: () => { throw injectedFailure; },
+    })).rejects.toBe(injectedFailure);
+    expect(await counts()).toEqual({ receipts: 0, events: 0, goals: 0, outbox: 0 });
+
+    const first = await executeGoalCommand(pool, command, proof);
+    expect(first).toMatchObject({ outcome: "succeeded", goalId: command.goalId, version: 1, state: "draft" });
+    await expect(executeGoalCommand(pool, command, proof)).resolves.toEqual(first);
+    expect(await counts()).toEqual({ receipts: 1, events: 1, goals: 1, outbox: 1 });
+  });
+
   it("atomically creates receipt, event, projection, and outbox with a current proof", async () => {
     const command = {
       commandId: randomUUID(), projectId: randomUUID(), goalId: randomUUID(),
