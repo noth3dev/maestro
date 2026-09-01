@@ -44,13 +44,23 @@ export type InvocationUsage =
   | { state: "unknown" }
   | { state: "unavailable"; reason: "provider-does-not-expose-usage" | "snapshot-unavailable" };
 
+/**
+ * `unavailable` means the provider completed the invocation but this kernel
+ * cannot observe its final reply text through the bound provider surface.
+ * This must never be fabricated; an absent or empty string is not the same
+ * as a genuinely observed empty reply.
+ */
+export type InvocationAnswer =
+  | { state: "available"; text: string }
+  | { state: "unavailable"; reason: "provider-does-not-expose-answer-text" | "snapshot-unavailable" };
+
 export interface InvocationObservation {
   invocation: InvocationRef;
   name: string;
   status: InvocationStatus;
   toolEvents: ToolEvents;
   usage: InvocationUsage;
-  answer?: string;
+  answer: InvocationAnswer;
   error?: string;
 }
 

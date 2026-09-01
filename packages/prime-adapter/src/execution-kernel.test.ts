@@ -59,7 +59,7 @@ describe("Prime execution-kernel adapter", () => {
         invocation: child.invocation,
         name: "luna-child",
         status: "succeeded",
-        answer: "LUNA_CHILD_OK",
+        answer: { state: "available", text: "LUNA_CHILD_OK" },
       }),
     ]));
     await expect(kernel.getModelIdentity(root.execution)).resolves.toEqual({
@@ -142,9 +142,12 @@ describe("Prime execution-kernel adapter", () => {
     session.getRlmChildSnapshots.mockReturnValue([
       { id: "prime-sdk-child-id-should-stay-private", sessionName: "luna-child", status: "done" },
     ]);
+    // The pinned SDK build does not always populate a completed child's
+    // answerPreview; this must be reported honestly, never fabricated.
     expect((await kernel.observe(root.execution)).find((item) => item.invocation === child.invocation)).toMatchObject({
       toolEvents: { state: "unavailable", reason: "provider-does-not-expose-tool-events" },
       usage: { state: "unknown" },
+      answer: { state: "unavailable", reason: "provider-does-not-expose-answer-text" },
     });
   });
 
@@ -172,6 +175,7 @@ describe("truthful unavailable Prime observations", () => {
         invocation: root.invocation,
         name: "luna-root",
         status: "unknown",
+        answer: { state: "unavailable", reason: "provider-does-not-expose-answer-text" },
       }),
       expect.objectContaining({
         invocation: child.invocation,
@@ -179,6 +183,7 @@ describe("truthful unavailable Prime observations", () => {
         status: "unknown",
         toolEvents: { state: "unavailable", reason: "snapshot-unavailable" },
         usage: { state: "unavailable", reason: "snapshot-unavailable" },
+        answer: { state: "unavailable", reason: "snapshot-unavailable" },
       }),
     ]));
   });

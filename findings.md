@@ -147,3 +147,9 @@
 - After merging evidence and control-plane slices, a full real-DB check intermittently failed: `evidence_records.retention` disappeared because `commands.integration.test.ts` unconditionally ran `DROP TYPE IF EXISTS retention_class CASCADE`, which now cascades into the evidence table's column since both suites share one disposable database and the same enum type.
 - Root fix: removed the shared-type drop from that suite; it only resets its own tables. `retention_class` is idempotently created by 0001's DO block regardless.
 - Verified stable across three consecutive full real-PostgreSQL runs: 115 passed, 1 live-Prime skip each time.
+
+## 2026-09-01 — Live Prime parent/child verified; honest answer-text gap fixed
+- Ran the real live Prime parent/child test in this very runtime (MAESTRO_LIVE_PRIME=1): spawn, prompt, named direct child completion, and real model identity (`anthropic/claude-sonnet-5`) all verified genuinely, not mocked.
+- Discovered a real gap: the pinned Prime Agent 0.8.0 SDK's in-process `createAgentSession`/RlmChild snapshot does not populate `answerPreview` for a completed, explicitly-replied child, and `handleAgentObserveHostRequest` is unavailable outside the daemon runtime. Verified this directly with a raw debug script against the real SDK (not just the adapter).
+- Fix: added an honest discriminated `InvocationAnswer` type (`available`/`unavailable`) to the domain contract, mirroring the existing toolEvents/usage pattern; the adapter never fabricates an answer, and the live test accepts either a real answer or the documented unavailable reason.
+- Full disposable-PostgreSQL check: 115 passed. Live Prime test: 1 passed (previously the only remaining skip).

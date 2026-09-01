@@ -10,6 +10,7 @@ import {
   type SpawnedInvocation,
   type ToolEvents,
   type InvocationUsage,
+  type InvocationAnswer,
   type ToolEventRef,
 } from "@maestro/domain";
 import { createAgentSession, SessionManager } from "prime-agent";
@@ -97,6 +98,13 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
     typeof snapshot.tokenCount === "number"
       ? { state: "available", totalTokens: snapshot.tokenCount }
       : { state: "unknown" };
+  // This pinned Prime Agent SDK build does not reliably populate a
+  // completed child's reply text on its snapshot in this adapter's
+  // in-process session mode; report that honestly rather than guessing.
+  const answerFor = (snapshot: PrimeChildSnapshot): InvocationAnswer =>
+    snapshot.answerPreview !== undefined
+      ? { state: "available", text: snapshot.answerPreview }
+      : { state: "unavailable", reason: "provider-does-not-expose-answer-text" };
   const snapshotFor = (child: ChildRecord): PrimeChildSnapshot | undefined =>
     sessions.get(child.parent)?.getRlmChildSnapshots().find((snapshot) => snapshot.id === child.childId);
 
@@ -147,6 +155,7 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
         status: root.cancelled ? "cancelled" : session.isStreaming ? "running" : "unknown",
         toolEvents: { state: "unavailable", reason: "provider-does-not-expose-tool-events" },
         usage: { state: "unavailable", reason: "provider-does-not-expose-usage" },
+        answer: { state: "unavailable", reason: "provider-does-not-expose-answer-text" },
       }] : [];
       const childObservations = [...children.values()]
         .filter((child) => child.parent === execution)
@@ -159,6 +168,7 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
               status: child.cancelled ? "cancelled" : "unknown",
               toolEvents: { state: "unavailable", reason: "snapshot-unavailable" },
               usage: { state: "unavailable", reason: "snapshot-unavailable" },
+              answer: { state: "unavailable", reason: "snapshot-unavailable" },
             };
           }
           return {
@@ -167,7 +177,7 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
             status: child.cancelled ? "cancelled" : normalizeStatus(snapshot.status),
             toolEvents: toolEventsFor(child.invocation, snapshot),
             usage: usageFor(snapshot),
-            ...(snapshot.answerPreview ? { answer: snapshot.answerPreview } : {}),
+            answer: answerFor(snapshot),
             ...(snapshot.error ? { error: snapshot.error } : {}),
           };
         });
