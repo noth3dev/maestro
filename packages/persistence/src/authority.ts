@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import type { ActionRequest, AuthorityDecisionAudit, AuthorityRecord, AuthorityRepository, ControlRecheck } from "@maestro/authority";
 
 export interface BootstrapAuthorityRecordInput extends ActionRequest {
@@ -75,10 +75,23 @@ export class PostgresAuthorityRepository implements AuthorityRepository {
       [request.projectId, request.goalId],
     );
     const control = result.rows[0]!;
-    // Emergency stop is a permanent latch and takes priority over an epoch
-    // mismatch, which can also occur for other reasons.
+    // Each latch dominates an epoch mismatch, which can also occur for other
+    // reasons; emergency stop and full stop are terminal and take priority
+    // over their requested-but-not-yet-confirmed predecessor states.
     if (control.emergency_stopped_at !== null) {
       return { effect: "deny", reason: "emergency_stop" };
+    }
+    if (control.stopped_at !== null) {
+      return { effect: "deny", reason: "stopped" };
+    }
+    if (control.stopping_at !== null) {
+      return { effect: "deny", reason: "stopping" };
+    }
+    if (control.paused_at !== null) {
+      return { effect: "deny", reason: "paused" };
+    }
+    if (control.pause_requested_at !== null) {
+      return { effect: "deny", reason: "pause_requested" };
     }
     if (control.control_epoch !== request.controlEpoch) {
       return { effect: "deny", reason: "stale_control_epoch" };
@@ -107,13 +120,28 @@ export interface GoalControl {
   /** Exact PostgreSQL bigint text; do not coerce it to a JavaScript number. */
   controlEpoch: string;
   emergencyStoppedAt?: Date;
+  pauseRequestedAt?: Date;
+  pausedAt?: Date;
+  stoppingAt?: Date;
+  stoppedAt?: Date;
 }
+
+/**
+ * Durable mode derived from the latch/timestamp columns, in dominance order.
+ * Emergency stop and full stop are terminal; "stopping"/"pause_requested" are
+ * the requested-but-not-yet-confirmed predecessors of "stopped"/"paused".
+ */
+type GoalControlMode = "emergency_stopped" | "stopped" | "stopping" | "paused" | "pause_requested" | "open";
 
 type StoredGoalControl = {
   project_id: string;
   goal_id: string;
   control_epoch: string;
   emergency_stopped_at: Date | null;
+  pause_requested_at: Date | null;
+  paused_at: Date | null;
+  stopping_at: Date | null;
+  stopped_at: Date | null;
 };
 
 function toGoalControl(row: StoredGoalControl): GoalControl {
@@ -122,7 +150,20 @@ function toGoalControl(row: StoredGoalControl): GoalControl {
     goalId: row.goal_id,
     controlEpoch: row.control_epoch,
     ...(row.emergency_stopped_at === null ? {} : { emergencyStoppedAt: row.emergency_stopped_at }),
+    ...(row.pause_requested_at === null ? {} : { pauseRequestedAt: row.pause_requested_at }),
+    ...(row.paused_at === null ? {} : { pausedAt: row.paused_at }),
+    ...(row.stopping_at === null ? {} : { stoppingAt: row.stopping_at }),
+    ...(row.stopped_at === null ? {} : { stoppedAt: row.stopped_at }),
   };
+}
+
+function goalControlMode(row: StoredGoalControl): GoalControlMode {
+  if (row.emergency_stopped_at !== null) return "emergency_stopped";
+  if (row.stopped_at !== null) return "stopped";
+  if (row.stopping_at !== null) return "stopping";
+  if (row.paused_at !== null) return "paused";
+  if (row.pause_requested_at !== null) return "pause_requested";
+  return "open";
 }
 
 /** Returns the durable control state, creating the initial unlatched epoch once. */
@@ -182,4 +223,157 @@ export async function emergencyStopGoal(pool: Pool, projectId: string, goalId: s
   } finally {
     client.release();
   }
+}
+
+
+/**
+ * Shared transaction skeleton for every pause/stop/resume transition: lock
+ * the Goal's control row, let the caller validate the current mode and apply
+ * its update, then return the durable result. A validation failure (thrown
+ * inside `apply`) rolls the whole transaction back with no partial write.
+ */
+async function transitionGoalControl(
+  pool: Pool,
+  projectId: string,
+  goalId: string,
+  apply: (client: PoolClient, current: StoredGoalControl) => Promise<void>,
+): Promise<GoalControl> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO goal_controls (project_id, goal_id) VALUES ($1, $2)
+       ON CONFLICT (project_id, goal_id) DO NOTHING`,
+      [projectId, goalId],
+    );
+    const control = await client.query<StoredGoalControl>(
+      "SELECT * FROM goal_controls WHERE project_id = $1 AND goal_id = $2 FOR UPDATE",
+      [projectId, goalId],
+    );
+    const current = control.rows[0]!;
+    await apply(client, current);
+    const result = await client.query<StoredGoalControl>(
+      "SELECT * FROM goal_controls WHERE project_id = $1 AND goal_id = $2",
+      [projectId, goalId],
+    );
+    await client.query("COMMIT");
+    return toGoalControl(result.rows[0]!);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Requests a pause: advances the epoch once and denies further effects with
+ * reason "pause_requested" immediately (no work quiescence is implemented in
+ * this phase; that only becomes meaningful once execution workers exist).
+ * Idempotent while already pause-requested; invalid from any other mode.
+ */
+export async function requestPauseGoal(pool: Pool, projectId: string, goalId: string): Promise<GoalControl> {
+  return transitionGoalControl(pool, projectId, goalId, async (client, current) => {
+    const mode = goalControlMode(current);
+    if (mode === "pause_requested") return;
+    if (mode !== "open") {
+      throw new Error(`cannot request pause from mode "${mode}" (expected "open")`);
+    }
+    await client.query(
+      `UPDATE goal_controls
+       SET control_epoch = control_epoch + 1, pause_requested_at = transaction_timestamp()
+       WHERE project_id = $1 AND goal_id = $2`,
+      [projectId, goalId],
+    );
+  });
+}
+
+/**
+ * Confirms a previously requested pause as fully paused, advancing the epoch
+ * again. Valid only immediately after `requestPauseGoal`; a Goal that has
+ * since had stop requested (or was never pause-requested) is rejected.
+ */
+export async function confirmPausedGoal(pool: Pool, projectId: string, goalId: string): Promise<GoalControl> {
+  return transitionGoalControl(pool, projectId, goalId, async (client, current) => {
+    const mode = goalControlMode(current);
+    if (mode !== "pause_requested") {
+      throw new Error(`cannot confirm pause from mode "${mode}" (expected "pause_requested")`);
+    }
+    await client.query(
+      `UPDATE goal_controls
+       SET control_epoch = control_epoch + 1, paused_at = transaction_timestamp()
+       WHERE project_id = $1 AND goal_id = $2`,
+      [projectId, goalId],
+    );
+  });
+}
+
+const STOP_SOURCE_MODES: readonly GoalControlMode[] = ["open", "pause_requested", "paused"];
+
+/**
+ * Requests a stop from an open, pause-requested, or fully paused Goal,
+ * advancing the epoch and denying further effects with reason "stopping".
+ * Not idempotent: requesting stop again while already stopping (or from any
+ * terminal mode) is rejected, matching the durable audit-once intent.
+ */
+export async function requestStopGoal(pool: Pool, projectId: string, goalId: string): Promise<GoalControl> {
+  return transitionGoalControl(pool, projectId, goalId, async (client, current) => {
+    const mode = goalControlMode(current);
+    if (!STOP_SOURCE_MODES.includes(mode)) {
+      throw new Error(`cannot request stop from mode "${mode}" (expected one of: ${STOP_SOURCE_MODES.join(", ")})`);
+    }
+    await client.query(
+      `UPDATE goal_controls
+       SET control_epoch = control_epoch + 1, stopping_at = transaction_timestamp()
+       WHERE project_id = $1 AND goal_id = $2`,
+      [projectId, goalId],
+    );
+  });
+}
+
+/**
+ * Confirms a previously requested stop as fully stopped: a terminal mode
+ * like emergency stop, so it also revokes every currently active authority
+ * record for the Goal atomically. Valid only immediately after
+ * `requestStopGoal`.
+ */
+export async function confirmStoppedGoal(pool: Pool, projectId: string, goalId: string): Promise<GoalControl> {
+  return transitionGoalControl(pool, projectId, goalId, async (client, current) => {
+    const mode = goalControlMode(current);
+    if (mode !== "stopping") {
+      throw new Error(`cannot confirm stop from mode "${mode}" (expected "stopping")`);
+    }
+    await client.query(
+      `UPDATE goal_controls
+       SET control_epoch = control_epoch + 1, stopped_at = transaction_timestamp()
+       WHERE project_id = $1 AND goal_id = $2`,
+      [projectId, goalId],
+    );
+    await client.query(
+      `UPDATE authority_records SET revoked_at = transaction_timestamp()
+       WHERE project_id = $1 AND goal_id = $2 AND revoked_at IS NULL`,
+      [projectId, goalId],
+    );
+  });
+}
+
+/**
+ * Resumes a fully paused Goal, advancing the epoch once more and clearing
+ * the pause timestamps so the Goal returns to the open mode. Requires the
+ * Goal to be exactly in "paused" mode: resume from pause-requested, stopping,
+ * stopped, or emergency-stopped is rejected.
+ */
+export async function resumeGoal(pool: Pool, projectId: string, goalId: string): Promise<GoalControl> {
+  return transitionGoalControl(pool, projectId, goalId, async (client, current) => {
+    const mode = goalControlMode(current);
+    if (mode !== "paused") {
+      throw new Error(`cannot resume from mode "${mode}" (expected "paused")`);
+    }
+    await client.query(
+      `UPDATE goal_controls
+       SET control_epoch = control_epoch + 1, pause_requested_at = NULL, paused_at = NULL
+       WHERE project_id = $1 AND goal_id = $2`,
+      [projectId, goalId],
+    );
+  });
 }

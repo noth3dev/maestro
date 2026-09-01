@@ -142,7 +142,10 @@ export interface AuthorityDecisionAudit {
 /** Durable storage boundary. The authority package has no database or provider dependency. */
 export type ControlRecheck =
   | { effect: "allow" }
-  | { effect: "deny"; reason: "emergency_stop" | "stale_control_epoch" };
+  | {
+      effect: "deny";
+      reason: "emergency_stop" | "stale_control_epoch" | "pause_requested" | "paused" | "stopping" | "stopped";
+    };
 
 export interface AuthorityRepository {
   load(request: ActionRequest): Promise<readonly AuthorityRecord[]>;
