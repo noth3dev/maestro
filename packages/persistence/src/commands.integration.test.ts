@@ -32,8 +32,12 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
   }
 
   beforeAll(async () => {
+    // `retention_class` is shared, idempotently created infrastructure (see
+    // 0001's DO block) now also used by other integration suites' tables
+    // (e.g. evidence_records). Dropping it here would cascade into their
+    // columns when suites share one database. Only this suite's own tables
+    // are reset.
     await pool.query("DROP TABLE IF EXISTS goal_leases, outbox, goal_events, goals, command_receipts CASCADE");
-    await pool.query("DROP TYPE IF EXISTS retention_class CASCADE");
     for (const name of ["0001_phase1_core.sql", "0002_goal_leases.sql"]) {
       const migration = await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8");
       await pool.query(migration);

@@ -142,3 +142,8 @@
 - A stale evidence_records table (missing the retention column) existed in the dedicated disposable database from an earlier iteration; dropped it before final verification, no code defect.
 - Renamed colliding migration 0006_goal_control.sql to 0007_goal_control.sql and updated its one test reference.
 - Final real-PostgreSQL verification: 115 passed, 1 explicitly gated Prime live test skipped.
+
+## 2026-09-01 — Cross-suite migration cleanup defect
+- After merging evidence and control-plane slices, a full real-DB check intermittently failed: `evidence_records.retention` disappeared because `commands.integration.test.ts` unconditionally ran `DROP TYPE IF EXISTS retention_class CASCADE`, which now cascades into the evidence table's column since both suites share one disposable database and the same enum type.
+- Root fix: removed the shared-type drop from that suite; it only resets its own tables. `retention_class` is idempotently created by 0001's DO block regardless.
+- Verified stable across three consecutive full real-PostgreSQL runs: 115 passed, 1 live-Prime skip each time.

@@ -253,10 +253,10 @@ The CEO can operate the full representative system from the Secretary Office: co
 ### 47. Secretary Office is the app home
 
 - The default app home is the Secretary Office with Sane as the primary conversational surface.
-- The CEO can state an objective, continue an Initiator Crew interview, review the current `task.md`, give the single launch confirmation, and receive milestone or final reports without navigating into an operations dashboard.
+- The CEO can state an objective, continue an Overture Crew interview, review the current `task.md`, give the single launch confirmation, and receive milestone or final reports without navigating into an operations dashboard.
 - Current Goal status remains visible from the home surface without overwhelming the conversation.
 - Primary navigation provides Secretary Office, Task Contracts, Goals, permanent Groups and Departments, Overwatch, Firefly and Incidents, Repository and Git, environments and enrolled devices, and data or evidence views.
-- The center workspace renders the selected Sane conversation, Initiator activity, Head Council, Goal timeline, Department room, Git state, incident, or Overwatch improvement.
+- The center workspace renders the selected Sane conversation, Overture activity, Head Council, Goal timeline, Department room, Git state, incident, or Overwatch improvement.
 - The contextual side panel shows the selected Goal hierarchy, active Heads and workers, branches and worktrees, budget, certification, relevant context, and authority state.
 - The visual direction remains spacious, legible, restrained, shadcn-based, avatar-first, and free of decorative bold weight or wide letter spacing.
 

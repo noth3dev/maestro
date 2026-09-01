@@ -493,11 +493,11 @@ Accepted worker commits flow to the responsible Department branch, then accepted
 
 The CEO-facing coordination layer is a permanent **Secretary Office**.
 
-- **Sane** is the current primary Secretary identity and the CEO's continuous conversational interface. Sane receives requests, maintains continuity, coordinates the Initiator Crew, presents the final Task Contract, launches approved Goals, reports outcomes, and surfaces only critical interruptions.
-- **Initiator Crew** is a selectively activated intake and task-definition team. It works with the CEO in a `grill-me`-style conversation and produces one canonical `task.md` before orchestration begins.
-- The Initiator Crew is not a flat always-on chat room. Sane wakes only the roles needed for the request.
+- **Sane** is the current primary Secretary identity and the CEO's continuous conversational interface. Sane receives requests, maintains continuity, coordinates the Overture Crew, presents the final Task Contract, launches approved Goals, reports outcomes, and surfaces only critical interruptions.
+- **Overture Crew** (or **Overture**) is a selectively activated intake and task-definition team. It works with the CEO in a `grill-me`-style conversation and produces one canonical `task.md` before orchestration begins.
+- The Overture Crew is not a flat always-on chat room. Sane wakes only the roles needed for the request.
 
-Initial Initiator Crew roles:
+Initial Overture Crew roles:
 
 - **Conversation Lead** — speaks with the CEO in plain language, asks one intent question at a time, and maintains the shared understanding.
 - **Project Context Scout** — inspects the current project, existing decisions, files, state, and constraints so the CEO is not asked questions the system can answer itself.
@@ -510,7 +510,7 @@ The Crew may later gain another role through the same evidence and Overwatch Cou
 
 ### 36. `task.md` as the Goal launch contract
 
-The Initiator Crew produces one versioned `task.md` containing:
+The Overture Crew produces one versioned `task.md` containing:
 
 - CEO intent and desired outcome.
 - User-visible behavior and success criteria.
@@ -536,7 +536,7 @@ Once launched, the Task Contract becomes the stable source of intent for Sane, t
 
 - Selection is quality-gated and then cost-optimized: among models demonstrated capable of meeting the mission's quality and safety requirements, choose the lowest-cost suitable option.
 - Sane uses a stable high-quality model appropriate for persistent CEO interaction and judgment continuity.
-- The Initiator Conversation Lead and Task Editor use models capable of accurately preserving intent and resolving contradictions.
+- The Overture Conversation Lead and Task Editor use models capable of accurately preserving intent and resolving contradictions.
 - Project and External Scouts prefer lower-cost retrieval and synthesis models and escalate only when evidence conflict or complexity requires it.
 - Department Heads use strong reasoning models appropriate for planning, delegation, negotiation, and evidence synthesis.
 - Workers receive the smallest model demonstrated capable of their specific mission. Model size is not inherited automatically from the Head.
@@ -670,10 +670,10 @@ Notification paths:
 ### 47. Secretary Office is the app home
 
 - The default app home is the Secretary Office with Sane as the primary conversational surface.
-- The CEO can state an objective, continue an Initiator Crew interview, review the current `task.md`, give the single launch confirmation, and receive milestone or final reports without navigating into an operations dashboard.
+- The CEO can state an objective, continue an Overture Crew interview, review the current `task.md`, give the single launch confirmation, and receive milestone or final reports without navigating into an operations dashboard.
 - Current Goal status remains visible from the home surface without overwhelming the conversation.
 - Primary navigation provides Secretary Office, Task Contracts, Goals, permanent Groups and Departments, Overwatch, Firefly and Incidents, Repository and Git, environments and enrolled devices, and data or evidence views.
-- The center workspace renders the selected Sane conversation, Initiator activity, Head Council, Goal timeline, Department room, Git state, incident, or Overwatch improvement.
+- The center workspace renders the selected Sane conversation, Overture activity, Head Council, Goal timeline, Department room, Git state, incident, or Overwatch improvement.
 - The contextual side panel shows the selected Goal hierarchy, active Heads and workers, branches and worktrees, budget, certification, relevant context, and authority state.
 - The visual direction remains spacious, legible, restrained, shadcn-based, avatar-first, and free of decorative bold weight or wide letter spacing.
 
@@ -812,7 +812,7 @@ The target architecture may replace the current standalone Maestro execution mod
 
 The Prime Agent-native replacement is ready for cutover only when all ten representative live scenarios pass end to end:
 
-1. **Initiator:** Sane activates only the needed Initiator Crew roles, incorporates project context, external evidence or a design mock when required, produces one coherent `task.md`, and obtains the single CEO launch confirmation.
+1. **Overture:** Sane activates only the needed Overture Crew roles, incorporates project context, external evidence or a design mock when required, produces one coherent `task.md`, and obtains the single CEO launch confirmation.
 2. **Hierarchical execution:** only relevant Heads wake; independent briefs, Head Council, Scout evidence, worker spawning, hierarchical Git integration, independent Quality validation, and Sane reporting all complete.
 3. **Head-to-Head activation:** a Head directly calls another existing Head during a Goal; context, Council membership and budget update without duplicate activation.
 4. **Environment and enrolled device:** a worker safely uses a virtual environment, project CLI and browser or device access inside scope while a critical out-of-scope effect is blocked.
