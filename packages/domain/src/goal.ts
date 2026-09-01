@@ -14,6 +14,16 @@ export type GoalState =
   | "failed"
   | "recovering";
 
+export const TERMINAL_GOAL_STATES: ReadonlySet<GoalState> = new Set([
+  "stopped",
+  "succeeded",
+  "failed",
+]);
+
+export function isTerminalGoalState(state: GoalState): boolean {
+  return TERMINAL_GOAL_STATES.has(state);
+}
+
 export class InvalidGoalTransitionError extends Error {
   readonly from: GoalState;
   readonly to: GoalState;

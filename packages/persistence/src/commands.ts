@@ -265,12 +265,20 @@ async function assertCurrentGoalLease(
 }
 
 function isValidLeaseProof(proof: GoalLeaseProof): boolean {
+  return proof.goalId !== "" && proof.ownerId !== "" && isValidFencingToken(proof.fencingToken);
+}
+
+/**
+ * Structural bounds check for an exact base-10 PostgreSQL signed bigint
+ * fencing token. Shared by every lease kind (per-Goal and reconciliation
+ * leader) so none of them ever coerce a token through a JS number.
+ */
+export function isValidFencingToken(fencingToken: string): boolean {
   const maxFencingToken = "9223372036854775807";
-  return proof.goalId !== "" && proof.ownerId !== "" &&
-    typeof proof.fencingToken === "string" &&
-    /^[1-9][0-9]*$/.test(proof.fencingToken) &&
-    (proof.fencingToken.length < maxFencingToken.length ||
-      (proof.fencingToken.length === maxFencingToken.length && proof.fencingToken <= maxFencingToken));
+  return typeof fencingToken === "string" &&
+    /^[1-9][0-9]*$/.test(fencingToken) &&
+    (fencingToken.length < maxFencingToken.length ||
+      (fencingToken.length === maxFencingToken.length && fencingToken <= maxFencingToken));
 }
 
 async function insertReceipt(
