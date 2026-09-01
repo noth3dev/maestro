@@ -10,7 +10,7 @@ import {
 } from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
-import { isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext, type HeadCouncil } from "./council.js";
+import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext, type HeadCouncil } from "./council.js";
 
 export class DepartmentPlanError extends Error {}
 export class DepartmentPlanNotFoundError extends DepartmentPlanError {}
@@ -90,6 +90,7 @@ async function lockGoalLease(client: PoolClient, proof: GoalLeaseProof): Promise
   const lease = await client.query("SELECT 1 FROM goal_leases WHERE goal_id = $1 AND owner_id = $2 AND fencing_token = $3::bigint AND expires_at > clock_timestamp() FOR UPDATE", [proof.goalId, proof.ownerId, proof.fencingToken]);
   if (lease.rowCount !== 1) throw new StaleGoalLeaseError(proof.goalId);
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 14))", [proof.goalId]);
+  await assertGoalControlOpen(client, proof.goalId);
 }
 
 /**

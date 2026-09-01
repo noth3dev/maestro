@@ -133,6 +133,12 @@ describeDatabase("Department Plans with PostgreSQL", () => {
     expect(v1.version).toBe(1);
   });
 
+  it("denies Department Plan writes once the Goal is paused", async () => {
+    const { council, proof, projectId, goalId } = await setupResolvedCouncil(["product"]);
+    await pool.query("INSERT INTO goal_controls (project_id, goal_id, pause_requested_at, paused_at) VALUES ($1, $2, clock_timestamp(), clock_timestamp()) ON CONFLICT (project_id, goal_id) DO UPDATE SET pause_requested_at = clock_timestamp(), paused_at = clock_timestamp()", [projectId, goalId]);
+    await expect(createDepartmentPlan(pool, { councilId: council.councilId, departmentId: "product", substance: substance() }, proof, headContext("product"))).rejects.toThrow();
+  });
+
   it("throws DepartmentPlanNotFoundError for a plan that does not exist", async () => {
     await expect(readDepartmentPlan(pool, randomUUID(), "product")).rejects.toBeInstanceOf(DepartmentPlanNotFoundError);
   });
