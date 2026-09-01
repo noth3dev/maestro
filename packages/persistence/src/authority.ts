@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import type { ActionRequest, AuthorityDecisionAudit, AuthorityRecord, AuthorityRepository } from "@maestro/authority";
+import type { ActionRequest, AuthorityDecisionAudit, AuthorityRecord, AuthorityRepository, ControlRecheck } from "@maestro/authority";
 
 export interface BootstrapAuthorityRecordInput extends ActionRequest {
   recordId?: string;
@@ -60,6 +60,31 @@ export class PostgresAuthorityRepository implements AuthorityRepository {
         decision.recordId ?? null, decidedAt],
     );
   }
+
+  async recheckControl(request: ActionRequest): Promise<ControlRecheck> {
+    // A Goal with no explicit control action yet is implicitly open at epoch 1,
+    // matching getGoalControl's lazily created default. Ensure that row exists
+    // so comparison below is against durable truth rather than an absent row.
+    await this.pool.query(
+      `INSERT INTO goal_controls (project_id, goal_id) VALUES ($1, $2)
+       ON CONFLICT (project_id, goal_id) DO NOTHING`,
+      [request.projectId, request.goalId],
+    );
+    const result = await this.pool.query<StoredGoalControl>(
+      "SELECT * FROM goal_controls WHERE project_id = $1 AND goal_id = $2",
+      [request.projectId, request.goalId],
+    );
+    const control = result.rows[0]!;
+    // Emergency stop is a permanent latch and takes priority over an epoch
+    // mismatch, which can also occur for other reasons.
+    if (control.emergency_stopped_at !== null) {
+      return { effect: "deny", reason: "emergency_stop" };
+    }
+    if (control.control_epoch !== request.controlEpoch) {
+      return { effect: "deny", reason: "stale_control_epoch" };
+    }
+    return { effect: "allow" };
+  }
 }
 
 type StoredAuthorityRecord = {
@@ -73,4 +98,88 @@ function toAuthorityRecord(row: StoredAuthorityRecord): AuthorityRecord {
     budgetEffectCents: Number(row.budget_effect_cents), expiresAt: row.expires_at, issuedAt: row.issued_at,
     ...(row.revoked_at === null ? {} : { revokedAt: row.revoked_at }),
   };
+}
+
+
+export interface GoalControl {
+  projectId: string;
+  goalId: string;
+  /** Exact PostgreSQL bigint text; do not coerce it to a JavaScript number. */
+  controlEpoch: string;
+  emergencyStoppedAt?: Date;
+}
+
+type StoredGoalControl = {
+  project_id: string;
+  goal_id: string;
+  control_epoch: string;
+  emergency_stopped_at: Date | null;
+};
+
+function toGoalControl(row: StoredGoalControl): GoalControl {
+  return {
+    projectId: row.project_id,
+    goalId: row.goal_id,
+    controlEpoch: row.control_epoch,
+    ...(row.emergency_stopped_at === null ? {} : { emergencyStoppedAt: row.emergency_stopped_at }),
+  };
+}
+
+/** Returns the durable control state, creating the initial unlatched epoch once. */
+export async function getGoalControl(pool: Pool, projectId: string, goalId: string): Promise<GoalControl> {
+  await pool.query(
+    `INSERT INTO goal_controls (project_id, goal_id) VALUES ($1, $2)
+     ON CONFLICT (project_id, goal_id) DO NOTHING`,
+    [projectId, goalId],
+  );
+  const result = await pool.query<StoredGoalControl>(
+    "SELECT * FROM goal_controls WHERE project_id = $1 AND goal_id = $2",
+    [projectId, goalId],
+  );
+  return toGoalControl(result.rows[0]!);
+}
+
+/**
+ * Latches a Goal permanently for this phase, advances its epoch once, and
+ * revokes every currently active authority record for that Goal atomically.
+ */
+export async function emergencyStopGoal(pool: Pool, projectId: string, goalId: string): Promise<GoalControl> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO goal_controls (project_id, goal_id) VALUES ($1, $2)
+       ON CONFLICT (project_id, goal_id) DO NOTHING`,
+      [projectId, goalId],
+    );
+    const control = await client.query<StoredGoalControl>(
+      "SELECT * FROM goal_controls WHERE project_id = $1 AND goal_id = $2 FOR UPDATE",
+      [projectId, goalId],
+    );
+    const current = control.rows[0]!;
+    if (current.emergency_stopped_at === null) {
+      await client.query(
+        `UPDATE goal_controls
+         SET control_epoch = control_epoch + 1, emergency_stopped_at = transaction_timestamp()
+         WHERE project_id = $1 AND goal_id = $2`,
+        [projectId, goalId],
+      );
+      await client.query(
+        `UPDATE authority_records SET revoked_at = transaction_timestamp()
+         WHERE project_id = $1 AND goal_id = $2 AND revoked_at IS NULL`,
+        [projectId, goalId],
+      );
+    }
+    const result = await client.query<StoredGoalControl>(
+      "SELECT * FROM goal_controls WHERE project_id = $1 AND goal_id = $2",
+      [projectId, goalId],
+    );
+    await client.query("COMMIT");
+    return toGoalControl(result.rows[0]!);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
