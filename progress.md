@@ -78,3 +78,10 @@
 
 
 - Updated canonical Phase 2/6/7/8 plans from cross-phase review: Head runtime contexts are Goal-partitioned; Phase 6 is the first adaptive-persona application phase; hierarchy-owning phases must preserve durable projection facts for Phase 7 radial views; Phase 8 Purpose now matches hardening/certification scope.
+
+## 2026-09-01 (direct execution, no subagent)
+- Implemented `packages/domain/src/sealed-submission.ts`: frozen, deep-copied, order-normalized snapshot primitive with hash identity (`freezeSealedSubmissionSnapshot`, `sealedSubmissionSnapshotHash`). 4/4 unit tests pass; committed on `phase2/sealed-submissions` (59bc408), merged into `phase2/council-briefs`.
+- Wired `createHeadCouncil` to freeze a real snapshot (project/goal/contract identity + active participant sessionRefs) at council creation and persist its hash in a new `snapshot_hash` column (migration 0013 updated). Council integration test now asserts a real 64-hex snapshot hash.
+- `npm run build` and `npm test` pass: 129 passed, 71 environment-gated skips (Docker/PostgreSQL unavailable in this runtime session, so the 3 real-DB council tests remain skipped, not run).
+- This slice is self-verified only, not yet independently (no-edit) reviewed per the project's own acceptance policy. Do not treat as accepted.
+- Remaining Phase 2 work sequence: Department Plan schema/reconciliation/worker linkage (step 6, blocked on this snapshot-bound decision packet — now unblocked), mission bundles (7), Scout/Execution worker lifecycle (8), worker request-for-help/bounded team-lead (9), Git branch/worktree/commit/integration (10), budget reservations/forecasts (11), one real local Goal run (12).

@@ -185,3 +185,8 @@ Against plan/phase1.md's exit gate and Tests section, still missing:
 - The uncommitted Council code is a persistence sketch, not a safe reusable sealed-submission boundary. Do not accept it as a narrow brief feature.
 - P2W5 is decomposed without advancing Phase 3: first a generic sealed-submission primitive with immutable frozen participant/session/contract/evidence identity, idempotency, deadline/disposition policy, reveal, append-only audit/event truth, and control/lease checks; then the Head Council-specific consumer with evidence-tagged complete rounds, durable novelty/stopping, and a non-executable escalation outcome.
 - Phase 3 will reuse the primitive for independent reviewer judgments and Sentinel will consume its durable event/evidence lineage. This adds no reviewer spawning or Sentinel implementation in Phase 2.
+
+## 2026-09-01 — Direct (no-subagent) resumption of P2S5
+- Prior subagent attempts (Terra, then Luna at max thinking) were spawned for read-only audits but were cancelled/completed without replying; discarded, no salvage needed.
+- Proceeded directly: implemented sealed-submission primitive and wired it into Head Council creation for real (not just present alongside it). Build+unit tests green; PostgreSQL integration tests remain environment-gated (Docker not available this session).
+- Department Plan work (step 6) can now begin against a durable, tamper-evident decision packet identity.
