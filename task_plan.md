@@ -55,3 +55,7 @@ Create the verified Phase 1 checkpoint commit, then branch isolated worktrees fo
 - Create a local commit after each coherent vertical slice clears focused tests, full `npm run check`, required disposable-DB integration tests, and independent review.
 - Use the resulting commit as the base for separate worktrees when remaining slices have isolated write ownership.
 - Local commits remain noncritical; remote push/merge/release stays behind the existing CEO approval boundary.
+
+## Naming decision (deferred, for Phase 2+)
+- User confirmed: rename Initiator Crew to "Overture" when Phase 2 Initiator/intake work is implemented. Use "Overture" as the actual name at that time, not "Initiator Crew".
+- "Vanguard" (rapid-response taskforce from plan/extra.md in the main workspace) is explicitly deferred to a later phase; do not implement it in Phase 1/2.
