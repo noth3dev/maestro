@@ -1,0 +1,1 @@
+{"name":"@maestro/api-client","private":true,"type":"module","main":"./dist/index.js","types":"./dist/index.d.ts","exports":{".":{"types":"./dist/index.d.ts","import":"./dist/index.js"}},"dependencies":{"@maestro/contracts":"*","zod":"^4.0.0"}}

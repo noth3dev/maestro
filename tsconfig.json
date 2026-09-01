@@ -5,6 +5,9 @@
       "path": "packages/contracts"
     },
     {
+      "path": "packages/api-client"
+    },
+    {
       "path": "packages/domain"
     },
     {
@@ -12,6 +15,9 @@
     },
     {
       "path": "packages/prime-adapter"
+    },
+    {
+      "path": "apps/cli"
     },
     {
       "path": "apps/control-plane"
