@@ -234,3 +234,10 @@
 - Verified: full `npm run check` against the disposable PostgreSQL 17 container: **390 passed, 1 intentional live-Prime skip, 0 failed.**
 - Merged (fast-forward) into `phase3/integration`, now HEAD `c975afe`. Removed the superseded worktree/branch.
 - **Phase 3 status: work-sequence steps 1-5 of 11 done.** Remaining: conditional Security/Safety certification (6), certification conflict adjudication + bounded waivers (7), evidence-bundle assembly (8), Sane milestone/final reporting (9), adversarial fixtures (10), full live release scenario (11).
+
+
+## 2026-09-01 (continued) — P3S6 (conditional Security/Safety certification) implemented and accepted
+- Branched `phase3/p3s6-conditional-cert` from `phase3/integration` (c975afe). Added `requiredConditionalCertifications` (pure risk-trigger evaluator: critical actions, external service assumptions, or a data boundary broader than local) and `certifyConditional`/`listConditionalCertifications` + migration `0033_conditional_certifications.sql`, reusing certifyQuality's exact non-negotiable guarantees (producer-cannot-self-certify as both an app check and a DB CHECK constraint, exact Contract/commit binding, durable evidence validation).
+- Verified: full `npm run check` against the disposable PostgreSQL 17 container: **399 passed, 1 intentional live-Prime skip, 0 failed.**
+- Merged (fast-forward) into `phase3/integration`, now HEAD `c641cc1`. Removed the superseded worktree/branch.
+- **Phase 3 status: work-sequence steps 1-6 of 11 done.** Remaining: certification conflict adjudication + bounded waivers (7), evidence-bundle assembly (8), Sane milestone/final reporting (9), adversarial fixtures (10), full live release scenario (11).
