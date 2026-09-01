@@ -1,0 +1,1 @@
+{"extends":"../../tsconfig.json","compilerOptions":{"composite":true,"target":"ES2023","module":"NodeNext","moduleResolution":"NodeNext","outDir":"dist","rootDir":"src","declaration":true,"tsBuildInfoFile":"dist/tsconfig.tsbuildinfo"},"include":["src/**/*.ts"],"exclude":["src/**/*.test.ts"]}
