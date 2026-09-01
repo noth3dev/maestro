@@ -1,20 +1,120 @@
-import { randomUUID } from "node:crypto";
-import { assertValidCouncilRoundContribution, assertValidDecisionPacket, assertValidIndependentBrief, freezeSealedSubmissionSnapshot, isMaterialCouncilRound, type CouncilRoundContribution, type DecisionPacket, type IndependentBrief } from "@maestro/domain";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  assertValidCouncilRoundContribution,
+  assertValidDecisionPacket,
+  assertValidIndependentBrief,
+  canonicalJson,
+  freezeSealedSubmissionSnapshot,
+  hydrateSealedSubmissionSnapshot,
+  isMaterialCouncilRound,
+  type CouncilRoundContribution,
+  type DecisionPacket,
+  type IndependentBrief,
+  type SealedSubmissionSnapshot,
+} from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 
 export type HeadCouncilState = "collecting" | "revealed" | "resolved" | "escalated" | "stopped_no_new_evidence";
-export interface HeadCouncil { readonly councilId: string; readonly goalId: string; readonly contractId: string; readonly briefDeadline: Date; readonly state: HeadCouncilState; readonly noNewEvidenceStreak: number; readonly decisionPacket: DecisionPacket | null; readonly snapshotHash: string; }
-export interface CreateHeadCouncilRequest { readonly councilId?: string; readonly goalId: string; readonly contractId: string; readonly briefDeadline: Date; }
+export type CouncilProtocolEventType = "council_created" | "brief_submitted" | "participant_absent" | "briefs_revealed" | "round_recorded" | "council_stopped" | "decision_resolved" | "decision_escalated";
+
+export interface HeadCouncil {
+  readonly councilId: string;
+  readonly goalId: string;
+  readonly contractId: string;
+  /** Canonical UTC timestamp; no mutable Date crosses the snapshot boundary. */
+  readonly briefDeadline: string;
+  readonly state: HeadCouncilState;
+  readonly noNewEvidenceStreak: number;
+  readonly decisionPacket: DecisionPacket | null;
+  readonly snapshotHash: string;
+  readonly snapshot: SealedSubmissionSnapshot;
+}
+
+export interface CouncilActorContext {
+  readonly actorId: string;
+  readonly sessionRef: string;
+  readonly commandId?: string;
+  readonly idempotencyKey?: string;
+}
+
+export interface CreateHeadCouncilRequest {
+  readonly councilId?: string;
+  readonly goalId: string;
+  readonly contractId: string;
+  readonly briefDeadline: Date | string;
+  readonly evidence: Readonly<Record<string, unknown>>;
+  /** Request metadata is supported for callers that keep creation identity in one object. */
+  readonly actorId?: string;
+  readonly sessionRef?: string;
+  readonly commandId?: string;
+  readonly idempotencyKey?: string;
+}
+
 export interface RoundInput { readonly departmentId: string; readonly contribution: CouncilRoundContribution; }
+
+export interface CouncilProtocolEvent {
+  readonly eventSequence: string;
+  readonly eventId: string;
+  readonly councilId: string;
+  readonly goalId: string;
+  readonly eventType: CouncilProtocolEventType;
+  readonly actorId: string;
+  readonly sessionRef: string;
+  readonly commandId: string | null;
+  readonly idempotencyKey: string | null;
+  readonly commandOrIdempotencyId: string;
+  readonly snapshotHash: string;
+  readonly evidenceLineage: Readonly<Record<string, unknown>>;
+  readonly payload: Readonly<Record<string, unknown>>;
+  readonly occurredAt: string;
+}
+
 export class HeadCouncilNotFoundError extends Error {}
 export class CouncilProtocolError extends Error {}
 export class CouncilBriefsSealedError extends Error {}
+export class CouncilBriefIdempotencyError extends CouncilProtocolError {}
 
-type CouncilRow = { council_id: string; goal_id: string; contract_id: string; brief_deadline: Date; state: HeadCouncilState; no_new_evidence_streak: number; decision_packet: DecisionPacket | null; snapshot_hash: string };
+interface CouncilRow {
+  council_id: string;
+  goal_id: string;
+  contract_id: string;
+  brief_deadline: Date | string;
+  state: HeadCouncilState;
+  no_new_evidence_streak: number;
+  decision_packet: DecisionPacket | null;
+  snapshot_hash: string;
+  snapshot_payload: unknown;
+}
 
-export async function createHeadCouncil(pool: Pool, request: CreateHeadCouncilRequest, proof: GoalLeaseProof): Promise<HeadCouncil> {
-  if (!validProofFor(request.goalId, proof) || request.contractId === "" || Number.isNaN(request.briefDeadline.valueOf())) throw new StaleGoalLeaseError(request.goalId);
+interface StoredBriefRow {
+  department_id: string;
+  payload: IndependentBrief;
+  payload_hash: string;
+  idempotency_key: string;
+  submitted_at: Date;
+}
+
+interface StoredEventRow {
+  event_sequence: string;
+  event_id: string;
+  council_id: string;
+  goal_id: string;
+  event_type: CouncilProtocolEventType;
+  actor_id: string;
+  session_ref: string;
+  command_id: string | null;
+  idempotency_key: string | null;
+  command_or_idempotency_id: string;
+  snapshot_hash: string;
+  evidence_lineage: Record<string, unknown>;
+  payload: Record<string, unknown>;
+  occurred_at: Date;
+}
+
+export async function createHeadCouncil(pool: Pool, request: CreateHeadCouncilRequest, proof: GoalLeaseProof, context?: CouncilActorContext): Promise<HeadCouncil> {
+  if (!validProofFor(request.goalId, proof) || request.contractId.trim() === "") throw new StaleGoalLeaseError(request.goalId);
+  const actorContext = resolveContext(proof, context ?? requestContext(request, proof), `council:create:${request.councilId ?? "new"}`);
   const client = await pool.connect(); let open = false;
   try {
     await client.query("BEGIN"); open = true; await lockGoal(client, proof);
@@ -28,103 +128,227 @@ export async function createHeadCouncil(pool: Pool, request: CreateHeadCouncilRe
     const snapshot = freezeSealedSubmissionSnapshot({
       projectId: goalRow.rows[0]!.project_id,
       goalId: request.goalId,
-      contract: { contractId: request.contractId, version: Number(contract.version), contentHash: contract.content_hash, content: contract.content },
+      contract: { contractId: request.contractId, version: Number(contract.version), contentHash: contract.content_hash.trim(), content: contract.content },
       participants: participants.rows.map((row) => ({ participantId: row.department_id, sessionRef: row.active_session_ref })),
-      evidence: {},
+      evidence: request.evidence,
       deadline: request.briefDeadline,
     });
     const councilId = request.councilId ?? randomUUID();
-    const inserted = await client.query<CouncilRow>(`INSERT INTO head_councils (council_id, goal_id, contract_id, brief_deadline, state, snapshot_hash) VALUES ($1, $2, $3, $4, 'collecting', $5) RETURNING council_id, goal_id, contract_id, brief_deadline, state, no_new_evidence_streak, decision_packet, snapshot_hash`, [councilId, request.goalId, request.contractId, request.briefDeadline, snapshot.snapshotHash]);
-    for (const participant of participants.rows) await client.query("INSERT INTO council_participants (council_id, department_id) VALUES ($1, $2)", [councilId, participant.department_id]);
-    await client.query("COMMIT"); open = false; return mapCouncil(inserted.rows[0]!);
+    const inserted = await client.query<CouncilRow>(`INSERT INTO head_councils (council_id, goal_id, contract_id, brief_deadline, state, snapshot_hash, snapshot_payload) VALUES ($1, $2, $3, $4, 'collecting', $5, $6::jsonb) RETURNING council_id, goal_id, contract_id, brief_deadline, state, no_new_evidence_streak, decision_packet, snapshot_hash, snapshot_payload`, [councilId, request.goalId, request.contractId, snapshot.deadline, snapshot.snapshotHash, JSON.stringify(snapshot)]);
+    for (const participant of participants.rows) await client.query("INSERT INTO council_participants (council_id, department_id, session_ref) VALUES ($1, $2, $3)", [councilId, participant.department_id, participant.active_session_ref]);
+    const council = mapCouncil(inserted.rows[0]!);
+    await insertProtocolEvent(client, council, "council_created", actorContext, { snapshot: council.snapshot }, actorContext.commandId ?? actorContext.idempotencyKey ?? `council:create:${council.councilId}`);
+    await client.query("COMMIT"); open = false; return council;
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 
-export async function submitIndependentBrief(pool: Pool, councilId: string, departmentId: string, brief: IndependentBrief, proof: GoalLeaseProof): Promise<void> {
+/** Read path verifies the complete persisted snapshot and its hash on every load. */
+export async function readHeadCouncil(pool: Pool, councilId: string): Promise<HeadCouncil> {
+  const result = await pool.query<CouncilRow>(councilSelectSql() + " WHERE council_id = $1", [councilId]);
+  if (result.rowCount !== 1) throw new HeadCouncilNotFoundError(`Council not found: ${councilId}`);
+  const council = mapCouncil(result.rows[0]!);
+  await assertParticipantSnapshot(pool, council);
+  return council;
+}
+/** Alias for callers that use the persistence layer's get/read naming convention. */
+export const getHeadCouncil = readHeadCouncil;
+
+export async function submitIndependentBrief(pool: Pool, councilId: string, departmentId: string, brief: IndependentBrief, proof: GoalLeaseProof, context?: CouncilActorContext): Promise<void> {
   assertValidIndependentBrief(brief);
-  await mutateCouncil(pool, councilId, proof, async (client, council) => {
+  const payloadHash = briefPayloadHash(brief);
+  await mutateCouncil(pool, councilId, proof, context, `brief:${departmentId}:${payloadHash}`, async (client, council, actorContext) => {
+    const idempotencyKey = actorContext.idempotencyKey ?? `brief:${departmentId}:${payloadHash}`;
+    const existing = await client.query<StoredBriefRow>(`SELECT department_id, payload, payload_hash, idempotency_key, submitted_at FROM independent_briefs WHERE council_id = $1 AND (department_id = $2 OR idempotency_key = $3) FOR KEY SHARE`, [councilId, departmentId, idempotencyKey]);
+    if ((existing.rowCount ?? 0) > 0) {
+      const priorForDepartment = existing.rows.find((row) => row.department_id === departmentId);
+      const priorForKey = existing.rows.find((row) => row.idempotency_key === idempotencyKey);
+      if (priorForKey !== undefined && priorForKey.department_id !== departmentId) throw new CouncilBriefIdempotencyError("Independent brief idempotency identity was reused by another participant");
+      const prior = priorForDepartment ?? priorForKey;
+      if (prior === undefined || prior.payload_hash !== payloadHash || canonicalJson(prior.payload) !== canonicalJson(brief)) throw new CouncilBriefIdempotencyError("Independent brief idempotency identity was reused with different content");
+      return;
+    }
     requireState(council, "collecting");
-    const participant = await client.query("SELECT 1 FROM council_participants WHERE council_id = $1 AND department_id = $2 AND absent_at IS NULL FOR KEY SHARE", [councilId, departmentId]);
+    const participant = await client.query<{ session_ref: string }>("SELECT session_ref FROM council_participants WHERE council_id = $1 AND department_id = $2 AND absent_at IS NULL FOR KEY SHARE", [councilId, departmentId]);
     if (participant.rowCount !== 1) throw new CouncilProtocolError("Only a present captured Council participant may submit a brief");
-    const inserted = await client.query("INSERT INTO independent_briefs (council_id, department_id, payload) VALUES ($1, $2, $3::jsonb) ON CONFLICT DO NOTHING RETURNING council_id", [councilId, departmentId, JSON.stringify(brief)]);
-    if (inserted.rowCount !== 1) throw new CouncilProtocolError("A participant may submit exactly one independent brief");
+    const deadline = await client.query<{ accepting: boolean }>("SELECT transaction_timestamp() < brief_deadline AS accepting FROM head_councils WHERE council_id = $1", [councilId]);
+    if (deadline.rowCount !== 1 || !deadline.rows[0]!.accepting) throw new CouncilProtocolError("Brief deadline has passed");
+    await client.query("INSERT INTO independent_briefs (council_id, department_id, payload, payload_hash, idempotency_key) VALUES ($1, $2, $3::jsonb, $4, $5)", [councilId, departmentId, JSON.stringify(brief), payloadHash, idempotencyKey]);
+    await insertProtocolEvent(client, council, "brief_submitted", actorContext, { departmentId, payloadHash, brief }, idempotencyKey);
   });
 }
 
 /** Missing Heads become absent only after the deadline, with an auditable nonblank reason. */
-export async function markMissingCouncilParticipantsAbsent(pool: Pool, councilId: string, reasons: Readonly<Record<string, string>>, proof: GoalLeaseProof): Promise<void> {
-  await mutateCouncil(pool, councilId, proof, async (client, council) => {
+export async function markMissingCouncilParticipantsAbsent(pool: Pool, councilId: string, reasons: Readonly<Record<string, string>>, proof: GoalLeaseProof, context?: CouncilActorContext): Promise<void> {
+  await mutateCouncil(pool, councilId, proof, context, `absence:${councilId}`, async (client, council, actorContext) => {
     requireState(council, "collecting");
-    const deadline = await client.query("SELECT transaction_timestamp() >= $2 AS elapsed", [councilId, council.briefDeadline]);
-    if (!deadline.rows[0]!.elapsed) throw new CouncilProtocolError("Brief deadline has not passed");
-    const missing = await client.query<{ department_id: string }>(`SELECT p.department_id FROM council_participants p LEFT JOIN independent_briefs b ON b.council_id = p.council_id AND b.department_id = p.department_id WHERE p.council_id = $1 AND p.absent_at IS NULL AND b.department_id IS NULL FOR UPDATE OF p`, [councilId]);
+    const deadline = await client.query<{ elapsed: boolean }>("SELECT transaction_timestamp() >= $1::timestamptz AS elapsed", [council.briefDeadline]);
+    if (deadline.rowCount !== 1 || !deadline.rows[0]!.elapsed) throw new CouncilProtocolError("Brief deadline has not passed");
+    const missing = await client.query<{ department_id: string; session_ref: string }>(`SELECT p.department_id, p.session_ref FROM council_participants p LEFT JOIN independent_briefs b ON b.council_id = p.council_id AND b.department_id = p.department_id WHERE p.council_id = $1 AND p.absent_at IS NULL AND b.department_id IS NULL FOR UPDATE OF p`, [councilId]);
     for (const row of missing.rows) {
       const reason = reasons[row.department_id];
       if (typeof reason !== "string" || reason.trim() === "") throw new CouncilProtocolError(`Missing absence reason for ${row.department_id}`);
     }
     if (Object.keys(reasons).some((departmentId) => !missing.rows.some((row) => row.department_id === departmentId))) throw new CouncilProtocolError("Absence reasons may name only missing participants");
-    for (const row of missing.rows) await client.query("UPDATE council_participants SET absence_reason = $3, absent_at = transaction_timestamp() WHERE council_id = $1 AND department_id = $2", [councilId, row.department_id, reasons[row.department_id]!.trim()]);
+    for (const row of missing.rows) {
+      const reason = reasons[row.department_id]!.trim();
+      await client.query("UPDATE council_participants SET absence_reason = $3, absent_at = transaction_timestamp() WHERE council_id = $1 AND department_id = $2", [councilId, row.department_id, reason]);
+      await insertProtocolEvent(client, council, "participant_absent", actorContext, { departmentId: row.department_id, reason }, `absence:${councilId}:${row.department_id}` , row.session_ref);
+    }
   });
 }
 
-export async function revealCouncilBriefs(pool: Pool, councilId: string, proof: GoalLeaseProof): Promise<void> {
-  await mutateCouncil(pool, councilId, proof, async (client, council) => {
+export async function revealCouncilBriefs(pool: Pool, councilId: string, proof: GoalLeaseProof, context?: CouncilActorContext): Promise<void> {
+  await mutateCouncil(pool, councilId, proof, context, `reveal:${councilId}`, async (client, council, actorContext) => {
     requireState(council, "collecting");
     const counts = await settlementCounts(client, councilId);
-    const allSubmitted = counts.briefs === counts.participants;
-    const deadline = await client.query<{ elapsed: boolean }>("SELECT transaction_timestamp() >= $1 AS elapsed", [council.briefDeadline]);
-    const deadlineSettled = deadline.rows[0]!.elapsed && counts.briefs + counts.absent === counts.participants;
+    const allSubmitted = counts.briefs === counts.participants && counts.absent === 0;
+    const deadline = await client.query<{ elapsed: boolean }>("SELECT transaction_timestamp() >= $1::timestamptz AS elapsed", [council.briefDeadline]);
+    const deadlineSettled = deadline.rowCount === 1 && deadline.rows[0]!.elapsed && counts.briefs + counts.absent === counts.participants;
     if (!allSubmitted && !deadlineSettled) throw new CouncilProtocolError("Briefs remain sealed until all submit or every deadline-missing participant is marked absent");
     await client.query("UPDATE head_councils SET state = 'revealed', revealed_at = transaction_timestamp() WHERE council_id = $1", [councilId]);
+    await insertProtocolEvent(client, council, "briefs_revealed", actorContext, { briefs: counts.briefs, absent: counts.absent }, `reveal:${councilId}`);
   });
 }
 
 export async function readRevealedCouncilBriefs(pool: Pool, councilId: string): Promise<readonly { departmentId: string; brief: IndependentBrief; submittedAt: Date }[]> {
-  const council = await pool.query<CouncilRow>("SELECT council_id, goal_id, contract_id, brief_deadline, state, no_new_evidence_streak, decision_packet, snapshot_hash FROM head_councils WHERE council_id = $1", [councilId]);
-  if (council.rowCount !== 1) throw new HeadCouncilNotFoundError(`Council not found: ${councilId}`);
-  if (council.rows[0]!.state === "collecting") throw new CouncilBriefsSealedError("Independent briefs are sealed before reveal");
+  const council = await readHeadCouncil(pool, councilId);
+  if (council.state === "collecting") throw new CouncilBriefsSealedError("Independent briefs are sealed before reveal");
   const rows = await pool.query<{ department_id: string; payload: IndependentBrief; submitted_at: Date }>("SELECT department_id, payload, submitted_at FROM independent_briefs WHERE council_id = $1 ORDER BY submitted_at, department_id", [councilId]);
   return rows.rows.map((row) => ({ departmentId: row.department_id, brief: row.payload, submittedAt: row.submitted_at }));
 }
 
-/** Adds one protocol round. Materiality is derived exclusively from validated contribution content. */
-export async function recordCouncilRound(pool: Pool, councilId: string, contributions: readonly RoundInput[], proof: GoalLeaseProof): Promise<HeadCouncil> {
+/** Adds one protocol round. All present participants must contribute exactly once. */
+export async function recordCouncilRound(pool: Pool, councilId: string, contributions: readonly RoundInput[], proof: GoalLeaseProof, context?: CouncilActorContext): Promise<HeadCouncil> {
   const seen = new Set<string>();
   for (const entry of contributions) { if (seen.has(entry.departmentId)) throw new CouncilProtocolError("A participant may contribute once per round"); seen.add(entry.departmentId); assertValidCouncilRoundContribution(entry.contribution); }
-  return mutateCouncil(pool, councilId, proof, async (client, council) => {
+  return mutateCouncil(pool, councilId, proof, context, `round:${councilId}`, async (client, council, actorContext) => {
     requireState(council, "revealed");
-    for (const entry of contributions) {
-      const participant = await client.query("SELECT 1 FROM council_participants WHERE council_id = $1 AND department_id = $2 AND absent_at IS NULL FOR KEY SHARE", [councilId, entry.departmentId]);
-      if (participant.rowCount !== 1) throw new CouncilProtocolError("Only present Council participants may deliberate");
-    }
-    const prior = await client.query<{ round_number: number }>("SELECT round_number FROM council_rounds WHERE council_id = $1 ORDER BY round_number DESC LIMIT 1 FOR UPDATE", [councilId]);
-    const material = contributions.some((entry) => isMaterialCouncilRound(entry.contribution));
-    const roundId = randomUUID(); const number = (prior.rows[0]?.round_number ?? 0) + 1;
+    const present = await client.query<{ department_id: string }>("SELECT department_id FROM council_participants WHERE council_id = $1 AND absent_at IS NULL ORDER BY department_id FOR KEY SHARE", [councilId]);
+    const expected = present.rows.map((row) => row.department_id);
+    const actual = [...seen].sort();
+    if (expected.length === 0 || expected.length !== actual.length || expected.some((departmentId, index) => departmentId !== actual[index])) throw new CouncilProtocolError("A Council round must contain exactly one contribution from every present participant");
+    const priorRows = await client.query<{ payload: CouncilRoundContribution }>(`SELECT c.payload FROM council_round_contributions c JOIN council_rounds r ON r.round_id = c.round_id WHERE r.council_id = $1 ORDER BY r.round_number, c.department_id`, [councilId]);
+    const prior = priorRows.rows.map((row) => row.payload);
+    const allowedEvidence = await knownEvidenceReferences(client, council, prior);
+    for (const entry of contributions) for (const tag of entry.contribution.newEvidence) if (!allowedEvidence.has(tag.trim())) throw new CouncilProtocolError(`Council round evidence tag is not a frozen or recorded reference: ${tag}`);
+    const material = contributions.some((entry) => isMaterialCouncilRound(entry.contribution, prior));
+    const previous = await client.query<{ round_number: number }>("SELECT round_number FROM council_rounds WHERE council_id = $1 ORDER BY round_number DESC LIMIT 1 FOR UPDATE", [councilId]);
+    const roundId = randomUUID(); const number = (previous.rows[0]?.round_number ?? 0) + 1;
     await client.query("INSERT INTO council_rounds (round_id, council_id, round_number, has_material_contribution) VALUES ($1, $2, $3, $4)", [roundId, councilId, number, material]);
     for (const entry of contributions) await client.query("INSERT INTO council_round_contributions (contribution_id, round_id, department_id, payload) VALUES ($1, $2, $3, $4::jsonb)", [randomUUID(), roundId, entry.departmentId, JSON.stringify(entry.contribution)]);
     const streak = material ? 0 : council.noNewEvidenceStreak + 1;
     const stopped = streak >= 2;
-    const updated = await client.query<CouncilRow>("UPDATE head_councils SET no_new_evidence_streak = $2, state = CASE WHEN $3 THEN 'stopped_no_new_evidence' ELSE state END, closed_at = CASE WHEN $3 THEN transaction_timestamp() ELSE closed_at END WHERE council_id = $1 RETURNING council_id, goal_id, contract_id, brief_deadline, state, no_new_evidence_streak, decision_packet, snapshot_hash", [councilId, streak, stopped]);
-    return mapCouncil(updated.rows[0]!);
+    const updated = await client.query<CouncilRow>(`UPDATE head_councils SET no_new_evidence_streak = $2, state = CASE WHEN $3 THEN 'stopped_no_new_evidence' ELSE state END, closed_at = CASE WHEN $3 THEN transaction_timestamp() ELSE closed_at END WHERE council_id = $1 RETURNING council_id, goal_id, contract_id, brief_deadline, state, no_new_evidence_streak, decision_packet, snapshot_hash, snapshot_payload`, [councilId, streak, stopped]);
+    const next = mapCouncil(updated.rows[0]!);
+    await insertProtocolEvent(client, council, "round_recorded", actorContext, { roundId, roundNumber: number, material, contributions }, `round:${councilId}:${number}`);
+    if (stopped) await insertProtocolEvent(client, next, "council_stopped", actorContext, { reason: "two consecutive rounds added no new evidence or argument", roundNumber: number }, `stop:${councilId}:${number}`);
+    return next;
   });
 }
 
-export async function recordCouncilDecisionPacket(pool: Pool, councilId: string, packet: DecisionPacket, proof: GoalLeaseProof): Promise<HeadCouncil> {
+export async function recordCouncilDecisionPacket(pool: Pool, councilId: string, packet: DecisionPacket, proof: GoalLeaseProof, context?: CouncilActorContext): Promise<HeadCouncil> {
   assertValidDecisionPacket(packet);
-  return mutateCouncil(pool, councilId, proof, async (client, council) => {
+  return mutateCouncil(pool, councilId, proof, context, `decision:${councilId}`, async (client, council, actorContext) => {
     if (council.state !== "revealed" && council.state !== "stopped_no_new_evidence") throw new CouncilProtocolError("A decision packet requires revealed deliberation");
+    const priorRows = await client.query<{ payload: CouncilRoundContribution }>(`SELECT c.payload FROM council_round_contributions c JOIN council_rounds r ON r.round_id = c.round_id WHERE r.council_id = $1 ORDER BY r.round_number, c.department_id`, [councilId]);
+    const allowedEvidence = await knownEvidenceReferences(client, council, priorRows.rows.map((row) => row.payload));
+    for (const reference of packet.evidenceReferences) if (!allowedEvidence.has(reference.trim())) throw new CouncilProtocolError(`Decision evidence reference is not frozen or recorded: ${reference}`);
     const state = packet.outcome === "escalated" ? "escalated" : "resolved";
-    const updated = await client.query<CouncilRow>("UPDATE head_councils SET state = $2, decision_packet = $3::jsonb, closed_at = transaction_timestamp() WHERE council_id = $1 RETURNING council_id, goal_id, contract_id, brief_deadline, state, no_new_evidence_streak, decision_packet, snapshot_hash", [councilId, state, JSON.stringify(packet)]);
-    return mapCouncil(updated.rows[0]!);
+    const updated = await client.query<CouncilRow>("UPDATE head_councils SET state = $2, decision_packet = $3::jsonb, closed_at = transaction_timestamp() WHERE council_id = $1 RETURNING council_id, goal_id, contract_id, brief_deadline, state, no_new_evidence_streak, decision_packet, snapshot_hash, snapshot_payload", [councilId, state, JSON.stringify(packet)]);
+    const next = mapCouncil(updated.rows[0]!);
+    await insertProtocolEvent(client, next, packet.outcome === "escalated" ? "decision_escalated" : "decision_resolved", actorContext, { packet }, `decision:${councilId}`);
+    return next;
   });
 }
 
-async function mutateCouncil<T>(pool: Pool, councilId: string, proof: GoalLeaseProof, mutation: (client: PoolClient, council: HeadCouncil) => Promise<T>): Promise<T> {
-  const client = await pool.connect(); let open = false;
-  try { await client.query("BEGIN"); open = true; const row = await client.query<CouncilRow>("SELECT council_id, goal_id, contract_id, brief_deadline, state, no_new_evidence_streak, decision_packet, snapshot_hash FROM head_councils WHERE council_id = $1 FOR UPDATE", [councilId]); if (row.rowCount !== 1) throw new HeadCouncilNotFoundError(`Council not found: ${councilId}`); const council = mapCouncil(row.rows[0]!); if (!validProofFor(council.goalId, proof)) throw new StaleGoalLeaseError(council.goalId); await lockGoal(client, proof); const result = await mutation(client, council); await client.query("COMMIT"); open = false; return result; } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+export async function listCouncilProtocolEvents(pool: Pool, councilId: string): Promise<readonly CouncilProtocolEvent[]> {
+  const rows = await pool.query<StoredEventRow>(`SELECT event_sequence, event_id, council_id, goal_id, event_type, actor_id, session_ref, command_id, idempotency_key, command_or_idempotency_id, snapshot_hash, evidence_lineage, payload, occurred_at FROM council_protocol_events WHERE council_id = $1 ORDER BY event_sequence`, [councilId]);
+  return rows.rows.map((row) => ({ eventSequence: row.event_sequence, eventId: row.event_id, councilId: row.council_id, goalId: row.goal_id, eventType: row.event_type, actorId: row.actor_id, sessionRef: row.session_ref, commandId: row.command_id, idempotencyKey: row.idempotency_key, commandOrIdempotencyId: row.command_or_idempotency_id, snapshotHash: row.snapshot_hash.trim(), evidenceLineage: row.evidence_lineage, payload: row.payload, occurredAt: row.occurred_at.toISOString() }));
 }
+
+async function mutateCouncil<T>(pool: Pool, councilId: string, proof: GoalLeaseProof, context: CouncilActorContext | undefined, fallbackIdentity: string, mutation: (client: PoolClient, council: HeadCouncil, context: CouncilActorContext) => Promise<T>): Promise<T> {
+  const client = await pool.connect(); let open = false;
+  try {
+    await client.query("BEGIN"); open = true;
+    const row = await client.query<CouncilRow>(councilSelectSql() + " WHERE council_id = $1 FOR UPDATE", [councilId]);
+    if (row.rowCount !== 1) throw new HeadCouncilNotFoundError(`Council not found: ${councilId}`);
+    const council = mapCouncil(row.rows[0]!);
+    await assertParticipantSnapshot(client, council);
+    if (!validProofFor(council.goalId, proof)) throw new StaleGoalLeaseError(council.goalId);
+    await lockGoal(client, proof);
+    const actorContext = resolveContext(proof, context, fallbackIdentity);
+    const result = await mutation(client, council, actorContext);
+    await client.query("COMMIT"); open = false; return result;
+  } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+}
+
+async function insertProtocolEvent(client: PoolClient, council: HeadCouncil, eventType: CouncilProtocolEventType, context: CouncilActorContext, payload: Record<string, unknown>, fallbackIdentity: string, sessionRefOverride?: string): Promise<void> {
+  const identity = context.commandId ?? context.idempotencyKey ?? fallbackIdentity;
+  const commandId = context.commandId ?? (context.idempotencyKey === undefined ? identity : null);
+  const idempotencyKey = context.idempotencyKey ?? (context.commandId === undefined ? identity : null);
+  const lineageReferences = new Set(extractEvidenceReferences(council.snapshot.evidence));
+  collectPayloadEvidenceReferences(payload, lineageReferences);
+  const lineage = { snapshotHash: council.snapshotHash, evidence: council.snapshot.evidence, evidenceReferences: [...lineageReferences] };
+  await client.query(`INSERT INTO council_protocol_events (event_id, council_id, goal_id, event_type, actor_id, session_ref, command_id, idempotency_key, command_or_idempotency_id, snapshot_hash, evidence_lineage, payload) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb)`, [randomUUID(), council.councilId, council.goalId, eventType, context.actorId, sessionRefOverride ?? context.sessionRef, commandId, idempotencyKey, identity, council.snapshotHash, JSON.stringify(lineage), JSON.stringify(payload)]);
+}
+
+async function assertParticipantSnapshot(queryable: Pick<Pool | PoolClient, "query">, council: HeadCouncil): Promise<void> {
+  const rows = await queryable.query<{ department_id: string; session_ref: string }>("SELECT department_id, session_ref FROM council_participants WHERE council_id = $1 ORDER BY department_id", [council.councilId]);
+  const expected = council.snapshot.participants;
+  if (rows.rowCount !== expected.length || rows.rows.some((row, index) => row.department_id !== expected[index]?.participantId || row.session_ref !== expected[index]?.sessionRef)) {
+    throw new CouncilProtocolError("Council participants no longer match the frozen snapshot");
+  }
+}
+
 async function lockGoal(client: PoolClient, proof: GoalLeaseProof): Promise<void> { const lease = await client.query("SELECT 1 FROM goal_leases WHERE goal_id = $1 AND owner_id = $2 AND fencing_token = $3::bigint AND expires_at > transaction_timestamp() FOR UPDATE", [proof.goalId, proof.ownerId, proof.fencingToken]); if (lease.rowCount !== 1) throw new StaleGoalLeaseError(proof.goalId); await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 12))", [proof.goalId]); }
 async function settlementCounts(client: PoolClient, councilId: string): Promise<{ participants: number; briefs: number; absent: number }> { const result = await client.query<{ participants: number; briefs: number; absent: number }>(`SELECT (SELECT count(*)::int FROM council_participants WHERE council_id = $1) participants, (SELECT count(*)::int FROM independent_briefs WHERE council_id = $1) briefs, (SELECT count(*)::int FROM council_participants WHERE council_id = $1 AND absent_at IS NOT NULL) absent`, [councilId]); return result.rows[0]!; }
+async function knownEvidenceReferences(client: PoolClient, council: HeadCouncil, prior: readonly CouncilRoundContribution[]): Promise<Set<string>> {
+  const references = new Set(extractEvidenceReferences(council.snapshot.evidence));
+  for (const contribution of prior) for (const reference of contribution.newEvidence) references.add(reference.trim());
+  const recorded = await client.query<{ evidence_id: string }>("SELECT evidence_id FROM evidence_records WHERE goal_id = $1", [council.goalId]);
+  for (const row of recorded.rows) references.add(row.evidence_id.trim());
+  return references;
+}
+function extractEvidenceReferences(value: Readonly<Record<string, unknown>>): readonly string[] {
+  const references = new Set<string>();
+  collectPayloadEvidenceReferences(value, references);
+  return [...references];
+}
+function collectPayloadEvidenceReferences(value: unknown, references: Set<string>, keyHint?: string): void {
+  if (typeof value === "string") {
+    if (keyHint !== undefined && ["reference", "references", "evidenceReference", "evidenceReferences", "evidenceId", "evidenceIds", "id", "newEvidence"].includes(keyHint)) {
+      if (value.trim() !== "") references.add(value.trim());
+    }
+    return;
+  }
+  if (Array.isArray(value)) { for (const item of value) collectPayloadEvidenceReferences(item, references, keyHint); return; }
+  if (value !== null && typeof value === "object") for (const [key, candidate] of Object.entries(value as Record<string, unknown>)) collectPayloadEvidenceReferences(candidate, references, key);
+}
+function briefPayloadHash(brief: IndependentBrief): string { return createHash("sha256").update(canonicalJson(brief)).digest("hex"); }
+function requestContext(request: CreateHeadCouncilRequest, proof: GoalLeaseProof): CouncilActorContext | undefined {
+  if (request.actorId === undefined && request.sessionRef === undefined && request.commandId === undefined && request.idempotencyKey === undefined) return undefined;
+  const context: { actorId: string; sessionRef: string; commandId?: string; idempotencyKey?: string } = { actorId: request.actorId ?? proof.ownerId, sessionRef: request.sessionRef ?? `lease:${proof.ownerId}` };
+  if (request.commandId !== undefined) context.commandId = request.commandId;
+  if (request.idempotencyKey !== undefined) context.idempotencyKey = request.idempotencyKey;
+  return context;
+}
+function resolveContext(proof: GoalLeaseProof, context: CouncilActorContext | undefined, fallbackIdentity: string): CouncilActorContext {
+  const actorId = context?.actorId ?? proof.ownerId;
+  const sessionRef = context?.sessionRef ?? `lease:${proof.ownerId}`;
+  if (actorId.trim() === "" || sessionRef.trim() === "") throw new CouncilProtocolError("Council actor and session identity are required");
+  const resolved: { actorId: string; sessionRef: string; commandId?: string; idempotencyKey?: string } = { actorId, sessionRef };
+  if (context?.commandId !== undefined) resolved.commandId = context.commandId;
+  if (context?.idempotencyKey !== undefined) resolved.idempotencyKey = context.idempotencyKey;
+  else if (context?.commandId === undefined) resolved.idempotencyKey = fallbackIdentity;
+  return resolved;
+}
 function requireState(council: HeadCouncil, state: HeadCouncilState): void { if (council.state !== state) throw new CouncilProtocolError(`Council is ${council.state}, not ${state}`); }
 function validProofFor(goalId: string, proof: GoalLeaseProof): boolean { return goalId === proof.goalId && proof.goalId !== "" && proof.ownerId !== "" && isValidFencingToken(proof.fencingToken); }
-function mapCouncil(row: CouncilRow): HeadCouncil { return { councilId: row.council_id, goalId: row.goal_id, contractId: row.contract_id, briefDeadline: row.brief_deadline, state: row.state, noNewEvidenceStreak: row.no_new_evidence_streak, decisionPacket: row.decision_packet, snapshotHash: row.snapshot_hash }; }
+function councilSelectSql(): string { return "SELECT council_id, goal_id, contract_id, brief_deadline, state, no_new_evidence_streak, decision_packet, snapshot_hash, snapshot_payload FROM head_councils"; }
+function mapCouncil(row: CouncilRow): HeadCouncil {
+  const snapshot = hydrateSealedSubmissionSnapshot(row.snapshot_payload, row.snapshot_hash.trim());
+  if (row.decision_packet !== null) assertValidDecisionPacket(row.decision_packet);
+  const deadline = row.brief_deadline instanceof Date ? row.brief_deadline.toISOString() : new Date(row.brief_deadline).toISOString();
+  if (snapshot.goalId !== row.goal_id || snapshot.contract.contractId !== row.contract_id || snapshot.deadline !== deadline) throw new CouncilProtocolError("Stored Council snapshot does not match its immutable projection");
+  return { councilId: row.council_id, goalId: row.goal_id, contractId: row.contract_id, briefDeadline: deadline, state: row.state, noNewEvidenceStreak: row.no_new_evidence_streak, decisionPacket: row.decision_packet, snapshotHash: row.snapshot_hash.trim(), snapshot };
+}

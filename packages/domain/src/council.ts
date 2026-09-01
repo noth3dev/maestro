@@ -15,6 +15,12 @@ export interface IndependentBrief {
 
 export interface CouncilRoundContribution {
   readonly summary: string;
+  /** Tags, not free-form evidence. Persistence constrains them to known references. */
+  readonly newEvidence: readonly string[];
+  readonly distinctArguments: readonly string[];
+}
+
+export interface CouncilRoundNovelty {
   readonly newEvidence: readonly string[];
   readonly distinctArguments: readonly string[];
 }
@@ -26,6 +32,8 @@ export interface WorkerPlanItem { readonly departmentId: string; readonly plan: 
 /** A decision packet is an auditable protocol result, not a personality or vote result. */
 export interface DecisionPacket {
   readonly outcome: "decided" | "escalated";
+  /** Explicit execution boundary. Escalations are never executable. */
+  readonly executionDisposition: "executable" | "non_executable";
   readonly selectedDirection: string;
   readonly rejectedAlternatives: readonly RejectedAlternative[];
   readonly departmentOwnership: readonly DepartmentOwnership[];
@@ -78,22 +86,46 @@ export function assertValidCouncilRoundContribution(value: unknown): asserts val
   texts(value.distinctArguments, "Council round contribution distinctArguments");
 }
 
+function priorValues(prior: readonly CouncilRoundNovelty[] | CouncilRoundNovelty | undefined, field: keyof CouncilRoundNovelty): Set<string> {
+  const values = new Set<string>();
+  if (prior === undefined) return values;
+  const rounds = Array.isArray(prior) ? prior : [prior];
+  for (const round of rounds) for (const value of round[field]) values.add(value.trim());
+  return values;
+}
+
 /** The protocol, not a caller-supplied flag, determines whether a round advanced. */
-export function isMaterialCouncilRound(contribution: CouncilRoundContribution): boolean {
+export function isMaterialCouncilRound(contribution: CouncilRoundContribution, prior?: readonly CouncilRoundNovelty[] | CouncilRoundNovelty): boolean {
   assertValidCouncilRoundContribution(contribution);
-  return contribution.newEvidence.length > 0 || contribution.distinctArguments.length > 0;
+  const priorEvidence = priorValues(prior, "newEvidence");
+  const priorArguments = priorValues(prior, "distinctArguments");
+  return contribution.newEvidence.some((value) => !priorEvidence.has(value.trim())) || contribution.distinctArguments.some((value) => !priorArguments.has(value.trim()));
 }
 
 export function assertValidDecisionPacket(value: unknown): asserts value is DecisionPacket {
   object(value, "Decision packet");
-  const fields = ["outcome", "selectedDirection", "rejectedAlternatives", "departmentOwnership", "workerPlan", "completionCriteria", "failureCriteria", "dissent", "uncertainty", "criticalActions", "unresolvedConflicts", "evidenceReferences"] as const;
+  const fields = ["outcome", "executionDisposition", "selectedDirection", "rejectedAlternatives", "departmentOwnership", "workerPlan", "completionCriteria", "failureCriteria", "dissent", "uncertainty", "criticalActions", "unresolvedConflicts", "evidenceReferences"] as const;
   onlyKeys(value, fields, "Decision packet");
   if (value.outcome !== "decided" && value.outcome !== "escalated") throw new InvalidCouncilPayloadError("Decision packet outcome is invalid");
+  if (value.executionDisposition !== "executable" && value.executionDisposition !== "non_executable") throw new InvalidCouncilPayloadError("Decision packet execution disposition is invalid");
   text(value.selectedDirection, "Decision packet selectedDirection");
   objectList(value.rejectedAlternatives, "Decision packet rejectedAlternatives", ["alternative", "reason"]);
   objectList(value.departmentOwnership, "Decision packet departmentOwnership", ["departmentId", "responsibility"]);
   objectList(value.workerPlan, "Decision packet workerPlan", ["departmentId", "plan"]);
   for (const field of ["completionCriteria", "failureCriteria", "dissent", "uncertainty", "criticalActions", "unresolvedConflicts", "evidenceReferences"]) texts(value[field], `Decision packet ${field}`);
-  if (value.outcome === "decided" && (value.unresolvedConflicts as readonly string[]).length > 0) throw new InvalidCouncilPayloadError("Unresolved qualifying conflict requires escalation");
-  if (value.outcome === "escalated" && (value.unresolvedConflicts as readonly string[]).length === 0) throw new InvalidCouncilPayloadError("Escalation requires an unresolved conflict");
+  const conflicts = value.unresolvedConflicts as readonly string[];
+  if (value.outcome === "decided" && conflicts.length > 0) throw new InvalidCouncilPayloadError("Unresolved qualifying conflict requires escalation");
+  if (value.outcome === "escalated") {
+    if (conflicts.length === 0) throw new InvalidCouncilPayloadError("Escalation requires an unresolved conflict");
+    if (value.executionDisposition !== "non_executable") throw new InvalidCouncilPayloadError("Escalated decision must be explicitly non-executable");
+    if ((value.workerPlan as readonly unknown[]).length > 0) throw new InvalidCouncilPayloadError("Escalated decision cannot contain a worker plan");
+    if ((value.criticalActions as readonly unknown[]).length > 0) throw new InvalidCouncilPayloadError("Escalated decision cannot contain critical actions");
+  } else if (value.executionDisposition !== "executable") {
+    throw new InvalidCouncilPayloadError("Resolved decision must be executable");
+  }
+}
+
+/** Only a resolved packet can be consumed by the later Department Plan phase. */
+export function isExecutableDecisionPacket(packet: DecisionPacket): boolean {
+  return packet.outcome === "decided" && packet.executionDisposition === "executable";
 }
