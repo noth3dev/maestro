@@ -119,3 +119,68 @@ export async function listQualityCertifications(pool: Pool, goalId: string): Pro
   const result = await pool.query<CertRow>("SELECT certification_id, goal_id, contract_id, contract_version, contract_content_hash, integrated_commit_sha, verdict, certified_by_department, producing_department FROM quality_certifications WHERE goal_id = $1 ORDER BY created_at", [goalId]);
   return result.rows.map(mapCert);
 }
+
+
+export interface ConditionalCertification {
+  readonly certificationId: string;
+  readonly kind: "security" | "safety_compliance";
+  readonly goalId: string;
+  readonly contractId: string;
+  readonly verdict: QualityVerdict;
+  readonly certifiedByDepartment: string;
+  readonly producingDepartment: string;
+}
+
+interface ConditionalCertRow {
+  certification_id: string; kind: "security" | "safety_compliance"; goal_id: string; contract_id: string;
+  verdict: QualityVerdict; certified_by_department: string; producing_department: string;
+}
+function mapConditionalCert(row: ConditionalCertRow): ConditionalCertification {
+  return {
+    certificationId: row.certification_id, kind: row.kind, goalId: row.goal_id, contractId: row.contract_id,
+    verdict: row.verdict, certifiedByDepartment: row.certified_by_department, producingDepartment: row.producing_department,
+  };
+}
+
+/**
+ * Certifies Security or Safety & Compliance for a worker's integrated
+ * output, with the exact same non-negotiable guarantees as Quality
+ * certification: the producing Department can never certify itself, the
+ * certifying Department must be a captured, currently active Council Head,
+ * and the certification binds the exact Task Contract identity and the
+ * exact integrated commit -- never caller-supplied values. Callers decide
+ * WHETHER a certification of this kind is required for a given Goal via
+ * `requiredConditionalCertifications` (a risk-triggered policy, not
+ * enforced by this function itself).
+ */
+export async function certifyConditional(pool: Pool, kind: "security" | "safety_compliance", workerId: string, substance: QualityCertificationSubstance, certifyingDepartmentId: string, context: CouncilActorContext): Promise<ConditionalCertification> {
+  assertValidQualityCertificationSubstance(substance);
+  const worker = await pool.query<{ council_id: string; department_id: string }>("SELECT council_id, department_id FROM workers WHERE worker_id = $1", [workerId]);
+  if (worker.rowCount !== 1) throw new CertificationNotFoundError(`Worker not found: ${workerId}`);
+  const { council_id: councilId, department_id: producingDepartment } = worker.rows[0]!;
+  if (certifyingDepartmentId === producingDepartment) throw new CertificationError(`The producing Department cannot issue its own ${kind} certification`);
+  const council = await readHeadCouncil(pool, councilId);
+  await assertAuthorizedDepartmentHead(pool, councilId, certifyingDepartmentId, context);
+  const commit = await pool.query<{ commit_sha: string }>("SELECT commit_sha FROM integration_commits WHERE worker_id = $1 ORDER BY recorded_at DESC LIMIT 1", [workerId]);
+  if (commit.rowCount !== 1) throw new CertificationError(`Worker has no recorded integration commit to certify for ${kind}`);
+  const contract = await pool.query<{ version: string; content_hash: string }>("SELECT version, content_hash FROM task_contracts WHERE contract_id = $1", [council.contractId]);
+  if (contract.rowCount !== 1) throw new CertificationError("Task Contract not found for certification");
+  const project = await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [council.goalId]);
+  const durable = await pool.query<{ evidence_id: string; sha256: string }>("SELECT evidence_id, sha256 FROM evidence_records WHERE goal_id = $1 AND project_id = $2", [council.goalId, project.rows[0]!.project_id]);
+  const durableIds = new Set(durable.rows.flatMap((row) => [row.evidence_id.trim(), row.sha256.trim()]));
+  for (const evidenceId of substance.testEvidenceIds) if (!durableIds.has(evidenceId.trim())) throw new CertificationError(`${kind} certification test evidence is not durable: ${evidenceId}`);
+  const inserted = await pool.query<ConditionalCertRow>(
+    `INSERT INTO conditional_certifications (certification_id, kind, goal_id, contract_id, contract_version, contract_content_hash, integrated_commit_sha, verdict, findings, test_evidence_ids, certified_by_department, producing_department)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12)
+     RETURNING certification_id, kind, goal_id, contract_id, verdict, certified_by_department, producing_department`,
+    [randomUUID(), kind, council.goalId, council.contractId, contract.rows[0]!.version, contract.rows[0]!.content_hash, commit.rows[0]!.commit_sha, substance.verdict, JSON.stringify(substance.findings), JSON.stringify(substance.testEvidenceIds), certifyingDepartmentId, producingDepartment],
+  );
+  return mapConditionalCert(inserted.rows[0]!);
+}
+
+export async function listConditionalCertifications(pool: Pool, goalId: string, kind?: "security" | "safety_compliance"): Promise<readonly ConditionalCertification[]> {
+  const result = kind === undefined
+    ? await pool.query<ConditionalCertRow>("SELECT certification_id, kind, goal_id, contract_id, verdict, certified_by_department, producing_department FROM conditional_certifications WHERE goal_id = $1 ORDER BY created_at", [goalId])
+    : await pool.query<ConditionalCertRow>("SELECT certification_id, kind, goal_id, contract_id, verdict, certified_by_department, producing_department FROM conditional_certifications WHERE goal_id = $1 AND kind = $2 ORDER BY created_at", [goalId, kind]);
+  return result.rows.map(mapConditionalCert);
+}

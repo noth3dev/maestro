@@ -45,3 +45,27 @@ export function assertValidQualityCertificationSubstance(value: QualityCertifica
     throw new InvalidCertificationError("A passed Quality certification cannot carry an unresolved critical finding");
   }
 }
+
+export type ConditionalCertificationKind = "security" | "safety_compliance";
+
+/**
+ * "Security and Safety & Compliance participate when risk requires them" --
+ * these are deterministic risk triggers from real Task Contract and Council
+ * decision facts, not a blanket requirement on every Goal.
+ */
+export interface ConditionalCertificationRiskFacts {
+  readonly criticalActionExpectations: readonly string[];
+  readonly criticalActions: readonly string[];
+  readonly externalServiceAssumptions: readonly string[];
+  readonly dataBoundary: string;
+}
+
+export function requiredConditionalCertifications(facts: ConditionalCertificationRiskFacts): readonly ConditionalCertificationKind[] {
+  const kinds: ConditionalCertificationKind[] = [];
+  const hasCriticalAction = facts.criticalActionExpectations.length > 0 || facts.criticalActions.length > 0;
+  const hasExternalService = facts.externalServiceAssumptions.some((assumption) => assumption.trim().toLowerCase() !== "none");
+  if (hasCriticalAction || hasExternalService) kinds.push("security");
+  const hasBroadDataBoundary = !["local", "repository files only"].includes(facts.dataBoundary.trim().toLowerCase());
+  if (hasCriticalAction || hasBroadDataBoundary) kinds.push("safety_compliance");
+  return kinds;
+}
