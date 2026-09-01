@@ -16,3 +16,4 @@ export * from "./git-integration.js";
 export * from "./budget-reservation.js";
 export * from "./sentinel.js";
 export * from "./sentinel-challenge.js";
+export * from "./semantic-review.js";
