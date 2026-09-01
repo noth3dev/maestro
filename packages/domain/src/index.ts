@@ -8,3 +8,4 @@ export * from "./sealed-submission.js";
 export * from "./council.js";
 export * from "./department-plan.js";
 export * from "./mission-bundle.js";
+export * from "./worker.js";
