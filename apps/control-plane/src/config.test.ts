@@ -16,7 +16,16 @@ describe("parseConfig", () => {
       primeAgentVersion: "0.8.0",
       actorId: "maestro-control-plane",
       leaseOwnerId: "local-control-plane",
+      reconcilerLeaseDurationMs: 30_000,
     });
+  });
+
+  it("accepts an explicit startup reconciler leader-lease duration override", () => {
+    expect(parseConfig({ ...required, MAESTRO_RECONCILER_LEASE_MS: "1000" }).reconcilerLeaseDurationMs).toBe(1_000);
+  });
+
+  it("rejects a non-positive reconciler leader-lease duration", () => {
+    expect(() => parseConfig({ ...required, MAESTRO_RECONCILER_LEASE_MS: "0" })).toThrow("Invalid Maestro configuration");
   });
 
   it("fails before startup when required configuration is missing", () => {

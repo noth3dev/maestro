@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import { authenticateLocalOperator, listGoalEvents } from "@maestro/persistence";
+import { authenticateLocalOperator, listGoalEvents, reconcileOnStartup } from "@maestro/persistence";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createDurableGoalService } from "./goal-service.js";
 import { buildServer, type OperatorAuthenticator } from "./server.js";
@@ -31,6 +31,12 @@ export function createControlPlane(config: MaestroConfig): ControlPlane {
     pool,
     config,
     async listen() {
+      // Fail closed: a real process must prove durable Goal/lease state is
+      // consistent (or durably marked "recovering") before it ever serves
+      // traffic. If the startup reconciliation leader lease cannot be
+      // acquired or reconciliation itself fails, this throws and the caller
+      // (main()) closes the pool without binding a listener.
+      await reconcileOnStartup(pool, { ownerId: config.leaseOwnerId, leaderLeaseDurationMs: config.reconcilerLeaseDurationMs });
       await app.listen({ host: config.host, port: config.port });
     },
     async close() {
