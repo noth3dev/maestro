@@ -15,3 +15,4 @@ export * from "./team-lead-grant.js";
 export * from "./git-integration.js";
 export * from "./budget-reservation.js";
 export * from "./sentinel.js";
+export * from "./sentinel-challenge.js";
