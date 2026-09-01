@@ -1,6 +1,12 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@maestro/api-client": new URL("./packages/api-client/src/index.ts", import.meta.url).pathname,
+      "@maestro/contracts": new URL("./packages/contracts/src/index.ts", import.meta.url).pathname,
+    },
+  },
   test: {
     // Multiple integration suites intentionally reset tables they manage in
     // their own beforeAll/beforeEach hooks against ONE shared disposable
