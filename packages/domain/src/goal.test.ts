@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InvalidGoalTransitionError, transitionGoal, type GoalState } from "./goal.js";
+import { InvalidGoalTransitionError, isTerminalGoalState, transitionGoal, type GoalState } from "./goal.js";
 
 describe("transitionGoal", () => {
   it("allows a draft goal to become ready for confirmation", () => {
@@ -58,4 +58,18 @@ describe("transitionGoal", () => {
     }
   });
 
+});
+
+describe("isTerminalGoalState", () => {
+  it("identifies exactly the states with no outgoing transitions", () => {
+    const states: GoalState[] = [
+      "draft", "ready_for_confirmation", "launched", "active", "pausing",
+      "paused", "resuming", "stopping", "stopped", "blocked",
+      "certifying", "succeeded", "failed", "recovering",
+    ];
+    const terminal = new Set(["stopped", "succeeded", "failed"]);
+    for (const state of states) {
+      expect(isTerminalGoalState(state), state).toBe(terminal.has(state));
+    }
+  });
 });
