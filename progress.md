@@ -241,3 +241,10 @@
 - Verified: full `npm run check` against the disposable PostgreSQL 17 container: **399 passed, 1 intentional live-Prime skip, 0 failed.**
 - Merged (fast-forward) into `phase3/integration`, now HEAD `c641cc1`. Removed the superseded worktree/branch.
 - **Phase 3 status: work-sequence steps 1-6 of 11 done.** Remaining: certification conflict adjudication + bounded waivers (7), evidence-bundle assembly (8), Sane milestone/final reporting (9), adversarial fixtures (10), full live release scenario (11).
+
+
+## 2026-09-01 (continued) — P3S7 (certification conflict adjudication + bounded waivers) implemented and accepted
+- Branched `phase3/p3s7-conflict-waiver` from `phase3/integration` (c641cc1). `certificationsConflict` (pure), `WaiverSubstance`/`assertValidWaiverSubstance` (authority/reason/consequence/followUp/future-expiry all required). Migration `0034_certification_waivers.sql`: certification_waivers (immutable, unique per finding) and certification_conflict_resolutions (links to a real Overwatch Council round). `grantCertificationWaiver` rejects waiving a finding whose REAL stored severity is critical (not a caller-supplied claim); `detectCertificationConflict` reads real Quality/conditional verdicts; `adjudicateCertificationConflict` reuses the already-accepted `runOverwatchCouncilReview` rather than a second mechanism.
+- Verified: full `npm run check` against the disposable PostgreSQL 17 container: **410 passed, 1 intentional live-Prime skip, 0 failed.**
+- Merged (fast-forward) into `phase3/integration`, now HEAD `8cfb5ea`. Removed the superseded worktree/branch.
+- **Phase 3 status: work-sequence steps 1-7 of 11 done.** Remaining: evidence-bundle assembly (8), Sane milestone/final reporting (9), adversarial fixtures (10), full live release scenario (11).
