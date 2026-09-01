@@ -63,3 +63,5 @@
 - Next: narrow deterministic scheduler/lifecycle repair before checkpoint commit.
 - Authenticated SSE slice accepted after direct lifecycle/frame repair. Focused loopback tests and full disposable-PostgreSQL check passed (98 passed, 1 live-Prime skip).
 - Preparing the first local Phase 1 checkpoint commit; exclude unrelated designsystem.html modification.
+- All three parallel Phase 1 worktrees now committed: evidence e0b85fd, client-cli d89399a, recovery f83fe29 (after direct control-latch ordering repair).
+- Next: merge the three branches into phase1/control-plane sequentially, resolve the 0006 migration numbering collision, and re-run full check with real PostgreSQL.
