@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { amendTaskContract, assertValidTaskContractSubstance, createTaskContract, selectOvertureRoles, taskContractContentHash, type TaskContractSubstance } from "./task-contract.js";
+import { amendTaskContract, assertValidTaskContractSubstance, canonicalizeOvertureRoles, createTaskContract, OVERTURE_ROLE_IDS, selectOvertureRoles, taskContractContentHash, type TaskContractSubstance } from "./task-contract.js";
 
 const substance: TaskContractSubstance = {
   desiredOutcome: "A durable contract", userVisibleBehavior: ["CEO can confirm exact content"],
@@ -25,8 +25,32 @@ describe("Task Contract", () => {
     expect(() => assertValidTaskContractSubstance({ ...substance, project: { ...substance.project, immutableBaseRevision: "" } })).toThrow("project boundary");
     expect(() => assertValidTaskContractSubstance({ ...substance, budget: { ...substance.budget, stoppingConditions: [1] } })).toThrow("budget");
   });
-  it("selects only the necessary named Overture roles", () => {
-    expect(selectOvertureRoles({ outsideEvidenceRequested: false, previewNeeded: false })).toEqual(["project-context-scout", "requirements-analyst", "task-editor"]);
-    expect(selectOvertureRoles({ outsideEvidenceRequested: true, previewNeeded: true })).toEqual(["project-context-scout", "external-research-scout", "requirements-analyst", "design-mock-specialist", "task-editor"]);
+  it("selects only the necessary named Overture roles from the canonical six-role pool", () => {
+    expect(OVERTURE_ROLE_IDS).toEqual([
+      "conversation-lead", "architecture-analyst", "external-research-scout",
+      "security-evaluator", "design-mock-specialist", "task-editor",
+    ]);
+    expect(selectOvertureRoles({ outsideEvidenceRequested: false, previewNeeded: false })).toEqual([
+      "conversation-lead", "architecture-analyst", "security-evaluator", "task-editor",
+    ]);
+    expect(selectOvertureRoles({ outsideEvidenceRequested: true, previewNeeded: true })).toEqual([...OVERTURE_ROLE_IDS]);
+  });
+
+  it("maps legacy persisted selections to canonical roles without losing optional intent", () => {
+    expect(canonicalizeOvertureRoles(["project-context-scout", "requirements-analyst", "task-editor"])).toEqual([
+      "conversation-lead", "architecture-analyst", "security-evaluator", "task-editor",
+    ]);
+    expect(canonicalizeOvertureRoles([
+      "project-context-scout", "external-research-scout", "requirements-analyst", "design-mock-specialist", "task-editor",
+    ])).toEqual([...OVERTURE_ROLE_IDS]);
+  });
+
+  it("rejects unknown persisted Overture role identifiers", () => {
+    expect(() => canonicalizeOvertureRoles(["conversation-lead", "unknown-role"])).toThrow("unknown Overture role");
+  });
+
+  it("rejects inherited object keys as unknown role identifiers", () => {
+    expect(() => canonicalizeOvertureRoles(["toString"])).toThrow("unknown Overture role");
+    expect(() => canonicalizeOvertureRoles(["__proto__"])).toThrow("unknown Overture role");
   });
 });

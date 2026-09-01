@@ -1,15 +1,24 @@
 import { createHash } from "node:crypto";
 
 export const TASK_CONTRACT_SCHEMA_VERSION = 1;
+export const OVERTURE_ROLE_TAXONOMY_VERSION = 2;
 
+/** Canonical selectively activated Overture candidate pool from phase2.md. */
 export const OVERTURE_ROLE_IDS = [
-  "project-context-scout",
+  "conversation-lead",
+  "architecture-analyst",
   "external-research-scout",
-  "requirements-analyst",
+  "security-evaluator",
   "design-mock-specialist",
   "task-editor",
 ] as const;
 export type OvertureRoleId = typeof OVERTURE_ROLE_IDS[number];
+
+/** IDs written by the first Task Contract implementation, retained for migration. */
+const LEGACY_OVERTURE_ROLE_ALIASES: Readonly<Record<string, OvertureRoleId>> = Object.freeze({
+  "project-context-scout": "architecture-analyst",
+  "requirements-analyst": "conversation-lead",
+});
 
 export type TaskContractLaunchState = "awaiting_confirmation" | "launched";
 
@@ -60,12 +69,37 @@ export interface OvertureSelectionInput {
   readonly previewNeeded: boolean;
 }
 
-/** A deterministic, transparent selection: the editor and requirements analyst always frame intake. */
+/**
+ * Map stored IDs from the first taxonomy to the canonical pool. Legacy
+ * selections did not include Security Evaluator, so migration adds that
+ * mandatory boundary role whenever a legacy ID is present.
+ */
+export function canonicalizeOvertureRoles(value: readonly unknown[]): readonly OvertureRoleId[] {
+  if (!Array.isArray(value)) throw new InvalidTaskContractError("Overture roles must be a list");
+  const selected = new Set<OvertureRoleId>();
+  let containsLegacyRole = false;
+  for (const role of value) {
+    if (typeof role !== "string") throw new InvalidTaskContractError("Overture role must be a string");
+    if ((OVERTURE_ROLE_IDS as readonly string[]).includes(role)) {
+      selected.add(role as OvertureRoleId);
+    } else if (Object.hasOwn(LEGACY_OVERTURE_ROLE_ALIASES, role)) {
+      selected.add(LEGACY_OVERTURE_ROLE_ALIASES[role]!);
+      containsLegacyRole = true;
+    } else {
+      throw new InvalidTaskContractError(`unknown Overture role: ${role}`);
+    }
+  }
+  if (containsLegacyRole) selected.add("security-evaluator");
+  return OVERTURE_ROLE_IDS.filter((role) => selected.has(role));
+}
+
+/** A deterministic, transparent selection: the canonical intake boundary roles always frame intake. */
 export function selectOvertureRoles(input: OvertureSelectionInput): readonly OvertureRoleId[] {
   return [
-    "project-context-scout",
+    "conversation-lead",
+    "architecture-analyst",
     ...(input.outsideEvidenceRequested ? ["external-research-scout"] as const : []),
-    "requirements-analyst",
+    "security-evaluator",
     ...(input.previewNeeded ? ["design-mock-specialist"] as const : []),
     "task-editor",
   ];
