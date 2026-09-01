@@ -12,3 +12,4 @@ export * from "./department-plan.js";
 export * from "./mission-bundle.js";
 export * from "./worker.js";
 export * from "./team-lead-grant.js";
+export * from "./git-integration.js";

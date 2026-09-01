@@ -20,6 +20,9 @@
       "path": "packages/prime-adapter"
     },
     {
+      "path": "packages/git-adapter"
+    },
+    {
       "path": "apps/cli"
     },
     {
