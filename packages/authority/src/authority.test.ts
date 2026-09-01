@@ -149,4 +149,35 @@ describe("AuthorizedEffectExecutor control recheck", () => {
     })).resolves.toMatchObject({ effect: "deny", reason: "stale_control_epoch" });
     expect(calls).toBe(0);
   });
+
+  it.each(["pause_requested", "paused", "stopping", "stopped"] as const)(
+    "does not call the effect when the Goal control reason is %s",
+    async (reason) => {
+      const ordinary: ActionRequest = {
+        ...request,
+        commandId: "edit-1",
+        action: "project.file.edit",
+        target: "/repo",
+      };
+      const grant: AuthorityRecord = {
+        ...exactApproval,
+        recordId: "grant-1",
+        kind: "grant",
+        commandId: null,
+        action: ordinary.action,
+        target: ordinary.target,
+      };
+      const repository: AuthorityRepository = {
+        load: async () => [grant],
+        appendDecision: async () => {},
+        recheckControl: async () => ({ effect: "deny", reason }),
+      };
+      let calls = 0;
+
+      await expect(new AuthorizedEffectExecutor(repository, () => now).execute(ordinary, async () => {
+        calls += 1;
+      })).resolves.toMatchObject({ effect: "deny", reason });
+      expect(calls).toBe(0);
+    },
+  );
 });
