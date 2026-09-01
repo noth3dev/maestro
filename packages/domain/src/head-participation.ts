@@ -1,5 +1,13 @@
 export type HeadParticipationStatus = "starting" | "active" | "sleeping";
 
+/** The durable identity key for the standing Head assigned to a Department. */
+export function canonicalHeadRoleId(departmentId: string): string {
+  if (typeof departmentId !== "string" || departmentId.trim() === "") {
+    throw new Error("departmentId is required to derive a HeadRoleId");
+  }
+  return `head:${departmentId.trim()}`;
+}
+
 /** Goal-scoped state. It deliberately does not extend the permanent Department. */
 export interface GoalHeadParticipation {
   readonly goalId: string;

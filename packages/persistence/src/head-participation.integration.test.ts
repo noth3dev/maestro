@@ -13,7 +13,8 @@ const migrations = [
   "0001_phase1_core.sql", "0002_goal_leases.sql", "0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql",
   "0005_authority_records.sql", "0006_evidence.sql", "0007_goal_control.sql", "0008_goal_pause_stop.sql",
   "0009_reconciliation_leader_lease.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql",
-  "0014_head_activation_runtime_safety.sql", "0018_role_identity_hardening.sql",
+  "0013_council_briefs.sql", "0014_head_activation_runtime_safety.sql", "0015_council_protocol.sql", "0016_council_hardening.sql",
+  "0018_role_identity_hardening.sql", "0019_council_authority_hardening.sql", "0020_head_role_identity_hardening.sql",
 ];
 
 describeDatabase("Goal Head participation with PostgreSQL", () => {
@@ -41,7 +42,7 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
   }
 
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals CASCADE");
+    await pool.query("DROP TABLE IF EXISTS council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals CASCADE");
     for (const name of migrations) await pool.query(await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8"));
   });
   beforeEach(async () => {

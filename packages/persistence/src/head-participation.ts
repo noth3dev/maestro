@@ -101,16 +101,26 @@ export async function activateHeadParticipation(
     const requesterHeadRoleId = requester.role === "Head"
       ? await resolveHeadRole(client, requester.departmentId, requester.headRoleId)
       : null;
-    if (requester.role === "Head") await assertActiveRequester(client, request.goalId, requester.departmentId);
+    if (requester.role === "Head") {
+      await assertActiveRequester(client, request.goalId, requester.departmentId, requesterHeadRoleId!);
+    }
     if (requestedContractId !== undefined) await assertLaunchedContract(client, requestedContractId);
 
     const existing = await client.query<ParticipationRow>(
       `SELECT goal_id, department_id, head_role_id, contract_id, context_id, status, active_session_ref
        FROM goal_head_participations
        WHERE goal_id = $1 AND department_id = $2
+       ORDER BY (status = 'active') DESC, updated_at DESC, head_role_id
        FOR UPDATE`,
       [request.goalId, request.departmentId],
     );
+    const active = existing.rows.find((candidate) => candidate.status === "active");
+    if (active !== undefined && active.head_role_id !== targetHeadRoleId) {
+      await insertAttempt(client, request, requester, targetHeadRoleId, requesterHeadRoleId, "binding_conflict");
+      await client.query("COMMIT"); open = false;
+      throw new HeadActivationBindingConflictError("A different HeadRoleId is already active for this Department and Goal");
+    }
+    const current = existing.rows.find((candidate) => candidate.head_role_id === targetHeadRoleId);
 
     const activeElsewhere = await client.query(
       `SELECT 1 FROM goal_head_participations
@@ -124,7 +134,6 @@ export async function activateHeadParticipation(
       throw new HeadActivationRuntimeConflictError();
     }
 
-    const current = existing.rowCount === 1 ? existing.rows[0]! : undefined;
     if (current && bindingMismatch(current, requestedContractId, requestedContextId)) {
       await insertAttempt(client, request, requester, targetHeadRoleId, requesterHeadRoleId, "binding_conflict");
       await client.query("COMMIT"); open = false;
@@ -134,8 +143,8 @@ export async function activateHeadParticipation(
     // The graph check must test reachability of the requested target, not the
     // requester. This catches both self-edges and transitive cycles.
     const cycle = requester.role === "Head" && (
-      requester.departmentId === request.departmentId ||
-      await wouldCreateCycle(client, request.goalId, request.departmentId, requester.departmentId)
+      requesterHeadRoleId === targetHeadRoleId ||
+      await wouldCreateCycle(client, request.goalId, targetHeadRoleId, requesterHeadRoleId!)
     );
     if (cycle) {
       // The rejected request is durable audit history, not a rolled-back write.
@@ -156,9 +165,9 @@ export async function activateHeadParticipation(
              contract_id = COALESCE($3::uuid, contract_id),
              context_id = COALESCE($4, context_id),
              updated_at = transaction_timestamp()
-         WHERE goal_id = $1 AND department_id = $2
+         WHERE goal_id = $1 AND head_role_id = $2
          RETURNING goal_id, department_id, head_role_id, contract_id, context_id, status, active_session_ref`,
-        [request.goalId, request.departmentId, requestedContractId ?? null, requestedContextId ?? null],
+        [request.goalId, targetHeadRoleId, requestedContractId ?? null, requestedContextId ?? null],
       );
       row = updated.rows[0]!;
       outcome = "reserved";
@@ -176,9 +185,10 @@ export async function activateHeadParticipation(
 
     if (requester.role === "Head") {
       await client.query(
-        `INSERT INTO head_activation_edges (goal_id, requester_department_id, department_id)
-         VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-        [request.goalId, requester.departmentId, request.departmentId],
+        `INSERT INTO head_activation_edges
+          (goal_id, requester_department_id, department_id, requester_head_role_id, head_role_id)
+         VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
+        [request.goalId, requester.departmentId, request.departmentId, requesterHeadRoleId, targetHeadRoleId],
       );
     }
     await insertAttempt(client, request, requester, targetHeadRoleId, requesterHeadRoleId, outcome);
@@ -196,6 +206,7 @@ export async function markHeadParticipationActive(
   departmentId: string,
   activeSessionRef: string,
   proof: GoalLeaseProof,
+  headRoleId?: string,
 ): Promise<GoalHeadParticipation> {
   if (goalId !== proof.goalId || !validProof(proof) || activeSessionRef.trim() === "") {
     throw new StaleGoalLeaseError(goalId);
@@ -208,6 +219,7 @@ export async function markHeadParticipationActive(
     `status = 'active', active_session_ref = $3, updated_at = transaction_timestamp()`,
     [activeSessionRef],
     "starting",
+    headRoleId,
     activeSessionRef,
   );
 }
@@ -217,6 +229,7 @@ export async function sleepHeadParticipation(
   goalId: string,
   departmentId: string,
   proof: GoalLeaseProof,
+  headRoleId?: string,
 ): Promise<GoalHeadParticipation> {
   if (goalId !== proof.goalId || !validProof(proof)) throw new StaleGoalLeaseError(goalId);
   return mutateParticipation(
@@ -227,6 +240,7 @@ export async function sleepHeadParticipation(
     `status = 'sleeping', active_session_ref = NULL, updated_at = transaction_timestamp()`,
     [],
     "active",
+    headRoleId,
   );
 }
 
@@ -238,8 +252,12 @@ async function mutateParticipation(
   set: string,
   extras: readonly string[],
   expected: HeadParticipationStatus,
+  requestedHeadRoleId?: string,
   requestedSessionRef?: string,
 ): Promise<GoalHeadParticipation> {
+  if (requestedHeadRoleId !== undefined && requestedHeadRoleId.trim() === "") {
+    throw new HeadActivationBindingConflictError("headRoleId must be a non-empty string");
+  }
   const client = await pool.connect(); let open = false;
   try {
     await client.query("BEGIN"); open = true;
@@ -247,12 +265,23 @@ async function mutateParticipation(
     await client.query("SET LOCAL statement_timeout = '15s'");
     await assertCurrentGoalLease(client, proof);
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 12))", [goalId]);
+    const rolePredicate = requestedHeadRoleId === undefined ? "" : " AND head_role_id = $3";
+    const roleValues = requestedHeadRoleId === undefined
+      ? [goalId, departmentId]
+      : [goalId, departmentId, requestedHeadRoleId];
     const current = await client.query<ParticipationRow>(
       `SELECT goal_id, department_id, head_role_id, contract_id, context_id, status, active_session_ref
-       FROM goal_head_participations WHERE goal_id = $1 AND department_id = $2 FOR UPDATE`,
-      [goalId, departmentId],
+       FROM goal_head_participations
+       WHERE goal_id = $1 AND department_id = $2${rolePredicate}
+         AND status = '${expected}'
+       ORDER BY updated_at DESC, head_role_id
+       LIMIT 1 FOR UPDATE`,
+      roleValues,
     );
-    if (current.rowCount !== 1 || current.rows[0]!.status !== expected) {
+    if (current.rowCount !== 1) {
+      if (requestedHeadRoleId !== undefined) {
+        throw new HeadActivationBindingConflictError("HeadRoleId is not bound to the requested Goal participation");
+      }
       throw new Error(`Head participation is not ${expected}`);
     }
     const participation = current.rows[0]!;
@@ -275,10 +304,10 @@ async function mutateParticipation(
         throw new HeadActivationRuntimeConflictError();
       }
     }
-    const values = [goalId, departmentId, ...extras, expected];
+    const values = [goalId, participation.head_role_id, ...extras, expected];
     const result = await client.query<ParticipationRow>(
       `UPDATE goal_head_participations SET ${set}
-       WHERE goal_id = $1 AND department_id = $2 AND status = $${values.length}
+       WHERE goal_id = $1 AND head_role_id = $2 AND status = $${values.length}
        RETURNING goal_id, department_id, head_role_id, contract_id, context_id, status, active_session_ref`,
       values,
     );
@@ -301,12 +330,12 @@ async function assertCurrentGoalLease(client: PoolClient, proof: GoalLeaseProof)
   if (result.rowCount !== 1) throw new StaleGoalLeaseError(proof.goalId);
 }
 
-async function assertActiveRequester(client: PoolClient, goalId: string, departmentId: string): Promise<void> {
+async function assertActiveRequester(client: PoolClient, goalId: string, departmentId: string, headRoleId: string): Promise<void> {
   const result = await client.query(
     `SELECT 1 FROM goal_head_participations
-     WHERE goal_id = $1 AND department_id = $2 AND status = 'active'
+     WHERE goal_id = $1 AND department_id = $2 AND head_role_id = $3 AND status = 'active'
      FOR KEY SHARE`,
-    [goalId, departmentId],
+    [goalId, departmentId, headRoleId],
   );
   if (result.rowCount !== 1) throw new HeadActivationRequesterInactiveError();
 }
@@ -317,8 +346,8 @@ async function resolveHeadRole(client: PoolClient, departmentId: string, request
     [departmentId],
   );
   if (result.rowCount !== 1) throw new HeadActivationBindingConflictError("No permanent Head role is bound to this Department");
-  const headRoleId = result.rows[0]!.head_role_id;
-  if (requestedHeadRoleId !== undefined && requestedHeadRoleId !== headRoleId) {
+  const headRoleId = result.rows[0]!.head_role_id.trim();
+  if (headRoleId === "" || (requestedHeadRoleId !== undefined && requestedHeadRoleId !== headRoleId)) {
     throw new HeadActivationBindingConflictError("HeadRoleId is not bound to the requested Department");
   }
   return headRoleId;
@@ -345,18 +374,23 @@ function bindingMismatch(
       (current.context_id === null ? active : requestedContextId !== current.context_id));
 }
 
-async function wouldCreateCycle(client: PoolClient, goalId: string, requester: string, target: string): Promise<boolean> {
+async function wouldCreateCycle(
+  client: PoolClient,
+  goalId: string,
+  targetHeadRoleId: string,
+  requesterHeadRoleId: string,
+): Promise<boolean> {
   const result = await client.query(
-    `WITH RECURSIVE reachable(department_id) AS (
-       SELECT department_id FROM head_activation_edges
-       WHERE goal_id = $1 AND requester_department_id = $2
+    `WITH RECURSIVE reachable(head_role_id) AS (
+       SELECT head_role_id FROM head_activation_edges
+       WHERE goal_id = $1 AND requester_head_role_id = $2
        UNION
-       SELECT e.department_id FROM head_activation_edges e
-       JOIN reachable r ON e.requester_department_id = r.department_id
+       SELECT e.head_role_id FROM head_activation_edges e
+       JOIN reachable r ON e.requester_head_role_id = r.head_role_id
        WHERE e.goal_id = $1
      )
-     SELECT 1 FROM reachable WHERE department_id = $3 LIMIT 1`,
-    [goalId, requester, target],
+     SELECT 1 FROM reachable WHERE head_role_id = $3 LIMIT 1`,
+    [goalId, targetHeadRoleId, requesterHeadRoleId],
   );
   return result.rowCount === 1;
 }

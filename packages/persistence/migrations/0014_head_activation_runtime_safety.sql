@@ -54,7 +54,7 @@ FOR EACH ROW EXECUTE FUNCTION reject_permanent_head_role_mutation();
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'permanent_head_roles_role_department_key'
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'permanent_head_roles'::regclass AND conname = 'permanent_head_roles_role_department_key'
   ) THEN
     ALTER TABLE permanent_head_roles
       ADD CONSTRAINT permanent_head_roles_role_department_key UNIQUE (head_role_id, department_id);
@@ -78,7 +78,7 @@ ALTER TABLE goal_head_participations
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'goal_head_participations_head_role_fk'
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'goal_head_participations'::regclass AND conname = 'goal_head_participations_head_role_fk'
   ) THEN
     ALTER TABLE goal_head_participations
       ADD CONSTRAINT goal_head_participations_head_role_fk
@@ -90,7 +90,7 @@ BEGIN
   -- the trigger below enforces that rule without coupling table lifecycles.
   ALTER TABLE goal_head_participations DROP CONSTRAINT IF EXISTS goal_head_participations_contract_fk;
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'goal_head_participations_context_check'
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'goal_head_participations'::regclass AND conname = 'goal_head_participations_context_check'
   ) THEN
     ALTER TABLE goal_head_participations
       ADD CONSTRAINT goal_head_participations_context_check
@@ -148,21 +148,21 @@ ALTER TABLE head_activation_attempts
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'head_activation_attempts_head_role_fk'
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'head_activation_attempts'::regclass AND conname = 'head_activation_attempts_head_role_fk'
   ) THEN
     ALTER TABLE head_activation_attempts
       ADD CONSTRAINT head_activation_attempts_head_role_fk
       FOREIGN KEY (head_role_id) REFERENCES permanent_head_roles (head_role_id);
   END IF;
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'head_activation_attempts_requester_head_role_fk'
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'head_activation_attempts'::regclass AND conname = 'head_activation_attempts_requester_head_role_fk'
   ) THEN
     ALTER TABLE head_activation_attempts
       ADD CONSTRAINT head_activation_attempts_requester_head_role_fk
       FOREIGN KEY (requester_head_role_id) REFERENCES permanent_head_roles (head_role_id);
   END IF;
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'head_activation_attempts_role_binding_check'
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'head_activation_attempts'::regclass AND conname = 'head_activation_attempts_role_binding_check'
   ) THEN
     ALTER TABLE head_activation_attempts
       ADD CONSTRAINT head_activation_attempts_role_binding_check
@@ -172,7 +172,7 @@ BEGIN
   -- 0012's original check did not include durable runtime/binding rejections.
   ALTER TABLE head_activation_attempts DROP CONSTRAINT IF EXISTS head_activation_attempts_outcome_check;
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'head_activation_attempts_outcome_check'
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'head_activation_attempts'::regclass AND conname = 'head_activation_attempts_outcome_check'
   ) THEN
     ALTER TABLE head_activation_attempts
       ADD CONSTRAINT head_activation_attempts_outcome_check
@@ -193,7 +193,7 @@ ALTER TABLE head_activation_attempts
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'head_activation_attempts_brief_check'
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'head_activation_attempts'::regclass AND conname = 'head_activation_attempts_brief_check'
   ) THEN
     ALTER TABLE head_activation_attempts
       ADD CONSTRAINT head_activation_attempts_brief_check

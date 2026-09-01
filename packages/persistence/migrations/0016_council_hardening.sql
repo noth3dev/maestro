@@ -2,7 +2,7 @@
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'head_councils_decision_outcome_matches_state') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'head_councils'::regclass AND conname = 'head_councils_decision_outcome_matches_state') THEN
     ALTER TABLE head_councils ADD CONSTRAINT head_councils_decision_outcome_matches_state
       CHECK ((
         (state = 'resolved' AND decision_packet->>'outcome' = 'decided')

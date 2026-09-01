@@ -20,7 +20,7 @@ const substance = (): TaskContractSubstance => ({
 describeDatabase("Task Contract exact confirmation with PostgreSQL", () => {
   const pool = new Pool({ connectionString: databaseUrl });
   beforeAll(async () => { await pool.query(await readFile(fileURLToPath(new URL("../migrations/0011_task_contracts.sql", import.meta.url)), "utf8")); });
-  beforeEach(async () => { await pool.query("TRUNCATE task_contract_confirmations, task_contract_decisions, task_contracts"); });
+  beforeEach(async () => { await pool.query("TRUNCATE task_contract_confirmations, task_contract_decisions, task_contracts CASCADE"); });
   afterAll(async () => { await pool.end(); });
 
   it("rejects launch without an exact confirmation and allows it after one", async () => {

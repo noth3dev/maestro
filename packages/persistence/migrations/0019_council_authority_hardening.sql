@@ -4,7 +4,7 @@
 -- reuse the existing Council, never create a conflicting one.
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'head_councils_goal_contract_unique') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'head_councils'::regclass AND conname = 'head_councils_goal_contract_unique') THEN
     ALTER TABLE head_councils ADD CONSTRAINT head_councils_goal_contract_unique UNIQUE (goal_id, contract_id);
   END IF;
 END $$;

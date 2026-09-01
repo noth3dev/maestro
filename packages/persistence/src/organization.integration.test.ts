@@ -2,8 +2,8 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { PERMANENT_DEPARTMENTS, PERMANENT_GROUPS, SANE_PERSONA_BASELINE } from "@maestro/domain";
-import { bootstrapPermanentOrganization, getPermanentRole, listPermanentOrganization } from "./organization.js";
+import { PERMANENT_DEPARTMENTS, PERMANENT_GROUPS, PERMANENT_ROLES, SANE_PERSONA_BASELINE } from "@maestro/domain";
+import { bootstrapPermanentOrganization, getPermanentRole, listPermanentOrganization, listPermanentRoles } from "./organization.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;

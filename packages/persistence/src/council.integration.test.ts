@@ -10,7 +10,7 @@ import { CouncilBriefIdempotencyError, CouncilBriefsSealedError, CouncilProtocol
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
-const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql", "0005_authority_records.sql", "0006_evidence.sql", "0007_goal_control.sql", "0008_goal_pause_stop.sql", "0009_reconciliation_leader_lease.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql", "0015_council_protocol.sql", "0016_council_hardening.sql", "0019_council_authority_hardening.sql"];
+const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql", "0005_authority_records.sql", "0006_evidence.sql", "0007_goal_control.sql", "0008_goal_pause_stop.sql", "0009_reconciliation_leader_lease.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql", "0014_head_activation_runtime_safety.sql", "0015_council_protocol.sql", "0016_council_hardening.sql", "0018_role_identity_hardening.sql", "0019_council_authority_hardening.sql", "0020_head_role_identity_hardening.sql"];
 function buildContractContent(projectId: string): TaskContractSubstance {
   return {
     desiredOutcome: "deliver safely",
@@ -23,7 +23,7 @@ function buildContractContent(projectId: string): TaskContractSubstance {
 const brief: IndependentBrief = { interpretation: "safe outcome", contribution: "review", nonGoals: [], assumptions: [], evidenceGaps: [], risks: [], dependencies: [], proposedValidation: [], expectedWorkers: [], expectedCost: "1", expectedTime: "1", objectionsToLikelyAlternatives: [] };
 const evidence = { references: [randomUUID(), randomUUID()] };
 const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `session:${label}`, commandId: randomUUID() });
-const headContext = (departmentId: string) => ({ actorId: departmentId, sessionRef: `opaque:${departmentId}`, commandId: randomUUID() });
+const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`, sessionRef: `opaque:${departmentId}`, commandId: randomUUID() });
 
  describeDatabase("Head Council briefs with PostgreSQL", () => {
  const pool = new Pool({ connectionString: databaseUrl });
@@ -38,7 +38,7 @@ const headContext = (departmentId: string) => ({ actorId: departmentId, sessionR
        [evidenceId, randomUUID(), randomUUID(), projectId, goalId, "test", "0".repeat(64)],
      );
    }
-   for (const departmentId of departments) await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, contract_id, status, active_session_ref) VALUES ($1, $2, $3, 'active', $4)", [goalId, departmentId, contractId, `opaque:${departmentId}`]);
+   for (const departmentId of departments) await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, head_role_id, contract_id, status, active_session_ref) VALUES ($1, $2, $3, $4, 'active', $5)", [goalId, departmentId, `head:${departmentId}`, contractId, `opaque:${departmentId}`]);
    const proof = await acquireGoalLease(pool, { goalId, ownerId: "test", leaseDurationMs: 60_000 });
    const council = await createHeadCouncil(pool, { goalId, contractId, briefDeadline, evidence: snapshotEvidence }, proof, context("secretary"));
    expect(/^[0-9a-f]{64}$/.test(council.snapshotHash)).toBe(true);
@@ -59,7 +59,10 @@ const headContext = (departmentId: string) => ({ actorId: departmentId, sessionR
    const { council, proof, projectId } = await setup();
    expect(typeof council.snapshot.deadline).toBe("string");
    expect(council.snapshot.contract.content).toEqual(buildContractContent(projectId));
-   expect(council.snapshot.participants).toEqual([{ participantId: "engineering", sessionRef: "opaque:engineering" }, { participantId: "product", sessionRef: "opaque:product" }]);
+   expect(council.snapshot.participants).toEqual([
+      { participantId: "head:engineering", headRoleId: "head:engineering", departmentId: "engineering", sessionRef: "opaque:engineering" },
+      { participantId: "head:product", headRoleId: "head:product", departmentId: "product", sessionRef: "opaque:product" },
+    ]);
    const stored = await pool.query<{ snapshot_payload: Record<string, unknown> }>("SELECT snapshot_payload FROM head_councils WHERE council_id = $1", [council.councilId]);
    expect(stored.rows[0]!.snapshot_payload).toEqual(council.snapshot);
    const restarted = new Pool({ connectionString: databaseUrl });
@@ -92,7 +95,7 @@ const headContext = (departmentId: string) => ({ actorId: departmentId, sessionR
    const contractContent = buildContractContent(projectId);
    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
    await pool.query("INSERT INTO task_contracts (contract_id, schema_version, version, content, content_hash, launch_state) VALUES ($1, 1, 1, $2::jsonb, $3, 'launched')", [contractId, JSON.stringify(contractContent), "a".repeat(64)]);
-   await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, contract_id, status, active_session_ref) VALUES ($1, 'product', $2, 'active', 'opaque:product')", [goalId, contractId]);
+   await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, head_role_id, contract_id, status, active_session_ref) VALUES ($1, 'product', 'head:product', $2, 'active', 'opaque:product')", [goalId, contractId]);
    const proof = await acquireGoalLease(pool, { goalId, ownerId: "test", leaseDurationMs: 60_000 });
    await expect(createHeadCouncil(pool, { goalId, contractId, briefDeadline: new Date(Date.now() + 60_000), evidence }, proof, context("secretary"))).rejects.toThrow(/content hash mismatch/i);
    expect((await pool.query("SELECT count(*)::int AS count FROM head_councils WHERE goal_id = $1", [goalId])).rows[0]!.count).toBe(0);
@@ -182,7 +185,9 @@ const headContext = (departmentId: string) => ({ actorId: departmentId, sessionR
     const contractContent = buildContractContent(projectId);
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
     await pool.query("INSERT INTO task_contracts (contract_id, schema_version, version, content, content_hash, launch_state) VALUES ($1, 1, 1, $2::jsonb, $3, 'awaiting_confirmation')", [contractId, JSON.stringify(contractContent), taskContractContentHash(contractContent)]);
-    await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, contract_id, status, active_session_ref) VALUES ($1, 'product', $2, 'active', 'opaque:product')", [goalId, contractId]);
+    // 0014 rejects active participation rows bound to an unlaunched contract;
+    // the Council creation path rejects the contract before it needs a match.
+    await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, head_role_id, contract_id, status, active_session_ref) VALUES ($1, 'product', 'head:product', NULL, 'active', 'opaque:product')", [goalId]);
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "test", leaseDurationMs: 60_000 });
 
     await expect(createHeadCouncil(pool, { goalId, contractId, briefDeadline: new Date(Date.now() + 60_000), evidence }, proof, context("secretary"))).rejects.toThrow(/launched/i);
@@ -196,7 +201,7 @@ const headContext = (departmentId: string) => ({ actorId: departmentId, sessionR
     const malformed = {};
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
     await pool.query("INSERT INTO task_contracts (contract_id, schema_version, version, content, content_hash, launch_state) VALUES ($1, 1, 1, $2::jsonb, $3, 'launched')", [contractId, JSON.stringify(malformed), taskContractContentHash(malformed as TaskContractSubstance)]);
-    await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, contract_id, status, active_session_ref) VALUES ($1, 'product', $2, 'active', 'opaque:product')", [goalId, contractId]);
+    await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, head_role_id, contract_id, status, active_session_ref) VALUES ($1, 'product', 'head:product', $2, 'active', 'opaque:product')", [goalId, contractId]);
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "test", leaseDurationMs: 60_000 });
 
     await expect(createHeadCouncil(pool, { goalId, contractId, briefDeadline: new Date(Date.now() + 60_000), evidence }, proof, context("secretary"))).rejects.toThrow(/Task Contract/i);
@@ -205,8 +210,8 @@ const headContext = (departmentId: string) => ({ actorId: departmentId, sessionR
 
   it("binds brief acceptance and audit to the captured authorized Head actor and session", async () => {
     const { council, proof } = await setup(["product"]);
-    await expect(submitIndependentBrief(pool, council.councilId, "product", brief, proof, { actorId: "engineering", sessionRef: "opaque:product", commandId: randomUUID() })).rejects.toBeInstanceOf(CouncilProtocolError);
-    await expect(submitIndependentBrief(pool, council.councilId, "product", brief, proof, { actorId: "product", sessionRef: "opaque:product-restarted", commandId: randomUUID() })).rejects.toBeInstanceOf(CouncilProtocolError);
+    await expect(submitIndependentBrief(pool, council.councilId, "product", brief, proof, { actorId: "head:engineering", sessionRef: "opaque:product", commandId: randomUUID() })).rejects.toBeInstanceOf(CouncilProtocolError);
+    await expect(submitIndependentBrief(pool, council.councilId, "product", brief, proof, { actorId: "head:product", sessionRef: "opaque:product-restarted", commandId: randomUUID() })).rejects.toBeInstanceOf(CouncilProtocolError);
 
     await pool.query("UPDATE goal_head_participations SET active_session_ref = 'opaque:product-restarted' WHERE goal_id = $1 AND department_id = 'product'", [council.goalId]);
     await expect(submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"))).rejects.toBeInstanceOf(CouncilProtocolError);
