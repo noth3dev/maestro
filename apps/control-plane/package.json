@@ -3,6 +3,13 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "zod": "^4.0.0"
+    "@maestro/contracts": "*",
+    "@maestro/persistence": "*",
+    "fastify": "^5.0.0",
+    "zod": "^4.0.0",
+    "pg": "^8.23.0"
+  },
+  "scripts": {
+    "start": "node ./dist/main.js"
   }
 }

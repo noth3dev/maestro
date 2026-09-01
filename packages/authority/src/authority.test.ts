@@ -3,6 +3,7 @@ import { evaluateAction, type ActionRequest, type AuthorityRecord } from "./auth
 
 const request: ActionRequest = {
   commandId: "command-1",
+  projectId: "project-1",
   actorId: "actor-1",
   goalId: "goal-1",
   action: "git.remote.push",
@@ -15,11 +16,13 @@ const exactApproval: AuthorityRecord = {
   recordId: "approval-1",
   kind: "approval",
   commandId: "command-1",
+  projectId: "project-1",
   actorId: "actor-1",
   goalId: "goal-1",
   action: "git.remote.push",
   target: "origin/main",
   policyVersion: 1,
+  budgetEffectCents: 0,
   expiresAt: new Date("2030-01-01T00:00:00Z"),
 };
 
@@ -72,3 +75,17 @@ describe("evaluateAction", () => {
     expect(evaluateAction({ ...request, action: "system.policy.bypass" }, [exactApproval], now)).toMatchObject({ effect: "deny", reason: "forbidden", classification: "forbidden" });
   });
 });
+
+
+  it("rejects a grant scoped to another project", () => {
+    const ordinary: ActionRequest = { ...request, action: "project.file.edit", target: "/repo" };
+    const grant: AuthorityRecord = { ...exactApproval, recordId: "grant-project", kind: "grant", commandId: null, action: ordinary.action, target: ordinary.target };
+    expect(evaluateAction(ordinary, [{ ...grant, projectId: "project-2" }], now)).toMatchObject({ effect: "deny", reason: "no_grant" });
+  });
+
+  it("rejects a grant or approval with an altered budget effect", () => {
+    const ordinary: ActionRequest = { ...request, action: "project.file.edit", target: "/repo", budgetEffectCents: 25 };
+    const grant: AuthorityRecord = { ...exactApproval, recordId: "grant-budget", kind: "grant", commandId: null, action: ordinary.action, target: ordinary.target, budgetEffectCents: 24 };
+    expect(evaluateAction(ordinary, [grant], now)).toMatchObject({ effect: "deny", reason: "no_grant" });
+    expect(evaluateAction({ ...request, budgetEffectCents: 1 }, [exactApproval], now)).toMatchObject({ effect: "require_approval", reason: "critical_action" });
+  });

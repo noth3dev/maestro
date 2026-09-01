@@ -15,5 +15,10 @@
   ],
   "exclude": [
     "src/**/*.test.ts"
+  ],
+  "references": [
+    {
+      "path": "../domain"
+    }
   ]
 }

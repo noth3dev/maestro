@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseConfig } from "./config.js";
+import { parseConfig, redactConfig } from "./config.js";
 
 const required = {
   DATABASE_URL: "postgresql://localhost/maestro",
@@ -14,6 +14,8 @@ describe("parseConfig", () => {
       host: "127.0.0.1",
       port: 4310,
       primeAgentVersion: "0.8.0",
+      actorId: "maestro-control-plane",
+      leaseOwnerId: "local-control-plane",
     });
   });
 
@@ -29,5 +31,18 @@ describe("parseConfig", () => {
 
   it("allows an explicit remote binding", () => {
     expect(parseConfig({ ...required, MAESTRO_HOST: "0.0.0.0", MAESTRO_ALLOW_REMOTE: "true" }).host).toBe("0.0.0.0");
+  });
+
+  it("redacts database credentials before configuration is logged", () => {
+    const config = parseConfig({
+      ...required,
+      DATABASE_URL: "postgresql://db-user:db-password@127.0.0.1:5432/maestro",
+    });
+
+    expect(redactConfig(config)).toEqual({
+      ...config,
+      databaseUrl: "postgresql://[redacted]@127.0.0.1:5432/maestro",
+    });
+    expect(JSON.stringify(redactConfig(config))).not.toContain("db-password");
   });
 });

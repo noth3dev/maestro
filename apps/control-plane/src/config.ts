@@ -6,6 +6,8 @@ export interface MaestroConfig {
   host: string;
   port: number;
   primeAgentVersion: string;
+  actorId: string;
+  leaseOwnerId: string;
 }
 
 const schema = z.object({
@@ -14,6 +16,8 @@ const schema = z.object({
   MAESTRO_HOST: z.string().default("127.0.0.1"),
   MAESTRO_PORT: z.coerce.number().int().min(1).max(65535).default(4310),
   MAESTRO_ALLOW_REMOTE: z.enum(["true", "false"]).default("false"),
+  MAESTRO_ACTOR_ID: z.string().min(1).default("maestro-control-plane"),
+  MAESTRO_INSTANCE_ID: z.string().min(1).default("local-control-plane"),
 });
 
 export function parseConfig(
@@ -30,11 +34,28 @@ export function parseConfig(
     MAESTRO_HOST: host,
     MAESTRO_PORT: port,
     MAESTRO_ALLOW_REMOTE: allowRemote,
+    MAESTRO_ACTOR_ID: actorId,
+    MAESTRO_INSTANCE_ID: leaseOwnerId,
   } = parsed.data;
 
   if (host !== "127.0.0.1" && host !== "localhost" && allowRemote !== "true") {
     throw new Error("Remote binding requires explicit MAESTRO_ALLOW_REMOTE=true");
   }
 
-  return { databaseUrl, evidenceDir, host, port, primeAgentVersion: "0.8.0" };
+  return { databaseUrl, evidenceDir, host, port, primeAgentVersion: "0.8.0", actorId, leaseOwnerId };
+}
+
+
+/** Safe for operational logs; it intentionally omits all database user info and query parameters. */
+export function redactConfig(config: MaestroConfig): MaestroConfig {
+  return { ...config, databaseUrl: redactDatabaseUrl(config.databaseUrl) };
+}
+
+function redactDatabaseUrl(databaseUrl: string): string {
+  try {
+    const url = new URL(databaseUrl);
+    return `${url.protocol}//[redacted]@${url.host}${url.pathname}`;
+  } catch {
+    return "[redacted]";
+  }
 }

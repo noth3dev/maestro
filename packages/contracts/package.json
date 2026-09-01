@@ -1,5 +1,5 @@
 {
-  "name": "@maestro/persistence",
+  "name": "@maestro/contracts",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -11,10 +11,6 @@
     }
   },
   "dependencies": {
-    "@maestro/domain": "*",
-    "drizzle-orm": "^0.45.2",
-    "pg": "^8.23.0",
-    "@maestro/authority": "*",
-    "@maestro/contracts": "*"
+    "zod": "^4.0.0"
   }
 }

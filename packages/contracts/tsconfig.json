@@ -1,16 +1,5 @@
 {
   "extends": "../../tsconfig.json",
-  "references": [
-    {
-      "path": "../domain"
-    },
-    {
-      "path": "../authority"
-    },
-    {
-      "path": "../contracts"
-    }
-  ],
   "compilerOptions": {
     "composite": true,
     "target": "ES2023",

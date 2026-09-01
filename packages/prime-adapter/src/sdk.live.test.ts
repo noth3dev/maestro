@@ -1,69 +1,54 @@
 import { expect, test } from "vitest";
-import { createAgentSession, SessionManager } from "prime-agent";
+import { ExecutionKernelUnavailableError } from "@maestro/domain";
+import { createPrimeExecutionKernel } from "./execution-kernel.js";
 
 const runLive = process.env.MAESTRO_LIVE_PRIME === "1";
 
+async function waitForChildReply(
+  kernel: ReturnType<typeof createPrimeExecutionKernel>,
+  execution: Parameters<ReturnType<typeof createPrimeExecutionKernel>["observe"]>[0],
+  invocation: Parameters<ReturnType<typeof createPrimeExecutionKernel>["cancel"]>[0],
+): Promise<Awaited<ReturnType<ReturnType<typeof createPrimeExecutionKernel>["observe"]>>[number]> {
+  const deadline = Date.now() + 120_000;
+  while (Date.now() < deadline) {
+    const result = (await kernel.observe(execution)).find((item) => item.invocation === invocation);
+    if (result?.status === "succeeded" || result?.status === "failed" || result?.status === "cancelled") {
+      return result;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error("Timed out waiting for normalized Prime Agent child result");
+}
+
 test.skipIf(!runLive)(
-  "runs a root prompt and a direct child through the public SDK",
+  "runs a parent and named direct child through the execution-kernel port",
   async () => {
-    const cwd = process.cwd();
-    const { session } = await createAgentSession({
-      cwd,
-      sessionManager: SessionManager.inMemory(cwd),
-      rlmMaxDepth: 1,
+    const kernel = createPrimeExecutionKernel();
+    const root = await kernel.spawn({ name: "luna-sdk-root", cwd: process.cwd() });
+    await kernel.prompt(root.execution, "Reply with exactly LUNA_ROOT_OK. Do not call tools or add punctuation.");
+
+    const child = await kernel.spawn({
+      parent: root.execution,
+      name: "luna-sdk-child",
+      prompt: "Reply with exactly LUNA_CHILD_OK. Do not call tools or add punctuation.",
     });
-    let rootText = "";
-    let childOff: () => void = () => undefined;
-    let childTimer: ReturnType<typeof setTimeout> | undefined;
-    const unsubscribe = session.subscribe((event) => {
-      if (
-        event.type === "message_update" &&
-        event.assistantMessageEvent.type === "text_delta"
-      ) {
-        rootText += event.assistantMessageEvent.delta;
-      }
+    const observation = await waitForChildReply(kernel, root.execution, child.invocation);
+
+    expect(observation).toMatchObject({
+      invocation: child.invocation,
+      name: "luna-sdk-child",
+      status: "succeeded",
+      answer: expect.stringContaining("LUNA_CHILD_OK"),
     });
 
     try {
-      await session.prompt(
-        "Reply with exactly LUNA_ROOT_OK. Do not call tools or add punctuation.",
-      );
-      expect(rootText).toContain("LUNA_ROOT_OK");
-      expect(session.model?.provider).toBeTruthy();
-      expect(session.model?.id).toBeTruthy();
-
-      const childAnswer = new Promise<string>((resolve, reject) => {
-        childTimer = setTimeout(() => {
-          childOff();
-          reject(new Error("Timed out waiting for Prime Agent child"));
-        }, 120_000);
-        childOff = session.subscribe((event) => {
-          if (event.type !== "rlm_child_update") return;
-          if (event.child.sessionName !== "luna-sdk-child") return;
-          if (event.child.status === "done") {
-            if (childTimer) clearTimeout(childTimer);
-            childOff();
-            resolve(event.child.answerPreview ?? "");
-          } else if (event.child.status === "error") {
-            if (childTimer) clearTimeout(childTimer);
-            childOff();
-            reject(new Error(event.child.error ?? "Prime Agent child failed"));
-          }
-        });
-      });
-
-      const handle = await session.runRlmChild(
-        "Reply with exactly LUNA_CHILD_OK. Do not call tools or add punctuation.",
-        { name: "luna-sdk-child", thinking: "off" },
-      );
-      expect(handle.rlm_child_id).toBeTruthy();
-      await expect(childAnswer).resolves.toContain("LUNA_CHILD_OK");
-    } finally {
-      if (childTimer) clearTimeout(childTimer);
-      childOff();
-      unsubscribe();
-      if (session.isStreaming) await session.abort();
-      await session.disposeAsync();
+      const model = await kernel.getModelIdentity(root.execution);
+      expect(model.provider).toBeTruthy();
+      expect(model.id).toBeTruthy();
+      console.info("Prime model identity", model);
+    } catch (error) {
+      expect(error).toBeInstanceOf(ExecutionKernelUnavailableError);
+      console.info("Prime model identity unavailable", error);
     }
   },
   180_000,

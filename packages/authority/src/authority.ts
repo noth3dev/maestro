@@ -2,6 +2,7 @@ export type ActionClassification = "ordinary" | "critical" | "forbidden" | "ambi
 
 export interface ActionRequest {
   commandId: string;
+  projectId: string;
   actorId: string;
   goalId: string;
   action: string;
@@ -14,12 +15,15 @@ export interface AuthorityRecord {
   recordId: string;
   kind: "grant" | "approval";
   commandId: string | null;
+  projectId: string;
   actorId: string;
   goalId: string;
   action: string;
   target: string;
   policyVersion: number;
+  budgetEffectCents: number;
   expiresAt: Date;
+  issuedAt?: Date;
   revokedAt?: Date;
 }
 
@@ -65,11 +69,13 @@ function hasMatchingScope(
   return (
     record.kind === kind &&
     commandMatches &&
+    record.projectId === request.projectId &&
     record.actorId === request.actorId &&
     record.goalId === request.goalId &&
     record.action === request.action &&
     record.target === request.target &&
-    record.policyVersion === request.policyVersion
+    record.policyVersion === request.policyVersion &&
+    record.budgetEffectCents === request.budgetEffectCents
   );
 }
 
@@ -122,5 +128,64 @@ export function evaluateAction(
     ...base,
     effect: classification === "critical" ? "require_approval" : "deny",
     reason,
+  };
+}
+
+
+export interface AuthorityDecisionAudit {
+  decision: AuthorityDecision;
+  decidedAt: Date;
+}
+
+/** Durable storage boundary. The authority package has no database or provider dependency. */
+export interface AuthorityRepository {
+  load(request: ActionRequest): Promise<readonly AuthorityRecord[]>;
+  appendDecision(audit: AuthorityDecisionAudit): Promise<void>;
+}
+
+/**
+ * The only gateway which may invoke an externally supplied effect. It first
+ * loads durable authority, evaluates it, and appends the decision. Any failure
+ * in that sequence denies without calling the effect.
+ */
+export class AuthorizedEffectExecutor {
+  constructor(
+    private readonly repository: AuthorityRepository,
+    private readonly clock: () => Date = () => new Date(),
+  ) {}
+
+  async execute(request: ActionRequest, effect: () => Promise<unknown>): Promise<AuthorityDecision> {
+    let decision: AuthorityDecision;
+    try {
+      const records = await this.repository.load(request);
+      decision = evaluateAction(request, records, this.clock());
+    } catch {
+      decision = unavailableDecision(request);
+      try {
+        await this.repository.appendDecision({ decision, decidedAt: this.clock() });
+      } catch {
+        // A failed audit write must still fail closed.
+      }
+      return decision;
+    }
+
+    try {
+      await this.repository.appendDecision({ decision, decidedAt: this.clock() });
+    } catch {
+      return unavailableDecision(request);
+    }
+
+    if (decision.effect !== "allow") return decision;
+    await effect();
+    return decision;
+  }
+}
+
+function unavailableDecision(request: ActionRequest): AuthorityDecision {
+  return {
+    effect: "deny",
+    reason: "authority_unavailable",
+    classification: "ambiguous",
+    request,
   };
 }

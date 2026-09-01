@@ -14,5 +14,13 @@
   ],
   "exclude": [
     "src/**/*.test.ts"
+  ],
+  "references": [
+    {
+      "path": "../../packages/contracts"
+    },
+    {
+      "path": "../../packages/persistence"
+    }
   ]
 }

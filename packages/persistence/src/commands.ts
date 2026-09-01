@@ -2,6 +2,35 @@ import { createHash, randomUUID } from "node:crypto";
 import { InvalidGoalTransitionError, transitionGoal, type GoalState } from "@maestro/domain";
 import type { Pool } from "pg";
 
+export interface GoalLeaseProof {
+  goalId: string;
+  ownerId: string;
+  /** Exact base-10 PostgreSQL bigint text. Never convert this to a JS number. */
+  fencingToken: string;
+}
+
+export interface AcquireGoalLeaseRequest {
+  goalId: string;
+  ownerId: string;
+  leaseDurationMs: number;
+}
+
+export class LeaseUnavailableError extends Error {
+  constructor(goalId: string) {
+    super(`Goal lease is currently held: ${goalId}`);
+    this.name = "LeaseUnavailableError";
+  }
+}
+
+export class StaleGoalLeaseError extends Error {
+  readonly code = "stale_lease";
+
+  constructor(goalId: string) {
+    super(`Goal lease proof is stale or invalid: ${goalId}`);
+    this.name = "StaleGoalLeaseError";
+  }
+}
+
 export type GoalCommand =
   | { commandId: string; projectId: string; goalId: string; actorId: string; type: "CreateGoal"; expectedVersion: 0 }
   | { commandId: string; projectId: string; goalId: string; actorId: string; type: "TransitionGoal"; expectedVersion: number; to: GoalState };
@@ -35,10 +64,66 @@ function commandHash(command: GoalCommand): Buffer {
   return createHash("sha256").update(canonicalJson(command)).digest();
 }
 
+export async function acquireGoalLease(
+  pool: Pool,
+  request: AcquireGoalLeaseRequest,
+): Promise<GoalLeaseProof> {
+  if (!Number.isSafeInteger(request.leaseDurationMs) || request.leaseDurationMs <= 0) {
+    throw new RangeError("leaseDurationMs must be a positive safe integer");
+  }
+  const result = await pool.query<{ goal_id: string; owner_id: string; fencing_token: string }>(
+    `INSERT INTO goal_leases (goal_id, owner_id, fencing_token, expires_at)
+     VALUES ($1, $2, 1, transaction_timestamp() + ($3 * interval '1 millisecond'))
+     ON CONFLICT (goal_id) DO UPDATE
+       SET owner_id = EXCLUDED.owner_id,
+           fencing_token = goal_leases.fencing_token + 1,
+           expires_at = transaction_timestamp() + ($3 * interval '1 millisecond'),
+           updated_at = transaction_timestamp()
+       WHERE goal_leases.expires_at <= transaction_timestamp()
+     RETURNING goal_id, owner_id, fencing_token`,
+    [request.goalId, request.ownerId, request.leaseDurationMs],
+  );
+  if (result.rowCount !== 1) throw new LeaseUnavailableError(request.goalId);
+  const row = result.rows[0]!;
+  return { goalId: row.goal_id, ownerId: row.owner_id, fencingToken: row.fencing_token };
+}
+
+/**
+ * Extend a lease only when this exact proof is still current. The UPDATE is
+ * atomic and deliberately leaves fencing_token unchanged.
+ */
+export async function renewGoalLease(
+  pool: Pool,
+  proof: GoalLeaseProof,
+  leaseDurationMs: number,
+): Promise<GoalLeaseProof> {
+  if (!isValidLeaseProof(proof) || !Number.isSafeInteger(leaseDurationMs) || leaseDurationMs <= 0) {
+    throw new StaleGoalLeaseError(proof.goalId);
+  }
+  const result = await pool.query<{ goal_id: string; owner_id: string; fencing_token: string }>(
+    `UPDATE goal_leases
+     SET expires_at = transaction_timestamp() + ($4 * interval '1 millisecond'),
+         updated_at = transaction_timestamp()
+     WHERE goal_id = $1
+       AND owner_id = $2
+       AND fencing_token = $3::bigint
+       AND expires_at > transaction_timestamp()
+     RETURNING goal_id, owner_id, fencing_token`,
+    [proof.goalId, proof.ownerId, proof.fencingToken, leaseDurationMs],
+  );
+  if (result.rowCount !== 1) throw new StaleGoalLeaseError(proof.goalId);
+  const row = result.rows[0]!;
+  return { goalId: row.goal_id, ownerId: row.owner_id, fencingToken: row.fencing_token };
+}
+
 export async function executeGoalCommand(
   pool: Pool,
   command: GoalCommand,
+  proof: GoalLeaseProof,
 ): Promise<CommandResult> {
+  if (proof.goalId !== command.goalId || !isValidLeaseProof(proof)) {
+    throw new StaleGoalLeaseError(command.goalId);
+  }
   const client = await pool.connect();
   let transactionOpen = false;
   try {
@@ -46,6 +131,7 @@ export async function executeGoalCommand(
     transactionOpen = true;
     await client.query("SET LOCAL lock_timeout = '5s'");
     await client.query("SET LOCAL statement_timeout = '15s'");
+    await assertCurrentGoalLease(client, command, proof);
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 1))", [command.commandId]);
 
     const hash = commandHash(command);
@@ -155,6 +241,36 @@ export async function executeGoalCommand(
   } finally {
     client.release();
   }
+}
+
+async function assertCurrentGoalLease(
+  client: { query: <T>(text: string, values?: readonly unknown[]) => Promise<{ rowCount: number | null; rows: T[] }> },
+  command: GoalCommand,
+  proof: GoalLeaseProof,
+): Promise<void> {
+  if (proof.goalId !== command.goalId || !isValidLeaseProof(proof)) {
+    throw new StaleGoalLeaseError(command.goalId);
+  }
+  const lease = await client.query<{ goal_id: string }>(
+    `SELECT goal_id
+     FROM goal_leases
+     WHERE goal_id = $1
+       AND owner_id = $2
+       AND fencing_token = $3::bigint
+       AND expires_at > transaction_timestamp()
+     FOR UPDATE`,
+    [command.goalId, proof.ownerId, proof.fencingToken],
+  );
+  if (lease.rowCount !== 1) throw new StaleGoalLeaseError(command.goalId);
+}
+
+function isValidLeaseProof(proof: GoalLeaseProof): boolean {
+  const maxFencingToken = "9223372036854775807";
+  return proof.goalId !== "" && proof.ownerId !== "" &&
+    typeof proof.fencingToken === "string" &&
+    /^[1-9][0-9]*$/.test(proof.fencingToken) &&
+    (proof.fencingToken.length < maxFencingToken.length ||
+      (proof.fencingToken.length === maxFencingToken.length && proof.fencingToken <= maxFencingToken));
 }
 
 async function insertReceipt(
