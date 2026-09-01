@@ -160,3 +160,11 @@
 - Discovered a second instance of the cross-suite shared-table race documented in the prior `retention_class` fix: this suite's real-PostgreSQL integration test needs `goals`/`goal_leases`/`goal_controls`, which are exclusively owned/truncated by `commands.integration.test.ts` and `authority.integration.test.ts` respectively. Running vitest's default parallel-file workers let those suites' `beforeEach` TRUNCATEs race this suite's rows. Root fix: added `vitest.config.ts` with `test.fileParallelism: false` so integration suites sharing one disposable database never execute concurrently; this is a test-infrastructure change only, no production behavior changed.
 - Verified stable across three consecutive full real-PostgreSQL `npm run check` runs: 131 passed, 1 explicitly gated Prime live test skipped, each time.
 
+
+## 2026-09-01 — Remaining Phase 1 exit-gate gap assessment
+Against plan/phase1.md's exit gate and Tests section, still missing:
+1. An actual process kill-and-restart acceptance test against a running control-plane process with an active Goal (durable reconciliation exists as a scaffold/library, but has not been exercised against a real killed/restarted process).
+2. fast-check property-based fencing tests across every state-changing repository method (Tests #3); current fencing coverage is example-based, not generative.
+3. A concrete example wiring `AuthorizedEffectExecutor` to at least one real effect call site (e.g. a stub critical-action adapter) so "block an unauthorized critical action" is demonstrated end-to-end, not only unit-level.
+4. The Secretary Next.js app shell (CLI exists; app does not). Test #6 requires identical durable state shown by both app and CLI.
+5. A failure-injection harness (work sequence item 10) and corrupted-evidence-hash rejection proof (Tests #9).
