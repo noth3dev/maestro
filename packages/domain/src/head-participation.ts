@@ -4,7 +4,12 @@ export type HeadParticipationStatus = "starting" | "active" | "sleeping";
 export interface GoalHeadParticipation {
   readonly goalId: string;
   readonly departmentId: string;
+  /** Stable permanent Head identity. A Head gets a separate participation per Goal. */
+  readonly headRoleId: string;
+  /** Exact Task Contract identity used to assemble this Goal participation. */
   readonly contractId: string | null;
+  /** Goal-scoped context identity; context contents never live in this record. */
+  readonly contextId: string | null;
   readonly status: HeadParticipationStatus;
   /** Opaque provider/session handle. It is never prompt or transcript content. */
   readonly activeSessionRef: string | null;
