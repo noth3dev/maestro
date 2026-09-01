@@ -14,6 +14,7 @@ import {
   type DecisionPacket,
   type TaskContractSubstance,
   type IndependentBrief,
+  type SealedSubmissionParticipant,
   type SealedSubmissionSnapshot,
 } from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
@@ -32,7 +33,7 @@ export interface HeadCouncil {
   readonly noNewEvidenceStreak: number;
   readonly decisionPacket: DecisionPacket | null;
   readonly snapshotHash: string;
-  readonly snapshot: SealedSubmissionSnapshot;
+  readonly snapshot: HeadCouncilSnapshot;
 }
 
 export interface CouncilActorContext {
@@ -40,6 +41,43 @@ export interface CouncilActorContext {
   readonly sessionRef: string;
   readonly commandId?: string;
   readonly idempotencyKey?: string;
+}
+
+/** New Council snapshots carry both durable Head identity and Department context. */
+export interface HeadCouncilParticipant extends SealedSubmissionParticipant {
+  /** Optional only for snapshots created before HeadRoleId hardening. */
+  readonly headRoleId?: string;
+  /** Optional only for snapshots created before HeadRoleId hardening. */
+  readonly departmentId?: string;
+}
+
+export type HeadCouncilSnapshot = Omit<SealedSubmissionSnapshot, "participants"> & {
+  readonly participants: readonly HeadCouncilParticipant[];
+};
+
+export function toHeadCouncilParticipant(identity: {
+  readonly headRoleId: string;
+  readonly departmentId: string;
+  readonly sessionRef: string;
+}): HeadCouncilParticipant {
+  if (identity.headRoleId.trim() === "") throw new CouncilProtocolError("HeadRoleId is required");
+  if (identity.departmentId.trim() === "") throw new CouncilProtocolError("Department identity is required");
+  if (identity.sessionRef.trim() === "") throw new CouncilProtocolError("Head session identity is required");
+  return {
+    participantId: identity.headRoleId,
+    headRoleId: identity.headRoleId,
+    departmentId: identity.departmentId,
+    sessionRef: identity.sessionRef,
+  };
+}
+
+export function isAuthorizedHeadCouncilActor(
+  context: Pick<CouncilActorContext, "actorId" | "sessionRef">,
+  participant: Pick<HeadCouncilParticipant, "headRoleId" | "sessionRef">,
+): boolean {
+  return participant.headRoleId !== undefined
+    && context.actorId === participant.headRoleId
+    && context.sessionRef === participant.sessionRef;
 }
 
 export interface CreateHeadCouncilRequest {
@@ -137,19 +175,34 @@ export async function createHeadCouncil(pool: Pool, request: CreateHeadCouncilRe
     const contract = contractRow.rows[0]!;
     const contractContent = assertLaunchedTaskContract(contract, request.contractId);
     await assertDurableEvidenceReferences(client, request.goalId, goalRow.rows[0]!.project_id, request.evidence, "Frozen Council evidence");
-    const participants = await client.query<{ department_id: string; active_session_ref: string }>(`SELECT department_id, active_session_ref FROM goal_head_participations WHERE goal_id = $1 AND contract_id = $2 AND status = 'active' ORDER BY department_id FOR UPDATE`, [request.goalId, request.contractId]);
+    const participants = await client.query<{ department_id: string; head_role_id: string; active_session_ref: string }>(
+      `SELECT department_id, head_role_id, active_session_ref
+       FROM goal_head_participations
+       WHERE goal_id = $1 AND contract_id = $2 AND status = 'active'
+       ORDER BY department_id, head_role_id FOR UPDATE`,
+      [request.goalId, request.contractId],
+    );
     if (participants.rowCount === 0) throw new CouncilProtocolError("A Head Council requires active Heads bound to the selected contract");
     const snapshot = freezeSealedSubmissionSnapshot({
       projectId: goalRow.rows[0]!.project_id,
       goalId: request.goalId,
       contract: { contractId: request.contractId, version: Number(contract.version), contentHash: contract.content_hash.trim(), content: contractContent as unknown as Readonly<Record<string, unknown>> },
-      participants: participants.rows.map((row) => ({ participantId: row.department_id, sessionRef: row.active_session_ref })),
+      participants: participants.rows.map((row) => toHeadCouncilParticipant({
+        headRoleId: row.head_role_id,
+        departmentId: row.department_id,
+        sessionRef: row.active_session_ref,
+      })),
       evidence: request.evidence,
       deadline: request.briefDeadline,
     });
     const councilId = request.councilId ?? randomUUID();
     const inserted = await client.query<CouncilRow>(`INSERT INTO head_councils (council_id, goal_id, contract_id, brief_deadline, state, snapshot_hash, snapshot_payload) VALUES ($1, $2, $3, $4, 'collecting', $5, $6::jsonb) RETURNING council_id, goal_id, contract_id, brief_deadline, state, no_new_evidence_streak, decision_packet, snapshot_hash, snapshot_payload`, [councilId, request.goalId, request.contractId, snapshot.deadline, snapshot.snapshotHash, JSON.stringify(snapshot)]);
-    for (const participant of participants.rows) await client.query("INSERT INTO council_participants (council_id, department_id, session_ref) VALUES ($1, $2, $3)", [councilId, participant.department_id, participant.active_session_ref]);
+    for (const participant of participants.rows) {
+      await client.query(
+        "INSERT INTO council_participants (council_id, department_id, head_role_id, session_ref) VALUES ($1, $2, $3, $4)",
+        [councilId, participant.department_id, participant.head_role_id, participant.active_session_ref],
+      );
+    }
     const council = mapCouncil(inserted.rows[0]!);
     await insertProtocolEvent(client, council, "council_created", actorContext, { snapshot: council.snapshot }, actorContext.commandId ?? actorContext.idempotencyKey ?? `council:create:${council.councilId}`);
     await client.query("COMMIT"); open = false; return council;
@@ -343,19 +396,25 @@ function assertLaunchedTaskContract(row: CouncilTaskContractRow, contractId: str
 }
 
 async function assertAuthorizedBriefActor(client: PoolClient, council: HeadCouncil, departmentId: string, context: CouncilActorContext): Promise<void> {
-  const captured = council.snapshot.participants.find((participant) => participant.participantId === departmentId);
-  // Department identity is the durable Head identity in this phase. The
-  // opaque session must be both the frozen Council session and the currently
-  // authorized Goal participation session.
-  if (captured === undefined || context.actorId !== captured.participantId || context.sessionRef !== captured.sessionRef) {
-    throw new CouncilProtocolError("Brief actor is not bound to the captured Head identity and session");
-  }
+  const captured = council.snapshot.participants.find((participant) => (participant.departmentId ?? participant.participantId) === departmentId);
+  if (captured === undefined) throw new CouncilProtocolError("Brief actor is not bound to the captured Head identity and session");
+  // New snapshots bind actor identity to the durable HeadRoleId. Legacy
+  // snapshots retain department participantId and continue using that identity
+  // until their protocol naturally expires.
+  const authorized = captured.headRoleId !== undefined
+    ? isAuthorizedHeadCouncilActor(context, captured)
+    : context.actorId === captured.participantId && context.sessionRef === captured.sessionRef;
+  if (!authorized) throw new CouncilProtocolError("Brief actor is not bound to the captured Head identity and session");
+  const roleClause = captured.headRoleId === undefined ? "" : " AND head_role_id = $5";
+  const values = captured.headRoleId === undefined
+    ? [council.goalId, departmentId, council.contractId, captured.sessionRef]
+    : [council.goalId, departmentId, council.contractId, captured.sessionRef, captured.headRoleId];
   const active = await client.query(
     `SELECT 1 FROM goal_head_participations
       WHERE goal_id = $1 AND department_id = $2 AND contract_id = $3
-        AND status = 'active' AND active_session_ref = $4
+        AND status = 'active' AND active_session_ref = $4${roleClause}
       FOR UPDATE`,
-    [council.goalId, departmentId, council.contractId, captured.sessionRef],
+    values,
   );
   if (active.rowCount !== 1) throw new CouncilProtocolError("Captured Head session is no longer authorized");
 }
@@ -412,9 +471,18 @@ async function assertCouncilCreationAnchor(queryable: Pick<Pool | PoolClient, "q
 }
 
 async function assertParticipantSnapshot(queryable: Pick<Pool | PoolClient, "query">, council: HeadCouncil): Promise<void> {
-  const rows = await queryable.query<{ department_id: string; session_ref: string }>("SELECT department_id, session_ref FROM council_participants WHERE council_id = $1 ORDER BY department_id", [council.councilId]);
+  const rows = await queryable.query<{ department_id: string; head_role_id: string; session_ref: string }>(
+    "SELECT department_id, head_role_id, session_ref FROM council_participants WHERE council_id = $1 ORDER BY department_id, head_role_id",
+    [council.councilId],
+  );
   const expected = council.snapshot.participants;
-  if (rows.rowCount !== expected.length || rows.rows.some((row, index) => row.department_id !== expected[index]?.participantId || row.session_ref !== expected[index]?.sessionRef)) {
+  if (rows.rowCount !== expected.length || rows.rows.some((row, index) => {
+    const participant = expected[index];
+    return participant === undefined
+      || row.department_id !== (participant.departmentId ?? participant.participantId)
+      || (participant.headRoleId !== undefined && row.head_role_id !== participant.headRoleId)
+      || row.session_ref !== participant.sessionRef;
+  })) {
     throw new CouncilProtocolError("Council participants no longer match the frozen snapshot");
   }
 }
