@@ -3,14 +3,14 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { assertValidDecisionPacket, taskContractContentHash, type IndependentBrief, type TaskContractSubstance } from "@maestro/domain";
+import { assertValidDecisionPacket, freezeSealedSubmissionSnapshot, sealedSubmissionSnapshotHash, taskContractContentHash, type IndependentBrief, type TaskContractSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";
 import { CouncilBriefIdempotencyError, CouncilBriefsSealedError, CouncilProtocolError, createHeadCouncil, listCouncilProtocolEvents, markMissingCouncilParticipantsAbsent, readHeadCouncil, readRevealedCouncilBriefs, recordCouncilDecisionPacket, recordCouncilRound, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
-const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql", "0005_authority_records.sql", "0006_evidence.sql", "0007_goal_control.sql", "0008_goal_pause_stop.sql", "0009_reconciliation_leader_lease.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql", "0015_council_protocol.sql"];
+const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql", "0005_authority_records.sql", "0006_evidence.sql", "0007_goal_control.sql", "0008_goal_pause_stop.sql", "0009_reconciliation_leader_lease.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql", "0015_council_protocol.sql", "0016_council_hardening.sql"];
 const contractContent: TaskContractSubstance = {
   desiredOutcome: "deliver safely",
   userVisibleBehavior: [], successCriteria: [], liveEvidence: [], scope: [], nonGoals: [], priorities: [], acceptableTradeoffs: [], constraints: [], knownEdgeCases: [],
@@ -19,18 +19,25 @@ const contractContent: TaskContractSubstance = {
   budget: { ceiling: "1", reportingExpectations: [], stoppingConditions: [] },
 };
 const brief: IndependentBrief = { interpretation: "safe outcome", contribution: "review", nonGoals: [], assumptions: [], evidenceGaps: [], risks: [], dependencies: [], proposedValidation: [], expectedWorkers: [], expectedCost: "1", expectedTime: "1", objectionsToLikelyAlternatives: [] };
-const evidence = { references: ["evidence-1", "evidence-2"] };
+const evidence = { references: [randomUUID(), randomUUID()] };
 const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `session:${label}`, commandId: randomUUID() });
+const headContext = (departmentId: string) => ({ actorId: departmentId, sessionRef: `opaque:${departmentId}`, commandId: randomUUID() });
 
  describeDatabase("Head Council briefs with PostgreSQL", () => {
  const pool = new Pool({ connectionString: databaseUrl });
- async function setup(departments = ["product", "engineering"], briefDeadline = new Date(Date.now() + 60_000)) {
+ async function setup(departments = ["product", "engineering"], briefDeadline = new Date(Date.now() + 60_000), snapshotEvidence = evidence) {
    const goalId = randomUUID(), contractId = randomUUID(), projectId = randomUUID();
    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
    await pool.query("INSERT INTO task_contracts (contract_id, schema_version, version, content, content_hash, launch_state) VALUES ($1, 1, 1, $2::jsonb, $3, 'launched')", [contractId, JSON.stringify(contractContent), taskContractContentHash(contractContent)]);
+   for (const evidenceId of evidence.references) {
+     await pool.query(
+       "INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 'test-result', 'text/plain', 'project_lifetime')",
+       [evidenceId, randomUUID(), randomUUID(), projectId, goalId, "test", "0".repeat(64)],
+     );
+   }
    for (const departmentId of departments) await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, contract_id, status, active_session_ref) VALUES ($1, $2, $3, 'active', $4)", [goalId, departmentId, contractId, `opaque:${departmentId}`]);
    const proof = await acquireGoalLease(pool, { goalId, ownerId: "test", leaseDurationMs: 60_000 });
-   const council = await createHeadCouncil(pool, { goalId, contractId, briefDeadline, evidence }, proof, context("secretary"));
+   const council = await createHeadCouncil(pool, { goalId, contractId, briefDeadline, evidence: snapshotEvidence }, proof, context("secretary"));
    expect(/^[0-9a-f]{64}$/.test(council.snapshotHash)).toBe(true);
    return { goalId, contractId, projectId, proof, council };
  }
@@ -39,10 +46,10 @@ const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `se
    for (const name of migrations) {
      const sql = await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8");
      await pool.query(sql);
-     if (name === "0015_council_protocol.sql") await pool.query(sql);
+     if (name === "0015_council_protocol.sql" || name === "0016_council_hardening.sql") await pool.query(sql);
    }
  });
- beforeEach(async () => { await pool.query("TRUNCATE council_protocol_events, head_councils, goal_head_participations, task_contracts, goal_leases, outbox, goal_events, command_receipts, goals RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
+ beforeEach(async () => { await pool.query("TRUNCATE council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
  afterAll(async () => { await pool.end(); });
 
  it("stores and reloads the complete immutable snapshot, and seals/idempotently accepts briefs", async () => {
@@ -58,14 +65,14 @@ const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `se
    expect(reloaded.snapshotHash).toBe(council.snapshotHash);
    expect(reloaded.snapshot).toEqual(council.snapshot);
 
-   await submitIndependentBrief(pool, council.councilId, "product", brief, proof, context("product"));
-   await submitIndependentBrief(pool, council.councilId, "product", brief, proof, context("product-retry"));
+   await submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"));
+   await submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"));
    const changed = { ...brief, interpretation: "changed" };
-   await expect(submitIndependentBrief(pool, council.councilId, "product", changed, proof, context("product-mismatch"))).rejects.toBeInstanceOf(CouncilBriefIdempotencyError);
+   await expect(submitIndependentBrief(pool, council.councilId, "product", changed, proof, headContext("product"))).rejects.toBeInstanceOf(CouncilBriefIdempotencyError);
    await expect(readRevealedCouncilBriefs(pool, council.councilId)).rejects.toBeInstanceOf(CouncilBriefsSealedError);
    await expect(revealCouncilBriefs(pool, council.councilId, proof, context("secretary-reveal"))).rejects.toBeInstanceOf(CouncilProtocolError);
    await expect(submitIndependentBrief(pool, council.councilId, "design", brief, proof, context("outsider"))).rejects.toBeInstanceOf(CouncilProtocolError);
-   await submitIndependentBrief(pool, council.councilId, "engineering", brief, proof, context("engineering"));
+   await submitIndependentBrief(pool, council.councilId, "engineering", brief, proof, headContext("engineering"));
    await revealCouncilBriefs(pool, council.councilId, proof, context("secretary-reveal"));
    expect(await readRevealedCouncilBriefs(pool, council.councilId)).toHaveLength(2);
 
@@ -94,9 +101,9 @@ const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `se
    expect(invalid.rowCount).toBe(1);
    await expect(readHeadCouncil(pool, council.councilId)).resolves.toBeDefined();
    // The snapshot already captured the valid contract identity; later contract mutation does not change it.
-   await submitIndependentBrief(pool, council.councilId, "product", brief, proof, context("product"));
+   await submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"));
    await pool.query("SELECT pg_sleep(0.7)");
-   await expect(submitIndependentBrief(pool, council.councilId, "engineering", brief, proof, context("engineering-late"))).rejects.toBeInstanceOf(CouncilProtocolError);
+   await expect(submitIndependentBrief(pool, council.councilId, "engineering", brief, proof, headContext("engineering"))).rejects.toBeInstanceOf(CouncilProtocolError);
    await expect(markMissingCouncilParticipantsAbsent(pool, council.councilId, {}, proof, context("secretary-absence"))).rejects.toBeInstanceOf(CouncilProtocolError);
    await markMissingCouncilParticipantsAbsent(pool, council.councilId, { engineering: "unavailable" }, proof, context("secretary-absence"));
    await revealCouncilBriefs(pool, council.councilId, proof, context("secretary-reveal"));
@@ -107,28 +114,28 @@ const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `se
 
  it("requires a complete present-participant round and counts only novel evidence/arguments", async () => {
    const { council, proof } = await setup();
-   await submitIndependentBrief(pool, council.councilId, "product", brief, proof, context("product"));
-   await submitIndependentBrief(pool, council.councilId, "engineering", brief, proof, context("engineering"));
+   await submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"));
+   await submitIndependentBrief(pool, council.councilId, "engineering", brief, proof, headContext("engineering"));
    await revealCouncilBriefs(pool, council.councilId, proof, context("reveal"));
-   const repeated = { summary: "repeat", newEvidence: ["evidence-1"], distinctArguments: ["argument-1"] };
+   const repeated = { summary: "repeat", newEvidence: [evidence.references[0]], distinctArguments: ["argument-1"] };
    await expect(recordCouncilRound(pool, council.councilId, [], proof, context("round-empty"))).rejects.toBeInstanceOf(CouncilProtocolError);
    await expect(recordCouncilRound(pool, council.councilId, [{ departmentId: "product", contribution: repeated }], proof, context("round-partial"))).rejects.toBeInstanceOf(CouncilProtocolError);
    await expect(recordCouncilRound(pool, council.councilId, [{ departmentId: "product", contribution: { summary: "unknown", newEvidence: ["unknown-evidence"], distinctArguments: [] } }, { departmentId: "engineering", contribution: { summary: "ok", newEvidence: [], distinctArguments: [] } }], proof, context("round-unknown"))).rejects.toBeInstanceOf(CouncilProtocolError);
 
    const first = await recordCouncilRound(pool, council.councilId, [
-     { departmentId: "product", contribution: { summary: "new product", newEvidence: ["evidence-1"], distinctArguments: ["argument-1"] } },
-     { departmentId: "engineering", contribution: { summary: "new engineering", newEvidence: ["evidence-2"], distinctArguments: ["argument-2"] } },
+     { departmentId: "product", contribution: { summary: "new product", newEvidence: [evidence.references[0]], distinctArguments: ["argument-1"] } },
+     { departmentId: "engineering", contribution: { summary: "new engineering", newEvidence: [evidence.references[1]], distinctArguments: ["argument-2"] } },
    ], proof, context("round-1"));
    expect(first.state).toBe("revealed");
    const second = await recordCouncilRound(pool, council.councilId, [
      { departmentId: "product", contribution: repeated },
-     { departmentId: "engineering", contribution: { summary: "repeat", newEvidence: ["evidence-2"], distinctArguments: ["argument-2"] } },
+     { departmentId: "engineering", contribution: { summary: "repeat", newEvidence: [evidence.references[1]], distinctArguments: ["argument-2"] } },
    ], proof, context("round-2"));
    expect(second.state).toBe("revealed");
    expect(second.noNewEvidenceStreak).toBe(1);
    const third = await recordCouncilRound(pool, council.councilId, [
      { departmentId: "product", contribution: repeated },
-     { departmentId: "engineering", contribution: { summary: "repeat", newEvidence: ["evidence-2"], distinctArguments: ["argument-2"] } },
+     { departmentId: "engineering", contribution: { summary: "repeat", newEvidence: [evidence.references[1]], distinctArguments: ["argument-2"] } },
    ], proof, context("round-3"));
    expect(third.state).toBe("stopped_no_new_evidence");
    expect((await listCouncilProtocolEvents(pool, council.councilId)).map((event) => event.eventType)).toContain("council_stopped");
@@ -136,9 +143,9 @@ const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `se
 
  it("records escalation as an explicit non-executable outcome", async () => {
    const { council, proof } = await setup(["product"]);
-   await submitIndependentBrief(pool, council.councilId, "product", brief, proof, context("product"));
+   await submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"));
    await revealCouncilBriefs(pool, council.councilId, proof, context("reveal"));
-   const packet = { executionDisposition: "non_executable" as const, outcome: "escalated" as const, selectedDirection: "Escalate to Phase 3 Council", rejectedAlternatives: [], departmentOwnership: [], workerPlan: [], completionCriteria: ["review"], failureCriteria: ["conflict remains"], dissent: ["product objects"], uncertainty: ["scope"], criticalActions: [], unresolvedConflicts: ["material scope conflict"], evidenceReferences: ["evidence-1"] };
+   const packet = { executionDisposition: "non_executable" as const, outcome: "escalated" as const, selectedDirection: "Escalate to Phase 3 Council", rejectedAlternatives: [], departmentOwnership: [], workerPlan: [], completionCriteria: ["review"], failureCriteria: ["conflict remains"], dissent: ["product objects"], uncertainty: ["scope"], criticalActions: [], unresolvedConflicts: ["material scope conflict"], evidenceReferences: [evidence.references[0]] };
    assertValidDecisionPacket(packet);
    const result = await recordCouncilDecisionPacket(pool, council.councilId, packet, proof, context("secretary-decision"));
    expect(result.state).toBe("escalated");
@@ -148,9 +155,94 @@ const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `se
    expect((await listCouncilProtocolEvents(pool, council.councilId)).map((event) => event.eventType)).toContain("decision_escalated");
  });
 
- it("fails closed when the stored snapshot payload is tampered", async () => {
+ it("protects snapshot identity from direct and coordinated tampering", async () => {
    const { council } = await setup(["product"]);
-   await pool.query("UPDATE head_councils SET snapshot_payload = jsonb_set(snapshot_payload, '{evidence,references,0}', to_jsonb('tampered'::text)) WHERE council_id = $1", [council.councilId]);
-   await expect(readHeadCouncil(pool, council.councilId)).rejects.toThrow(/snapshot hash|snapshot/i);
+   await expect(pool.query("UPDATE head_councils SET brief_deadline = clock_timestamp() WHERE council_id = $1", [council.councilId])).rejects.toThrow(/immutable/i);
+
+   const { snapshotHash: _snapshotHash, ...snapshotInput } = council.snapshot;
+   const tampered = freezeSealedSubmissionSnapshot({ ...snapshotInput, deadline: new Date(Date.now() + 120_000) });
+   expect(sealedSubmissionSnapshotHash(tampered)).toBe(tampered.snapshotHash);
+   await pool.query("ALTER TABLE head_councils DISABLE TRIGGER head_councils_snapshot_identity_immutable");
+   try {
+     await pool.query("UPDATE head_councils SET brief_deadline = $2, snapshot_hash = $3, snapshot_payload = $4::jsonb WHERE council_id = $1", [council.councilId, tampered.deadline, tampered.snapshotHash, JSON.stringify(tampered)]);
+   } finally {
+     await pool.query("ALTER TABLE head_councils ENABLE TRIGGER head_councils_snapshot_identity_immutable");
+   }
+   await expect(readHeadCouncil(pool, council.councilId)).rejects.toThrow(/creation|snapshot/i);
  });
-});
+
+  it("accepts only a valid launched Task Contract", async () => {
+    const goalId = randomUUID();
+    const contractId = randomUUID();
+    const projectId = randomUUID();
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
+    await pool.query("INSERT INTO task_contracts (contract_id, schema_version, version, content, content_hash, launch_state) VALUES ($1, 1, 1, $2::jsonb, $3, 'awaiting_confirmation')", [contractId, JSON.stringify(contractContent), taskContractContentHash(contractContent)]);
+    await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, contract_id, status, active_session_ref) VALUES ($1, 'product', $2, 'active', 'opaque:product')", [goalId, contractId]);
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "test", leaseDurationMs: 60_000 });
+
+    await expect(createHeadCouncil(pool, { goalId, contractId, briefDeadline: new Date(Date.now() + 60_000), evidence }, proof, context("secretary"))).rejects.toThrow(/launched/i);
+    expect((await pool.query("SELECT count(*)::int AS count FROM head_councils WHERE goal_id = $1", [goalId])).rows[0]!.count).toBe(0);
+  });
+
+  it("rejects malformed Task Contract substance before Council creation", async () => {
+    const goalId = randomUUID();
+    const contractId = randomUUID();
+    const projectId = randomUUID();
+    const malformed = {};
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
+    await pool.query("INSERT INTO task_contracts (contract_id, schema_version, version, content, content_hash, launch_state) VALUES ($1, 1, 1, $2::jsonb, $3, 'launched')", [contractId, JSON.stringify(malformed), taskContractContentHash(malformed as TaskContractSubstance)]);
+    await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, contract_id, status, active_session_ref) VALUES ($1, 'product', $2, 'active', 'opaque:product')", [goalId, contractId]);
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "test", leaseDurationMs: 60_000 });
+
+    await expect(createHeadCouncil(pool, { goalId, contractId, briefDeadline: new Date(Date.now() + 60_000), evidence }, proof, context("secretary"))).rejects.toThrow(/Task Contract/i);
+    expect((await pool.query("SELECT count(*)::int AS count FROM head_councils WHERE goal_id = $1", [goalId])).rows[0]!.count).toBe(0);
+  });
+
+  it("binds brief acceptance and audit to the captured authorized Head actor and session", async () => {
+    const { council, proof } = await setup(["product"]);
+    await expect(submitIndependentBrief(pool, council.councilId, "product", brief, proof, { actorId: "engineering", sessionRef: "opaque:product", commandId: randomUUID() })).rejects.toBeInstanceOf(CouncilProtocolError);
+    await expect(submitIndependentBrief(pool, council.councilId, "product", brief, proof, { actorId: "product", sessionRef: "opaque:product-restarted", commandId: randomUUID() })).rejects.toBeInstanceOf(CouncilProtocolError);
+
+    await pool.query("UPDATE goal_head_participations SET active_session_ref = 'opaque:product-restarted' WHERE goal_id = $1 AND department_id = 'product'", [council.goalId]);
+    await expect(submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"))).rejects.toBeInstanceOf(CouncilProtocolError);
+    expect((await pool.query("SELECT count(*)::int AS count FROM independent_briefs WHERE council_id = $1", [council.councilId])).rows[0]!.count).toBe(0);
+    expect((await pool.query("SELECT count(*)::int AS count FROM council_protocol_events WHERE council_id = $1 AND event_type = 'brief_submitted'", [council.councilId])).rows[0]!.count).toBe(0);
+  });
+
+  it("uses current database time after the Council row lock for deadline decisions", async () => {
+    const { council, proof } = await setup(["product"], new Date(Date.now() + 250));
+    const blocker = await pool.connect();
+    try {
+      await blocker.query("BEGIN");
+      await blocker.query("SELECT council_id FROM head_councils WHERE council_id = $1 FOR UPDATE", [council.councilId]);
+      const pending = submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"));
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await blocker.query("COMMIT");
+      await expect(pending).rejects.toThrow(/deadline/i);
+    } finally {
+      await blocker.query("ROLLBACK").catch(() => undefined);
+      blocker.release();
+    }
+  });
+
+  it("requires frozen evidence references to be durable goal-scoped records", async () => {
+    const invented = { references: [randomUUID()] };
+    await expect(setup(["product"], new Date(Date.now() + 60_000), invented)).rejects.toThrow(/evidence/i);
+  });
+
+  it("requires every round evidence reference to resolve to a durable record", async () => {
+    const { council, proof } = await setup(["product"]);
+    await submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"));
+    await revealCouncilBriefs(pool, council.councilId, proof, context("reveal"));
+    await expect(recordCouncilRound(pool, council.councilId, [{ departmentId: "product", contribution: { summary: "invented", newEvidence: [randomUUID()], distinctArguments: ["argument"] } }], proof, context("round"))).rejects.toBeInstanceOf(CouncilProtocolError);
+    expect((await pool.query("SELECT count(*)::int AS count FROM council_rounds WHERE council_id = $1", [council.councilId])).rows[0]!.count).toBe(0);
+  });
+
+  it("enforces bidirectional Council state and decision outcome consistency in the database", async () => {
+    const { council } = await setup(["product"]);
+    const escalated = { executionDisposition: "non_executable", outcome: "escalated", selectedDirection: "escalate", rejectedAlternatives: [], departmentOwnership: [], workerPlan: [], completionCriteria: ["review"], failureCriteria: ["conflict"], dissent: ["dissent"], uncertainty: ["uncertainty"], criticalActions: [], unresolvedConflicts: ["conflict"], evidenceReferences: [] };
+    const decided = { executionDisposition: "executable", outcome: "decided", selectedDirection: "proceed", rejectedAlternatives: [], departmentOwnership: [], workerPlan: [], completionCriteria: ["done"], failureCriteria: ["fail"], dissent: [], uncertainty: [], criticalActions: [], unresolvedConflicts: [], evidenceReferences: [] };
+    await expect(pool.query("UPDATE head_councils SET state = 'resolved', decision_packet = $2::jsonb, closed_at = clock_timestamp() WHERE council_id = $1", [council.councilId, JSON.stringify(escalated)])).rejects.toThrow();
+    await expect(pool.query("UPDATE head_councils SET state = 'escalated', decision_packet = $2::jsonb, closed_at = clock_timestamp() WHERE council_id = $1", [council.councilId, JSON.stringify(decided)])).rejects.toThrow();
+  });
+ });

@@ -3,12 +3,16 @@ import {
   assertValidCouncilRoundContribution,
   assertValidDecisionPacket,
   assertValidIndependentBrief,
+  assertValidTaskContractSubstance,
   canonicalJson,
   freezeSealedSubmissionSnapshot,
   hydrateSealedSubmissionSnapshot,
   isMaterialCouncilRound,
+  taskContractContentHash,
+  TASK_CONTRACT_SCHEMA_VERSION,
   type CouncilRoundContribution,
   type DecisionPacket,
+  type TaskContractSubstance,
   type IndependentBrief,
   type SealedSubmissionSnapshot,
 } from "@maestro/domain";
@@ -87,6 +91,14 @@ interface CouncilRow {
   snapshot_payload: unknown;
 }
 
+interface CouncilTaskContractRow {
+  schema_version: number;
+  version: string;
+  content: unknown;
+  content_hash: string;
+  launch_state: string;
+}
+
 interface StoredBriefRow {
   department_id: string;
   payload: IndependentBrief;
@@ -118,17 +130,19 @@ export async function createHeadCouncil(pool: Pool, request: CreateHeadCouncilRe
   const client = await pool.connect(); let open = false;
   try {
     await client.query("BEGIN"); open = true; await lockGoal(client, proof);
-    const participants = await client.query<{ department_id: string; active_session_ref: string }>(`SELECT department_id, active_session_ref FROM goal_head_participations WHERE goal_id = $1 AND contract_id = $2 AND status = 'active' ORDER BY department_id FOR KEY SHARE`, [request.goalId, request.contractId]);
-    if (participants.rowCount === 0) throw new CouncilProtocolError("A Head Council requires active Heads bound to the selected contract");
     const goalRow = await client.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1 FOR KEY SHARE", [request.goalId]);
     if (goalRow.rowCount !== 1) throw new CouncilProtocolError("Goal not found for Head Council creation");
-    const contractRow = await client.query<{ version: string; content: Record<string, unknown>; content_hash: string }>("SELECT version, content, content_hash FROM task_contracts WHERE contract_id = $1 FOR KEY SHARE", [request.contractId]);
+    const contractRow = await client.query<CouncilTaskContractRow>("SELECT schema_version, version, content, content_hash, launch_state FROM task_contracts WHERE contract_id = $1 FOR UPDATE", [request.contractId]);
     if (contractRow.rowCount !== 1) throw new CouncilProtocolError("Task Contract not found for Head Council creation");
     const contract = contractRow.rows[0]!;
+    const contractContent = assertLaunchedTaskContract(contract, request.contractId);
+    await assertDurableEvidenceReferences(client, request.goalId, goalRow.rows[0]!.project_id, request.evidence, "Frozen Council evidence");
+    const participants = await client.query<{ department_id: string; active_session_ref: string }>(`SELECT department_id, active_session_ref FROM goal_head_participations WHERE goal_id = $1 AND contract_id = $2 AND status = 'active' ORDER BY department_id FOR UPDATE`, [request.goalId, request.contractId]);
+    if (participants.rowCount === 0) throw new CouncilProtocolError("A Head Council requires active Heads bound to the selected contract");
     const snapshot = freezeSealedSubmissionSnapshot({
       projectId: goalRow.rows[0]!.project_id,
       goalId: request.goalId,
-      contract: { contractId: request.contractId, version: Number(contract.version), contentHash: contract.content_hash.trim(), content: contract.content },
+      contract: { contractId: request.contractId, version: Number(contract.version), contentHash: contract.content_hash.trim(), content: contractContent as unknown as Readonly<Record<string, unknown>> },
       participants: participants.rows.map((row) => ({ participantId: row.department_id, sessionRef: row.active_session_ref })),
       evidence: request.evidence,
       deadline: request.briefDeadline,
@@ -148,6 +162,8 @@ export async function readHeadCouncil(pool: Pool, councilId: string): Promise<He
   if (result.rowCount !== 1) throw new HeadCouncilNotFoundError(`Council not found: ${councilId}`);
   const council = mapCouncil(result.rows[0]!);
   await assertParticipantSnapshot(pool, council);
+  await assertCouncilCreationAnchor(pool, council);
+  await assertDurableEvidenceReferences(pool, council.goalId, council.snapshot.projectId, council.snapshot.evidence, "Frozen Council evidence");
   return council;
 }
 /** Alias for callers that use the persistence layer's get/read naming convention. */
@@ -157,6 +173,7 @@ export async function submitIndependentBrief(pool: Pool, councilId: string, depa
   assertValidIndependentBrief(brief);
   const payloadHash = briefPayloadHash(brief);
   await mutateCouncil(pool, councilId, proof, context, `brief:${departmentId}:${payloadHash}`, async (client, council, actorContext) => {
+    await assertAuthorizedBriefActor(client, council, departmentId, actorContext);
     const idempotencyKey = actorContext.idempotencyKey ?? `brief:${departmentId}:${payloadHash}`;
     const existing = await client.query<StoredBriefRow>(`SELECT department_id, payload, payload_hash, idempotency_key, submitted_at FROM independent_briefs WHERE council_id = $1 AND (department_id = $2 OR idempotency_key = $3) FOR KEY SHARE`, [councilId, departmentId, idempotencyKey]);
     if ((existing.rowCount ?? 0) > 0) {
@@ -170,7 +187,7 @@ export async function submitIndependentBrief(pool: Pool, councilId: string, depa
     requireState(council, "collecting");
     const participant = await client.query<{ session_ref: string }>("SELECT session_ref FROM council_participants WHERE council_id = $1 AND department_id = $2 AND absent_at IS NULL FOR KEY SHARE", [councilId, departmentId]);
     if (participant.rowCount !== 1) throw new CouncilProtocolError("Only a present captured Council participant may submit a brief");
-    const deadline = await client.query<{ accepting: boolean }>("SELECT transaction_timestamp() < brief_deadline AS accepting FROM head_councils WHERE council_id = $1", [councilId]);
+    const deadline = await client.query<{ accepting: boolean }>("SELECT clock_timestamp() < brief_deadline AS accepting FROM head_councils WHERE council_id = $1", [councilId]);
     if (deadline.rowCount !== 1 || !deadline.rows[0]!.accepting) throw new CouncilProtocolError("Brief deadline has passed");
     await client.query("INSERT INTO independent_briefs (council_id, department_id, payload, payload_hash, idempotency_key) VALUES ($1, $2, $3::jsonb, $4, $5)", [councilId, departmentId, JSON.stringify(brief), payloadHash, idempotencyKey]);
     await insertProtocolEvent(client, council, "brief_submitted", actorContext, { departmentId, payloadHash, brief }, idempotencyKey);
@@ -181,9 +198,12 @@ export async function submitIndependentBrief(pool: Pool, councilId: string, depa
 export async function markMissingCouncilParticipantsAbsent(pool: Pool, councilId: string, reasons: Readonly<Record<string, string>>, proof: GoalLeaseProof, context?: CouncilActorContext): Promise<void> {
   await mutateCouncil(pool, councilId, proof, context, `absence:${councilId}`, async (client, council, actorContext) => {
     requireState(council, "collecting");
-    const deadline = await client.query<{ elapsed: boolean }>("SELECT transaction_timestamp() >= $1::timestamptz AS elapsed", [council.briefDeadline]);
-    if (deadline.rowCount !== 1 || !deadline.rows[0]!.elapsed) throw new CouncilProtocolError("Brief deadline has not passed");
+    // Lock every participant before taking the deadline decision. A current
+    // clock reading after these locks prevents a wait from crossing the
+    // deadline while still using an earlier timestamp.
     const missing = await client.query<{ department_id: string; session_ref: string }>(`SELECT p.department_id, p.session_ref FROM council_participants p LEFT JOIN independent_briefs b ON b.council_id = p.council_id AND b.department_id = p.department_id WHERE p.council_id = $1 AND p.absent_at IS NULL AND b.department_id IS NULL FOR UPDATE OF p`, [councilId]);
+    const deadline = await client.query<{ elapsed: boolean }>("SELECT clock_timestamp() >= $1::timestamptz AS elapsed", [council.briefDeadline]);
+    if (deadline.rowCount !== 1 || !deadline.rows[0]!.elapsed) throw new CouncilProtocolError("Brief deadline has not passed");
     for (const row of missing.rows) {
       const reason = reasons[row.department_id];
       if (typeof reason !== "string" || reason.trim() === "") throw new CouncilProtocolError(`Missing absence reason for ${row.department_id}`);
@@ -191,7 +211,7 @@ export async function markMissingCouncilParticipantsAbsent(pool: Pool, councilId
     if (Object.keys(reasons).some((departmentId) => !missing.rows.some((row) => row.department_id === departmentId))) throw new CouncilProtocolError("Absence reasons may name only missing participants");
     for (const row of missing.rows) {
       const reason = reasons[row.department_id]!.trim();
-      await client.query("UPDATE council_participants SET absence_reason = $3, absent_at = transaction_timestamp() WHERE council_id = $1 AND department_id = $2", [councilId, row.department_id, reason]);
+      await client.query("UPDATE council_participants SET absence_reason = $3, absent_at = clock_timestamp() WHERE council_id = $1 AND department_id = $2", [councilId, row.department_id, reason]);
       await insertProtocolEvent(client, council, "participant_absent", actorContext, { departmentId: row.department_id, reason }, `absence:${councilId}:${row.department_id}` , row.session_ref);
     }
   });
@@ -202,10 +222,10 @@ export async function revealCouncilBriefs(pool: Pool, councilId: string, proof: 
     requireState(council, "collecting");
     const counts = await settlementCounts(client, councilId);
     const allSubmitted = counts.briefs === counts.participants && counts.absent === 0;
-    const deadline = await client.query<{ elapsed: boolean }>("SELECT transaction_timestamp() >= $1::timestamptz AS elapsed", [council.briefDeadline]);
+    const deadline = await client.query<{ elapsed: boolean }>("SELECT clock_timestamp() >= $1::timestamptz AS elapsed", [council.briefDeadline]);
     const deadlineSettled = deadline.rowCount === 1 && deadline.rows[0]!.elapsed && counts.briefs + counts.absent === counts.participants;
     if (!allSubmitted && !deadlineSettled) throw new CouncilProtocolError("Briefs remain sealed until all submit or every deadline-missing participant is marked absent");
-    await client.query("UPDATE head_councils SET state = 'revealed', revealed_at = transaction_timestamp() WHERE council_id = $1", [councilId]);
+    await client.query("UPDATE head_councils SET state = 'revealed', revealed_at = clock_timestamp() WHERE council_id = $1", [councilId]);
     await insertProtocolEvent(client, council, "briefs_revealed", actorContext, { briefs: counts.briefs, absent: counts.absent }, `reveal:${councilId}`);
   });
 }
@@ -262,7 +282,11 @@ export async function recordCouncilDecisionPacket(pool: Pool, councilId: string,
 }
 
 export async function listCouncilProtocolEvents(pool: Pool, councilId: string): Promise<readonly CouncilProtocolEvent[]> {
+  const council = await readHeadCouncil(pool, councilId);
   const rows = await pool.query<StoredEventRow>(`SELECT event_sequence, event_id, council_id, goal_id, event_type, actor_id, session_ref, command_id, idempotency_key, command_or_idempotency_id, snapshot_hash, evidence_lineage, payload, occurred_at FROM council_protocol_events WHERE council_id = $1 ORDER BY event_sequence`, [councilId]);
+  for (const row of rows.rows) {
+    if (row.goal_id !== council.goalId || row.snapshot_hash.trim() !== council.snapshotHash) throw new CouncilProtocolError("Council protocol event identity does not match the immutable snapshot");
+  }
   return rows.rows.map((row) => ({ eventSequence: row.event_sequence, eventId: row.event_id, councilId: row.council_id, goalId: row.goal_id, eventType: row.event_type, actorId: row.actor_id, sessionRef: row.session_ref, commandId: row.command_id, idempotencyKey: row.idempotency_key, commandOrIdempotencyId: row.command_or_idempotency_id, snapshotHash: row.snapshot_hash.trim(), evidenceLineage: row.evidence_lineage, payload: row.payload, occurredAt: row.occurred_at.toISOString() }));
 }
 
@@ -274,6 +298,8 @@ async function mutateCouncil<T>(pool: Pool, councilId: string, proof: GoalLeaseP
     if (row.rowCount !== 1) throw new HeadCouncilNotFoundError(`Council not found: ${councilId}`);
     const council = mapCouncil(row.rows[0]!);
     await assertParticipantSnapshot(client, council);
+    await assertCouncilCreationAnchor(client, council);
+    await assertDurableEvidenceReferences(client, council.goalId, council.snapshot.projectId, council.snapshot.evidence, "Frozen Council evidence");
     if (!validProofFor(council.goalId, proof)) throw new StaleGoalLeaseError(council.goalId);
     await lockGoal(client, proof);
     const actorContext = resolveContext(proof, context, fallbackIdentity);
@@ -292,6 +318,99 @@ async function insertProtocolEvent(client: PoolClient, council: HeadCouncil, eve
   await client.query(`INSERT INTO council_protocol_events (event_id, council_id, goal_id, event_type, actor_id, session_ref, command_id, idempotency_key, command_or_idempotency_id, snapshot_hash, evidence_lineage, payload) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb)`, [randomUUID(), council.councilId, council.goalId, eventType, context.actorId, sessionRefOverride ?? context.sessionRef, commandId, idempotencyKey, identity, council.snapshotHash, JSON.stringify(lineage), JSON.stringify(payload)]);
 }
 
+
+interface StoredCreationEventRow {
+  goal_id: string;
+  snapshot_hash: string;
+  payload: Record<string, unknown>;
+}
+
+function assertLaunchedTaskContract(row: CouncilTaskContractRow, contractId: string): TaskContractSubstance {
+  if (row.launch_state !== "launched") throw new CouncilProtocolError(`Task Contract must be launched before Head Council creation: ${contractId}`);
+  if (row.schema_version !== TASK_CONTRACT_SCHEMA_VERSION) throw new CouncilProtocolError(`Task Contract schema version is unsupported: ${contractId}`);
+  const version = Number(row.version);
+  if (!Number.isSafeInteger(version) || version < 1) throw new CouncilProtocolError(`Task Contract version is invalid: ${contractId}`);
+  try {
+    assertValidTaskContractSubstance(row.content);
+  } catch (error) {
+    throw new CouncilProtocolError(`Task Contract substance is invalid: ${error instanceof Error ? error.message : contractId}`);
+  }
+  const contentHash = row.content_hash.trim();
+  if (!/^[0-9a-f]{64}$/.test(contentHash) || taskContractContentHash(row.content) !== contentHash) {
+    throw new CouncilProtocolError(`Task Contract content hash mismatch: ${contractId}`);
+  }
+  return row.content;
+}
+
+async function assertAuthorizedBriefActor(client: PoolClient, council: HeadCouncil, departmentId: string, context: CouncilActorContext): Promise<void> {
+  const captured = council.snapshot.participants.find((participant) => participant.participantId === departmentId);
+  // Department identity is the durable Head identity in this phase. The
+  // opaque session must be both the frozen Council session and the currently
+  // authorized Goal participation session.
+  if (captured === undefined || context.actorId !== captured.participantId || context.sessionRef !== captured.sessionRef) {
+    throw new CouncilProtocolError("Brief actor is not bound to the captured Head identity and session");
+  }
+  const active = await client.query(
+    `SELECT 1 FROM goal_head_participations
+      WHERE goal_id = $1 AND department_id = $2 AND contract_id = $3
+        AND status = 'active' AND active_session_ref = $4
+      FOR UPDATE`,
+    [council.goalId, departmentId, council.contractId, captured.sessionRef],
+  );
+  if (active.rowCount !== 1) throw new CouncilProtocolError("Captured Head session is no longer authorized");
+}
+
+async function loadDurableEvidenceReferences(queryable: Pick<Pool | PoolClient, "query">, goalId: string, projectId: string): Promise<Set<string>> {
+  const recorded = await queryable.query<{ evidence_id: string; sha256: string }>(
+    "SELECT evidence_id, sha256 FROM evidence_records WHERE goal_id = $1 AND project_id = $2",
+    [goalId, projectId],
+  );
+  const references = new Set<string>();
+  for (const row of recorded.rows) {
+    references.add(row.evidence_id.trim());
+    references.add(row.sha256.trim());
+  }
+  return references;
+}
+
+async function assertDurableEvidenceReferences(
+  queryable: Pick<Pool | PoolClient, "query">,
+  goalId: string,
+  projectId: string,
+  value: Readonly<Record<string, unknown>>,
+  label: string,
+): Promise<Set<string>> {
+  const durable = await loadDurableEvidenceReferences(queryable, goalId, projectId);
+  for (const reference of extractEvidenceReferences(value)) {
+    if (!durable.has(reference.trim())) throw new CouncilProtocolError(`${label} reference is not a durable goal-scoped evidence record: ${reference}`);
+  }
+  return durable;
+}
+
+async function assertCouncilCreationAnchor(queryable: Pick<Pool | PoolClient, "query">, council: HeadCouncil): Promise<void> {
+  const result = await queryable.query<StoredCreationEventRow>(
+    `SELECT goal_id, snapshot_hash, payload
+       FROM council_protocol_events
+      WHERE council_id = $1 AND event_type = 'council_created'`,
+    [council.councilId],
+  );
+  if (result.rowCount !== 1) throw new CouncilProtocolError("Council creation snapshot anchor is missing or duplicated");
+  const anchor = result.rows[0]!;
+  if (anchor.goal_id !== council.goalId || anchor.snapshot_hash.trim() !== council.snapshotHash) {
+    throw new CouncilProtocolError("Council creation snapshot anchor does not match the Council projection");
+  }
+  const snapshotValue = anchor.payload?.snapshot;
+  let anchoredSnapshot: SealedSubmissionSnapshot;
+  try {
+    anchoredSnapshot = hydrateSealedSubmissionSnapshot(snapshotValue, anchor.snapshot_hash.trim());
+  } catch (error) {
+    throw new CouncilProtocolError(`Council creation snapshot anchor is invalid: ${error instanceof Error ? error.message : "invalid snapshot"}`);
+  }
+  if (canonicalJson(anchoredSnapshot) !== canonicalJson(council.snapshot)) {
+    throw new CouncilProtocolError("Council creation snapshot anchor does not match the immutable snapshot");
+  }
+}
+
 async function assertParticipantSnapshot(queryable: Pick<Pool | PoolClient, "query">, council: HeadCouncil): Promise<void> {
   const rows = await queryable.query<{ department_id: string; session_ref: string }>("SELECT department_id, session_ref FROM council_participants WHERE council_id = $1 ORDER BY department_id", [council.councilId]);
   const expected = council.snapshot.participants;
@@ -300,14 +419,16 @@ async function assertParticipantSnapshot(queryable: Pick<Pool | PoolClient, "que
   }
 }
 
-async function lockGoal(client: PoolClient, proof: GoalLeaseProof): Promise<void> { const lease = await client.query("SELECT 1 FROM goal_leases WHERE goal_id = $1 AND owner_id = $2 AND fencing_token = $3::bigint AND expires_at > transaction_timestamp() FOR UPDATE", [proof.goalId, proof.ownerId, proof.fencingToken]); if (lease.rowCount !== 1) throw new StaleGoalLeaseError(proof.goalId); await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 12))", [proof.goalId]); }
+async function lockGoal(client: PoolClient, proof: GoalLeaseProof): Promise<void> { const lease = await client.query("SELECT 1 FROM goal_leases WHERE goal_id = $1 AND owner_id = $2 AND fencing_token = $3::bigint AND expires_at > clock_timestamp() FOR UPDATE", [proof.goalId, proof.ownerId, proof.fencingToken]); if (lease.rowCount !== 1) throw new StaleGoalLeaseError(proof.goalId); await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 12))", [proof.goalId]); }
 async function settlementCounts(client: PoolClient, councilId: string): Promise<{ participants: number; briefs: number; absent: number }> { const result = await client.query<{ participants: number; briefs: number; absent: number }>(`SELECT (SELECT count(*)::int FROM council_participants WHERE council_id = $1) participants, (SELECT count(*)::int FROM independent_briefs WHERE council_id = $1) briefs, (SELECT count(*)::int FROM council_participants WHERE council_id = $1 AND absent_at IS NOT NULL) absent`, [councilId]); return result.rows[0]!; }
 async function knownEvidenceReferences(client: PoolClient, council: HeadCouncil, prior: readonly CouncilRoundContribution[]): Promise<Set<string>> {
-  const references = new Set(extractEvidenceReferences(council.snapshot.evidence));
-  for (const contribution of prior) for (const reference of contribution.newEvidence) references.add(reference.trim());
-  const recorded = await client.query<{ evidence_id: string }>("SELECT evidence_id FROM evidence_records WHERE goal_id = $1", [council.goalId]);
-  for (const row of recorded.rows) references.add(row.evidence_id.trim());
-  return references;
+  const durable = await assertDurableEvidenceReferences(client, council.goalId, council.snapshot.projectId, council.snapshot.evidence, "Frozen Council evidence");
+  for (const contribution of prior) {
+    for (const reference of contribution.newEvidence) {
+      if (!durable.has(reference.trim())) throw new CouncilProtocolError(`Recorded Council round evidence is not durable: ${reference}`);
+    }
+  }
+  return durable;
 }
 function extractEvidenceReferences(value: Readonly<Record<string, unknown>>): readonly string[] {
   const references = new Set<string>();
@@ -348,6 +469,9 @@ function councilSelectSql(): string { return "SELECT council_id, goal_id, contra
 function mapCouncil(row: CouncilRow): HeadCouncil {
   const snapshot = hydrateSealedSubmissionSnapshot(row.snapshot_payload, row.snapshot_hash.trim());
   if (row.decision_packet !== null) assertValidDecisionPacket(row.decision_packet);
+  if (row.state === "resolved" && row.decision_packet?.outcome !== "decided") throw new CouncilProtocolError("Resolved Council must carry a decided packet");
+  if (row.state === "escalated" && row.decision_packet?.outcome !== "escalated") throw new CouncilProtocolError("Escalated Council must carry an escalated packet");
+  if (row.state !== "resolved" && row.state !== "escalated" && row.decision_packet !== null) throw new CouncilProtocolError("Only a resolved or escalated Council may carry a decision packet");
   const deadline = row.brief_deadline instanceof Date ? row.brief_deadline.toISOString() : new Date(row.brief_deadline).toISOString();
   if (snapshot.goalId !== row.goal_id || snapshot.contract.contractId !== row.contract_id || snapshot.deadline !== deadline) throw new CouncilProtocolError("Stored Council snapshot does not match its immutable projection");
   return { councilId: row.council_id, goalId: row.goal_id, contractId: row.contract_id, briefDeadline: deadline, state: row.state, noNewEvidenceStreak: row.no_new_evidence_streak, decisionPacket: row.decision_packet, snapshotHash: row.snapshot_hash.trim(), snapshot };
