@@ -73,3 +73,5 @@
 
 - phase1-reconciliation worktree: added durable reconciler-leader lease (migration 0008) and reconcileOnStartup Goal-consistency scaffold (leader election + goal_leases/goal_controls consistency check -> durable 'recovering' transition, no session reconciliation yet). Fixed a second cross-suite shared-table test race by serializing integration test file execution. Verified stable over 3 consecutive real-PostgreSQL check runs (131 passed, 1 live-Prime skip).
 
+- Added fast-check property-based fencing tests (Tests #3 requirement). Full check: 145 passed, stable over 2 runs.
+- Next: kill-and-restart acceptance test against a real running control-plane process, and wiring AuthorizedEffectExecutor to one concrete critical-action call site.

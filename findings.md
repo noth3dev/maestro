@@ -168,3 +168,7 @@ Against plan/phase1.md's exit gate and Tests section, still missing:
 3. A concrete example wiring `AuthorizedEffectExecutor` to at least one real effect call site (e.g. a stub critical-action adapter) so "block an unauthorized critical action" is demonstrated end-to-end, not only unit-level.
 4. The Secretary Next.js app shell (CLI exists; app does not). Test #6 requires identical durable state shown by both app and CLI.
 5. A failure-injection harness (work sequence item 10) and corrupted-evidence-hash rejection proof (Tests #9).
+
+## 2026-09-01 — Fencing property tests (Tests #3)
+- Added fast-check generative property tests covering stale/forged fencing tokens and goalId/ownerId mismatches against every state-changing Goal command path (CreateGoal, TransitionGoal) and renewGoalLease, proving zero durable writes (receipts/events/goals/outbox unchanged) on every generated case, then that the real current proof still works afterward (forging never corrupts a lease).
+- Verified stable across two consecutive real-PostgreSQL runs: 145 passed.
