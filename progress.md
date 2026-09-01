@@ -75,3 +75,16 @@
 
 - Added fast-check property-based fencing tests (Tests #3 requirement). Full check: 145 passed, stable over 2 runs.
 - Next: kill-and-restart acceptance test against a real running control-plane process, and wiring AuthorizedEffectExecutor to one concrete critical-action call site.
+
+
+## 2026-09-01 (continued, this session — reconnected after interruption)
+- Session resumed at P2S5 (plan/phase2.md Work sequence step 5). Read task_plan.md, progress.md, findings.md, and plan/phase1.md–phase2.md in full.
+- Note: this file (root `progress.md` on `main`) is the canonical planning-doc log. Active Phase 2 code work happens in `.worktrees/phase2-*` on unmerged branches; each worktree has its own copy of progress.md/findings.md that is ahead of this one until merged. See task_plan.md "Phase 2 detailed status" for the full branch/commit map.
+- Parallel read-only audit subagents (first Terra, then explicitly requested `openai-codex/gpt-5.6-luna` at max thinking) were dispatched twice for Phase-wide context gathering; both rounds completed/were cancelled without sending a reply. Discarded — no salvage attempted beyond a quick transcript check.
+- Proceeded directly (no subagent) in `.worktrees/phase2-sealed-submissions` and `.worktrees/phase2-council-briefs`:
+  - Implemented `packages/domain/src/sealed-submission.ts` (frozen, deep-copied, participant-order-normalized snapshot + hash). 4/4 unit tests pass. Committed `59bc408` on `phase2/sealed-submissions`.
+  - Merged into `phase2/council-briefs` and wired `createHeadCouncil` to actually freeze a real snapshot (project/goal/contract identity + active participant sessionRefs) and persist `snapshot_hash` (migration `0013_council_briefs.sql` extended). Council integration test asserts a real 64-hex hash. Committed `d86ba7f`.
+  - `npm run build && npm test` on `phase2/council-briefs`: 129 passed, 71 skipped (Docker unavailable this session, so all real-PostgreSQL integration suites remain environment-gated skips, not run).
+  - This slice is self-verified only — no independent (no-edit) review yet. Do not treat as accepted.
+- User then asked to continue with parallel Sonnet subagents. Before dispatch, produced a detailed current-state update (this entry + task_plan.md "Phase 2 detailed status") so each subagent and the user have an accurate baseline.
+- Next: dispatch parallel `anthropic/claude-sonnet-4-5` (or newer, per `rlm.find_models`) subagents per the parallelization plan in task_plan.md — starting with Department Plan schema (step 6), independent review of the sealed-submission/council slice, and completing the in-progress canonical Overture role rename in `phase2-overture-role-refresh`.
