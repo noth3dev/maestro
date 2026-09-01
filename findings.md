@@ -136,3 +136,9 @@
 - evidence (e0b85fd) and client-cli (d89399a) verified green with real disposable PostgreSQL on first check; committed directly.
 - recovery initially failed 3 real-DB integration tests: emergency-stop reason was masked as "revoked_grant" because the control-latch recheck only ran after a pure-evaluator allow, and never on a Goal whose grant had also been revoked. Root fix (direct repair, not a subagent claim): always recheck Goal control before/regardless of the pure grant decision, and let emergency-stop dominate a stale-epoch reason. Verified stable across two consecutive real-DB runs (15/15) before commit (f83fe29).
 - Migration filename collision: evidence and recovery each used 0006_*.sql for different schemas. Must renumber one before merging into phase1/control-plane.
+
+## 2026-09-01 — Parallel slices merged into phase1/control-plane
+- Merged phase1/client-cli, phase1/evidence, phase1/recovery sequentially with no code conflicts.
+- A stale evidence_records table (missing the retention column) existed in the dedicated disposable database from an earlier iteration; dropped it before final verification, no code defect.
+- Renamed colliding migration 0006_goal_control.sql to 0007_goal_control.sql and updated its one test reference.
+- Final real-PostgreSQL verification: 115 passed, 1 explicitly gated Prime live test skipped.

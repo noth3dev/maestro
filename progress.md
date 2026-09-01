@@ -65,3 +65,5 @@
 - Preparing the first local Phase 1 checkpoint commit; exclude unrelated designsystem.html modification.
 - All three parallel Phase 1 worktrees now committed: evidence e0b85fd, client-cli d89399a, recovery f83fe29 (after direct control-latch ordering repair).
 - Next: merge the three branches into phase1/control-plane sequentially, resolve the 0006 migration numbering collision, and re-run full check with real PostgreSQL.
+- All three parallel Phase 1 slices merged into phase1/control-plane and fully re-verified with real PostgreSQL: 115 passed, 1 live-Prime skip.
+- Ready to remove the now-merged isolated worktrees and continue with remaining Phase 1 work (pause/stop/resume beyond emergency-stop, restart reconciliation, Secretary app shell, live Prime verification).
