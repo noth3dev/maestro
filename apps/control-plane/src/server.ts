@@ -2,6 +2,8 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { OperatorAuthentication, OperatorContext } from "@maestro/persistence";
 import {
   CreateGoalInputSchema,
+  CriticalActionInputSchema,
+  CriticalActionResultSchema,
   GoalQuerySchema,
   GoalResultSchema,
   EventQuerySchema,
@@ -23,8 +25,10 @@ import {
   VersionConflictError,
   type GoalService,
 } from "./goal-service.js";
+import { CriticalActionUnavailableError, type CriticalActionService } from "./critical-action-service.js";
 
 export type { GoalService } from "./goal-service.js";
+export type { CriticalActionService } from "./critical-action-service.js";
 
 export interface EventService {
   listEvents(projectId: string, after: EventCursor): Promise<import("@maestro/contracts").GoalEvent[]>;
@@ -44,15 +48,19 @@ const systemPollingScheduler: PollingScheduler = {
   clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
 };
 
-export function buildServer({ goalService, authenticator, eventService, pollingScheduler = systemPollingScheduler }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
+  criticalActionService?: CriticalActionService;
   pollingScheduler?: PollingScheduler;
 }): FastifyInstance {
   const app = Fastify();
   const activeStreams = new Set<() => void>();
   const events = eventService ?? { listEvents: async () => { throw new DurableStoreUnavailableError(); } };
+  const criticalActions = criticalActionService ?? {
+    performCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
+  };
   // preClose runs while Fastify can still release open HTTP responses. onClose is too late:
   // Fastify waits for those connections before it invokes onClose.
   app.addHook("preClose", async () => {
@@ -99,6 +107,27 @@ export function buildServer({ goalService, authenticator, eventService, pollingS
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
     const result = await goalService.transitionGoal(goalId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
     return reply.status(200).send(GoalResultSchema.parse(result));
+  });
+
+  app.post("/v1/goals/:goalId/critical-actions", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const input = parse(CriticalActionInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const decision = await criticalActions.performCriticalAction(
+      goalId,
+      input,
+      commandId,
+      requestOperator(request as { operator?: OperatorContext }),
+    );
+    if (decision.effect === "deny") throw new CriticalActionDeniedError(decision.reason);
+    if (decision.effect === "require_approval") throw new CriticalActionRequiresApprovalError(decision.reason);
+    return reply.status(200).send(CriticalActionResultSchema.parse({
+      goalId,
+      effect: decision.effect,
+      reason: decision.reason,
+      classification: decision.classification,
+      ...(decision.recordId === undefined ? {} : { recordId: decision.recordId }),
+    }));
   });
 
   app.get("/v1/goals/:goalId", async (request, reply) => {
@@ -207,6 +236,12 @@ class RequestValidationError extends Error {}
 class AuthenticationRequiredError extends Error {}
 class CredentialForbiddenError extends Error {}
 class AuthenticationUnavailableError extends Error {}
+class CriticalActionDeniedError extends Error {
+  constructor(reason: string) { super(`Critical action denied: ${reason}`); }
+}
+class CriticalActionRequiresApprovalError extends Error {
+  constructor(reason: string) { super(`Critical action requires approval: ${reason}`); }
+}
 
 function bearerSecret(authorization: string | string[] | undefined): string | undefined {
   if (typeof authorization !== "string") return undefined;
@@ -230,6 +265,9 @@ function mapError(error: unknown): { status: number; body: StableApiError } {
   if (error instanceof StaleLeaseError) return apiError(409, "stale_lease", error.message);
   if (error instanceof LeaseUnavailableError) return apiError(423, "lease_unavailable", error.message);
   if (error instanceof CommandIdReuseError) return apiError(409, "command_id_reused", error.message);
+  if (error instanceof CriticalActionDeniedError) return apiError(403, "critical_action_denied", error.message);
+  if (error instanceof CriticalActionRequiresApprovalError) return apiError(409, "critical_action_requires_approval", error.message);
+  if (error instanceof CriticalActionUnavailableError) return apiError(503, "durable_store_unavailable", error.message);
   if (error instanceof DurableStoreUnavailableError) return apiError(503, "durable_store_unavailable", error.message);
   return apiError(503, "durable_store_unavailable", "Durable store is unavailable");
 }

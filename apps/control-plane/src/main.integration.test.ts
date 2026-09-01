@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { bootstrapLocalOperator } from "@maestro/persistence";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { bootstrapAuthorityRecord, bootstrapLocalOperator, revokeAuthorityRecord } from "@maestro/persistence";
 import { createControlPlane } from "./main.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -31,7 +31,9 @@ if (!databaseUrl) {
       "0002_goal_leases.sql",
       "0003_local_operator_auth.sql",
       "0004_local_operator_credential_security.sql",
+      "0005_authority_records.sql",
       "0007_goal_control.sql",
+      "0008_goal_pause_stop.sql",
       "0009_reconciliation_leader_lease.sql",
     ]) {
       await setupPool.query(await readFile(fileURLToPath(new URL(`../../../packages/persistence/migrations/${name}`, import.meta.url)), "utf8"));
@@ -40,7 +42,7 @@ if (!databaseUrl) {
 
   beforeEach(async () => {
     await setupPool.query(
-      "TRUNCATE reconciler_leader_lease, goal_controls, goal_leases, outbox, goal_events, command_receipts, goals, local_operator_credentials, local_operators CASCADE",
+      "TRUNCATE reconciler_leader_lease, authority_decisions, authority_records, goal_controls, goal_leases, outbox, goal_events, command_receipts, goals, local_operator_credentials, local_operators CASCADE",
     );
   });
 
@@ -254,6 +256,90 @@ if (!databaseUrl) {
         "SELECT owner_id FROM reconciler_leader_lease WHERE lease_key = 'singleton'",
       );
       expect(leaseRow.rows[0]!.owner_id).toBe("other-instance");
+    } finally {
+      await controlPlane.close();
+    }
+  });
+
+
+  it("proves the full HTTP authority boundary: no approval blocks the effect, an exact approval invokes it once, and a revoked approval blocks it again", async () => {
+    const secret = `critical-action-secret-${randomUUID()}`;
+    const localOperator = await bootstrapLocalOperator(setupPool, { secret });
+    const effect = vi.fn(async () => {});
+    const controlPlane = createControlPlane(
+      { databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `critical-${randomUUID()}` },
+      { criticalActionEffect: effect },
+    );
+    await controlPlane.listen();
+    const address = controlPlane.app.server.address();
+    if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+    const projectId = randomUUID();
+    const goalId = randomUUID();
+    const headers = { authorization: `Bearer ${secret}`, "content-type": "application/json" };
+    const body = { projectId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0 };
+
+    try {
+      // (a) No bootstrapped approval yet: the durable gateway requires approval and the effect is never called.
+      const firstCommandId = randomUUID();
+      const pending = await fetch(`${baseUrl}/v1/goals/${goalId}/critical-actions`, {
+        method: "POST",
+        headers: { ...headers, "idempotency-key": firstCommandId },
+        body: JSON.stringify(body),
+      });
+      expect(pending.status).toBe(409);
+      expect(await pending.json()).toMatchObject({ error: { code: "critical_action_requires_approval" } });
+      expect(effect).not.toHaveBeenCalled();
+      const auditedPending = await setupPool.query(
+        "SELECT outcome FROM authority_decisions WHERE project_id = $1 AND goal_id = $2 AND command_id = $3",
+        [projectId, goalId, firstCommandId],
+      );
+      expect(auditedPending.rows).toEqual([{ outcome: "require_approval" }]);
+
+      // (b) Bootstrap the exact approval for a new commandId: the gateway allows it and invokes the effect exactly once.
+      const approvedCommandId = randomUUID();
+      const approval = await bootstrapAuthorityRecord(setupPool, {
+        kind: "approval",
+        commandId: approvedCommandId,
+        projectId,
+        goalId,
+        actorId: localOperator.operatorId,
+        action: body.action,
+        target: body.target,
+        policyVersion: body.policyVersion,
+        budgetEffectCents: body.budgetEffectCents,
+        expiresAt: new Date(Date.now() + 3_600_000),
+      });
+      const allowed = await fetch(`${baseUrl}/v1/goals/${goalId}/critical-actions`, {
+        method: "POST",
+        headers: { ...headers, "idempotency-key": approvedCommandId },
+        body: JSON.stringify(body),
+      });
+      expect(allowed.status).toBe(200);
+      expect(await allowed.json()).toMatchObject({ goalId, effect: "allow", recordId: approval.recordId });
+      expect(effect).toHaveBeenCalledTimes(1);
+      const auditedAllowed = await setupPool.query(
+        "SELECT outcome, matched_record_id FROM authority_decisions WHERE project_id = $1 AND goal_id = $2 AND command_id = $3",
+        [projectId, goalId, approvedCommandId],
+      );
+      expect(auditedAllowed.rows).toEqual([{ outcome: "allow", matched_record_id: approval.recordId }]);
+
+      // (c) Revoke the approval, then retry the same exact command: the gateway denies it and the effect is not called again.
+      await revokeAuthorityRecord(setupPool, approval.recordId);
+      const revoked = await fetch(`${baseUrl}/v1/goals/${goalId}/critical-actions`, {
+        method: "POST",
+        headers: { ...headers, "idempotency-key": approvedCommandId },
+        body: JSON.stringify(body),
+      });
+      expect(revoked.status).toBe(409);
+      expect(await revoked.json()).toMatchObject({ error: { code: "critical_action_requires_approval" } });
+      expect(effect).toHaveBeenCalledTimes(1);
+      const auditedRevoked = await setupPool.query(
+        "SELECT outcome FROM authority_decisions WHERE project_id = $1 AND goal_id = $2 AND command_id = $3 ORDER BY decided_at",
+        [projectId, goalId, approvedCommandId],
+      );
+      expect(auditedRevoked.rows).toEqual([{ outcome: "allow" }, { outcome: "require_approval" }]);
+
     } finally {
       await controlPlane.close();
     }

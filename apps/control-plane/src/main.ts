@@ -1,6 +1,8 @@
 import { Pool } from "pg";
-import { authenticateLocalOperator, listGoalEvents, reconcileOnStartup } from "@maestro/persistence";
+import { authenticateLocalOperator, getGoalControl, listGoalEvents, PostgresAuthorityRepository, reconcileOnStartup } from "@maestro/persistence";
+import type { ActionRequest } from "@maestro/authority";
 import { parseConfig, type MaestroConfig } from "./config.js";
+import { createCriticalActionService } from "./critical-action-service.js";
 import { createDurableGoalService } from "./goal-service.js";
 import { buildServer, type OperatorAuthenticator } from "./server.js";
 
@@ -12,8 +14,13 @@ export interface ControlPlane {
   close(): Promise<void>;
 }
 
+export interface ControlPlaneOverrides {
+  /** Test-only injection point for the critical-action effect callback. Production defaults to a safe no-op. */
+  criticalActionEffect?: (request: ActionRequest) => Promise<void>;
+}
+
 /** Compose only the Phase 1 local Goal API. Credential setup remains a controlled persistence operation. */
-export function createControlPlane(config: MaestroConfig): ControlPlane {
+export function createControlPlane(config: MaestroConfig, overrides: ControlPlaneOverrides = {}): ControlPlane {
   const pool = new Pool({ connectionString: config.databaseUrl });
   const goalService = createDurableGoalService({
     pool,
@@ -23,7 +30,18 @@ export function createControlPlane(config: MaestroConfig): ControlPlane {
   const authenticator: OperatorAuthenticator = {
     authenticateBearerSecret: (secret) => authenticateLocalOperator(pool, secret),
   };
-  const app = buildServer({ goalService, authenticator, eventService: { listEvents: (projectId, after) => listGoalEvents(pool, { projectId, after }) } });
+  const criticalActionService = createCriticalActionService({
+    repository: new PostgresAuthorityRepository(pool),
+    getControlEpoch: async (projectId, goalId) => (await getGoalControl(pool, projectId, goalId)).controlEpoch,
+    // The gateway is the point of this endpoint; no real external effect is wired in Phase 1.
+    effect: overrides.criticalActionEffect ?? (async () => {}),
+  });
+  const app = buildServer({
+    goalService,
+    authenticator,
+    eventService: { listEvents: (projectId, after) => listGoalEvents(pool, { projectId, after }) },
+    criticalActionService,
+  });
   let closed = false;
 
   return {
