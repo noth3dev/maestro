@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { assertValidDepartmentAcceptanceSubstance, assertValidQualityCertificationSubstance, type DepartmentAcceptanceSubstance, type QualityCertificationSubstance, type QualityVerdict } from "@maestro/domain";
+import { assertValidDepartmentAcceptanceSubstance, assertValidQualityCertificationSubstance, assertValidWaiverSubstance, certificationsConflict, type DepartmentAcceptanceSubstance, type QualityCertificationSubstance, type QualityVerdict, type WaiverSubstance } from "@maestro/domain";
 import { isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
 import type { Pool } from "pg";
 
@@ -183,4 +183,90 @@ export async function listConditionalCertifications(pool: Pool, goalId: string, 
     ? await pool.query<ConditionalCertRow>("SELECT certification_id, kind, goal_id, contract_id, verdict, certified_by_department, producing_department FROM conditional_certifications WHERE goal_id = $1 ORDER BY created_at", [goalId])
     : await pool.query<ConditionalCertRow>("SELECT certification_id, kind, goal_id, contract_id, verdict, certified_by_department, producing_department FROM conditional_certifications WHERE goal_id = $1 AND kind = $2 ORDER BY created_at", [goalId, kind]);
   return result.rows.map(mapConditionalCert);
+}
+
+
+export interface CertificationWaiver {
+  readonly waiverId: string;
+  readonly certificationTable: "quality_certifications" | "conditional_certifications";
+  readonly certificationId: string;
+  readonly findingId: string;
+  readonly authority: string;
+  readonly reason: string;
+}
+
+interface WaiverRow {
+  waiver_id: string; certification_table: "quality_certifications" | "conditional_certifications"; certification_id: string;
+  finding_id: string; authority: string; reason: string;
+}
+function mapWaiver(row: WaiverRow): CertificationWaiver {
+  return { waiverId: row.waiver_id, certificationTable: row.certification_table, certificationId: row.certification_id, findingId: row.finding_id, authority: row.authority, reason: row.reason };
+}
+
+/**
+ * "A waived noncritical finding must record authority, reason, consequence,
+ * expiry, and follow-up. Critical safety or correctness findings cannot be
+ * waived merely to close the Goal." The critical-severity check is done
+ * here, against the actual stored finding -- a caller cannot bypass it by
+ * omitting or mislabeling the finding.
+ */
+export async function grantCertificationWaiver(
+  pool: Pool,
+  certificationTable: "quality_certifications" | "conditional_certifications",
+  certificationId: string,
+  findingId: string,
+  substance: WaiverSubstance,
+  grantedByActorId: string,
+): Promise<CertificationWaiver> {
+  assertValidWaiverSubstance(substance);
+  const table = certificationTable === "quality_certifications" ? "quality_certifications" : "conditional_certifications";
+  const cert = await pool.query<{ findings: { findingId: string; severity: "critical" | "noncritical" }[] }>(
+    `SELECT findings FROM ${table} WHERE certification_id = $1`,
+    [certificationId],
+  );
+  if (cert.rowCount !== 1) throw new CertificationNotFoundError(`Certification not found: ${certificationId}`);
+  const finding = cert.rows[0]!.findings.find((candidate) => candidate.findingId === findingId);
+  if (finding === undefined) throw new CertificationError(`Finding not found on certification: ${findingId}`);
+  if (finding.severity === "critical") throw new CertificationError("A critical finding cannot be waived to close the Goal");
+  const existing = await pool.query<WaiverRow>(
+    "SELECT waiver_id, certification_table, certification_id, finding_id, authority, reason FROM certification_waivers WHERE certification_table = $1 AND certification_id = $2 AND finding_id = $3",
+    [certificationTable, certificationId, findingId],
+  );
+  if ((existing.rowCount ?? 0) > 0) return mapWaiver(existing.rows[0]!);
+  const inserted = await pool.query<WaiverRow>(
+    `INSERT INTO certification_waivers (waiver_id, certification_table, certification_id, finding_id, authority, reason, consequence, follow_up, granted_by, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     RETURNING waiver_id, certification_table, certification_id, finding_id, authority, reason`,
+    [randomUUID(), certificationTable, certificationId, findingId, substance.authority, substance.reason, substance.consequence, substance.followUp, grantedByActorId, substance.expiresAt],
+  );
+  return mapWaiver(inserted.rows[0]!);
+}
+
+/** Reports whether the Goal's recorded certifications currently conflict (some passed, some failed/blocked). */
+export async function detectCertificationConflict(pool: Pool, goalId: string): Promise<boolean> {
+  const quality = await pool.query<{ verdict: QualityVerdict }>("SELECT verdict FROM quality_certifications WHERE goal_id = $1", [goalId]);
+  const conditional = await pool.query<{ verdict: QualityVerdict }>("SELECT verdict FROM conditional_certifications WHERE goal_id = $1", [goalId]);
+  return certificationsConflict([...quality.rows.map((row) => row.verdict), ...conditional.rows.map((row) => row.verdict)]);
+}
+
+export interface CertificationConflictResolution {
+  readonly resolutionId: string;
+  readonly goalId: string;
+  readonly roundId: string;
+}
+
+/**
+ * "Conflicting certifications route to Council." Reuses the accepted
+ * Overwatch Council review primitive rather than inventing a second
+ * adjudication mechanism; the Council's synthesis becomes the durable
+ * ruling for the conflict.
+ */
+export async function adjudicateCertificationConflict(pool: Pool, roundResult: { roundId: string }, goalId: string, conflictingVerdicts: readonly QualityVerdict[]): Promise<CertificationConflictResolution> {
+  if (!certificationsConflict(conflictingVerdicts)) throw new CertificationError("No certification conflict exists to adjudicate");
+  const resolutionId = randomUUID();
+  await pool.query(
+    "INSERT INTO certification_conflict_resolutions (resolution_id, goal_id, round_id, conflicting_verdicts) VALUES ($1, $2, $3, $4::jsonb)",
+    [resolutionId, goalId, roundResult.roundId, JSON.stringify(conflictingVerdicts)],
+  );
+  return { resolutionId, goalId, roundId: roundResult.roundId };
 }

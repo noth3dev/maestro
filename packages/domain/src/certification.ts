@@ -69,3 +69,43 @@ export function requiredConditionalCertifications(facts: ConditionalCertificatio
   if (hasCriticalAction || hasBroadDataBoundary) kinds.push("safety_compliance");
   return kinds;
 }
+
+/** Certifications conflict when any required verdict disagrees with any other (a mix of "passed" with "failed"/"blocked"). */
+export function certificationsConflict(verdicts: readonly QualityVerdict[]): boolean {
+  const distinct = new Set(verdicts);
+  return distinct.has("passed") && (distinct.has("failed") || distinct.has("blocked"));
+}
+
+export interface WaiverSubstance {
+  readonly authority: string;
+  readonly reason: string;
+  readonly consequence: string;
+  readonly followUp: string;
+  readonly expiresAt: Date;
+}
+
+export class InvalidWaiverError extends Error {
+  constructor(message: string) { super(message); this.name = "InvalidWaiverError"; }
+}
+
+/**
+ * "A waived noncritical finding must record authority, reason, consequence,
+ * expiry, and follow-up. Critical safety or correctness findings cannot be
+ * waived merely to close the Goal." The critical-severity check happens
+ * where the actual finding is loaded (the persistence layer); this
+ * validator enforces the required substance fields and that expiry is
+ * genuinely in the future, not a rubber-stamped past date.
+ */
+function waiverText(value: unknown, field: string): asserts value is string {
+  if (typeof value !== "string" || value.trim() === "") throw new InvalidWaiverError(`${field} is required`);
+}
+
+export function assertValidWaiverSubstance(value: WaiverSubstance, now: Date = new Date()): void {
+  waiverText(value.authority, "Waiver authority");
+  waiverText(value.reason, "Waiver reason");
+  waiverText(value.consequence, "Waiver consequence");
+  waiverText(value.followUp, "Waiver followUp");
+  if (!(value.expiresAt instanceof Date) || Number.isNaN(value.expiresAt.getTime()) || value.expiresAt.getTime() <= now.getTime()) {
+    throw new InvalidWaiverError("Waiver expiresAt must be a real future date");
+  }
+}
