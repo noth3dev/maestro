@@ -31,13 +31,17 @@ if (!databaseUrl) {
       "0002_goal_leases.sql",
       "0003_local_operator_auth.sql",
       "0004_local_operator_credential_security.sql",
+      "0007_goal_control.sql",
+      "0009_reconciliation_leader_lease.sql",
     ]) {
       await setupPool.query(await readFile(fileURLToPath(new URL(`../../../packages/persistence/migrations/${name}`, import.meta.url)), "utf8"));
     }
   });
 
   beforeEach(async () => {
-    await setupPool.query("TRUNCATE goal_leases, outbox, goal_events, command_receipts, goals, local_operator_credentials, local_operators CASCADE");
+    await setupPool.query(
+      "TRUNCATE reconciler_leader_lease, goal_controls, goal_leases, outbox, goal_events, command_receipts, goals, local_operator_credentials, local_operators CASCADE",
+    );
   });
 
   afterAll(async () => {
@@ -197,6 +201,60 @@ if (!databaseUrl) {
     } finally {
       if (timeout) clearTimeout(timeout);
       await reader.cancel().catch(() => undefined);
+      await controlPlane.close();
+    }
+  });
+
+  it("runs reconcileOnStartup before serving traffic and records the leader lease", async () => {
+    const controlPlane = createControlPlane({
+      databaseUrl: scopedUrl,
+      evidenceDir: "/tmp/maestro-evidence",
+      host: "127.0.0.1",
+      port: 0,
+      primeAgentVersion: "0.8.0",
+      actorId: "maestro-control-plane",
+      leaseOwnerId: `startup-${randomUUID()}`,
+      reconcilerLeaseDurationMs: 30_000,
+    });
+    try {
+      await controlPlane.listen();
+      const address = controlPlane.app.server.address();
+      if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
+      const leaseRow = await setupPool.query<{ owner_id: string }>(
+        "SELECT owner_id FROM reconciler_leader_lease WHERE lease_key = 'singleton'",
+      );
+      expect(leaseRow.rowCount).toBe(1);
+      expect(leaseRow.rows[0]!.owner_id).toBe(controlPlane.config.leaseOwnerId);
+    } finally {
+      await controlPlane.close();
+    }
+  });
+
+  it("fails closed and never binds a listener when the reconciliation leader lease is already held", async () => {
+    await setupPool.query(
+      `INSERT INTO reconciler_leader_lease (lease_key, owner_id, fencing_token, expires_at)
+       VALUES ('singleton', 'other-instance', 1, transaction_timestamp() + interval '1 minute')`,
+    );
+    const controlPlane = createControlPlane({
+      databaseUrl: scopedUrl,
+      evidenceDir: "/tmp/maestro-evidence",
+      host: "127.0.0.1",
+      port: 0,
+      primeAgentVersion: "0.8.0",
+      actorId: "maestro-control-plane",
+      leaseOwnerId: `blocked-${randomUUID()}`,
+      reconcilerLeaseDurationMs: 30_000,
+    });
+    try {
+      await expect(controlPlane.listen()).rejects.toThrow(
+        "Reconciliation leader lease is currently held by another instance",
+      );
+      expect(controlPlane.app.server.listening).toBe(false);
+      const leaseRow = await setupPool.query<{ owner_id: string }>(
+        "SELECT owner_id FROM reconciler_leader_lease WHERE lease_key = 'singleton'",
+      );
+      expect(leaseRow.rows[0]!.owner_id).toBe("other-instance");
+    } finally {
       await controlPlane.close();
     }
   });

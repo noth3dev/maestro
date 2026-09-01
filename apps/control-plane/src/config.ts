@@ -8,6 +8,8 @@ export interface MaestroConfig {
   primeAgentVersion: string;
   actorId: string;
   leaseOwnerId: string;
+  /** Duration of the startup-only reconciliation-leader lease; never renewed after startup. */
+  reconcilerLeaseDurationMs: number;
 }
 
 const schema = z.object({
@@ -18,6 +20,7 @@ const schema = z.object({
   MAESTRO_ALLOW_REMOTE: z.enum(["true", "false"]).default("false"),
   MAESTRO_ACTOR_ID: z.string().min(1).default("maestro-control-plane"),
   MAESTRO_INSTANCE_ID: z.string().min(1).default("local-control-plane"),
+  MAESTRO_RECONCILER_LEASE_MS: z.coerce.number().int().positive().default(30_000),
 });
 
 export function parseConfig(
@@ -36,13 +39,14 @@ export function parseConfig(
     MAESTRO_ALLOW_REMOTE: allowRemote,
     MAESTRO_ACTOR_ID: actorId,
     MAESTRO_INSTANCE_ID: leaseOwnerId,
+    MAESTRO_RECONCILER_LEASE_MS: reconcilerLeaseDurationMs,
   } = parsed.data;
 
   if (host !== "127.0.0.1" && host !== "localhost" && allowRemote !== "true") {
     throw new Error("Remote binding requires explicit MAESTRO_ALLOW_REMOTE=true");
   }
 
-  return { databaseUrl, evidenceDir, host, port, primeAgentVersion: "0.8.0", actorId, leaseOwnerId };
+  return { databaseUrl, evidenceDir, host, port, primeAgentVersion: "0.8.0", actorId, leaseOwnerId, reconcilerLeaseDurationMs };
 }
 
 
