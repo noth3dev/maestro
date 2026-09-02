@@ -1,7 +1,6 @@
 import { expect, test } from "vitest";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { ExecutionKernelUnavailableError } from "@maestro/domain";
 import { createPrimeExecutionKernel } from "./execution-kernel.js";
 
@@ -72,19 +71,30 @@ test.skipIf(!runLive)(
 test.skipIf(!runLive)(
   "runs a real Prime child worker against a disposable fixture",
   async () => {
-    const fixture = mkdtempSync(join(tmpdir(), "maestro-live-worker-"));
+    // createPrimeExecutionKernel() intentionally pins the real SDK session to
+    // process.cwd() (see execution-kernel.ts: "caller cannot redirect the
+    // production root session through SpawnRequest.cwd") -- that is accepted
+    // hardening against a spawned kernel escaping the trusted repository
+    // context, not a bug. A "disposable isolated project" for a live worker
+    // must therefore be a disposable subdirectory INSIDE the real repo tree,
+    // addressed by a relative path, rather than an external tmpdir the
+    // pinned cwd would never actually visit.
+    const fixtureName = `tmp-live-worker-${Date.now()}`;
+    const fixturePath = join(process.cwd(), fixtureName);
+    mkdirSync(fixturePath, { recursive: true });
     try {
       const kernel = createPrimeExecutionKernel();
-      const root = await kernel.spawn({ name: "maestro-live-root", cwd: fixture });
+      const root = await kernel.spawn({ name: "maestro-live-root" });
       const child = await kernel.spawn({
-        parent: root.execution, name: "maestro-live-worker", cwd: fixture,
-        prompt: "In this disposable fixture, write a file named result.txt containing exactly PRIME_WORKER_OK, then run node -e to assert its contents. Do not modify any other path. Finally reply to the parent with exactly PRIME_WORKER_DONE.",
+        parent: root.execution,
+        name: "maestro-live-worker",
+        prompt: `In the disposable directory ./${fixtureName} (relative to your current working directory), write a file named result.txt containing exactly PRIME_WORKER_OK, then run node -e to assert its contents. Do not modify any path outside ./${fixtureName}. Finally reply to the parent with exactly PRIME_WORKER_DONE.`,
       });
       const result = await waitForChildReply(kernel, root.execution, child.invocation);
       expect(result.status).toBe("succeeded");
-      expect(readFileSync(join(fixture, "result.txt"), "utf8")).toBe("PRIME_WORKER_OK");
+      expect(readFileSync(join(fixturePath, "result.txt"), "utf8")).toBe("PRIME_WORKER_OK");
     } finally {
-      rmSync(fixture, { recursive: true, force: true });
+      rmSync(fixturePath, { recursive: true, force: true });
     }
   },
   180_000,
