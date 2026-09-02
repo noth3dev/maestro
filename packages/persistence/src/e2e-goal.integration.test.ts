@@ -16,12 +16,17 @@ import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, su
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, spawnWorker } from "./worker.js";
+import { acceptDepartmentWorkerOutput, certifyQuality, certifyConditional } from "./certification.js";
+import { recordGoalIntegrationRevision } from "./git-integration.js";
+import { recordEvidenceBundle, verifyStoredEvidenceBundle, readEvidenceBundle } from "./evidence-bundle.js";
+import { generateSaneFinalReport } from "./sane-report.js";
+import { reconcileOnStartup } from "./reconciliation.js";
 import { recordDepartmentBranch, recordGoalIntegrationBranch, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
 import { reserveDepartmentBudget, reserveGoalBudget, reserveMissionBudget } from "./budget-reservation.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
-const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql", "0005_authority_records.sql", "0006_evidence.sql", "0007_goal_control.sql", "0008_goal_pause_stop.sql", "0009_reconciliation_leader_lease.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql", "0014_head_activation_runtime_safety.sql", "0015_council_protocol.sql", "0016_council_hardening.sql", "0018_role_identity_hardening.sql", "0019_council_authority_hardening.sql", "0020_head_role_identity_hardening.sql", "0021_council_round_idempotency.sql", "0022_department_plans.sql", "0023_mission_bundles.sql", "0024_workers.sql", "0025_team_lead_grants.sql", "0026_git_integration.sql", "0027_budget_reservations.sql"];
+const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql", "0005_authority_records.sql", "0006_evidence.sql", "0007_goal_control.sql", "0008_goal_pause_stop.sql", "0009_reconciliation_leader_lease.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql", "0014_head_activation_runtime_safety.sql", "0015_council_protocol.sql", "0016_council_hardening.sql", "0018_role_identity_hardening.sql", "0019_council_authority_hardening.sql", "0020_head_role_identity_hardening.sql", "0021_council_round_idempotency.sql", "0022_department_plans.sql", "0023_mission_bundles.sql", "0024_workers.sql", "0025_team_lead_grants.sql", "0026_git_integration.sql", "0027_budget_reservations.sql", "0028_sentinel_findings.sql", "0029_sentinel_challenges.sql", "0030_semantic_reviews.sql", "0031_overwatch_council.sql", "0032_certifications.sql", "0033_conditional_certifications.sql", "0034_certification_waivers.sql", "0035_evidence_bundles.sql", "0036_sane_final_reports.sql", "0037_sentinel_challenge_idempotency.sql", "0038_certification_report_hardening.sql"];
 
 const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `session:${label}`, commandId: randomUUID() });
 const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`, sessionRef: `opaque:${departmentId}`, commandId: randomUUID() });
@@ -65,14 +70,14 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
   });
 
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
+    await pool.query("DROP TABLE IF EXISTS sane_final_reports, evidence_bundles, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, certification_conflict_resolution_members, department_acceptances, goal_integration_revision_commits, goal_integration_revisions, overwatch_council_syntheses, overwatch_council_judgments, overwatch_council_rounds, semantic_reviews, sentinel_challenge_findings, sentinel_challenges, sentinel_findings, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
     for (const name of migrations) {
       const sql = await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8");
       await pool.query(sql);
     }
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE");
+    await pool.query("TRUNCATE reconciler_leader_lease, sane_final_reports, evidence_bundles, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, certification_conflict_resolution_members, department_acceptances, goal_integration_revision_commits, goal_integration_revisions, overwatch_council_syntheses, overwatch_council_judgments, overwatch_council_rounds, semantic_reviews, sentinel_challenge_findings, sentinel_challenges, sentinel_findings, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE");
     await bootstrapPermanentOrganization(pool);
   });
   afterAll(async () => { await pool.end(); });
@@ -96,7 +101,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
       scope: ["one bounded change"], nonGoals: ["unrelated refactors"], priorities: ["safety", "correctness"], acceptableTradeoffs: ["no UI"], constraints: ["local only"], knownEdgeCases: ["none"],
       project: { projectId, repository: repositoryPath, immutableBaseRevision: baseRevision, dataBoundary: "repository files only" },
       evidenceReferences: [], approvedPreviewReferences: [], expectedGroups: ["Product Group"], expectedDepartments: ["Product Department"],
-      criticalActionExpectations: ["none"], forbiddenEffects: ["remote push"], environmentAssumptions: ["PostgreSQL"], externalServiceAssumptions: ["none"],
+      criticalActionExpectations: [], forbiddenEffects: ["remote push"], environmentAssumptions: ["PostgreSQL"], externalServiceAssumptions: [],
       budget: { ceiling: "1000 USD", reportingExpectations: ["on launch"], stoppingConditions: ["ceiling reached"] },
     };
     const contract = await createDurableTaskContract(pool, contractId, substance);
@@ -112,6 +117,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
 
     // 4. Head Council: seal, reveal, decide (executable).
     const evidenceIds = [randomUUID(), randomUUID()];
+    await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, head_role_id, contract_id, status, active_session_ref) VALUES ($1, 'quality', 'head:quality', $2, 'active', 'opaque:quality')", [goalId, contractId]);
     for (const evidenceId of evidenceIds) {
       await pool.query(
         "INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 'test-result', 'text/plain', 'project_lifetime')",
@@ -119,11 +125,11 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
       );
     }
     const council = await createHeadCouncil(pool, { goalId, contractId, briefDeadline: new Date(Date.now() + 60_000), evidence: { references: evidenceIds } }, proof, context("secretary"));
-    await submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"));
+    for (const departmentId of ["product", "quality"]) await submitIndependentBrief(pool, council.councilId, departmentId, brief, proof, headContext(departmentId));
     await revealCouncilBriefs(pool, council.councilId, proof, context("reveal"));
     const packet: DecisionPacket = {
       outcome: "decided", executionDisposition: "executable", selectedDirection: "implement the bounded change",
-      rejectedAlternatives: [], departmentOwnership: [{ departmentId: "product", responsibility: "own the change" }],
+      rejectedAlternatives: [], departmentOwnership: [{ departmentId: "product", responsibility: "own the change" }, { departmentId: "quality", responsibility: "independently certify" }],
       workerPlan: [], completionCriteria: ["tests pass"], failureCriteria: ["tests fail"], dissent: [], uncertainty: [],
       criticalActions: [], unresolvedConflicts: [], evidenceReferences: [],
     };
@@ -176,9 +182,37 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     expect(missionReservation.amountCents).toBe(10_000);
 
     // 10. Stop at "awaiting certification" (certifying), not final succeeded/failed -- per plan/phase2.md work-sequence step 12.
+    // Phase 3 live gate: independently accept the worker output, freeze the
+    // integrated revision, certify it from Quality, and persist a replayable
+    // evidence bundle. These are real PostgreSQL rows and a real Git commit.
+    await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
+    await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "Head reviewed the integrated worker output" }, headContext("product"));
+    const revision = await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
+    const quality = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: evidenceIds }, "quality", headContext("quality"));
+    expect(quality.verdict).toBe("passed");
+
+    const bundle = await recordEvidenceBundle(pool, goalId);
+    await verifyStoredEvidenceBundle(pool, bundle.bundleId);
+    expect(bundle.hash).toMatch(/^[0-9a-f]{64}$/);
+
+    // Restart/reconcile is deliberately repeated after the worker is terminal;
+    // the durable action remains singular and no stale authority is granted.
+    const recovery = await reconcileOnStartup(pool, { ownerId: "control-plane-restarted", leaderLeaseDurationMs: 60_000, goalLeaseDurationMs: 60_000 });
+    expect(recovery.results.find((result) => result.goalId === goalId)?.outcome).toBe("lease_contended");
+    expect((await pool.query("SELECT count(*)::int AS count FROM workers WHERE worker_id = $1", [worker.workerId])).rows[0].count).toBe(1);
+
     const certifying = await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 4, to: "certifying" }, proof);
     expect(certifying.outcome).toBe("succeeded");
     const finalGoal = await pool.query<{ state: string }>("SELECT state FROM goals WHERE goal_id = $1", [goalId]);
     expect(finalGoal.rows[0]!.state).toBe("certifying");
+
+    const report = await generateSaneFinalReport(pool, goalId);
+    expect(report.success).toBe(true);
+    expect(report.evidenceBundleId).not.toBe(bundle.bundleId);
+    await verifyStoredEvidenceBundle(pool, report.evidenceBundleId);
+    expect((await readEvidenceBundle(pool, report.evidenceBundleId)).goalId).toBe(goalId);
+    expect(report.independentValidation).toContain("quality: passed");
+    expect((localGitPort as Record<string, unknown>).push).toBeUndefined();
+    expect((localGitPort as Record<string, unknown>).merge).toBeUndefined();
   });
 });
