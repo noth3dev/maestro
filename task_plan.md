@@ -120,7 +120,7 @@ Current restart lane: forced mid-flight worker restart/reconciliation scenario i
 ## Phase 3 step 11 split — CLI/app parity finding (2026-09-03)
 - **Tests item 18 status: blocked by missing read surfaces.** Control-plane currently serves only Goal and event reads (`GET /v1/goals/:goalId`, `GET /v1/events`, and event SSE). CLI currently provides `goal get` and `events list`; Secretary loads and renders only Goal/events.
 - No route, typed API-client method, CLI command, or Secretary loader exists for Sentinel challenges, Overwatch Council state, certification state, or Sane reports, although the durable domain/persistence modules exist. This branch records the evidence and does not invent a new aggregate endpoint.
-- Parity can be tested after a minimal read contract is intentionally designed and implemented across all three surfaces.
+- The minimal read contract is now implemented across control-plane, API client, and CLI. A real PostgreSQL app/API/CLI parity composition fixture remains to be added before claiming the item fully proven.
 
 ## 2026-09-03 — P3S11 CLI/app parity read contract implemented
 - Added authenticated read-only control-plane routes for Sentinel challenges, Overwatch Council rounds (including judgments and synthesis), Quality/conditional certifications, and Sane final reports, backed by durable persistence reads. Added matching zod contracts, typed API-client methods, and CLI commands.

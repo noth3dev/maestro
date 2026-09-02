@@ -23,6 +23,13 @@ export interface OverwatchCouncilRoundRequest {
   readonly reviewerCount: number;
 }
 
+export interface OverwatchCouncilRound {
+  readonly roundId: string; readonly goalId: string; readonly question: string;
+  readonly criteria: readonly { readonly criterionId: string; readonly description: string }[];
+  readonly evidenceIds: readonly string[]; readonly triggerReasons: readonly string[]; readonly reviewerCount: number;
+  readonly judgments: readonly OverwatchJudgmentSubstance[]; readonly synthesis: OverwatchSynthesis;
+}
+
 export interface OverwatchCouncilResult {
   readonly roundId: string;
   readonly judgments: readonly OverwatchJudgmentSubstance[];
@@ -184,4 +191,24 @@ export async function runOverwatchCouncilReview(pool: Pool, kernel: ExecutionKer
     await client.query("COMMIT");
     return { roundId, judgments, synthesis };
   } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+}
+
+
+/** Reads complete, immutable Overwatch rounds for one Goal. */
+export async function listOverwatchCouncilRounds(pool: Pool, goalId: string): Promise<readonly OverwatchCouncilRound[]> {
+  const rounds = await pool.query<{ round_id: string; goal_id: string; question: string; criteria: { criterionId: string; description: string }[]; evidence_ids: string[]; trigger_reasons: string[]; reviewer_count: number; final_verdict: OverwatchVerdict; same_model_only: boolean; escalated: boolean; dissent_notes: string[] }>(
+    `SELECT r.round_id, r.goal_id, r.question, r.criteria, r.evidence_ids, r.trigger_reasons, r.reviewer_count,
+            s.final_verdict, s.same_model_only, s.escalated, s.dissent_notes
+       FROM overwatch_council_rounds r JOIN overwatch_council_syntheses s ON s.round_id = r.round_id
+      WHERE r.goal_id = $1 ORDER BY r.created_at, r.round_id`, [goalId],
+  );
+  const result: OverwatchCouncilRound[] = [];
+  for (const row of rounds.rows) {
+    const judgments = await pool.query<{ model_provider: string; model_id: string; verdict: OverwatchVerdict; confidence: "low"|"medium"|"high"; reasoning: string; conditions: string[]; dissent_note: string|null; cited_evidence_ids: string[] }>(
+      `SELECT model_provider, model_id, verdict, confidence, reasoning, conditions, dissent_note, cited_evidence_ids
+         FROM overwatch_council_judgments WHERE round_id = $1 ORDER BY reviewer_index`, [row.round_id],
+    );
+    result.push({ roundId: row.round_id, goalId: row.goal_id, question: row.question, criteria: row.criteria, evidenceIds: row.evidence_ids, triggerReasons: row.trigger_reasons, reviewerCount: row.reviewer_count, judgments: judgments.rows.map((judgment) => ({ modelProvider: judgment.model_provider, modelId: judgment.model_id, verdict: judgment.verdict, confidence: judgment.confidence, reasoning: judgment.reasoning, conditions: judgment.conditions, dissentNote: judgment.dissent_note, citedEvidenceIds: judgment.cited_evidence_ids })), synthesis: { finalVerdict: row.final_verdict, sameModelOnly: row.same_model_only, escalated: row.escalated, dissentNotes: row.dissent_notes } });
+  }
+  return result;
 }
