@@ -263,21 +263,49 @@ CREATE TRIGGER certification_conflict_member_goal_binding
   BEFORE INSERT ON certification_conflict_resolution_members
   FOR EACH ROW EXECUTE FUNCTION assert_conflict_member_goal();
 
+-- Findings are stored as JSON for immutable certification snapshots. Enforce
+-- the same identity uniqueness at the database boundary so waiver lookups
+-- cannot select one of multiple meanings for the same finding id.
+CREATE OR REPLACE FUNCTION reject_duplicate_certification_finding_ids()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF EXISTS (
+    SELECT finding->>'findingId'
+      FROM jsonb_array_elements(NEW.findings) AS finding
+     GROUP BY finding->>'findingId'
+    HAVING count(*) > 1
+  ) THEN
+    RAISE EXCEPTION 'Duplicate certification finding identity';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS quality_certifications_unique_finding_ids ON quality_certifications;
+CREATE TRIGGER quality_certifications_unique_finding_ids
+  BEFORE INSERT ON quality_certifications
+  FOR EACH ROW EXECUTE FUNCTION reject_duplicate_certification_finding_ids();
+DROP TRIGGER IF EXISTS conditional_certifications_unique_finding_ids ON conditional_certifications;
+CREATE TRIGGER conditional_certifications_unique_finding_ids
+  BEFORE INSERT ON conditional_certifications
+  FOR EACH ROW EXECUTE FUNCTION reject_duplicate_certification_finding_ids();
+
 -- Database-level defense in depth for the critical-finding waiver rule.
 CREATE OR REPLACE FUNCTION reject_critical_certification_waiver()
 RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE finding_severity text;
 BEGIN
-  IF NEW.certification_table = 'quality_certifications' THEN
-    SELECT finding->>'severity' INTO finding_severity
-      FROM quality_certifications cert, jsonb_array_elements(cert.findings) finding
-     WHERE cert.certification_id = NEW.certification_id AND finding->>'findingId' = NEW.finding_id;
-  ELSE
-    SELECT finding->>'severity' INTO finding_severity
-      FROM conditional_certifications cert, jsonb_array_elements(cert.findings) finding
-     WHERE cert.certification_id = NEW.certification_id AND finding->>'findingId' = NEW.finding_id;
-  END IF;
-  IF finding_severity = 'critical' THEN
+  IF (NEW.certification_table = 'quality_certifications' AND EXISTS (
+        SELECT 1
+          FROM quality_certifications cert, jsonb_array_elements(cert.findings) finding
+         WHERE cert.certification_id = NEW.certification_id
+           AND finding->>'findingId' = NEW.finding_id
+           AND finding->>'severity' = 'critical'
+      )) OR (NEW.certification_table = 'conditional_certifications' AND EXISTS (
+        SELECT 1
+          FROM conditional_certifications cert, jsonb_array_elements(cert.findings) finding
+         WHERE cert.certification_id = NEW.certification_id
+           AND finding->>'findingId' = NEW.finding_id
+           AND finding->>'severity' = 'critical'
+      )) THEN
     RAISE EXCEPTION 'A critical certification finding cannot be waived';
   END IF;
   RETURN NEW;

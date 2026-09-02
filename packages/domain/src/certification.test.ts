@@ -25,6 +25,16 @@ describe("Certification substances", () => {
   it("allows a failed verdict with no test evidence", () => {
     expect(() => assertValidQualityCertificationSubstance({ verdict: "failed", findings: [], testEvidenceIds: [] })).not.toThrow();
   });
+  it("rejects duplicate finding identities so a critical finding cannot be hidden", () => {
+    expect(() => assertValidQualityCertificationSubstance({
+      verdict: "failed",
+      findings: [
+        { findingId: "same-finding", severity: "noncritical", description: "first interpretation" },
+        { findingId: "same-finding", severity: "critical", description: "actual correctness defect" },
+      ],
+      testEvidenceIds: [],
+    })).toThrow(InvalidCertificationError);
+  });
 });
 
 

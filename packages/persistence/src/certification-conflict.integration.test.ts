@@ -150,6 +150,35 @@ describeDatabase("Department acceptance and independent Quality certification wi
     await expect(grantCertificationWaiver(pool, "quality_certifications", certified.certificationId, "f1", { authority: "ceo", reason: "just close it", consequence: "none", followUp: "none", expiresAt: future }, "sane")).rejects.toBeInstanceOf(CertificationError);
   });
 
+  it("rejects duplicate certification finding identities at the database boundary", async () => {
+    const { worker, evidenceIds } = await setupWorkerWithCommit();
+    const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
+    const lineage = await pool.query<{
+      goal_id: string; contract_id: string; contract_version: string; contract_content_hash: string; integrated_commit_sha: string;
+      worker_id: string; department_acceptance_id: string; integration_revision_id: string; producing_department: string;
+    }>(
+      `SELECT goal_id, contract_id, contract_version, contract_content_hash, integrated_commit_sha,
+              worker_id, department_acceptance_id, integration_revision_id, producing_department
+         FROM quality_certifications WHERE certification_id = $1`,
+      [certified.certificationId],
+    );
+    const row = lineage.rows[0]!;
+    await expect(pool.query(
+      `INSERT INTO quality_certifications
+        (certification_id, goal_id, contract_id, contract_version, contract_content_hash,
+         integrated_commit_sha, verdict, findings, test_evidence_ids, certified_by_department,
+         producing_department, worker_id, department_acceptance_id, integration_revision_id)
+       VALUES ($1, $2, $3, $4, $5, $6, 'failed', $7::jsonb, '[]'::jsonb, 'quality', $8, $9, $10, $11)`,
+      [
+        randomUUID(), row.goal_id, row.contract_id, row.contract_version, row.contract_content_hash,
+        row.integrated_commit_sha, JSON.stringify([
+          { findingId: "same-finding", severity: "noncritical", description: "first interpretation" },
+          { findingId: "same-finding", severity: "critical", description: "actual correctness defect" },
+        ]), row.producing_department, row.worker_id, row.department_acceptance_id, row.integration_revision_id,
+      ],
+    )).rejects.toThrow(/duplicate certification finding identity/i);
+  });
+
   it("rejects direct tampering with an immutable waiver", async () => {
     const { worker, evidenceIds } = await setupWorkerWithCommit();
     const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [{ findingId: "f1", severity: "noncritical", description: "minor" }], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));

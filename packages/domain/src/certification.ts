@@ -30,7 +30,11 @@ export function assertValidDepartmentAcceptanceSubstance(value: DepartmentAccept
 
 export function assertValidQualityCertificationSubstance(value: QualityCertificationSubstance): void {
   if (!["passed", "failed", "blocked"].includes(value.verdict)) throw new InvalidCertificationError("Quality certification verdict is invalid");
+  const findingIds = new Set<string>();
   for (const finding of value.findings) {
+    text(finding.findingId, "Quality finding identity");
+    if (findingIds.has(finding.findingId)) throw new InvalidCertificationError(`Duplicate Quality finding identity: ${finding.findingId}`);
+    findingIds.add(finding.findingId);
     if (!["critical", "noncritical"].includes(finding.severity)) throw new InvalidCertificationError("Quality finding severity is invalid");
     text(finding.description, "Quality finding description");
   }

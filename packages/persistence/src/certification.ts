@@ -342,9 +342,10 @@ export async function grantCertificationWaiver(
     [certificationId],
   );
   if (cert.rowCount !== 1) throw new CertificationNotFoundError(`Certification not found: ${certificationId}`);
-  const finding = cert.rows[0]!.findings.find((candidate) => candidate.findingId === findingId);
-  if (finding === undefined) throw new CertificationError(`Finding not found on certification: ${findingId}`);
-  if (finding.severity === "critical") throw new CertificationError("A critical finding cannot be waived to close the Goal");
+  const matchingFindings = cert.rows[0]!.findings.filter((candidate) => candidate.findingId === findingId);
+  if (matchingFindings.length === 0) throw new CertificationError(`Finding not found on certification: ${findingId}`);
+  if (matchingFindings.length > 1) throw new CertificationError(`Finding identity is ambiguous on certification: ${findingId}`);
+  if (matchingFindings[0]!.severity === "critical") throw new CertificationError("A critical finding cannot be waived to close the Goal");
   const existing = await pool.query<WaiverRow>(
     "SELECT waiver_id, certification_table, certification_id, finding_id, authority, reason FROM certification_waivers WHERE certification_table = $1 AND certification_id = $2 AND finding_id = $3",
     [certificationTable, certificationId, findingId],
