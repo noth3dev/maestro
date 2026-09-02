@@ -159,6 +159,24 @@ describeDatabase("Department acceptance and independent Quality certification wi
     expect(certified.integratedCommitSha).toMatch(/^[0-9a-f]{40}$/);
   });
 
+  it("certifies an accepted worker when the frozen revision head advances beyond its commit", async () => {
+    const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
+    const workerCommit = (await pool.query<{ commit_sha: string }>("SELECT commit_sha FROM integration_commits WHERE worker_id = $1", [worker.workerId])).rows[0]!.commit_sha.trim();
+    await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, workerCommit);
+    await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product"));
+    const integrationWorktree = join(repositoryPath, "..", `maestro-cert-integration-${randomUUID()}`);
+    worktreePaths.push(integrationWorktree);
+    await localGitPort.createWorktree(repositoryPath, integrationWorktree, "goal/integration");
+    const fs = await import("node:fs/promises");
+    await fs.writeFile(join(integrationWorktree, "integration-summary.txt"), "reviewed integration");
+    const revisionHead = (await localGitPort.commit(integrationWorktree, "mission: record integration", "head", "head@example.com")).commitSha;
+    const revision = await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
+    expect(revision.commitSha).toBe(revisionHead);
+    expect(revision.commitSha).not.toBe(workerCommit);
+    const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
+    expect(certified.integratedCommitSha).toBe(revisionHead);
+  });
+
   it("rejects a passed certification with fabricated test evidence or an unauthorized certifier", async () => {
     const { worker } = await setupWorkerWithCommit(true);
     await expect(certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: ["fabricated"] }, "quality", headContext("quality"))).rejects.toThrow();

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GitOperationError } from "@maestro/domain";
-import { commit, createBranch, createWorktree, headRevision, removeWorktree } from "./git-ops.js";
+import { advanceBranch, commit, createBranch, createWorktree, headRevision, removeWorktree } from "./git-ops.js";
 
 describe("local Git operations", () => {
   let repositoryPath: string;
@@ -36,6 +36,23 @@ describe("local Git operations", () => {
       expect(/^[0-9a-f]{40}$/.test(result.commitSha)).toBe(true);
       expect(await headRevision(worktreePath)).toBe(result.commitSha);
       expect(result.commitSha).not.toBe(baseRevision);
+    } finally {
+      await removeWorktree(repositoryPath, worktreePath).catch(() => undefined);
+    }
+  });
+
+  it("advances a branch only to a descendant commit", async () => {
+    await createBranch(repositoryPath, "goal/integration", baseRevision);
+    await createBranch(repositoryPath, "worker/advance", baseRevision);
+    const worktreePath = join(repositoryPath, "..", "maestro-advance-worktree");
+    try {
+      await createWorktree(repositoryPath, worktreePath, "worker/advance");
+      const fs = await import("node:fs/promises");
+      await fs.writeFile(join(worktreePath, "integrated.txt"), "integrated change");
+      const result = await commit(worktreePath, "mission: integrate", "worker", "worker@example.com");
+      await advanceBranch(repositoryPath, "goal/integration", baseRevision, result.commitSha);
+      expect(await headRevision(repositoryPath, "goal/integration")).toBe(result.commitSha);
+      await expect(advanceBranch(repositoryPath, "goal/integration", baseRevision, baseRevision)).rejects.toBeInstanceOf(GitOperationError);
     } finally {
       await removeWorktree(repositoryPath, worktreePath).catch(() => undefined);
     }

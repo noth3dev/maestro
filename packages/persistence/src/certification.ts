@@ -207,7 +207,7 @@ async function readCertificationLineage(
     return {
       lineage: {
         goalId: council.goalId, councilId, contractId: council.contractId, contractVersion: contractRow.version,
-        contractContentHash: contractRow.content_hash.trim(), integratedCommitSha: accepted.commit_sha.trim(), workerId,
+        contractContentHash: contractRow.content_hash.trim(), integratedCommitSha: currentRevision.commit_sha.trim(), workerId,
         producingDepartment, departmentAcceptanceId: accepted.acceptance_id, integrationRevisionId: currentRevision.revision_id,
       },
       client,

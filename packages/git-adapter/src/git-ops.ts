@@ -25,6 +25,13 @@ export async function createWorktree(repositoryPath: string, worktreePath: strin
   await runGit(["worktree", "add", "--", worktreePath, branchName], repositoryPath);
 }
 
+/** Advances a local branch atomically, only when target descends from its expected current revision. */
+export async function advanceBranch(repositoryPath: string, branchName: string, expectedRevision: string, targetRevision: string): Promise<void> {
+  if (expectedRevision === targetRevision) throw new GitOperationError("Branch target must advance beyond its expected revision");
+  await runGit(["merge-base", "--is-ancestor", expectedRevision, targetRevision], repositoryPath);
+  await runGit(["update-ref", `refs/heads/${branchName}`, targetRevision, expectedRevision], repositoryPath);
+}
+
 export async function commit(worktreePath: string, message: string, authorName: string, authorEmail: string): Promise<{ commitSha: string }> {
   await runGit(["add", "-A"], worktreePath);
   await runGit(["-c", `user.name=${authorName}`, "-c", `user.email=${authorEmail}`, "commit", "-m", message], worktreePath);
@@ -40,4 +47,4 @@ export async function removeWorktree(repositoryPath: string, worktreePath: strin
   await runGit(["worktree", "remove", "--force", "--", worktreePath], repositoryPath);
 }
 
-export const localGitPort = { createBranch, createWorktree, commit, headRevision, removeWorktree };
+export const localGitPort = { createBranch, createWorktree, advanceBranch, commit, headRevision, removeWorktree };

@@ -152,8 +152,8 @@ BEGIN
     RAISE EXCEPTION 'Certification worker is not bound to the certification Goal';
   END IF;
   SELECT * INTO acceptance_row FROM department_acceptances WHERE acceptance_id = NEW.department_acceptance_id;
-  IF NOT FOUND OR acceptance_row.worker_id <> NEW.worker_id OR acceptance_row.commit_sha <> NEW.integrated_commit_sha THEN
-    RAISE EXCEPTION 'Certification must bind the worker acceptance and its accepted commit';
+  IF NOT FOUND OR acceptance_row.worker_id <> NEW.worker_id THEN
+    RAISE EXCEPTION 'Certification must bind the worker Department acceptance';
   END IF;
   SELECT * INTO revision_row FROM goal_integration_revisions WHERE revision_id = NEW.integration_revision_id AND goal_id = NEW.goal_id;
   IF NOT FOUND OR revision_row.commit_sha <> NEW.integrated_commit_sha THEN
@@ -163,7 +163,7 @@ BEGIN
     SELECT 1 FROM goal_integration_revision_commits member
      WHERE member.revision_id = NEW.integration_revision_id
        AND member.worker_id = NEW.worker_id
-       AND member.commit_sha = NEW.integrated_commit_sha
+       AND member.commit_sha = acceptance_row.commit_sha
   ) THEN
     RAISE EXCEPTION 'Certification worker acceptance is not included in the Goal integration revision';
   END IF;

@@ -9,6 +9,8 @@ export class GitOperationError extends Error {}
 export interface GitPort {
   createBranch(repositoryPath: string, branchName: string, baseRevision: string): Promise<void>;
   createWorktree(repositoryPath: string, worktreePath: string, branchName: string): Promise<void>;
+  /** Atomically advances a local branch only to a descendant of its expected revision. */
+  advanceBranch(repositoryPath: string, branchName: string, expectedRevision: string, targetRevision: string): Promise<void>;
   commit(worktreePath: string, message: string, authorName: string, authorEmail: string): Promise<{ commitSha: string }>;
   /** Read HEAD for a worktree, or a named ref when repositoryPath is a repository. */
   headRevision(repositoryPath: string, ref?: string): Promise<string>;
