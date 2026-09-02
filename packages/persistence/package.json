@@ -16,6 +16,7 @@
     "pg": "^8.23.0",
     "@maestro/authority": "*",
     "@maestro/contracts": "*",
-    "@maestro/evidence": "*"
+    "@maestro/evidence": "*",
+    "@maestro/git-adapter": "*"
   }
 }

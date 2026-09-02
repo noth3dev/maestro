@@ -59,3 +59,5 @@ describe("executeCli", () => {
     expect(stderr.lines.join("")).not.toContain("top-secret");
   });
 });
+
+it("reads Sentinel challenges through the parity command", async () => { const fetch=vi.fn().mockResolvedValue(new Response(JSON.stringify({challenges:[]}),{status:200})); const stdout=output(); const stderr=output(); await expect(executeCli(["sentinel-challenges","list","--goal-id",goalId,"--json"],env,{fetch,stdout:stdout.write,stderr:stderr.write})).resolves.toBe(0); expect(JSON.parse(stdout.lines[0]!)).toEqual({challenges:[]}); expect(stderr.lines).toEqual([]); });

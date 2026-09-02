@@ -4,6 +4,7 @@ import type { ActionRequest } from "@maestro/authority";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService } from "./critical-action-service.js";
 import { createDurableGoalService } from "./goal-service.js";
+import { createReadStateService } from "./read-state-service.js";
 import { buildServer, type OperatorAuthenticator } from "./server.js";
 
 export interface ControlPlane {
@@ -41,6 +42,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     authenticator,
     eventService: { listEvents: (projectId, after) => listGoalEvents(pool, { projectId, after }) },
     criticalActionService,
+    readStateService: createReadStateService(pool),
   });
   let closed = false;
 

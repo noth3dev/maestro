@@ -232,6 +232,30 @@ export async function emergencyStopGoal(pool: Pool, projectId: string, goalId: s
  * its update, then return the durable result. A validation failure (thrown
  * inside `apply`) rolls the whole transaction back with no partial write.
  */
+async function transitionGoalControlInTransaction(
+  client: PoolClient,
+  projectId: string,
+  goalId: string,
+  apply: (client: PoolClient, current: StoredGoalControl) => Promise<void>,
+): Promise<GoalControl> {
+  await client.query(
+    `INSERT INTO goal_controls (project_id, goal_id) VALUES ($1, $2)
+     ON CONFLICT (project_id, goal_id) DO NOTHING`,
+    [projectId, goalId],
+  );
+  const control = await client.query<StoredGoalControl>(
+    "SELECT * FROM goal_controls WHERE project_id = $1 AND goal_id = $2 FOR UPDATE",
+    [projectId, goalId],
+  );
+  const current = control.rows[0]!;
+  await apply(client, current);
+  const result = await client.query<StoredGoalControl>(
+    "SELECT * FROM goal_controls WHERE project_id = $1 AND goal_id = $2",
+    [projectId, goalId],
+  );
+  return toGoalControl(result.rows[0]!);
+}
+
 async function transitionGoalControl(
   pool: Pool,
   projectId: string,
@@ -241,29 +265,37 @@ async function transitionGoalControl(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query(
-      `INSERT INTO goal_controls (project_id, goal_id) VALUES ($1, $2)
-       ON CONFLICT (project_id, goal_id) DO NOTHING`,
-      [projectId, goalId],
-    );
-    const control = await client.query<StoredGoalControl>(
-      "SELECT * FROM goal_controls WHERE project_id = $1 AND goal_id = $2 FOR UPDATE",
-      [projectId, goalId],
-    );
-    const current = control.rows[0]!;
-    await apply(client, current);
-    const result = await client.query<StoredGoalControl>(
-      "SELECT * FROM goal_controls WHERE project_id = $1 AND goal_id = $2",
-      [projectId, goalId],
-    );
+    const result = await transitionGoalControlInTransaction(client, projectId, goalId, apply);
     await client.query("COMMIT");
-    return toGoalControl(result.rows[0]!);
+    return result;
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
   } finally {
     client.release();
   }
+}
+
+async function applyPauseRequest(client: PoolClient, projectId: string, goalId: string, current: StoredGoalControl): Promise<void> {
+  const mode = goalControlMode(current);
+  if (mode === "pause_requested") return;
+  if (mode !== "open") {
+    throw new Error(`cannot request pause from mode "${mode}" (expected "open")`);
+  }
+  await client.query(
+    `UPDATE goal_controls
+     SET control_epoch = control_epoch + 1, pause_requested_at = transaction_timestamp()
+     WHERE project_id = $1 AND goal_id = $2`,
+    [projectId, goalId],
+  );
+}
+
+/**
+ * Apply the pause transition to an already-open caller transaction. The
+ * caller owns BEGIN/COMMIT so related durable records can commit atomically.
+ */
+export async function requestPauseGoalInTransaction(client: PoolClient, projectId: string, goalId: string): Promise<GoalControl> {
+  return transitionGoalControlInTransaction(client, projectId, goalId, (connection, current) => applyPauseRequest(connection, projectId, goalId, current));
 }
 
 /**
@@ -273,19 +305,7 @@ async function transitionGoalControl(
  * Idempotent while already pause-requested; invalid from any other mode.
  */
 export async function requestPauseGoal(pool: Pool, projectId: string, goalId: string): Promise<GoalControl> {
-  return transitionGoalControl(pool, projectId, goalId, async (client, current) => {
-    const mode = goalControlMode(current);
-    if (mode === "pause_requested") return;
-    if (mode !== "open") {
-      throw new Error(`cannot request pause from mode "${mode}" (expected "open")`);
-    }
-    await client.query(
-      `UPDATE goal_controls
-       SET control_epoch = control_epoch + 1, pause_requested_at = transaction_timestamp()
-       WHERE project_id = $1 AND goal_id = $2`,
-      [projectId, goalId],
-    );
-  });
+  return transitionGoalControl(pool, projectId, goalId, (client, current) => applyPauseRequest(client, projectId, goalId, current));
 }
 
 /**

@@ -101,3 +101,24 @@ export const CriticalActionResultSchema = z.object({
   recordId: UuidSchema.optional(),
 }).strict();
 export type CriticalActionResult = z.infer<typeof CriticalActionResultSchema>;
+
+const SentinelChallengeSchema = z.object({
+  challengeId: UuidSchema, goalId: UuidSchema, reason: z.string().min(1), evidenceReferences: z.array(z.string()),
+  status: z.enum(["open", "correction_requested", "safe_paused", "resolved"]), correctionRequest: z.string().nullable(),
+  raisedBy: z.string().min(1), resolvedBy: z.string().nullable(), resolutionReason: z.string().nullable(),
+}).strict();
+export const SentinelChallengeListSchema = z.object({ challenges: z.array(SentinelChallengeSchema) }).strict();
+export type SentinelChallengeList = z.infer<typeof SentinelChallengeListSchema>;
+
+const CouncilJudgmentSchema = z.object({ modelProvider: z.string().min(1), modelId: z.string().min(1), verdict: z.enum(["proceed", "do_not_proceed", "escalate"]), confidence: z.enum(["low", "medium", "high"]), reasoning: z.string().min(1), conditions: z.array(z.string()), dissentNote: z.string().nullable(), citedEvidenceIds: z.array(z.string()) }).strict();
+const CouncilSynthesisSchema = z.object({ finalVerdict: z.enum(["proceed", "do_not_proceed", "escalate"]), sameModelOnly: z.boolean(), escalated: z.boolean(), dissentNotes: z.array(z.string()) }).strict();
+export const OverwatchCouncilRoundListSchema = z.object({ rounds: z.array(z.object({ roundId: UuidSchema, goalId: UuidSchema, question: z.string().min(1), criteria: z.array(z.object({ criterionId: z.string(), description: z.string() }).strict()), evidenceIds: z.array(z.string()), triggerReasons: z.array(z.string()), reviewerCount: z.number().int().positive(), judgments: z.array(CouncilJudgmentSchema), synthesis: CouncilSynthesisSchema }).strict()) }).strict();
+export type OverwatchCouncilRoundList = z.infer<typeof OverwatchCouncilRoundListSchema>;
+
+const CertificationSchema = z.object({ certificationId: UuidSchema, kind: z.enum(["quality", "security", "safety_compliance"]), goalId: UuidSchema, contractId: UuidSchema, contractVersion: z.number().int(), contractContentHash: z.string().min(1), integratedCommitSha: z.string().min(1), workerId: UuidSchema, departmentAcceptanceId: UuidSchema, integrationRevisionId: UuidSchema, verdict: z.enum(["passed", "failed", "blocked"]), certifiedByDepartment: z.string().min(1), producingDepartment: z.string().min(1) }).strict();
+export const CertificationListSchema = z.object({ certifications: z.array(CertificationSchema) }).strict();
+export type CertificationList = z.infer<typeof CertificationListSchema>;
+
+const SaneFinalReportSchema = z.object({ reportId: UuidSchema, goalId: UuidSchema, success: z.boolean(), blockers: z.array(z.object({ reason: z.string(), detail: z.string() }).strict()), ceoRequest: z.string(), whatChanged: z.string(), userVisibleBehaviorPassed: z.boolean(), participatingDepartments: z.array(z.string()), keyDecisions: z.array(z.string()), dissent: z.array(z.string()), independentValidation: z.array(z.string()), costCents: z.number().int(), budgetCents: z.number().int(), incidents: z.array(z.string()), knownLimitations: z.array(z.string()), criticalActionAwaitingApproval: z.boolean(), evidenceBundleId: UuidSchema }).strict();
+export { SaneFinalReportSchema };
+export type SaneFinalReport = z.infer<typeof SaneFinalReportSchema>;

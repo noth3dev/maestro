@@ -28,7 +28,7 @@ Complete the remaining Phase 1 durable control-plane safety foundations, then im
 - [in_progress] 9. Phase 4 (plan/phase4.md) preparation: baseline branch `phase4/integration` created from accepted Phase 3 exit gate (`1effc49`), worktree `.worktrees/p4` added, build verified clean. Recommended two-track work-sequence split recorded in progress.md (Track A: environments+devices, steps 1-5; Track B: Firefly, steps 6-9; step 10 integrates both). Playwright dependency not yet added (needed for step 3). Implementation not yet started.
 
 ## Next step
-Dispatch parallel Sonnet subagents, one per isolated worktree, to implement the remaining Phase 2 work sequence steps 6-12 (see "Phase 2 detailed status"). Each subagent works only inside its assigned `.worktrees/phase2-*` directory, test-first, and reports back instead of silently finishing. Independent review and `npm run check` (build+unit; DB integration tests remain environment-gated — Docker unavailable this session) required before any slice is treated as accepted.
+Phase 3 is fully exit-gate accepted (all 13 live-gate steps, all 18 Tests items). Main now carries the real Phase 2+3 source code (this merge). Next: decide whether to start Phase 4 Track A (environments/devices) and Track B (Firefly) implementation, e.g. via parallel subagents in `.worktrees/p4`-derived worktrees, matching the pattern used throughout Phase 3.
 
 ## Errors encountered
 | Error | Resolution |
@@ -104,3 +104,26 @@ Dispatch parallel Sonnet subagents, one per isolated worktree, to implement the 
 - After Phase 2 reaches its actual exit gate (not merely self-verified code), proceed directly into Phase 3.
 - Phase 3 start gate: all required Phase 2 slices independently reviewed and real-PostgreSQL verified; one bounded local Goal has durable Contract/Council/Plan/worker/Git/budget/evidence lineage and stops at the Phase 2 boundary (`awaiting certification` rather than a claimed success); no unresolved safety/authority/recovery blocker.
 - Phase 3 scope then begins with Overwatch/Sentinel, independent certification, durable evidence bundle, and Sane final report. Do not begin Phase 3 implementation while Phase 2’s current Council/Head/Contract acceptance blockers remain open.
+
+## Phase 3 closeout status — 2026-09-03
+- Step 10 (adversarial fixtures) is complete at the code/test level on `phase3/integration`: tests cover fabricated evidence/unsupported claims, same-model fake consensus and disagreement, seeded Quality defects, forged evidence references, and unauthorized remote push capability.
+- Closeout hardening is included: Sentinel challenge mutations require durable lease/role/session authorization; Prime production roots stay in the process repository context; certifications and reports bind to the exact launched Contract and immutable integrated revision; frozen revisions include accepted worker commits; and duplicate certification finding IDs are rejected at domain, waiver, and database boundaries.
+- Verification gate: fresh `npm run check` reported 261 passed, 188 skipped, 0 failed. The skipped suites require PostgreSQL/Docker (unavailable here), so no real-PostgreSQL claim is made.
+- Step 11, the full live release scenario, remains pending. Do not treat Phase 3 as fully exit-gate accepted until that scenario and the PostgreSQL environment gate pass.
+
+## 2026-09-03 — P3S11 council unsupported-assertion round
+- Added a real-PostgreSQL composition test that requests a semantic review of an unsupported natural-language claim, verifies the claimed-supported/no-evidence result is downgraded to `unsupported`, confirms the uncertainty trigger, and runs a complete Overwatch Council round.
+- The round records each reviewer identity from `getModelIdentity`, labels the one-family fallback as `same-model-independent-review`, preserves minority dissent in synthesis, and proves sealed collection by checking zero persisted judgments during every reviewer prompt before all three are written.
+- Focused verification passed: 7 passed, 0 skipped, 0 failed. Full `npm run check` is required before acceptance.
+
+
+## Phase 3 step 11 split — CLI/app parity finding (2026-09-03)
+- **Tests item 18 status: blocked by missing read surfaces.** Control-plane currently serves only Goal and event reads (`GET /v1/goals/:goalId`, `GET /v1/events`, and event SSE). CLI currently provides `goal get` and `events list`; Secretary loads and renders only Goal/events.
+- No route, typed API-client method, CLI command, or Secretary loader exists for Sentinel challenges, Overwatch Council state, certification state, or Sane reports, although the durable domain/persistence modules exist. This branch records the evidence and does not invent a new aggregate endpoint.
+- The minimal read contract is now implemented across control-plane, API client, and CLI. A real PostgreSQL app/API/CLI parity composition fixture remains to be added before claiming the item fully proven.
+
+## 2026-09-03 — P3S11 CLI/app parity read contract implemented
+- Added authenticated read-only control-plane routes for Sentinel challenges, Overwatch Council rounds (including judgments and synthesis), Quality/conditional certifications, and Sane final reports, backed by durable persistence reads. Added matching zod contracts, typed API-client methods, and CLI commands.
+- Control-plane route tests prove all four shapes and missing-report handling. Secretary UI was not changed: it consumes the same API client but has no existing state-panel architecture for these four records; the control-plane is the app backing API.
+- Verification: `MAESTRO_TEST_DATABASE_URL=...55440... npm run check` passed with **458 passed, 2 skipped, 0 failed** (74 test files passed, 1 skipped; skips are the intentional live-Prime cases).
+- Tests item 18 is now covered at the shared read-contract level (control-plane/API client/CLI); a full real-domain parity fixture remains limited to existing persistence integration coverage.

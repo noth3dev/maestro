@@ -1,0 +1,176 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { Pool } from "pg";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { localGitPort } from "@maestro/git-adapter";
+import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance } from "@maestro/domain";
+import { bootstrapPermanentOrganization } from "./organization.js";
+import { acquireGoalLease } from "./commands.js";
+import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
+import { createDepartmentPlan } from "./department-plan.js";
+import { createMissionBundle } from "./mission-bundle.js";
+import { observeWorker, spawnWorker } from "./worker.js";
+import { recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
+import { acceptDepartmentWorkerOutput, certifyQuality } from "./certification.js";
+import { generateSaneFinalReport, readSaneFinalReport, SaneReportError } from "./sane-report.js";
+
+const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
+const describeDatabase = databaseUrl ? describe : describe.skip;
+const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql", "0005_authority_records.sql", "0006_evidence.sql", "0007_goal_control.sql", "0008_goal_pause_stop.sql", "0009_reconciliation_leader_lease.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql", "0014_head_activation_runtime_safety.sql", "0015_council_protocol.sql", "0016_council_hardening.sql", "0018_role_identity_hardening.sql", "0019_council_authority_hardening.sql", "0020_head_role_identity_hardening.sql", "0021_council_round_idempotency.sql", "0022_department_plans.sql", "0023_mission_bundles.sql", "0024_workers.sql", "0026_git_integration.sql", "0028_sentinel_findings.sql", "0029_sentinel_challenges.sql", "0031_overwatch_council.sql", "0032_certifications.sql", "0035_evidence_bundles.sql", "0036_sane_final_reports.sql", "0033_conditional_certifications.sql", "0034_certification_waivers.sql", "0038_certification_report_hardening.sql"];
+
+const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `session:${label}`, commandId: randomUUID() });
+const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`, sessionRef: `opaque:${departmentId}`, commandId: randomUUID() });
+const brief: IndependentBrief = { interpretation: "safe outcome", contribution: "review", nonGoals: [], assumptions: [], evidenceGaps: [], risks: [], dependencies: [], proposedValidation: [], expectedWorkers: [], expectedCost: "1", expectedTime: "1", objectionsToLikelyAlternatives: [] };
+
+function fakeKernel(): ExecutionKernelPort {
+  let counter = 0;
+  return {
+    async spawn() { counter += 1; return { execution: `exec-${counter}` as never, invocation: `inv-${counter}` as never }; },
+    async prompt() {}, async sendMessage() {},
+    async observe() { return [{ invocation: "inv-1" as never, name: "worker", status: "succeeded", toolEvents: { state: "empty", events: [] }, usage: { state: "available", totalTokens: 1 }, answer: { state: "available", text: "done" } }]; },
+    async cancel() { return { cancelled: true }; },
+    async getModelIdentity() { return { provider: "fake", id: "fake" }; },
+    async getToolEvents() { return { state: "empty", events: [] }; },
+    async getUsage() { return { state: "available", totalTokens: 1 }; },
+    async getInvocationStatus() { return "succeeded"; },
+    async resume() { throw new Error("not supported"); },
+    async reconnect() { throw new Error("not supported"); },
+  };
+}
+
+describeDatabase("Sane final report with PostgreSQL", () => {
+  const pool = new Pool({ connectionString: databaseUrl });
+  let repositoryPath: string;
+  let baseRevision: string;
+  const worktreePaths: string[] = [];
+
+  beforeEach(() => {
+    repositoryPath = mkdtempSync(join(tmpdir(), "maestro-cert-"));
+    execFileSync("git", ["init", "--quiet", "--initial-branch=main"], { cwd: repositoryPath });
+    execFileSync("git", ["-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-m", "initial"], { cwd: repositoryPath });
+    baseRevision = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repositoryPath }).toString().trim();
+  });
+  afterEach(() => {
+    for (const path of worktreePaths.splice(0)) rmSync(path, { recursive: true, force: true });
+    rmSync(repositoryPath, { recursive: true, force: true });
+  });
+
+  async function setupWorkerWithCommit() {
+    const goalId = randomUUID(), contractId = randomUUID(), projectId = randomUUID();
+    const contractContent: TaskContractSubstance = {
+      desiredOutcome: "deliver safely", userVisibleBehavior: [], successCriteria: [], liveEvidence: [], scope: [], nonGoals: [], priorities: [], acceptableTradeoffs: [], constraints: [], knownEdgeCases: [],
+      project: { projectId, repository: repositoryPath, immutableBaseRevision: baseRevision, dataBoundary: "local" },
+      evidenceReferences: [], approvedPreviewReferences: [], expectedGroups: [], expectedDepartments: [], criticalActionExpectations: [], forbiddenEffects: [], environmentAssumptions: [], externalServiceAssumptions: [],
+      budget: { ceiling: "1", reportingExpectations: [], stoppingConditions: [] },
+    };
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
+    await pool.query("INSERT INTO task_contracts (contract_id, schema_version, version, content, content_hash, launch_state) VALUES ($1, 1, 1, $2::jsonb, $3, 'launched')", [contractId, JSON.stringify(contractContent), taskContractContentHash(contractContent)]);
+    const evidenceIds = [randomUUID(), randomUUID()];
+    for (const evidenceId of evidenceIds) {
+      await pool.query(
+        "INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 'test-result', 'text/plain', 'project_lifetime')",
+        [evidenceId, randomUUID(), randomUUID(), projectId, goalId, "test", "0".repeat(64)],
+      );
+    }
+    for (const departmentId of ["product", "quality"]) await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, head_role_id, contract_id, status, active_session_ref) VALUES ($1, $2, $3, $4, 'active', $5)", [goalId, departmentId, `head:${departmentId}`, contractId, `opaque:${departmentId}`]);
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "test", leaseDurationMs: 60_000 });
+    const council = await createHeadCouncil(pool, { goalId, contractId, briefDeadline: new Date(Date.now() + 60_000), evidence: { references: evidenceIds } }, proof, context("secretary"));
+    for (const departmentId of ["product", "quality"]) await submitIndependentBrief(pool, council.councilId, departmentId, brief, proof, headContext(departmentId));
+    await revealCouncilBriefs(pool, council.councilId, proof, context("reveal"));
+    const packet: DecisionPacket = {
+      outcome: "decided", executionDisposition: "executable", selectedDirection: "proceed",
+      rejectedAlternatives: [], departmentOwnership: [{ departmentId: "product", responsibility: "own it" }, { departmentId: "quality", responsibility: "certify it" }],
+      workerPlan: [], completionCriteria: ["done"], failureCriteria: ["fail"], dissent: [], uncertainty: [],
+      criticalActions: [], unresolvedConflicts: [], evidenceReferences: [],
+    };
+    const resolved = await recordCouncilDecisionPacket(pool, council.councilId, packet, proof, context("decision"));
+    const planSubstance: DepartmentPlanSubstance = {
+      contribution: "implement", nonGoals: [],
+      items: [{ itemId: "exec-1", kind: "execution", objective: "implement", dependsOn: [], scoutQuestion: "", workerAssignment: "implement", evidenceReferences: [] }],
+      requiredHandoffs: [], budgetCeiling: "10 USD", expectedTime: "1 day", maxRetries: 1, maxWorkers: 1,
+      gitRepository: repositoryPath, gitBranch: "phase2/product", integrationPath: "packages/product",
+      risks: [], safePausePoints: [], escalationTriggers: [], evidenceReferences: [], validationCriteria: ["tests pass"],
+    };
+    const plan = await createDepartmentPlan(pool, { councilId: resolved.councilId, departmentId: "product", substance: planSubstance }, proof, headContext("product"));
+    const bundleSubstance: MissionBundleSubstance = {
+      role: "execution", profileRef: "profile-1", goalBrief: "implement",
+      approvedModels: ["model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
+      environment: ["node24"], authorityBoundary: ["write-scoped"], externalServiceBoundary: ["none"], dataBoundary: ["repository files only"],
+      costCeiling: "5 USD", timeCeiling: "1 hour", retryCeiling: 1, workerCeiling: 0,
+      deliverable: "a change", evidenceRequirements: ["diff"], validationCriteria: ["tests pass"], terminationConditions: ["deadline passed"],
+    };
+    await createMissionBundle(pool, { councilId: resolved.councilId, departmentId: "product", itemId: "exec-1", substance: bundleSubstance }, proof, headContext("product"));
+    const kernel = fakeKernel();
+    const worker = await spawnWorker(pool, kernel, { councilId: resolved.councilId, departmentId: "product", planVersion: plan.version, itemId: "exec-1" }, proof, headContext("product"));
+    await observeWorker(pool, kernel, worker.workerId);
+    await recordGoalIntegrationBranch(pool, localGitPort, goalId, repositoryPath, "goal/integration", baseRevision, proof);
+    await recordDepartmentBranch(pool, localGitPort, resolved.councilId, "product", proof, headContext("product"));
+    const worktreePath = join(repositoryPath, "..", `maestro-cert-worker-${randomUUID()}`);
+    worktreePaths.push(worktreePath);
+    await recordWorkerWorktree(pool, localGitPort, worker.workerId, worktreePath, proof, headContext("product"));
+    const fs = await import("node:fs/promises");
+    await fs.writeFile(join(worktreePath, "change.txt"), "the change");
+    const commitResult = await localGitPort.commit(worktreePath, "mission: implement", "worker", "worker@example.com");
+    await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: implement", evidenceIds);
+    await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
+    await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product"));
+    await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
+    return { goalId, council: resolved, worker, evidenceIds };
+  }
+
+  beforeAll(async () => {
+    await pool.query("DROP TABLE IF EXISTS sane_final_reports, evidence_bundles, certification_conflict_resolution_members, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, goal_integration_revision_commits, goal_integration_revisions, department_acceptances, integration_commits, worker_worktrees, department_branches, goal_integration_branches, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
+    for (const name of migrations) {
+      const sql = await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8");
+      await pool.query(sql);
+    }
+  });
+  beforeEach(async () => { await pool.query("TRUNCATE sane_final_reports, evidence_bundles, quality_certifications, department_acceptances, integration_commits, worker_worktrees, department_branches, goal_integration_branches, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
+  afterAll(async () => { await pool.end(); });
+
+  it("reports success with independent validation when the required certification passes cleanly, and blocks it once a challenge opens", async () => {
+    const { goalId, worker, evidenceIds } = await setupWorkerWithCommit();
+    await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
+    const report = await generateSaneFinalReport(pool, goalId);
+    expect(report.success).toBe(true);
+    expect(report.blockers).toHaveLength(0);
+    expect(report.userVisibleBehaviorPassed).toBe(true);
+    expect(report.independentValidation).toContain("quality: passed");
+    expect(report.criticalActionAwaitingApproval).toBe(false);
+    const read = await readSaneFinalReport(pool, report.reportId);
+    expect(read).toEqual(report);
+  });
+
+  it("reports failure with a missing_required_certification blocker when Quality never certified", async () => {
+    const { goalId } = await setupWorkerWithCommit();
+    const report = await generateSaneFinalReport(pool, goalId);
+    expect(report.success).toBe(false);
+    expect(report.blockers.some((blocker) => blocker.reason === "missing_required_certification")).toBe(true);
+  });
+
+  it("reports failure and flags an awaiting critical action when a critical finding is unwaived", async () => {
+    const { goalId, worker, evidenceIds } = await setupWorkerWithCommit();
+    await certifyQuality(pool, worker.workerId, { verdict: "failed", findings: [{ findingId: "f1", severity: "critical", description: "security hole" }], testEvidenceIds: [] }, "quality", headContext("quality"));
+    const report = await generateSaneFinalReport(pool, goalId);
+    expect(report.success).toBe(false);
+    expect(report.criticalActionAwaitingApproval).toBe(true);
+    expect(report.blockers.some((blocker) => blocker.reason === "unwaived_critical_finding")).toBe(true);
+  });
+
+  it("includes real Git integration evidence in whatChanged and durably links a real evidence bundle", async () => {
+    const { goalId, worker, evidenceIds } = await setupWorkerWithCommit();
+    await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
+    const report = await generateSaneFinalReport(pool, goalId);
+    expect(report.whatChanged).toContain("mission: implement");
+    expect(report.evidenceBundleId).toBeTruthy();
+  });
+
+  it("throws SaneReportError when no resolved Council decision exists for the Goal", async () => {
+    await expect(generateSaneFinalReport(pool, randomUUID())).rejects.toBeInstanceOf(SaneReportError);
+  });
+});
