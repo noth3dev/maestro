@@ -289,3 +289,10 @@
 - Added a real-PostgreSQL worker integration scenario that spawns and observes a worker in `running` (non-terminal) state, then reconnects through a fresh Pool and fresh kernel instance.
 - Restart reconciliation records `lease_contended` with `goal_lease_held_across_reconciliation`, preserving the active execution rather than racing recovery. The worker row remains singular. After lease expiry, the successor fencing token rejects the pre-restart proof with `stale_lease` and no event write occurs.
 - Focused verification: 8 passed, 0 failed.
+
+
+## 2026-09-03 — P3S11 CLI/app parity investigation (Tests item 18)
+- Investigated `apps/cli/src/main.ts`, `apps/control-plane/src/server.ts`, `apps/control-plane/src/main.ts`, and Secretary (`apps/secretary/src/goal-page.tsx`, `goal-page.tsx` tests). The only app/API read surfaces are `GET /v1/goals/:goalId` and `GET /v1/events` (plus the SSE replay stream); the CLI exposes these through `goal get` and `events list`, and Secretary renders the same Goal/event data through `@maestro/api-client`.
+- The domain and persistence layers do contain durable Sentinel challenge, Overwatch Council, Quality/conditional certification, evidence-bundle, and Sane report modules, but neither `apps/control-plane` nor `@maestro/api-client` exports a route/client method for reading any of those records. The CLI has no challenge, Council, certification, or report command. Secretary has no corresponding data loader or UI.
+- Therefore Tests item 18 cannot be honestly proven by a live parity scenario on this branch: there is no app/CLI read contract to query for those four states. No new endpoint was added because inventing a broad aggregate surface would exceed this isolated parity gap and lacks an existing app/API pattern. Existing Goal/event parity remains covered by `apps/secretary/src/cli-secretary-parity.integration.test.ts`.
+- This is a precise missing-surface finding, not a claim that the underlying durable state is absent. A follow-up should first define the minimal read contract and then add matching API client, CLI, and Secretary coverage.

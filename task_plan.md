@@ -115,3 +115,9 @@ Current restart lane: forced mid-flight worker restart/reconciliation scenario i
 - Added a real-PostgreSQL composition test that requests a semantic review of an unsupported natural-language claim, verifies the claimed-supported/no-evidence result is downgraded to `unsupported`, confirms the uncertainty trigger, and runs a complete Overwatch Council round.
 - The round records each reviewer identity from `getModelIdentity`, labels the one-family fallback as `same-model-independent-review`, preserves minority dissent in synthesis, and proves sealed collection by checking zero persisted judgments during every reviewer prompt before all three are written.
 - Focused verification passed: 7 passed, 0 skipped, 0 failed. Full `npm run check` is required before acceptance.
+
+
+## Phase 3 step 11 split — CLI/app parity finding (2026-09-03)
+- **Tests item 18 status: blocked by missing read surfaces.** Control-plane currently serves only Goal and event reads (`GET /v1/goals/:goalId`, `GET /v1/events`, and event SSE). CLI currently provides `goal get` and `events list`; Secretary loads and renders only Goal/events.
+- No route, typed API-client method, CLI command, or Secretary loader exists for Sentinel challenges, Overwatch Council state, certification state, or Sane reports, although the durable domain/persistence modules exist. This branch records the evidence and does not invent a new aggregate endpoint.
+- Parity can be tested after a minimal read contract is intentionally designed and implemented across all three surfaces.
