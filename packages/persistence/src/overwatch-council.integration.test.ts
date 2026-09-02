@@ -5,13 +5,16 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { ExecutionKernelPort } from "@maestro/domain";
 import { evaluateOverwatchCouncilTrigger, OverwatchCouncilError, runOverwatchCouncilReview } from "./overwatch-council.js";
+import { acquireGoalLease } from "./commands.js";
+import { bootstrapPermanentOrganization } from "./organization.js";
 import { raiseSentinelChallenge } from "./sentinel-challenge.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
-const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0006_evidence.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql", "0014_head_activation_runtime_safety.sql", "0015_council_protocol.sql", "0016_council_hardening.sql", "0018_role_identity_hardening.sql", "0019_council_authority_hardening.sql", "0020_head_role_identity_hardening.sql", "0021_council_round_idempotency.sql", "0028_sentinel_findings.sql", "0029_sentinel_challenges.sql", "0030_semantic_reviews.sql", "0031_overwatch_council.sql"];
+const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0006_evidence.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql", "0014_head_activation_runtime_safety.sql", "0015_council_protocol.sql", "0016_council_hardening.sql", "0018_role_identity_hardening.sql", "0019_council_authority_hardening.sql", "0020_head_role_identity_hardening.sql", "0021_council_round_idempotency.sql", "0028_sentinel_findings.sql", "0029_sentinel_challenges.sql", "0030_semantic_reviews.sql", "0031_overwatch_council.sql", "0037_sentinel_challenge_idempotency.sql"];
 
 const criteria = [{ criterionId: "safety", description: "does this preserve safety invariants" }];
+const sentinelContext = (label: string) => ({ actorId: "  overwatch-sentinel  ", sessionRef: `sentinel-session:${label}`, commandId: randomUUID() });
 
 function fakeKernelWithVerdicts(verdicts: readonly { provider: string; id: string; text: string }[]): ExecutionKernelPort {
   let counter = 0;
@@ -50,7 +53,8 @@ describeDatabase("Overwatch Council with PostgreSQL", () => {
       "INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 'test-result', 'text/plain', 'project_lifetime')",
       [evidenceId, randomUUID(), randomUUID(), projectId, goalId, "test", "0".repeat(64)],
     );
-    return { goalId, projectId, evidenceId };
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "sentinel-test", leaseDurationMs: 60_000 });
+    return { goalId, projectId, evidenceId, proof };
   }
 
   beforeAll(async () => {
@@ -60,7 +64,10 @@ describeDatabase("Overwatch Council with PostgreSQL", () => {
       await pool.query(sql);
     }
   });
-  beforeEach(async () => { await pool.query("TRUNCATE overwatch_council_syntheses, overwatch_council_judgments, overwatch_council_rounds, semantic_reviews, sentinel_challenges, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals RESTART IDENTITY CASCADE"); });
+  beforeEach(async () => {
+    await pool.query("TRUNCATE overwatch_council_syntheses, overwatch_council_judgments, overwatch_council_rounds, semantic_reviews, sentinel_challenge_findings, sentinel_challenges, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals RESTART IDENTITY CASCADE");
+    await bootstrapPermanentOrganization(pool);
+  });
   afterAll(async () => { await pool.end(); });
 
   it("does not report a trigger for a routine Goal with no signals", async () => {
@@ -70,8 +77,8 @@ describeDatabase("Overwatch Council with PostgreSQL", () => {
   });
 
   it("reports the unresolved-challenge trigger once a Sentinel challenge is open", async () => {
-    const { goalId } = await setupGoalWithEvidence();
-    await raiseSentinelChallenge(pool, goalId, [], { reason: "concern", evidenceReferences: [] });
+    const { goalId, proof } = await setupGoalWithEvidence();
+    await raiseSentinelChallenge(pool, goalId, [], { reason: "concern", evidenceReferences: [] }, proof, sentinelContext("trigger"));
     const triggers = await evaluateOverwatchCouncilTrigger(pool, goalId);
     expect(triggers).toContain("unresolved_sentinel_challenge");
   });

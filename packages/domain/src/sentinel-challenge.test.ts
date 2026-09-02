@@ -11,10 +11,14 @@ describe("Sentinel challenge", () => {
   it("rejects a blank reason", () => {
     expect(() => assertValidSentinelChallengeSubstance({ reason: "", evidenceReferences: [] })).toThrow(InvalidSentinelChallengeError);
   });
-  it("rejects Sentinel resolving its own challenge", () => {
+  it("rejects the canonical Sentinel role resolving its own durable challenge identity", () => {
+    expect(() => assertResolverIsNotSentinel("  overwatch-sentinel  ", " overwatch-sentinel ")).toThrow(InvalidSentinelChallengeError);
+  });
+  it("rejects the canonical Sentinel role even when called through the legacy actor constant", () => {
+    expect(SENTINEL_ACTOR_ID).toBe("overwatch-sentinel");
     expect(() => assertResolverIsNotSentinel(SENTINEL_ACTOR_ID)).toThrow(InvalidSentinelChallengeError);
   });
   it("allows a non-Sentinel actor to resolve", () => {
-    expect(() => assertResolverIsNotSentinel("head:product")).not.toThrow();
+    expect(() => assertResolverIsNotSentinel("head:product", "overwatch-sentinel")).not.toThrow();
   });
 });

@@ -11,6 +11,7 @@ import { createDepartmentPlan, reviseDepartmentPlan } from "./department-plan.js
 import { createMissionBundle } from "./mission-bundle.js";
 import { spawnWorker } from "./worker.js";
 import { listSentinelFindings, resolveSentinelFinding, scanGoalForSentinelFindings, SentinelFindingNotFoundError } from "./sentinel.js";
+import { SentinelAuthorizationError } from "./sentinel-challenge.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -29,6 +30,8 @@ const brief: IndependentBrief = { interpretation: "safe outcome", contribution: 
 const evidence = { references: [randomUUID(), randomUUID()] };
 const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `session:${label}`, commandId: randomUUID() });
 const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`, sessionRef: `opaque:${departmentId}`, commandId: randomUUID() });
+const sentinelContext = (label: string) => ({ actorId: "overwatch-sentinel", sessionRef: `sentinel-session:${label}`, commandId: randomUUID() });
+const intruderContext = (label: string) => ({ actorId: `intruder:${label}`, sessionRef: `intruder-session:${label}`, commandId: randomUUID() });
 
 const planSubstance = (itemId = "exec-1", contribution = "own the product slice"): DepartmentPlanSubstance => ({
   contribution, nonGoals: [],
@@ -103,18 +106,23 @@ describeDatabase("Sentinel deterministic findings with PostgreSQL", () => {
   beforeEach(async () => { await pool.query("TRUNCATE sentinel_findings, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
   afterAll(async () => { await pool.end(); });
 
-  it("stays silent on a valid Goal with no violations", async () => {
+  it("rejects a finding scan without durable Sentinel authorization", async () => {
     const { goalId } = await setupPlan();
-    const findings = await scanGoalForSentinelFindings(pool, goalId);
+    await expect(scanGoalForSentinelFindings(pool, goalId)).rejects.toBeInstanceOf(SentinelAuthorizationError);
+  });
+
+  it("stays silent on a valid Goal with no violations", async () => {
+    const { goalId, proof } = await setupPlan();
+    const findings = await scanGoalForSentinelFindings(pool, goalId, proof, { actorId: "overwatch-sentinel", sessionRef: "sentinel-session:valid", commandId: randomUUID() });
     expect(findings).toHaveLength(0);
   });
 
   it("flags a worker as stale once its Department Plan is revised to a new version", async () => {
     const { goalId, plan, proof, council } = await setupPlan();
     await reviseDepartmentPlan(pool, council.councilId, "product", plan.version, planSubstance("exec-1", "own the product slice, revised"), "evidence changed", proof, headContext("product"));
-    const findings = await scanGoalForSentinelFindings(pool, goalId);
+    const findings = await scanGoalForSentinelFindings(pool, goalId, proof, sentinelContext("stale-worker"));
     expect(findings.some((finding) => finding.ruleId === "stale_worker_superseded_plan")).toBe(true);
-    const rescan = await scanGoalForSentinelFindings(pool, goalId);
+    const rescan = await scanGoalForSentinelFindings(pool, goalId, proof, sentinelContext("stale-worker-rescan"));
     expect(rescan).toHaveLength(0);
     const listed = await listSentinelFindings(pool, goalId);
     expect(listed.length).toBeGreaterThan(0);
@@ -123,7 +131,7 @@ describeDatabase("Sentinel deterministic findings with PostgreSQL", () => {
   it("flags a worker as stale once its item is superseded by a plan revision that changes the item set", async () => {
     const { goalId, plan, proof, council, worker } = await setupPlan("exec-1");
     await reviseDepartmentPlan(pool, council.councilId, "product", plan.version, planSubstance("exec-2"), "scope changed", proof, headContext("product"));
-    const findings = await scanGoalForSentinelFindings(pool, goalId);
+    const findings = await scanGoalForSentinelFindings(pool, goalId, proof, sentinelContext("superseded-item"));
     const staleFindings = findings.filter((finding) => finding.ruleId === "stale_worker_superseded_plan");
     expect(staleFindings.some((finding) => finding.evidenceIdentity === worker.workerId)).toBe(true);
   });
@@ -131,11 +139,11 @@ describeDatabase("Sentinel deterministic findings with PostgreSQL", () => {
   it("resolves a finding exactly once and rejects re-flagging it as new after resolution reappears identically", async () => {
     const { goalId, plan, proof, council } = await setupPlan();
     await reviseDepartmentPlan(pool, council.councilId, "product", plan.version, planSubstance("exec-1", "own the product slice, revised again"), "evidence changed", proof, headContext("product"));
-    const [finding] = await scanGoalForSentinelFindings(pool, goalId);
+    const [finding] = await scanGoalForSentinelFindings(pool, goalId, proof, sentinelContext("resolve"));
     expect(finding).toBeDefined();
-    const resolved = await resolveSentinelFinding(pool, finding!.findingId, "worker will be replaced next cycle");
+    const resolved = await resolveSentinelFinding(pool, finding!.findingId, "worker will be replaced next cycle", proof, headContext("product"));
     expect(resolved.resolved).toBe(true);
-    const resolvedAgain = await resolveSentinelFinding(pool, finding!.findingId, "duplicate call");
+    const resolvedAgain = await resolveSentinelFinding(pool, finding!.findingId, "duplicate call", proof, headContext("product"));
     expect(resolvedAgain).toEqual(resolved);
     const unresolvedOnly = await listSentinelFindings(pool, goalId);
     expect(unresolvedOnly.find((item) => item.findingId === finding!.findingId)).toBeUndefined();
@@ -144,7 +152,23 @@ describeDatabase("Sentinel deterministic findings with PostgreSQL", () => {
     await expect(pool.query("UPDATE sentinel_findings SET details = '{}'::jsonb WHERE finding_id = $1", [finding!.findingId])).rejects.toThrow();
   });
 
+  it("rejects an arbitrary actor from resolving a finding", async () => {
+    const { goalId, plan, proof, council } = await setupPlan();
+    await reviseDepartmentPlan(pool, council.councilId, "product", plan.version, planSubstance("exec-1", "revised for authorization"), "evidence changed", proof, headContext("product"));
+    const [finding] = await scanGoalForSentinelFindings(pool, goalId, proof, sentinelContext("authorization"));
+    expect(finding).toBeDefined();
+    await expect(resolveSentinelFinding(pool, finding!.findingId, "intruder resolution", proof, intruderContext("finding"))).rejects.toThrow();
+    const stillOpen = await listSentinelFindings(pool, goalId);
+    expect(stillOpen.some((item) => item.findingId === finding!.findingId)).toBe(true);
+  });
+
   it("throws SentinelFindingNotFoundError for a missing finding", async () => {
-    await expect(resolveSentinelFinding(pool, randomUUID(), "reason")).rejects.toBeInstanceOf(SentinelFindingNotFoundError);
+    await expect(resolveSentinelFinding(
+      pool,
+      randomUUID(),
+      "reason",
+      { goalId: randomUUID(), ownerId: "test", fencingToken: "1" },
+      { actorId: "head:product", sessionRef: "opaque:product", commandId: randomUUID() },
+    )).rejects.toBeInstanceOf(SentinelFindingNotFoundError);
   });
 });

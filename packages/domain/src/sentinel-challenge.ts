@@ -1,3 +1,5 @@
+import { SENTINEL_ROLE } from "./organization.js";
+
 export type SentinelChallengeStatus = "open" | "correction_requested" | "safe_paused" | "resolved";
 
 export class InvalidSentinelChallengeError extends Error {
@@ -24,9 +26,25 @@ export function assertValidSentinelChallengeSubstance(value: unknown): asserts v
   texts(record.evidenceReferences, "Sentinel challenge evidenceReferences");
 }
 
-/** The Sentinel identity is a fixed, reserved actor id; a challenge it raises can never be resolved by that same identity ("It cannot ... certify its own challenge as resolved"). */
-export const SENTINEL_ACTOR_ID = "sentinel";
 
-export function assertResolverIsNotSentinel(actorId: string): void {
-  if (actorId === SENTINEL_ACTOR_ID) throw new InvalidSentinelChallengeError("Sentinel cannot resolve its own challenge");
+export const SENTINEL_ROLE_ID = SENTINEL_ROLE.roleId;
+/** @deprecated Use SENTINEL_ROLE_ID; retained for callers that use actor terminology. */
+export const SENTINEL_ACTOR_ID = SENTINEL_ROLE_ID;
+
+export function normalizeSentinelIdentity(actorId: string): string {
+  return actorId.trim();
+}
+
+export function isSentinelRoleIdentity(actorId: string): boolean {
+  return normalizeSentinelIdentity(actorId) === SENTINEL_ROLE_ID;
+}
+
+/**
+ * A resolver cannot certify a challenge raised by the canonical Sentinel role.
+ * `raisedBy` is the durable challenge identity, not a caller-selected label.
+ */
+export function assertResolverIsNotSentinel(actorId: string, raisedBy = SENTINEL_ROLE_ID): void {
+  if (isSentinelRoleIdentity(actorId) && isSentinelRoleIdentity(raisedBy)) {
+    throw new InvalidSentinelChallengeError("Sentinel cannot resolve its own challenge");
+  }
 }

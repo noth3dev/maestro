@@ -12,11 +12,11 @@ import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, su
 import { acquireGoalLease } from "./commands.js";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type TaskContractSubstance } from "@maestro/domain";
-import { raiseSentinelChallenge, readSentinelChallenge, requestSentinelCorrection, requestSentinelSafePause, resolveSentinelChallenge, SentinelChallengeError, SentinelChallengeNotFoundError } from "./sentinel-challenge.js";
+import { raiseSentinelChallenge, readSentinelChallenge, requestSentinelCorrection, requestSentinelSafePause, resolveSentinelChallenge, SentinelAuthorizationError, SentinelChallengeError, SentinelChallengeNotFoundError } from "./sentinel-challenge.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
-const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql", "0005_authority_records.sql", "0006_evidence.sql", "0007_goal_control.sql", "0008_goal_pause_stop.sql", "0009_reconciliation_leader_lease.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql", "0014_head_activation_runtime_safety.sql", "0015_council_protocol.sql", "0016_council_hardening.sql", "0018_role_identity_hardening.sql", "0019_council_authority_hardening.sql", "0020_head_role_identity_hardening.sql", "0021_council_round_idempotency.sql", "0022_department_plans.sql", "0023_mission_bundles.sql", "0024_workers.sql", "0028_sentinel_findings.sql", "0029_sentinel_challenges.sql"];
+const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql", "0005_authority_records.sql", "0006_evidence.sql", "0007_goal_control.sql", "0008_goal_pause_stop.sql", "0009_reconciliation_leader_lease.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql", "0014_head_activation_runtime_safety.sql", "0015_council_protocol.sql", "0016_council_hardening.sql", "0018_role_identity_hardening.sql", "0019_council_authority_hardening.sql", "0020_head_role_identity_hardening.sql", "0021_council_round_idempotency.sql", "0022_department_plans.sql", "0023_mission_bundles.sql", "0024_workers.sql", "0028_sentinel_findings.sql", "0029_sentinel_challenges.sql", "0030_semantic_reviews.sql", "0031_overwatch_council.sql", "0032_certifications.sql", "0033_conditional_certifications.sql", "0034_certification_waivers.sql", "0035_evidence_bundles.sql", "0036_sane_final_reports.sql", "0037_sentinel_challenge_idempotency.sql"];
 
 function buildContractContent(projectId: string): TaskContractSubstance {
   return {
@@ -31,6 +31,7 @@ const brief: IndependentBrief = { interpretation: "safe outcome", contribution: 
 const evidence = { references: [randomUUID(), randomUUID()] };
 const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `session:${label}`, commandId: randomUUID() });
 const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`, sessionRef: `opaque:${departmentId}`, commandId: randomUUID() });
+const sentinelContext = (label: string) => ({ actorId: "  overwatch-sentinel  ", sessionRef: `sentinel-session:${label}`, commandId: randomUUID() });
 const planSubstance = (contribution = "own the product slice"): DepartmentPlanSubstance => ({
   contribution, nonGoals: [],
   items: [{ itemId: "exec-1", kind: "execution", objective: "implement", dependsOn: [], scoutQuestion: "", workerAssignment: "implement", evidenceReferences: [] }],
@@ -88,7 +89,7 @@ describeDatabase("Sentinel challenges with PostgreSQL", () => {
     };
     await spawnWorker(pool, kernel, { councilId: resolved.councilId, departmentId: "product", planVersion: plan.version, itemId: "exec-1" }, proof, headContext("product"));
     await reviseDepartmentPlan(pool, resolved.councilId, "product", plan.version, planSubstance("revised contribution"), "evidence changed", proof, headContext("product"));
-    return { goalId, projectId };
+    return { goalId, projectId, proof };
   }
 
   beforeAll(async () => {
@@ -102,39 +103,82 @@ describeDatabase("Sentinel challenges with PostgreSQL", () => {
   afterAll(async () => { await pool.end(); });
 
   it("raises a challenge grounded in a real finding with durable evidence, requests a bounded correction, and lets a non-Sentinel actor resolve it", async () => {
-    const { goalId } = await setupGoalWithFinding();
-    const [finding] = await scanGoalForSentinelFindings(pool, goalId);
+    const { goalId, proof } = await setupGoalWithFinding();
+    const [finding] = await scanGoalForSentinelFindings(pool, goalId, proof, sentinelContext("finding"));
     expect(finding).toBeDefined();
-    const challenge = await raiseSentinelChallenge(pool, goalId, [finding!.findingId], { reason: "stale worker detected", evidenceReferences: [...evidence.references] });
+    const substance = { reason: "stale worker detected", evidenceReferences: [...evidence.references] };
+    const challenge = await raiseSentinelChallenge(pool, goalId, [finding!.findingId], substance, proof, sentinelContext("raise"));
     expect(challenge.status).toBe("open");
-    expect(challenge.raisedBy).toBe("sentinel");
-    const corrected = await requestSentinelCorrection(pool, challenge.challengeId, "replace the stale worker with one bound to the current plan version");
+    expect(challenge.raisedBy).toBe("overwatch-sentinel");
+    const retry = await raiseSentinelChallenge(pool, goalId, [finding!.findingId], substance, proof, sentinelContext("retry"));
+    expect(retry).toEqual(challenge);
+    await expect(pool.query("SELECT challenge_id FROM sentinel_challenges WHERE goal_id = $1", [goalId])).resolves.toMatchObject({ rowCount: 1 });
+    const corrected = await requestSentinelCorrection(pool, challenge.challengeId, "replace the stale worker with one bound to the current plan version", proof, sentinelContext("correction"));
     expect(corrected.status).toBe("correction_requested");
-    const resolved = await resolveSentinelChallenge(pool, challenge.challengeId, "head:product", "worker replaced");
+    const resolved = await resolveSentinelChallenge(pool, challenge.challengeId, "head:product", "worker replaced", proof, headContext("product"));
     expect(resolved.status).toBe("resolved");
     expect(resolved.resolvedBy).toBe("head:product");
   });
 
   it("rejects Sentinel resolving its own challenge and rejects a challenge citing a nonexistent finding or fabricated evidence", async () => {
-    const { goalId } = await setupGoalWithFinding();
-    const challenge = await raiseSentinelChallenge(pool, goalId, [], { reason: "generic concern", evidenceReferences: [] });
-    await expect(resolveSentinelChallenge(pool, challenge.challengeId, "sentinel", "self-resolved")).rejects.toThrow();
-    await expect(raiseSentinelChallenge(pool, goalId, [randomUUID()], { reason: "x", evidenceReferences: [] })).rejects.toBeInstanceOf(SentinelChallengeError);
-    await expect(raiseSentinelChallenge(pool, goalId, [], { reason: "x", evidenceReferences: ["fabricated"] })).rejects.toBeInstanceOf(SentinelChallengeError);
+    const { goalId, proof } = await setupGoalWithFinding();
+    const challenge = await raiseSentinelChallenge(pool, goalId, [], { reason: "generic concern", evidenceReferences: [] }, proof, sentinelContext("raise"));
+    await expect(resolveSentinelChallenge(pool, challenge.challengeId, " overwatch-sentinel ", "self-resolved", proof, sentinelContext("self-resolution"))).rejects.toThrow();
+    await expect(raiseSentinelChallenge(pool, goalId, [randomUUID()], { reason: "x", evidenceReferences: [] }, proof, sentinelContext("bad-finding"))).rejects.toBeInstanceOf(SentinelChallengeError);
+    await expect(raiseSentinelChallenge(pool, goalId, [], { reason: "x", evidenceReferences: ["fabricated"] }, proof, sentinelContext("bad-evidence"))).rejects.toBeInstanceOf(SentinelChallengeError);
+  });
+
+  it("rolls back the safe pause when recording its challenge status fails", async () => {
+    const { goalId, projectId, proof } = await setupGoalWithFinding();
+    const challenge = await raiseSentinelChallenge(pool, goalId, [], { reason: "atomic pause", evidenceReferences: [] }, proof, sentinelContext("atomic-raise"));
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION fail_sentinel_safe_pause()
+      RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION 'injected safe-pause status failure';
+      END;
+      $$;
+    `);
+    await pool.query(`
+      CREATE TRIGGER sentinel_safe_pause_failure
+      BEFORE UPDATE OF status ON sentinel_challenges
+      FOR EACH ROW EXECUTE FUNCTION fail_sentinel_safe_pause();
+    `);
+    try {
+      await expect(requestSentinelSafePause(pool, challenge.challengeId, projectId, proof, sentinelContext("atomic-pause"))).rejects.toThrow("injected safe-pause status failure");
+    } finally {
+      await pool.query("DROP TRIGGER IF EXISTS sentinel_safe_pause_failure ON sentinel_challenges");
+      await pool.query("DROP FUNCTION IF EXISTS fail_sentinel_safe_pause()");
+    }
+    const control = await getGoalControl(pool, projectId, goalId);
+    expect(control.pauseRequestedAt).toBeUndefined();
+    await expect(readSentinelChallenge(pool, challenge.challengeId)).resolves.toMatchObject({ status: "open" });
   });
 
   it("requests a real safe pause through the Phase 1 authority mechanism and is idempotent/final once resolved", async () => {
-    const { goalId, projectId } = await setupGoalWithFinding();
-    const challenge = await raiseSentinelChallenge(pool, goalId, [], { reason: "material risk", evidenceReferences: [] });
-    const paused = await requestSentinelSafePause(pool, challenge.challengeId, projectId);
+    const { goalId, projectId, proof } = await setupGoalWithFinding();
+    const challenge = await raiseSentinelChallenge(pool, goalId, [], { reason: "material risk", evidenceReferences: [] }, proof, sentinelContext("raise"));
+    const paused = await requestSentinelSafePause(pool, challenge.challengeId, projectId, proof, sentinelContext("safe-pause"));
     expect(paused.status).toBe("safe_paused");
     const control = await getGoalControl(pool, projectId, goalId);
     expect(control.pauseRequestedAt).toBeDefined();
-    const resolved = await resolveSentinelChallenge(pool, challenge.challengeId, "sane", "reviewed and cleared");
-    const resolvedAgain = await resolveSentinelChallenge(pool, challenge.challengeId, "sane", "duplicate call");
+    const resolved = await resolveSentinelChallenge(pool, challenge.challengeId, "head:product", "reviewed and cleared", proof, headContext("product"));
+    const resolvedAgain = await resolveSentinelChallenge(pool, challenge.challengeId, "head:product", "duplicate call", proof, headContext("product"));
     expect(resolvedAgain).toEqual(resolved);
-    await expect(requestSentinelCorrection(pool, challenge.challengeId, "too late")).rejects.toBeInstanceOf(SentinelChallengeError);
+    await expect(requestSentinelCorrection(pool, challenge.challengeId, "too late", proof, sentinelContext("too-late"))).rejects.toBeInstanceOf(SentinelChallengeError);
     await expect(pool.query("UPDATE sentinel_challenges SET reason = 'tampered' WHERE challenge_id = $1", [challenge.challengeId])).rejects.toThrow();
+  });
+
+  it("rejects arbitrary actors from challenge mutation and rejects a project/Goal mismatch before pause", async () => {
+    const { goalId, projectId, proof } = await setupGoalWithFinding();
+    const challenge = await raiseSentinelChallenge(pool, goalId, [], { reason: "authorization boundary", evidenceReferences: [] }, proof, sentinelContext("raise"));
+    const intruder = context("intruder");
+    await expect(raiseSentinelChallenge(pool, goalId, [], { reason: "bare caller", evidenceReferences: [] })).rejects.toBeInstanceOf(SentinelAuthorizationError);
+    await expect(requestSentinelCorrection(pool, challenge.challengeId, "bounded correction", proof, intruder)).rejects.toThrow();
+    await expect(requestSentinelSafePause(pool, challenge.challengeId, randomUUID(), proof, sentinelContext("wrong-project"))).rejects.toThrow(/project/i);
+    await expect(resolveSentinelChallenge(pool, challenge.challengeId, "head:product", "intruder resolution", proof, intruder)).rejects.toThrow();
+    const control = await getGoalControl(pool, projectId, goalId);
+    expect(control.pauseRequestedAt).toBeUndefined();
   });
 
   it("throws SentinelChallengeNotFoundError for a missing challenge", async () => {
