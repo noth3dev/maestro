@@ -5,11 +5,12 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type InvocationObservation, type MissionBundleSubstance, type TaskContractSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
-import { acquireGoalLease } from "./commands.js";
+import { acquireGoalLease, executeGoalCommand } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { cancelWorker, observeWorker, readWorker, spawnWorker, WorkerError, WorkerNotFoundError } from "./worker.js";
+import { reconcileOnStartup } from "./reconciliation.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -119,7 +120,7 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
       await pool.query(sql);
     }
   });
-  beforeEach(async () => { await pool.query("TRUNCATE workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
+  beforeEach(async () => { await pool.query("TRUNCATE reconciler_leader_lease, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
   afterAll(async () => { await pool.end(); });
 
   it("spawns a worker for a real Mission Bundle by the captured Head and observes it to a terminal state", async () => {
@@ -134,6 +135,43 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     expect(observed.usageTotalTokens).toBe(42);
     const reobserved = await observeWorker(pool, kernel, worker.workerId);
     expect(reobserved).toEqual(observed);
+  });
+
+  it("reconciles a genuinely mid-flight worker after a fresh control-plane restart without duplicate effects or stale authority reuse", async () => {
+    const { council, plan, proof, goalId, projectId } = await setupBundle();
+    const preRestartKernel = fakeKernel("running");
+    const worker = await spawnWorker(pool, preRestartKernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    const captured = await observeWorker(pool, preRestartKernel, worker.workerId);
+    expect(captured.status).toBe("running");
+
+    // A new Pool and kernel stand in for a restarted control plane. The old
+    // Goal lease is still live because the worker is genuinely in flight.
+    // Reconciliation must report lease_contended rather than racing recovery:
+    // protecting the active execution is the correct outcome, not a failure.
+    const restartedPool = new Pool({ connectionString: databaseUrl });
+    const postRestartKernel = fakeKernel("running");
+    try {
+      const recovery = await reconcileOnStartup(restartedPool, { ownerId: "restarted-control-plane", leaderLeaseDurationMs: 60_000, goalLeaseDurationMs: 60_000 });
+      expect(recovery.results).toEqual([{
+        goalId,
+        projectId,
+        priorState: "active",
+        outcome: "lease_contended",
+        reasons: ["goal_lease_held_across_reconciliation"],
+      }]);
+      expect(await readWorker(restartedPool, worker.workerId)).toMatchObject({ workerId: worker.workerId, status: "running" });
+      expect((await restartedPool.query("SELECT count(*)::int AS count FROM workers WHERE council_id = $1", [council.councilId])).rows[0].count).toBe(1);
+
+      // Once the original lease is expired, a new owner may fence it out. The
+      // pre-restart proof is stale and must be rejected before any write.
+      await restartedPool.query("UPDATE goal_leases SET expires_at = clock_timestamp() - interval '1 millisecond' WHERE goal_id = $1", [goalId]);
+      const successorProof = await acquireGoalLease(restartedPool, { goalId, ownerId: "restarted-owner", leaseDurationMs: 60_000 });
+      await expect(executeGoalCommand(restartedPool, { commandId: randomUUID(), projectId, goalId, actorId: "old-process", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof)).rejects.toMatchObject({ code: "stale_lease" });
+      expect(successorProof.fencingToken).not.toBe(proof.fencingToken);
+      expect((await restartedPool.query("SELECT count(*)::int AS count FROM goal_events WHERE goal_id = $1", [goalId])).rows[0].count).toBe(0);
+    } finally {
+      await restartedPool.end();
+    }
   });
 
   it("rejects spawning a second worker while one is already active for the same mission", async () => {

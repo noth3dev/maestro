@@ -26,7 +26,9 @@ Complete the remaining Phase 1 durable control-plane safety foundations, then im
 - [complete_with_limitations] 8. Run the Phase 3 live-gate composition scenario on `phase3/p3s11-live-gate`; PostgreSQL gate passes, but full thirteen-step exit acceptance remains blocked by the evidenced live-Prime recursion-depth environment failure, in-flight Council/Quality restart, and app/CLI parity limitations documented in `progress.md`.
 
 ## Next step
-Run Phase 3 work-sequence step 11 (the complete live release scenario) when the PostgreSQL and live-Prime environment gates are available. Verify the thirteen live-gate steps, replayable evidence bundle, and no critical findings before treating Phase 3 as exit-gate accepted. Do not begin Phase 4+ work.
+Run Phase 3 work-sequence step 11 (the complete live release scenario) when the PostgreSQL and live-Prime environment gates are available.
+
+Current restart lane: forced mid-flight worker restart/reconciliation scenario is implemented on `phase3/p3s11-restart`; focused and full real-PostgreSQL checks pass pending parent merge. Verify the thirteen live-gate steps, replayable evidence bundle, and no critical findings before treating Phase 3 as exit-gate accepted. Do not begin Phase 4+ work.
 
 ## Errors encountered
 | Error | Resolution |

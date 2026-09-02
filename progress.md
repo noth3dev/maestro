@@ -284,3 +284,8 @@
 - Added a real-PostgreSQL composition test that requests a semantic review of an unsupported natural-language claim, verifies the claimed-supported/no-evidence result is downgraded to `unsupported`, confirms the uncertainty trigger, and runs a complete Overwatch Council round.
 - The round records each reviewer identity from `getModelIdentity`, labels the one-family fallback as `same-model-independent-review`, preserves minority dissent in synthesis, and proves sealed collection by checking zero persisted judgments during every reviewer prompt before all three are written.
 - Focused verification passed: 7 passed, 0 skipped, 0 failed. Full `npm run check` is required before acceptance.
+
+## 2026-09-03 (continued) — P3S11 forced mid-flight restart slice implemented
+- Added a real-PostgreSQL worker integration scenario that spawns and observes a worker in `running` (non-terminal) state, then reconnects through a fresh Pool and fresh kernel instance.
+- Restart reconciliation records `lease_contended` with `goal_lease_held_across_reconciliation`, preserving the active execution rather than racing recovery. The worker row remains singular. After lease expiry, the successor fencing token rejects the pre-restart proof with `stale_lease` and no event write occurs.
+- Focused verification: 8 passed, 0 failed.
