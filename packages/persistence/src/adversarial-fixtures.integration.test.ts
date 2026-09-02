@@ -17,8 +17,8 @@ import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, su
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, spawnWorker } from "./worker.js";
-import { recordDepartmentBranch, recordGoalIntegrationBranch, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
-import { certifyQuality, CertificationError } from "./certification.js";
+import { recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
+import { acceptDepartmentWorkerOutput, certifyQuality, CertificationError } from "./certification.js";
 import { raiseSentinelChallenge, SentinelChallengeError } from "./sentinel-challenge.js";
 import { requestSemanticReview } from "./semantic-review.js";
 import { runOverwatchCouncilReview } from "./overwatch-council.js";
@@ -35,11 +35,11 @@ const migrations = [
   "0023_mission_bundles.sql", "0024_workers.sql", "0025_team_lead_grants.sql", "0026_git_integration.sql", "0027_budget_reservations.sql",
   "0028_sentinel_findings.sql", "0029_sentinel_challenges.sql", "0030_semantic_reviews.sql", "0031_overwatch_council.sql",
   "0032_certifications.sql", "0033_conditional_certifications.sql", "0034_certification_waivers.sql", "0035_evidence_bundles.sql",
-  "0036_sane_final_reports.sql",
+  "0036_sane_final_reports.sql", "0037_sentinel_challenge_idempotency.sql", "0038_certification_report_hardening.sql",
 ];
 const tables = [
   "sane_final_reports", "evidence_bundles", "certification_conflict_resolutions", "certification_waivers", "conditional_certifications",
-  "quality_certifications", "department_acceptances", "overwatch_council_syntheses", "overwatch_council_judgments", "overwatch_council_rounds",
+  "quality_certifications", "certification_conflict_resolution_members", "department_acceptances", "goal_integration_revision_commits", "goal_integration_revisions", "overwatch_council_syntheses", "overwatch_council_judgments", "overwatch_council_rounds",
   "semantic_reviews", "sentinel_challenge_findings", "sentinel_challenges", "sentinel_findings", "budget_forecasts", "budget_reservations",
   "integration_commits", "worker_worktrees", "goal_integration_branches", "team_lead_grants", "workers", "mission_bundles",
   "department_plan_revisions", "department_plans", "council_protocol_events", "council_round_contributions", "council_rounds", "independent_briefs",
@@ -51,6 +51,7 @@ const tables = [
 
 const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `session:${label}`, commandId: randomUUID() });
 const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`, sessionRef: `opaque:${departmentId}`, commandId: randomUUID() });
+const sentinelContext = () => ({ actorId: "overwatch-sentinel", sessionRef: `sentinel-session:${randomUUID()}`, commandId: randomUUID() });
 const brief: IndependentBrief = {
   interpretation: "safe outcome", contribution: "review", nonGoals: [], assumptions: [], evidenceGaps: [], risks: [], dependencies: [],
   proposedValidation: [], expectedWorkers: [], expectedCost: "1", expectedTime: "1", objectionsToLikelyAlternatives: [],
@@ -171,7 +172,10 @@ async function setupWorkerWithRealCommit(pool: Pool, repositoryPath: string, bas
   await writeFile(join(worktreePath, "seeded-defect.txt"), "worker produced a green result");
   const commitResult = await localGitPort.commit(worktreePath, "mission: seed implementation defect", "worker", "worker@example.com");
   await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: seed implementation defect", evidenceIds);
-  return { goalId, projectId, contractId, council: resolvedCouncil, worker, evidenceIds, commitSha: commitResult.commitSha, worktreePath };
+  execFileSync("git", ["branch", "-f", "goal/integration", commitResult.commitSha], { cwd: repositoryPath });
+  await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product"));
+  await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
+  return { goalId, projectId, contractId, council: resolvedCouncil, worker, evidenceIds, commitSha: commitResult.commitSha, worktreePath, proof };
 }
 
 describeDatabase("Phase 3 adversarial fixtures with PostgreSQL", () => {
@@ -265,9 +269,9 @@ describeDatabase("Phase 3 adversarial fixtures with PostgreSQL", () => {
   });
 
   it("rejects forged evidence references in both Sentinel challenges and Quality certification", async () => {
-    const { goalId, worker } = await setupWorkerWithRealCommit(pool, repositoryPath, baseRevision, worktreePaths);
+    const { goalId, worker, proof } = await setupWorkerWithRealCommit(pool, repositoryPath, baseRevision, worktreePaths);
     const fabricatedEvidenceId = randomUUID();
-    await expect(raiseSentinelChallenge(pool, goalId, [], { reason: "forged challenge", evidenceReferences: [fabricatedEvidenceId] })).rejects.toBeInstanceOf(SentinelChallengeError);
+    await expect(raiseSentinelChallenge(pool, goalId, [], { reason: "forged challenge", evidenceReferences: [fabricatedEvidenceId] }, proof, sentinelContext())).rejects.toBeInstanceOf(SentinelChallengeError);
     await expect(certifyQuality(
       pool,
       worker.workerId,
