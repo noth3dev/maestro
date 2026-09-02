@@ -4,6 +4,8 @@ import {
   evaluateOverwatchTriggers,
   synthesizeOverwatchJudgments,
   type ExecutionKernelPort,
+  type InvocationObservation,
+  type InvocationStatus,
   type OverwatchJudgmentSubstance,
   type OverwatchSynthesis,
   type OverwatchTriggerReason,
@@ -52,6 +54,28 @@ interface RawJudgmentOutput {
   readonly citedEvidenceIds: readonly string[];
 }
 
+const MAX_TERMINAL_OBSERVATIONS = 8;
+
+function isTerminalStatus(status: InvocationStatus): boolean {
+  return status === "succeeded" || status === "failed" || status === "cancelled";
+}
+
+/** Observe until the adapter reports a terminal status, without trusting one
+ * queued/running/unknown snapshot as a submitted judgment. */
+async function observeTerminal(
+  kernel: ExecutionKernelPort,
+  execution: Parameters<ExecutionKernelPort["observe"]>[0],
+  invocation: Parameters<ExecutionKernelPort["cancel"]>[0],
+): Promise<InvocationObservation | undefined> {
+  let latest: InvocationObservation | undefined;
+  for (let attempt = 0; attempt < MAX_TERMINAL_OBSERVATIONS; attempt += 1) {
+    const observations = await kernel.observe(execution);
+    latest = observations.find((candidate) => candidate.invocation === invocation);
+    if (latest && isTerminalStatus(latest.status)) return latest;
+  }
+  return latest;
+}
+
 function parseJudgmentOutput(rawText: string): RawJudgmentOutput {
   const parsed = JSON.parse(rawText) as Record<string, unknown>;
   if (parsed.verdict !== "proceed" && parsed.verdict !== "do_not_proceed" && parsed.verdict !== "escalate") throw new OverwatchCouncilError("Invalid Overwatch judgment verdict");
@@ -94,19 +118,35 @@ export async function runOverwatchCouncilReview(pool: Pool, kernel: ExecutionKer
   // isolated lane, not a shared conversation -- before collecting any answer.
   const spawnedReviewers: { execution: unknown; invocation: unknown }[] = [];
   for (let index = 0; index < request.reviewerCount; index += 1) {
-    spawnedReviewers.push(await kernel.spawn({ name: `overwatch-review:${randomUUID()}:${index}`, prompt }));
+    // A root spawn admits an isolated session; it does not submit this prompt.
+    spawnedReviewers.push(await kernel.spawn({ name: `overwatch-review:${randomUUID()}:${index}`, cwd: process.cwd() }));
   }
   const judgments: (OverwatchJudgmentSubstance & { executionRef: string; invocationRef: string })[] = [];
   for (const spawned of spawnedReviewers) {
     const model = await kernel.getModelIdentity(spawned.execution as never);
-    const observations = await kernel.observe(spawned.execution as never);
-    const observation = observations.find((candidate) => candidate.invocation === spawned.invocation);
-    const rawText = observation?.answer.state === "available" ? observation.answer.text : "";
+    let observation: InvocationObservation | undefined;
+    let promptError: unknown;
+    try {
+      await kernel.prompt(spawned.execution as never, prompt);
+      observation = await observeTerminal(kernel, spawned.execution as never, spawned.invocation as never);
+    } catch (error) {
+      promptError = error;
+    }
+    const rawText = observation?.status === "succeeded" && observation.answer.state === "available"
+      ? observation.answer.text
+      : "";
     let output: RawJudgmentOutput;
     try {
       output = parseJudgmentOutput(rawText);
     } catch {
-      output = { verdict: "escalate", confidence: "low", reasoning: "unparseable reviewer output", conditions: [], dissentNote: null, citedEvidenceIds: [] };
+      output = {
+        verdict: "escalate",
+        confidence: "low",
+        reasoning: promptError instanceof Error ? `reviewer prompt failed: ${promptError.message}` : "unparseable reviewer output",
+        conditions: [],
+        dissentNote: null,
+        citedEvidenceIds: [],
+      };
     }
     const substance: OverwatchJudgmentSubstance = {
       modelProvider: model.provider, modelId: model.id, verdict: output.verdict, confidence: output.confidence,

@@ -5,6 +5,8 @@ import {
   parseSemanticReviewOutput,
   resolveSemanticReviewVerdict,
   type ExecutionKernelPort,
+  type InvocationObservation,
+  type InvocationStatus,
   type SemanticReviewCriterion,
   type SemanticReviewVerdict,
 } from "@maestro/domain";
@@ -30,6 +32,28 @@ function mapReview(row: ReviewRow): SemanticReview {
   return { reviewId: row.review_id, goalId: row.goal_id, claimText: row.claim_text, verdict: row.verdict, citedEvidenceIds: row.cited_evidence_ids, reasoning: row.reasoning };
 }
 
+const MAX_TERMINAL_OBSERVATIONS = 8;
+
+function isTerminalStatus(status: InvocationStatus): boolean {
+  return status === "succeeded" || status === "failed" || status === "cancelled";
+}
+
+/** Observe until the adapter reports a terminal status, without treating one
+ * queued/running/unknown snapshot as the review result. */
+async function observeTerminal(
+  kernel: ExecutionKernelPort,
+  execution: Parameters<ExecutionKernelPort["observe"]>[0],
+  invocation: Parameters<ExecutionKernelPort["cancel"]>[0],
+): Promise<InvocationObservation | undefined> {
+  let latest: InvocationObservation | undefined;
+  for (let attempt = 0; attempt < MAX_TERMINAL_OBSERVATIONS; attempt += 1) {
+    const observations = await kernel.observe(execution);
+    latest = observations.find((candidate) => candidate.invocation === invocation);
+    if (latest && isTerminalStatus(latest.status)) return latest;
+  }
+  return latest;
+}
+
 /**
  * Requests one isolated semantic review of a claim against fixed criteria.
  * "Isolated" means a fresh root execution with no parent -- it shares no
@@ -46,10 +70,20 @@ export async function requestSemanticReview(pool: Pool, kernel: ExecutionKernelP
   const durableIds = new Set(durable.rows.flatMap((row) => [row.evidence_id.trim(), row.sha256.trim()]));
 
   const prompt = buildSemanticReviewPrompt({ claimText, criteria, availableEvidenceIds: [...durableIds] });
-  const spawned = await kernel.spawn({ name: `semantic-review:${randomUUID()}`, prompt });
-  const observations = await kernel.observe(spawned.execution);
-  const observation = observations.find((candidate) => candidate.invocation === spawned.invocation);
-  const rawText = observation?.answer.state === "available" ? observation.answer.text : "";
+  const spawned = await kernel.spawn({ name: `semantic-review:${randomUUID()}`, cwd: process.cwd() });
+  let observation: InvocationObservation | undefined;
+  let promptError: unknown;
+  try {
+    // Prime's root spawn only admits the session. Submission is a separate
+    // operation and must happen before any terminal observation is trusted.
+    await kernel.prompt(spawned.execution, prompt);
+    observation = await observeTerminal(kernel, spawned.execution, spawned.invocation);
+  } catch (error) {
+    promptError = error;
+  }
+  const rawText = observation?.status === "succeeded" && observation.answer.state === "available"
+    ? observation.answer.text
+    : "";
 
   let verdict: SemanticReviewVerdict;
   let citedEvidenceIds: readonly string[];
@@ -63,7 +97,9 @@ export async function requestSemanticReview(pool: Pool, kernel: ExecutionKernelP
     if (!(error instanceof InvalidSemanticReviewOutputError)) throw error;
     verdict = "unsupported";
     citedEvidenceIds = [];
-    reasoning = `unparseable reviewer output: ${error.message}`;
+    reasoning = promptError instanceof Error
+      ? `reviewer prompt failed: ${promptError.message}`
+      : `unparseable reviewer output: ${error.message}`;
   }
 
   const reviewId = randomUUID();

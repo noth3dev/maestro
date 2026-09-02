@@ -7,6 +7,7 @@ type FakeSession = {
   runRlmChild: ReturnType<typeof vi.fn>;
   cancelRlmChildRun: ReturnType<typeof vi.fn>;
   prompt: ReturnType<typeof vi.fn>;
+  getLastAssistantText: ReturnType<typeof vi.fn>;
   subscribe: ReturnType<typeof vi.fn>;
   abort: ReturnType<typeof vi.fn>;
   isStreaming: boolean;
@@ -26,6 +27,7 @@ function makeSession(): FakeSession {
     }),
     cancelRlmChildRun: vi.fn().mockReturnValue(true),
     prompt: vi.fn().mockResolvedValue(undefined),
+    getLastAssistantText: vi.fn().mockReturnValue("ROOT_OK"),
     subscribe: vi.fn().mockReturnValue(() => undefined),
     abort: vi.fn().mockResolvedValue(undefined),
     isStreaming: false,
@@ -66,6 +68,35 @@ describe("Prime execution-kernel adapter", () => {
       provider: "prime",
       id: "kimi",
     });
+  });
+
+  it("defaults an omitted root cwd to the current repository context", async () => {
+    const session = makeSession();
+    const factory = { create: vi.fn().mockResolvedValue({ session }) };
+    const kernel = createPrimeExecutionKernelFromFactory(factory);
+
+    await kernel.spawn({ name: "luna-root" });
+
+    expect(factory.create).toHaveBeenCalledWith({ cwd: process.cwd() });
+  });
+
+  it("does not submit a root prompt during spawn and exposes the terminal root reply after prompt", async () => {
+    const session = makeSession();
+    const factory = { create: vi.fn().mockResolvedValue({ session }) };
+    const kernel = createPrimeExecutionKernelFromFactory(factory);
+
+    const root = await kernel.spawn({ name: "luna-root", cwd: "/repo", prompt: "ROOT_PROMPT" });
+    expect(session.prompt).not.toHaveBeenCalled();
+    await kernel.prompt(root.execution, "ROOT_PROMPT");
+
+    expect(session.prompt).toHaveBeenCalledWith("ROOT_PROMPT");
+    expect(await kernel.observe(root.execution)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        invocation: root.invocation,
+        status: "succeeded",
+        answer: { state: "available", text: "ROOT_OK" },
+      }),
+    ]));
   });
 
   it("cancels an invocation once and treats later cancellation as already cancelled", async () => {

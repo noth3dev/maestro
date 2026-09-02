@@ -28,6 +28,8 @@ interface PrimeChildSnapshot {
 interface PrimeSession {
   model?: { provider?: string; id?: string } | undefined;
   prompt(text: string): Promise<void>;
+  /** Public Prime Agent SDK surface used to read the completed root reply. */
+  getLastAssistantText?(): string | undefined;
   runRlmChild(prompt: string, kwargs?: Record<string, unknown>): Promise<{
     rlm_child_id: string;
     name: string;
@@ -48,6 +50,9 @@ type RootRecord = {
   execution: ExecutionRef;
   name: string;
   cancelled: boolean;
+  status: InvocationStatus;
+  answerText?: string;
+  error?: string;
 };
 
 type ChildRecord = {
@@ -115,12 +120,22 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
   return {
     async spawn(request: SpawnRequest): Promise<SpawnedInvocation> {
       if (!request.parent) {
-        if (!request.cwd) throw new Error("A root execution requires cwd");
-        const { session } = await factory.create({ cwd: request.cwd });
+        // A root is always bound to an existing process/repository context. The
+        // public kernel supplies process.cwd() when callers omit cwd; the
+        // production factory below also pins that context instead of trusting a
+        // caller-provided path.
+        const cwd = request.cwd ?? process.cwd();
+        const { session } = await factory.create({ cwd });
         const execution = asExecutionRef(`execution-${++nextRoot}`);
         const invocation = nextPublicInvocation();
         sessions.set(execution, session);
-        roots.set(invocation, { invocation, execution, name: request.name, cancelled: false });
+        roots.set(invocation, {
+          invocation,
+          execution,
+          name: request.name,
+          cancelled: false,
+          status: "unknown",
+        });
         return { execution, invocation };
       }
 
@@ -140,8 +155,24 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
 
     async prompt(execution, text): Promise<void> {
       const session = sessions.get(execution);
-      if (!session) return unavailable("prompt");
-      await session.prompt(text);
+      const root = [...roots.values()].find((item) => item.execution === execution);
+      if (!session || !root) return unavailable("prompt");
+      root.status = "running";
+      delete root.answerText;
+      delete root.error;
+      try {
+        await session.prompt(text);
+        if (root.cancelled) return;
+        root.status = "succeeded";
+        const answerText = session.getLastAssistantText?.();
+        if (answerText !== undefined) root.answerText = answerText;
+      } catch (error) {
+        if (!root.cancelled) {
+          root.status = "failed";
+          root.error = error instanceof Error ? error.message : String(error);
+        }
+        throw error;
+      }
     },
 
     async observe(execution): Promise<readonly InvocationObservation[]> {
@@ -152,10 +183,13 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
       const rootObservation: InvocationObservation[] = root ? [{
         invocation: root.invocation,
         name: root.name,
-        status: root.cancelled ? "cancelled" : session.isStreaming ? "running" : "unknown",
+        status: root.cancelled ? "cancelled" : root.status === "unknown" && session.isStreaming ? "running" : root.status,
         toolEvents: { state: "unavailable", reason: "provider-does-not-expose-tool-events" },
         usage: { state: "unavailable", reason: "provider-does-not-expose-usage" },
-        answer: { state: "unavailable", reason: "provider-does-not-expose-answer-text" },
+        answer: root.status === "succeeded" && root.answerText !== undefined
+          ? { state: "available", text: root.answerText }
+          : { state: "unavailable", reason: "provider-does-not-expose-answer-text" },
+        ...(root.error ? { error: root.error } : {}),
       }] : [];
       const childObservations = [...children.values()]
         .filter((child) => child.parent === execution)
@@ -203,6 +237,7 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
         if (!session) return { cancelled: false };
         await session.abort();
         root.cancelled = true;
+        root.status = "cancelled";
         return { cancelled: true };
       }
       const child = children.get(invocation);
@@ -242,7 +277,7 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
       if (root) {
         if (root.cancelled) return "cancelled";
         const session = sessions.get(root.execution);
-        return session?.isStreaming ? "running" : "unknown";
+        return root.status === "unknown" && session?.isStreaming ? "running" : root.status;
       }
       const child = children.get(invocation);
       if (!child) return "failed";
@@ -264,8 +299,11 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
 }
 
 export function createPrimeExecutionKernel(): ExecutionKernelPort {
+  // Pin the real SDK session to the process' existing repository context. A
+  // caller cannot redirect the production root session through SpawnRequest.cwd.
+  const cwd = process.cwd();
   return createPrimeExecutionKernelFromFactory({
-    async create({ cwd }) {
+    async create() {
       return createAgentSession({
         cwd,
         sessionManager: SessionManager.inMemory(cwd),
