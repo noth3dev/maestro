@@ -1,4 +1,7 @@
 import { expect, test } from "vitest";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { ExecutionKernelUnavailableError } from "@maestro/domain";
 import { createPrimeExecutionKernel } from "./execution-kernel.js";
 
@@ -60,6 +63,28 @@ test.skipIf(!runLive)(
     } catch (error) {
       expect(error).toBeInstanceOf(ExecutionKernelUnavailableError);
       console.info("Prime model identity unavailable", error);
+    }
+  },
+  180_000,
+);
+
+
+test.skipIf(!runLive)(
+  "runs a real Prime child worker against a disposable fixture",
+  async () => {
+    const fixture = mkdtempSync(join(tmpdir(), "maestro-live-worker-"));
+    try {
+      const kernel = createPrimeExecutionKernel();
+      const root = await kernel.spawn({ name: "maestro-live-root", cwd: fixture });
+      const child = await kernel.spawn({
+        parent: root.execution, name: "maestro-live-worker", cwd: fixture,
+        prompt: "In this disposable fixture, write a file named result.txt containing exactly PRIME_WORKER_OK, then run node -e to assert its contents. Do not modify any other path. Finally reply to the parent with exactly PRIME_WORKER_DONE.",
+      });
+      const result = await waitForChildReply(kernel, root.execution, child.invocation);
+      expect(result.status).toBe("succeeded");
+      expect(readFileSync(join(fixture, "result.txt"), "utf8")).toBe("PRIME_WORKER_OK");
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
     }
   },
   180_000,
