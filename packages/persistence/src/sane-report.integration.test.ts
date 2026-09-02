@@ -117,7 +117,7 @@ describeDatabase("Sane final report with PostgreSQL", () => {
     await fs.writeFile(join(worktreePath, "change.txt"), "the change");
     const commitResult = await localGitPort.commit(worktreePath, "mission: implement", "worker", "worker@example.com");
     await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: implement", evidenceIds);
-    execFileSync("git", ["branch", "--force", "goal/integration", commitResult.commitSha], { cwd: repositoryPath });
+    await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
     await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product"));
     await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
     return { goalId, council: resolved, worker, evidenceIds };
