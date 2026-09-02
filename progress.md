@@ -279,3 +279,8 @@
 - Inspection found `apps/cli/src/main.ts` exposes command execution only and `apps/control-plane/src/server.ts` exposes Goal/critical-action routes; neither has read routes for Sentinel challenges, Overwatch Council state, certification state, or Sane reports. App/CLI parity cannot yet be exercised without inventing a new surface.
 - Existing `adversarial-fixtures.integration.test.ts` proves unsupported semantic downgrade and same-model disagreement synthesis separately, but the new live-gate composition does not chain those into one Council round.
 - This is not a claim that all thirteen prose live-gate steps are met: the scenario still uses the project's deterministic fake ExecutionKernel rather than a live Prime Agent process, does not execute a full unsupported-assertion Overwatch Council round/recovery interruption during Council or Quality, and there is no separate app/CLI parity surface for this scenario. Unauthorized remote push is proven structurally by the Git port's absent capability.
+
+## 2026-09-03 — P3S11 council unsupported-assertion round
+- Added a real-PostgreSQL composition test that requests a semantic review of an unsupported natural-language claim, verifies the claimed-supported/no-evidence result is downgraded to `unsupported`, confirms the uncertainty trigger, and runs a complete Overwatch Council round.
+- The round records each reviewer identity from `getModelIdentity`, labels the one-family fallback as `same-model-independent-review`, preserves minority dissent in synthesis, and proves sealed collection by checking zero persisted judgments during every reviewer prompt before all three are written.
+- Focused verification passed: 7 passed, 0 skipped, 0 failed. Full `npm run check` is required before acceptance.

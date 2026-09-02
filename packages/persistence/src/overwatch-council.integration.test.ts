@@ -5,6 +5,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { ExecutionKernelPort } from "@maestro/domain";
 import { evaluateOverwatchCouncilTrigger, OverwatchCouncilError, runOverwatchCouncilReview } from "./overwatch-council.js";
+import { requestSemanticReview } from "./semantic-review.js";
 import { acquireGoalLease } from "./commands.js";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { raiseSentinelChallenge } from "./sentinel-challenge.js";
@@ -121,6 +122,66 @@ describeDatabase("Overwatch Council with PostgreSQL", () => {
     const result = await runOverwatchCouncilReview(pool, kernel, { goalId, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
     expect(result.synthesis.sameModelOnly).toBe(true);
     await expect(runOverwatchCouncilReview(pool, kernel, { goalId, question: "q", criteria, evidenceIds: ["fabricated"], reviewerCount: 1 })).rejects.toBeInstanceOf(OverwatchCouncilError);
+  });
+
+  it("composes unsupported semantic uncertainty into a sealed same-model Council round", async () => {
+    const { goalId, evidenceId } = await setupGoalWithEvidence();
+    const councilAnswer = (verdict: string, dissentNote: string | null) => JSON.stringify({
+      verdict, confidence: "high", reasoning: verdict === "proceed" ? "claim lacks support" : "uncertainty requires adjudication",
+      conditions: [], dissentNote, citedEvidenceIds: [evidenceId],
+    });
+    const answers = [
+      JSON.stringify({ verdict: "supported", citedEvidenceIds: [], reasoning: "the claim sounds plausible" }),
+      councilAnswer("proceed", null),
+      councilAnswer("do_not_proceed", "Unsupported claim must not be treated as established."),
+      councilAnswer("proceed", null),
+    ];
+    const sealedCounts: number[] = [];
+    let next = 0;
+    const executions = new Map<string, string>();
+    const kernel: ExecutionKernelPort = {
+      async spawn() { const execution = `council-round-exec-${next}`; executions.set(execution, `council-round-inv-${next}`); next += 1; return { execution: execution as never, invocation: executions.get(execution) as never }; },
+      async prompt(execution, prompt) {
+        if (prompt.includes("Overwatch Council reviewers")) {
+          const count = await pool.query("SELECT count(*)::int AS count FROM overwatch_council_judgments");
+          sealedCounts.push(Number(count.rows[0]!.count));
+        }
+      },
+      async sendMessage() {},
+      async observe(execution) {
+        const invocation = executions.get(execution as unknown as string)!;
+        const index = Number((execution as unknown as string).split("-").at(-1));
+        return [{ invocation: invocation as never, name: "reviewer", status: "succeeded", toolEvents: { state: "empty", events: [] }, usage: { state: "available", totalTokens: 1 }, answer: { state: "available", text: answers[index]! } }];
+      },
+      async cancel() { return { cancelled: true }; },
+      async getModelIdentity() { return { provider: "prime", id: "kimi" }; },
+      async getToolEvents() { return { state: "empty", events: [] }; },
+      async getUsage() { return { state: "available", totalTokens: 1 }; },
+      async getInvocationStatus() { return "succeeded"; },
+      async resume() { throw new Error("not supported"); },
+      async reconnect() { throw new Error("not supported"); },
+    };
+
+    const semantic = await requestSemanticReview(pool, kernel, goalId, "the release is safe", criteria);
+    expect(semantic.verdict).toBe("unsupported");
+    expect(semantic.citedEvidenceIds).toEqual([]);
+    expect(await evaluateOverwatchCouncilTrigger(pool, goalId)).toContain("high_uncertainty_semantic_review");
+
+    const result = await runOverwatchCouncilReview(pool, kernel, {
+      goalId, question: "Should this unsupported claim be allowed to influence release?", criteria, evidenceIds: [evidenceId], reviewerCount: 3,
+    });
+    expect(result.judgments).toHaveLength(3);
+    expect(result.judgments.every((judgment) => judgment.modelProvider === "prime" && judgment.modelId === "kimi")).toBe(true);
+    expect(result.synthesis.sameModelOnly).toBe(true);
+    expect(result.synthesis.escalated).toBe(true);
+    expect(result.synthesis.finalVerdict).toBe("escalate");
+    expect(result.synthesis.dissentNotes).toEqual(["Unsupported claim must not be treated as established."]);
+    // This is the honest fallback label required when only one model family is available.
+    expect(result.synthesis.sameModelOnly ? "same-model-independent-review" : "multi-model-independent-review").toBe("same-model-independent-review");
+    // No judgment is persisted until every isolated reviewer has answered.
+    expect(sealedCounts).toEqual([0, 0, 0]);
+    const stored = await pool.query("SELECT count(*)::int AS count FROM overwatch_council_judgments");
+    expect(Number(stored.rows[0]!.count)).toBe(3);
   });
 
   it("rejects direct tampering with immutable Overwatch Council records", async () => {
