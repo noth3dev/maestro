@@ -12,6 +12,7 @@ export interface EvidenceBundle {
   readonly taskContract: Readonly<Record<string, unknown>> | null;
   readonly council: Readonly<Record<string, unknown>> | null;
   readonly departmentPlans: readonly Readonly<Record<string, unknown>>[];
+  readonly departmentPlanRevisions: readonly Readonly<Record<string, unknown>>[];
   readonly workers: readonly Readonly<Record<string, unknown>>[];
   readonly gitIntegration: Readonly<Record<string, unknown>>;
   readonly certifications: Readonly<Record<string, unknown>>;
@@ -19,6 +20,8 @@ export interface EvidenceBundle {
   readonly sentinelChallenges: readonly Readonly<Record<string, unknown>>[];
   readonly overwatchRounds: readonly Readonly<Record<string, unknown>>[];
   readonly budgetReservations: readonly Readonly<Record<string, unknown>>[];
+  /** Full durable evidence metadata referenced by certification and replay. */
+  readonly evidenceRecords: readonly Readonly<Record<string, unknown>>[];
   readonly assembledAt: string;
 }
 

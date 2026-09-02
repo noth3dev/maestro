@@ -32,8 +32,8 @@ export async function commit(worktreePath: string, message: string, authorName: 
   return { commitSha };
 }
 
-export async function headRevision(worktreePath: string): Promise<string> {
-  return runGit(["rev-parse", "HEAD"], worktreePath);
+export async function headRevision(repositoryPath: string, ref = "HEAD"): Promise<string> {
+  return runGit(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`], repositoryPath);
 }
 
 export async function removeWorktree(repositoryPath: string, worktreePath: string): Promise<void> {

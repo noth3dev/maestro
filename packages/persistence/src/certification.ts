@@ -19,8 +19,8 @@ function mapAcceptance(row: AcceptanceRow): DepartmentAcceptance {
   return { acceptanceId: row.acceptance_id, workerId: row.worker_id, commitSha: row.commit_sha, reason: row.reason, acceptedBy: row.accepted_by };
 }
 
-async function assertAuthorizedDepartmentHead(pool: Pool, councilId: string, departmentId: string, context: CouncilActorContext): Promise<void> {
-  const council = await readHeadCouncil(pool, councilId);
+async function assertAuthorizedDepartmentHead(pool: Pool, councilId: string, departmentId: string, context: CouncilActorContext, councilOverride?: Awaited<ReturnType<typeof readHeadCouncil>>): Promise<void> {
+  const council = councilOverride ?? await readHeadCouncil(pool, councilId);
   const captured = council.snapshot.participants.find((participant) => (participant.departmentId ?? participant.participantId) === departmentId);
   if (captured === undefined) throw new CertificationError(`Department is not a captured Council participant: ${departmentId}`);
   const authorized = captured.headRoleId !== undefined
@@ -28,8 +28,8 @@ async function assertAuthorizedDepartmentHead(pool: Pool, councilId: string, dep
     : context.actorId === captured.participantId && context.sessionRef === captured.sessionRef;
   if (!authorized) throw new CertificationError("Actor is not bound to the captured Head identity and session");
   const active = await pool.query(
-    "SELECT 1 FROM goal_head_participations WHERE goal_id = $1 AND department_id = $2 AND status = 'active' AND active_session_ref = $3",
-    [council.goalId, departmentId, captured.sessionRef],
+    "SELECT 1 FROM goal_head_participations WHERE goal_id = $1 AND department_id = $2 AND contract_id = $3 AND head_role_id = $4 AND status = 'active' AND active_session_ref = $5",
+    [council.goalId, departmentId, council.contractId, captured.headRoleId ?? captured.participantId, captured.sessionRef],
   );
   if (active.rowCount !== 1) throw new CertificationError("Captured Head session is no longer authorized");
 }
@@ -66,6 +66,9 @@ export interface QualityCertification {
   readonly contractVersion: number;
   readonly contractContentHash: string;
   readonly integratedCommitSha: string;
+  readonly workerId: string;
+  readonly departmentAcceptanceId: string;
+  readonly integrationRevisionId: string;
   readonly verdict: QualityVerdict;
   readonly certifiedByDepartment: string;
   readonly producingDepartment: string;
@@ -73,59 +76,29 @@ export interface QualityCertification {
 
 interface CertRow {
   certification_id: string; goal_id: string; contract_id: string; contract_version: string; contract_content_hash: string;
-  integrated_commit_sha: string; verdict: QualityVerdict; certified_by_department: string; producing_department: string;
+  integrated_commit_sha: string; worker_id: string; department_acceptance_id: string; integration_revision_id: string;
+  verdict: QualityVerdict; certified_by_department: string; producing_department: string;
 }
 function mapCert(row: CertRow): QualityCertification {
   return {
     certificationId: row.certification_id, goalId: row.goal_id, contractId: row.contract_id, contractVersion: Number(row.contract_version),
-    contractContentHash: row.contract_content_hash.trim(), integratedCommitSha: row.integrated_commit_sha, verdict: row.verdict,
-    certifiedByDepartment: row.certified_by_department, producingDepartment: row.producing_department,
+    contractContentHash: row.contract_content_hash.trim(), integratedCommitSha: row.integrated_commit_sha.trim(),
+    workerId: row.worker_id, departmentAcceptanceId: row.department_acceptance_id, integrationRevisionId: row.integration_revision_id,
+    verdict: row.verdict, certifiedByDepartment: row.certified_by_department, producingDepartment: row.producing_department,
   };
 }
-
-/**
- * Quality independently certifies the integrated Goal revision against the
- * exact Task Contract identity. The certifying Department can never be the
- * same as the producing Department ("Producer cannot issue the independent
- * Quality certification"); it must itself be a captured, currently active
- * Council participant Head, not merely any caller.
- */
-export async function certifyQuality(pool: Pool, workerId: string, substance: QualityCertificationSubstance, certifyingDepartmentId: string, context: CouncilActorContext): Promise<QualityCertification> {
-  assertValidQualityCertificationSubstance(substance);
-  const worker = await pool.query<{ council_id: string; department_id: string }>("SELECT council_id, department_id FROM workers WHERE worker_id = $1", [workerId]);
-  if (worker.rowCount !== 1) throw new CertificationNotFoundError(`Worker not found: ${workerId}`);
-  const { council_id: councilId, department_id: producingDepartment } = worker.rows[0]!;
-  if (certifyingDepartmentId === producingDepartment) throw new CertificationError("The producing Department cannot issue its own Quality certification");
-  const council = await readHeadCouncil(pool, councilId);
-  await assertAuthorizedDepartmentHead(pool, councilId, certifyingDepartmentId, context);
-  const commit = await pool.query<{ commit_sha: string }>("SELECT commit_sha FROM integration_commits WHERE worker_id = $1 ORDER BY recorded_at DESC LIMIT 1", [workerId]);
-  if (commit.rowCount !== 1) throw new CertificationError("Worker has no recorded integration commit to certify");
-  const contract = await pool.query<{ version: string; content_hash: string }>("SELECT version, content_hash FROM task_contracts WHERE contract_id = $1", [council.contractId]);
-  if (contract.rowCount !== 1) throw new CertificationError("Task Contract not found for Quality certification");
-  const project = await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [council.goalId]);
-  const durable = await pool.query<{ evidence_id: string; sha256: string }>("SELECT evidence_id, sha256 FROM evidence_records WHERE goal_id = $1 AND project_id = $2", [council.goalId, project.rows[0]!.project_id]);
-  const durableIds = new Set(durable.rows.flatMap((row) => [row.evidence_id.trim(), row.sha256.trim()]));
-  for (const evidenceId of substance.testEvidenceIds) if (!durableIds.has(evidenceId.trim())) throw new CertificationError(`Quality certification test evidence is not durable: ${evidenceId}`);
-  const inserted = await pool.query<CertRow>(
-    `INSERT INTO quality_certifications (certification_id, goal_id, contract_id, contract_version, contract_content_hash, integrated_commit_sha, verdict, findings, test_evidence_ids, certified_by_department, producing_department)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11)
-     RETURNING certification_id, goal_id, contract_id, contract_version, contract_content_hash, integrated_commit_sha, verdict, certified_by_department, producing_department`,
-    [randomUUID(), council.goalId, council.contractId, contract.rows[0]!.version, contract.rows[0]!.content_hash, commit.rows[0]!.commit_sha, substance.verdict, JSON.stringify(substance.findings), JSON.stringify(substance.testEvidenceIds), certifyingDepartmentId, producingDepartment],
-  );
-  return mapCert(inserted.rows[0]!);
-}
-
-export async function listQualityCertifications(pool: Pool, goalId: string): Promise<readonly QualityCertification[]> {
-  const result = await pool.query<CertRow>("SELECT certification_id, goal_id, contract_id, contract_version, contract_content_hash, integrated_commit_sha, verdict, certified_by_department, producing_department FROM quality_certifications WHERE goal_id = $1 ORDER BY created_at", [goalId]);
-  return result.rows.map(mapCert);
-}
-
 
 export interface ConditionalCertification {
   readonly certificationId: string;
   readonly kind: "security" | "safety_compliance";
   readonly goalId: string;
   readonly contractId: string;
+  readonly contractVersion: number;
+  readonly contractContentHash: string;
+  readonly integratedCommitSha: string;
+  readonly workerId: string;
+  readonly departmentAcceptanceId: string;
+  readonly integrationRevisionId: string;
   readonly verdict: QualityVerdict;
   readonly certifiedByDepartment: string;
   readonly producingDepartment: string;
@@ -133,58 +106,202 @@ export interface ConditionalCertification {
 
 interface ConditionalCertRow {
   certification_id: string; kind: "security" | "safety_compliance"; goal_id: string; contract_id: string;
+  contract_version: string; contract_content_hash: string; integrated_commit_sha: string;
+  worker_id: string; department_acceptance_id: string; integration_revision_id: string;
   verdict: QualityVerdict; certified_by_department: string; producing_department: string;
 }
 function mapConditionalCert(row: ConditionalCertRow): ConditionalCertification {
   return {
     certificationId: row.certification_id, kind: row.kind, goalId: row.goal_id, contractId: row.contract_id,
+    contractVersion: Number(row.contract_version), contractContentHash: row.contract_content_hash.trim(), integratedCommitSha: row.integrated_commit_sha.trim(),
+    workerId: row.worker_id, departmentAcceptanceId: row.department_acceptance_id, integrationRevisionId: row.integration_revision_id,
     verdict: row.verdict, certifiedByDepartment: row.certified_by_department, producingDepartment: row.producing_department,
   };
 }
 
+type CertificationKind = "quality" | "security" | "safety_compliance";
+interface CertificationLineage {
+  readonly goalId: string;
+  readonly councilId: string;
+  readonly contractId: string;
+  readonly contractVersion: string;
+  readonly contractContentHash: string;
+  readonly integratedCommitSha: string;
+  readonly workerId: string;
+  readonly producingDepartment: string;
+  readonly departmentAcceptanceId: string;
+  readonly integrationRevisionId: string;
+}
+
 /**
- * Certifies Security or Safety & Compliance for a worker's integrated
- * output, with the exact same non-negotiable guarantees as Quality
- * certification: the producing Department can never certify itself, the
- * certifying Department must be a captured, currently active Council Head,
- * and the certification binds the exact Task Contract identity and the
- * exact integrated commit -- never caller-supplied values. Callers decide
- * WHETHER a certification of this kind is required for a given Goal via
- * `requiredConditionalCertifications` (a risk-triggered policy, not
- * enforced by this function itself).
+ * Read and lock every identity fact needed by a certification.  In particular,
+ * the accepted commit and the frozen Goal revision come from durable rows;
+ * callers cannot supply a SHA or a contract version to certify.
  */
-export async function certifyConditional(pool: Pool, kind: "security" | "safety_compliance", workerId: string, substance: QualityCertificationSubstance, certifyingDepartmentId: string, context: CouncilActorContext): Promise<ConditionalCertification> {
-  assertValidQualityCertificationSubstance(substance);
+async function readCertificationLineage(
+  pool: Pool,
+  kind: CertificationKind,
+  workerId: string,
+  certifyingDepartmentId: string,
+  context: CouncilActorContext,
+): Promise<{ lineage: CertificationLineage; client: import("pg").PoolClient; council: Awaited<ReturnType<typeof readHeadCouncil>> }> {
   const worker = await pool.query<{ council_id: string; department_id: string }>("SELECT council_id, department_id FROM workers WHERE worker_id = $1", [workerId]);
   if (worker.rowCount !== 1) throw new CertificationNotFoundError(`Worker not found: ${workerId}`);
   const { council_id: councilId, department_id: producingDepartment } = worker.rows[0]!;
+  if (kind === "quality" && certifyingDepartmentId !== "quality") throw new CertificationError("Quality certification requires the Quality Department authority");
+  const requiredAuthority = kind === "safety_compliance" ? "safety-compliance" : kind;
+  if (certifyingDepartmentId !== requiredAuthority) throw new CertificationError(`${kind} certification requires the ${requiredAuthority} Department authority`);
   if (certifyingDepartmentId === producingDepartment) throw new CertificationError(`The producing Department cannot issue its own ${kind} certification`);
   const council = await readHeadCouncil(pool, councilId);
-  await assertAuthorizedDepartmentHead(pool, councilId, certifyingDepartmentId, context);
-  const commit = await pool.query<{ commit_sha: string }>("SELECT commit_sha FROM integration_commits WHERE worker_id = $1 ORDER BY recorded_at DESC LIMIT 1", [workerId]);
-  if (commit.rowCount !== 1) throw new CertificationError(`Worker has no recorded integration commit to certify for ${kind}`);
-  const contract = await pool.query<{ version: string; content_hash: string }>("SELECT version, content_hash FROM task_contracts WHERE contract_id = $1", [council.contractId]);
-  if (contract.rowCount !== 1) throw new CertificationError("Task Contract not found for certification");
-  const project = await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [council.goalId]);
-  const durable = await pool.query<{ evidence_id: string; sha256: string }>("SELECT evidence_id, sha256 FROM evidence_records WHERE goal_id = $1 AND project_id = $2", [council.goalId, project.rows[0]!.project_id]);
-  const durableIds = new Set(durable.rows.flatMap((row) => [row.evidence_id.trim(), row.sha256.trim()]));
-  for (const evidenceId of substance.testEvidenceIds) if (!durableIds.has(evidenceId.trim())) throw new CertificationError(`${kind} certification test evidence is not durable: ${evidenceId}`);
-  const inserted = await pool.query<ConditionalCertRow>(
-    `INSERT INTO conditional_certifications (certification_id, kind, goal_id, contract_id, contract_version, contract_content_hash, integrated_commit_sha, verdict, findings, test_evidence_ids, certified_by_department, producing_department)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12)
-     RETURNING certification_id, kind, goal_id, contract_id, verdict, certified_by_department, producing_department`,
-    [randomUUID(), kind, council.goalId, council.contractId, contract.rows[0]!.version, contract.rows[0]!.content_hash, commit.rows[0]!.commit_sha, substance.verdict, JSON.stringify(substance.findings), JSON.stringify(substance.testEvidenceIds), certifyingDepartmentId, producingDepartment],
+  await assertAuthorizedDepartmentHead(pool, councilId, certifyingDepartmentId, context, council);
+
+  const client = await pool.connect();
+  let open = false;
+  try {
+    await client.query("BEGIN"); open = true;
+    const lockedWorker = await client.query<{ council_id: string; department_id: string; status: string }>(
+      "SELECT council_id, department_id, status FROM workers WHERE worker_id = $1 FOR UPDATE", [workerId],
+    );
+    if (lockedWorker.rowCount !== 1) throw new CertificationNotFoundError(`Worker not found: ${workerId}`);
+    if (lockedWorker.rows[0]!.council_id !== councilId) throw new CertificationError("Worker Council identity changed during certification");
+    if (lockedWorker.rows[0]!.status !== "succeeded") throw new CertificationError("Only a worker that terminated successfully can be certified");
+
+    const contract = await client.query<{ version: string; content_hash: string; launch_state: string }>(
+      "SELECT version, content_hash, launch_state FROM task_contracts WHERE contract_id = $1 FOR SHARE", [council.contractId],
+    );
+    if (contract.rowCount !== 1) throw new CertificationError("Task Contract not found for certification");
+    const contractRow = contract.rows[0]!;
+    const snapshotContract = council.snapshot.contract;
+    if (Number(contractRow.version) !== snapshotContract.version || contractRow.content_hash.trim() !== snapshotContract.contentHash) {
+      throw new CertificationError("Council and worker lineage is stale after a Task Contract amendment");
+    }
+    if (contractRow.launch_state !== "launched") throw new CertificationError("Task Contract is not launched");
+
+    const acceptance = await client.query<{ acceptance_id: string; commit_sha: string }>(
+      "SELECT acceptance_id, commit_sha FROM department_acceptances WHERE worker_id = $1 FOR SHARE", [workerId],
+    );
+    if (acceptance.rowCount !== 1) throw new CertificationError("Worker output requires durable Department acceptance before certification");
+    const accepted = acceptance.rows[0]!;
+    const revision = await client.query<{ revision_id: string; commit_sha: string }>(
+      "SELECT revision_id, commit_sha FROM goal_integration_revisions WHERE goal_id = $1 ORDER BY revision_number DESC LIMIT 1 FOR SHARE", [council.goalId],
+    );
+    if (revision.rowCount !== 1) throw new CertificationError("Goal has no frozen integrated revision");
+    const currentRevision = revision.rows[0]!;
+    if (!/^[0-9a-f]{40}$/.test(currentRevision.commit_sha.trim())) {
+      throw new CertificationError("Goal integration revision is invalid");
+    }
+    const member = await client.query(
+      `SELECT 1 FROM goal_integration_revision_commits
+        WHERE revision_id = $1 AND worker_id = $2 AND commit_sha = $3`,
+      [currentRevision.revision_id, workerId, accepted.commit_sha],
+    );
+    if (member.rowCount !== 1) throw new CertificationError("Accepted worker commit is not included in the current Goal integration revision");
+    const active = await client.query(
+      `SELECT 1 FROM goal_head_participations
+        WHERE goal_id = $1 AND department_id = $2 AND contract_id = $3
+          AND head_role_id = $4 AND status = 'active' AND active_session_ref = $5
+        FOR SHARE`,
+      [council.goalId, certifyingDepartmentId, council.contractId, council.snapshot.participants.find((participant) => (participant.departmentId ?? participant.participantId) === certifyingDepartmentId)?.headRoleId ?? certifyingDepartmentId, context.sessionRef],
+    );
+    if (active.rowCount !== 1) throw new CertificationError("Certifying Head session is no longer authorized");
+    return {
+      lineage: {
+        goalId: council.goalId, councilId, contractId: council.contractId, contractVersion: contractRow.version,
+        contractContentHash: contractRow.content_hash.trim(), integratedCommitSha: accepted.commit_sha.trim(), workerId,
+        producingDepartment, departmentAcceptanceId: accepted.acceptance_id, integrationRevisionId: currentRevision.revision_id,
+      },
+      client,
+      council,
+    };
+  } catch (error) {
+    if (open) await client.query("ROLLBACK");
+    client.release();
+    throw error;
+  }
+}
+
+async function createCertification(
+  pool: Pool,
+  kind: CertificationKind,
+  workerId: string,
+  substance: QualityCertificationSubstance,
+  certifyingDepartmentId: string,
+  context: CouncilActorContext,
+): Promise<QualityCertification | ConditionalCertification> {
+  assertValidQualityCertificationSubstance(substance);
+  const prepared = await readCertificationLineage(pool, kind, workerId, certifyingDepartmentId, context);
+  const { lineage, client } = prepared;
+  try {
+    const project = await client.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [lineage.goalId]);
+    const durable = await client.query<{ evidence_id: string; sha256: string }>(
+      "SELECT evidence_id, sha256 FROM evidence_records WHERE goal_id = $1 AND project_id = $2", [lineage.goalId, project.rows[0]?.project_id],
+    );
+    const durableIds = new Set(durable.rows.flatMap((row) => [row.evidence_id.trim(), row.sha256.trim()]));
+    for (const evidenceId of substance.testEvidenceIds) if (!durableIds.has(evidenceId.trim())) throw new CertificationError(`${kind} certification test evidence is not durable: ${evidenceId}`);
+    const certificationId = randomUUID();
+    if (kind === "quality") {
+      const inserted = await client.query<CertRow>(
+        `INSERT INTO quality_certifications
+          (certification_id, goal_id, contract_id, contract_version, contract_content_hash,
+           integrated_commit_sha, verdict, findings, test_evidence_ids, certified_by_department,
+           producing_department, worker_id, department_acceptance_id, integration_revision_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12, $13, $14)
+         RETURNING certification_id, goal_id, contract_id, contract_version, contract_content_hash,
+           integrated_commit_sha, worker_id, department_acceptance_id, integration_revision_id,
+           verdict, certified_by_department, producing_department`,
+        [certificationId, lineage.goalId, lineage.contractId, lineage.contractVersion, lineage.contractContentHash, lineage.integratedCommitSha, substance.verdict, JSON.stringify(substance.findings), JSON.stringify(substance.testEvidenceIds), certifyingDepartmentId, lineage.producingDepartment, lineage.workerId, lineage.departmentAcceptanceId, lineage.integrationRevisionId],
+      );
+      await client.query("COMMIT");
+      return mapCert(inserted.rows[0]!);
+    }
+    const inserted = await client.query<ConditionalCertRow>(
+      `INSERT INTO conditional_certifications
+        (certification_id, kind, goal_id, contract_id, contract_version, contract_content_hash,
+         integrated_commit_sha, verdict, findings, test_evidence_ids, certified_by_department,
+         producing_department, worker_id, department_acceptance_id, integration_revision_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, $13, $14, $15)
+       RETURNING certification_id, kind, goal_id, contract_id, contract_version, contract_content_hash,
+         integrated_commit_sha, worker_id, department_acceptance_id, integration_revision_id,
+         verdict, certified_by_department, producing_department`,
+      [certificationId, kind, lineage.goalId, lineage.contractId, lineage.contractVersion, lineage.contractContentHash, lineage.integratedCommitSha, substance.verdict, JSON.stringify(substance.findings), JSON.stringify(substance.testEvidenceIds), certifyingDepartmentId, lineage.producingDepartment, lineage.workerId, lineage.departmentAcceptanceId, lineage.integrationRevisionId],
+    );
+    await client.query("COMMIT");
+    return mapConditionalCert(inserted.rows[0]!);
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    if (error instanceof CertificationError || error instanceof CertificationNotFoundError) throw error;
+    throw new CertificationError(error instanceof Error ? error.message : "Could not record certification");
+  } finally {
+    client.release();
+  }
+}
+
+/** Quality is an independent Department path; it cannot be replaced by Security or Safety authority. */
+export async function certifyQuality(pool: Pool, workerId: string, substance: QualityCertificationSubstance, certifyingDepartmentId: string, context: CouncilActorContext): Promise<QualityCertification> {
+  return await createCertification(pool, "quality", workerId, substance, certifyingDepartmentId, context) as QualityCertification;
+}
+
+export async function listQualityCertifications(pool: Pool, goalId: string): Promise<readonly QualityCertification[]> {
+  const result = await pool.query<CertRow>(
+    `SELECT certification_id, goal_id, contract_id, contract_version, contract_content_hash,
+      integrated_commit_sha, worker_id, department_acceptance_id, integration_revision_id,
+      verdict, certified_by_department, producing_department
+       FROM quality_certifications WHERE goal_id = $1 ORDER BY created_at, certification_id`, [goalId],
   );
-  return mapConditionalCert(inserted.rows[0]!);
+  return result.rows.filter((row) => row.worker_id !== null && row.integration_revision_id !== null).map(mapCert);
+}
+
+/** Conditional certification is available only to its designated authority Department. */
+export async function certifyConditional(pool: Pool, kind: "security" | "safety_compliance", workerId: string, substance: QualityCertificationSubstance, certifyingDepartmentId: string, context: CouncilActorContext): Promise<ConditionalCertification> {
+  return await createCertification(pool, kind, workerId, substance, certifyingDepartmentId, context) as ConditionalCertification;
 }
 
 export async function listConditionalCertifications(pool: Pool, goalId: string, kind?: "security" | "safety_compliance"): Promise<readonly ConditionalCertification[]> {
   const result = kind === undefined
-    ? await pool.query<ConditionalCertRow>("SELECT certification_id, kind, goal_id, contract_id, verdict, certified_by_department, producing_department FROM conditional_certifications WHERE goal_id = $1 ORDER BY created_at", [goalId])
-    : await pool.query<ConditionalCertRow>("SELECT certification_id, kind, goal_id, contract_id, verdict, certified_by_department, producing_department FROM conditional_certifications WHERE goal_id = $1 AND kind = $2 ORDER BY created_at", [goalId, kind]);
-  return result.rows.map(mapConditionalCert);
+    ? await pool.query<ConditionalCertRow>(`SELECT certification_id, kind, goal_id, contract_id, contract_version, contract_content_hash, integrated_commit_sha, worker_id, department_acceptance_id, integration_revision_id, verdict, certified_by_department, producing_department FROM conditional_certifications WHERE goal_id = $1 ORDER BY created_at, certification_id`, [goalId])
+    : await pool.query<ConditionalCertRow>(`SELECT certification_id, kind, goal_id, contract_id, contract_version, contract_content_hash, integrated_commit_sha, worker_id, department_acceptance_id, integration_revision_id, verdict, certified_by_department, producing_department FROM conditional_certifications WHERE goal_id = $1 AND kind = $2 ORDER BY created_at, certification_id`, [goalId, kind]);
+  return result.rows.filter((row) => row.worker_id !== null && row.integration_revision_id !== null).map(mapConditionalCert);
 }
-
 
 export interface CertificationWaiver {
   readonly waiverId: string;
@@ -253,20 +370,151 @@ export interface CertificationConflictResolution {
   readonly resolutionId: string;
   readonly goalId: string;
   readonly roundId: string;
+  readonly resolutionVerdict: "proceed" | "do_not_proceed" | "escalate";
+  readonly certificationIds: readonly string[];
+  readonly contractId: string;
+  readonly contractVersion: number;
+  readonly contractContentHash: string;
+  readonly integrationRevisionId: string;
+  readonly integratedCommitSha: string;
+}
+
+interface ConflictCertificationRow {
+  certification_table: "quality_certifications" | "conditional_certifications";
+  certification_id: string;
+  verdict: QualityVerdict;
+  contract_id: string;
+  contract_version: string;
+  contract_content_hash: string;
+  integrated_commit_sha: string;
+  integration_revision_id: string | null;
+}
+
+function isCurrentCertification(row: ConflictCertificationRow, identity: { contractId: string; contractVersion: number; contractContentHash: string; revisionId: string; commitSha: string }): boolean {
+  return row.contract_id === identity.contractId
+    && Number(row.contract_version) === identity.contractVersion
+    && row.contract_content_hash.trim() === identity.contractContentHash
+    && row.integration_revision_id === identity.revisionId
+    && row.integrated_commit_sha.trim() === identity.commitSha;
+}
+
+async function currentCertificationIdentity(pool: Pool, goalId: string): Promise<{ contractId: string; contractVersion: number; contractContentHash: string; revisionId: string; commitSha: string } | null> {
+  const current = await pool.query<{ contract_id: string; version: string; content_hash: string; revision_id: string; commit_sha: string }>(
+    `SELECT council.contract_id, contract.version, contract.content_hash, revision.revision_id, revision.commit_sha
+       FROM head_councils council
+       JOIN task_contracts contract ON contract.contract_id = council.contract_id
+       JOIN goal_integration_revisions revision ON revision.goal_id = council.goal_id
+      WHERE council.goal_id = $1 AND council.state = 'resolved'
+      ORDER BY revision.revision_number DESC, council.created_at DESC
+      LIMIT 1`, [goalId],
+  );
+  if (current.rowCount !== 1) return null;
+  const row = current.rows[0]!;
+  return { contractId: row.contract_id, contractVersion: Number(row.version), contractContentHash: row.content_hash.trim(), revisionId: row.revision_id, commitSha: row.commit_sha.trim() };
+}
+
+async function readConflictCertificationRows(pool: Pool, goalId: string): Promise<ConflictCertificationRow[]> {
+  const result = await pool.query<ConflictCertificationRow>(
+    `SELECT 'quality_certifications'::text AS certification_table, certification_id, verdict,
+            contract_id, contract_version, contract_content_hash, integrated_commit_sha, integration_revision_id
+       FROM quality_certifications WHERE goal_id = $1
+     UNION ALL
+     SELECT 'conditional_certifications'::text AS certification_table, certification_id, verdict,
+            contract_id, contract_version, contract_content_hash, integrated_commit_sha, integration_revision_id
+       FROM conditional_certifications WHERE goal_id = $1`, [goalId],
+  );
+  return result.rows;
 }
 
 /**
- * "Conflicting certifications route to Council." Reuses the accepted
- * Overwatch Council review primitive rather than inventing a second
- * adjudication mechanism; the Council's synthesis becomes the durable
- * ruling for the conflict.
+ * A resolution is valid only for the exact current certification identities
+ * and exact immutable certification row set. Verdict text alone is never a
+ * resolution, and a newest row cannot hide an unresolved disagreement.
+ */
+export async function isCertificationConflictResolved(
+  pool: Pool,
+  goalId: string,
+  certificationIds: readonly string[],
+  identity: { contractId: string; contractVersion: number; contractContentHash: string; revisionId: string; commitSha: string },
+): Promise<boolean> {
+  if (certificationIds.length === 0) return true;
+  const wanted = new Set(certificationIds);
+  const resolutions = await pool.query<{
+    resolution_id: string; resolution_verdict: "proceed" | "do_not_proceed" | "escalate" | null;
+    contract_id: string | null; contract_version: string | null; contract_content_hash: string | null;
+    integration_revision_id: string | null; integrated_commit_sha: string | null;
+  }>(
+    `SELECT resolution_id, resolution_verdict, contract_id, contract_version, contract_content_hash,
+            integration_revision_id, integrated_commit_sha
+       FROM certification_conflict_resolutions
+      WHERE goal_id = $1`, [goalId],
+  );
+  for (const resolution of resolutions.rows) {
+    if (resolution.resolution_verdict !== "proceed" || resolution.contract_id !== identity.contractId || Number(resolution.contract_version) !== identity.contractVersion || resolution.contract_content_hash?.trim() !== identity.contractContentHash || resolution.integration_revision_id !== identity.revisionId || resolution.integrated_commit_sha?.trim() !== identity.commitSha) continue;
+    const members = await pool.query<{ certification_id: string }>(
+      `SELECT quality_certification_id AS certification_id FROM certification_conflict_resolution_members WHERE resolution_id = $1 AND quality_certification_id IS NOT NULL
+       UNION ALL
+       SELECT conditional_certification_id AS certification_id FROM certification_conflict_resolution_members WHERE resolution_id = $1 AND conditional_certification_id IS NOT NULL`, [resolution.resolution_id],
+    );
+    const actual = new Set(members.rows.map((member) => member.certification_id));
+    if (actual.size === wanted.size && [...actual].every((id) => wanted.has(id))) return true;
+  }
+  return false;
+}
+
+/**
+ * Routes a real conflicting certification set through an existing Overwatch
+ * Council round. The database row names every immutable certification member,
+ * captures the current contract/revision identity, and stores the Council's
+ * actual synthesis verdict.
  */
 export async function adjudicateCertificationConflict(pool: Pool, roundResult: { roundId: string }, goalId: string, conflictingVerdicts: readonly QualityVerdict[]): Promise<CertificationConflictResolution> {
-  if (!certificationsConflict(conflictingVerdicts)) throw new CertificationError("No certification conflict exists to adjudicate");
-  const resolutionId = randomUUID();
-  await pool.query(
-    "INSERT INTO certification_conflict_resolutions (resolution_id, goal_id, round_id, conflicting_verdicts) VALUES ($1, $2, $3, $4::jsonb)",
-    [resolutionId, goalId, roundResult.roundId, JSON.stringify(conflictingVerdicts)],
+  const round = await pool.query<{ goal_id: string; final_verdict: "proceed" | "do_not_proceed" | "escalate" }>(
+    `SELECT round.goal_id, synthesis.final_verdict
+       FROM overwatch_council_rounds round
+       JOIN overwatch_council_syntheses synthesis ON synthesis.round_id = round.round_id
+      WHERE round.round_id = $1`, [roundResult.roundId],
   );
-  return { resolutionId, goalId, roundId: roundResult.roundId };
+  if (round.rowCount !== 1 || round.rows[0]!.goal_id !== goalId) throw new CertificationError("Overwatch Council round is not bound to this Goal");
+  const actualRows = await readConflictCertificationRows(pool, goalId);
+  const identity = await currentCertificationIdentity(pool, goalId);
+  if (identity === null) throw new CertificationError("Cannot adjudicate a conflict without a current Goal integration identity");
+  const currentRows = actualRows.filter((row) => isCurrentCertification(row, identity));
+  const actualVerdicts = currentRows.map((row) => row.verdict);
+  if (!certificationsConflict(actualVerdicts)) throw new CertificationError("No current certification conflict exists to adjudicate");
+  if ([...conflictingVerdicts].sort().join(",") !== [...actualVerdicts].sort().join(",")) throw new CertificationError("Supplied conflict verdicts do not match the durable certification rows");
+
+  const resolutionId = randomUUID();
+  const client = await pool.connect(); let open = false;
+  try {
+    await client.query("BEGIN"); open = true;
+    await client.query(
+      `INSERT INTO certification_conflict_resolutions
+        (resolution_id, goal_id, round_id, conflicting_verdicts, resolution_verdict,
+         contract_id, contract_version, contract_content_hash, integration_revision_id, integrated_commit_sha)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10)`,
+      [resolutionId, goalId, roundResult.roundId, JSON.stringify(actualVerdicts), round.rows[0]!.final_verdict, identity.contractId, identity.contractVersion, identity.contractContentHash, identity.revisionId, identity.commitSha],
+    );
+    for (const row of currentRows) {
+      await client.query(
+        `INSERT INTO certification_conflict_resolution_members
+          (member_id, resolution_id, quality_certification_id, conditional_certification_id)
+         VALUES ($1, $2, $3, $4)`,
+        [randomUUID(), resolutionId, row.certification_table === "quality_certifications" ? row.certification_id : null, row.certification_table === "conditional_certifications" ? row.certification_id : null],
+      );
+    }
+    await client.query("COMMIT"); open = false;
+  } catch (error) {
+    if (open) await client.query("ROLLBACK");
+    if (error instanceof CertificationError) throw error;
+    throw new CertificationError(error instanceof Error ? error.message : "Could not record certification conflict resolution");
+  } finally {
+    client.release();
+  }
+  return {
+    resolutionId, goalId, roundId: roundResult.roundId, resolutionVerdict: round.rows[0]!.final_verdict,
+    certificationIds: currentRows.map((row) => row.certification_id), contractId: identity.contractId,
+    contractVersion: identity.contractVersion, contractContentHash: identity.contractContentHash,
+    integrationRevisionId: identity.revisionId, integratedCommitSha: identity.commitSha,
+  };
 }

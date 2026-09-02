@@ -41,6 +41,20 @@ describe("local Git operations", () => {
     }
   });
 
+  it("reads the exact head of a named repository branch", async () => {
+    await createBranch(repositoryPath, "goal/integration", baseRevision);
+    const worktreePath = join(repositoryPath, "..", "maestro-goal-head-worktree");
+    try {
+      await createWorktree(repositoryPath, worktreePath, "goal/integration");
+      const fs = await import("node:fs/promises");
+      await fs.writeFile(join(worktreePath, "integrated.txt"), "integrated change");
+      const result = await commit(worktreePath, "mission: integrate", "worker", "worker@example.com");
+      expect(await headRevision(repositoryPath, "goal/integration")).toBe(result.commitSha);
+    } finally {
+      await removeWorktree(repositoryPath, worktreePath).catch(() => undefined);
+    }
+  });
+
   it("rejects an invalid Git operation with a GitOperationError, not a raw process error", async () => {
     await expect(createBranch(repositoryPath, "x", "not-a-real-revision")).rejects.toBeInstanceOf(GitOperationError);
   });

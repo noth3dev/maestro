@@ -3,6 +3,7 @@ import type {
   DepartmentBranch,
   GitPort,
   GoalIntegrationBranch,
+  GoalIntegrationRevision,
   IntegrationCommit,
   WorkerWorktree,
 } from "@maestro/domain";
@@ -47,6 +48,86 @@ export async function recordGoalIntegrationBranch(pool: Pool, git: GitPort, goal
     await client.query("COMMIT"); open = false;
     return { goalId, repositoryPath, branchName, baseRevision };
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+}
+
+/**
+ * Freezes the current Goal integration branch head as the revision that later
+ * certifications must use. The SHA is read from Git, never accepted from the
+ * caller. Every accepted worker commit is recorded as a member of the frozen
+ * revision so a Goal with multiple Departments remains replayable.
+ */
+export async function recordGoalIntegrationRevision(pool: Pool, git: GitPort, goalId: string, proof: GoalLeaseProof): Promise<GoalIntegrationRevision> {
+  if (goalId !== proof.goalId || goalId === "" || proof.ownerId === "" || !isValidFencingToken(proof.fencingToken)) throw new StaleGoalLeaseError(proof.goalId);
+  const client = await pool.connect(); let open = false;
+  try {
+    await client.query("BEGIN"); open = true;
+    await lockGoalLease(client, proof);
+    const branch = await client.query<{ repository_path: string; branch_name: string; base_revision: string }>(
+      "SELECT repository_path, branch_name, base_revision FROM goal_integration_branches WHERE goal_id = $1 FOR SHARE", [goalId],
+    );
+    if (branch.rowCount !== 1) throw new GitIntegrationError("Goal integration branch must exist before freezing a revision");
+    const branchIdentity = branch.rows[0]!;
+    const commitSha = (await git.headRevision(branchIdentity.repository_path, branchIdentity.branch_name)).trim();
+    if (!/^[0-9a-f]{40}$/.test(commitSha)) throw new GitIntegrationError("Git returned an invalid Goal integration revision SHA");
+    if (commitSha === branchIdentity.base_revision) throw new GitIntegrationError("Goal integration branch has no integrated commit to freeze");
+    const accepted = await client.query<{ worker_id: string; commit_sha: string }>(
+      `SELECT acceptance.worker_id, acceptance.commit_sha
+         FROM department_acceptances acceptance
+         JOIN workers worker ON worker.worker_id = acceptance.worker_id
+         JOIN department_plans plan
+           ON plan.council_id = worker.council_id
+          AND plan.department_id = worker.department_id
+        WHERE plan.goal_id = $1
+        ORDER BY acceptance.created_at, acceptance.acceptance_id`, [goalId],
+    );
+    if (accepted.rowCount === 0) throw new GitIntegrationError("A Goal integration revision requires at least one accepted worker commit");
+    const inserted = await client.query<{
+      revision_id: string; revision_number: string; goal_id: string; repository_path: string;
+      branch_name: string; base_revision: string; commit_sha: string;
+    }>(
+      `INSERT INTO goal_integration_revisions
+         (revision_id, goal_id, repository_path, branch_name, commit_sha, base_revision)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (goal_id, commit_sha) DO NOTHING
+       RETURNING revision_id, revision_number, goal_id, repository_path, branch_name, base_revision, commit_sha`,
+      [randomUUID(), goalId, branchIdentity.repository_path, branchIdentity.branch_name, commitSha, branchIdentity.base_revision],
+    );
+    const revisionResult = inserted.rowCount === 1
+      ? inserted
+      : await client.query<{
+        revision_id: string; revision_number: string; goal_id: string; repository_path: string;
+        branch_name: string; base_revision: string; commit_sha: string;
+      }>(
+        `SELECT revision_id, revision_number, goal_id, repository_path, branch_name, base_revision, commit_sha
+           FROM goal_integration_revisions
+          WHERE goal_id = $1 AND commit_sha = $2`, [goalId, commitSha],
+      );
+    if (revisionResult.rowCount !== 1) throw new GitIntegrationError("Could not read the frozen Goal integration revision");
+    const revision = revisionResult.rows[0]!;
+    for (const acceptedCommit of accepted.rows) {
+      await client.query(
+        `INSERT INTO goal_integration_revision_commits (member_id, revision_id, worker_id, commit_sha)
+         VALUES ($1, $2, $3, $4) ON CONFLICT (revision_id, worker_id, commit_sha) DO NOTHING`,
+        [randomUUID(), revision.revision_id, acceptedCommit.worker_id, acceptedCommit.commit_sha],
+      );
+    }
+    await client.query("COMMIT"); open = false;
+    return {
+      revisionId: revision.revision_id,
+      revisionNumber: Number(revision.revision_number),
+      goalId: revision.goal_id,
+      repositoryPath: revision.repository_path,
+      branchName: revision.branch_name,
+      baseRevision: revision.base_revision,
+      commitSha: revision.commit_sha.trim(),
+    };
+  } catch (error) {
+    if (open) await client.query("ROLLBACK");
+    if (error instanceof GitIntegrationError || error instanceof StaleGoalLeaseError) throw error;
+    throw new GitIntegrationError(error instanceof Error ? error.message : "Could not freeze Goal integration revision");
+  } finally {
+    client.release();
+  }
 }
 
 /** Creates one Department branch, off the Goal integration branch, for a writing Department. Only that Department's currently active, captured Head may create it. */

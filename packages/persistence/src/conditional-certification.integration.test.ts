@@ -15,12 +15,12 @@ import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, su
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, spawnWorker } from "./worker.js";
-import { recordDepartmentBranch, recordGoalIntegrationBranch, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
-import { CertificationError, certifyConditional, listConditionalCertifications } from "./certification.js";
+import { recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
+import { acceptDepartmentWorkerOutput, CertificationError, certifyConditional, listConditionalCertifications } from "./certification.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
-const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql", "0005_authority_records.sql", "0006_evidence.sql", "0007_goal_control.sql", "0008_goal_pause_stop.sql", "0009_reconciliation_leader_lease.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql", "0014_head_activation_runtime_safety.sql", "0015_council_protocol.sql", "0016_council_hardening.sql", "0018_role_identity_hardening.sql", "0019_council_authority_hardening.sql", "0020_head_role_identity_hardening.sql", "0021_council_round_idempotency.sql", "0022_department_plans.sql", "0023_mission_bundles.sql", "0024_workers.sql", "0026_git_integration.sql", "0032_certifications.sql", "0033_conditional_certifications.sql"];
+const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql", "0005_authority_records.sql", "0006_evidence.sql", "0007_goal_control.sql", "0008_goal_pause_stop.sql", "0009_reconciliation_leader_lease.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql", "0014_head_activation_runtime_safety.sql", "0015_council_protocol.sql", "0016_council_hardening.sql", "0018_role_identity_hardening.sql", "0019_council_authority_hardening.sql", "0020_head_role_identity_hardening.sql", "0021_council_round_idempotency.sql", "0022_department_plans.sql", "0023_mission_bundles.sql", "0024_workers.sql", "0026_git_integration.sql", "0031_overwatch_council.sql", "0032_certifications.sql", "0033_conditional_certifications.sql", "0034_certification_waivers.sql", "0035_evidence_bundles.sql", "0036_sane_final_reports.sql", "0037_certification_report_hardening.sql"];
 
 const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `session:${label}`, commandId: randomUUID() });
 const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`, sessionRef: `opaque:${departmentId}`, commandId: randomUUID() });
@@ -76,10 +76,10 @@ describeDatabase("Department acceptance and independent Quality certification wi
         [evidenceId, randomUUID(), randomUUID(), projectId, goalId, "test", "0".repeat(64)],
       );
     }
-    for (const departmentId of ["product", "quality"]) await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, head_role_id, contract_id, status, active_session_ref) VALUES ($1, $2, $3, $4, 'active', $5)", [goalId, departmentId, `head:${departmentId}`, contractId, `opaque:${departmentId}`]);
+    for (const departmentId of ["product", "quality", "security", "safety-compliance"]) await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, head_role_id, contract_id, status, active_session_ref) VALUES ($1, $2, $3, $4, 'active', $5)", [goalId, departmentId, `head:${departmentId}`, contractId, `opaque:${departmentId}`]);
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "test", leaseDurationMs: 60_000 });
     const council = await createHeadCouncil(pool, { goalId, contractId, briefDeadline: new Date(Date.now() + 60_000), evidence: { references: evidenceIds } }, proof, context("secretary"));
-    for (const departmentId of ["product", "quality"]) await submitIndependentBrief(pool, council.councilId, departmentId, brief, proof, headContext(departmentId));
+    for (const departmentId of ["product", "quality", "security", "safety-compliance"]) await submitIndependentBrief(pool, council.councilId, departmentId, brief, proof, headContext(departmentId));
     await revealCouncilBriefs(pool, council.councilId, proof, context("reveal"));
     const packet: DecisionPacket = {
       outcome: "decided", executionDisposition: "executable", selectedDirection: "proceed",
@@ -116,11 +116,14 @@ describeDatabase("Department acceptance and independent Quality certification wi
     await fs.writeFile(join(worktreePath, "change.txt"), "the change");
     const commitResult = await localGitPort.commit(worktreePath, "mission: implement", "worker", "worker@example.com");
     await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: implement", evidenceIds);
+    execFileSync("git", ["branch", "--force", "goal/integration", commitResult.commitSha], { cwd: repositoryPath });
+    await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product"));
+    await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
     return { goalId, council: resolved, worker, evidenceIds };
   }
 
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS conditional_certifications, quality_certifications, department_acceptances, integration_commits, worker_worktrees, department_branches, goal_integration_branches, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
+    await pool.query("DROP TABLE IF EXISTS certification_conflict_resolution_members, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, goal_integration_revision_commits, goal_integration_revisions, department_acceptances, integration_commits, worker_worktrees, department_branches, goal_integration_branches, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
     for (const name of migrations) {
       const sql = await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8");
       await pool.query(sql);
@@ -132,17 +135,17 @@ describeDatabase("Department acceptance and independent Quality certification wi
   it("lets an independent Department certify Security but rejects the producing Department certifying itself", async () => {
     const { worker, evidenceIds } = await setupWorkerWithCommit();
     await expect(certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "product", headContext("product"))).rejects.toBeInstanceOf(CertificationError);
-    const certified = await certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
+    const certified = await certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "security", headContext("security"));
     expect(certified.kind).toBe("security");
-    expect(certified.certifiedByDepartment).toBe("quality");
+    expect(certified.certifiedByDepartment).toBe("security");
     const listed = await listConditionalCertifications(pool, certified.goalId, "security");
     expect(listed).toHaveLength(1);
   });
 
   it("certifies Safety & Compliance independently of Security, both listed together", async () => {
     const { goalId, worker, evidenceIds } = await setupWorkerWithCommit();
-    await certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
-    await certifyConditional(pool, "safety_compliance", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
+    await certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "security", headContext("security"));
+    await certifyConditional(pool, "safety_compliance", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "safety-compliance", headContext("safety-compliance"));
     const all = await listConditionalCertifications(pool, goalId);
     expect(all).toHaveLength(2);
     expect(all.map((cert) => cert.kind).sort()).toEqual(["safety_compliance", "security"]);
@@ -150,13 +153,13 @@ describeDatabase("Department acceptance and independent Quality certification wi
 
   it("rejects a passed certification with fabricated test evidence or an unauthorized certifier", async () => {
     const { worker } = await setupWorkerWithCommit();
-    await expect(certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: ["fabricated"] }, "quality", headContext("quality"))).rejects.toThrow();
-    await expect(certifyConditional(pool, "security", worker.workerId, { verdict: "failed", findings: [], testEvidenceIds: [] }, "quality", context("not-the-head"))).rejects.toBeInstanceOf(CertificationError);
+    await expect(certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: ["fabricated"] }, "security", headContext("security"))).rejects.toThrow();
+    await expect(certifyConditional(pool, "security", worker.workerId, { verdict: "failed", findings: [], testEvidenceIds: [] }, "security", context("not-the-head"))).rejects.toBeInstanceOf(CertificationError);
   });
 
   it("rejects direct tampering with immutable conditional certification records", async () => {
     const { worker, evidenceIds } = await setupWorkerWithCommit();
-    const certified = await certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
+    const certified = await certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "security", headContext("security"));
     await expect(pool.query("UPDATE conditional_certifications SET verdict = 'failed' WHERE certification_id = $1", [certified.certificationId])).rejects.toThrow();
   });
 });

@@ -43,4 +43,41 @@ describe("Certification completeness gate", () => {
     });
     expect(blockers).toHaveLength(0);
   });
+
+  it("requires successful workers, durable acceptance, and a frozen integration revision", () => {
+    const blockers = evaluateCertificationCompleteness({
+      requiredKinds: ["quality"],
+      records: [record()],
+      openChallengeCount: 0,
+      hasFrozenIntegratedRevision: false,
+      workers: [{ workerId: "worker-1", status: "running", hasDepartmentAcceptance: false, acceptanceBoundToIntegratedRevision: false }],
+    });
+    expect(blockers.map((blocker) => blocker.reason)).toEqual(expect.arrayContaining([
+      "missing_integrated_revision", "worker_execution_not_succeeded", "missing_department_acceptance", "unverifiable_integrated_revision",
+    ]));
+  });
+
+  it("requires certification records to match the current contract hash and integration revision", () => {
+    const blockers = evaluateCertificationCompleteness({
+      requiredKinds: ["quality"],
+      records: [record({ contractContentHash: "b".repeat(64), integrationRevisionId: "old-revision" })],
+      expectedContractId: "c1",
+      expectedContractVersion: 1,
+      expectedContractContentHash: "c".repeat(64),
+      expectedIntegrationRevisionId: "new-revision",
+      expectedIntegratedCommitSha: "a".repeat(40),
+      openChallengeCount: 0,
+    });
+    expect(blockers.some((blocker) => blocker.reason === "certification_identity_mismatch")).toBe(true);
+  });
+
+  it("does not let a newest certification hide an unresolved conflict", () => {
+    const blockers = evaluateCertificationCompleteness({
+      requiredKinds: ["quality"],
+      records: [record()],
+      openChallengeCount: 0,
+      unresolvedCertificationConflict: true,
+    });
+    expect(blockers.some((blocker) => blocker.reason === "unresolved_certification_conflict")).toBe(true);
+  });
 });

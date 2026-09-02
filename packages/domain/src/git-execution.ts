@@ -10,7 +10,8 @@ export interface GitPort {
   createBranch(repositoryPath: string, branchName: string, baseRevision: string): Promise<void>;
   createWorktree(repositoryPath: string, worktreePath: string, branchName: string): Promise<void>;
   commit(worktreePath: string, message: string, authorName: string, authorEmail: string): Promise<{ commitSha: string }>;
-  headRevision(worktreePath: string): Promise<string>;
+  /** Read HEAD for a worktree, or a named ref when repositoryPath is a repository. */
+  headRevision(repositoryPath: string, ref?: string): Promise<string>;
   removeWorktree(repositoryPath: string, worktreePath: string): Promise<void>;
 }
 
@@ -42,4 +43,15 @@ export interface IntegrationCommit {
   readonly commitSha: string;
   readonly message: string;
   readonly evidenceReferences: readonly string[];
+}
+
+/** Immutable snapshot of the actual Goal integration branch used by certification. */
+export interface GoalIntegrationRevision {
+  readonly revisionId: string;
+  readonly revisionNumber: number;
+  readonly goalId: string;
+  readonly repositoryPath: string;
+  readonly branchName: string;
+  readonly baseRevision: string;
+  readonly commitSha: string;
 }

@@ -107,6 +107,7 @@ export function selectOvertureRoles(input: OvertureSelectionInput): readonly Ove
 
 /** Stable JSON encoding for cross-process SHA-256 identity. */
 export function canonicalJson(value: unknown): string {
+  if (value instanceof Date) return JSON.stringify(value.toISOString());
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   const object = value as Record<string, unknown>;
