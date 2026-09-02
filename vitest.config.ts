@@ -16,5 +16,13 @@ export default defineConfig({
     // the same underlying tables at that moment. Serializing file execution
     // keeps every real-PostgreSQL run deterministic.
     fileParallelism: false,
+    // `.worktrees/*` holds separate git worktrees (other phase branches)
+    // nested inside this checkout on disk. Vitest's own default excludes
+    // only cover node_modules/dist/.git, not sibling worktree checkouts, so
+    // without this a run from the main worktree root would also collect and
+    // execute every other worktree's test files against this process's
+    // module graph. Exclude them explicitly; each worktree runs its own
+    // tests independently from its own directory.
+    exclude: ["**/node_modules/**", "**/dist/**", ".git/**", ".worktrees/**"],
   },
 });
