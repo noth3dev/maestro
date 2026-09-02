@@ -121,3 +121,9 @@ Current restart lane: forced mid-flight worker restart/reconciliation scenario i
 - **Tests item 18 status: blocked by missing read surfaces.** Control-plane currently serves only Goal and event reads (`GET /v1/goals/:goalId`, `GET /v1/events`, and event SSE). CLI currently provides `goal get` and `events list`; Secretary loads and renders only Goal/events.
 - No route, typed API-client method, CLI command, or Secretary loader exists for Sentinel challenges, Overwatch Council state, certification state, or Sane reports, although the durable domain/persistence modules exist. This branch records the evidence and does not invent a new aggregate endpoint.
 - Parity can be tested after a minimal read contract is intentionally designed and implemented across all three surfaces.
+
+## 2026-09-03 — P3S11 CLI/app parity read contract implemented
+- Added authenticated read-only control-plane routes for Sentinel challenges, Overwatch Council rounds (including judgments and synthesis), Quality/conditional certifications, and Sane final reports, backed by durable persistence reads. Added matching zod contracts, typed API-client methods, and CLI commands.
+- Control-plane route tests prove all four shapes and missing-report handling. Secretary UI was not changed: it consumes the same API client but has no existing state-panel architecture for these four records; the control-plane is the app backing API.
+- Verification: `MAESTRO_TEST_DATABASE_URL=...55440... npm run check` passed with **458 passed, 2 skipped, 0 failed** (74 test files passed, 1 skipped; skips are the intentional live-Prime cases).
+- Tests item 18 is now covered at the shared read-contract level (control-plane/API client/CLI); a full real-domain parity fixture remains limited to existing persistence integration coverage.

@@ -51,6 +51,10 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       printGoal(io.stdout, result, json);
       return 0;
     }
+    if (resource === "sentinel-challenges" && action === "list") { const result=await client.listSentinelChallenges(string("goal-id")); printState(io.stdout,result,json); return 0; }
+    if (resource === "overwatch-council" && action === "list") { const result=await client.listOverwatchCouncilRounds(string("goal-id")); printState(io.stdout,result,json); return 0; }
+    if (resource === "certifications" && action === "list") { const result=await client.listCertifications(string("goal-id")); printState(io.stdout,result,json); return 0; }
+    if (resource === "sane-report" && action === "get") { const result=await client.getSaneReport(string("goal-id")); printState(io.stdout,result,json); return 0; }
     if (resource === "events" && action === "list") {
       const page = await client.listEvents({ projectId: string("project-id"), after: value("after") === undefined ? "0" : string("after") });
       if (json) io.stdout(`${JSON.stringify(page)}\n`);
@@ -79,6 +83,8 @@ function requiredOption(value: string | boolean | undefined, name: string): stri
 function printGoal(write: CliIo["stdout"], result: GoalResult, json: boolean): void {
   write(json ? `${JSON.stringify(result)}\n` : `Goal ${result.goalId}: ${result.state} (version ${result.version})\n`);
 }
+
+function printState(write: CliIo["stdout"], result: unknown, json: boolean): void { write(json ? `${JSON.stringify(result)}\n` : `${JSON.stringify(result)}\n`); }
 
 function printEvents(write: CliIo["stdout"], events: GoalEvent[], nextCursor: string): void {
   if (events.length === 0) write(`Events: 0 (next cursor: ${nextCursor})\n`);

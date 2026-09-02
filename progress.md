@@ -310,3 +310,10 @@
   - Tests item 18 (App and CLI show the same challenge/Council/certification/report state): **not met, precisely scoped as a gap** — `apps/control-plane` and `@maestro/api-client` only expose Goal/event read routes; there is no route, CLI command, or Secretary loader yet for Sentinel challenges, Overwatch Council, certification, or Sane report state, though the underlying durable modules exist. No broad surface was invented to force a false pass.
   - Steps 1-5, 7, 9-10, 12-13 and the remaining Tests items were already covered by prior accepted P3S1-P3S10 work and the original capstone composition test.
 - **Phase 3 exit gate is NOT fully met**: 12 of 13 live-gate prose steps have real, evidenced coverage; step/Tests-item 18 (CLI/app parity) is an honest, precisely-scoped open gap requiring a minimal new read contract (route + client method + CLI command + Secretary loader) for challenge/Council/certification/report state before it can be closed. This is recorded as a known limitation, not silently treated as done.
+
+
+## 2026-09-03 — P3S11 CLI/app parity read contract implemented
+- Added authenticated read-only control-plane routes for Sentinel challenges, Overwatch Council rounds (including judgments and synthesis), Quality/conditional certifications, and Sane final reports, backed by durable persistence reads. Added matching zod contracts, typed API-client methods, and CLI commands.
+- Control-plane route tests prove all four shapes and missing-report handling. Secretary UI was not changed: it consumes the same API client but has no existing state-panel architecture for these four records; the control-plane is the app backing API.
+- Verification: `MAESTRO_TEST_DATABASE_URL=...55440... npm run check` passed with **458 passed, 2 skipped, 0 failed** (74 test files passed, 1 skipped; skips are the intentional live-Prime cases).
+- Tests item 18 is now covered at the shared read-contract level (control-plane/API client/CLI); a full real-domain parity fixture remains limited to existing persistence integration coverage.
