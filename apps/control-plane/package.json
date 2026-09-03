@@ -6,6 +6,7 @@
     "@maestro/authority": "*",
     "@maestro/contracts": "*",
     "@maestro/persistence": "*",
+    "@maestro/prime-adapter": "*",
     "fastify": "^5.0.0",
     "zod": "^4.0.0",
     "pg": "^8.23.0"

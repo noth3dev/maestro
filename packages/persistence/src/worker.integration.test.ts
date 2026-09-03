@@ -207,6 +207,7 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
         priorState: "active",
         outcome: "lease_contended",
         reasons: ["goal_lease_held_across_reconciliation"],
+        reconciledWorkerIds: [],
       }]);
       expect(await readWorker(restartedPool, worker.workerId)).toMatchObject({ workerId: worker.workerId, status: "running" });
       expect((await restartedPool.query("SELECT count(*)::int AS count FROM workers WHERE council_id = $1", [council.councilId])).rows[0].count).toBe(1);
@@ -218,6 +219,78 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
       await expect(executeGoalCommand(restartedPool, { commandId: randomUUID(), projectId, goalId, actorId: "old-process", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof)).rejects.toMatchObject({ code: "stale_lease" });
       expect(successorProof.fencingToken).not.toBe(proof.fencingToken);
       expect((await restartedPool.query("SELECT count(*)::int AS count FROM goal_events WHERE goal_id = $1", [goalId])).rows[0].count).toBe(0);
+    } finally {
+      await restartedPool.end();
+    }
+  });
+
+  it("forces a genuinely orphaned running worker to unknown at startup once its Goal's lease has actually expired (Phase 1 re-patch item 8 part 2/2)", async () => {
+    const { council, plan, proof, goalId, projectId } = await setupBundle();
+    const preRestartKernel = fakeKernel("running");
+    const worker = await spawnWorker(pool, preRestartKernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    const captured = await observeWorker(pool, preRestartKernel, worker.workerId);
+    expect(captured.status).toBe("running");
+
+    // Unlike the "still contended" scenario above, this Goal's lease has
+    // genuinely expired -- no other live process could still hold the real
+    // session, so a fresh restarted process's brand-new kernel (which has
+    // no session for this worker's execution_ref at all) may honestly
+    // reconcile it.
+    await pool.query("UPDATE goal_leases SET expires_at = clock_timestamp() - interval '1 millisecond' WHERE goal_id = $1", [goalId]);
+
+    const restartedPool = new Pool({ connectionString: databaseUrl });
+    const freshKernel = fakeKernel("running"); // fresh instance: empty session/root/child state, unrelated to preRestartKernel
+    try {
+      const recovery = await reconcileOnStartup(restartedPool, {
+        ownerId: "restarted-control-plane", leaderLeaseDurationMs: 60_000, goalLeaseDurationMs: 60_000, kernel: freshKernel,
+      });
+      const result = recovery.results.find((entry) => entry.goalId === goalId);
+      expect(result?.reconciledWorkerIds).toEqual([worker.workerId]);
+
+      const reconciledWorker = await readWorker(restartedPool, worker.workerId);
+      expect(reconciledWorker.status).toBe("unknown");
+    } finally {
+      await restartedPool.end();
+    }
+  });
+
+  it("does not touch a worker whose Goal lease is still live (protects, rather than prematurely reconciles, active execution)", async () => {
+    const { council, plan, proof, goalId } = await setupBundle();
+    const kernel = fakeKernel("running");
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    await observeWorker(pool, kernel, worker.workerId);
+
+    const restartedPool = new Pool({ connectionString: databaseUrl });
+    const freshKernel = fakeKernel("running");
+    try {
+      const recovery = await reconcileOnStartup(restartedPool, {
+        ownerId: "restarted-control-plane-2", leaderLeaseDurationMs: 60_000, goalLeaseDurationMs: 60_000, kernel: freshKernel,
+      });
+      const result = recovery.results.find((entry) => entry.goalId === goalId);
+      expect(result?.outcome).toBe("lease_contended");
+      expect(result?.reconciledWorkerIds).toEqual([]);
+
+      const untouchedWorker = await readWorker(restartedPool, worker.workerId);
+      expect(untouchedWorker.status).toBe("running");
+    } finally {
+      await restartedPool.end();
+    }
+  });
+
+  it("does not attempt worker reconciliation when no kernel is supplied to reconcileOnStartup", async () => {
+    const { council, plan, proof, goalId } = await setupBundle();
+    const kernel = fakeKernel("running");
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    await observeWorker(pool, kernel, worker.workerId);
+    await pool.query("UPDATE goal_leases SET expires_at = clock_timestamp() - interval '1 millisecond' WHERE goal_id = $1", [goalId]);
+
+    const restartedPool = new Pool({ connectionString: databaseUrl });
+    try {
+      const recovery = await reconcileOnStartup(restartedPool, { ownerId: "restarted-no-kernel", leaderLeaseDurationMs: 60_000, goalLeaseDurationMs: 60_000 });
+      const result = recovery.results.find((entry) => entry.goalId === goalId);
+      expect(result?.reconciledWorkerIds).toEqual([]);
+      const untouchedWorker = await readWorker(restartedPool, worker.workerId);
+      expect(untouchedWorker.status).toBe("running");
     } finally {
       await restartedPool.end();
     }

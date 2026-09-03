@@ -119,7 +119,7 @@ describeDatabase("Reconciliation leader lease and startup consistency scaffold",
 
     expect(report.checkedGoalCount).toBe(1);
     expect(report.results).toEqual([
-      { goalId: activeGoal, projectId: expect.any(String), priorState: "active", outcome: "consistent", reasons: [] },
+      { goalId: activeGoal, projectId: expect.any(String), priorState: "active", outcome: "consistent", reasons: [], reconciledWorkerIds: [] },
     ]);
     const state = await pool.query("SELECT state FROM goals WHERE goal_id = $1", [activeGoal]);
     expect(state.rows[0]).toMatchObject({ state: "active" });
@@ -135,7 +135,7 @@ describeDatabase("Reconciliation leader lease and startup consistency scaffold",
     const report = await reconcileOnStartup(pool, { ownerId: "reconciler-a" });
 
     expect(report.results).toEqual([
-      { goalId, projectId, priorState: "active", outcome: "recovering", reasons: ["emergency_stop_state_mismatch"] },
+      { goalId, projectId, priorState: "active", outcome: "recovering", reasons: ["emergency_stop_state_mismatch"], reconciledWorkerIds: [] },
     ]);
     const row = await pool.query("SELECT state, version FROM goals WHERE goal_id = $1", [goalId]);
     expect(row.rows[0]).toMatchObject({ state: "recovering" });
@@ -155,7 +155,7 @@ describeDatabase("Reconciliation leader lease and startup consistency scaffold",
     const report = await reconcileOnStartup(pool, { ownerId: "reconciler-a" });
 
     expect(report.results).toEqual([
-      { goalId, projectId, priorState: "active", outcome: "lease_contended", reasons: ["goal_lease_held_across_reconciliation"] },
+      { goalId, projectId, priorState: "active", outcome: "lease_contended", reasons: ["goal_lease_held_across_reconciliation"], reconciledWorkerIds: [] },
     ]);
     const row = await pool.query("SELECT state FROM goals WHERE goal_id = $1", [goalId]);
     expect(row.rows[0]).toMatchObject({ state: "active" });
@@ -181,7 +181,7 @@ describeDatabase("Reconciliation leader lease and startup consistency scaffold",
 
     const winningReport = (fulfilled[0] as PromiseFulfilledResult<Awaited<ReturnType<typeof reconcileOnStartup>>>).value;
     expect(winningReport.results).toEqual([
-      { goalId, projectId, priorState: "active", outcome: "recovering", reasons: ["emergency_stop_state_mismatch"] },
+      { goalId, projectId, priorState: "active", outcome: "recovering", reasons: ["emergency_stop_state_mismatch"], reconciledWorkerIds: [] },
     ]);
 
     const events = await pool.query("SELECT event_type FROM goal_events WHERE goal_id = $1 ORDER BY global_position", [goalId]);

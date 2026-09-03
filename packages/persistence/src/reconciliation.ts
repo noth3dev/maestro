@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { isTerminalGoalState, type GoalState } from "@maestro/domain";
+import { isTerminalGoalState, type ExecutionKernelPort, type GoalState } from "@maestro/domain";
 import type { Pool } from "pg";
 import {
   LeaseUnavailableError,
@@ -7,6 +7,7 @@ import {
   executeGoalCommand,
   isValidFencingToken,
 } from "./commands.js";
+import { observeWorker } from "./worker.js";
 
 /**
  * Proof of holding the singleton reconciliation-leader lease. Mirrors
@@ -107,6 +108,21 @@ export interface ReconcileOnStartupOptions {
   leaderLeaseDurationMs?: number;
   /** Duration of the per-Goal lease used to durably mark a Goal recovering. */
   goalLeaseDurationMs?: number;
+  /**
+   * When supplied, this exact fresh kernel instance's own in-process
+   * session/root/child state is used to force an honest re-observation of
+   * every nonterminal worker under a Goal whose durable lease is not
+   * currently live (expired or absent) -- the case where no other live
+   * process could still legitimately hold the prior session, so a worker
+   * left "spawned"/"running" is genuinely orphaned, not merely contended.
+   * A kernel started by this same process is always fresh (no session for
+   * any pre-restart execution can exist in it), so this call can only ever
+   * honestly downgrade a stale worker to "unknown" -- see
+   * execution-kernel.ts's kernel.observe() honest-empty-observation
+   * fallback and worker.ts's observeWorker -- never fabricate a status.
+   * Omitted only by tests that do not exercise worker-level recovery.
+   */
+  kernel?: ExecutionKernelPort;
 }
 
 export type GoalReconciliationOutcome = "consistent" | "recovering" | "lease_contended";
@@ -117,6 +133,14 @@ export interface GoalReconciliationResult {
   priorState: GoalState;
   outcome: GoalReconciliationOutcome;
   reasons: readonly string[];
+  /**
+   * Worker IDs this pass forced through a fresh observeWorker call because
+   * this Goal's durable lease was not live. Empty when no kernel was
+   * supplied, when the lease was still live (lease_contended -- active
+   * execution is protected, not touched), or when no nonterminal worker
+   * existed under this Goal.
+   */
+  reconciledWorkerIds: readonly string[];
 }
 
 export interface ReconciliationReport {
@@ -182,21 +206,30 @@ export async function reconcileOnStartup(
         [row.project_id, row.goal_id],
       ),
     ]);
+    const now = new Date();
+    const leaseExpiresAt = leaseRow.rowCount === 1 ? leaseRow.rows[0]!.expires_at : null;
+    const leaseIsLive = leaseExpiresAt !== null && leaseExpiresAt > now;
     const { consistent, reasons } = classifyGoalConsistency({
       state: row.state,
-      leaseExpiresAt: leaseRow.rowCount === 1 ? leaseRow.rows[0]!.expires_at : null,
+      leaseExpiresAt,
       emergencyStoppedAt: controlRow.rowCount === 1 ? controlRow.rows[0]!.emergency_stopped_at : null,
-      now: new Date(),
+      now,
     });
 
+    // Only meaningful when the Goal's own lease is not currently live: a
+    // live lease means some other process could still legitimately hold
+    // the real session (lease_contended below never reaches here), so
+    // forcing observation would be premature, not merely redundant.
+    const reconciledWorkerIds = !leaseIsLive ? await reconcileOrphanedWorkers(pool, options.kernel, row.goal_id) : [];
+
     if (consistent) {
-      results.push({ goalId: row.goal_id, projectId: row.project_id, priorState: row.state, outcome: "consistent", reasons: [] });
+      results.push({ goalId: row.goal_id, projectId: row.project_id, priorState: row.state, outcome: "consistent", reasons: [], reconciledWorkerIds });
       continue;
     }
     if (row.state === "recovering") {
       // Already durably marked recovering by a prior run or actor; nothing
       // further to record this pass.
-      results.push({ goalId: row.goal_id, projectId: row.project_id, priorState: row.state, outcome: "recovering", reasons });
+      results.push({ goalId: row.goal_id, projectId: row.project_id, priorState: row.state, outcome: "recovering", reasons, reconciledWorkerIds });
       continue;
     }
 
@@ -225,13 +258,14 @@ export async function reconcileOnStartup(
         priorState: row.state,
         outcome: commandResult.outcome === "succeeded" ? "recovering" : "lease_contended",
         reasons,
+        reconciledWorkerIds,
       });
     } catch (error) {
       if (error instanceof LeaseUnavailableError) {
         // Some other actor legitimately holds the Goal lease right now;
         // reconciliation must never steal it. Report the ambiguity instead
         // of forcing a transition.
-        results.push({ goalId: row.goal_id, projectId: row.project_id, priorState: row.state, outcome: "lease_contended", reasons });
+        results.push({ goalId: row.goal_id, projectId: row.project_id, priorState: row.state, outcome: "lease_contended", reasons, reconciledWorkerIds: [] });
         continue;
       }
       throw error;
@@ -239,4 +273,40 @@ export async function reconcileOnStartup(
   }
 
   return { leaderProof, checkedGoalCount: nonterminalGoals.length, results };
+}
+
+/**
+ * Forces a fresh observeWorker call for every nonterminal worker under a
+ * Goal whose durable lease is not currently live, using this restarted
+ * process's own fresh kernel. A worker whose execution genuinely no longer
+ * exists in this fresh kernel's session state is durably transitioned to
+ * "unknown" by observeWorker's own existing empty-observation fallback
+ * (never a fabricated "failed", per Phase 1 re-patch item 2); a worker
+ * whose observation happens to resolve some other way is recorded exactly
+ * as observeWorker reports it. One worker's reconciliation failure is
+ * logged into the returned list as skipped, never allowed to abort startup
+ * for every other Goal/worker.
+ */
+async function reconcileOrphanedWorkers(pool: Pool, kernel: ExecutionKernelPort | undefined, goalId: string): Promise<readonly string[]> {
+  if (!kernel) return [];
+  const workersResult = await pool.query<{ worker_id: string }>(
+    `SELECT w.worker_id
+       FROM workers w
+       JOIN head_councils hc ON hc.council_id = w.council_id
+      WHERE hc.goal_id = $1 AND w.status IN ('spawned', 'running')`,
+    [goalId],
+  );
+  const reconciled: string[] = [];
+  for (const { worker_id: workerId } of workersResult.rows) {
+    try {
+      await observeWorker(pool, kernel, workerId);
+      reconciled.push(workerId);
+    } catch {
+      // A concurrent legitimate transition (e.g. another reconciler
+      // instance, or the worker's own owning Head, already observed or
+      // cancelled it first) is not this pass's failure; skip it silently
+      // rather than aborting the whole startup reconciliation for it.
+    }
+  }
+  return reconciled;
 }

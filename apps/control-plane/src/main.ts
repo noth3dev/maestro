@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { assertProjectMembership, authenticateLocalOperator, getGoalControl, listGoalEvents, PostgresAuthorityRepository, reconcileOnStartup, runMigrations } from "@maestro/persistence";
+import { createPrimeExecutionKernel } from "@maestro/prime-adapter";
 import type { ActionRequest } from "@maestro/authority";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService } from "./critical-action-service.js";
@@ -75,7 +76,17 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       // traffic. If the startup reconciliation leader lease cannot be
       // acquired or reconciliation itself fails, this throws and the caller
       // (main()) closes the pool without binding a listener.
-      await reconcileOnStartup(pool, { ownerId: config.leaseOwnerId, leaderLeaseDurationMs: config.reconcilerLeaseDurationMs });
+      // A freshly constructed kernel here always starts with empty
+      // sessions/roots/children state (see execution-kernel.ts), so forcing
+      // every orphaned nonterminal worker through it during reconciliation
+      // can only ever honestly downgrade a genuinely dead session to
+      // "unknown" -- never fabricate or accidentally resume one (Phase 1
+      // re-patch item 8 part 2/2: durable worker/session restart recovery).
+      await reconcileOnStartup(pool, {
+        ownerId: config.leaseOwnerId,
+        leaderLeaseDurationMs: config.reconcilerLeaseDurationMs,
+        kernel: createPrimeExecutionKernel(),
+      });
       await app.listen({ host: config.host, port: config.port });
     },
     async close() {
