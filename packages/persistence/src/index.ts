@@ -27,3 +27,4 @@ export * from "./device-grant.js";
 export * from "./firefly.js";
 export * from "./firefly-incident.js";
 export * from "./test-migrations.js";
+export * from "./migrate.js";
