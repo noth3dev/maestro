@@ -1,0 +1,1 @@
+{"name":"@maestro/firefly","private":true,"type":"module","dependencies":{"@maestro/domain":"*","@maestro/persistence":"*"},"scripts":{"start":"node ./dist/main.js"}}

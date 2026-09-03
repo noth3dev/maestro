@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS firefly_signals (
+  signal_id uuid PRIMARY KEY,
+  incident_fingerprint text NOT NULL,
+  first_observed_at timestamptz NOT NULL,
+  last_observed_at timestamptz NOT NULL,
+  severity text NOT NULL CHECK (severity IN ('info','warning','critical')),
+  confidence double precision NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+  affected_component text NOT NULL,
+  affected_version text NOT NULL,
+  minimal_reproduction_evidence jsonb NOT NULL,
+  source text NOT NULL,
+  source_freshness text NOT NULL,
+  deduplication_relationship text NOT NULL CHECK (deduplication_relationship IN ('new','same','related')),
+  firefly_health_state text NOT NULL CHECK (firefly_health_state IN ('healthy','degraded','unhealthy')),
+  nonce text NOT NULL UNIQUE,
+  sequence bigint NOT NULL,
+  issued_at timestamptz NOT NULL,
+  signature text NOT NULL,
+  received_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  UNIQUE (sequence)
+);

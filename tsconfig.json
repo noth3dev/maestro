@@ -36,6 +36,9 @@
     },
     {
       "path": "packages/persistence"
+    },
+    {
+      "path": "apps/firefly"
     }
   ],
   "compilerOptions": {

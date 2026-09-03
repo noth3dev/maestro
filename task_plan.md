@@ -132,3 +132,8 @@ Current restart lane: forced mid-flight worker restart/reconciliation scenario i
 ## 2026-09-04 — Phase 4 P4S1 environment foundation
 - [self_verified_pending_postgres] Implemented typed environment recipe/manifest and durable PostgreSQL environment lifecycle records in migration 0039. Identity is content-addressed from canonical recipe and resolved inputs; durable writes require current Goal lease plus actor/session context.
 - Focused/domain tests and build pass. Full check: 267 passed, 194 skipped, 0 failed; integration tests require the assigned disposable PostgreSQL instance and were not run in this runtime.
+## Phase 4 step 6 — Firefly foundation
+- Implemented Firefly authenticated signal schema, freshness and replay rejection, independent append-only buffer, and PostgreSQL receiving primitive.
+- Self-verification currently: build passed; focused Firefly tests **2 passed, 0 failed**. Real-Postgres integration remains pending.
+- [in_progress] 9. Phase 4 Track B (plan/phase4.md work-sequence steps 6-9): P4S6 Firefly signal foundation is self-verified with real-PostgreSQL focused evidence pending independent review; steps 7-9 are next. Track A remains isolated in `.worktrees/p4-env`.
+- [in_progress] 9. Phase 4 Track B (plan/phase4.md work-sequence steps 6-9): P4S6 hardening and P4S7 fingerprint/dedup/severity-confidence/silence slices are self-verified with real-PostgreSQL evidence, pending independent review; step 8 Incident Brief/triage/remediation composition is next. Track A remains isolated in `.worktrees/p4-env`.
