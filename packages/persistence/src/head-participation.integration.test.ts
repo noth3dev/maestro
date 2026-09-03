@@ -34,11 +34,11 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
   }
 
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals CASCADE");
+    await pool.query("DROP TABLE IF EXISTS council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
     await applyAllMigrations(pool);
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE head_activation_edges, head_activation_attempts, goal_head_participations, goal_leases, outbox, goal_events, command_receipts, goals RESTART IDENTITY CASCADE");
+    await pool.query("TRUNCATE head_activation_edges, head_activation_attempts, goal_head_participations, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE");
     await bootstrapPermanentOrganization(pool);
   });
   afterAll(async () => { await pool.end(); });
@@ -222,5 +222,46 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
     await proof(goalId);
     await expect(activateHeadParticipation(pool, sane(goalId, "product"), stale)).rejects.toMatchObject({ code: "stale_lease" });
     expect((await pool.query("SELECT (SELECT count(*) FROM goal_head_participations) AS participations, (SELECT count(*) FROM head_activation_attempts) AS attempts, (SELECT count(*) FROM head_activation_edges) AS edges")).rows[0]).toEqual({ participations: "0", attempts: "0", edges: "0" });
+  });
+
+  async function setGoalControl(goalId: string, setClause: string) {
+    const { rows } = await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId]);
+    const projectId = rows[0]!.project_id;
+    await pool.query("INSERT INTO goal_controls (project_id, goal_id) VALUES ($1, $2) ON CONFLICT (project_id, goal_id) DO NOTHING", [projectId, goalId]);
+    await pool.query(`UPDATE goal_controls SET ${setClause} WHERE project_id = $1 AND goal_id = $2`, [projectId, goalId]);
+  }
+
+  const controlLatchCases = [
+    { label: "paused", setClause: "pause_requested_at = clock_timestamp(), paused_at = clock_timestamp()", pattern: /paused/ },
+    { label: "stopped", setClause: "stopping_at = clock_timestamp(), stopped_at = clock_timestamp()", pattern: /stopped/ },
+    { label: "emergency-stopped", setClause: "emergency_stopped_at = clock_timestamp()", pattern: /emergency-stopped/ },
+  ] as const;
+
+  it.each(controlLatchCases)("rejects Head activation once the Goal is $label, creating no participation or attempt row", async ({ setClause, pattern }) => {
+    const goalId = await goal(); const lease = await proof(goalId);
+    await setGoalControl(goalId, setClause);
+    await expect(activateHeadParticipation(pool, sane(goalId, "product"), lease)).rejects.toThrow(pattern);
+    expect((await pool.query("SELECT (SELECT count(*) FROM goal_head_participations WHERE goal_id = $1) AS participations, (SELECT count(*) FROM head_activation_attempts WHERE goal_id = $1) AS attempts", [goalId])).rows[0]).toEqual({ participations: "0", attempts: "0" });
+  });
+
+  it("still activates a Head normally once the Goal has an explicit but open control row", async () => {
+    const goalId = await goal(); const lease = await proof(goalId);
+    await setGoalControl(goalId, "pause_requested_at = NULL");
+    await expect(activateHeadParticipation(pool, sane(goalId, "product"), lease)).resolves.toMatchObject({ status: "starting" });
+  });
+
+  it("rejects markHeadParticipationActive (resume) once the Goal is emergency-stopped, leaving the row starting", async () => {
+    const goalId = await goal(); const lease = await proof(goalId);
+    await activateHeadParticipation(pool, sane(goalId, "product"), lease);
+    await setGoalControl(goalId, "emergency_stopped_at = clock_timestamp()");
+    await expect(markHeadParticipationActive(pool, goalId, "product", "opaque:blocked", lease)).rejects.toThrow(/emergency-stopped/);
+    expect((await pool.query("SELECT status, active_session_ref FROM goal_head_participations WHERE goal_id = $1 AND department_id = 'product'", [goalId])).rows[0]).toEqual({ status: "starting", active_session_ref: null });
+  });
+
+  it("rejects sleepHeadParticipation once the Goal is emergency-stopped, leaving the row active", async () => {
+    const goalId = await goal(); const lease = await active(goalId, "product");
+    await setGoalControl(goalId, "emergency_stopped_at = clock_timestamp()");
+    await expect(sleepHeadParticipation(pool, goalId, "product", lease)).rejects.toThrow(/emergency-stopped/);
+    expect((await pool.query("SELECT status, active_session_ref FROM goal_head_participations WHERE goal_id = $1 AND department_id = 'product'", [goalId])).rows[0]).toEqual({ status: "active", active_session_ref: "opaque:product" });
   });
 });

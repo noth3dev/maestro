@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { GoalHeadParticipation, HeadParticipationStatus } from "@maestro/domain";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
+import { assertGoalControlOpen } from "./council.js";
 import type { Pool, PoolClient } from "pg";
 
 export interface ActivateHeadRequest {
@@ -328,6 +329,10 @@ async function assertCurrentGoalLease(client: PoolClient, proof: GoalLeaseProof)
     [proof.goalId, proof.ownerId, proof.fencingToken],
   );
   if (result.rowCount !== 1) throw new StaleGoalLeaseError(proof.goalId);
+  // A valid lease alone does not authorize Head participation writes once the
+  // Goal is paused, stopping, stopped, or emergency-stopped -- matches the
+  // Council/DepartmentPlan/Worker call sites' existing control-latch check.
+  await assertGoalControlOpen(client, proof.goalId);
 }
 
 async function assertActiveRequester(client: PoolClient, goalId: string, departmentId: string, headRoleId: string): Promise<void> {
