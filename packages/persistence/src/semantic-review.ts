@@ -109,6 +109,12 @@ export async function requestSemanticReview(pool: Pool, kernel: ExecutionKernelP
      RETURNING review_id, goal_id, claim_text, verdict, cited_evidence_ids, reasoning`,
     [reviewId, goalId, claimText, JSON.stringify(criteria), prompt, rawText, verdict, JSON.stringify(citedEvidenceIds), reasoning, spawned.execution, spawned.invocation],
   );
+  // The review is now durably recorded on every path (including the
+  // unparseable/prompt-failure downgrade above), so this isolated one-shot
+  // root execution's in-process kernel state may be released (Phase 1
+  // re-patch item 2). Best-effort: a release failure must never surface as
+  // a review failure, since the durable INSERT already succeeded above.
+  await kernel.release?.(spawned.invocation).catch(() => {});
   return mapReview(inserted.rows[0]!);
 }
 

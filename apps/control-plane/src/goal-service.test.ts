@@ -56,6 +56,62 @@ describe("durable goal service leases", () => {
 });
 
 
+describe("durable goal service lease-proof eviction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("evicts the lease proof once a command reaches a terminal Goal state, so the next command re-acquires", async () => {
+    persistence.acquireGoalLease.mockResolvedValue(proof);
+    persistence.executeGoalCommand.mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "succeeded", version: 1 });
+    const service = createDurableGoalService({ pool: {} as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+
+    await service.createGoal({ projectId }, commandId, operator);
+    expect(persistence.acquireGoalLease).toHaveBeenCalledTimes(1);
+    expect(persistence.renewGoalLease).not.toHaveBeenCalled();
+
+    persistence.executeGoalCommand.mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "succeeded", version: 2 });
+    await service.transitionGoal(commandId, { projectId, expectedVersion: 1, to: "succeeded" }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05", operator);
+
+    expect(persistence.acquireGoalLease).toHaveBeenCalledTimes(2);
+    expect(persistence.renewGoalLease).not.toHaveBeenCalled();
+  });
+
+  it("retains the lease proof and still renews on retry when the command result is nonterminal", async () => {
+    persistence.acquireGoalLease.mockResolvedValue(proof);
+    persistence.renewGoalLease.mockResolvedValue(proof);
+    persistence.executeGoalCommand.mockResolvedValue({ outcome: "succeeded", goalId: proof.goalId, state: "draft", version: 1 });
+    const service = createDurableGoalService({ pool: {} as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+
+    await service.createGoal({ projectId }, commandId, operator);
+    await service.transitionGoal(commandId, { projectId, expectedVersion: 1, to: "ready_for_confirmation" }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f06", operator);
+
+    expect(persistence.acquireGoalLease).toHaveBeenCalledTimes(1);
+    expect(persistence.renewGoalLease).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains the lease proof (still renews on the next call) when a command result is a version conflict, not a terminal success", async () => {
+    persistence.acquireGoalLease.mockResolvedValue(proof);
+    persistence.renewGoalLease.mockResolvedValue(proof);
+    persistence.executeGoalCommand
+      .mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "draft", version: 1 })
+      .mockResolvedValueOnce({ outcome: "version_conflict" });
+    const service = createDurableGoalService({ pool: {} as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+
+    await service.createGoal({ projectId }, commandId, operator);
+    await expect(
+      service.transitionGoal(commandId, { projectId, expectedVersion: 5, to: "ready_for_confirmation" }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f07", operator),
+    ).rejects.toMatchObject({ name: "VersionConflictError" });
+
+    persistence.executeGoalCommand.mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "ready_for_confirmation", version: 2 });
+    await service.transitionGoal(commandId, { projectId, expectedVersion: 1, to: "ready_for_confirmation" }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f08", operator);
+
+    expect(persistence.acquireGoalLease).toHaveBeenCalledTimes(1);
+    expect(persistence.renewGoalLease).toHaveBeenCalledTimes(2);
+  });
+});
+
+
 describe("durable goal service command receipt errors", () => {
   beforeEach(() => {
     vi.clearAllMocks();

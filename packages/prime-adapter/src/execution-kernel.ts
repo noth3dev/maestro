@@ -280,7 +280,12 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
         return root.status === "unknown" && session?.isStreaming ? "running" : root.status;
       }
       const child = children.get(invocation);
-      if (!child) return "failed";
+      // No provider state or terminal evidence is available for an
+      // invocation this kernel never registered, or has already released --
+      // "unknown" is the domain contract's exact meaning for that case.
+      // Never fabricate "failed": a released invocation's real terminal
+      // outcome was already durably recorded by its caller before release.
+      if (!child) return "unknown";
       if (child.cancelled) return "cancelled";
       const snapshot = sessions.get(child.parent)?.getRlmChildSnapshots().find((item) => item.id === child.childId);
       return snapshot ? normalizeStatus(snapshot.status) : "unknown";
@@ -294,6 +299,25 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
     async reconnect(execution): Promise<never> {
       void execution;
       return unavailable("reconnect");
+    },
+
+    /**
+     * Bounds the sessions/roots/children Maps' otherwise-unbounded growth
+     * (Phase 1 re-patch item 2). Must only be called by a caller that has
+     * already durably recorded this invocation's terminal outcome; this
+     * kernel never evicts on its own initiative. Idempotent: releasing an
+     * already-released or never-registered invocation is a safe no-op.
+     */
+    async release(invocation): Promise<void> {
+      const root = roots.get(invocation);
+      if (root) {
+        roots.delete(invocation);
+        const stillReferenced = [...children.values()].some((child) => child.parent === root.execution);
+        if (!stillReferenced) sessions.delete(root.execution);
+        return;
+      }
+      const child = children.get(invocation);
+      if (child) children.delete(invocation);
     },
   };
 }

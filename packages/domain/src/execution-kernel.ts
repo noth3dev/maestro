@@ -90,4 +90,16 @@ export interface ExecutionKernelPort {
   getInvocationStatus(invocation: InvocationRef): Promise<InvocationStatus>;
   resume(execution: ExecutionRef): Promise<never>;
   reconnect(execution: ExecutionRef): Promise<never>;
+  /**
+   * Acknowledges that this invocation's terminal outcome has already been
+   * durably recorded by the caller, so the kernel may release any in-process
+   * state it still holds for it. A kernel MUST NOT evict terminal state on
+   * its own initiative (e.g. on first terminal observation or a timer) --
+   * only an explicit post-durable-write release from the caller proves the
+   * evidence is safe to forget, since a retry after a failed durable write
+   * still needs the same terminal observation available. Optional: kernels
+   * with no unbounded in-process state (e.g. a durable/replayable adapter)
+   * may omit it; callers must tolerate its absence.
+   */
+  release?(invocation: InvocationRef): Promise<void>;
 }
