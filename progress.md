@@ -650,3 +650,32 @@ HEAD
   `verifyEvidenceRecord`) and item 7 (config credential-key exclusion test, test-only, no
   production change needed) -- both designs already prepared this session by the earlier
   `luna-p1-testgaps-audit` child.
+
+## 2026-09-04 (continued) — Phase 1 re-patch item 7 (config credential-key exclusion test) resolved, item 6 deferred
+- User asked which of item 6 (evidence-hash-corruption at real consumers, requiring a genuine
+  production seam threaded through certifyQuality/certifyConditional/assembleEvidenceBundle/
+  recordEvidenceBundle/generateSaneFinalReport across ~15 call sites, many already-passing large
+  capstone integration tests using synthetic evidence rows with no real backing content) or item 7
+  (test-only, no production change, zod already excludes unknown keys) would produce a cleaner
+  result done first. Recommended and the user agreed: item 7 first (small, isolated, zero blast
+  radius), item 6 afterward with full attention rather than rushed alongside a long list of other
+  work this session.
+- Implemented item 7 directly (no subagent), in an isolated worktree
+  (`.worktrees/p1-config-credential-test`, branch `patch/p1-config-credential-test`): one new
+  `config.test.ts` regression supplying `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`/`OPENROUTER_API_KEY`
+  sentinels alongside required config, asserting `parseConfig`'s result is unchanged and its
+  output key set is exactly the eight accepted fields, with the serialized JSON never containing
+  any of the sentinel secret values. No production code changed (confirmed unneeded).
+- Verification: 12/12 `config.test.ts` passed. Full real-PostgreSQL `npm run check` (build + test,
+  both clean -- test-only addition, no node_modules-symlink cross-package staleness): 96/97 files,
+  619 passed, 2 intentional live-Prime skips, 0 failed, in the isolated worktree on the first run.
+- Independent review performed by the parent session directly (no independent-review subagent
+  spawned, per explicit user direction to continue without further subagents this session), then
+  merged to `main` (`9a1d084`). Authoritative post-merge re-verification on `main`: fresh
+  `npm run build` and full real-PostgreSQL `npm run check` both clean: 96/97 files, 619 passed, 2
+  intentional live-Prime skips, 0 failed. Worktree, branch, and the disposable PostgreSQL container
+  (`maestro-p1-config-postgres`) removed.
+- **Phase 1 status: items 1, 2, 3, 4, 5, 7 resolved and accepted; item 6 (evidence-hash-corruption
+  at real consumers) deliberately deferred for its own dedicated, unhurried slice given its larger
+  production-seam scope; item 8 (already-known restart-recovery/project-scope-auth P0s) remains
+  open.** Next: item 6, or item 8, per user direction next session/turn.

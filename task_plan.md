@@ -231,9 +231,12 @@ feature-completeness audit before treating Phase 4 as usable.
    `getEvidenceMetadata` (packages/persistence/src/evidence.integration.test.ts:32), never at any
    of the actual "certification consumers" the spec names (certification, evidence-bundle, Sane
    report). Fix: add one corrupted-hash regression test per real consumer.
-7. **[LOW, test quality]** No test asserts `parseConfig`'s accepted key set excludes
-   provider-credential-shaped env vars (Phase 1 Tests #12 has no dedicated coverage; the only
-   related test checks DB-credential log redaction, a different property).
+7. **[RESOLVED 2026-09-04, commit `9a1d084`]** No test asserted
+   `parseConfig`'s accepted key set excludes provider-credential-shaped env vars. Fixed:
+   test-only regression (no production change needed -- zod's `z.object` already only
+   destructures its own known keys) proving `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`/
+   `OPENROUTER_API_KEY` sentinels never appear in `parseConfig`'s output. Full real-PostgreSQL
+   `npm run check` on `main`: 96/97 files, 619 passed, 2 intentional live-Prime skips, 0 failed.
 8. Already-known Phase 1-rooted P0s from the first audit wave (see "Phase 5 remediation plan" /
    Track A above, items 1 and 4): no durable worker/session restart recovery
    (`execution-kernel.ts` `resume()`/`reconnect()` always throw; `reconciliation.ts` does no real
