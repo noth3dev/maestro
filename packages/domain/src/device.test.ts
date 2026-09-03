@@ -78,7 +78,19 @@ describe("local device policy agent", () => {
   });
 
   it("never authorizes critical effects through local policy alone", () => {
-    for (const action of ["external.send", "deployment.release", "payment.charge", "permission.change", "git.remote.push", "PERMANENT.DELETE"]) {
+    for (const action of [
+      "external.send",
+      "deployment.release",
+      "payment.charge",
+      "permission.change",
+      "git.push",
+      "GIT.PUSH",
+      "git push --force",
+      "git.remote.push",
+      "git remote push",
+      "git.remote.push --force",
+      "PERMANENT.DELETE",
+    ]) {
       expect(() => assertValidLocalDevicePolicy(policy({ rules: [{ action, targets: ["target"] }] }))).toThrow(/critical|policy/i);
       const agent = new LocalDevicePolicyAgent(enrollment(), policy());
       expect(agent.evaluate({ deviceId: "device-1", identityFingerprint: enrollment().identityFingerprint, action, target: "target" })).toMatchObject({ allowed: false, reason: "critical_action_requires_goal_grant" });

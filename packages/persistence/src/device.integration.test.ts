@@ -20,7 +20,7 @@ import {
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
-const migrations = ["0001_phase1_core.sql", "0040_devices.sql"];
+const migrations = ["0001_phase1_core.sql", "0040_devices.sql", "0041_device_policy_hardening.sql"];
 
 const inventory = (overrides: Partial<DeviceInventory> = {}): DeviceInventory => ({
   observedAt: "2030-01-01T00:00:00.000Z",
@@ -122,6 +122,17 @@ const context = (role: "ceo" | "device_agent", deviceId?: string, identityFinger
     await expect(evaluateDevicePolicy(pool, request)).resolves.toMatchObject({ allowed: true, reason: "allowed", policyVersion: 2 });
     await expect(evaluateDevicePolicy(pool, { ...request, target: "/repo/secrets.env" })).resolves.toMatchObject({ allowed: false, reason: "target_not_allowed" });
     await expect(evaluateDevicePolicy(pool, { ...request, action: "node", target: "/repo" })).resolves.toMatchObject({ allowed: false, reason: "action_not_allowed" });
+  });
+
+  it("rejects a directly injected policy version that is not the next revision", async () => {
+    const device = await enrollDevice(pool, { displayName: "Build laptop", deviceType: "computer", publicKey: "public-key-policy-sequence" }, context("ceo"));
+    const configured = await setLocalDevicePolicy(pool, device.deviceId, policy(), context("ceo"));
+    await expect(pool.query(
+      "INSERT INTO device_policies (device_id, policy_version, rules, set_by) VALUES ($1, 99, $2::jsonb, 'attacker')",
+      [device.deviceId, JSON.stringify(policy().rules)],
+    )).rejects.toThrow(/next|version|revision|append/i);
+    expect((await readDevice(pool, device.deviceId))?.policy.policyVersion).toBe(configured.policy.policyVersion);
+    await expect(setLocalDevicePolicy(pool, device.deviceId, policy({ rules: [{ action: "project.file.write", targets: ["/repo/README.md"] }] }), context("ceo"))).resolves.toMatchObject({ policy: { policyVersion: 3 } });
   });
 
   it("rejects an unrecognized policy field instead of silently widening or dropping policy input", async () => {

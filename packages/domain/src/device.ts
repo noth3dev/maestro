@@ -117,7 +117,9 @@ function isCriticalOrForbiddenAction(action: string): boolean {
     canonical.startsWith("payment.") ||
     canonical.startsWith("permission.") ||
     canonical.startsWith("authority.") ||
-    canonical.startsWith("git.remote.");
+    canonical.startsWith("git.remote.") ||
+    canonical === "git.push" ||
+    canonical.startsWith("git.push.");
 }
 
 /** Hashes normalized public verification material with Node's standard SHA-256. */
