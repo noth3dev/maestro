@@ -8,7 +8,7 @@ import { listFireflySignals, recordFireflySignal } from "./firefly.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
-const migrations = ["0039_firefly_signals.sql", "0040_firefly_signal_hardening.sql", "0041_firefly_incidents.sql", "0042_firefly_integrity.sql"];
+const migrations = ["0042_firefly_signals.sql", "0043_firefly_signal_hardening.sql", "0044_firefly_incidents.sql", "0045_firefly_integrity.sql"];
 
 const signal = (): FireflySignal => {
   const value: FireflySignal = {
