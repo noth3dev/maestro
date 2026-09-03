@@ -24,6 +24,9 @@
     },
     {
       "path": "../../packages/persistence"
+    },
+    {
+      "path": "../../packages/prime-adapter"
     }
   ]
 }
