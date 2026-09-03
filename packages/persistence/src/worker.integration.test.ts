@@ -46,19 +46,21 @@ const bundleSubstance = (overrides: Partial<MissionBundleSubstance> = {}): Missi
 });
 
 /** A minimal, deterministic fake standing in for a real Prime execution kernel. */
-function fakeKernel(finalStatus: InvocationObservation["status"] = "succeeded"): ExecutionKernelPort & { spawnedCount: number; cancelledInvocations: string[]; releasedInvocations: string[] } {
+function fakeKernel(finalStatus: InvocationObservation["status"] = "succeeded"): ExecutionKernelPort & { spawnedCount: number; cancelledInvocations: string[]; releasedInvocations: string[]; spawnRequests: Parameters<ExecutionKernelPort["spawn"]>[0][] } {
   let counter = 0;
   const invocations = new Map<string, { execution: string; name: string }>();
   return {
     spawnedCount: 0,
     cancelledInvocations: [],
     releasedInvocations: [],
+    spawnRequests: [],
     async spawn(request) {
       counter += 1;
       const execution = `exec-${counter}`;
       const invocation = `inv-${counter}`;
       invocations.set(invocation, { execution, name: request.name });
       (this as { spawnedCount: number }).spawnedCount += 1;
+      (this as { spawnRequests: unknown[] }).spawnRequests.push(request);
       return { execution: execution as never, invocation: invocation as never };
     },
     async prompt() { /* no-op */ },
@@ -132,6 +134,21 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     expect(observed.usageTotalTokens).toBe(42);
     const reobserved = await observeWorker(pool, kernel, worker.workerId);
     expect(reobserved).toEqual(observed);
+  });
+
+  it("threads the exact Mission Bundle capability grant (allowedTools/allowedSkills) through to the real spawn call (Phase 2 re-patch item 2)", async () => {
+    const { council, plan, proof, bundle } = await setupBundle();
+    const kernel = fakeKernel("succeeded");
+    await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+
+    expect(kernel.spawnRequests).toHaveLength(1);
+    expect(kernel.spawnRequests[0]!.capabilities).toEqual({
+      allowedTools: bundle.substance.allowedTools,
+      allowedSkills: bundle.substance.allowedSkills,
+    });
+    // The exact grant, not a widened or narrowed copy.
+    expect(kernel.spawnRequests[0]!.capabilities!.allowedTools).toEqual(["read"]);
+    expect(kernel.spawnRequests[0]!.capabilities!.allowedSkills).toEqual(["research"]);
   });
 
   it("releases the kernel's in-process invocation record exactly once, only after the terminal status is durably committed (Phase 1 re-patch item 2)", async () => {

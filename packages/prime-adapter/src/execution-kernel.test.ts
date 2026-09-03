@@ -255,6 +255,48 @@ describe("Prime execution-kernel bounded release (Phase 1 re-patch item 2)", () 
   });
 
 
+describe("Prime execution-kernel capability scoping (Phase 2 re-patch item 2)", () => {
+  it("forwards a root spawn's capabilities exactly to the session factory", async () => {
+    const session = makeSession();
+    const factory = { create: vi.fn().mockResolvedValue({ session }) };
+    const kernel = createPrimeExecutionKernelFromFactory(factory);
+
+    await kernel.spawn({
+      name: "scout-worker",
+      cwd: "/repo",
+      capabilities: { allowedTools: ["read", "grep"], allowedSkills: ["research"] },
+    });
+
+    expect(factory.create).toHaveBeenCalledWith({
+      cwd: "/repo",
+      capabilities: { allowedTools: ["read", "grep"], allowedSkills: ["research"] },
+    });
+  });
+
+  it("passes undefined capabilities through unchanged when a root spawn declares none", async () => {
+    const session = makeSession();
+    const factory = { create: vi.fn().mockResolvedValue({ session }) };
+    const kernel = createPrimeExecutionKernelFromFactory(factory);
+
+    await kernel.spawn({ name: "unscoped-root", cwd: "/repo" });
+
+    expect(factory.create).toHaveBeenCalledWith({ cwd: "/repo", capabilities: undefined });
+  });
+
+  it("a child spawn does not require or forward capabilities (it inherits its root's already-scoped session)", async () => {
+    const session = makeSession();
+    const factory = { create: vi.fn().mockResolvedValue({ session }) };
+    const kernel = createPrimeExecutionKernelFromFactory(factory);
+    const root = await kernel.spawn({ name: "root", cwd: "/repo", capabilities: { allowedTools: ["read"] } });
+    factory.create.mockClear();
+
+    await kernel.spawn({ name: "child", parent: root.execution, prompt: "reply", capabilities: { allowedTools: ["write"] } });
+
+    expect(factory.create).not.toHaveBeenCalled();
+    expect(session.runRlmChild).toHaveBeenCalledWith("reply", { name: "child", thinking: "off" });
+  });
+});
+
 describe("truthful unavailable Prime observations", () => {
   it("keeps root and a child without a snapshot observable without inventing status, events, or usage", async () => {
     const session = makeSession();

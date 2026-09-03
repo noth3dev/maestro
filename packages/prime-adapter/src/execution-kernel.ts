@@ -6,6 +6,7 @@ import {
   type InvocationRef,
   type InvocationStatus,
   type ModelIdentity,
+  type SpawnCapabilities,
   type SpawnRequest,
   type SpawnedInvocation,
   type ToolEvents,
@@ -42,7 +43,7 @@ interface PrimeSession {
 }
 
 export interface PrimeSessionFactory {
-  create(options: { cwd: string }): Promise<{ session: PrimeSession }>;
+  create(options: { cwd: string; capabilities?: SpawnCapabilities }): Promise<{ session: PrimeSession }>;
 }
 
 type RootRecord = {
@@ -123,9 +124,11 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
         // A root is always bound to an existing process/repository context. The
         // public kernel supplies process.cwd() when callers omit cwd; the
         // production factory below also pins that context instead of trusting a
-        // caller-provided path.
+        // caller-provided path. Capability scoping (allowedTools/allowedSkills)
+        // is only meaningful for a root spawn -- a child inherits its root's
+        // already-scoped session, it cannot be independently re-scoped.
         const cwd = request.cwd ?? process.cwd();
-        const { session } = await factory.create({ cwd });
+        const { session } = await factory.create({ cwd, capabilities: request.capabilities });
         const execution = asExecutionRef(`execution-${++nextRoot}`);
         const invocation = nextPublicInvocation();
         sessions.set(execution, session);
@@ -327,11 +330,17 @@ export function createPrimeExecutionKernel(): ExecutionKernelPort {
   // caller cannot redirect the production root session through SpawnRequest.cwd.
   const cwd = process.cwd();
   return createPrimeExecutionKernelFromFactory({
-    async create() {
+    async create(options) {
       return createAgentSession({
         cwd,
         sessionManager: SessionManager.inMemory(cwd),
         rlmMaxDepth: 1,
+        // allowedToolNames is the real Prime Agent SDK's own tool-restriction
+        // surface (packages/domain's Mission Bundle allowedTools maps to it
+        // directly). Omitted entirely when no capability scoping is
+        // supplied, matching the SDK's own "no restriction" default -- never
+        // silently narrowed or widened.
+        ...(options.capabilities?.allowedTools ? { allowedToolNames: [...options.capabilities.allowedTools] } : {}),
       });
     },
   });
