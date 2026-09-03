@@ -134,43 +134,50 @@ async function createCredential(
 
 export async function authenticateLocalOperator(
   pool: Pool,
-  secret: string,
+  bearerToken: string,
   options: LocalOperatorAuthenticationOptions = {},
 ): Promise<OperatorAuthentication> {
-  if (Buffer.byteLength(secret, "utf8") > MAX_BEARER_SECRET_BYTES) return { outcome: "invalid" };
+  const separator = bearerToken.indexOf(".");
+  if (separator <= 0) return { outcome: "invalid" };
+  const credentialId = bearerToken.slice(0, separator);
+  const secret = bearerToken.slice(separator + 1);
+  if (!isCanonicalCredentialId(credentialId) || secret.length === 0 || Buffer.byteLength(secret, "utf8") > MAX_BEARER_SECRET_BYTES) {
+    return { outcome: "invalid" };
+  }
+
+  const result = await pool.query<{
+    operator_id: string;
+    credential_id: string;
+    operator_active: boolean;
+    credential_active: boolean;
+    revoked_at: Date | null;
+    salt: Buffer;
+    verifier: Buffer;
+  }>(
+    `SELECT c.operator_id, c.credential_id, o.active AS operator_active,
+            c.active AS credential_active, c.revoked_at, c.salt, c.verifier
+     FROM local_operator_credentials c
+     JOIN local_operators o ON o.operator_id = c.operator_id
+     WHERE c.credential_id = $1`,
+    [credentialId],
+  );
+  const row = result.rows[0];
+  if (!row) return { outcome: "invalid" };
+
   const release = (options.scryptGuard ?? processScryptGuard).tryAcquire();
   if (!release) return { outcome: "unavailable" };
   try {
-    const result = await pool.query<{
-      operator_id: string;
-      credential_id: string;
-      operator_active: boolean;
-      credential_active: boolean;
-      revoked_at: Date | null;
-      salt: Buffer;
-      verifier: Buffer;
-    }>(
-      `SELECT c.operator_id, c.credential_id, o.active AS operator_active,
-              c.active AS credential_active, c.revoked_at, c.salt, c.verifier
-       FROM local_operator_credentials c
-       JOIN local_operators o ON o.operator_id = c.operator_id`,
-    );
-
-    let forbidden = false;
-    const derive = options.deriveVerifier ?? deriveVerifier;
-    for (const row of result.rows) {
-      const verifier = await derive(secret, row.salt);
-      if (!timingSafeEqual(verifier, row.verifier)) continue;
-      if (!row.operator_active || !row.credential_active || row.revoked_at !== null) {
-        forbidden = true;
-        continue;
-      }
-      return { outcome: "authenticated", operator: { operatorId: row.operator_id, credentialId: row.credential_id } };
-    }
-    return forbidden ? { outcome: "forbidden" } : { outcome: "invalid" };
+    const verifier = await (options.deriveVerifier ?? deriveVerifier)(secret, row.salt);
+    if (!timingSafeEqual(verifier, row.verifier)) return { outcome: "invalid" };
+    if (!row.operator_active || !row.credential_active || row.revoked_at !== null) return { outcome: "forbidden" };
+    return { outcome: "authenticated", operator: { operatorId: row.operator_id, credentialId: row.credential_id } };
   } finally {
     release();
   }
+}
+
+function isCanonicalCredentialId(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
 }
 
 async function deriveVerifier(secret: string, salt: Buffer): Promise<Buffer> {

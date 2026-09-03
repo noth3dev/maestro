@@ -25,7 +25,7 @@ describeDatabase("local operator credentials with PostgreSQL", () => {
     const context = await bootstrapLocalOperator(pool, { operatorId, credentialId, secret });
 
     expect(context).toEqual({ operatorId, credentialId });
-    await expect(authenticateLocalOperator(pool, secret)).resolves.toEqual({ outcome: "authenticated", operator: context });
+    await expect(authenticateLocalOperator(pool, `${context.credentialId}.${secret}`)).resolves.toEqual({ outcome: "authenticated", operator: context });
 
     const stored = await pool.query<{ serialized: string }>("SELECT row_to_json(c)::text AS serialized FROM (SELECT * FROM local_operator_credentials) c");
     expect(stored.rows).toHaveLength(1);
@@ -36,14 +36,14 @@ describeDatabase("local operator credentials with PostgreSQL", () => {
     const { credentialId } = await bootstrapLocalOperator(pool, { secret: "revoked-secret" });
     await pool.query("UPDATE local_operator_credentials SET active = false, revoked_at = transaction_timestamp() WHERE credential_id = $1", [credentialId]);
 
-    await expect(authenticateLocalOperator(pool, "revoked-secret")).resolves.toEqual({ outcome: "forbidden" });
+    await expect(authenticateLocalOperator(pool, `${credentialId}.revoked-secret`)).resolves.toEqual({ outcome: "forbidden" });
   });
 
   it("returns forbidden for a disabled operator", async () => {
-    const { operatorId } = await bootstrapLocalOperator(pool, { secret: "disabled-secret" });
+    const { operatorId, credentialId } = await bootstrapLocalOperator(pool, { secret: "disabled-secret" });
     await pool.query("UPDATE local_operators SET active = false WHERE operator_id = $1", [operatorId]);
 
-    await expect(authenticateLocalOperator(pool, "disabled-secret")).resolves.toEqual({ outcome: "forbidden" });
+    await expect(authenticateLocalOperator(pool, `${credentialId}.disabled-secret`)).resolves.toEqual({ outcome: "forbidden" });
   });
 
   it("does not allow credential identifiers to be reassigned", async () => {
@@ -80,7 +80,7 @@ describeDatabase("local operator credentials with PostgreSQL", () => {
   });
 
   it("returns invalid for an unknown secret", async () => {
-    await bootstrapLocalOperator(pool, { secret: "known-secret" });
-    await expect(authenticateLocalOperator(pool, "wrong-secret")).resolves.toEqual({ outcome: "invalid" });
+    const { credentialId } = await bootstrapLocalOperator(pool, { secret: "known-secret" });
+    await expect(authenticateLocalOperator(pool, `${credentialId}.wrong-secret`)).resolves.toEqual({ outcome: "invalid" });
   });
 });
