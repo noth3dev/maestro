@@ -157,3 +157,8 @@ Current restart lane: forced mid-flight worker restart/reconciliation scenario i
 ## 2026-09-03 (continued) — P4S9 integrated
 - [in_progress] 9. `phase4/integration` now also carries P4S9 (durable Firefly improvement evidence recorded on incident closure, no automatic changes). Full real-PostgreSQL check: 580 passed, 2 intentional live-Prime skips, 0 failed.
 - Next: P4S10, the device-scope and seeded-incident live gates -- the Phase 4 exit gate itself.
+
+
+## 2026-09-03 (continued) — P4S10 integrated; Phase 4 work-sequence complete at code level
+- [complete_pending_independent_review] 9. Phase 4 (plan/phase4.md) work-sequence steps 1-10 are implemented and integrated on `phase4/integration`, with real-PostgreSQL verification stable over repeated runs (582 passed, 2 intentional live-Prime skips, 0 failed). The exit gate (device/local-policy narrow-grant task plus Firefly outage/recovery/dedupe/isolated-remediation) is evidenced by two composition tests. Self-reviewed only; independent (no-edit) review of the full Phase 4 surface is the recommended next step, and merge to `main` remains behind that review per this project's existing acceptance policy.
+- Branches merged into `phase4/integration`: `fix/shared-migration-runner`, `phase4/p4s1-environments` (S1+S2), `phase4/p4s4-devices` (S4), `phase4/p4s6-firefly` (S6+S7), `phase4/p4s5-device-grants` (S3+S5), `phase4/p4s8-incident-workflow` (S8), `phase4/p4s9-improvement-evidence` (S9), `phase4/p4s10-live-gate` (S10).
