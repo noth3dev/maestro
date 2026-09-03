@@ -902,3 +902,20 @@ HEAD
   real Prime Agent spawn call -- `SpawnRequest` has no field for `allowedSkills`/`allowedTools`/
   `allowedPaths`/`authorityBoundary`, so "Scout workers are read-only by default" is currently
   unenforced anywhere).
+## 2026-09-04 (continued) — Doc/repo sync on resume; Phase 2 re-patch item 2 confirmed merged
+- Session resume found a doc/repo mismatch: `main` already carried commit `efc40c8` ("merge:
+  Phase 2 re-patch item 2 -- thread Mission Bundle capability scoping to real spawn call",
+  merging `6d791d5`), but `task_plan.md` still listed that item as open `[HIGH, test quality]`
+  and `progress.md`'s last entry described it as "next" work not yet done. Per the operating
+  protocol ("if they disagree, trust the repo and correct the docs, not the reverse"), updated
+  `task_plan.md` item 2 to `[RESOLVED]` with the real commit evidence (SpawnCapabilities threaded
+  to the real Prime Agent spawn call via `allowedToolNames`; scout-read-only *enforcement* and
+  path/authority-boundary scoping deliberately left out of this item's scope, per the commit's own
+  documented rationale) and updated the Phase 2 status line from `[not_started]` to `[in_progress]`
+  (items 1-2 resolved, 3-9 open).
+- Also found and removed a stale merged worktree/branch left over from that work:
+  `.worktrees/p2-capability-scoping` (branch `patch/p2-capability-scoping`, already merged at
+  `6d791d5`) -- per this project's own worktree-hygiene rule (delete immediately after merge, do
+  not let it linger). No disposable PostgreSQL containers were left running.
+- No code change in this entry, doc/environment sync only. Next: Phase 2 re-patch item 3 (team-lead
+  grant cost/duration/scope ceilings stored but never enforced at `spawnHelperWorker` time).

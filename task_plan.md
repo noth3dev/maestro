@@ -294,15 +294,24 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    with 3 new real-PostgreSQL regressions reproducing the exact audit scenario at both the
    Department and Mission level. Full real-PostgreSQL `npm run check` on `main`: 97/98 files, 638
    passed, 2 intentional live-Prime skips, 0 failed.
-2. **[HIGH, test quality]** Mission Assignment Bundle capability scoping (skills/tools/paths/
-   authority boundary) never reaches the real Prime Agent spawn call.
-   `packages/domain/src/execution-kernel.ts`'s `SpawnRequest` (lines 13-18) has no field for it;
-   `worker.ts:104` drops `allowedSkills`/`allowedTools`/`allowedPaths`/`authorityBoundary` when
-   calling `kernel.spawn`. "Scout workers are read-only by default" (plan/phase2.md) is currently
-   unenforced anywhere; Phase 2 Tests #12/#13 have no code path to test. Fix: extend the
-   execution-kernel port to carry mission-bundle capability scoping through to the real spawn/tool
-   surface (or wrap every worker action in an authority check keyed off the mission bundle), then
-   add a real spawn + out-of-scope-tool-call test that fails closed.
+2. **[RESOLVED 2026-09-03/04, commit `6d791d5`/merge `efc40c8`]** Mission Assignment Bundle
+   capability scoping (skills/tools) previously never reached the real Prime Agent spawn call.
+   Fixed: added a `SpawnCapabilities` type (`{allowedTools?, allowedSkills?}`) and an optional
+   `capabilities` field on `SpawnRequest`, meaningful only for a root spawn (a child spawn inherits
+   its already-scoped root session). Threaded through
+   `createPrimeExecutionKernelFromFactory`'s `spawn()` to the session factory, and
+   `createPrimeExecutionKernel()`'s real factory maps `capabilities.allowedTools` directly to the
+   Prime Agent SDK's own `createAgentSession({ allowedToolNames })` option. `worker.ts`'s
+   `spawnWorker` now passes the mission bundle's exact `allowedTools`/`allowedSkills` grant, never
+   widened or narrowed. Verified: 3 new `execution-kernel.test.ts` unit cases (16/16 pass) plus 1
+   new real-PostgreSQL `worker.integration.test.ts` case.
+   **Deliberately NOT implemented:** the "scout must be read-only" enforcement rule itself (the
+   other half of Tests #12/#13) -- this codebase has no canonical tool-name taxonomy anywhere
+   (fixtures use arbitrary invented tool-name strings), so defining which tool names count as
+   "write-capable" for an automated check requires a product/scope decision, not a technical fix.
+   Path/authority-boundary scoping (`allowedPaths`/`authorityBoundary`) also remains unthreaded --
+   out of this item's literal scope (spawn-call capability scoping), left open if a future item
+   needs it.
 3. **[MEDIUM, test quality]** Team-lead grant cost/duration/scope ceilings
    (packages/persistence/src/team-lead-grant.ts:37-39,63-64,120-123) are stored but never enforced
    at `spawnHelperWorker` time — only `max_helpers` is checked (Phase 2 Tests #10 is ~25% covered).
@@ -452,8 +461,10 @@ concrete illustration each, plus two smaller cross-cutting gaps not previously c
 
 ### Status
 - [complete_pending_independent_review] Phase 1 remaining items 1-8 above: all 8 items resolved and accepted (see each item's own status line above for commit hashes). Self-plus-parent-reviewed only this session; a formal independent (no-edit) review of the full Phase 1 re-patch diff is the recommended next step before treating Phase 1 as re-accepted, per this project's own acceptance policy.
-- [not_started] Phase 2 remaining items 1-9 above (feature-completeness item 1 above illustrates
-  item 9's write-API gap concretely; fix together).
+- [in_progress] Phase 2 remaining items 1-9 above: items 1 (budget double-counting) and 2 (Mission
+  Bundle capability scoping to real spawn call) resolved and merged to `main`; items 3-9 not
+  started (feature-completeness item 1 above illustrates item 9's write-API gap concretely; fix
+  together).
 - [not_started] Phase 3 remaining items 1-7 above.
 - [not_started] Phase 4 remaining items (= Track B items 1-8, unchanged; feature-completeness item 2
   above is a Firefly-specific instance to fix alongside Track B).
