@@ -19,3 +19,4 @@ export * from "./overwatch-council.js";
 export * from "./certification.js";
 export * from "./evidence-bundle.js";
 export * from "./sane-report.js";
+export * from "./environment.js";

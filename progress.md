@@ -324,3 +324,9 @@
 - This closes the prior honest gap ("no new real PostgreSQL end-to-end API+CLI fixture was added") from the immediately preceding entry. Tests item 18 is now proven the same way every other live-gate item in this project was proven: a real composition test against real durable state, not a wiring-level unit test with fakes.
 - Verified: full `MAESTRO_TEST_DATABASE_URL=...55440... npm run check`: **459 passed, 2 skipped, 0 failed** (75 test files passed, 1 skipped; skips are the intentional live-Prime cases).
 - **Phase 3 exit gate (plan/phase3.md "First usable release live gate"): all 13 prose steps and all 18 "## Tests" items now have real, evidenced coverage.** Secretary UI still has no dedicated panel for these four record kinds (only Goal/event loaders exist there); this is a UI-layer follow-up, not a gap in the "App and CLI show the same state" claim itself, since the control-plane HTTP API is the app's backing surface and is proven consistent with the CLI above.
+
+
+## 2026-09-04 — P4S1 environment records self-verified
+- Added domain environment recipe/capability manifest and typed four environment kinds, boundaries, secret references, resource ceilings, lifecycle/health/cleanup state, and SHA-256 content identity over canonical recipe + resolved inputs. Added migration `0039_environments.sql` with immutable identity/recipe trigger and expiry index.
+- Added lease-authorized persistence create/read/build-failure/health/expiry/cleanup lifecycle functions. Partial failures retain setup logs and schedule only explicitly owned resources.
+- Verification in this worktree: `npm run check` passed **267 tests, 194 skipped, 0 failed** (45 files passed, 33 skipped); build passed. PostgreSQL-gated environment integration tests are included but skipped because this runtime has no configured `MAESTRO_TEST_DATABASE_URL`; real-PostgreSQL execution remains required before acceptance.
