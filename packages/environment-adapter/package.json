@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@maestro/domain": "*",
-    "@maestro/authority": "*"
+    "@maestro/authority": "*",
+    "playwright": "^1.48.0"
   }
 }

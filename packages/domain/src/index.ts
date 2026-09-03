@@ -21,6 +21,7 @@ export * from "./evidence-bundle.js";
 export * from "./sane-report.js";
 export * from "./environment.js";
 export * from "./environment-execution.js";
+export * from "./browser-execution.js";
 export * from "./device.js";
 export * from "./device-grant.js";
 export * from "./device-command.js";
