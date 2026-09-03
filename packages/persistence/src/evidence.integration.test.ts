@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { EvidenceIntegrityError, FileEvidenceStore } from "@maestro/evidence";
 import { Pool } from "pg";
+import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { appendEvidenceMetadata, getEvidenceMetadata } from "./evidence.js";
 
@@ -20,10 +20,7 @@ async function captureAndAppend(pool: Pool): Promise<{ record: Awaited<ReturnTyp
 
 describeDatabase("durable evidence metadata", () => {
   const pool = new Pool({ connectionString: databaseUrl });
-  beforeAll(async () => {
-    const migration = await readFile(fileURLToPath(new URL("../migrations/0006_evidence.sql", import.meta.url)), "utf8");
-    await pool.query(migration);
-  });
+  beforeAll(async () => { await applyAllMigrations(pool); });
   beforeEach(async () => { await pool.query("TRUNCATE evidence_records"); });
   afterAll(async () => { await pool.end(); });
 

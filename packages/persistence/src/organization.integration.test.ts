@@ -1,6 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PERMANENT_DEPARTMENTS, PERMANENT_GROUPS, PERMANENT_ROLES, SANE_PERSONA_BASELINE } from "@maestro/domain";
 import { bootstrapPermanentOrganization, getPermanentRole, listPermanentOrganization, listPermanentRoles } from "./organization.js";
@@ -11,11 +10,7 @@ const describeDatabase = databaseUrl ? describe : describe.skip;
 describeDatabase("permanent organization with PostgreSQL", () => {
   const pool = new Pool({ connectionString: databaseUrl });
 
-  beforeAll(async () => {
-    for (const name of ["0010_permanent_organization.sql", "0018_role_identity_hardening.sql"]) {
-      await pool.query(await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8"));
-    }
-  });
+  beforeAll(async () => { await applyAllMigrations(pool); });
   afterAll(async () => { await pool.end(); });
 
   it("bootstraps the full permanent taxonomy idempotently without Goal context or active sessions", async () => {

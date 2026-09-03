@@ -1,14 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { ExecutionKernelPort } from "@maestro/domain";
 import { listSemanticReviews, requestSemanticReview } from "./semantic-review.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
-const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0006_evidence.sql", "0030_semantic_reviews.sql"];
 
 function fakeKernelReturning(answerText: string): ExecutionKernelPort {
   return {
@@ -43,10 +41,7 @@ describeDatabase("Semantic review with PostgreSQL", () => {
 
   beforeAll(async () => {
     await pool.query("DROP TABLE IF EXISTS semantic_reviews, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals CASCADE");
-    for (const name of migrations) {
-      const sql = await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8");
-      await pool.query(sql);
-    }
+    await applyAllMigrations(pool);
   });
   beforeEach(async () => { await pool.query("TRUNCATE semantic_reviews, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals RESTART IDENTITY CASCADE"); });
   afterAll(async () => { await pool.end(); });

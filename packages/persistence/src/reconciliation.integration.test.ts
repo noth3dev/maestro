@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { acquireGoalLease, executeGoalCommand } from "./commands.js";
 import {
@@ -48,29 +47,7 @@ describeDatabase("Reconciliation leader lease and startup consistency scaffold",
     return { goalId, projectId };
   }
 
-  beforeAll(async () => {
-    // Every other real-PostgreSQL integration suite shares this one
-    // disposable database and these same tables (see the cross-suite
-    // shared-table notes elsewhere in this package). A destructive
-    // `DROP TABLE ... CASCADE` here previously recreated goal_controls from
-    // only 0007, silently discarding the 0008 pause/stop columns whenever
-    // this suite's beforeAll happened to run after another suite had
-    // already applied 0008 -- an order-dependent break, since Vitest's
-    // default file scheduler is not required to run suites in source order.
-    // Migrations are idempotent (CREATE TABLE/ADD COLUMN IF NOT EXISTS), so
-    // just apply every migration this suite depends on and truncate this
-    // suite's own rows in beforeEach, exactly like the other suites do.
-    for (const name of [
-      "0001_phase1_core.sql",
-      "0002_goal_leases.sql",
-      "0007_goal_control.sql",
-      "0008_goal_pause_stop.sql",
-      "0009_reconciliation_leader_lease.sql",
-    ]) {
-      const migration = await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8");
-      await pool.query(migration);
-    }
-  });
+  beforeAll(async () => { await applyAllMigrations(pool); });
 
   beforeEach(async () => {
     await pool.query(

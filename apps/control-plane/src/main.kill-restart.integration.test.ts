@@ -1,10 +1,10 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { bootstrapLocalOperator } from "@maestro/persistence";
+import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
 
 // A real integration test that spawns the compiled control-plane
 // (apps/control-plane/dist/main.js, produced by `npm run build`) as a real
@@ -44,16 +44,7 @@ describe("control-plane real process kill-and-restart", () => {
   beforeAll(async () => {
     await basePool.query(`CREATE SCHEMA ${schema}`);
     setupPool = new Pool({ connectionString: scopedUrl });
-    for (const name of [
-      "0001_phase1_core.sql",
-      "0002_goal_leases.sql",
-      "0003_local_operator_auth.sql",
-      "0004_local_operator_credential_security.sql",
-      "0007_goal_control.sql",
-      "0009_reconciliation_leader_lease.sql",
-    ]) {
-      await setupPool.query(await readFile(fileURLToPath(new URL(`../../../packages/persistence/migrations/${name}`, import.meta.url)), "utf8"));
-    }
+    await applyAllMigrations(setupPool);
     await bootstrapLocalOperator(setupPool, { secret });
   });
 

@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ActiveCredentialLimitError, authenticateLocalOperator, bootstrapLocalOperator, createLocalOperatorCredential, ACTIVE_CREDENTIAL_CAP } from "./auth.js";
 
@@ -11,12 +10,7 @@ const describeDatabase = databaseUrl ? describe : describe.skip;
 describeDatabase("local operator credentials with PostgreSQL", () => {
   const pool = new Pool({ connectionString: databaseUrl });
 
-  beforeAll(async () => {
-    for (const name of ["0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql"]) {
-      const migration = await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8");
-      await pool.query(migration);
-    }
-  });
+  beforeAll(async () => { await applyAllMigrations(pool); });
 
   beforeEach(async () => {
     await pool.query("TRUNCATE local_operator_credentials, local_operators CASCADE");
