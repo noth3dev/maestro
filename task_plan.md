@@ -320,14 +320,58 @@ pause lifecycle; Sentinel has no device-access observation; grant expiry/closure
 automatic state transition. See Track B items 1-8 above for full detail — not re-numbered here to
 avoid duplicate item IDs.
 
+### Feature-completeness (real-world usability) sweep — completed directly 2026-09-04
+The dispatched subagent aborted mid-run with no findings (see above); the parent session completed
+this sweep directly by reading `apps/cli/src/main.ts`, `apps/secretary/src/goal-page.tsx`,
+`apps/control-plane/src/server.ts`, `apps/firefly/src/main.ts`, and plan/phase2.md's Sane/Task
+Contract flow. This is additional to (not a duplicate of) the known "no write-command API surface"
+P0 items already listed per-phase above; it grounds two of those gaps in their single sharpest
+concrete illustration each, plus two smaller cross-cutting gaps not previously called out.
+
+1. **[Phase 2, illustrates known P0]** "Sane" (the intake persona meant to turn a plain-language
+   CEO request into a draft Goal + Task Contract, per plan/phase2.md line 5/36) exists in code only
+   as a display-name string (`packages/domain/src/organization.ts:166`). The actual Task Contract
+   lifecycle functions (`createDurableTaskContract`, `selectAndRecordOvertureRoles`,
+   `recordExactTaskContractConfirmation`, `launchConfirmedTaskContract`, all in
+   `packages/persistence/src/task-contract.ts`) have no CLI command and no HTTP route calling them
+   — `apps/cli/src/main.ts` only has `goal create --project-id` (a bare Goal, no Task Contract
+   substance field exists in `CreateGoalInputSchema` at all) and `apps/control-plane/src/server.ts`
+   has no `/task-contracts` route. There is currently no way, through any user-facing surface, for
+   a CEO to actually start a Goal with a plain-language outcome.
+2. **[Phase 4, illustrates known Firefly notification gap]** `apps/firefly/src/main.ts:89`'s
+   `main()` wires Firefly's own delivery transport to a stub that immediately throws `"No delivery
+   transport configured"` — there is no default delivery implementation at all, and no Discord/
+   desktop emergency-notification channel exists anywhere in the codebase despite plan/phase4.md
+   #46 explicitly promising "one pre-approved out-of-band emergency channel ... a dedicated Discord
+   emergency channel or enrolled-device desktop notification" for exactly the case (main control
+   plane unavailable) Firefly exists to handle.
+3. **[Medium, cross-cutting, new]** No "list/browse Goals" capability exists anywhere. Confirmed
+   `apps/control-plane/src/server.ts` has only `GET /v1/goals/:goalId` (requires already knowing
+   the UUID), never a bare `GET /v1/goals` listing route; the CLI and Secretary UI inherit the same
+   limit. An operator with no memorized Goal UUID has no way to discover what Goals exist.
+4. **[Medium, cross-cutting, new]** No cost/budget-at-a-glance surface anywhere for a human: no CLI
+   command, no route, and no Secretary panel surfaces `budget_reservations` data, even though (per
+   the Phase 2/3 domain-correctness findings above) that data already has real accounting-integrity
+   problems worth seeing before they compound.
+5. Confirms with direct evidence (no new finding, closes the open question): Secretary
+   (`apps/secretary/src/goal-page.tsx`) is a single, config-fixed-`goalId`, fully read-only page —
+   zero forms, zero navigation between Goals, zero Council/certification/Sane-report panels. The
+   CLI (`apps/cli/src/main.ts`) totals 2 write commands (`goal create`, `goal transition`) and 5
+   read commands (`goal get`, 3x `*.list`, `sane-report get`, `events list`) — no command exists for
+   Task Contract, Council brief submission, Department Plan, Mission Bundle, worker spawn, Git
+   actions, critical-action approval, device enrollment/grants, environment creation, or any
+   Firefly incident action.
+
 ### Status
 - [not_started] Phase 1 remaining items 1-8 above.
-- [not_started] Phase 2 remaining items 1-9 above.
+- [not_started] Phase 2 remaining items 1-9 above (feature-completeness item 1 above illustrates
+  item 9's write-API gap concretely; fix together).
 - [not_started] Phase 3 remaining items 1-7 above.
-- [not_started] Phase 4 remaining items (= Track B items 1-8, unchanged).
-- [not_started / partially blind] Dedicated feature-completeness (real-world usability) sweep —
-  re-dispatch before treating any phase as usable; the aborted 2026-09-04 attempt delivered no
-  findings.
+- [not_started] Phase 4 remaining items (= Track B items 1-8, unchanged; feature-completeness item 2
+  above is a Firefly-specific instance to fix alongside Track B).
+- [not_started] Feature-completeness items 3-4 above (Goal listing, budget-at-a-glance) — new,
+  cross-cutting, not yet assigned to a specific phase item; fold into the write-API-surface work
+  whichever phase implements it first (most naturally Phase 3's read/write API extension).
 
 ## Phase 5 remediation plan — operational usability (added 2026-09-04, supersedes prior "complete/complete_pending_independent_review" claims for P1-P4 runtime lanes)
 
