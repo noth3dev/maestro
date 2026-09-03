@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { assertValidDepartmentAcceptanceSubstance, assertValidQualityCertificationSubstance, assertValidWaiverSubstance, certificationsConflict, type DepartmentAcceptanceSubstance, type QualityCertificationSubstance, type QualityVerdict, type WaiverSubstance } from "@maestro/domain";
+import { verifyEvidenceRecord, type EvidenceContentReader } from "@maestro/evidence";
 import { isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
 import type { Pool } from "pg";
 
@@ -227,17 +228,32 @@ async function createCertification(
   substance: QualityCertificationSubstance,
   certifyingDepartmentId: string,
   context: CouncilActorContext,
+  content?: EvidenceContentReader,
 ): Promise<QualityCertification | ConditionalCertification> {
   assertValidQualityCertificationSubstance(substance);
   const prepared = await readCertificationLineage(pool, kind, workerId, certifyingDepartmentId, context);
   const { lineage, client } = prepared;
   try {
     const project = await client.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [lineage.goalId]);
-    const durable = await client.query<{ evidence_id: string; sha256: string }>(
-      "SELECT evidence_id, sha256 FROM evidence_records WHERE goal_id = $1 AND project_id = $2", [lineage.goalId, project.rows[0]?.project_id],
+    const durable = await client.query<{ evidence_id: string; sha256: string; byte_length: string }>(
+      "SELECT evidence_id, sha256, byte_length FROM evidence_records WHERE goal_id = $1 AND project_id = $2", [lineage.goalId, project.rows[0]?.project_id],
     );
     const durableIds = new Set(durable.rows.flatMap((row) => [row.evidence_id.trim(), row.sha256.trim()]));
     for (const evidenceId of substance.testEvidenceIds) if (!durableIds.has(evidenceId.trim())) throw new CertificationError(`${kind} certification test evidence is not durable: ${evidenceId}`);
+    // Only ever a real defense-in-depth check when a caller supplies a real
+    // content reader (e.g. the production evidence store); it never
+    // fabricates trust and never weakens the existing metadata allow-list
+    // check above -- it verifies each cited evidence's actual artifact
+    // bytes still match its durable sha256/byteLength, catching the case
+    // where a metadata row's sha256 was itself corrupted or repointed.
+    if (content) {
+      const rowByEvidenceId = new Map(durable.rows.map((row) => [row.evidence_id.trim(), row]));
+      for (const evidenceId of substance.testEvidenceIds) {
+        const row = rowByEvidenceId.get(evidenceId.trim());
+        if (!row) continue; // sha256-only citation already covered by the allow-list check above
+        await verifyEvidenceRecord({ sha256: row.sha256, byteLength: Number(row.byte_length) }, content);
+      }
+    }
     const certificationId = randomUUID();
     if (kind === "quality") {
       const inserted = await client.query<CertRow>(
@@ -277,8 +293,8 @@ async function createCertification(
 }
 
 /** Quality is an independent Department path; it cannot be replaced by Security or Safety authority. */
-export async function certifyQuality(pool: Pool, workerId: string, substance: QualityCertificationSubstance, certifyingDepartmentId: string, context: CouncilActorContext): Promise<QualityCertification> {
-  return await createCertification(pool, "quality", workerId, substance, certifyingDepartmentId, context) as QualityCertification;
+export async function certifyQuality(pool: Pool, workerId: string, substance: QualityCertificationSubstance, certifyingDepartmentId: string, context: CouncilActorContext, content?: EvidenceContentReader): Promise<QualityCertification> {
+  return await createCertification(pool, "quality", workerId, substance, certifyingDepartmentId, context, content) as QualityCertification;
 }
 
 export async function listQualityCertifications(pool: Pool, goalId: string): Promise<readonly QualityCertification[]> {
@@ -292,8 +308,8 @@ export async function listQualityCertifications(pool: Pool, goalId: string): Pro
 }
 
 /** Conditional certification is available only to its designated authority Department. */
-export async function certifyConditional(pool: Pool, kind: "security" | "safety_compliance", workerId: string, substance: QualityCertificationSubstance, certifyingDepartmentId: string, context: CouncilActorContext): Promise<ConditionalCertification> {
-  return await createCertification(pool, kind, workerId, substance, certifyingDepartmentId, context) as ConditionalCertification;
+export async function certifyConditional(pool: Pool, kind: "security" | "safety_compliance", workerId: string, substance: QualityCertificationSubstance, certifyingDepartmentId: string, context: CouncilActorContext, content?: EvidenceContentReader): Promise<ConditionalCertification> {
+  return await createCertification(pool, kind, workerId, substance, certifyingDepartmentId, context, content) as ConditionalCertification;
 }
 
 export async function listConditionalCertifications(pool: Pool, goalId: string, kind?: "security" | "safety_compliance"): Promise<readonly ConditionalCertification[]> {

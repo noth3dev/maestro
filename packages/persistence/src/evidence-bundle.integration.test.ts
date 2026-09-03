@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -7,6 +8,7 @@ import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { localGitPort } from "@maestro/git-adapter";
+import { FileEvidenceStore } from "@maestro/evidence";
 import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease, executeGoalCommand } from "./commands.js";
@@ -199,5 +201,45 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
 
   it("throws EvidenceBundleNotFoundError for a missing bundle", async () => {
     await expect(readEvidenceBundle(pool, randomUUID())).rejects.toBeInstanceOf(EvidenceBundleNotFoundError);
+  });
+
+  it("rejects bundle assembly when a supplied content reader detects a corrupted evidence artifact hash (Phase 1 re-patch item 6)", async () => {
+    const projectId = randomUUID();
+    const goalId = randomUUID();
+    await pool.query(
+      "INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())",
+      [goalId, projectId],
+    );
+    const store = new FileEvidenceStore(await mkdtemp(join(tmpdir(), "maestro-bundle-evidence-")));
+    const captured = await store.capture({
+      context: { correlationId: randomUUID(), commandId: randomUUID(), projectId, goalId, actorId: "test" },
+      bytes: Buffer.from("real evidence bundle artifact"), kind: "test-result", mediaType: "text/plain",
+    });
+    const evidenceId = randomUUID();
+    await pool.query(
+      "INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'test-result', 'text/plain', 'project_lifetime')",
+      [evidenceId, randomUUID(), randomUUID(), projectId, goalId, "test", captured.sha256, captured.byteLength],
+    );
+
+    // Genuinely matching content assembles cleanly when a real reader is supplied.
+    await expect(assembleEvidenceBundle(pool, goalId, store)).resolves.toBeDefined();
+    await expect(recordEvidenceBundle(pool, goalId, store)).resolves.toBeDefined();
+    const beforeCorruptionCount = (await pool.query<{ count: string }>("SELECT count(*)::text AS count FROM evidence_bundles WHERE goal_id = $1", [goalId])).rows[0]!.count;
+
+    // Corrupt the durable metadata's sha256 so it no longer matches the actual stored artifact.
+    await pool.query("ALTER TABLE evidence_records DISABLE TRIGGER evidence_records_immutable");
+    try {
+      await pool.query("UPDATE evidence_records SET sha256 = $1 WHERE evidence_id = $2", ["c".repeat(64), evidenceId]);
+    } finally {
+      await pool.query("ALTER TABLE evidence_records ENABLE TRIGGER evidence_records_immutable");
+    }
+
+    await expect(assembleEvidenceBundle(pool, goalId, store)).rejects.toThrow();
+    await expect(recordEvidenceBundle(pool, goalId, store)).rejects.toThrow();
+    const afterCorruptionCount = (await pool.query<{ count: string }>("SELECT count(*)::text AS count FROM evidence_bundles WHERE goal_id = $1", [goalId])).rows[0]!.count;
+    expect(afterCorruptionCount).toBe(beforeCorruptionCount);
+
+    // Without a content reader, existing metadata-only-trust behavior is unchanged.
+    await expect(assembleEvidenceBundle(pool, goalId)).resolves.toBeDefined();
   });
 });

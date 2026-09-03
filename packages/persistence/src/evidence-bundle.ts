@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { assertEvidenceBundleIntegrity, evidenceBundleContentHash, type EvidenceBundle } from "@maestro/domain";
+import { verifyEvidenceRecord, type EvidenceContentReader } from "@maestro/evidence";
 import type { Pool } from "pg";
 
 export class EvidenceBundleError extends Error {}
@@ -10,7 +11,7 @@ export class EvidenceBundleNotFoundError extends EvidenceBundleError {}
  * durable records across every subsystem built so far. This is a read-only
  * aggregation: it invents nothing and computes no new judgment.
  */
-export async function assembleEvidenceBundle(pool: Pool, goalId: string): Promise<{ bundle: Omit<EvidenceBundle, "assembledAt">; hash: string }> {
+export async function assembleEvidenceBundle(pool: Pool, goalId: string, content?: EvidenceContentReader): Promise<{ bundle: Omit<EvidenceBundle, "assembledAt">; hash: string }> {
   const goal = await pool.query<Record<string, unknown>>("SELECT goal_id, project_id, state, version, created_at, updated_at FROM goals WHERE goal_id = $1", [goalId]);
   if (goal.rowCount !== 1) throw new EvidenceBundleError("Goal not found for evidence bundle assembly");
   const projectId = goal.rows[0]!.project_id;
@@ -181,6 +182,16 @@ export async function assembleEvidenceBundle(pool: Pool, goalId: string): Promis
        FROM evidence_records WHERE goal_id = $1 AND project_id = $2
        ORDER BY created_at, evidence_id`, [goalId, projectId],
   )).rows;
+  // Only ever a real defense-in-depth check when a caller supplies a real
+  // content reader (e.g. the production evidence store); it verifies every
+  // evidence artifact this bundle is about to durably reference still
+  // matches its recorded sha256/byteLength, catching corruption or a
+  // repointed metadata row before it is ever baked into an immutable bundle.
+  if (content) {
+    for (const row of evidenceRecords) {
+      await verifyEvidenceRecord({ sha256: row.sha256 as string, byteLength: Number(row.byte_length) }, content);
+    }
+  }
 
   const bundle: Omit<EvidenceBundle, "assembledAt"> = {
     goalId,
@@ -202,8 +213,8 @@ export async function assembleEvidenceBundle(pool: Pool, goalId: string): Promis
 }
 
 /** Assembles and durably records one evidence bundle snapshot. Immutable once written; a later re-assembly is a new row. */
-export async function recordEvidenceBundle(pool: Pool, goalId: string): Promise<{ bundleId: string; hash: string }> {
-  const { bundle, hash } = await assembleEvidenceBundle(pool, goalId);
+export async function recordEvidenceBundle(pool: Pool, goalId: string, content?: EvidenceContentReader): Promise<{ bundleId: string; hash: string }> {
+  const { bundle, hash } = await assembleEvidenceBundle(pool, goalId, content);
   if (bundle.goalId !== goalId) throw new EvidenceBundleError("Evidence bundle Goal identity mismatch");
   const bundleId = randomUUID();
   await pool.query(

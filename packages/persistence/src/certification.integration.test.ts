@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -7,6 +8,7 @@ import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { localGitPort } from "@maestro/git-adapter";
+import { EvidenceIntegrityError, FileEvidenceStore } from "@maestro/evidence";
 import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";
@@ -145,6 +147,49 @@ describeDatabase("Department acceptance and independent Quality certification wi
     expect(certified.producingDepartment).toBe("product");
     const listed = await listQualityCertifications(pool, certified.goalId);
     expect(listed).toHaveLength(1);
+  });
+
+  it("rejects certification when a supplied content reader detects a cited evidence artifact's real bytes no longer match its durable metadata (Phase 1 re-patch item 6)", async () => {
+    const { worker, evidenceIds } = await setupWorkerWithCommit(true);
+    const store = new FileEvidenceStore(await mkdtemp(join(tmpdir(), "maestro-cert-evidence-")));
+    const captured = await store.capture({
+      context: { correlationId: randomUUID(), commandId: randomUUID(), projectId: randomUUID(), goalId: randomUUID(), actorId: "test" },
+      bytes: Buffer.from("real quality evidence artifact"), kind: "test-result", mediaType: "text/plain",
+    });
+    // Repoint this test's citation at genuinely stored, real bytes -- not
+    // the setup helper's placeholder sha256/byte_length=0 row.
+    await pool.query("ALTER TABLE evidence_records DISABLE TRIGGER evidence_records_immutable");
+    try {
+      await pool.query("UPDATE evidence_records SET sha256 = $1, byte_length = $2 WHERE evidence_id = $3", [captured.sha256, captured.byteLength, evidenceIds[0]]);
+    } finally {
+      await pool.query("ALTER TABLE evidence_records ENABLE TRIGGER evidence_records_immutable");
+    }
+
+    // With genuinely matching content, certification succeeds when a real reader is supplied.
+    const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"), store);
+    expect(certified.certifiedByDepartment).toBe("quality");
+    const beforeCorruptionCount = (await listQualityCertifications(pool, certified.goalId)).length;
+
+    // Now corrupt the durable metadata's sha256 (a different, still well-formed hash) so it no
+    // longer matches the actual stored artifact -- the exact "corrupted evidence hash" scenario.
+    await pool.query("ALTER TABLE evidence_records DISABLE TRIGGER evidence_records_immutable");
+    try {
+      await pool.query("UPDATE evidence_records SET sha256 = $1 WHERE evidence_id = $2", ["b".repeat(64), evidenceIds[1]]);
+    } finally {
+      await pool.query("ALTER TABLE evidence_records ENABLE TRIGGER evidence_records_immutable");
+    }
+
+    await expect(
+      certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[1]!] }, "quality", headContext("quality"), store),
+    ).rejects.toBeInstanceOf(CertificationError);
+    // No new certification row was written by the rejected attempt.
+    expect((await listQualityCertifications(pool, certified.goalId)).length).toBe(beforeCorruptionCount);
+
+    // Without a content reader, existing metadata-only-trust behavior is unchanged (documented,
+    // not silently strengthened for callers that do not yet supply one).
+    await expect(
+      certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[1]!] }, "quality", headContext("quality")),
+    ).resolves.toBeDefined();
   });
 
   it("binds the certification to the exact Task Contract identity and integrated commit", async () => {
