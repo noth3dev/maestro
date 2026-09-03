@@ -324,3 +324,9 @@
 - This closes the prior honest gap ("no new real PostgreSQL end-to-end API+CLI fixture was added") from the immediately preceding entry. Tests item 18 is now proven the same way every other live-gate item in this project was proven: a real composition test against real durable state, not a wiring-level unit test with fakes.
 - Verified: full `MAESTRO_TEST_DATABASE_URL=...55440... npm run check`: **459 passed, 2 skipped, 0 failed** (75 test files passed, 1 skipped; skips are the intentional live-Prime cases).
 - **Phase 3 exit gate (plan/phase3.md "First usable release live gate"): all 13 prose steps and all 18 "## Tests" items now have real, evidenced coverage.** Secretary UI still has no dedicated panel for these four record kinds (only Goal/event loaders exist there); this is a UI-layer follow-up, not a gap in the "App and CLI show the same state" claim itself, since the control-plane HTTP API is the app's backing surface and is proven consistent with the CLI above.
+
+
+## 2026-09-03 — P4S6 Firefly foundation (self-verified, pending review)
+- Added pure Firefly signal schema/authentication/replay primitives (`packages/domain/src/firefly.ts`) using HMAC-SHA256, freshness windows, nonces, and monotonic sequence checks. Added additive migration `0039_firefly_signals.sql` and PostgreSQL receiver (`recordFireflySignal`) that authenticates and checks replay state inside a transaction before durable insert.
+- Added independent `apps/firefly` with deliberately minimal config and append-only JSONL signal buffer. Delivery failures retain pending signals; successful delivery appends an acknowledgement, so Firefly does not depend on Maestro's Postgres for liveness.
+- Focused verification: **2 passed, 0 failed** (`apps/firefly/src/firefly.test.ts`); `npm run build` passed. Real-Postgres Firefly integration was not run in this environment; pending disposable PostgreSQL verification and independent review.

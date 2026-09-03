@@ -127,3 +127,8 @@ Current restart lane: forced mid-flight worker restart/reconciliation scenario i
 - Control-plane route tests prove all four shapes and missing-report handling. Secretary UI was not changed: it consumes the same API client but has no existing state-panel architecture for these four records; the control-plane is the app backing API.
 - Verification: `MAESTRO_TEST_DATABASE_URL=...55440... npm run check` passed with **458 passed, 2 skipped, 0 failed** (74 test files passed, 1 skipped; skips are the intentional live-Prime cases).
 - Tests item 18 is now covered at the shared read-contract level (control-plane/API client/CLI); a full real-domain parity fixture remains limited to existing persistence integration coverage.
+
+
+## Phase 4 step 6 — Firefly foundation
+- Implemented Firefly authenticated signal schema, freshness and replay rejection, independent append-only buffer, and PostgreSQL receiving primitive.
+- Self-verification currently: build passed; focused Firefly tests **2 passed, 0 failed**. Real-Postgres integration remains pending.

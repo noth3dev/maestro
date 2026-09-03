@@ -1,0 +1,10 @@
+import { mkdtemp, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { describe, expect, it } from "vitest";
+import { FireflyAuthenticationError, FireflyFreshnessError, FireflyReplayError, signFireflySignal, verifyFireflySignal, type FireflySignal } from "@maestro/domain";
+import { createFirefly } from "./main.js";
+const signal=():FireflySignal=>({incidentFingerprint:"fp-1",firstObservedAt:"2026-01-01T00:00:00.000Z",lastObservedAt:"2026-01-01T00:00:01.000Z",severity:"warning",confidence:.9,affectedComponent:"control-plane",affectedVersion:"1.0.0",minimalReproductionEvidence:["GET /health -> 503"],source:"health-probe",sourceFreshness:"2026-01-01T00:00:01.000Z",deduplicationRelationship:"new",fireflyHealthState:"healthy"});
+describe("Firefly authentication",()=>{it("rejects tampering, stale timestamps, and replay",()=>{const now=Date.parse("2026-01-01T00:00:10.000Z"); const e=signFireflySignal(signal(),"secret","n1",1,"2026-01-01T00:00:05.000Z"); const state=verifyFireflySignal(e,"secret",now,10_000); expect(()=>verifyFireflySignal({...e,signal:{...e.signal,severity:"critical"}},"secret",now,10_000)).toThrow(FireflyAuthenticationError); expect(()=>verifyFireflySignal(e,"secret",now+20_000,10_000)).toThrow(FireflyFreshnessError); expect(()=>verifyFireflySignal(e,"secret",now,10_000,state)).toThrow(FireflyReplayError);});});
+describe("Firefly durable buffer",()=>{it("buffers during outage and delivers after recovery",async()=>{const path=join(await mkdtemp(join(tmpdir(),"firefly-")),"buffer.jsonl"); let healthy=false; const delivered:string[]=[]; const f=createFirefly({bufferPath:path,credential:"x",flushIntervalMs:100,freshnessWindowMs:100000},{deliver:async e=>{if(!healthy) throw new Error("down"); delivered.push(e.nonce);}}); const e=signFireflySignal(signal(),"x","n1",1); await f.emit(e); expect(f.pendingCount()).toBe(1); healthy=true; await f.flush(); expect(delivered).toEqual(["n1"]); expect(f.pendingCount()).toBe(0); const lines=(await readFile(path,"utf8")).trim().split("\n"); expect(lines).toHaveLength(2);});});
