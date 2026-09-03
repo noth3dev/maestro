@@ -227,10 +227,22 @@ feature-completeness audit before treating Phase 4 as usable.
    96/97 files, 618 passed, 2 intentional live-Prime skips, 0 failed. See Phase 2/3 items below
    for the remaining 10 modules across those phases with zero stale/forged fencing coverage --
    out of this Phase 1 item's scope.
-6. **[LOW-MEDIUM, test quality]** Evidence-hash corruption (Phase 1 Tests #9) is proven only at
-   `getEvidenceMetadata` (packages/persistence/src/evidence.integration.test.ts:32), never at any
-   of the actual "certification consumers" the spec names (certification, evidence-bundle, Sane
-   report). Fix: add one corrupted-hash regression test per real consumer.
+6. **[RESOLVED 2026-09-04, commit `384d1e3`]** Evidence-hash corruption (Phase 1 Tests #9) was
+   proven only at `getEvidenceMetadata`, never at the actual "certification consumers" the spec
+   names. Fixed: narrowed `@maestro/evidence`'s `verifyEvidenceRecord` to a minimal
+   `VerifiableEvidenceRecord` ({sha256, byteLength}) and threaded an optional
+   `EvidenceContentReader` through `certifyQuality`/`certifyConditional` (verifies each cited
+   evidence's real bytes before the pre-INSERT allow-list check), `assembleEvidenceBundle`/
+   `recordEvidenceBundle` (verifies every evidence record for the Goal, since a bundle is a full
+   snapshot), and `generateSaneFinalReport` (threads through its existing `recordEvidenceBundle`
+   call). Optional and behavior-unchanged when omitted, since no production write-command API
+   surface exists yet for these three actions (a separate, already-tracked P0) -- this seam is
+   available for that surface once it lands. Added one real-artifact (not synthetic
+   sha256/byte_length=0) corrupted-hash regression per consumer via `FileEvidenceStore`, matching
+   `evidence.integration.test.ts`'s existing corruption-test pattern; deliberately did not rewrite
+   the rest of the test suite's pervasive synthetic-evidence-row convention, judged out of scope.
+   Full real-PostgreSQL `npm run check` on `main`: 96/97 files, 622 passed, 2 intentional
+   live-Prime skips, 0 failed.
 7. **[RESOLVED 2026-09-04, commit `9a1d084`]** No test asserted
    `parseConfig`'s accepted key set excludes provider-credential-shaped env vars. Fixed:
    test-only regression (no production change needed -- zod's `z.object` already only
@@ -414,7 +426,7 @@ concrete illustration each, plus two smaller cross-cutting gaps not previously c
    Firefly incident action.
 
 ### Status
-- [not_started] Phase 1 remaining items 1-8 above.
+- [in_progress] Phase 1 remaining items 1-8 above: items 1-7 resolved and accepted (see each item's own status line above for commit hashes); item 8 (already-known restart-recovery/project-scope-auth P0s) remains open.
 - [not_started] Phase 2 remaining items 1-9 above (feature-completeness item 1 above illustrates
   item 9's write-API gap concretely; fix together).
 - [not_started] Phase 3 remaining items 1-7 above.

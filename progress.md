@@ -679,3 +679,62 @@ HEAD
   at real consumers) deliberately deferred for its own dedicated, unhurried slice given its larger
   production-seam scope; item 8 (already-known restart-recovery/project-scope-auth P0s) remains
   open.** Next: item 6, or item 8, per user direction next session/turn.
+
+## 2026-09-04 (continued) — Phase 1 re-patch item 6 (evidence-hash corruption at real consumers) resolved
+- Implemented directly (no subagent), in an isolated worktree (`.worktrees/p1-evidence-hash-corruption`,
+  branch `patch/p1-evidence-hash-corruption`), after user confirmed doing item 7 first (small,
+  isolated) then returning to this larger item with full attention.
+- Discovered empirically (not just estimated) that the whole test suite pervasively creates
+  synthetic `evidence_records` rows (sha256 dummy value, `byte_length = 0`) via raw SQL across
+  ~20+ integration test files, with no real backing artifact content. A mandatory content-
+  verification requirement at the three consumers would have broken essentially the entire
+  integration suite; judged out of this item's surgical scope to rewrite that pervasive
+  convention. Instead threaded an *optional* `EvidenceContentReader` through the three consumers:
+  when a caller supplies one, real content is verified before certification/bundle/report
+  succeeds; when omitted, the existing metadata-only-trust behavior is unchanged. There is
+  currently no production write-command API surface for these three actions at all (a separate,
+  already-tracked P0), so no live caller exists yet to require a reader from -- this makes the
+  seam available for that surface once it lands, closing the actual code-level gap the finding
+  named without inventing a false "mandatory" claim this session cannot back with a real caller.
+- Narrowed `@maestro/evidence`'s `verifyEvidenceRecord(record: EvidenceRecord, ...)` to
+  `verifyEvidenceRecord(record: VerifiableEvidenceRecord, ...)` where
+  `VerifiableEvidenceRecord = Pick<EvidenceRecord, "sha256" | "byteLength">`, since that is all it
+  ever reads -- lets the three consumers pass a minimal shape built directly from their own
+  `evidence_records` query rows without fabricating unused `EvidenceRecord` fields.
+- `certification.ts`: `certifyQuality`/`certifyConditional` gained an optional 6th `content`
+  parameter, threaded through the shared `createCertification`; when supplied, verifies each
+  cited `testEvidenceId`'s real bytes in the same pre-INSERT check as the existing metadata
+  allow-list, so a rejection writes no certification row.
+- `evidence-bundle.ts`: `assembleEvidenceBundle`/`recordEvidenceBundle` gained an optional
+  `content` parameter; when supplied, verifies *every* evidence record for the Goal (not only
+  cited ones, since a bundle is meant to be a full immutable snapshot) before returning/recording.
+- `sane-report.ts`: `generateSaneFinalReport` gained an optional `content` parameter, threaded
+  through its existing internal `recordEvidenceBundle` call.
+- Added one real-artifact corrupted-hash regression per consumer, each following
+  `evidence.integration.test.ts`'s existing pattern (capture genuine content via
+  `FileEvidenceStore`, disable the immutable trigger, `UPDATE evidence_records SET sha256 = ...`,
+  re-enable the trigger): `certification.integration.test.ts` (repoint one cited evidence row at
+  real content, certify successfully with a reader, corrupt a second cited row, prove rejection
+  with no new certification and unchanged old behavior without a reader);
+  `evidence-bundle.integration.test.ts` (minimal standalone Goal + one real evidence row, prove
+  assemble/record succeed with a reader, corrupt it, prove rejection with no new bundle row);
+  `sane-report.integration.test.ts` (repoint every evidence row for the Goal at real content,
+  since bundle assembly verifies all of a Goal's evidence not just cited ones, certify and
+  generate a passing report with a reader, corrupt one row, prove rejection, confirm unchanged
+  behavior without a reader).
+- Verification: all three new tests passed on the first run (certification.integration.test.ts
+  7/7, evidence-bundle.integration.test.ts 3/3, sane-report.integration.test.ts 6/6). Full
+  real-PostgreSQL `npm test` (vitest) in the worktree: 96/97 files, 622 passed, 2 intentional
+  live-Prime skips, 0 failed. The node_modules-symlink cross-package staleness limitation from
+  items 1-4 blocked `tsc -b` here again (a genuine cross-package type/value export from
+  `@maestro/evidence`); confirmed the same known limitation, not a real defect.
+- Independent review performed by the parent session directly (no independent-review subagent
+  spawned, per explicit user direction to continue without further subagents this session), then
+  merged to `main` (`384d1e3`). Authoritative post-merge re-verification on `main`: fresh
+  `npm run build` and full real-PostgreSQL `npm run check` both clean: 96/97 files, 622 passed, 2
+  intentional live-Prime skips, 0 failed. Worktree, branch, and the disposable PostgreSQL container
+  (`maestro-p1-evidence-cert-postgres`) removed.
+- **Phase 1 re-patch status: items 1-7 resolved and accepted, all merged to `main` and pushed to
+  `origin`.** Only item 8 (already-known restart-recovery/project-scope-auth P0s from the first
+  audit wave) remains open before Phase 1 as a whole can be re-claimed accepted and the 8-item
+  execution order moves on to Phase 2's remaining items.
