@@ -3,6 +3,10 @@
 ## Goal
 Complete the remaining Phase 1 durable control-plane safety foundations, then implement Phase 2 hierarchical execution for one local software Goal.
 
+
+## Operating protocol
+Read `docs/OPERATING_PROTOCOL.md` first, every session, before doing anything else. It has the session-resume checklist, git/worktree hygiene, disposable-DB container hygiene, subagent spawn rules (model/thinking-level/dead-child handling), and the commit checkpoint policy. This section stays a one-line pointer so the protocol has a single source of truth.
+
 ## Assumptions and boundaries
 - Work remains in the existing isolated worktree `phase1/control-plane`.
 - No remote push, deployment, external send, credential change, or deletion is authorized.

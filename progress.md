@@ -411,6 +411,7 @@
 - **This consolidation is a code/repo-hygiene cleanup only.** It does not change the Phase 5 remediation plan's operational-acceptance status recorded above: Phase 1-4 remain code/test-level complete, not operationally accepted, pending Track A/B remediation work.
 
 
+HEAD
 ## 2026-09-04 (continued) — Second hardening audit wave consolidated; re-patch execution order set
 - Four parallel read-only audits (security, concurrency/data-integrity, test quality, budget/evidence-bundle/certification domain correctness) completed against `main`. A fifth (feature-completeness/real-world usability) was dispatched but its subagent aborted mid-run with no findings; not re-dispatched this session.
 - Two new P0s found beyond the known list: (1) certification/evidence-bundle/sane-report/overwatch-council write paths have zero goal_lease/fencing/control-latch check (a stale/fenced-out actor can certify, run a real Council round, or produce a Sane report on a paused/emergency-stopped Goal); (2) budget reservations silently double-count across envelope revisions — empirically reproduced 78% overspend undetected against real PostgreSQL. Full findings recorded per-phase in task_plan.md's new "Re-patch execution order" section.
@@ -600,3 +601,10 @@
 - Next: Phase 1 re-patch item 5 (fast-check property-based fencing coverage), then items 6-8
   (evidence-hash-corruption consumer tests, config credential-key test, already-known
   restart-recovery/project-scope-auth P0s), before Phase 2's re-patch items.
+
+
+## 2026-09-04 (continued) — Operating protocol designed via grill-me, extracted to docs/OPERATING_PROTOCOL.md
+- Ran a grill-me PLAN MODE interview with the user to design the session-continuity/subagent-spawn protocol properly (rather than the earlier unilateral draft at commit 1fd3948). Decisions: keep task_plan.md as the first-read entry point but move detailed rules into a separate `docs/OPERATING_PROTOCOL.md` (English); scope covers this project first, plus a lightweight reusable pattern saved as a global memory for future projects.
+- Amendments folded in: subagents default to `openai-codex/gpt-5.6-luna` (with `openrouter/openai/gpt-5.6-luna` as a same-model fallback before dropping to the inherited default), thinking level scaled medium/high/max by task difficulty; new worktrees symlink `node_modules` from `main` instead of a fresh `npm install`, with the exact caveat from the 2026-09-03 Phase 4 merge's stale-symlink incident; Karpathy guidelines declared the default engineering discipline for this repo.
+- Live behavior test (grill-me's closing step, not skipped): created a throwaway worktree `.worktrees/protocol-test`, symlinked `node_modules` from main, ran `npm run build` clean from inside it, then deleted the worktree per the protocol's own lifecycle rule. Confirmed the `task_plan.md` -> `docs/OPERATING_PROTOCOL.md` pointer chain resolves.
+- Committed at `d80adb0`. Saved a global cross-project memory (`session_continuity_operating_protocol_pattern_for_multi_session_software_project`) capturing the reusable pattern for future projects.
