@@ -23,6 +23,9 @@
       "path": "packages/git-adapter"
     },
     {
+      "path": "packages/environment-adapter"
+    },
+    {
       "path": "apps/cli"
     },
     {
