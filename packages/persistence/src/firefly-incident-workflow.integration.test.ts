@@ -21,7 +21,7 @@ import {
   type TaskContractSubstance,
 } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
-import { acquireGoalLease, executeGoalCommand } from "./commands.js";
+import { acquireGoalLease, executeGoalCommand, StaleGoalLeaseError } from "./commands.js";
 import { createDurableTaskContract, launchConfirmedTaskContract, recordExactTaskContractConfirmation } from "./task-contract.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
 import { createDepartmentPlan } from "./department-plan.js";
@@ -286,6 +286,27 @@ describeDatabase("Phase 4 work-sequence step 8: Firefly incident through Task Co
     expect(control.rows[0]?.pause_requested_at ?? null).toBeNull();
 
     await expect(requestFireflyImmediateSafePause(pool, incident.incidentId, projectId, proof, context("firefly"))).resolves.toMatchObject({ incidentId: incident.incidentId });
+  });
+
+  it("rejects linking an incident to a Goal with a stale/forged fencing token, zero durable mutation, and the real proof still works afterward (Phase 2 re-patch item 8)", async () => {
+    const { incident } = await seedIncident({ severity: "warning", confidence: 0.3, affectedComponent: "fencing-link-component" });
+    const projectId = randomUUID();
+    const goalId = randomUUID();
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "control-plane", leaseDurationMs: 120_000 });
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "CreateGoal", expectedVersion: 0 }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
+
+    const forgedProof = { goalId, ownerId: proof.ownerId, fencingToken: String(BigInt(proof.fencingToken) + 1n) };
+    await expect(linkFireflyIncidentToGoal(pool, incident.incidentId, goalId, forgedProof, context("sane"))).rejects.toBeInstanceOf(StaleGoalLeaseError);
+    const unlinked = (await listFireflyIncidents(pool)).find((i) => i.incidentId === incident.incidentId);
+    expect(unlinked?.linkedGoalId ?? null).toBeNull();
+    expect(unlinked?.status).toBe("open");
+
+    const linked = await linkFireflyIncidentToGoal(pool, incident.incidentId, goalId, proof, context("sane"));
+    expect(linked.linkedGoalId).toBe(goalId);
+    expect(linked.status).toBe("triaging");
   });
 
   it("rejects an immediate safe pause request below the high-confidence critical threshold", async () => {

@@ -7,6 +7,7 @@ import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
 import { createDepartmentPlan, DepartmentPlanError, DepartmentPlanNotFoundError, listDepartmentPlansForCouncil, readDepartmentPlan, reviseDepartmentPlan } from "./department-plan.js";
+import { StaleGoalLeaseError } from "./commands.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -163,5 +164,18 @@ describeDatabase("Department Plans with PostgreSQL", () => {
     expect(retried).toEqual(applied);
     const revisions = await pool.query("SELECT version FROM department_plan_revisions WHERE council_id = $1 AND department_id = $2 ORDER BY version", [council.councilId, "product"]);
     expect(revisions.rows.map((row: { version: number }) => row.version)).toEqual([1, 2]);
+  });
+
+  it("rejects Department Plan creation and revision with a stale/forged fencing token, zero durable mutation, and the real proof still works afterward (Phase 2 re-patch item 8)", async () => {
+    const { council, proof } = await setupResolvedCouncil(["product"]);
+    const forgedProof = { goalId: proof.goalId, ownerId: proof.ownerId, fencingToken: String(BigInt(proof.fencingToken) + 1n) };
+    await expect(createDepartmentPlan(pool, { councilId: council.councilId, departmentId: "product", substance: substance() }, forgedProof, headContext("product"))).rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect((await listDepartmentPlansForCouncil(pool, council.councilId)).length).toBe(0);
+    const created = await createDepartmentPlan(pool, { councilId: council.councilId, departmentId: "product", substance: substance() }, proof, headContext("product"));
+    expect(created.version).toBe(1);
+    await expect(reviseDepartmentPlan(pool, council.councilId, "product", 1, substance({ contribution: "forged revision" }), "forged", forgedProof, headContext("product"))).rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect((await readDepartmentPlan(pool, council.councilId, "product")).version).toBe(1);
+    const revised = await reviseDepartmentPlan(pool, council.councilId, "product", 1, substance({ contribution: "real revision" }), "real", proof, headContext("product"));
+    expect(revised.version).toBe(2);
   });
 });
