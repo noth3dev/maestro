@@ -919,3 +919,45 @@ HEAD
   not let it linger). No disposable PostgreSQL containers were left running.
 - No code change in this entry, doc/environment sync only. Next: Phase 2 re-patch item 3 (team-lead
   grant cost/duration/scope ceilings stored but never enforced at `spawnHelperWorker` time).
+
+## 2026-09-04 (continued) — Real build defect found and fixed; 9 parallel Claude Sonnet 5 subagents dispatched
+- Before dispatching parallel work, `npm run build` on `main` HEAD (`fccc922`) failed for real
+  (confirmed directly, not a worktree/symlink-staleness artifact): item 2's merge
+  (`efc40c8`/`6d791d5`) passed `capabilities: request.capabilities` (possibly `undefined`)
+  explicitly into `factory.create(...)`, which `exactOptionalPropertyTypes: true` rejects (the key
+  must be omitted, not set to `undefined`). Fixed by conditionally omitting the key
+  (`packages/prime-adapter/src/execution-kernel.ts`), commit `090dcbd`. Full real-PostgreSQL
+  `npm run check` on `main` after the fix: 97 passed / 1 skipped files, 642 passed / 2 skipped
+  tests, 0 failed. Docker is now available in this runtime (was previously unavailable this
+  session; user confirmed it was turned on).
+- Per user direction to move fast with several parallel Claude Sonnet 5 subagents, dispatched 9
+  children (`model=anthropic/claude-sonnet-5`), each in its own worktree/branch created from
+  `090dcbd`, each with a disjoint file scope to avoid merge conflicts, each told to test-first,
+  self-verify only (not self-accept), use its own uniquely-named disposable PostgreSQL container,
+  stay in scope, and reply via `agent_message` when done:
+  - `p2-team-lead-ceilings` (Phase 2 item 3, medium thinking): team-lead-grant.ts ceiling enforcement.
+  - `p2-persona-overlay` (Phase 2 item 4, medium thinking): mission-bundle.ts persona overlay.
+  - `p2-head-control-latch` (Phase 2 item 5, high thinking): head-participation.ts control-latch check.
+  - `p2-worker-output-race` (Phase 2 item 6 + Phase 3 item 1's certification.ts part, high thinking):
+    certification.ts race fix + fencing/control-latch on certifyQuality/certifyConditional/waiver/
+    conflict-adjudication.
+  - `p2-git-path-containment` (Phase 2 item 7 + item 8's git-integration.ts fencing test, high
+    thinking): git-integration.ts/git-ops.ts path containment.
+  - `p2-fencing-coverage` (Phase 2 item 8 remaining modules, medium thinking): stale-fencing tests
+    only for council.ts, department-plan.ts, device-grant.ts, environment.ts, firefly-incident.ts,
+    sentinel-challenge.ts (test-only, no production edits).
+  - `p3-evidence-sane-hardening` (Phase 3 items 1/2/3/4/5's evidence-bundle.ts+sane-report.ts parts,
+    max thinking): fencing/control-latch, transactional assembly, per-Goal idempotency, missing
+    evidence sources, budget-exceeded blocker.
+  - `p3-overwatch-control-latch` (Phase 3 item 1's overwatch-council.ts part, high thinking):
+    fencing/control-latch before any real reviewer subagent spawn.
+  - `p3-idor-readstate` (Phase 3 item 6, high thinking): add `projectId` to the four read-state
+    routes/contracts/service/API-client, matching `getGoal`'s existing pattern.
+- All 9 admitted and running in parallel as of this entry; none have replied yet. Each owns a
+  disjoint file set by design (certification.ts is deliberately split by concern between
+  `p2-worker-output-race` sequentially, not shared with any other agent). Next: wait for each
+  child's real reply (or apply dead-child protocol per docs/OPERATING_PROTOCOL.md section D.2 if
+  one stalls/errors), independently review each diff directly (no independent-review subagent
+  layer this round, per established practice this session), merge one at a time to `main` with
+  re-verification, then update `task_plan.md`/this file per item and proceed to Phase 3's remaining
+  items (7) and Phase 4's Track A/B items.
