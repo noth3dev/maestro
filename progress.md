@@ -552,3 +552,51 @@
   `reconcileOnStartup`) -- design already prepared this session by the earlier
   `luna-p1-migration-audit` child, though that child completed without sending its findings back
   and was deleted per the dead-child protocol; this item's design work has not yet been redone.
+
+## 2026-09-04 (continued) — Phase 1 re-patch item 4 (no production-safe migration runner, P0-adjacent) resolved
+- Implemented directly (no subagent), test-first, in an isolated worktree
+  (`.worktrees/p1-migration-runner`, branch `patch/p1-migration-runner`).
+- `packages/persistence/src/migrate.ts`'s `runMigrations(pool)`: durable `schema_migrations` ledger
+  (filename PRIMARY KEY, checksum, applied_at); a single fixed `pg_advisory_lock` key serializes
+  concurrent callers database-wide for the call's duration (always released, even on error);
+  applies only files not yet recorded (each in its own transaction, checksum recorded in the same
+  transaction); fails closed with `MigrationChecksumMismatchError` if an already-recorded file's
+  current content no longer matches its recorded checksum. Never drops or resets anything
+  (additive-only), unlike the existing test-only `applyAllMigrations`. Wired into
+  `apps/control-plane/src/main.ts`'s `ControlPlane.listen()`, before `reconcileOnStartup`, so a
+  real process's schema is always current before any reconciliation or traffic.
+- **A dedicated regression surfaced a real, non-hypothetical defect before merge**:
+  apps/control-plane's own composition-root integration tests (`main.integration.test.ts`,
+  `main.kill-restart.integration.test.ts`) already call `applyAllMigrations` in `beforeAll` and
+  then `createControlPlane(...).listen()` against the same schema; once `.listen()` also calls
+  `runMigrations`, several of the project's ~30+ migration files with a bare (non-idempotent)
+  `CREATE TRIGGER` statement (first confirmed via `0013_council_briefs.sql`'s `head_councils`
+  table) would fail "already exists" on that second, ledger-less pass. Fixed by making
+  `applyAllMigrations` populate the same `schema_migrations` ledger (with each applied file's real
+  checksum) instead of leaving it empty, so both runners share one ledger and neither re-executes
+  DDL a second time -- rather than auditing/patching idempotency into dozens of individual
+  migration files, which was judged out of this item's surgical scope.
+- Verification: 6 real-PostgreSQL `migrate.integration.test.ts` cases -- fresh apply into an empty
+  schema (ledger row per file), idempotent no-op re-run, incremental new-file apply leaving
+  existing ledger rows untouched, two concurrent runners racing through the advisory lock (exactly
+  one ledger row per migration, no duplicate-key error), checksum-mismatch rejection, and no
+  re-execution against an `applyAllMigrations`-built schema -- all passed, the last only after the
+  ledger-sharing fix above.
+- Same-package tests (this file's own `.test.ts`) verified cleanly in the isolated worktree. The
+  node_modules-symlink cross-package staleness limitation established in items 1-3 blocked both
+  `tsc -b` and, this time, the real spawned-subprocess control-plane tests too (`runMigrations is
+  not a function` / `does not provide an export named 'runMigrations'`) -- confirmed by direct
+  inspection this is the same known limitation (a genuinely new runtime export from
+  `@maestro/persistence`, not just a type change), not a real defect. Independent review performed
+  by the parent session directly (no independent-review subagent spawned, per explicit user
+  direction to continue without further subagents this session), then merged to `main` (`1828350`).
+  Authoritative post-merge re-verification on `main`: fresh `npm run build` clean, full
+  real-PostgreSQL `npm run check`: 95/96 files, 615 passed, 2 intentional live-Prime skips, 0
+  failed. Worktree, branch, and the disposable PostgreSQL container
+  (`maestro-p1-migration-postgres`) removed.
+- User gave explicit go-ahead this session to also push to `origin` periodically as items land
+  (not only local commits), superseding the prior "local commits only, ask before pushing" default
+  for this session going forward.
+- Next: Phase 1 re-patch item 5 (fast-check property-based fencing coverage), then items 6-8
+  (evidence-hash-corruption consumer tests, config credential-key test, already-known
+  restart-recovery/project-scope-auth P0s), before Phase 2's re-patch items.

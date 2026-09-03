@@ -196,14 +196,21 @@ feature-completeness audit before treating Phase 4 as usable.
    real HTTPS request against the configured listener succeeds while a plain-HTTP request to the
    same port fails outright (protocol mismatch). Full real-PostgreSQL `npm run check` on `main`:
    94/95 files, 609 passed, 2 intentional live-Prime skips, 0 failed.
-4. **[P0-adjacent, concurrency/infra]** No production-safe migration runner exists anywhere in the
-   codebase. The only runner (`packages/persistence/src/test-migrations.ts` `applyAllMigrations`)
-   unconditionally `DROP SCHEMA ... CASCADE`s before applying all 47 migrations, has no
-   `schema_migrations` ledger, and takes no advisory lock; it is called exclusively from
-   `*.integration.test.ts` files. There is currently no supported way to create or evolve a real
-   production database. Fix: add a real migration runner with a checksum/applied-at ledger under a
-   single `pg_advisory_lock`, additive-only, wired into control-plane startup before
-   `reconcileOnStartup`.
+4. **[RESOLVED 2026-09-04, commit `1828350`]** No production-safe migration runner existed
+   anywhere. Fixed: `packages/persistence/src/migrate.ts`'s `runMigrations(pool)` -- durable
+   `schema_migrations` ledger (filename/checksum/applied_at), a single `pg_advisory_lock`
+   serializing concurrent callers database-wide, applies only not-yet-recorded files (each in its
+   own transaction), and fails closed with `MigrationChecksumMismatchError` if an already-applied
+   file's content no longer matches its recorded checksum. Wired into
+   `apps/control-plane/src/main.ts`'s `ControlPlane.listen()` before `reconcileOnStartup`. Also
+   fixed a real defect found via a dedicated regression (not hypothetical): `applyAllMigrations`
+   now populates the same ledger, since apps/control-plane's own composition-root integration
+   tests already call it in `beforeAll` then `createControlPlane(...).listen()` against the same
+   schema, and several of the ~30+ migration files with a bare (non-idempotent) `CREATE TRIGGER`
+   would otherwise fail "already exists" on that second, ledger-less pass. Verified with 6 real-
+   PostgreSQL cases (fresh apply, idempotent no-op, incremental apply, two-runner advisory-lock
+   race, checksum-mismatch rejection, shared-ledger no-re-execution). Full real-PostgreSQL
+   `npm run check` on `main`: 95/96 files, 615 passed, 2 intentional live-Prime skips, 0 failed.
 5. **[HIGH, test quality]** fast-check property testing is almost entirely absent despite being a
    locked-stack requirement (plan/phase1.md) and two explicit Phase 1 Tests items (#2, #3). Only
    one file (`packages/persistence/src/fencing.property.test.ts`) uses fast-check at all, and it
