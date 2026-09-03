@@ -423,3 +423,42 @@
 - Two findings sharpen existing known P0s to their single clearest illustration: "Sane" natural-language intake is a display-name string only, with zero CLI/HTTP entry point to the existing Task Contract persistence functions; Firefly's own `main()` wires a delivery-transport stub that always throws, and no Discord/desktop emergency channel (promised by plan/phase4.md #46) exists anywhere.
 - Two new cross-cutting gaps: no Goal-listing route/command/UI anywhere (only single-Goal-by-UUID lookup); no cost/budget-at-a-glance surface for a human despite the budget accounting-integrity issues already found.
 - Recorded in task_plan.md's "Re-patch execution order" section, folded into the phase items they illustrate rather than as a separate untracked list.
+
+
+## 2026-09-04 (continued) — Phase 1 re-patch item 1 (auth CPU amplification) resolved
+- Dispatched parallel Luna subagents (gpt-5.6-luna): one implementer in an isolated worktree
+  (`.worktrees/auth-credential-lookup`, branch `patch/auth-credential-lookup`) plus two read-only
+  design/security auditors in parallel. Converged design: bearer tokens become a strict
+  `credentialId.secret` envelope; `authenticateLocalOperator` validates the UUID selector and
+  secret byte length before any DB/KDF work, then looks up exactly one row by indexed
+  `WHERE c.credential_id = $1` before deriving. No raw-secret fallback; existing active/revoked
+  semantics and the scrypt concurrency guard preserved.
+- Implementer delivered test-first (RED observed against the old unfiltered query), 8/8 focused
+  unit tests, 9/9 real-PostgreSQL `auth.integration.test.ts`, full no-DB `npm run check` (351
+  passed / 236 skipped / 0 failed), and migrated control-plane loopback/kill-restart fixtures to
+  the new envelope.
+- Two independent-review subagents (`luna-auth-independent-review`, `luna-auth-adversarial-review`)
+  completed without sending a reply; per the dead-child protocol they were deleted rather than
+  treated as silent acceptance. Per explicit user direction to continue without further subagents,
+  the parent session performed the independent review directly: inspected the full diff, ran
+  focused and full builds/tests itself, and diagnosed the two real-PostgreSQL `npm run check`
+  failures (`apps/control-plane/src/main.integration.test.ts`,
+  `main.kill-restart.integration.test.ts`) as a known node_modules-symlink artifact — confirmed by
+  direct inspection that `main`'s compiled `packages/persistence/dist/auth.js` still carried the
+  pre-fix signature at merge time, not a defect in the change. Verdict: ACCEPT.
+- Merged to `main` (`fef8831`). Post-merge rebuild-and-reverify surfaced two *different*, real
+  failures in fixtures the original diff hadn't touched (`read-state-parity.integration.test.ts`,
+  `apps/secretary/src/cli-secretary-parity.integration.test.ts`), which still passed the raw
+  secret alone as `MAESTRO_API_TOKEN`/api-client token. Fixed directly (no subagent, mechanical
+  2-file change) in a second small worktree (`fix/auth-parity-fixtures`), self-verified with a
+  full real-PostgreSQL `npm run check` (94/95 files, 590 passed, 2 intentional live-Prime skips, 0
+  failed) before merging (`be490f8`). This second fix was self-verified only, not independently
+  reviewed by a separate agent, given its mechanical scope and explicit user direction; noted here
+  transparently rather than silently claiming full independent review.
+- Final state on `main`: fresh `npm run build` + real-PostgreSQL `npm run check` both clean (94/95
+  files, 590 passed, 2 intentional live-Prime skips, 0 failed). Worktrees, branches, and the
+  disposable PostgreSQL container (`maestro-auth-credential-lookup-postgres`) removed.
+- Next: continue Phase 1 re-patch items 2-8 in order (memory-bound eviction, remote-TLS fail-closed,
+  production migration runner, fast-check fencing coverage, evidence-hash-corruption consumer
+  tests, config credential-key test, restart-recovery/project-scope-auth P0s), each test-first,
+  each independently reviewed before acceptance.

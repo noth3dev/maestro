@@ -154,11 +154,19 @@ approval completion path), so this is a partial, not total, blind spot — re-ru
 feature-completeness audit before treating Phase 4 as usable.
 
 ### Phase 1 — remaining open items
-1. **[MEDIUM, security]** `authenticateLocalOperator` (packages/persistence/src/auth.ts:140-176)
-   runs an unfiltered SQL query (no WHERE clause) and scrypt-derives against every credential row
-   on every login attempt, including pre-auth junk-bearer requests — a CPU-amplification DoS
-   vector once multiple operators exist. Fix: accept an operator/credential identifier to narrow
-   the query to O(1) rows before deriving, or rate-limit failed attempts per source.
+1. **[RESOLVED 2026-09-04, commits `fef8831`/`be490f8`]** `authenticateLocalOperator`
+   (packages/persistence/src/auth.ts) previously ran an unfiltered SQL query and scrypt-derived
+   against every credential row on every login attempt (O(n) CPU-amplification DoS vector).
+   Fixed: bearer tokens are now a strict `credentialId.secret` envelope; the selector is
+   canonical-UUID validated and looked up by indexed `WHERE c.credential_id = $1` (one row)
+   before any KDF work runs; a missing/malformed selector or unknown credential never reaches
+   scrypt. No raw-secret fallback; all callers/fixtures (control-plane, CLI, Secretary parity
+   tests) migrated to the new envelope. Independently reviewed (parent-session direct review,
+   not a subagent, after two review-subagent spawns died without replying and were deleted per
+   dead-child protocol). Full real-PostgreSQL `npm run check` on `main` after merge: 94/95 files,
+   590 passed, 2 intentional live-Prime skips, 0 failed. Residual documented risk (not this
+   item's scope): no per-source rate limiter for repeated failed attempts against the same known
+   selector — the fix removes CPU amplification, not brute-force throttling.
 2. **[LOW-MEDIUM, security]** Unbounded in-process memory growth: `execution-kernel.ts`'s
    `sessions`/`roots`/`children` Maps (lines 81-83) and `goal-service.ts`'s `leaseProofs` Map
    (line 42) never evict terminal-state entries. Fix: evict or bound (LRU) on terminal status once
