@@ -1,6 +1,6 @@
 <p align="center">
   <a href="README.md">
-    <img alt="Maestro" src="assets/logo.svg" width="360" style="max-width: 100%;">
+    <img alt="Maestro" src="assets/logo.svg" width="240" style="max-width: 100%;">
   </a>
 </p>
 

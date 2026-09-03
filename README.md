@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="docs/README.md">
-    <img alt="Maestro" src="docs/assets/logo.svg" width="400" style="max-width: 100%;">
+    <img alt="Maestro" src="docs/assets/logo.svg" width="280" style="max-width: 100%;">
   </a>
 </p>
 
