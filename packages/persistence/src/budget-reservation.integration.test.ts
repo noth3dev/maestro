@@ -70,6 +70,58 @@ describeDatabase("Budget reservations with PostgreSQL", () => {
     await expect(reserveDepartmentBudget(pool, council.councilId, "product", 1, "over the reserve", proof, headContext("product"))).rejects.toBeInstanceOf(BudgetReservationError);
   });
 
+  it("rejects Department over-allocation across a re-reserved Goal envelope of the same amount, closing the double-counting gap (Phase 2 re-patch item 1)", async () => {
+    const { goalId, council, proof } = await setupResolvedCouncil();
+    // A routine, CEO-approval-free "same amount" re-reservation: not an
+    // increase, so it needs no approval, yet it is still a brand-new
+    // append-only goal-scope row with its own reservation_id.
+    const firstEnvelope = await reserveGoalBudget(pool, goalId, 100_000, "initial envelope", proof, context("secretary"));
+    const firstAllocation = await reserveDepartmentBudget(pool, council.councilId, "product", 80_000, "first allocation", proof, headContext("product"));
+    expect(firstAllocation.parentReservationId).toBe(firstEnvelope.reservationId);
+
+    const secondEnvelope = await reserveGoalBudget(pool, goalId, 100_000, "re-reserved, same amount", proof, context("secretary"));
+    expect(secondEnvelope.reservationId).not.toBe(firstEnvelope.reservationId);
+    expect(secondEnvelope.ceoApproved).toBe(false);
+
+    // Without the fix, this would bind to the new (second) envelope row,
+    // whose own direct children sum to 0 so far, and incorrectly succeed --
+    // pushing real cumulative Department spend to 160,000 against a 90,000
+    // allocatable ceiling (the exact scenario this item's audit reproduced).
+    await expect(
+      reserveDepartmentBudget(pool, council.councilId, "product", 80_000, "second allocation", proof, headContext("product")),
+    ).rejects.toBeInstanceOf(BudgetReservationError);
+
+    // A smaller amount that fits the true remaining allocatable room (90,000 - 80,000 = 10,000) still succeeds.
+    const withinRemaining = await reserveDepartmentBudget(pool, council.councilId, "product", 10_000, "fits the true remainder", proof, headContext("product"));
+    expect(withinRemaining.parentReservationId).toBe(secondEnvelope.reservationId);
+    await expect(
+      reserveDepartmentBudget(pool, council.councilId, "product", 1, "one cent over the true remainder", proof, headContext("product")),
+    ).rejects.toBeInstanceOf(BudgetReservationError);
+  });
+
+  it("rejects Mission over-allocation across a re-reserved Department envelope of the same amount", async () => {
+    const { goalId, council, proof } = await setupResolvedCouncil();
+    // A large enough Goal envelope that Department-level re-reservations
+    // (well within its allocatable ceiling) do not themselves trip the
+    // Department-level check exercised by the previous test -- this test
+    // isolates the same double-counting fix one level down, at the
+    // Department-to-Mission boundary.
+    await reserveGoalBudget(pool, goalId, 300_000, "initial envelope", proof, context("secretary"));
+    const firstDept = await reserveDepartmentBudget(pool, council.councilId, "product", 50_000, "product allocation", proof, headContext("product"));
+    const firstMission = await reserveMissionBudget(pool, council.councilId, "product", 1, "scout-1", 40_000, "first mission allocation", proof, headContext("product"));
+    expect(firstMission.parentReservationId).toBe(firstDept.reservationId);
+
+    const secondDept = await reserveDepartmentBudget(pool, council.councilId, "product", 50_000, "re-reserved, same amount", proof, headContext("product"));
+    expect(secondDept.reservationId).not.toBe(firstDept.reservationId);
+
+    await expect(
+      reserveMissionBudget(pool, council.councilId, "product", 1, "scout-2", 40_000, "second mission allocation", proof, headContext("product")),
+    ).rejects.toBeInstanceOf(BudgetReservationError);
+
+    const withinRemaining = await reserveMissionBudget(pool, council.councilId, "product", 1, "scout-2", 10_000, "fits the true remainder", proof, headContext("product"));
+    expect(withinRemaining.parentReservationId).toBe(secondDept.reservationId);
+  });
+
   it("requires CEO approval to increase the Goal envelope but not to decrease it", async () => {
     const { goalId, proof } = await setupResolvedCouncil();
     await reserveGoalBudget(pool, goalId, 100_000, "initial envelope", proof, context("secretary"));
