@@ -37,6 +37,7 @@ import {
   FireflyIncidentError,
   closeFireflyIncident,
   linkFireflyIncidentToGoal,
+  listFireflyImprovementEvidence,
   listFireflyIncidents,
   requestFireflyImmediateSafePause,
 } from "./firefly-incident.js";
@@ -231,6 +232,13 @@ describeDatabase("Phase 4 work-sequence step 8: Firefly incident through Task Co
     expect(closed.closedAt).not.toBeNull();
 
     await expect(pool.query("UPDATE firefly_incidents SET status = 'open' WHERE incident_id = $1", [incident.incidentId])).rejects.toThrow();
+
+    const improvementEvidence = (await listFireflyImprovementEvidence(pool)).find((e) => e.incidentId === incident.incidentId);
+    expect(improvementEvidence).toMatchObject({ outcome: "resolved", severity: "critical" });
+    expect(improvementEvidence!.detectionToTriageMs).not.toBeNull();
+    expect(improvementEvidence!.triageToCloseMs).not.toBeNull();
+    expect(improvementEvidence!.detectionToTriageMs).toBeGreaterThanOrEqual(0);
+    expect(improvementEvidence!.triageToCloseMs).toBeGreaterThanOrEqual(0);
   });
 
   it("requests an immediate safe pause for a high-confidence critical incident and blocks Council writes until it is lifted", async () => {
@@ -279,6 +287,10 @@ describeDatabase("Phase 4 work-sequence step 8: Firefly incident through Task Co
     const closed = await closeFireflyIncident(pool, incident.incidentId, "false_positive", "The named version is unaffected.", "none", context("security"));
     expect(closed.status).toBe("false_positive");
     expect(closed.linkedGoalId).toBeNull();
+    const improvementEvidence = (await listFireflyImprovementEvidence(pool)).find((e) => e.incidentId === incident.incidentId);
+    expect(improvementEvidence).toMatchObject({ outcome: "false_positive" });
+    expect(improvementEvidence!.detectionToTriageMs).toBeNull();
+    expect(improvementEvidence!.triageToCloseMs).toBeNull();
 
     const { incident: second } = await seedIncident({ severity: "warning", confidence: 0.3, affectedComponent: "unlinked-resolve-attempt-component" });
     await expect(closeFireflyIncident(pool, second.incidentId, "resolved", "done", "none", context("security"))).rejects.toBeInstanceOf(FireflyIncidentError);

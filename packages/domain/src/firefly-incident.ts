@@ -122,3 +122,51 @@ const IMMEDIATE_SAFE_PAUSE_CONFIDENCE_THRESHOLD = 0.85;
 export function requiresImmediateSafePause(severity: FireflySeverity, confidence: number): boolean {
   return severity === "critical" && confidence >= IMMEDIATE_SAFE_PAUSE_CONFIDENCE_THRESHOLD;
 }
+
+export interface FireflyImprovementEvidence {
+  readonly outcome: "resolved" | "false_positive";
+  readonly severity: FireflySeverity;
+  readonly confidence: number;
+  /** Time from the incident's first observation to when it was linked to a
+   * remediation Goal (triage start). Null when it closed without ever
+   * linking a Goal, for example a direct false positive. */
+  readonly detectionToTriageMs: number | null;
+  /** Time from triage start to closure. Null under the same condition. */
+  readonly triageToCloseMs: number | null;
+}
+
+/**
+ * Derive bounded improvement-evidence facts from real durable timestamps
+ * only. This never triggers a change by itself; it is durable evidence for
+ * a later Overwatch Improvement Digest to consume.
+ */
+export function computeFireflyImprovementEvidence(
+  outcome: "resolved" | "false_positive",
+  severity: FireflySeverity,
+  confidence: number,
+  firstObservedAt: string,
+  linkedAt: string | null,
+  closedAt: string,
+): FireflyImprovementEvidence {
+  if (!Object.hasOwn(severityRank, severity)) throw new FireflySignalError("invalid severity");
+  if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) throw new FireflySignalError("confidence must be between 0 and 1");
+  const firstObserved = Date.parse(firstObservedAt);
+  const closed = Date.parse(closedAt);
+  if (!Number.isFinite(firstObserved) || !Number.isFinite(closed) || closed < firstObserved) {
+    throw new FireflySignalError("improvement evidence timestamps must be valid and ordered");
+  }
+  if (linkedAt === null) {
+    return { outcome, severity, confidence, detectionToTriageMs: null, triageToCloseMs: null };
+  }
+  const linked = Date.parse(linkedAt);
+  if (!Number.isFinite(linked) || linked < firstObserved || closed < linked) {
+    throw new FireflySignalError("improvement evidence timestamps must be valid and ordered");
+  }
+  return {
+    outcome,
+    severity,
+    confidence,
+    detectionToTriageMs: linked - firstObserved,
+    triageToCloseMs: closed - linked,
+  };
+}

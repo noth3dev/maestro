@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   assessFireflySilence,
+  computeFireflyImprovementEvidence,
   requiresImmediateSafePause,
   scoreFireflySignals,
   type FireflySeverity,
@@ -302,7 +303,7 @@ export async function linkFireflyIncidentToGoal(
       throw new FireflyIncidentError(`Firefly incident ${incidentId} cannot be linked from status ${incident.status}`);
     }
     const updated = await client.query<IncidentRow>(
-      `UPDATE firefly_incidents SET linked_goal_id = $2, status = 'triaging', updated_at = transaction_timestamp()
+      `UPDATE firefly_incidents SET linked_goal_id = $2, linked_at = transaction_timestamp(), status = 'triaging', updated_at = transaction_timestamp()
         WHERE incident_id = $1 RETURNING ${INCIDENT_COLUMNS}`,
       [incidentId, goalId],
     );
@@ -356,9 +357,30 @@ export async function closeFireflyIncident(
         WHERE incident_id = $1 RETURNING ${INCIDENT_COLUMNS}`,
       [incidentId, outcome, resolutionSummary.trim(), retainedRisk.trim()],
     );
+    const closed = updated.rows[0]!;
+    // Every closure durably records improvement evidence in the same
+    // transaction. This is read-only evidence for a later Overwatch
+    // Improvement Digest; it never triggers a change by itself.
+    const linkedAtRow = await client.query<{ linked_at: Date | null }>(
+      "SELECT linked_at FROM firefly_incidents WHERE incident_id = $1", [incidentId],
+    );
+    const evidence = computeFireflyImprovementEvidence(
+      outcome,
+      closed.severity,
+      Number(closed.confidence),
+      closed.first_observed_at.toISOString(),
+      linkedAtRow.rows[0]!.linked_at?.toISOString() ?? null,
+      closed.closed_at!.toISOString(),
+    );
+    await client.query(
+      `INSERT INTO firefly_improvement_evidence
+         (evidence_id, incident_id, outcome, severity, confidence, detection_to_triage_ms, triage_to_close_ms)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [randomUUID(), incidentId, evidence.outcome, evidence.severity, evidence.confidence, evidence.detectionToTriageMs, evidence.triageToCloseMs],
+    );
     await client.query("COMMIT");
     open = false;
-    return mapIncident(updated.rows[0]!);
+    return mapIncident(closed);
   } catch (error) {
     if (open) await client.query("ROLLBACK");
     throw error;
@@ -407,4 +429,48 @@ export async function requestFireflyImmediateSafePause(
   } finally {
     client.release();
   }
+}
+
+export interface FireflyImprovementEvidenceRecord {
+  readonly evidenceId: string;
+  readonly incidentId: string;
+  readonly outcome: "resolved" | "false_positive";
+  readonly severity: FireflySeverity;
+  readonly confidence: number;
+  readonly detectionToTriageMs: number | null;
+  readonly triageToCloseMs: number | null;
+  readonly recordedAt: string;
+}
+
+interface ImprovementEvidenceRow {
+  evidence_id: string;
+  incident_id: string;
+  outcome: "resolved" | "false_positive";
+  severity: FireflySeverity;
+  confidence: number;
+  detection_to_triage_ms: string | null;
+  triage_to_close_ms: string | null;
+  recorded_at: Date;
+}
+
+function mapImprovementEvidence(row: ImprovementEvidenceRow): FireflyImprovementEvidenceRecord {
+  return {
+    evidenceId: row.evidence_id,
+    incidentId: row.incident_id,
+    outcome: row.outcome,
+    severity: row.severity,
+    confidence: Number(row.confidence),
+    detectionToTriageMs: row.detection_to_triage_ms === null ? null : Number(row.detection_to_triage_ms),
+    triageToCloseMs: row.triage_to_close_ms === null ? null : Number(row.triage_to_close_ms),
+    recordedAt: row.recorded_at.toISOString(),
+  };
+}
+
+/** Read-only evidence for a later Overwatch Improvement Digest. Nothing in
+ * this module consumes it to trigger a change. */
+export async function listFireflyImprovementEvidence(pool: Pick<Pool, "query">): Promise<readonly FireflyImprovementEvidenceRecord[]> {
+  const result = await pool.query<ImprovementEvidenceRow>(
+    "SELECT evidence_id, incident_id, outcome, severity, confidence, detection_to_triage_ms, triage_to_close_ms, recorded_at FROM firefly_improvement_evidence ORDER BY recorded_at, evidence_id",
+  );
+  return result.rows.map(mapImprovementEvidence);
 }

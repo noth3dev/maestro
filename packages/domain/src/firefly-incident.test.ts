@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FireflySignalError, type FireflySignal } from "./firefly.js";
-import { assessFireflySilence, buildFireflyIncidentBrief, deriveFireflyIncidentFingerprint, requiresImmediateSafePause, routeFireflyIncidentDepartments, scoreFireflySignals } from "./firefly-incident.js";
+import { assessFireflySilence, buildFireflyIncidentBrief, computeFireflyImprovementEvidence, deriveFireflyIncidentFingerprint, requiresImmediateSafePause, routeFireflyIncidentDepartments, scoreFireflySignals } from "./firefly-incident.js";
 
 const signal = (overrides: Partial<FireflySignal> = {}): FireflySignal => {
   const value: FireflySignal = {
@@ -105,5 +105,33 @@ describe("Firefly Incident Brief and routing", () => {
     expect(requiresImmediateSafePause("critical", 0.9)).toBe(true);
     expect(requiresImmediateSafePause("critical", 0.5)).toBe(false);
     expect(requiresImmediateSafePause("warning", 0.99)).toBe(false);
+  });
+});
+
+
+describe("Firefly improvement evidence", () => {
+  it("computes bounded detection-to-triage and triage-to-close durations", () => {
+    const evidence = computeFireflyImprovementEvidence(
+      "resolved", "critical", 0.9,
+      "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:10.000Z", "2026-01-01T00:01:10.000Z",
+    );
+    expect(evidence.detectionToTriageMs).toBe(10_000);
+    expect(evidence.triageToCloseMs).toBe(60_000);
+    expect(evidence.outcome).toBe("resolved");
+  });
+
+  it("reports null durations for a false positive closed without ever linking a Goal", () => {
+    const evidence = computeFireflyImprovementEvidence(
+      "false_positive", "warning", 0.3,
+      "2026-01-01T00:00:00.000Z", null, "2026-01-01T00:00:05.000Z",
+    );
+    expect(evidence.detectionToTriageMs).toBeNull();
+    expect(evidence.triageToCloseMs).toBeNull();
+  });
+
+  it("rejects out-of-order or invalid timestamps rather than fabricating a duration", () => {
+    expect(() => computeFireflyImprovementEvidence("resolved", "critical", 0.9, "2026-01-01T00:00:10.000Z", "2026-01-01T00:00:05.000Z", "2026-01-01T00:01:00.000Z")).toThrow();
+    expect(() => computeFireflyImprovementEvidence("resolved", "critical", 0.9, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:05.000Z", "2026-01-01T00:00:01.000Z")).toThrow();
+    expect(() => computeFireflyImprovementEvidence("resolved", "bogus" as never, 0.9, "2026-01-01T00:00:00.000Z", null, "2026-01-01T00:00:01.000Z")).toThrow();
   });
 });
