@@ -104,11 +104,11 @@ function onlyKeys(value: Record<string, unknown>, allowed: readonly string[], na
   for (const key of Object.keys(value)) if (!allowed.includes(key)) throw error(`${name} has unknown field ${key}`);
 }
 
-function canonicalAction(action: string): string {
+export function canonicalAction(action: string): string {
   return action.trim().toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.|\.$/g, "");
 }
 
-function isCriticalOrForbiddenAction(action: string): boolean {
+export function isCriticalOrForbiddenAction(action: string): boolean {
   const canonical = canonicalAction(action);
   return canonical === "system.policy.bypass" ||
     canonical === "permanent.delete" ||
