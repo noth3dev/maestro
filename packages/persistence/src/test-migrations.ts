@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Pool } from "pg";
+import { computeMigrationChecksum, ensureMigrationLedgerTable } from "./migrate.js";
 
 const migrationsDirectory = fileURLToPath(new URL("../migrations/", import.meta.url));
 
@@ -25,8 +26,20 @@ export async function applyAllMigrations(pool: Pool): Promise<void> {
       .filter((name) => name.endsWith(".sql"))
       .sort();
 
+    // Also populate the production runner's ledger (schema_migrations) with
+    // every applied file's checksum, so a real control-plane process's
+    // subsequent runMigrations(pool) call -- e.g. inside a real-DB
+    // integration test that also exercises createControlPlane().listen()
+    // against this same test-built schema -- sees every migration already
+    // current instead of re-executing non-idempotent DDL a second time.
+    await ensureMigrationLedgerTable(client);
     for (const name of migrations) {
-      await client.query(readFileSync(join(migrationsDirectory, name), "utf8"));
+      const sql = readFileSync(join(migrationsDirectory, name), "utf8");
+      await client.query(sql);
+      await client.query(
+        "INSERT INTO schema_migrations (filename, checksum) VALUES ($1, $2)",
+        [name, computeMigrationChecksum(sql)],
+      );
     }
   } finally {
     client.release();

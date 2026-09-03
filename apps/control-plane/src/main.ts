@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
-import { authenticateLocalOperator, getGoalControl, listGoalEvents, PostgresAuthorityRepository, reconcileOnStartup } from "@maestro/persistence";
+import { authenticateLocalOperator, getGoalControl, listGoalEvents, PostgresAuthorityRepository, reconcileOnStartup, runMigrations } from "@maestro/persistence";
 import type { ActionRequest } from "@maestro/authority";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService } from "./critical-action-service.js";
@@ -62,6 +62,13 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     pool,
     config,
     async listen() {
+      // The schema must be current before any reconciliation or traffic:
+      // apply every not-yet-recorded migration (additive-only, advisory-
+      // lock-serialized against concurrent instances, fails closed on a
+      // changed already-applied migration file) before reconcileOnStartup
+      // ever queries goal/lease/control tables that a pending migration
+      // might still be introducing.
+      await runMigrations(pool);
       // Fail closed: a real process must prove durable Goal/lease state is
       // consistent (or durably marked "recovering") before it ever serves
       // traffic. If the startup reconciliation leader lease cannot be
