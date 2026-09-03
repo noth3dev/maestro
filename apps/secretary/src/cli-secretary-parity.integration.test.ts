@@ -46,7 +46,8 @@ if (!databaseUrl) {
       const secret = "cli-secretary-parity-test-secret";
       const projectId = randomUUID();
       const goalId = randomUUID();
-      await bootstrapLocalOperator(setupPool, { secret });
+      const { credentialId } = await bootstrapLocalOperator(setupPool, { secret });
+      const bearerToken = `${credentialId}.${secret}`;
       const controlPlane = createControlPlane({
         databaseUrl: scopedUrl,
         evidenceDir: "/tmp/maestro-evidence",
@@ -60,7 +61,7 @@ if (!databaseUrl) {
       const address = controlPlane.app.server.address();
       if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
       const apiUrl = `http://127.0.0.1:${address.port}`;
-      const env = { MAESTRO_API_URL: apiUrl, MAESTRO_API_TOKEN: secret };
+      const env = { MAESTRO_API_URL: apiUrl, MAESTRO_API_TOKEN: bearerToken };
       const stdout: string[] = [];
       const stderr: string[] = [];
       const io = { stdout: (line: string) => { stdout.push(line); }, stderr: (line: string) => { stderr.push(line); } };
@@ -80,7 +81,7 @@ if (!databaseUrl) {
 
         expect(await executeCli(["events", "list", "--project-id", projectId, "--json"], env, io)).toBe(0);
         const cliEvents = JSON.parse(stdout.at(-1)!) as { events: unknown[]; nextCursor: string };
-        const secretary = await loadGoalPageData({ apiUrl, token: secret, projectId, goalId });
+        const secretary = await loadGoalPageData({ apiUrl, token: bearerToken, projectId, goalId });
 
         expect(stderr).toEqual([]);
         expect(secretary.goal).toEqual(transitioned);
