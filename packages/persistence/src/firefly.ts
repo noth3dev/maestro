@@ -7,6 +7,10 @@ function map(row: Record<string, unknown>): StoredFireflySignal { return { signa
 export async function recordFireflySignal(pool: Pool, envelope: AuthenticatedFireflySignal, credential: string, options: { now?: Date; freshnessWindowMs?: number } = {}): Promise<StoredFireflySignal> {
   const client = await pool.connect(); let open = false;
   try { await client.query("BEGIN"); open = true;
+    // Serialize receivers before reading the high-water mark. Without a
+    // writer lock, concurrent transactions can both observe the same maximum
+    // sequence and commit out of order.
+    await client.query("LOCK TABLE firefly_signals IN SHARE ROW EXCLUSIVE MODE");
     const prior = await client.query<{ nonce: string }>("SELECT nonce FROM firefly_signals WHERE nonce = $1 FOR SHARE", [envelope.nonce]);
     const latest = await client.query<{ highest_sequence: string | null }>("SELECT max(sequence) AS highest_sequence FROM firefly_signals");
     const replay: FireflyReplayState = { nonces: new Set(prior.rows.map((row) => row.nonce)), highestSequence: Number(latest.rows[0]?.highest_sequence ?? -1) };

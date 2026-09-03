@@ -190,3 +190,9 @@ Against plan/phase1.md's exit gate and Tests section, still missing:
 - Prior subagent attempts (Terra, then Luna at max thinking) were spawned for read-only audits but were cancelled/completed without replying; discarded, no salvage needed.
 - Proceeded directly: implemented sealed-submission primitive and wired it into Head Council creation for real (not just present alongside it). Build+unit tests green; PostgreSQL integration tests remain environment-gated (Docker not available this session).
 - Department Plan work (step 6) can now begin against a durable, tamper-evident decision packet identity.
+
+## 2026-09-03 — P4S6 Firefly hardening findings
+- The initial `recordFireflySignal` receiver read `max(sequence)` without a writer serialization boundary. Two concurrent transactions could both accept values from the same stale high-water mark and commit an older sequence after a newer one. A deterministic PostgreSQL trigger/`NOTIFY` race reproduced this; `LOCK TABLE firefly_signals IN SHARE ROW EXCLUSIVE MODE` now serializes receiver writers before replay evaluation.
+- Durable Firefly signal rows are audit records. Migration `0040_firefly_signal_hardening.sql` adds immutable-row triggers and database checks for observation order and JSON-array evidence. It is additive because `0039_firefly_signals.sql` is already committed.
+- Firefly's local buffer now verifies envelopes against its configured HMAC credential before appending. Its flush loop also records a concurrent flush request so a signal emitted during an in-flight delivery is not left pending when `emit` returns.
+- Fresh full-suite PostgreSQL failures are pre-existing per-file migration-list omissions, not Firefly defects: `sane-report.integration.test.ts` omitted budget migration `0027`; `certification-conflict.integration.test.ts` omitted semantic-review migration `0030`. Parent session is fixing these through a shared migration runner on a separate branch.

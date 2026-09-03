@@ -38,14 +38,20 @@ export function assertValidFireflySignal(s: FireflySignal): void {
   if (!["new","same","related"].includes(s.deduplicationRelationship)) throw new FireflySignalError("invalid deduplication relationship");
   if (!Number.isFinite(s.confidence) || s.confidence < 0 || s.confidence > 1) throw new FireflySignalError("confidence must be between 0 and 1");
   if (!Array.isArray(s.minimalReproductionEvidence)) throw new FireflySignalError("reproduction evidence must be an array");
-  if (Number.isNaN(Date.parse(s.firstObservedAt)) || Number.isNaN(Date.parse(s.lastObservedAt))) throw new FireflySignalError("observation timestamps must be ISO dates");
+  for (const item of s.minimalReproductionEvidence) text(item, "reproduction evidence item");
+  const firstObserved = Date.parse(s.firstObservedAt);
+  const lastObserved = Date.parse(s.lastObservedAt);
+  if (!Number.isFinite(firstObserved) || !Number.isFinite(lastObserved)) throw new FireflySignalError("observation timestamps must be ISO dates");
+  if (lastObserved < firstObserved) throw new FireflySignalError("last observation cannot precede first observation");
 }
 function unsigned(e: Omit<AuthenticatedFireflySignal, "signature">): string { return canonicalJson(e); }
 export function signFireflySignal(signal: FireflySignal, secret: string, nonce: string, sequence: number, issuedAt = new Date().toISOString()): AuthenticatedFireflySignal {
   assertValidFireflySignal(signal); text(secret,"credential"); text(nonce,"nonce"); if (!Number.isSafeInteger(sequence) || sequence < 0) throw new FireflySignalError("sequence must be a nonnegative integer");
+  if (!Number.isFinite(Date.parse(issuedAt))) throw new FireflySignalError("issuedAt must be an ISO date");
   const body = { signal, nonce, sequence, issuedAt }; return { ...body, signature: createHmac("sha256", secret).update(unsigned(body)).digest("hex") };
 }
 export function verifyFireflySignal(e: AuthenticatedFireflySignal, secret: string, now = Date.now(), freshnessWindowMs = 300_000, replay: FireflyReplayState = { nonces: new Set(), highestSequence: -1 }): FireflyReplayState {
+  if (!Number.isFinite(now) || !Number.isFinite(freshnessWindowMs) || freshnessWindowMs < 0) throw new FireflySignalError("freshness verification inputs are invalid");
   assertValidFireflySignal(e.signal); text(secret,"credential"); text(e.nonce,"nonce");
   const expected = createHmac("sha256", secret).update(unsigned({ signal:e.signal, nonce:e.nonce, sequence:e.sequence, issuedAt:e.issuedAt })).digest("hex");
   const provided = Buffer.from(e.signature, "hex"); const wanted = Buffer.from(expected, "hex");
