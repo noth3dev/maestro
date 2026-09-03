@@ -858,3 +858,47 @@ HEAD
 - Next: per the re-patch execution order (`task_plan.md`), Phase 2's remaining items 1-9 are now
   the front of the queue -- starting with item 1, the P0 empirically-reproduced budget-reservation
   double-counting defect (78% overspend undetected against real PostgreSQL in the original audit).
+
+## 2026-09-04 (continued) — Phase 2 re-patch item 1 (budget reservation double-counting, P0) resolved
+- Implemented directly (no subagent), in an isolated worktree (`.worktrees/p2-budget-fix`, branch
+  `patch/p2-budget-fix`). First Phase 2 re-patch item, now that all 8 Phase 1 items are complete.
+- Confirmed the exact defect by direct inspection: `reserveGoalBudget`/`reserveDepartmentBudget`/
+  `reserveMissionBudget` are all strictly append-only (each call inserts a new row, never mutates
+  a prior one). The Department- and Mission-level overrun checks summed only rows whose
+  `parent_reservation_id` matched the single newest parent row
+  (`ORDER BY created_at DESC LIMIT 1 FOR UPDATE`), so any allocation parented to a now-superseded
+  envelope row became invisible to the check the next time that envelope was re-reserved --
+  exactly reproducing the original audit's finding (reserving the same 100,000-cent Goal ceiling
+  twice let a Department allocate 160,000 cents against it, 78% over budget, zero rejection).
+  `sane-report.ts`'s own `departmentSpend` query was already summing by `goal_id` (the wider,
+  correct scope), so enforcement and reporting were genuinely inconsistent with each other, as the
+  original finding also named.
+- Fixed both overrun checks to sum by the durable Goal/Department identity instead of the single
+  newest parent reservation: `reserveDepartmentBudget` now sums `WHERE goal_id = $1 AND
+  scope = 'department'`; `reserveMissionBudget` now sums `WHERE council_id = $1 AND
+  department_id = $2 AND scope = 'mission'` -- both across every envelope revision. This makes
+  enforcement's aggregation scope identical to `sane-report.ts`'s existing (already-correct)
+  query, closing the consistency gap directly rather than inventing a new aggregation concept.
+- Added 3 new real-PostgreSQL regressions in `budget-reservation.integration.test.ts` reproducing
+  the exact audit scenario at both levels: re-reserve the parent envelope at the same amount (no
+  CEO approval needed, since it's not an increase), then prove the second allocation that would
+  have wrongly succeeded under the old parent-scoped sum is now rejected, while a smaller amount
+  that fits the *true* remaining allocatable room still succeeds correctly.
+- Verification: 8/8 `budget-reservation.integration.test.ts` cases passed (3 new) on the second
+  run (the first run caught and required fixing an amount-sizing mistake in the mission-level test,
+  where the department-level fix I had just made was ALSO correctly rejecting the test's own
+  department-level setup amounts before the mission-level scenario could even be exercised --
+  adjusted the test's Goal/Department amounts to isolate the mission-level check specifically).
+  Full real-PostgreSQL `npm run check` (build + test, both clean -- no cross-package export
+  change, purely an internal query-scope fix): 97/98 files, 638 passed, 2 intentional live-Prime
+  skips, 0 failed, in the isolated worktree on the first post-fix run.
+- Independent review performed by the parent session directly (no independent-review subagent
+  spawned, per explicit user direction to continue without further subagents this session), then
+  merged to `main` (`5360b9d`). Authoritative post-merge re-verification on `main`: fresh
+  `npm run build` and full real-PostgreSQL `npm run check` both clean: 97/98 files, 638 passed, 2
+  intentional live-Prime skips, 0 failed. Worktree, branch, and the disposable PostgreSQL container
+  (`maestro-p2-budget-postgres`) removed.
+- Next: Phase 2 re-patch item 2 (Mission Assignment Bundle capability scoping never reaching the
+  real Prime Agent spawn call -- `SpawnRequest` has no field for `allowedSkills`/`allowedTools`/
+  `allowedPaths`/`authorityBoundary`, so "Scout workers are read-only by default" is currently
+  unenforced anywhere).

@@ -284,19 +284,16 @@ this session's self-plus-parent-reviewed evidence per this project's own accepta
 the re-patch execution order moves on to Phase 2's remaining items below.
 
 ### Phase 2 — remaining open items
-1. **[P0, domain correctness — empirically reproduced]** Budget reservations silently double-count
-   across envelope revisions. `reserveGoalBudget`/`reserveDepartmentBudget`/`reserveMissionBudget`
-   (packages/persistence/src/budget-reservation.ts:63-68,104-109,146-151) are strictly append-only;
-   each child-level overrun check sums only rows under the single newest parent row
-   (`ORDER BY created_at DESC LIMIT 1`), so reservations against a superseded envelope become
-   invisible and enforcement never re-aggregates. Verified against real PostgreSQL: reserving the
-   same 100,000-cent Goal ceiling twice (a routine, CEO-approval-free "same amount" action) let a
-   Department allocate 160,000 cents against it — 78% over budget — with zero rejection.
-   `sane-report.ts:193-194`'s `costCents` sums *all* historical reservations (a different, wider
-   scope than enforcement uses), so reporting and enforcement are inconsistent. Fix: track a
-   durable "current envelope" identity so overrun checks always sum all live reservations for the
-   Goal/Department, not just the newest envelope's children; add a regression test that
-   re-reserves at the goal level and proves the department cap still holds.
+1. **[RESOLVED 2026-09-04, commit `5360b9d`]** Budget reservations silently double-counted
+   across envelope revisions. Fixed: `reserveDepartmentBudget` now sums every `'department'`-scope
+   reservation for the Goal (`WHERE goal_id = $1 AND scope = 'department'`), and
+   `reserveMissionBudget` now sums every `'mission'`-scope reservation for the exact
+   `(council, department)` pair -- both across every envelope revision, not only the newest one's
+   direct children. This now exactly matches `sane-report.ts`'s own `departmentSpend` query, which
+   already (correctly) summed by `goal_id`; enforcement and reporting are now consistent. Verified
+   with 3 new real-PostgreSQL regressions reproducing the exact audit scenario at both the
+   Department and Mission level. Full real-PostgreSQL `npm run check` on `main`: 97/98 files, 638
+   passed, 2 intentional live-Prime skips, 0 failed.
 2. **[HIGH, test quality]** Mission Assignment Bundle capability scoping (skills/tools/paths/
    authority boundary) never reaches the real Prime Agent spawn call.
    `packages/domain/src/execution-kernel.ts`'s `SpawnRequest` (lines 13-18) has no field for it;
