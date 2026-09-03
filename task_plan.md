@@ -249,11 +249,22 @@ feature-completeness audit before treating Phase 4 as usable.
    destructures its own known keys) proving `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`/
    `OPENROUTER_API_KEY` sentinels never appear in `parseConfig`'s output. Full real-PostgreSQL
    `npm run check` on `main`: 96/97 files, 619 passed, 2 intentional live-Prime skips, 0 failed.
-8. Already-known Phase 1-rooted P0s from the first audit wave (see "Phase 5 remediation plan" /
-   Track A above, items 1 and 4): no durable worker/session restart recovery
-   (`execution-kernel.ts` `resume()`/`reconnect()` always throw; `reconciliation.ts` does no real
-   session reconciliation); no project-scoped operator authorization (authentication only, no
-   membership/role/capability check in `server.ts`/`goal-service.ts`).
+8. **[PART 1/2 RESOLVED 2026-09-04, commit `fcd70b4`]** No project-scoped operator authorization
+   existed (authentication only, no membership check in `server.ts`/`goal-service.ts`). Fixed:
+   `packages/persistence/src/project-membership.ts`'s durable `operator_project_memberships`
+   table/API (grant/revoke/assert/list; membership existence only for now, not per-action role/
+   capability granularity, a documented future refinement), wired into `server.ts` via a new
+   `preHandler` hook checking every request's stated projectId (body or query) before its route
+   handler runs. The four read-state routes (Sentinel/Council/certification/Sane-report) carry no
+   projectId at all and are not covered here -- that IDOR gap is Phase 3's already-tracked item 6,
+   not silently claimed fixed by this change. Full real-PostgreSQL `npm run check` on `main`:
+   97/98 files, 633 passed, 2 intentional live-Prime skips, 0 failed.
+   **[PART 2/2 REMAINING]** No durable worker/session restart recovery: `execution-kernel.ts`'s
+   `resume()`/`reconnect()` always throw; `reconciliation.ts` does no real session reconciliation
+   (scaffold only, per the 2026-09-01 finding). This is a substantially larger piece (durable
+   session/invocation binding table, real `reconcileOnStartup` fencing/canceling stale provider
+   work, a real process kill-and-restart acceptance test with an active worker) than any other
+   Phase 1 item and remains open.
 
 ### Phase 2 — remaining open items
 1. **[P0, domain correctness — empirically reproduced]** Budget reservations silently double-count

@@ -738,3 +738,60 @@ HEAD
   `origin`.** Only item 8 (already-known restart-recovery/project-scope-auth P0s from the first
   audit wave) remains open before Phase 1 as a whole can be re-claimed accepted and the 8-item
   execution order moves on to Phase 2's remaining items.
+
+## 2026-09-04 (continued) — Phase 1 re-patch item 8 part 1/2 (project-scoped operator authorization) resolved
+- Implemented directly (no subagent), in an isolated worktree (`.worktrees/p1-project-scoped-auth`,
+  branch `patch/p1-project-scoped-auth`). Item 8 bundles two already-known P0s from the first audit
+  wave; tackled the smaller/more contained one (project-scoped authorization) first, leaving the
+  larger one (durable worker/session restart recovery) as its own dedicated slice.
+- Confirmed by direct inspection: no project-membership concept existed anywhere in the codebase.
+  `server.ts`'s `onRequest` hook authenticated the bearer credential but attached the resulting
+  `operator` context with no further check; `goal-service.ts`'s `getGoal(goalId, projectId)`
+  scoped its own DB query correctly (`WHERE goal_id = $1 AND project_id = $2`, so a wrong-project
+  guess returns not-found) but nothing prevented any validly authenticated credential from acting
+  on the *correct* projectId for a project it had no organizational right to touch at all.
+- Added `packages/persistence/src/project-membership.ts` (migration `0049`): durable
+  `operator_project_memberships` table, membership existence only for now (no per-action role/
+  capability granularity yet -- documented as a future refinement, not silently over-claimed).
+  Idempotent grant; one-way revoke; a revoked row can never be reactivated (unique partial index
+  restricting one active row per operator/project, plus a no-reactivation trigger matching this
+  codebase's existing credential-rotation convention), so granting again after a revoke creates a
+  genuinely new row. A real defect was found and fixed mid-implementation: the first schema design
+  used `(operator_id, project_id)` as the literal primary key, which structurally could not support
+  "grant a new membership after revoke" at all (the row physically couldn't be re-inserted); fixed
+  by switching to a surrogate `membership_id` UUID primary key with a partial unique index instead.
+- Wired into `server.ts` via a new `preHandler` hook (distinct from the existing `onRequest`
+  authentication hook, since body/query are not yet parsed at `onRequest` time): reads a `projectId`
+  from the request's body or query when present and asserts durable membership before the route
+  handler runs. The four read-state routes (Sentinel/Council/certification/Sane-report) carry no
+  `projectId` field in their contract at all and are structurally not covered by this hook -- this
+  is Phase 3's already-tracked IDOR item 6, explicitly not claimed fixed here. Added a new
+  `"project_access_forbidden"` stable API error code. `buildServer`'s `projectMembership` param is
+  optional so existing service-level unit tests that don't yet exercise it are unaffected;
+  `main.ts`'s real composition always supplies a real checker backed by `assertProjectMembership`.
+- Added 6 real-PostgreSQL `project-membership.integration.test.ts` cases and 5 new
+  `server.test.ts` unit cases (allow with membership, reject without -- both create and transition
+  -- confirm the four read-state routes are unaffected, confirm unchanged behavior when no checker
+  is supplied). Updated the four existing composition-root integration tests (`main.integration`,
+  `main.kill-restart.integration`, `read-state-parity.integration`, `cli-secretary-parity.integration`)
+  to grant membership for their test operator, since they now compose the real enforced path.
+- Verification: `project-membership.integration.test.ts` 6/6 passed on the first run after the
+  primary-key redesign. Same-package/non-cross-package unit tests all passed cleanly in the
+  worktree. The 5 cross-package composition test files hit the now well-established node_modules-
+  symlink cross-package staleness limitation from items 1, 4, and 6 (confirmed by inspecting each
+  exact failure -- `grantProjectMembership is not a function`, an enum-parse mismatch for the new
+  error code -- both matching the known pattern, not a new regression). Full worktree `npm test`:
+  92/98 files, 623 passed, 10 failed (all 5 expected-stale files), 2 intentional live-Prime skips.
+- Independent review performed by the parent session directly (no independent-review subagent
+  spawned, per explicit user direction to continue without further subagents this session), then
+  merged to `main` (`fcd70b4`). Authoritative post-merge re-verification on `main`: fresh
+  `npm run build` clean, full real-PostgreSQL `npm run check`: 97/98 files, 633 passed, 2
+  intentional live-Prime skips, 0 failed -- all 5 previously-stale files now pass, confirming the
+  staleness diagnosis was correct. Worktree, branch, and the disposable PostgreSQL container
+  (`maestro-p1-project-auth-postgres`) removed.
+- **Phase 1 re-patch status: items 1-7 and item 8 part 1/2 (project-scoped authorization) resolved
+  and accepted, all merged to `main` and pushed to `origin`.** Only item 8 part 2/2 (durable
+  worker/session restart recovery) remains open -- the single largest remaining Phase 1 item,
+  requiring a durable session/invocation binding table, a real `reconcileOnStartup` that fences or
+  cancels stale provider work (not just the existing structural Goal-state consistency scaffold),
+  and a real process kill-and-restart acceptance test with an actively running worker.
