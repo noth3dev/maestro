@@ -137,3 +137,8 @@ Current restart lane: forced mid-flight worker restart/reconciliation scenario i
 - Self-verification currently: build passed; focused Firefly tests **2 passed, 0 failed**. Real-Postgres integration remains pending.
 - [in_progress] 9. Phase 4 Track B (plan/phase4.md work-sequence steps 6-9): P4S6 Firefly signal foundation is self-verified with real-PostgreSQL focused evidence pending independent review; steps 7-9 are next. Track A remains isolated in `.worktrees/p4-env`.
 - [in_progress] 9. Phase 4 Track B (plan/phase4.md work-sequence steps 6-9): P4S6 hardening and P4S7 fingerprint/dedup/severity-confidence/silence slices are self-verified with real-PostgreSQL evidence, pending independent review; step 8 Incident Brief/triage/remediation composition is next. Track A remains isolated in `.worktrees/p4-env`.
+
+
+## 2026-09-03 — Phase 4 integration merge landed
+- [in_progress] 9. `phase4/integration` now carries environments (P4S1+P4S2), devices (P4S4), Firefly (P4S6+P4S7), and the shared migration-runner fix, merged and fresh-verified together: 532 passed, 2 intentional live-Prime skips, 0 failed, stable over 2 consecutive real-PostgreSQL runs. Migration numbering collision between environments/devices (0039-0041) and Firefly (previously 0039-0042) resolved by renumbering Firefly to 0042-0045.
+- Next: P4S3 (browser environment adapter, Playwright), P4S5 (Goal-scoped device grants/command channel), P4S8-P4S9 (Firefly Incident Brief through closure and improvement evidence), P4S10 (live gates).
