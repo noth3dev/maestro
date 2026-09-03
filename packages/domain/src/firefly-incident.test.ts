@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FireflySignalError, type FireflySignal } from "./firefly.js";
-import { assessFireflySilence, deriveFireflyIncidentFingerprint, scoreFireflySignals } from "./firefly-incident.js";
+import { assessFireflySilence, buildFireflyIncidentBrief, deriveFireflyIncidentFingerprint, requiresImmediateSafePause, routeFireflyIncidentDepartments, scoreFireflySignals } from "./firefly-incident.js";
 
 const signal = (overrides: Partial<FireflySignal> = {}): FireflySignal => {
   const value: FireflySignal = {
@@ -63,5 +63,47 @@ describe("Firefly silence monitoring", () => {
     expect(assessFireflySilence(null, "2026-01-01T00:00:11.000Z", { maxSilenceMs: 10_000 })).toEqual({
       state: "uncertain", silenceMs: null, reason: "firefly_observation_missing",
     });
+  });
+});
+
+
+describe("Firefly Incident Brief and routing", () => {
+  const summary = {
+    incidentFingerprint: "f".repeat(64),
+    affectedComponent: "control-plane",
+    affectedVersion: "1.0.0",
+    severity: "critical" as const,
+    confidence: 0.9,
+    firstObservedAt: "2026-01-01T00:00:00.000Z",
+    lastObservedAt: "2026-01-01T00:00:05.000Z",
+    signalCount: 3,
+  };
+
+  it("routes a crash to Operations and Engineering", () => {
+    expect(routeFireflyIncidentDepartments("crash")).toEqual(["operations", "engineering"]);
+  });
+
+  it("routes a vulnerability to Security and Engineering", () => {
+    expect(routeFireflyIncidentDepartments("vulnerability")).toEqual(["security", "engineering"]);
+  });
+
+  it("builds a bounded brief that caps evidence and never expands beyond the deterministic routing", () => {
+    const evidence = Array.from({ length: 20 }, (_, i) => `evidence-${i}`);
+    const brief = buildFireflyIncidentBrief(summary, evidence, "crash");
+    expect(brief.boundedEvidence).toHaveLength(5);
+    expect(brief.boundedEvidence).toEqual(evidence.slice(0, 5));
+    expect(brief.routedDepartments).toEqual(["operations", "engineering"]);
+    expect(brief.incidentFingerprint).toBe(summary.incidentFingerprint);
+  });
+
+  it("rejects an invalid severity or confidence rather than fabricating a brief", () => {
+    expect(() => buildFireflyIncidentBrief({ ...summary, severity: "bogus" as never }, [], "crash")).toThrow(FireflySignalError);
+    expect(() => buildFireflyIncidentBrief({ ...summary, confidence: 1.5 }, [], "crash")).toThrow(FireflySignalError);
+  });
+
+  it("requires immediate safe pause only for high-confidence critical severity", () => {
+    expect(requiresImmediateSafePause("critical", 0.9)).toBe(true);
+    expect(requiresImmediateSafePause("critical", 0.5)).toBe(false);
+    expect(requiresImmediateSafePause("warning", 0.99)).toBe(false);
   });
 });

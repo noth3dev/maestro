@@ -49,3 +49,76 @@ export function assessFireflySilence(
     ? { state: "uncertain", silenceMs, reason: "firefly_observation_silent" }
     : { state: "observing", silenceMs, reason: null };
 }
+
+export type FireflyIncidentKind = "crash" | "vulnerability" | "regression";
+
+/** Initial routing per plan/phase4.md #41: crash/reliability evidence maps to
+ * Operations and Engineering; vulnerability evidence maps to Security and
+ * Engineering; a user-visible regression may map more broadly. This is the
+ * smallest deterministic mapping and is not a substitute for a real Head's
+ * own assessment once activated. */
+export function routeFireflyIncidentDepartments(kind: FireflyIncidentKind): readonly string[] {
+  if (kind === "crash") return ["operations", "engineering"];
+  if (kind === "vulnerability") return ["security", "engineering"];
+  return ["quality", "engineering"];
+}
+
+const MAX_BRIEF_EVIDENCE_ITEMS = 5;
+
+export interface FireflyIncidentSummary {
+  readonly incidentFingerprint: string;
+  readonly affectedComponent: string;
+  readonly affectedVersion: string;
+  readonly severity: FireflySeverity;
+  readonly confidence: number;
+  readonly firstObservedAt: string;
+  readonly lastObservedAt: string;
+  readonly signalCount: number;
+}
+
+export interface FireflyIncidentBrief {
+  readonly incidentFingerprint: string;
+  readonly affectedComponent: string;
+  readonly affectedVersion: string;
+  readonly severity: FireflySeverity;
+  readonly confidence: number;
+  readonly firstObservedAt: string;
+  readonly lastObservedAt: string;
+  readonly signalCount: number;
+  /** Already-redacted evidence from the durable signals, capped so the
+   * Brief never becomes an unfiltered raw log dump. */
+  readonly boundedEvidence: readonly string[];
+  readonly routedDepartments: readonly string[];
+}
+
+/** A bounded, redaction-preserving Incident Brief -- never raw log evidence
+ * beyond a small capped sample, and never more department routing than the
+ * deterministic initial mapping. */
+export function buildFireflyIncidentBrief(
+  summary: FireflyIncidentSummary,
+  evidence: readonly string[],
+  kind: FireflyIncidentKind,
+): FireflyIncidentBrief {
+  if (!Object.hasOwn(severityRank, summary.severity)) throw new FireflySignalError("invalid severity");
+  if (!Number.isFinite(summary.confidence) || summary.confidence < 0 || summary.confidence > 1) throw new FireflySignalError("confidence must be between 0 and 1");
+  return {
+    incidentFingerprint: summary.incidentFingerprint,
+    affectedComponent: summary.affectedComponent,
+    affectedVersion: summary.affectedVersion,
+    severity: summary.severity,
+    confidence: summary.confidence,
+    firstObservedAt: summary.firstObservedAt,
+    lastObservedAt: summary.lastObservedAt,
+    signalCount: summary.signalCount,
+    boundedEvidence: evidence.slice(0, MAX_BRIEF_EVIDENCE_ITEMS),
+    routedDepartments: routeFireflyIncidentDepartments(kind),
+  };
+}
+
+const IMMEDIATE_SAFE_PAUSE_CONFIDENCE_THRESHOLD = 0.85;
+
+/** A high-confidence critical signal may trigger an automatic safe pause
+ * before deliberation. It never triggers remediation by itself. */
+export function requiresImmediateSafePause(severity: FireflySeverity, confidence: number): boolean {
+  return severity === "critical" && confidence >= IMMEDIATE_SAFE_PAUSE_CONFIDENCE_THRESHOLD;
+}

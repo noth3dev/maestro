@@ -1,16 +1,21 @@
 import { randomUUID } from "node:crypto";
 import {
   assessFireflySilence,
+  requiresImmediateSafePause,
   scoreFireflySignals,
   type FireflySeverity,
   type FireflySilenceAssessment,
   type FireflySilencePolicy,
 } from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
+import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
+import { requestPauseGoalInTransaction } from "./authority.js";
+import { assertGoalControlOpen, type CouncilActorContext } from "./council.js";
 import type { StoredFireflySignal } from "./firefly.js";
 
 export class FireflyIncidentError extends Error {}
 export class FireflyIncidentNotFoundError extends FireflyIncidentError {}
+export class FireflyIncidentAuthorizationError extends FireflyIncidentError {}
 
 export type FireflyIncidentStatus = "open" | "triaging" | "remediating" | "resolved" | "false_positive";
 
@@ -27,7 +32,13 @@ export interface FireflyIncidentRecord {
   readonly signalCount: number;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly linkedGoalId: string | null;
+  readonly resolutionSummary: string | null;
+  readonly retainedRisk: string | null;
+  readonly closedAt: string | null;
 }
+
+const INCIDENT_COLUMNS = "incident_id, incident_fingerprint, affected_version, first_observed_at, last_observed_at, severity, confidence, affected_component, status, signal_count, created_at, updated_at, linked_goal_id, resolution_summary, retained_risk, closed_at";
 
 interface IncidentRow {
   incident_id: string;
@@ -42,6 +53,10 @@ interface IncidentRow {
   signal_count: number;
   created_at: Date;
   updated_at: Date;
+  linked_goal_id: string | null;
+  resolution_summary: string | null;
+  retained_risk: string | null;
+  closed_at: Date | null;
 }
 
 interface IncidentSignalRow {
@@ -69,6 +84,10 @@ function mapIncident(row: IncidentRow): FireflyIncidentRecord {
     signalCount: Number(row.signal_count),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
+    linkedGoalId: row.linked_goal_id,
+    resolutionSummary: row.resolution_summary,
+    retainedRisk: row.retained_risk,
+    closedAt: row.closed_at?.toISOString() ?? null,
   };
 }
 
@@ -99,9 +118,7 @@ export async function attachSignalToIncidentInTransaction(client: PoolClient, si
       observation.confidence, observation.affected_component],
   );
   const incidentResult = await client.query<IncidentRow>(
-    `SELECT incident_id, incident_fingerprint, affected_version, first_observed_at,
-            last_observed_at, severity, confidence, affected_component, status,
-            signal_count, created_at, updated_at
+    `SELECT ${INCIDENT_COLUMNS}
        FROM firefly_incidents
       WHERE incident_fingerprint = $1 AND affected_version = $2
       FOR UPDATE`,
@@ -127,9 +144,7 @@ export async function attachSignalToIncidentInTransaction(client: PoolClient, si
               severity = $4, confidence = $5, signal_count = signal_count + 1,
               updated_at = transaction_timestamp()
         WHERE incident_id = $1
-      RETURNING incident_id, incident_fingerprint, affected_version,
-                first_observed_at, last_observed_at, severity, confidence,
-                affected_component, status, signal_count, created_at, updated_at`,
+      RETURNING ${INCIDENT_COLUMNS}`,
       [incident.incident_id, observation.first_observed_at, observation.last_observed_at, score.severity, score.confidence],
     );
     current = updated.rows[0]!;
@@ -161,9 +176,7 @@ export async function attachFireflySignalToIncident(pool: Pool, signalId: string
 
 export async function listFireflyIncidents(pool: Pool, fingerprint?: string): Promise<readonly FireflyIncidentRecord[]> {
   const result = await pool.query<IncidentRow>(
-    `SELECT incident_id, incident_fingerprint, affected_version, first_observed_at,
-            last_observed_at, severity, confidence, affected_component, status,
-            signal_count, created_at, updated_at
+    `SELECT ${INCIDENT_COLUMNS}
        FROM firefly_incidents
       WHERE ($1::text IS NULL OR incident_fingerprint = $1)
       ORDER BY first_observed_at, incident_id`,
@@ -236,4 +249,162 @@ export async function listFireflySilenceChecks(pool: Pool): Promise<readonly Fir
        FROM firefly_watchdog_checks ORDER BY checked_at, check_id`,
   );
   return result.rows.map(mapSilence);
+}
+
+async function lockGoalLease(client: PoolClient, proof: GoalLeaseProof): Promise<void> {
+  const lease = await client.query(
+    "SELECT 1 FROM goal_leases WHERE goal_id = $1 AND owner_id = $2 AND fencing_token = $3::bigint AND expires_at > clock_timestamp() FOR UPDATE",
+    [proof.goalId, proof.ownerId, proof.fencingToken],
+  );
+  if (lease.rowCount !== 1) throw new StaleGoalLeaseError(proof.goalId);
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 31))", [proof.goalId]);
+  await assertGoalControlOpen(client, proof.goalId);
+}
+
+/**
+ * Bind one Firefly incident to exactly one remediation Goal, so Sane,
+ * Sentinel, and every awakened Head share the same incident identity and
+ * duplicate signals never create duplicate Goals. Linking is permitted only
+ * while the incident is open or triaging, requires the current lease on the
+ * target Goal, and moves the incident into triaging on first link. Retrying
+ * the same (incidentId, goalId) pair is idempotent; linking a second,
+ * different Goal is rejected.
+ */
+export async function linkFireflyIncidentToGoal(
+  pool: Pool,
+  incidentId: string,
+  goalId: string,
+  proof: GoalLeaseProof,
+  context: CouncilActorContext,
+): Promise<FireflyIncidentRecord> {
+  if (incidentId.trim() === "") throw new FireflyIncidentError("incidentId is required");
+  if (goalId !== proof.goalId || proof.goalId === "" || proof.ownerId === "" || !isValidFencingToken(proof.fencingToken)) {
+    throw new StaleGoalLeaseError(proof.goalId);
+  }
+  const client = await pool.connect();
+  let open = false;
+  try {
+    await client.query("BEGIN");
+    open = true;
+    await lockGoalLease(client, proof);
+    const current = await client.query<IncidentRow>(`SELECT ${INCIDENT_COLUMNS} FROM firefly_incidents WHERE incident_id = $1 FOR UPDATE`, [incidentId]);
+    if (current.rowCount !== 1) throw new FireflyIncidentNotFoundError(`Firefly incident not found: ${incidentId}`);
+    const incident = current.rows[0]!;
+    if (incident.linked_goal_id === goalId) {
+      await client.query("COMMIT");
+      open = false;
+      return mapIncident(incident);
+    }
+    if (incident.linked_goal_id !== null) {
+      throw new FireflyIncidentError(`Firefly incident ${incidentId} is already linked to a different Goal`);
+    }
+    if (incident.status !== "open" && incident.status !== "triaging") {
+      throw new FireflyIncidentError(`Firefly incident ${incidentId} cannot be linked from status ${incident.status}`);
+    }
+    const updated = await client.query<IncidentRow>(
+      `UPDATE firefly_incidents SET linked_goal_id = $2, status = 'triaging', updated_at = transaction_timestamp()
+        WHERE incident_id = $1 RETURNING ${INCIDENT_COLUMNS}`,
+      [incidentId, goalId],
+    );
+    await client.query("COMMIT");
+    open = false;
+    return mapIncident(updated.rows[0]!);
+  } catch (error) {
+    if (open) await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Close an incident with its final resolution: `resolved` (remediation
+ * completed and independently certified) or `false_positive` (no real
+ * incident existed). Closure is final and durable, matching
+ * plan/phase4.md's "Close with resolution, retained risk, false-positive
+ * result, and Firefly feedback." A false positive may close directly from
+ * `open` (for example a vulnerability feed naming an unaffected version);
+ * a `resolved` close requires a linked Goal.
+ */
+export async function closeFireflyIncident(
+  pool: Pool,
+  incidentId: string,
+  outcome: "resolved" | "false_positive",
+  resolutionSummary: string,
+  retainedRisk: string,
+  context: CouncilActorContext,
+): Promise<FireflyIncidentRecord> {
+  if (incidentId.trim() === "") throw new FireflyIncidentError("incidentId is required");
+  if (resolutionSummary.trim() === "") throw new FireflyIncidentError("resolutionSummary is required");
+  const client = await pool.connect();
+  let open = false;
+  try {
+    await client.query("BEGIN");
+    open = true;
+    const current = await client.query<IncidentRow>(`SELECT ${INCIDENT_COLUMNS} FROM firefly_incidents WHERE incident_id = $1 FOR UPDATE`, [incidentId]);
+    if (current.rowCount !== 1) throw new FireflyIncidentNotFoundError(`Firefly incident not found: ${incidentId}`);
+    const incident = current.rows[0]!;
+    if (incident.status === "resolved" || incident.status === "false_positive") {
+      return mapIncident(incident);
+    }
+    if (outcome === "resolved" && incident.linked_goal_id === null) {
+      throw new FireflyIncidentError("A resolved incident requires a linked remediation Goal");
+    }
+    const updated = await client.query<IncidentRow>(
+      `UPDATE firefly_incidents
+          SET status = $2, resolution_summary = $3, retained_risk = $4, closed_at = transaction_timestamp(), updated_at = transaction_timestamp()
+        WHERE incident_id = $1 RETURNING ${INCIDENT_COLUMNS}`,
+      [incidentId, outcome, resolutionSummary.trim(), retainedRisk.trim()],
+    );
+    await client.query("COMMIT");
+    open = false;
+    return mapIncident(updated.rows[0]!);
+  } catch (error) {
+    if (open) await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * A high-confidence critical incident may request an automatic safe pause
+ * on its linked Goal before deliberation, through the existing Phase 1
+ * authority mechanism -- never a direct patch, deploy, or permission
+ * change. Requesting it for a signal that does not meet the threshold is
+ * rejected so Firefly cannot pause a Goal outside its documented trigger.
+ */
+export async function requestFireflyImmediateSafePause(
+  pool: Pool,
+  incidentId: string,
+  projectId: string,
+  proof: GoalLeaseProof,
+  context: CouncilActorContext,
+): Promise<FireflyIncidentRecord> {
+  if (incidentId.trim() === "") throw new FireflyIncidentError("incidentId is required");
+  const client = await pool.connect();
+  let open = false;
+  try {
+    await client.query("BEGIN");
+    open = true;
+    const current = await client.query<IncidentRow>(`SELECT ${INCIDENT_COLUMNS} FROM firefly_incidents WHERE incident_id = $1 FOR UPDATE`, [incidentId]);
+    if (current.rowCount !== 1) throw new FireflyIncidentNotFoundError(`Firefly incident not found: ${incidentId}`);
+    const incident = current.rows[0]!;
+    if (!requiresImmediateSafePause(incident.severity, Number(incident.confidence))) {
+      throw new FireflyIncidentAuthorizationError("Firefly incident does not meet the high-confidence critical threshold for an immediate safe pause");
+    }
+    if (incident.linked_goal_id === null) throw new FireflyIncidentError("Firefly incident has no linked Goal to pause");
+    if (incident.linked_goal_id !== proof.goalId || projectId.trim() === "" || proof.goalId === "" || proof.ownerId === "" || !isValidFencingToken(proof.fencingToken)) {
+      throw new StaleGoalLeaseError(proof.goalId);
+    }
+    await requestPauseGoalInTransaction(client, projectId.trim(), incident.linked_goal_id);
+    await client.query("COMMIT");
+    open = false;
+    return mapIncident(incident);
+  } catch (error) {
+    if (open) await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
