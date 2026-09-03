@@ -3,27 +3,30 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { signFireflySignal, type FireflySignal } from "@maestro/domain";
+import { deriveFireflyIncidentFingerprint, signFireflySignal, type FireflySignal } from "@maestro/domain";
 import { listFireflySignals, recordFireflySignal } from "./firefly.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
-const migrations = ["0039_firefly_signals.sql", "0040_firefly_signal_hardening.sql"];
+const migrations = ["0039_firefly_signals.sql", "0040_firefly_signal_hardening.sql", "0041_firefly_incidents.sql", "0042_firefly_integrity.sql"];
 
-const signal = (fingerprint = "fp-1"): FireflySignal => ({
-  incidentFingerprint: fingerprint,
-  firstObservedAt: "2026-01-01T00:00:00.000Z",
-  lastObservedAt: "2026-01-01T00:00:01.000Z",
-  severity: "warning",
-  confidence: 0.9,
-  affectedComponent: "control-plane",
-  affectedVersion: "1.0.0",
-  minimalReproductionEvidence: ["GET /health -> 503"],
-  source: "health-probe",
-  sourceFreshness: "2026-01-01T00:00:01.000Z",
-  deduplicationRelationship: "new",
-  fireflyHealthState: "healthy",
-});
+const signal = (): FireflySignal => {
+  const value: FireflySignal = {
+    incidentFingerprint: "",
+    firstObservedAt: "2026-01-01T00:00:00.000Z",
+    lastObservedAt: "2026-01-01T00:00:01.000Z",
+    severity: "warning",
+    confidence: 0.9,
+    affectedComponent: "control-plane",
+    affectedVersion: "1.0.0",
+    minimalReproductionEvidence: ["GET /health -> 503"],
+    source: "health-probe",
+    sourceFreshness: "2026-01-01T00:00:01.000Z",
+    deduplicationRelationship: "new",
+    fireflyHealthState: "healthy",
+  };
+  return { ...value, incidentFingerprint: deriveFireflyIncidentFingerprint(value) };
+};
 
 const envelope = (sequence: number, nonce = randomUUID()) => signFireflySignal(
   signal(),
@@ -37,13 +40,13 @@ describeDatabase("Firefly signal receiver with PostgreSQL", () => {
   const pool = new Pool({ connectionString: databaseUrl });
 
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS firefly_signals CASCADE");
+    await pool.query("DROP TABLE IF EXISTS firefly_watchdog_checks, firefly_incident_signals, firefly_incidents, firefly_signals CASCADE");
     for (const name of migrations) {
       const sql = await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8");
       await pool.query(sql);
     }
   });
-  beforeEach(async () => { await pool.query("TRUNCATE firefly_signals"); });
+  beforeEach(async () => { await pool.query("TRUNCATE firefly_watchdog_checks, firefly_incident_signals, firefly_incidents, firefly_signals"); });
   afterAll(async () => { await pool.end(); });
 
   it("stores one authenticated signal and rejects a replay without a second row", async () => {

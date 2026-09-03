@@ -1,21 +1,5 @@
-import { createHash } from "node:crypto";
-import { canonicalJson } from "./task-contract.js";
-import { assertValidFireflySignal, FireflySignalError, type FireflySignal, type FireflySeverity } from "./firefly.js";
-
-/** The identity input deliberately excludes version: persistence keys incidents by fingerprint plus version. */
-export function deriveFireflyIncidentFingerprint(signal: FireflySignal): string {
-  assertValidFireflySignal(signal);
-  const identity = {
-    affectedComponent: normalize(signal.affectedComponent),
-    source: normalize(signal.source),
-    evidence: signal.minimalReproductionEvidence.map(normalize).filter(Boolean).sort(),
-  };
-  return createHash("sha256").update(canonicalJson(identity)).digest("hex");
-}
-
-function normalize(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
+import { FireflySignalError, type FireflySignal, type FireflySeverity } from "./firefly.js";
+export { deriveFireflyIncidentFingerprint } from "./firefly-identity.js";
 
 const severityRank: Record<FireflySeverity, number> = { info: 0, warning: 1, critical: 2 };
 

@@ -2,21 +2,24 @@ import { describe, expect, it } from "vitest";
 import { FireflySignalError, type FireflySignal } from "./firefly.js";
 import { assessFireflySilence, deriveFireflyIncidentFingerprint, scoreFireflySignals } from "./firefly-incident.js";
 
-const signal = (overrides: Partial<FireflySignal> = {}): FireflySignal => ({
-  incidentFingerprint: "unused",
-  firstObservedAt: "2026-01-01T00:00:01.000Z",
-  lastObservedAt: "2026-01-01T00:00:02.000Z",
-  severity: "warning",
-  confidence: 0.9,
-  affectedComponent: "Control-Plane",
-  affectedVersion: "1.0.0",
-  minimalReproductionEvidence: ["GET /health -> 503"],
-  source: "Health-Probe",
-  sourceFreshness: "2026-01-01T00:00:02.000Z",
-  deduplicationRelationship: "new",
-  fireflyHealthState: "healthy",
-  ...overrides,
-});
+const signal = (overrides: Partial<FireflySignal> = {}): FireflySignal => {
+  const value: FireflySignal = {
+    incidentFingerprint: "",
+    firstObservedAt: "2026-01-01T00:00:01.000Z",
+    lastObservedAt: "2026-01-01T00:00:02.000Z",
+    severity: "warning",
+    confidence: 0.9,
+    affectedComponent: "Control-Plane",
+    affectedVersion: "1.0.0",
+    minimalReproductionEvidence: ["GET /health -> 503"],
+    source: "Health-Probe",
+    sourceFreshness: "2026-01-01T00:00:02.000Z",
+    deduplicationRelationship: "new",
+    fireflyHealthState: "healthy",
+    ...overrides,
+  };
+  return { ...value, incidentFingerprint: deriveFireflyIncidentFingerprint(value) };
+};
 
 describe("Firefly incident fingerprinting and scoring", () => {
   it("derives the same fingerprint for equivalent normalized evidence", () => {
