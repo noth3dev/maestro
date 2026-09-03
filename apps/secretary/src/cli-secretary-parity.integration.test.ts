@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { bootstrapLocalOperator } from "@maestro/persistence";
+import { bootstrapLocalOperator, grantProjectMembership } from "@maestro/persistence";
 import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
 import { executeCli } from "../../cli/src/main.js";
 import { createControlPlane } from "../../control-plane/src/main.js";
@@ -46,7 +46,8 @@ if (!databaseUrl) {
       const secret = "cli-secretary-parity-test-secret";
       const projectId = randomUUID();
       const goalId = randomUUID();
-      const { credentialId } = await bootstrapLocalOperator(setupPool, { secret });
+      const { credentialId, operatorId } = await bootstrapLocalOperator(setupPool, { secret });
+      await grantProjectMembership(setupPool, operatorId, projectId);
       const bearerToken = `${credentialId}.${secret}`;
       const controlPlane = createControlPlane({
         databaseUrl: scopedUrl,

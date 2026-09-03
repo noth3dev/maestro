@@ -3,6 +3,7 @@ import { once } from "node:events";
 import { request as httpRequest, type IncomingMessage } from "node:http";
 import { buildServer, type EventService, type GoalService, type OperatorAuthenticator } from "./server.js";
 import type { ReadStateService } from "./read-state-service.js";
+import { ProjectMembershipRequiredError } from "@maestro/persistence";
 
 const goal = { goalId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02", projectId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01", state: "draft" as const, version: 1 };
 
@@ -296,3 +297,74 @@ function openSse(url: string): Promise<IncomingMessage> {
     request.end();
   });
 }
+
+
+describe("project-scoped authorization (Phase 1 re-patch item 8)", () => {
+  function checker(allowedProjectIds: readonly string[]) {
+    return {
+      assertProjectMembership: vi.fn(async (operatorId: string, projectId: string) => {
+        if (!allowedProjectIds.includes(projectId)) throw new ProjectMembershipRequiredError(operatorId, projectId);
+      }),
+    };
+  }
+
+  it("allows a request whose stated projectId the operator has active membership for", async () => {
+    const projectMembership = checker([goal.projectId]);
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), projectMembership });
+    const response = await app.inject({
+      method: "POST", url: "/v1/goals",
+      headers: { authorization: "Bearer test-secret", "idempotency-key": "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f07" },
+      payload: { projectId: goal.projectId },
+    });
+    expect(response.statusCode).toBe(201);
+    expect(projectMembership.assertProjectMembership).toHaveBeenCalledWith(operator.operatorId, goal.projectId);
+    await app.close();
+  });
+
+  it("rejects a request whose stated projectId the operator has no active membership for, before the route's own service runs", async () => {
+    const projectMembership = checker(["018f3c9b-7e71-7b44-ae23-3b5d4e8c9f99"]);
+    const goalService = fakeService({ createGoal: vi.fn(fakeService().createGoal) });
+    const app = buildServer({ goalService, authenticator: authenticated(), projectMembership });
+    const response = await app.inject({
+      method: "POST", url: "/v1/goals",
+      headers: { authorization: "Bearer test-secret", "idempotency-key": "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f08" },
+      payload: { projectId: goal.projectId },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ error: { code: "project_access_forbidden" } });
+    expect(goalService.createGoal).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("rejects a transition and a critical action for a project the operator is not a member of", async () => {
+    const projectMembership = checker([]);
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), projectMembership });
+    const transition = await app.inject({
+      method: "POST", url: `/v1/goals/${goal.goalId}/transitions`,
+      headers: { authorization: "Bearer test-secret", "idempotency-key": "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f09" },
+      payload: { projectId: goal.projectId, expectedVersion: 1, to: "ready_for_confirmation" },
+    });
+    expect(transition.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("does not check membership for a route that carries no projectId at all (the four read-state routes), matching the documented Phase 3 IDOR gap", async () => {
+    const projectMembership = checker([]);
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readStateService: state, projectMembership });
+    const response = await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/sentinel-challenges`, headers: { authorization: "Bearer test-secret" } });
+    expect(response.statusCode).toBe(200);
+    expect(projectMembership.assertProjectMembership).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("skips the membership check entirely when no checker is supplied, matching prior behavior", async () => {
+    const app = buildAuthenticatedServer(fakeService());
+    const response = await app.inject({
+      method: "POST", url: "/v1/goals",
+      headers: { authorization: "Bearer test-secret", "idempotency-key": "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f0a" },
+      payload: { projectId: goal.projectId },
+    });
+    expect(response.statusCode).toBe(201);
+    await app.close();
+  });
+});

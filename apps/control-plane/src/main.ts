@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
-import { authenticateLocalOperator, getGoalControl, listGoalEvents, PostgresAuthorityRepository, reconcileOnStartup, runMigrations } from "@maestro/persistence";
+import { assertProjectMembership, authenticateLocalOperator, getGoalControl, listGoalEvents, PostgresAuthorityRepository, reconcileOnStartup, runMigrations } from "@maestro/persistence";
 import type { ActionRequest } from "@maestro/authority";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService } from "./critical-action-service.js";
@@ -53,6 +53,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     eventService: { listEvents: (projectId, after) => listGoalEvents(pool, { projectId, after }) },
     criticalActionService,
     readStateService: createReadStateService(pool),
+    projectMembership: { assertProjectMembership: (operatorId, projectId) => assertProjectMembership(pool, operatorId, projectId) },
     ...(https ? { https } : {}),
   });
   let closed = false;

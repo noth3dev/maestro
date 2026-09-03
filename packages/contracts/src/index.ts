@@ -34,7 +34,7 @@ export const StableApiErrorCodeSchema = z.enum([
   "validation_error", "version_conflict", "invalid_transition", "goal_not_found",
   "stale_lease", "lease_unavailable", "command_id_reused", "durable_store_unavailable",
   "authentication_required", "authentication_unavailable", "credential_forbidden",
-  "critical_action_denied", "critical_action_requires_approval",
+  "critical_action_denied", "critical_action_requires_approval", "project_access_forbidden",
 ]);
 export const StableApiErrorSchema = z.object({
   error: z.object({ code: StableApiErrorCodeSchema, message: z.string().min(1) }).strict(),

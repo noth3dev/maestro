@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { bootstrapAuthorityRecord, bootstrapLocalOperator, revokeAuthorityRecord } from "@maestro/persistence";
+import { bootstrapAuthorityRecord, bootstrapLocalOperator, grantProjectMembership, revokeAuthorityRecord } from "@maestro/persistence";
 import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
 import { createControlPlane } from "./main.js";
 
@@ -42,7 +42,7 @@ if (!databaseUrl) {
 
   it("serves authenticated durable Goal operations over a real loopback listener and closes resources", async () => {
     const secret = "integration-secret-not-configured";
-    const { credentialId } = await bootstrapLocalOperator(setupPool, { secret });
+    const { credentialId, operatorId } = await bootstrapLocalOperator(setupPool, { secret });
     const controlPlane = createControlPlane({
       databaseUrl: scopedUrl,
       evidenceDir: "/tmp/maestro-evidence",
@@ -58,6 +58,7 @@ if (!databaseUrl) {
     const baseUrl = `http://127.0.0.1:${address.port}`;
     const projectId = randomUUID();
     const goalId = randomUUID();
+    await grantProjectMembership(setupPool, operatorId, projectId);
 
     try {
       const unauthorized = await fetch(`${baseUrl}/v1/goals`, {
@@ -97,13 +98,14 @@ if (!databaseUrl) {
 
   it("streams durable replay over loopback, resumes without duplicate IDs, and stops on disconnect", async () => {
     const secret = "sse-secret-not-configured";
-    const { credentialId } = await bootstrapLocalOperator(setupPool, { secret });
+    const { credentialId, operatorId } = await bootstrapLocalOperator(setupPool, { secret });
     const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `sse-${randomUUID()}` });
     await controlPlane.listen();
     const address = controlPlane.app.server.address();
     if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
     const baseUrl = `http://127.0.0.1:${address.port}`;
     const projectId = randomUUID();
+    await grantProjectMembership(setupPool, operatorId, projectId);
     const headers = { authorization: `Bearer ${credentialId}.${secret}`, "content-type": "application/json" };
     const create = async (goalId: string) => fetch(`${baseUrl}/v1/goals`, { method: "POST", headers: { ...headers, "idempotency-key": goalId }, body: JSON.stringify({ projectId }) });
     const readChunk = async (reader: ReadableStreamDefaultReader<Uint8Array>, label: string) => {
@@ -162,12 +164,14 @@ if (!databaseUrl) {
 
   it("closes an open raw SSE response within a bounded interval", async () => {
     const secret = "sse-close-secret-not-configured";
-    const { credentialId } = await bootstrapLocalOperator(setupPool, { secret });
+    const { credentialId, operatorId } = await bootstrapLocalOperator(setupPool, { secret });
     const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `sse-close-${randomUUID()}` });
     await controlPlane.listen();
     const address = controlPlane.app.server.address();
     if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
-    const response = await fetch(`http://127.0.0.1:${address.port}/v1/events/stream?projectId=${randomUUID()}`, { headers: { authorization: `Bearer ${credentialId}.${secret}` } });
+    const streamProjectId = randomUUID();
+    await grantProjectMembership(setupPool, operatorId, streamProjectId);
+    const response = await fetch(`http://127.0.0.1:${address.port}/v1/events/stream?projectId=${streamProjectId}`, { headers: { authorization: `Bearer ${credentialId}.${secret}` } });
     const reader = response.body!.getReader();
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -253,7 +257,7 @@ if (!databaseUrl) {
   it("proves the full HTTP authority boundary: no approval blocks the effect, an exact approval invokes it once, and a revoked approval blocks it again", async () => {
     const secret = `critical-action-secret-${randomUUID()}`;
     const localOperator = await bootstrapLocalOperator(setupPool, { secret });
-    const { credentialId } = localOperator;
+    const { credentialId, operatorId } = localOperator;
     const effect = vi.fn(async () => {});
     const controlPlane = createControlPlane(
       { databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `critical-${randomUUID()}` },
@@ -265,6 +269,7 @@ if (!databaseUrl) {
     const baseUrl = `http://127.0.0.1:${address.port}`;
     const projectId = randomUUID();
     const goalId = randomUUID();
+    await grantProjectMembership(setupPool, operatorId, projectId);
     const headers = { authorization: `Bearer ${credentialId}.${secret}`, "content-type": "application/json" };
     const body = { projectId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0 };
 
@@ -368,7 +373,7 @@ if (!databaseUrl) {
       })).toThrow(/ENOENT/);
 
       const secret = "tls-test-secret-not-configured";
-      const { credentialId } = await bootstrapLocalOperator(setupPool, { secret });
+      const { credentialId, operatorId } = await bootstrapLocalOperator(setupPool, { secret });
       const controlPlane = createControlPlane({
         databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0,
         primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `tls-real-${randomUUID()}`,
@@ -381,6 +386,7 @@ if (!databaseUrl) {
 
         const projectId = randomUUID();
         const goalId = randomUUID();
+        await grantProjectMembership(setupPool, operatorId, projectId);
         const body = JSON.stringify({ projectId });
         const status = await new Promise<number>((resolve, reject) => {
           const request = httpsModule.request(
