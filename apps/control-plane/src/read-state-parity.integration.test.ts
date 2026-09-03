@@ -178,7 +178,8 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
     const report = await generateSaneFinalReport(pool, goalId);
 
     const secret = "read-state-parity-test-secret";
-    await bootstrapLocalOperator(pool, { secret });
+    const { credentialId } = await bootstrapLocalOperator(pool, { secret });
+    const bearerToken = `${credentialId}.${secret}`;
     const controlPlane = createControlPlane({
       databaseUrl: databaseUrl!, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0,
       primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `read-state-parity-${randomUUID()}`,
@@ -188,7 +189,7 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
     const address = controlPlane.app.server.address();
     if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
     const apiUrl = `http://127.0.0.1:${address.port}`;
-    const env = { MAESTRO_API_URL: apiUrl, MAESTRO_API_TOKEN: secret };
+    const env = { MAESTRO_API_URL: apiUrl, MAESTRO_API_TOKEN: bearerToken };
     const stdout: string[] = [];
     const stderr: string[] = [];
     const io = { stdout: (line: string) => { stdout.push(line); }, stderr: (line: string) => { stderr.push(line); } };
@@ -221,7 +222,7 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
       // identical facts through the real HTTP surface, not merely that the
       // CLI's own formatting happens to match.
       const { createApiClient } = await import("@maestro/api-client");
-      const client = createApiClient({ baseUrl: apiUrl, token: secret });
+      const client = createApiClient({ baseUrl: apiUrl, token: bearerToken });
       const apiChallenges = await client.listSentinelChallenges(goalId);
       const apiRounds = await client.listOverwatchCouncilRounds(goalId);
       const apiCertifications = await client.listCertifications(goalId);
