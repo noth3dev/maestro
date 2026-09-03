@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -7,6 +8,7 @@ import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { localGitPort } from "@maestro/git-adapter";
+import { FileEvidenceStore } from "@maestro/evidence";
 import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";
@@ -167,5 +169,46 @@ describeDatabase("Sane final report with PostgreSQL", () => {
 
   it("throws SaneReportError when no resolved Council decision exists for the Goal", async () => {
     await expect(generateSaneFinalReport(pool, randomUUID())).rejects.toBeInstanceOf(SaneReportError);
+  });
+
+  it("rejects the final report when a supplied content reader detects a corrupted evidence artifact hash (Phase 1 re-patch item 6)", async () => {
+    const { goalId, worker, evidenceIds } = await setupWorkerWithCommit();
+    const store = new FileEvidenceStore(await mkdtemp(join(tmpdir(), "maestro-sane-evidence-")));
+    const captured = await store.capture({
+      context: { correlationId: randomUUID(), commandId: randomUUID(), projectId: randomUUID(), goalId, actorId: "test" },
+      bytes: Buffer.from("real sane-report evidence artifact"), kind: "test-result", mediaType: "text/plain",
+    });
+    // Repoint every evidence row for this Goal at the same genuinely stored
+    // content -- assembleEvidenceBundle verifies all of a Goal's evidence,
+    // not only the cited subset, so every row must have real backing bytes
+    // before corrupting exactly one of them below.
+    await pool.query("ALTER TABLE evidence_records DISABLE TRIGGER evidence_records_immutable");
+    try {
+      for (const evidenceId of evidenceIds) {
+        await pool.query("UPDATE evidence_records SET sha256 = $1, byte_length = $2 WHERE evidence_id = $3", [captured.sha256, captured.byteLength, evidenceId]);
+      }
+    } finally {
+      await pool.query("ALTER TABLE evidence_records ENABLE TRIGGER evidence_records_immutable");
+    }
+    await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
+
+    // Genuinely matching content produces a report cleanly when a real reader is supplied.
+    const report = await generateSaneFinalReport(pool, goalId, store);
+    expect(report.success).toBe(true);
+
+    // Corrupt one evidence row's durable sha256 so it no longer matches its actual stored bytes.
+    await pool.query("ALTER TABLE evidence_records DISABLE TRIGGER evidence_records_immutable");
+    try {
+      await pool.query("UPDATE evidence_records SET sha256 = $1 WHERE evidence_id = $2", ["d".repeat(64), evidenceIds[1]]);
+    } finally {
+      await pool.query("ALTER TABLE evidence_records ENABLE TRIGGER evidence_records_immutable");
+    }
+
+    await expect(generateSaneFinalReport(pool, goalId, store)).rejects.toThrow();
+
+    // Without a content reader, existing metadata-only-trust behavior is unchanged (documented,
+    // not silently strengthened for callers that do not yet supply one): the same corrupted row
+    // no longer blocks report generation once no reader is supplied.
+    await expect(generateSaneFinalReport(pool, goalId)).resolves.toBeDefined();
   });
 });

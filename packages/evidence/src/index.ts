@@ -45,8 +45,11 @@ export function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+/** The minimal shape verifyEvidenceRecord actually needs; any EvidenceRecord satisfies it. */
+export type VerifiableEvidenceRecord = Pick<EvidenceRecord, "sha256" | "byteLength">;
+
 /** Fails closed unless stored bytes still match durable evidence metadata. */
-export async function verifyEvidenceRecord(record: EvidenceRecord, content: EvidenceContentReader): Promise<void> {
+export async function verifyEvidenceRecord(record: VerifiableEvidenceRecord, content: EvidenceContentReader): Promise<void> {
   if (!hashPattern.test(record.sha256)) throw new EvidenceIntegrityError("Evidence SHA-256 must be lowercase hex");
   let bytes: Uint8Array;
   try {

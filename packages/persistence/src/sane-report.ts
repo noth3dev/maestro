@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { certificationsConflict, evaluateCertificationCompleteness, requiredConditionalCertifications, taskContractContentHash, type CertificationRecordFact } from "@maestro/domain";
+import type { EvidenceContentReader } from "@maestro/evidence";
 import type { Pool } from "pg";
 import { isCertificationConflictResolved } from "./certification.js";
 import { recordEvidenceBundle } from "./evidence-bundle.js";
@@ -32,7 +33,7 @@ export interface SaneFinalReport {
  * certification rows. Plan completion percentage and worker self-report are
  * never used as substitutes for those facts.
  */
-export async function generateSaneFinalReport(pool: Pool, goalId: string): Promise<SaneFinalReport> {
+export async function generateSaneFinalReport(pool: Pool, goalId: string, content?: EvidenceContentReader): Promise<SaneFinalReport> {
   const councilRow = await pool.query<{
     council_id: string; contract_id: string; decision_packet: Record<string, unknown> | null;
     snapshot_payload: Record<string, unknown>; snapshot_hash: string;
@@ -205,7 +206,7 @@ export async function generateSaneFinalReport(pool: Pool, goalId: string): Promi
     .concat(conflict && !conflictResolved ? ["unresolved: conflicting certifications"] : []);
   const criticalActionAwaitingApproval = records.some((record) => record.hasUnwaivedCriticalFinding);
 
-  const { bundleId } = await recordEvidenceBundle(pool, goalId);
+  const { bundleId } = await recordEvidenceBundle(pool, goalId, content);
   const reportId = randomUUID();
   await pool.query(
     `INSERT INTO sane_final_reports (report_id, goal_id, success, blockers, ceo_request, what_changed, user_visible_behavior_passed, participating_departments, key_decisions, dissent, independent_validation, cost_cents, budget_cents, incidents, known_limitations, critical_action_awaiting_approval, evidence_bundle_id)
