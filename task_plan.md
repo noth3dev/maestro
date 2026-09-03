@@ -147,3 +147,8 @@ Current restart lane: forced mid-flight worker restart/reconciliation scenario i
 ## 2026-09-03 (continued) — P4S3 and P4S5 integrated
 - [in_progress] 9. `phase4/integration` now also carries P4S3 (Playwright browser environment adapter) and P4S5 (Goal-scoped device grants + sequenced capability-authenticated command channel). Full real-PostgreSQL check: 568 passed, 2 intentional live-Prime skips, 0 failed.
 - Next: P4S8-P4S9 (Firefly Incident Brief through closure and improvement evidence), P4S10 (live gates).
+
+
+## 2026-09-03 (continued) — P4S8 integrated
+- [in_progress] 9. `phase4/integration` now also carries P4S8 (Firefly Incident Brief -> Goal linkage -> immediate safe pause -> remediation through the existing Phase 2/3 pipeline -> closure). Full real-PostgreSQL check: 577 passed, 2 intentional live-Prime skips, 0 failed, stable over 2 runs.
+- Next: P4S9 (incident outcome/false-positive improvement evidence, no automatic changes), P4S10 (device-scope and seeded-incident live gates -- the Phase 4 exit gate).
