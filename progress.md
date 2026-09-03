@@ -462,3 +462,50 @@
   production migration runner, fast-check fencing coverage, evidence-hash-corruption consumer
   tests, config credential-key test, restart-recovery/project-scope-auth P0s), each test-first,
   each independently reviewed before acceptance.
+
+## 2026-09-04 (continued) — Phase 1 re-patch item 2 (unbounded in-process memory growth) resolved
+- Implemented directly (no subagent, per explicit user direction), test-first, in an isolated
+  worktree (`.worktrees/p1-memory-bound`, branch `patch/p1-memory-bound`), reusing the earlier
+  Luna memory-audit findings from this session: eviction must be an explicit post-durable-write
+  acknowledgement, never kernel-initiated (first observation/timer), since a retry after a failed
+  durable write still needs the same terminal observation; an evicted invocation must report
+  `"unknown"`, never a fabricated `"failed"`.
+- `apps/control-plane/src/goal-service.ts`: `leaseProofs.delete(goalId)` once a command result
+  reaches a terminal Goal state (`isTerminalGoalState`), never on a provider/DB/error path. 3
+  focused unit tests (terminal eviction + re-acquire; nonterminal retains + renews; version
+  conflict is not terminal and still renews).
+- `packages/domain/src/execution-kernel.ts`: added optional `ExecutionKernelPort.release(invocation)`.
+  `packages/prime-adapter/src/execution-kernel.ts` implements it (child release drops only that
+  child; root release drops the root record and, only if no children still reference its
+  execution, the underlying session too) and fixes a real correctness bug found while
+  implementing: `getInvocationStatus` previously returned a fabricated `"failed"` for any
+  unregistered/released invocation instead of the domain contract's actual `"unknown"`. 5 new
+  kernel-level unit tests (13/13 total in that file).
+- Wired `kernel.release` into every consumer that durably records a terminal Prime invocation
+  outcome: `worker.ts`'s `observeWorker` (after a terminal status commits) and `cancelWorker`
+  (after cancellation commits); `semantic-review.ts`'s `requestSemanticReview` (after its
+  always-written row inserts, including the unparseable-output downgrade path);
+  `overwatch-council.ts`'s `runOverwatchCouncilReview` (after every reviewer's sealed judgment
+  commits together in one transaction).
+- **Self-review found and fixed a second real defect before merge**: every `kernel.release` call
+  sat inside/adjacent to a try/catch whose catch rethrows, so a release failure would incorrectly
+  surface as if the already-durably-committed operation itself had failed -- and in
+  `overwatch-council.ts`, would additionally attempt a spurious `ROLLBACK` after an already-
+  succeeded `COMMIT`. Fixed by making every release call best-effort (`.catch(() => {})`); added
+  one dedicated regression per caller (`worker.ts` x2, `semantic-review.ts`, `overwatch-council.ts`)
+  proving each still returns its durable result when the kernel's release call fails.
+- Verification: real-PostgreSQL `npm test` (vitest directly, not blocked by the node_modules-symlink
+  dist-staleness limitation that blocks `tsc -b`/`npm run build` in this worktree -- confirmed the
+  same limitation from item 1 applies only to the TypeScript build step, not to vitest's own
+  resolution) in the worktree: 94/95 files, 604 passed, 2 intentional live-Prime skips, 0 failed.
+  Independent review performed by the parent session directly (no independent-review subagent
+  spawned this pass, per explicit user direction to continue without further subagents), then
+  merged to `main` (`eba0823`). Authoritative post-merge re-verification on `main`: fresh
+  `npm run build` clean, full real-PostgreSQL `npm run check`: 94/95 files, 604 passed, 2
+  intentional live-Prime skips, 0 failed. Worktree, branch, and the disposable PostgreSQL container
+  (`maestro-p1-memory-bound-postgres`) removed.
+- Next: Phase 1 re-patch item 3 (remote-TLS fail-closed) -- design already prepared this session by
+  the earlier `luna-p1-tls-audit` child: optional paired `MAESTRO_TLS_CERT_FILE`/`MAESTRO_TLS_KEY_FILE`,
+  required together whenever `MAESTRO_ALLOW_REMOTE=true`, wired through to a real Fastify HTTPS
+  listener (not just config validation), with a composition-level regression proving a remote
+  config without TLS never reaches `app.listen` as plain HTTP.

@@ -167,10 +167,23 @@ feature-completeness audit before treating Phase 4 as usable.
    590 passed, 2 intentional live-Prime skips, 0 failed. Residual documented risk (not this
    item's scope): no per-source rate limiter for repeated failed attempts against the same known
    selector — the fix removes CPU amplification, not brute-force throttling.
-2. **[LOW-MEDIUM, security]** Unbounded in-process memory growth: `execution-kernel.ts`'s
-   `sessions`/`roots`/`children` Maps (lines 81-83) and `goal-service.ts`'s `leaseProofs` Map
-   (line 42) never evict terminal-state entries. Fix: evict or bound (LRU) on terminal status once
-   evidence is durably recorded.
+2. **[RESOLVED 2026-09-04, commit `eba0823`]** `execution-kernel.ts`'s `sessions`/`roots`/`children`
+   Maps and `goal-service.ts`'s `leaseProofs` Map previously never evicted terminal-state entries.
+   Fixed: added an optional `ExecutionKernelPort.release(invocation)` acknowledgement, called only
+   by a caller that has already durably recorded the terminal outcome (worker.ts's observeWorker
+   after a terminal status commits and cancelWorker after cancellation commits; semantic-review.ts's
+   requestSemanticReview after its always-written row inserts; overwatch-council.ts's
+   runOverwatchCouncilReview after every reviewer's sealed judgment commits together); every release
+   call is best-effort (never masks an already-succeeded durable write as a failure -- a real defect
+   found and fixed during self-review). `goal-service.ts` evicts a Goal's lease proof once a command
+   result reaches a terminal Goal state (`isTerminalGoalState`), never on a provider/DB/error path.
+   Also fixed a related correctness bug: `getInvocationStatus` previously fabricated `"failed"` for
+   any unregistered/released invocation; it now reports the domain contract's actual `"unknown"`.
+   Self-verified via real-PostgreSQL `npm test` in the isolated worktree (blocked from a full
+   `npm run build` there by the same node_modules-symlink dist-staleness limitation as item 1);
+   independently re-verified by the parent session directly (no reviewer subagent available/reliable
+   this session) after merge: fresh `main` build clean, full real-PostgreSQL `npm run check`:
+   94/95 files, 604 passed, 2 intentional live-Prime skips, 0 failed.
 3. **[LOW, security]** No TLS requirement when `MAESTRO_ALLOW_REMOTE=true` (apps/control-plane/src/config.ts:20,45-46);
    bearer secrets would travel in cleartext on a non-loopback bind. Fix: fail closed on remote bind
    without TLS configured.
