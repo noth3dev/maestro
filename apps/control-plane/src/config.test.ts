@@ -38,8 +38,39 @@ describe("parseConfig", () => {
     );
   });
 
-  it("allows an explicit remote binding", () => {
-    expect(parseConfig({ ...required, MAESTRO_HOST: "0.0.0.0", MAESTRO_ALLOW_REMOTE: "true" }).host).toBe("0.0.0.0");
+  it("rejects a remote binding without TLS configured, even with MAESTRO_ALLOW_REMOTE=true", () => {
+    expect(() => parseConfig({ ...required, MAESTRO_HOST: "0.0.0.0", MAESTRO_ALLOW_REMOTE: "true" })).toThrow(
+      "Remote binding requires TLS certificate and key configuration",
+    );
+  });
+
+  it.each([
+    { MAESTRO_TLS_CERT_FILE: "/tmp/cert.pem" },
+    { MAESTRO_TLS_KEY_FILE: "/tmp/key.pem" },
+  ])("rejects a remote binding with only one half of the TLS cert/key pair configured: %j", (partial) => {
+    expect(() => parseConfig({ ...required, MAESTRO_HOST: "0.0.0.0", MAESTRO_ALLOW_REMOTE: "true", ...partial })).toThrow(
+      "Remote binding requires TLS certificate and key configuration",
+    );
+  });
+
+  it("allows an explicit remote binding once both TLS certificate and key are configured", () => {
+    const config = parseConfig({
+      ...required,
+      MAESTRO_HOST: "0.0.0.0",
+      MAESTRO_ALLOW_REMOTE: "true",
+      MAESTRO_TLS_CERT_FILE: "/tmp/cert.pem",
+      MAESTRO_TLS_KEY_FILE: "/tmp/key.pem",
+    });
+
+    expect(config.host).toBe("0.0.0.0");
+    expect(config.tls).toEqual({ certFile: "/tmp/cert.pem", keyFile: "/tmp/key.pem" });
+  });
+
+  it("ignores a TLS cert/key pair supplied for a loopback (non-remote) binding", () => {
+    const config = parseConfig({ ...required, MAESTRO_TLS_CERT_FILE: "/tmp/cert.pem", MAESTRO_TLS_KEY_FILE: "/tmp/key.pem" });
+
+    expect(config.host).toBe("127.0.0.1");
+    expect(config.tls).toBeUndefined();
   });
 
   it("redacts database credentials before configuration is logged", () => {

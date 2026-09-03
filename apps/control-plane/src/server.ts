@@ -55,15 +55,19 @@ const systemPollingScheduler: PollingScheduler = {
   clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
 };
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService, https }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
   criticalActionService?: CriticalActionService;
   pollingScheduler?: PollingScheduler;
   readStateService?: ReadStateService;
+  /** When set, the listener is real HTTPS, not plain HTTP. */
+  https?: { cert: Buffer; key: Buffer };
 }): FastifyInstance {
-  const app = Fastify();
+  const app: FastifyInstance = https
+    ? (Fastify({ https }) as unknown as FastifyInstance)
+    : Fastify();
   const activeStreams = new Set<() => void>();
   const events = eventService ?? { listEvents: async () => { throw new DurableStoreUnavailableError(); } };
   const readState = readStateService ?? { listSentinelChallenges: async () => { throw new DurableStoreUnavailableError(); }, listOverwatchCouncilRounds: async () => { throw new DurableStoreUnavailableError(); }, listCertifications: async () => { throw new DurableStoreUnavailableError(); }, getSaneReport: async () => { throw new DurableStoreUnavailableError(); } };
