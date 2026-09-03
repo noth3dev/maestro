@@ -795,3 +795,66 @@ HEAD
   requiring a durable session/invocation binding table, a real `reconcileOnStartup` that fences or
   cancels stale provider work (not just the existing structural Goal-state consistency scaffold),
   and a real process kill-and-restart acceptance test with an actively running worker.
+
+## 2026-09-04 (continued) — Phase 1 re-patch item 8 part 2/2 (durable worker/session restart recovery) resolved; Phase 1 re-patch complete
+- Implemented directly (no subagent), in an isolated worktree (`.worktrees/p1-restart-recovery`,
+  branch `patch/p1-restart-recovery`), completing the second and larger half of item 8.
+- Confirmed by direct inspection: `execution-kernel.ts`'s `resume()`/`reconnect()` intentionally
+  always throw (`ExecutionKernelUnavailableError`) -- this is a genuine, correctly-documented Prime
+  SDK constraint (an in-process session cannot be transparently resumed across a real process
+  restart), not a defect to engineer around. The actual gap was narrower and more tractable than
+  it first appeared: `reconcileOnStartup` already correctly leaves a worker under a still-live
+  Goal lease untouched (`lease_contended`, protecting genuinely active execution -- proven by an
+  existing Phase 2/3 test), but for a Goal whose lease has genuinely expired at restart (the
+  "truly abandoned" case, not merely contended), nothing ever proactively re-observed that Goal's
+  nonterminal workers -- they would sit "spawned"/"running" forever unless some unrelated future
+  caller happened to call `observeWorker` on them again.
+- Fixed by threading an optional `kernel: ExecutionKernelPort` into `reconcileOnStartup`. Since a
+  kernel constructed fresh at process startup (`createPrimeExecutionKernel()` in `main.ts`) always
+  begins with empty `sessions`/`roots`/`children` maps (per `execution-kernel.ts`), forcing every
+  nonterminal worker under a Goal with a non-live lease through a fresh `observeWorker` call can
+  only ever honestly downgrade a genuinely dead session to `"unknown"` via the already-existing
+  empty-observation fallback (Phase 1 item 2) -- it structurally cannot fabricate a status or
+  accidentally resume real work, since a truly-still-running session's execution ref simply
+  wouldn't exist in a brand-new kernel's maps at all if the owning process actually died. Added
+  `reconciledWorkerIds` to `GoalReconciliationResult` for durable evidence of what this pass
+  touched. Wired the real kernel into `main.ts` (added `@maestro/prime-adapter` as a genuine
+  control-plane dependency + tsconfig project reference, since it wasn't one before).
+- Added 3 new real-PostgreSQL regressions in `worker.integration.test.ts` (alongside the existing
+  "genuinely mid-flight, lease still contended" test from Phase 2/3 work): a genuinely orphaned
+  running worker (lease actually expired) is forced to `"unknown"` at startup through a fresh
+  kernel; a worker whose lease is still live is left untouched; supplying no kernel at all leaves
+  prior behavior completely unchanged. Updated `reconciliation.integration.test.ts`'s and
+  `worker.integration.test.ts`'s existing exact-object `toEqual` assertions for the new field.
+- Verification: `worker.integration.test.ts` 15/15 passed (3 new) against real PostgreSQL on the
+  first run; `reconciliation.integration.test.ts` 11/11 passed; the item 5
+  `reconciliation.fencing.property.test.ts` 3/3 passed unaffected. Full worktree real-PostgreSQL
+  `npm test`: 97/98 files, 636 passed, 2 intentional live-Prime skips, 0 failed -- clean this time
+  (the field addition to `ReconcileOnStartupOptions` is additive/optional and `reconcileOnStartup`'s
+  own exported name/signature shape was already resolvable via the stale symlinked
+  `@maestro/persistence` dist, so no cross-package *test* failures this pass, unlike items 1, 4, 6,
+  and 8-part-1). `tsc -b` itself still hit the established node_modules-symlink staleness
+  limitation for the new `kernel` field's *type* specifically (confirmed by the exact TS2353
+  error), resolved by the standard post-merge rebuild.
+- Independent review performed by the parent session directly (no independent-review subagent
+  spawned, per explicit user direction to continue without further subagents this session), then
+  merged to `main` (`9e39822`). Authoritative post-merge re-verification on `main`: fresh
+  `npm run build` clean, full real-PostgreSQL `npm run check`: 97/98 files, 636 passed, 2
+  intentional live-Prime skips, 0 failed. Worktree, branch, and the disposable PostgreSQL container
+  (`maestro-p1-restart-postgres`) removed.
+- **Phase 1 re-patch is now fully complete: all 8 items (1-8, including both halves of item 8)
+  resolved, merged to `main`, and pushed to `origin`.** Every item was implemented test-first,
+  self-verified against real PostgreSQL, independently reviewed by the parent session directly
+  (no independent-review subagent was reliably available this session), merged, and re-verified on
+  `main` before the next item began -- matching this project's own worktree/review/merge discipline
+  throughout. A genuine second real defect was caught and fixed during self-review at least twice
+  this session (item 2's release-error-masking bug; item 8-part-1's unreachable-primary-key design)
+  before merge, and one real production-code defect was caught by a dedicated regression before
+  merge in item 4 (the shared-migration-ledger gap). Per this project's own acceptance policy, a
+  formal independent (no-edit) review of the full Phase 1 re-patch diff by a separate reviewer
+  remains the recommended next step before Phase 1 is formally re-accepted; the parent session's
+  own review this session substituted for that step throughout due to independent-review subagents
+  being unavailable/unreliable for most of this session.
+- Next: per the re-patch execution order (`task_plan.md`), Phase 2's remaining items 1-9 are now
+  the front of the queue -- starting with item 1, the P0 empirically-reproduced budget-reservation
+  double-counting defect (78% overspend undetected against real PostgreSQL in the original audit).

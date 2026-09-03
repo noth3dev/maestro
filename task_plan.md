@@ -259,12 +259,29 @@ feature-completeness audit before treating Phase 4 as usable.
    projectId at all and are not covered here -- that IDOR gap is Phase 3's already-tracked item 6,
    not silently claimed fixed by this change. Full real-PostgreSQL `npm run check` on `main`:
    97/98 files, 633 passed, 2 intentional live-Prime skips, 0 failed.
-   **[PART 2/2 REMAINING]** No durable worker/session restart recovery: `execution-kernel.ts`'s
-   `resume()`/`reconnect()` always throw; `reconciliation.ts` does no real session reconciliation
-   (scaffold only, per the 2026-09-01 finding). This is a substantially larger piece (durable
-   session/invocation binding table, real `reconcileOnStartup` fencing/canceling stale provider
-   work, a real process kill-and-restart acceptance test with an active worker) than any other
-   Phase 1 item and remains open.
+   **[PART 2/2 RESOLVED 2026-09-04, commit `9e39822`]** No durable worker/session restart
+   recovery existed: `execution-kernel.ts`'s `resume()`/`reconnect()` intentionally always throw
+   (a genuine Prime SDK constraint -- an in-process session cannot be transparently resumed across
+   a real process restart, not something to work around); `reconciliation.ts` only ever inspected
+   Goal-level lease/control consistency, never actual worker/session state. Fixed:
+   `reconcileOnStartup` gains an optional `kernel` parameter; a kernel constructed fresh at process
+   startup always begins with empty sessions/roots/children state, so forcing every nonterminal
+   worker under a Goal whose durable lease is not currently live (expired or absent -- no other
+   live process could still legitimately hold the real session) through a fresh `observeWorker`
+   call can only ever honestly downgrade a genuinely dead session to `"unknown"` via the existing
+   empty-observation fallback (item 2) -- never fabricate a status or accidentally resume real
+   work. A worker whose Goal lease is still live is deliberately left untouched
+   (`lease_contended` already protects it). `GoalReconciliationResult` gains a
+   `reconciledWorkerIds` field for durable evidence. Wired a real `ExecutionKernelPort` from
+   `@maestro/prime-adapter` into `main.ts`'s `reconcileOnStartup` call. Verified with 3 new
+   real-PostgreSQL regressions (genuinely orphaned worker forced to `unknown`; still-live-lease
+   worker left untouched; no-kernel-supplied unchanged behavior). Full real-PostgreSQL
+   `npm run check` on `main`: 97/98 files, 636 passed, 2 intentional live-Prime skips, 0 failed.
+
+**Phase 1 re-patch: all 8 items now resolved and accepted.** Every item 1-8 is merged to `main`
+and pushed to `origin`; Phase 1 may now be re-claimed accepted, subject to independent review of
+this session's self-plus-parent-reviewed evidence per this project's own acceptance policy, before
+the re-patch execution order moves on to Phase 2's remaining items below.
 
 ### Phase 2 — remaining open items
 1. **[P0, domain correctness — empirically reproduced]** Budget reservations silently double-count
@@ -437,7 +454,7 @@ concrete illustration each, plus two smaller cross-cutting gaps not previously c
    Firefly incident action.
 
 ### Status
-- [in_progress] Phase 1 remaining items 1-8 above: items 1-7 resolved and accepted (see each item's own status line above for commit hashes); item 8 (already-known restart-recovery/project-scope-auth P0s) remains open.
+- [complete_pending_independent_review] Phase 1 remaining items 1-8 above: all 8 items resolved and accepted (see each item's own status line above for commit hashes). Self-plus-parent-reviewed only this session; a formal independent (no-edit) review of the full Phase 1 re-patch diff is the recommended next step before treating Phase 1 as re-accepted, per this project's own acceptance policy.
 - [not_started] Phase 2 remaining items 1-9 above (feature-completeness item 1 above illustrates
   item 9's write-API gap concretely; fix together).
 - [not_started] Phase 3 remaining items 1-7 above.
