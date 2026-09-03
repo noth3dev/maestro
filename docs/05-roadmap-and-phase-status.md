@@ -1,0 +1,48 @@
+# 05. Roadmap & Phase Status
+
+Maestro follows a strict phased milestone roadmap. Code completion alone does not constitute phase acceptance—each phase requires empirical proof passing real PostgreSQL integration suites and operational usability exit gates.
+
+---
+
+## 1. Multi-Phase Roadmap Matrix
+
+| Phase | Title | Code Status | Verification & Operational Exit Gate |
+| :--- | :--- | :---: | :--- |
+| **Phase 1** | Technical Foundation & Durable Control Plane | **Code Complete** | Fastify REST/SSE API, PostgreSQL 17 event sourcing, monotonic fencing leases, Prime Agent adapter isolation. |
+| **Phase 2** | Secretary Office Core & Hierarchical Execution | **Code Complete** | Overture Crew intake flow, Task Contract identity, Head Council sealed deliberation, Department Plans, isolated Git execution. |
+| **Phase 3** | Overwatch, Certification & First Usable Release | **Code Complete** | Sentinel live event monitoring, Overwatch Council adjudication, independent Quality certification, Sane report generation, CLI/App API parity. |
+| **Phase 4** | Isolated Environments, Devices & Firefly Incidents | **Code Complete** *(Self-verified)* | Declarative container recipes, Playwright browser isolation, enrolled device authorization, Firefly out-of-band incident detection. |
+| **Phase 5** | Concurrent Goals & Portfolio Control | Planned | Multi-goal isolation, budget/compute contention scheduling, Portfolio Council priority management. |
+| **Phase 6** | Overwatch Learning & 10-Axis Adaptation | Planned | Offline replay lab, 10-axis persona tuning, synthetic evaluation, curated knowledge propagation. |
+| **Phase 7** | Full Secretary Office & Radial Control Surface | Planned | Next.js 16 / React 19 web application, `@xyflow/react` radial portfolio visualization, real-time SSE interaction. |
+| **Phase 8** | Full-System Hardening & Release Certification | Planned | Adversarial stress testing, security penetration audit, recovery verification, release candidate freeze. |
+
+---
+
+## 2. Operational Usability Audit Notice
+
+> [!IMPORTANT]
+> **Operational Usability Gate Disclaimer:**  
+> While domain and persistence unit test suites for Phases 1–4 are green, an independent operational usability audit (`task_plan.md`) established that Phase 1–3 control plane features remain gated behind operational usability requirements (e.g., end-to-end service API execution pathways, real effect executor wiring for Git, and continuous Sentinel observation). Phase 4 device controls similarly await live device agent protocol wiring. Implementation of these operational usability tracks is tracked under the **Phase 5 Remediation Plan**.
+
+---
+
+## 3. Post-Phase 8 Extension: Luthiery (Dynamic MCP Workshop)
+
+**Luthiery** (Phase 9 candidate) enables agents to generate, audit, run, and reuse specialized **Model Context Protocol (MCP)** servers dynamically during task execution without compromising core safety boundaries ([`plan/post-phase8-ideas.md`](file:///home/ubuntu/projects/ms/plan/post-phase8-ideas.md)).
+
+```mermaid
+flowchart LR
+    TASK[Task Requires Custom Tool] --> LUTHIERY[Luthiery Workshop]
+    LUTHIERY --> GEN[Generate MCP Server Code]
+    GEN --> AST[AST Analysis: Mandatory AuthorizedEffectExecutor]
+    AST --> SEC{Passes Security Check?}
+    SEC -->|No| REJECT[SecurityBypassAttemptError]
+    SEC -->|Yes| RUN[Execute in Task Container & Save to SHA-256 Registry]
+```
+
+### Core Luthiery Principles
+1. **Organizational Separation**: Placed under the **Operations / Infrastructure Group**. Strictly separated from Overwatch to avoid self-auditing conflicts of interest.
+2. **Container Sandbox Binding**: Dynamic MCP server processes run inside Phase 4 containers, bound directly to the Goal's fencing token lease (`SIGTERM` cleanup on expiry).
+3. **AST Static Enforcement**: Generated handler code must explicitly include `AuthorizedEffectExecutor.execute()` wrappers, failing static analysis otherwise.
+4. **Content-Addressed Reuse**: Certified MCP server binaries are indexed in `packages/evidence` using SHA-256 hashes for instant zero-latency reuse in future goals.

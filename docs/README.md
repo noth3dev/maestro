@@ -1,29 +1,40 @@
+<p align="center">
+  <a href="README.md">
+    <img alt="Maestro" src="assets/logo.svg" width="360" style="max-width: 100%;">
+  </a>
+</p>
+
 # Maestro Documentation
 
-Maestro는 **Prime Agent SDK** 기반의 **내구성 있는(Durable) 계층형 AI 오케스트레이션 시스템**입니다.  
-본 문서는 Maestro의 시스템 아키텍처, 계층형 오케스트레이션 구조, 데이터 무결성 및 보안 모델을 체계적으로 설명합니다.
+Maestro is a **durable, hierarchical AI orchestration system** built on top of the **Prime Agent SDK**.  
+This documentation set provides a detailed breakdown of Maestro's system architecture, multi-agent organizational structure, durable control plane, fail-closed authority model, phase roadmap, and developer guidelines.
 
 ---
 
-## 📚 목차 (Documentation Index)
+## Documentation Index
 
-### 1. 아키텍처 (Architecture)
-* **[계층형 오케스트레이션 구조 (Hierarchical Orchestration)](file:///home/ubuntu/projects/ms/docs/architecture/orchestration.md)**
-  * CEO ➔ Sane ➔ Overture Crew ➔ Department Heads ➔ Head Council ➔ Workers ➔ Overwatch / Certification 파이프라인
-  * 조직 분립 및 영구 부서(Department)와 역할(Persona)
-* **[내구성 제어 평면 및 복구 (Control Plane & Durability)](file:///home/ubuntu/projects/ms/docs/architecture/control-plane-and-durability.md)**
-  * PostgreSQL 17 단일 신뢰 원천, 이벤트 소싱, Transactional Outbox
-  * Monotonic Fencing Token Lease를 통한 유령 쓰기 방지 및 프로세스 재시작 복구(Reconciliation)
-* **[보안 및 권한 모델 (Authority & Security)](file:///home/ubuntu/projects/ms/docs/architecture/authority-and-security.md)**
-  * Fail-Closed & Default-Deny 원칙 (`AuthorizedEffectExecutor`)
-  * 액션 분류(`ordinary`, `critical`, `forbidden`, `ambiguous`) 및 단일 승인(Single Confirmation)
-  * 봉인 제출(Sealed Submission)과 SHA-256 불변 스냅샷 무결성
+### 1. [System Overview](file:///home/ubuntu/projects/ms/docs/01-system-overview.md)
+* Architectural philosophy, design principles, separation of powers, and monorepo structure.
+* Prime Agent SDK boundary vs Maestro control-plane responsibilities.
 
-### 2. 로드맵 (Roadmap)
-* **[단계별 로드맵 및 구현 현황 (Phases & Roadmap)](file:///home/ubuntu/projects/ms/docs/roadmap/phases.md)**
-  * Phase 1 ~ Phase 8 핵심 마일스톤 및 완료 현황
-  * Post-Phase 8 아이디어: Luthiery (동적 MCP 및 도구 제작 공방)
+### 2. [Hierarchical Orchestration](file:///home/ubuntu/projects/ms/docs/02-hierarchical-orchestration.md)
+* End-to-end execution lifecycle: CEO ➔ Sane ➔ Overture Crew ➔ Department Heads ➔ Head Council ➔ Workers ➔ Overwatch / Certification.
+* Permanent Groups & Departments structure, personas, and wake-on-demand mechanics.
 
-### 3. 개발자 가이드 (Guides)
-* **[개발 환경 및 사용 가이드 (Developer Guide)](file:///home/ubuntu/projects/ms/docs/guides/developer-guide.md)**
-  * 모노레포 패키지 구성, TypeScript 빌드, 테스트 실행, CLI 명령어
+### 3. [Durable Control Plane & Durability](file:///home/ubuntu/projects/ms/docs/03-durable-control-plane.md)
+* Single operational source of truth with PostgreSQL 17, Drizzle ORM, append-only domain event log (`goal_events`), and transactional outbox.
+* Monotonic Fencing Token Leases (`goal_leases`), signed `bigint` precision, idempotent command processing, and crash recovery reconciliation.
+
+### 4. [Security & Authority Model](file:///home/ubuntu/projects/ms/docs/04-security-and-authority-model.md)
+* Fail-Closed & Default-Deny security principle enforced by `AuthorizedEffectExecutor`.
+* Action classification matrix (`ordinary`, `critical`, `forbidden`, `ambiguous`) and single launch confirmation.
+* Sealed Submission protocol with SHA-256 canonical JSON snapshots for cryptographically immutable audit trails.
+
+### 5. [Roadmap & Phase Status](file:///home/ubuntu/projects/ms/docs/05-roadmap-and-phase-status.md)
+* Phase 1 through Phase 8 milestones, verified code status vs. operational usability exit gates.
+* Post-Phase 8 Extension: **Luthiery** (Dynamic MCP Server Workshop & Tool Generation).
+
+### 6. [Developer & Operations Guide](file:///home/ubuntu/projects/ms/docs/06-developer-and-operations-guide.md)
+* Monorepo package directory layout, Node.js 24 & TypeScript environment setup.
+* Build (`npm run build`), test (`npm test`), and full verification (`npm run check`) workflows.
+* Real PostgreSQL integration testing, live Prime Agent integration, CLI commands, and operating protocols.
