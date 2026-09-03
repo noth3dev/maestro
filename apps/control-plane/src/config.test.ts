@@ -85,4 +85,27 @@ describe("parseConfig", () => {
     });
     expect(JSON.stringify(redactConfig(config))).not.toContain("db-password");
   });
+
+  it("excludes provider-credential-shaped env vars from the accepted output (Phase 1 re-patch item 7)", () => {
+    const providerCredentialSentinels = {
+      OPENAI_API_KEY: "sk-test-openai-should-never-appear",
+      ANTHROPIC_API_KEY: "sk-ant-test-should-never-appear",
+      OPENROUTER_API_KEY: "sk-or-test-should-never-appear",
+    };
+
+    const withoutCredentials = parseConfig(required);
+    const withCredentials = parseConfig({ ...required, ...providerCredentialSentinels });
+
+    // parseConfig's zod schema only ever destructures its own known keys, so
+    // an unrelated provider-credential env var present in process.env must
+    // never leak into the returned config, regardless of its value.
+    expect(withCredentials).toEqual(withoutCredentials);
+    expect(Object.keys(withCredentials).sort()).toEqual([
+      "actorId", "databaseUrl", "evidenceDir", "host", "leaseOwnerId", "port", "primeAgentVersion", "reconcilerLeaseDurationMs",
+    ]);
+    const serialized = JSON.stringify(withCredentials);
+    for (const secret of Object.values(providerCredentialSentinels)) {
+      expect(serialized).not.toContain(secret);
+    }
+  });
 });
