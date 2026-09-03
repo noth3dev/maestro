@@ -269,6 +269,25 @@ describeDatabase("Phase 4 work-sequence step 8: Firefly incident through Task Co
     await expect(createHeadCouncil(pool, { goalId, contractId, briefDeadline: new Date(Date.now() + 60_000), evidence: { references: [] } }, proof, context("secretary"))).rejects.toThrow();
   });
 
+  it("rejects an immediate safe pause request with a stale or forged lease proof even when the goalId matches", async () => {
+    const { incident } = await seedIncident({ severity: "critical", confidence: 0.95, affectedComponent: "forged-proof-component" });
+    const projectId = randomUUID();
+    const goalId = randomUUID();
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "control-plane", leaseDurationMs: 120_000 });
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "CreateGoal", expectedVersion: 0 }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
+    await linkFireflyIncidentToGoal(pool, incident.incidentId, goalId, proof, context("sane"));
+
+    const forgedProof = { goalId, ownerId: "attacker", fencingToken: proof.fencingToken };
+    await expect(requestFireflyImmediateSafePause(pool, incident.incidentId, projectId, forgedProof, context("firefly"))).rejects.toThrow();
+    const control = await pool.query<{ pause_requested_at: Date | null }>("SELECT pause_requested_at FROM goal_controls WHERE goal_id = $1", [goalId]);
+    expect(control.rows[0]?.pause_requested_at ?? null).toBeNull();
+
+    await expect(requestFireflyImmediateSafePause(pool, incident.incidentId, projectId, proof, context("firefly"))).resolves.toMatchObject({ incidentId: incident.incidentId });
+  });
+
   it("rejects an immediate safe pause request below the high-confidence critical threshold", async () => {
     const { incident } = await seedIncident({ severity: "critical", confidence: 0.5, affectedComponent: "below-threshold-component" });
     const projectId = randomUUID();

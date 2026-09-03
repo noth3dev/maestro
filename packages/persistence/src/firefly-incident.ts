@@ -438,6 +438,15 @@ export async function requestFireflyImmediateSafePause(
     if (incident.linked_goal_id !== proof.goalId || projectId.trim() === "" || proof.goalId === "" || proof.ownerId === "" || !isValidFencingToken(proof.fencingToken)) {
       throw new StaleGoalLeaseError(proof.goalId);
     }
+    // Verify the lease is currently live before pausing. This deliberately
+    // does not call assertGoalControlOpen: requestPauseGoalInTransaction is
+    // itself idempotent while already pause-requested, and gating on the
+    // control latch here would break that idempotent retry.
+    const lease = await client.query(
+      "SELECT 1 FROM goal_leases WHERE goal_id = $1 AND owner_id = $2 AND fencing_token = $3::bigint AND expires_at > clock_timestamp() FOR UPDATE",
+      [proof.goalId, proof.ownerId, proof.fencingToken],
+    );
+    if (lease.rowCount !== 1) throw new StaleGoalLeaseError(proof.goalId);
     await requestPauseGoalInTransaction(client, projectId.trim(), incident.linked_goal_id);
     await client.query("COMMIT");
     open = false;
