@@ -8,7 +8,7 @@ import { createDepartmentPlan, reviseDepartmentPlan } from "./department-plan.js
 import { createMissionBundle } from "./mission-bundle.js";
 import { spawnWorker } from "./worker.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
-import { acquireGoalLease } from "./commands.js";
+import { acquireGoalLease, StaleGoalLeaseError } from "./commands.js";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type TaskContractSubstance } from "@maestro/domain";
 import { raiseSentinelChallenge, readSentinelChallenge, requestSentinelCorrection, requestSentinelSafePause, resolveSentinelChallenge, SentinelAuthorizationError, SentinelChallengeError, SentinelChallengeNotFoundError } from "./sentinel-challenge.js";
@@ -178,5 +178,15 @@ describeDatabase("Sentinel challenges with PostgreSQL", () => {
 
   it("throws SentinelChallengeNotFoundError for a missing challenge", async () => {
     await expect(readSentinelChallenge(pool, randomUUID())).rejects.toBeInstanceOf(SentinelChallengeNotFoundError);
+  });
+
+  it("rejects raising a Sentinel challenge with a stale/forged fencing token, zero durable mutation, and the real proof still works afterward (Phase 2 re-patch item 8)", async () => {
+    const { goalId, proof } = await setupGoalWithFinding();
+    const forgedProof = { goalId, ownerId: proof.ownerId, fencingToken: String(BigInt(proof.fencingToken) + 1n) };
+    const substance = { reason: "forged fencing attempt", evidenceReferences: [] };
+    await expect(raiseSentinelChallenge(pool, goalId, [], substance, forgedProof, sentinelContext("forged"))).rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect((await pool.query("SELECT count(*)::int AS count FROM sentinel_challenges WHERE goal_id = $1", [goalId])).rows[0]!.count).toBe(0);
+    const challenge = await raiseSentinelChallenge(pool, goalId, [], substance, proof, sentinelContext("real"));
+    expect(challenge.status).toBe("open");
   });
 });

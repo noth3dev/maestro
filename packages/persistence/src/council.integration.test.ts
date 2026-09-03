@@ -6,6 +6,7 @@ import { assertValidDecisionPacket, freezeSealedSubmissionSnapshot, sealedSubmis
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";
 import { CouncilBriefIdempotencyError, CouncilBriefsSealedError, CouncilProtocolError, createHeadCouncil, listCouncilProtocolEvents, markMissingCouncilParticipantsAbsent, readHeadCouncil, readRevealedCouncilBriefs, recordCouncilDecisionPacket, recordCouncilRound, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
+import { StaleGoalLeaseError } from "./commands.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -319,5 +320,14 @@ const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`
     expect(briefEvent).toBeDefined();
     expect(JSON.stringify(briefEvent!.payload)).not.toContain("safe outcome");
     expect(briefEvent!.payload.brief).toBe("[redacted-until-reveal]");
+  });
+
+  it("rejects a stale/forged fencing-token brief submission with zero durable mutation, and the real proof still works afterward (Phase 2 re-patch item 8)", async () => {
+    const { council, proof } = await setup(["product"]);
+    const forgedProof = { goalId: proof.goalId, ownerId: proof.ownerId, fencingToken: String(BigInt(proof.fencingToken) + 1n) };
+    await expect(submitIndependentBrief(pool, council.councilId, "product", brief, forgedProof, headContext("product"))).rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect((await pool.query("SELECT count(*)::int AS count FROM independent_briefs WHERE council_id = $1", [council.councilId])).rows[0]!.count).toBe(0);
+    await submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"));
+    expect((await pool.query("SELECT count(*)::int AS count FROM independent_briefs WHERE council_id = $1", [council.councilId])).rows[0]!.count).toBe(1);
   });
  });

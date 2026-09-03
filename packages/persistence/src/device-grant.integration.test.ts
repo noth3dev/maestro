@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { DeviceGrantScope } from "@maestro/domain";
 import { applyAllMigrations } from "./test-migrations.js";
-import { acquireGoalLease } from "./commands.js";
+import { acquireGoalLease, StaleGoalLeaseError } from "./commands.js";
 import { enrollDevice, revokeDevice } from "./device.js";
 import {
   DeviceGrantAuthorizationError,
@@ -166,5 +166,18 @@ describeDatabase("Device grants and command results with PostgreSQL", () => {
 
   it("throws DeviceGrantNotFoundError for a missing grant", async () => {
     await expect(revokeDeviceGrant(pool, randomUUID(), { goalId: randomUUID(), ownerId: "x", fencingToken: "1" }, ceo("x"))).rejects.toBeInstanceOf(DeviceGrantNotFoundError);
+  });
+
+  it("rejects device grant issuance and revocation with a stale/forged fencing token, zero durable mutation, and the real proof still works afterward (Phase 2 re-patch item 8)", async () => {
+    const { goalId, proof, deviceId } = await setupGoalAndDevice();
+    const forgedProof = { goalId, ownerId: proof.ownerId, fencingToken: String(BigInt(proof.fencingToken) + 1n) };
+    await expect(createDeviceGrant(pool, goalId, deviceId, scope(), new Date(Date.now() + 60_000).toISOString(), forgedProof, ceo(goalId))).rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect(await listDeviceGrantsForGoal(pool, goalId)).toHaveLength(0);
+    const { grant } = await createDeviceGrant(pool, goalId, deviceId, scope(), new Date(Date.now() + 60_000).toISOString(), proof, ceo(goalId));
+    expect(grant.state).toBe("active");
+    await expect(revokeDeviceGrant(pool, grant.grantId, forgedProof, ceo(goalId))).rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect((await readDeviceGrant(pool, grant.grantId))?.state).toBe("active");
+    const revoked = await revokeDeviceGrant(pool, grant.grantId, proof, ceo(goalId));
+    expect(revoked.state).toBe("revoked");
   });
 });
