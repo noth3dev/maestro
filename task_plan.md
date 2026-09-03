@@ -312,23 +312,26 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    Path/authority-boundary scoping (`allowedPaths`/`authorityBoundary`) also remains unthreaded --
    out of this item's literal scope (spawn-call capability scoping), left open if a future item
    needs it.
-3. **[MEDIUM, test quality]** Team-lead grant cost/duration/scope ceilings
+3. **[BLOCKED 2026-09-04, independent review]** Team-lead grant cost/duration/scope ceilings
    (packages/persistence/src/team-lead-grant.ts:37-39,63-64,120-123) are stored but never enforced
    at `spawnHelperWorker` time — only `max_helpers` is checked (Phase 2 Tests #10 is ~25% covered).
-   Fix: enforce cost/duration/scope at spawn time; add the three missing ceiling-exceeded tests.
+   A candidate branch (`patch/p2-team-lead-ceilings`, `9135765`) adds duration and plan-version scope
+   checks, but its cost check treats each helper as an invented “one unit” against a free-text monetary
+   ceiling (for example, `1 USD` permits exactly one helper). The repository has no actual or estimated
+   per-helper cost model, so that is not valid cost enforcement and must not be merged. **Decision
+   needed:** define the cost accounting unit/source for helper spawns (or explicitly define a
+   non-monetary helper-count interpretation). Then implement the smallest matching enforcement and
+   three ceiling-exceeded regressions.
 4. **[MEDIUM, test quality]** Mission persona overlay (plan/phase2.md "Ten-axis persona baseline")
    has zero implementation — `mission-bundle.ts` only carries an opaque `profileRef: string`; no
    derivation or mission-lifetime expiry exists to test (Phase 2 Tests #11's "expire correctly"
    half is untestable as-is). Fix: implement a durable mission-persona-overlay derivation bound to
    mission lifetime with explicit expiry, then test [0,1] bounds and post-mission unavailability.
-5. **[HIGH, concurrency — empirically reproduced]** Head activation/sleep/resume
-   (packages/persistence/src/head-participation.ts) checks fencing (`assertCurrentGoalLease`,
-   line 322) but never checks the pause/stop/emergency-stop control latch — zero references to
-   `goal_controls`/`assertGoalControlOpen`/`paused_at`/`emergency_stopped_at` in the file. Verified
-   against real PostgreSQL: `activateHeadParticipation` succeeded and durably created a new
-   participation row on a Goal with `emergency_stopped_at` already set. Fix: call the existing
-   `assertGoalControlOpen` inside head-participation.ts's lease-check helper before creating or
-   transitioning a participation row.
+5. **[RESOLVED 2026-09-04, commit `9157324` / merge `acfb6c4`]** Head activation/sleep/resume
+   (packages/persistence/src/head-participation.ts) now checks the pause/stop/emergency-stop control
+   latch through the existing `assertGoalControlOpen` helper before a participation row is created or
+   transitioned. Real-PostgreSQL regressions cover blocked activation, sleep, and resume; merged to
+   `main`.
 6. **[LOW/MEDIUM, concurrency]** `acceptDepartmentWorkerOutput`
    (packages/persistence/src/certification.ts:38) is an unguarded check-then-insert race, saved
    only by a DB unique constraint whose violation surfaces as a raw Postgres error instead of this
@@ -342,13 +345,11 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    any writable absolute path (no shell injection since `spawn` uses argv arrays, but no path
    containment either). Fix: canonicalize and assert `repositoryPath`/`worktreePath` fall under a
    configured single workspace root (e.g. `MAESTRO_WORKTREE_ROOT`) at the persistence boundary.
-8. **[9-10 uncovered fencing modules, test quality — part of item 5 above]** Of 13 persistence
-   modules independently implementing the `FOR UPDATE ... fencing_token = $3` pattern, these have
-   zero stale/forged-lease test coverage: `budget-reservation.ts`, `council.ts`,
-   `department-plan.ts`, `device-grant.ts` (only a not-found case, not stale-token),
-   `mission-bundle.ts`, `team-lead-grant.ts` (Phase 2), plus `environment.ts`, `firefly-incident.ts`
-   (Phase 4) and `git-integration.ts`, `sentinel-challenge.ts` (spans Phase 2/3). Add at least one
-   stale/forged-fencing-token test per module while its phase is being re-patched.
+8. **[PARTIALLY RESOLVED 2026-09-04, commit `bcbd15b` / merge `e160af5`]** Stale/forged
+   fencing-token regressions now cover `council.ts`, `department-plan.ts`, `device-grant.ts`,
+   `environment.ts`, `firefly-incident.ts`, and `sentinel-challenge.ts`. The remaining Phase 2
+   modules are `budget-reservation.ts`, `mission-bundle.ts`, `team-lead-grant.ts`, and
+   `git-integration.ts`; cover each while its owning item lands. 
 9. Already-known Phase 2-rooted P0 from the first audit wave: effect adapters (Git) not enforced
    through `AuthorizedEffectExecutor`; no production write-command API surface for Task
    Contract/Council/Plan/worker/Git actions.

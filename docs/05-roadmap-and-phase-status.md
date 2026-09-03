@@ -27,7 +27,9 @@ Maestro follows a strict phased milestone roadmap. Code completion alone does no
 
 ---
 
-## 3. Post-Phase 8 Extension: Luthiery (Dynamic MCP Workshop)
+## 3. Post-Phase 8 Extensions
+
+### 1) Luthiery (Dynamic MCP Workshop)
 
 **Luthiery** (Phase 9 candidate) enables agents to generate, audit, run, and reuse specialized **Model Context Protocol (MCP)** servers dynamically during task execution without compromising core safety boundaries ([`plan/post-phase8-ideas.md`](file:///home/ubuntu/projects/ms/plan/post-phase8-ideas.md)).
 
@@ -41,8 +43,20 @@ flowchart LR
     SEC -->|Yes| RUN[Execute in Task Container & Save to SHA-256 Registry]
 ```
 
-### Core Luthiery Principles
+#### Core Luthiery Principles
 1. **Organizational Separation**: Placed under the **Operations / Infrastructure Group**. Strictly separated from Overwatch to avoid self-auditing conflicts of interest.
 2. **Container Sandbox Binding**: Dynamic MCP server processes run inside Phase 4 containers, bound directly to the Goal's fencing token lease (`SIGTERM` cleanup on expiry).
 3. **AST Static Enforcement**: Generated handler code must explicitly include `AuthorizedEffectExecutor.execute()` wrappers, failing static analysis otherwise.
 4. **Content-Addressed Reuse**: Certified MCP server binaries are indexed in `packages/evidence` using SHA-256 hashes for instant zero-latency reuse in future goals.
+
+---
+
+### 2) Autonomous Treasury & Real Capital Wallet
+
+**Autonomous Treasury** (Phase 9/10 candidate) embeds a durable, system-managed wallet into Maestro, granting the orchestration system real financial capability to autonomously pay for APIs, cloud computing resources, and Web3 smart contract interactions using pre-funded capital ([`plan/post-phase8-ideas.md`](file:///home/ubuntu/projects/ms/plan/post-phase8-ideas.md)).
+
+#### Core Treasury Principles
+1. **Pre-funded Capital Model**: Orchestration operates on user-funded/pre-charged capital (Web3 crypto assets & traditional fiat payment rails like Stripe/Plaid).
+2. **Treasury Department Ownership**: Managed under the **Operations / Finance Group (Treasury Department)**, allocating spend ceilings per goal during Head Council planning.
+3. **Autonomous Execution with Optional 2-Step Gate**: Standard in-budget spend executes autonomously via `payment.spend` actions; high-value payments can enforce an optional 2-step CEO approval threshold.
+4. **Audit-Before-Spend & Sentinel Monitoring**: Transaction intents and double-entry receipts are immutably logged in PostgreSQL before network dispatch, monitored continuously by **Sentinel** for unusual spend velocity.

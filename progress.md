@@ -961,3 +961,9 @@ HEAD
   layer this round, per established practice this session), merge one at a time to `main` with
   re-verification, then update `task_plan.md`/this file per item and proceed to Phase 3's remaining
   items (7) and Phase 4's Track A/B items.
+
+
+## 2026-09-04 — Phase 2 re-patch item 3 review blocked pending cost-accounting decision
+- Resumed against clean `main` at `d931bd2`; repository state showed Phase 2 items 5 (`9157324`) and 8 (`bcbd15b`/`e160af5`) already merged even though the remediation text was stale. The first still-open Phase 2 item is item 3.
+- Independently reviewed the clean candidate `patch/p2-team-lead-ceilings` commit `9135765`. Its duration check (grant age) and scope check (Department Plan version) are concrete, but its proposed cost enforcement parses a free-text string such as `1 USD` and charges an invented one unit per helper. No actual/estimated worker cost field or pricing unit exists in the repository, so this cannot truthfully enforce a monetary ceiling.
+- Result: **NOT ACCEPTABLE; not merged.** Recorded the blocker in `task_plan.md`. Next requires a user decision defining the helper-spawn cost accounting source/unit (or explicitly changing the ceiling to a non-monetary helper-count rule). The candidate worktree and its disposable PostgreSQL container remain intact pending that decision.
