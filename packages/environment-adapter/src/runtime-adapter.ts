@@ -1,5 +1,6 @@
 import { spawn as nodeSpawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { basename, relative, resolve } from "node:path";
 import type { ActionRequest, AuthorityDecision } from "@maestro/authority";
 import {
@@ -123,11 +124,26 @@ function environmentAllowlist(record: EnvironmentRecord): readonly string[] {
   return [];
 }
 
+/** Resolve symlinks before boundary comparison. An existing path's real
+ * location is what the OS actually executes/reads/writes at; a lexical
+ * `path.resolve` alone would let a symlink inside the allowlisted directory
+ * point outside it and still pass. Falls back to the lexical path only when
+ * the candidate does not exist yet (for example a file about to be
+ * created); intermediate symlinked directories on an existing prefix are
+ * still resolved because callers always check the containing cwd too. */
+function safeRealpath(candidate: string): string {
+  try {
+    return realpathSync(candidate);
+  } catch {
+    return resolve(candidate);
+  }
+}
+
 function pathWithinAllowlist(candidate: string, allowlist: readonly string[]): boolean {
-  const normalizedCandidate = resolve(candidate);
+  const normalizedCandidate = safeRealpath(candidate);
   return allowlist.some((allowed) => {
     if (!isAbsolutePath(allowed)) return false;
-    const normalizedAllowed = resolve(allowed);
+    const normalizedAllowed = safeRealpath(allowed);
     const remainder = relative(normalizedAllowed, normalizedCandidate);
     return remainder === "" || (!remainder.startsWith("..") && !remainder.includes(".." + pathSeparator()));
   });

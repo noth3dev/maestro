@@ -189,6 +189,30 @@ describe("local runtime environment adapter", () => {
     expect(spawn).not.toHaveBeenCalled();
   });
 
+  it("denies a cwd that is a symlink escaping the filesystem allowlist", async () => {
+    const { symlinkSync } = await import("node:fs");
+    const root = mkdtempSync(join(tmpdir(), "maestro-runtime-symlink-"));
+    const allowed = join(root, "allowed");
+    const outside = join(root, "outside");
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(allowed);
+    mkdirSync(outside);
+    const escape = join(allowed, "escape");
+    symlinkSync(outside, escape);
+    try {
+      const spawn = vi.fn(() => new FakeProcess());
+      const { authority } = permissiveAuthority();
+      const environment = makeEnvironment({ boundaries: { ...makeEnvironment().boundaries, filesystem: [allowed] } });
+      const adapter = createLocalRuntimeAdapter(environment, authority, { spawn });
+
+      await expect(adapter.start(command({ cwd: escape, target: escape }))).rejects.toBeInstanceOf(EnvironmentBoundaryError);
+      expect(authority.execute).not.toHaveBeenCalled();
+      expect(spawn).not.toHaveBeenCalled();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("denies an absolute project target outside the filesystem allowlist", async () => {
     const spawn = vi.fn(() => new FakeProcess());
     const { authority } = permissiveAuthority();
