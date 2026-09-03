@@ -42,7 +42,7 @@ if (!databaseUrl) {
 
   it("serves authenticated durable Goal operations over a real loopback listener and closes resources", async () => {
     const secret = "integration-secret-not-configured";
-    await bootstrapLocalOperator(setupPool, { secret });
+    const { credentialId } = await bootstrapLocalOperator(setupPool, { secret });
     const controlPlane = createControlPlane({
       databaseUrl: scopedUrl,
       evidenceDir: "/tmp/maestro-evidence",
@@ -69,7 +69,7 @@ if (!databaseUrl) {
       expect((await setupPool.query("SELECT count(*)::int AS count FROM goals")).rows[0]!.count).toBe(0);
 
       const headers = {
-        authorization: `Bearer ${secret}`,
+        authorization: `Bearer ${credentialId}.${secret}`,
         "content-type": "application/json",
         "idempotency-key": goalId,
       };
@@ -85,7 +85,7 @@ if (!databaseUrl) {
       expect(transitioned.status).toBe(200);
       expect(await transitioned.json()).toMatchObject({ goalId, projectId, state: "ready_for_confirmation", version: 2 });
 
-      const read = await fetch(`${baseUrl}/v1/goals/${goalId}?projectId=${projectId}`, { headers: { authorization: `Bearer ${secret}` } });
+      const read = await fetch(`${baseUrl}/v1/goals/${goalId}?projectId=${projectId}`, { headers: { authorization: `Bearer ${credentialId}.${secret}` } });
       expect(read.status).toBe(200);
       expect(await read.json()).toMatchObject({ goalId, projectId, state: "ready_for_confirmation", version: 2 });
     } finally {
@@ -97,14 +97,14 @@ if (!databaseUrl) {
 
   it("streams durable replay over loopback, resumes without duplicate IDs, and stops on disconnect", async () => {
     const secret = "sse-secret-not-configured";
-    await bootstrapLocalOperator(setupPool, { secret });
+    const { credentialId } = await bootstrapLocalOperator(setupPool, { secret });
     const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `sse-${randomUUID()}` });
     await controlPlane.listen();
     const address = controlPlane.app.server.address();
     if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
     const baseUrl = `http://127.0.0.1:${address.port}`;
     const projectId = randomUUID();
-    const headers = { authorization: `Bearer ${secret}`, "content-type": "application/json" };
+    const headers = { authorization: `Bearer ${credentialId}.${secret}`, "content-type": "application/json" };
     const create = async (goalId: string) => fetch(`${baseUrl}/v1/goals`, { method: "POST", headers: { ...headers, "idempotency-key": goalId }, body: JSON.stringify({ projectId }) });
     const readChunk = async (reader: ReadableStreamDefaultReader<Uint8Array>, label: string) => {
       let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -162,12 +162,12 @@ if (!databaseUrl) {
 
   it("closes an open raw SSE response within a bounded interval", async () => {
     const secret = "sse-close-secret-not-configured";
-    await bootstrapLocalOperator(setupPool, { secret });
+    const { credentialId } = await bootstrapLocalOperator(setupPool, { secret });
     const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `sse-close-${randomUUID()}` });
     await controlPlane.listen();
     const address = controlPlane.app.server.address();
     if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
-    const response = await fetch(`http://127.0.0.1:${address.port}/v1/events/stream?projectId=${randomUUID()}`, { headers: { authorization: `Bearer ${secret}` } });
+    const response = await fetch(`http://127.0.0.1:${address.port}/v1/events/stream?projectId=${randomUUID()}`, { headers: { authorization: `Bearer ${credentialId}.${secret}` } });
     const reader = response.body!.getReader();
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -253,6 +253,7 @@ if (!databaseUrl) {
   it("proves the full HTTP authority boundary: no approval blocks the effect, an exact approval invokes it once, and a revoked approval blocks it again", async () => {
     const secret = `critical-action-secret-${randomUUID()}`;
     const localOperator = await bootstrapLocalOperator(setupPool, { secret });
+    const { credentialId } = localOperator;
     const effect = vi.fn(async () => {});
     const controlPlane = createControlPlane(
       { databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `critical-${randomUUID()}` },
@@ -264,7 +265,7 @@ if (!databaseUrl) {
     const baseUrl = `http://127.0.0.1:${address.port}`;
     const projectId = randomUUID();
     const goalId = randomUUID();
-    const headers = { authorization: `Bearer ${secret}`, "content-type": "application/json" };
+    const headers = { authorization: `Bearer ${credentialId}.${secret}`, "content-type": "application/json" };
     const body = { projectId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0 };
 
     try {

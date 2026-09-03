@@ -39,13 +39,14 @@ describe("control-plane real process kill-and-restart", () => {
   })();
   let setupPool: Pool;
   const secret = `kill-restart-secret-${randomUUID()}`;
+  let credentialId: string;
   const spawnedChildren: ChildProcessWithoutNullStreams[] = [];
 
   beforeAll(async () => {
     await basePool.query(`CREATE SCHEMA ${schema}`);
     setupPool = new Pool({ connectionString: scopedUrl });
     await applyAllMigrations(setupPool);
-    await bootstrapLocalOperator(setupPool, { secret });
+    ({ credentialId } = await bootstrapLocalOperator(setupPool, { secret }));
   });
 
   afterEach(async () => {
@@ -146,7 +147,7 @@ describe("control-plane real process kill-and-restart", () => {
       const started = Date.now();
       const projectId = randomUUID();
       const goalId = randomUUID();
-      const headers = { authorization: `Bearer ${secret}`, "content-type": "application/json" };
+      const headers = { authorization: `Bearer ${credentialId}.${secret}`, "content-type": "application/json" };
 
       // --- Process A: create and partially advance a real Goal over real HTTP.
       const portA = await findFreePort();
@@ -254,7 +255,7 @@ describe("control-plane real process kill-and-restart", () => {
         // durable state after restart matches exactly what A's last
         // committed HTTP response said, with no phantom re-application.
         const readAfterRestart = await fetch(`http://127.0.0.1:${portB}/v1/goals/${goalId}?projectId=${projectId}`, {
-          headers: { authorization: `Bearer ${secret}` },
+          headers: { authorization: `Bearer ${credentialId}.${secret}` },
         });
         expect(readAfterRestart.status).toBe(200);
         expect(await readAfterRestart.json()).toEqual(committedResult);
