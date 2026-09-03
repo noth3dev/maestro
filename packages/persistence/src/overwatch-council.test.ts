@@ -45,6 +45,7 @@ function fakeKernel(sequences: readonly (readonly InvocationObservation[])[]): E
   spawn: ReturnType<typeof vi.fn>;
   prompt: ReturnType<typeof vi.fn>;
   observe: ReturnType<typeof vi.fn>;
+  release: ReturnType<typeof vi.fn>;
   calls: string[];
 } {
   const calls: string[] = [];
@@ -77,6 +78,7 @@ function fakeKernel(sequences: readonly (readonly InvocationObservation[])[]): E
     async getToolEvents() { return { state: "empty", events: [] }; },
     async getUsage() { return { state: "unknown" }; },
     async getInvocationStatus() { return "unknown"; },
+    release: vi.fn(async (invocation: unknown) => { calls.push(`release-${String(invocation)}`); }),
     async resume() { throw new Error("not supported"); },
     async reconnect() { throw new Error("not supported"); },
     calls,
@@ -122,6 +124,12 @@ describe("Overwatch Council execution", () => {
     expect(kernel.calls.slice(0, 2)).toEqual(["spawn-0", "spawn-1"]);
     expect(kernel.observe).toHaveBeenCalledTimes(4);
     expect(result.synthesis.finalVerdict).toBe("proceed");
+    // The sealed round committed durably (both judgments written together in
+    // one transaction), so every isolated reviewer's kernel record may now
+    // be released (Phase 1 re-patch item 2).
+    expect(kernel.release).toHaveBeenCalledTimes(2);
+    expect(kernel.release).toHaveBeenCalledWith("overwatch-invocation-0");
+    expect(kernel.release).toHaveBeenCalledWith("overwatch-invocation-1");
   });
 
   it("escalates when the only available answer was observed before terminal completion", async () => {
@@ -142,5 +150,26 @@ describe("Overwatch Council execution", () => {
     expect(result.judgments[0]).toMatchObject({ verdict: "escalate", confidence: "low" });
     expect(result.synthesis.finalVerdict).toBe("escalate");
     expect(result.synthesis.escalated).toBe(true);
+    expect(kernel.release).toHaveBeenCalledWith("overwatch-invocation-0");
+  });
+
+  it("still returns the durably committed round even when the kernel's release call fails for a reviewer", async () => {
+    const kernel = fakeKernel([
+      [
+        observation(0, "queued", { state: "unavailable", reason: "provider-does-not-expose-answer-text" }),
+        observation(0, "succeeded", { state: "available", text: proceed }),
+      ],
+    ]);
+    kernel.release = vi.fn(async () => { throw new Error("kernel eviction backend unavailable"); });
+
+    const result = await runOverwatchCouncilReview(fakePool(), kernel, {
+      goalId,
+      question: "should we proceed?",
+      criteria,
+      evidenceIds: [evidenceId],
+      reviewerCount: 1,
+    });
+
+    expect(result.synthesis.finalVerdict).toBe("proceed");
   });
 });

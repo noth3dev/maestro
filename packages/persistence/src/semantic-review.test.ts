@@ -54,6 +54,8 @@ function fakeKernel(sequence: readonly InvocationObservation[]): ExecutionKernel
   spawn: ReturnType<typeof vi.fn>;
   prompt: ReturnType<typeof vi.fn>;
   observe: ReturnType<typeof vi.fn>;
+  release: ReturnType<typeof vi.fn>;
+  calls: string[];
 } {
   let observationIndex = 0;
   const calls: string[] = [];
@@ -78,6 +80,7 @@ function fakeKernel(sequence: readonly InvocationObservation[]): ExecutionKernel
     async getToolEvents() { return { state: "empty", events: [] }; },
     async getUsage() { return { state: "unknown" }; },
     async getInvocationStatus() { return "unknown"; },
+    release: vi.fn(async () => { calls.push("release"); }),
     async resume() { throw new Error("not supported"); },
     async reconnect() { throw new Error("not supported"); },
     calls,
@@ -109,6 +112,10 @@ describe("semantic review execution", () => {
     expect(kernel.calls.indexOf("spawn")).toBeLessThan(kernel.calls.indexOf("prompt"));
     expect(kernel.observe).toHaveBeenCalledTimes(2);
     expect(review.verdict).toBe("supported");
+    // Once the review is durably recorded, the kernel's isolated one-shot
+    // root execution may be released (Phase 1 re-patch item 2).
+    expect(kernel.release).toHaveBeenCalledWith(invocation);
+    expect(kernel.calls.at(-1)).toBe("release");
   });
 
   it("does not parse an answer observed before terminal completion", async () => {
@@ -121,5 +128,20 @@ describe("semantic review execution", () => {
 
     expect(review.verdict).toBe("unsupported");
     expect(review.citedEvidenceIds).toEqual([]);
+    // A durable row is always written on this path too (downgraded to
+    // "unsupported"), so the kernel record is still released.
+    expect(kernel.release).toHaveBeenCalledWith(invocation);
+  });
+
+  it("still returns the durably recorded review even when the kernel's release call fails", async () => {
+    const kernel = fakeKernel([
+      observation("running", { state: "unavailable", reason: "provider-does-not-expose-answer-text" }),
+      observation("succeeded", { state: "available", text: supported }),
+    ]);
+    kernel.release = vi.fn(async () => { throw new Error("kernel eviction backend unavailable"); });
+
+    const review = await requestSemanticReview(fakePool(), kernel, "goal-1", "the claim", criteria);
+
+    expect(review.verdict).toBe("supported");
   });
 });

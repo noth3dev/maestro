@@ -189,6 +189,15 @@ export async function runOverwatchCouncilReview(pool: Pool, kernel: ExecutionKer
       [roundId, synthesis.finalVerdict, synthesis.sameModelOnly, synthesis.escalated, JSON.stringify(synthesis.dissentNotes)],
     );
     await client.query("COMMIT");
+    // The sealed round is now durably committed (every judgment written
+    // together in one transaction). Each isolated reviewer's kernel record
+    // may be released; this happens after commit, never before or on a
+    // rollback path, so a retried/failed round still has its terminal
+    // observations available (Phase 1 re-patch item 2). Best-effort: a
+    // release failure must never surface as a round failure (which would
+    // also wrongly attempt a ROLLBACK after this COMMIT already succeeded),
+    // since the durable round is already committed above.
+    for (const spawned of spawnedReviewers) await kernel.release?.(spawned.invocation as never).catch(() => {});
     return { roundId, judgments, synthesis };
   } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }

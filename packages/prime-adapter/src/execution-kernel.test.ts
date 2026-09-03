@@ -124,6 +124,78 @@ describe("Prime execution-kernel adapter", () => {
   });
 });
 
+describe("Prime execution-kernel bounded release (Phase 1 re-patch item 2)", () => {
+  it("reports unknown, never a fabricated failed, for an invocation that was never registered", async () => {
+    const kernel = createPrimeExecutionKernelFromFactory({ create: vi.fn() });
+
+    await expect(kernel.getInvocationStatus("never-registered" as never)).resolves.toBe("unknown");
+  });
+
+  it("releases a child's in-process record without touching its sibling or the shared session", async () => {
+    const session = makeSession();
+    const kernel = createPrimeExecutionKernelFromFactory({
+      create: vi.fn().mockResolvedValue({ session }),
+    });
+    const root = await kernel.spawn({ name: "luna-root", cwd: "/repo" });
+    const childA = await kernel.spawn({ name: "luna-child-a", parent: root.execution, prompt: "reply" });
+    const childB = await kernel.spawn({ name: "luna-child-b", parent: root.execution, prompt: "reply" });
+
+    await kernel.release?.(childA.invocation);
+
+    await expect(kernel.getInvocationStatus(childA.invocation)).resolves.toBe("unknown");
+    await expect(kernel.getInvocationStatus(childB.invocation)).resolves.toBe("succeeded");
+    await expect(kernel.observe(root.execution)).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ invocation: root.invocation }),
+      expect.objectContaining({ invocation: childB.invocation }),
+    ]));
+    const remaining = await kernel.observe(root.execution);
+    expect(remaining.some((item) => item.invocation === childA.invocation)).toBe(false);
+  });
+
+  it("releasing a root's last remaining reference also drops its session, so a stale invocation reports unknown afterward", async () => {
+    const session = makeSession();
+    const kernel = createPrimeExecutionKernelFromFactory({
+      create: vi.fn().mockResolvedValue({ session }),
+    });
+    const root = await kernel.spawn({ name: "luna-root", cwd: "/repo" });
+    const child = await kernel.spawn({ name: "luna-child", parent: root.execution, prompt: "reply" });
+
+    await kernel.release?.(child.invocation);
+    await kernel.release?.(root.invocation);
+
+    await expect(kernel.getInvocationStatus(root.invocation)).resolves.toBe("unknown");
+    await expect(kernel.observe(root.execution)).resolves.toEqual([]);
+  });
+
+  it("releasing a root while a child is still unreleased is a safe no-op for the session (children observation is preserved)", async () => {
+    const session = makeSession();
+    const kernel = createPrimeExecutionKernelFromFactory({
+      create: vi.fn().mockResolvedValue({ session }),
+    });
+    const root = await kernel.spawn({ name: "luna-root", cwd: "/repo" });
+    const child = await kernel.spawn({ name: "luna-child", parent: root.execution, prompt: "reply" });
+
+    await kernel.release?.(root.invocation);
+
+    await expect(kernel.getInvocationStatus(root.invocation)).resolves.toBe("unknown");
+    await expect(kernel.getInvocationStatus(child.invocation)).resolves.toBe("succeeded");
+  });
+
+  it("releasing an already-released or unknown invocation is an idempotent no-op", async () => {
+    const session = makeSession();
+    const kernel = createPrimeExecutionKernelFromFactory({
+      create: vi.fn().mockResolvedValue({ session }),
+    });
+    const root = await kernel.spawn({ name: "luna-root", cwd: "/repo" });
+    const child = await kernel.spawn({ name: "luna-child", parent: root.execution, prompt: "reply" });
+
+    await kernel.release?.(child.invocation);
+    await expect(kernel.release?.(child.invocation)).resolves.toBeUndefined();
+    await expect(kernel.release?.("never-registered" as never)).resolves.toBeUndefined();
+    await expect(kernel.release?.(root.invocation)).resolves.toBeUndefined();
+  });
+});
+
 
   it("keeps SDK identifiers private and maps root status and cancellation", async () => {
     const session = makeSession();

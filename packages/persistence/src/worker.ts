@@ -155,7 +155,17 @@ export async function observeWorker(pool: Pool, kernel: ExecutionKernelPort, wor
       [workerId, nextStatus, answerText, usage],
     );
     await client.query("COMMIT"); open = false;
-    return mapWorker(updated.rows[0]!);
+    const result = mapWorker(updated.rows[0]!);
+    // Only now that the terminal status is durably committed may the kernel
+    // forget its in-process record (Phase 1 re-patch item 2); a nonterminal
+    // status must keep it, since the next observeWorker call still needs it.
+    if (result.status === "succeeded" || result.status === "failed" || result.status === "cancelled") {
+      // Best-effort only: this is durable-evidence-write cleanup, not part of
+      // the durable write itself (already committed above), so a release
+      // failure must never surface as if the observation itself failed.
+      await kernel.release?.(worker.invocation_ref as unknown as InvocationRef).catch(() => {});
+    }
+    return result;
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 
@@ -188,6 +198,11 @@ export async function cancelWorker(pool: Pool, kernel: ExecutionKernelPort, work
       [workerId],
     );
     await client.query("COMMIT"); open = false;
+    // Cancellation is terminal and now durably committed; release the
+    // kernel's in-process record for this invocation (Phase 1 item 2).
+    // Best-effort: a release failure must never surface as a cancellation
+    // failure, since the durable cancellation already committed above.
+    await kernel.release?.(worker.invocation_ref as unknown as InvocationRef).catch(() => {});
     return mapWorker(updated.rows[0]!);
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }

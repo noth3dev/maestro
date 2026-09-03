@@ -46,12 +46,13 @@ const bundleSubstance = (overrides: Partial<MissionBundleSubstance> = {}): Missi
 });
 
 /** A minimal, deterministic fake standing in for a real Prime execution kernel. */
-function fakeKernel(finalStatus: InvocationObservation["status"] = "succeeded"): ExecutionKernelPort & { spawnedCount: number; cancelledInvocations: string[] } {
+function fakeKernel(finalStatus: InvocationObservation["status"] = "succeeded"): ExecutionKernelPort & { spawnedCount: number; cancelledInvocations: string[]; releasedInvocations: string[] } {
   let counter = 0;
   const invocations = new Map<string, { execution: string; name: string }>();
   return {
     spawnedCount: 0,
     cancelledInvocations: [],
+    releasedInvocations: [],
     async spawn(request) {
       counter += 1;
       const execution = `exec-${counter}`;
@@ -75,6 +76,7 @@ function fakeKernel(finalStatus: InvocationObservation["status"] = "succeeded"):
     async getToolEvents() { return { state: "empty", events: [] }; },
     async getUsage() { return { state: "available", totalTokens: 42 }; },
     async getInvocationStatus() { return finalStatus; },
+    async release(invocation) { (this as { releasedInvocations: string[] }).releasedInvocations.push(invocation as unknown as string); },
     async resume() { throw new Error("not supported by fake kernel"); },
     async reconnect() { throw new Error("not supported by fake kernel"); },
   };
@@ -130,6 +132,58 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     expect(observed.usageTotalTokens).toBe(42);
     const reobserved = await observeWorker(pool, kernel, worker.workerId);
     expect(reobserved).toEqual(observed);
+  });
+
+  it("releases the kernel's in-process invocation record exactly once, only after the terminal status is durably committed (Phase 1 re-patch item 2)", async () => {
+    const { council, plan, proof } = await setupBundle();
+    const kernel = fakeKernel("succeeded");
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    expect(kernel.releasedInvocations).toEqual([]);
+
+    const observed = await observeWorker(pool, kernel, worker.workerId);
+    expect(observed.status).toBe("succeeded");
+    expect(kernel.releasedInvocations).toEqual([worker.invocationRef]);
+
+    // Re-observing an already-terminal worker returns durable state directly
+    // without calling the kernel again, so it must not release a second time.
+    await observeWorker(pool, kernel, worker.workerId);
+    expect(kernel.releasedInvocations).toEqual([worker.invocationRef]);
+  });
+
+  it("still returns the durably committed cancellation even when the kernel's release call fails", async () => {
+    const { council, plan, proof } = await setupBundle();
+    const kernel = fakeKernel("running");
+    (kernel as unknown as { release: () => Promise<void> }).release = async () => { throw new Error("kernel eviction backend unavailable"); };
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+
+    const cancelled = await cancelWorker(pool, kernel, worker.workerId, proof, headContext("product"));
+
+    expect(cancelled.status).toBe("cancelled");
+    const stored = await readWorker(pool, worker.workerId);
+    expect(stored.status).toBe("cancelled");
+  });
+
+  it("does not release a still-running worker's invocation record", async () => {
+    const { council, plan, proof } = await setupBundle();
+    const kernel = fakeKernel("running");
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+
+    const observed = await observeWorker(pool, kernel, worker.workerId);
+    expect(observed.status).toBe("running");
+    expect(kernel.releasedInvocations).toEqual([]);
+  });
+
+  it("still returns the durably committed terminal observation even when the kernel's release call fails", async () => {
+    const { council, plan, proof } = await setupBundle();
+    const kernel = fakeKernel("succeeded");
+    (kernel as unknown as { release: () => Promise<void> }).release = async () => { throw new Error("kernel eviction backend unavailable"); };
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+
+    const observed = await observeWorker(pool, kernel, worker.workerId);
+
+    expect(observed.status).toBe("succeeded");
+    const stored = await readWorker(pool, worker.workerId);
+    expect(stored.status).toBe("succeeded");
   });
 
   it("reconciles a genuinely mid-flight worker after a fresh control-plane restart without duplicate effects or stale authority reuse", async () => {
@@ -202,8 +256,12 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     const cancelled = await cancelWorker(pool, kernel, worker.workerId, proof, headContext("product"));
     expect(cancelled.status).toBe("cancelled");
     expect(kernel.cancelledInvocations).toContain(worker.invocationRef);
+    expect(kernel.releasedInvocations).toEqual([worker.invocationRef]);
     const observedAfterCancel = await observeWorker(pool, kernel, worker.workerId);
     expect(observedAfterCancel.status).toBe("cancelled");
+    // Already-terminal (cancelled) worker: observeWorker's early-return path
+    // never calls the kernel again, so no second release.
+    expect(kernel.releasedInvocations).toEqual([worker.invocationRef]);
   });
 
   it("rejects direct tampering with immutable worker identity/binding and terminal status", async () => {

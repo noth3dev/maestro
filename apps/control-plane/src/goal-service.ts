@@ -1,4 +1,5 @@
 import type { GoalResult, CreateGoalInput, TransitionGoalInput } from "@maestro/contracts";
+import { isTerminalGoalState } from "@maestro/domain";
 import {
   acquireGoalLease,
   renewGoalLease,
@@ -62,7 +63,16 @@ export function createDurableGoalService(options: DurableGoalServiceOptions): Go
     try {
       const proof = await leaseFor(goalId);
       const result = await executeGoalCommand(options.pool, command, proof);
-      return commandResult(result, command.projectId);
+      const goalResult = commandResult(result, command.projectId);
+      // Once a Goal reaches a terminal state, no further command against it
+      // can ever succeed (see the domain transition table), so the lease
+      // proof for this goalId would otherwise stay in the in-process Map
+      // forever. Evict only after the terminal write is durably committed
+      // (commandResult already threw for any non-success/non-terminal-write
+      // outcome above); never evict on a provider/DB/error path, since a
+      // retry after a transient failure still needs the same proof.
+      if (isTerminalGoalState(goalResult.state)) leaseProofs.delete(goalId);
+      return goalResult;
     } catch (error) {
       if (error instanceof PersistenceStaleGoalLeaseError) leaseProofs.delete(goalId);
       if (error instanceof GoalServiceError) throw error;
