@@ -10,11 +10,25 @@ export type ToolEventRef = string & { readonly [toolEventRefBrand]: "ToolEventRe
 /** `unknown` means no provider state or terminal evidence is available. */
 export type InvocationStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "unknown";
 
+/**
+ * Least-privilege capability scoping carried through to the real spawn
+ * call. Every field mirrors an explicit Mission Bundle grant (never
+ * inferred): installed capability is not automatically assigned
+ * capability. A kernel that cannot honor a field must fail closed rather
+ * than silently ignore it, once it declares support for that field.
+ */
+export interface SpawnCapabilities {
+  allowedTools?: readonly string[];
+  allowedSkills?: readonly string[];
+}
+
 export interface SpawnRequest {
   name: string;
   cwd?: string;
   parent?: ExecutionRef;
   prompt?: string;
+  /** Only meaningful for a root spawn (no parent); a child spawn inherits its root's session. */
+  capabilities?: SpawnCapabilities;
 }
 
 export interface SpawnedInvocation {

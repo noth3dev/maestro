@@ -101,7 +101,14 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
     if (activeAttempt !== undefined) throw new WorkerError(`A worker is already active for this mission (attempt ${activeAttempt.attempt})`);
     const nextAttempt = (priorAttempts.rows[0]?.attempt ?? 0) + 1;
     if (nextAttempt > bundle.substance.retryCeiling + 1) throw new WorkerError(`Mission retry ceiling exceeded: ${bundle.substance.retryCeiling}`);
-    const spawned = await kernel.spawn({ name: `${bundle.substance.role}:${request.itemId}:${nextAttempt}`, prompt: bundle.substance.goalBrief });
+    const spawned = await kernel.spawn({
+      name: `${bundle.substance.role}:${request.itemId}:${nextAttempt}`,
+      prompt: bundle.substance.goalBrief,
+      // Every field is the exact least-privilege grant this Mission Bundle
+      // declared -- never widened, never inferred (Phase 2 re-patch item 2:
+      // this scoping previously never reached the real spawn call at all).
+      capabilities: { allowedTools: bundle.substance.allowedTools, allowedSkills: bundle.substance.allowedSkills },
+    });
     const workerId = randomUUID();
     const inserted = await client.query<WorkerRow>(
       `INSERT INTO workers (worker_id, council_id, department_id, plan_version, item_id, bundle_content_hash, attempt, execution_ref, invocation_ref, status)
