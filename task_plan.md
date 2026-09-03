@@ -132,6 +132,203 @@ Phase 3 is fully exit-gate accepted (all 13 live-gate steps, all 18 Tests items)
 - Tests item 18 is now covered at the shared read-contract level (control-plane/API client/CLI); a full real-domain parity fixture remains limited to existing persistence integration coverage.
 
 
+
+## Re-patch execution order (added 2026-09-04, after second hardening audit wave) — supersedes Track A/B ordering
+
+The Track A/Track B split above groups fixes by subsystem. Actual execution instead walks the
+phases in original order — Phase 1, then 2, then 3, then 4 — repairing everything below before any
+phase is re-claimed as accepted, so each phase is fully hardened before the next is touched again.
+Do not skip ahead to a later phase's items while an earlier phase still has an open item below.
+This section is the current source of truth for "what remains broken"; Track A/B above stays as
+the original grouping for reference but is no longer the execution order.
+
+A second wave of four parallel read-only audits (security, concurrency/data-integrity, test
+quality, and budget/evidence-bundle/certification domain correctness — `p1-3-security-audit2`,
+`p1-3-concurrency-audit2`, `p1-3-testquality-audit2`, `p1-3-domain-audit2`) ran 2026-09-04 against
+`main` and delivered the findings below, each grounded in exact file:line evidence. A fifth
+audit (`p1-3-feature-completeness-audit`, real-world usability/missing-feature sweep) was
+dispatched but its subagent aborted mid-run without delivering findings; it was not re-dispatched
+this session. The Track A/B items already cover the largest known functional gaps (no
+write-command API surface, no CLI/UI parity for Council/certification/report state, no CEO
+approval completion path), so this is a partial, not total, blind spot — re-run a dedicated
+feature-completeness audit before treating Phase 4 as usable.
+
+### Phase 1 — remaining open items
+1. **[MEDIUM, security]** `authenticateLocalOperator` (packages/persistence/src/auth.ts:140-176)
+   runs an unfiltered SQL query (no WHERE clause) and scrypt-derives against every credential row
+   on every login attempt, including pre-auth junk-bearer requests — a CPU-amplification DoS
+   vector once multiple operators exist. Fix: accept an operator/credential identifier to narrow
+   the query to O(1) rows before deriving, or rate-limit failed attempts per source.
+2. **[LOW-MEDIUM, security]** Unbounded in-process memory growth: `execution-kernel.ts`'s
+   `sessions`/`roots`/`children` Maps (lines 81-83) and `goal-service.ts`'s `leaseProofs` Map
+   (line 42) never evict terminal-state entries. Fix: evict or bound (LRU) on terminal status once
+   evidence is durably recorded.
+3. **[LOW, security]** No TLS requirement when `MAESTRO_ALLOW_REMOTE=true` (apps/control-plane/src/config.ts:20,45-46);
+   bearer secrets would travel in cleartext on a non-loopback bind. Fix: fail closed on remote bind
+   without TLS configured.
+4. **[P0-adjacent, concurrency/infra]** No production-safe migration runner exists anywhere in the
+   codebase. The only runner (`packages/persistence/src/test-migrations.ts` `applyAllMigrations`)
+   unconditionally `DROP SCHEMA ... CASCADE`s before applying all 47 migrations, has no
+   `schema_migrations` ledger, and takes no advisory lock; it is called exclusively from
+   `*.integration.test.ts` files. There is currently no supported way to create or evolve a real
+   production database. Fix: add a real migration runner with a checksum/applied-at ledger under a
+   single `pg_advisory_lock`, additive-only, wired into control-plane startup before
+   `reconcileOnStartup`.
+5. **[HIGH, test quality]** fast-check property testing is almost entirely absent despite being a
+   locked-stack requirement (plan/phase1.md) and two explicit Phase 1 Tests items (#2, #3). Only
+   one file (`packages/persistence/src/fencing.property.test.ts`) uses fast-check at all, and it
+   only covers `commands.ts`. See Phase 2/3 items below for the 10 modules with zero stale/forged
+   fencing coverage.
+6. **[LOW-MEDIUM, test quality]** Evidence-hash corruption (Phase 1 Tests #9) is proven only at
+   `getEvidenceMetadata` (packages/persistence/src/evidence.integration.test.ts:32), never at any
+   of the actual "certification consumers" the spec names (certification, evidence-bundle, Sane
+   report). Fix: add one corrupted-hash regression test per real consumer.
+7. **[LOW, test quality]** No test asserts `parseConfig`'s accepted key set excludes
+   provider-credential-shaped env vars (Phase 1 Tests #12 has no dedicated coverage; the only
+   related test checks DB-credential log redaction, a different property).
+8. Already-known Phase 1-rooted P0s from the first audit wave (see "Phase 5 remediation plan" /
+   Track A above, items 1 and 4): no durable worker/session restart recovery
+   (`execution-kernel.ts` `resume()`/`reconnect()` always throw; `reconciliation.ts` does no real
+   session reconciliation); no project-scoped operator authorization (authentication only, no
+   membership/role/capability check in `server.ts`/`goal-service.ts`).
+
+### Phase 2 — remaining open items
+1. **[P0, domain correctness — empirically reproduced]** Budget reservations silently double-count
+   across envelope revisions. `reserveGoalBudget`/`reserveDepartmentBudget`/`reserveMissionBudget`
+   (packages/persistence/src/budget-reservation.ts:63-68,104-109,146-151) are strictly append-only;
+   each child-level overrun check sums only rows under the single newest parent row
+   (`ORDER BY created_at DESC LIMIT 1`), so reservations against a superseded envelope become
+   invisible and enforcement never re-aggregates. Verified against real PostgreSQL: reserving the
+   same 100,000-cent Goal ceiling twice (a routine, CEO-approval-free "same amount" action) let a
+   Department allocate 160,000 cents against it — 78% over budget — with zero rejection.
+   `sane-report.ts:193-194`'s `costCents` sums *all* historical reservations (a different, wider
+   scope than enforcement uses), so reporting and enforcement are inconsistent. Fix: track a
+   durable "current envelope" identity so overrun checks always sum all live reservations for the
+   Goal/Department, not just the newest envelope's children; add a regression test that
+   re-reserves at the goal level and proves the department cap still holds.
+2. **[HIGH, test quality]** Mission Assignment Bundle capability scoping (skills/tools/paths/
+   authority boundary) never reaches the real Prime Agent spawn call.
+   `packages/domain/src/execution-kernel.ts`'s `SpawnRequest` (lines 13-18) has no field for it;
+   `worker.ts:104` drops `allowedSkills`/`allowedTools`/`allowedPaths`/`authorityBoundary` when
+   calling `kernel.spawn`. "Scout workers are read-only by default" (plan/phase2.md) is currently
+   unenforced anywhere; Phase 2 Tests #12/#13 have no code path to test. Fix: extend the
+   execution-kernel port to carry mission-bundle capability scoping through to the real spawn/tool
+   surface (or wrap every worker action in an authority check keyed off the mission bundle), then
+   add a real spawn + out-of-scope-tool-call test that fails closed.
+3. **[MEDIUM, test quality]** Team-lead grant cost/duration/scope ceilings
+   (packages/persistence/src/team-lead-grant.ts:37-39,63-64,120-123) are stored but never enforced
+   at `spawnHelperWorker` time — only `max_helpers` is checked (Phase 2 Tests #10 is ~25% covered).
+   Fix: enforce cost/duration/scope at spawn time; add the three missing ceiling-exceeded tests.
+4. **[MEDIUM, test quality]** Mission persona overlay (plan/phase2.md "Ten-axis persona baseline")
+   has zero implementation — `mission-bundle.ts` only carries an opaque `profileRef: string`; no
+   derivation or mission-lifetime expiry exists to test (Phase 2 Tests #11's "expire correctly"
+   half is untestable as-is). Fix: implement a durable mission-persona-overlay derivation bound to
+   mission lifetime with explicit expiry, then test [0,1] bounds and post-mission unavailability.
+5. **[HIGH, concurrency — empirically reproduced]** Head activation/sleep/resume
+   (packages/persistence/src/head-participation.ts) checks fencing (`assertCurrentGoalLease`,
+   line 322) but never checks the pause/stop/emergency-stop control latch — zero references to
+   `goal_controls`/`assertGoalControlOpen`/`paused_at`/`emergency_stopped_at` in the file. Verified
+   against real PostgreSQL: `activateHeadParticipation` succeeded and durably created a new
+   participation row on a Goal with `emergency_stopped_at` already set. Fix: call the existing
+   `assertGoalControlOpen` inside head-participation.ts's lease-check helper before creating or
+   transitioning a participation row.
+6. **[LOW/MEDIUM, concurrency]** `acceptDepartmentWorkerOutput`
+   (packages/persistence/src/certification.ts:38) is an unguarded check-then-insert race, saved
+   only by a DB unique constraint whose violation surfaces as a raw Postgres error instead of this
+   codebase's usual idempotent-return pattern. Fix: `INSERT ... ON CONFLICT (worker_id) DO NOTHING
+   RETURNING ...`, re-read on conflict.
+7. **[HIGH, security]** No path/repository containment check before Git worktree/branch
+   operations. `recordGoalIntegrationBranch`/`recordDepartmentBranch`/`recordWorkerWorktree`
+   (packages/persistence/src/git-integration.ts:26,134,170) and `createWorktree`/`createBranch`
+   (packages/git-adapter/src/git-ops.ts:20-27) accept caller-supplied paths with no containment
+   check against an allow-listed workspace root; `git worktree add` will materialize a checkout at
+   any writable absolute path (no shell injection since `spawn` uses argv arrays, but no path
+   containment either). Fix: canonicalize and assert `repositoryPath`/`worktreePath` fall under a
+   configured single workspace root (e.g. `MAESTRO_WORKTREE_ROOT`) at the persistence boundary.
+8. **[9-10 uncovered fencing modules, test quality — part of item 5 above]** Of 13 persistence
+   modules independently implementing the `FOR UPDATE ... fencing_token = $3` pattern, these have
+   zero stale/forged-lease test coverage: `budget-reservation.ts`, `council.ts`,
+   `department-plan.ts`, `device-grant.ts` (only a not-found case, not stale-token),
+   `mission-bundle.ts`, `team-lead-grant.ts` (Phase 2), plus `environment.ts`, `firefly-incident.ts`
+   (Phase 4) and `git-integration.ts`, `sentinel-challenge.ts` (spans Phase 2/3). Add at least one
+   stale/forged-fencing-token test per module while its phase is being re-patched.
+9. Already-known Phase 2-rooted P0 from the first audit wave: effect adapters (Git) not enforced
+   through `AuthorizedEffectExecutor`; no production write-command API surface for Task
+   Contract/Council/Plan/worker/Git actions.
+
+### Phase 3 — remaining open items
+1. **[P0, concurrency]** `certification.ts`, `evidence-bundle.ts`, `sane-report.ts`, and
+   `overwatch-council.ts` have **zero** goal_lease/fencing check and **zero** control-latch
+   (pause/stop/emergency-stop) check — unlike every other Phase 2/3 write module. Unguarded entry
+   points: `certifyQuality`/`certifyConditional`/`grantCertificationWaiver`/
+   `adjudicateCertificationConflict` (certification.ts:280,295,330), `assembleEvidenceBundle`/
+   `recordEvidenceBundle` (evidence-bundle.ts:13,205), `generateSaneFinalReport`
+   (sane-report.ts:35), `runOverwatchCouncilReview` (overwatch-council.ts:106, which spawns real
+   Prime Agent subagents and incurs real cost). A stale/fenced-out actor can therefore certify, run
+   a full Council round, assemble an evidence bundle, or produce a Sane final report on a
+   paused/emergency-stopped Goal. Fix: thread a `GoalLeaseProof`/authorized-actor context through
+   all five entry points; lock the lease row FOR UPDATE and call `assertGoalControlOpen` before any
+   write; add a fencing/pause-bypass regression test per module.
+2. **[MEDIUM/HIGH, concurrency]** `assembleEvidenceBundle` and `generateSaneFinalReport` each issue
+   10-15+ sequential, non-transactional reads across ~10 tables — unlike `certification.ts`'s own
+   `readCertificationLineage` (line 141), which correctly opens one transaction with FOR SHARE/FOR
+   UPDATE locks. A concurrent write during assembly can produce an internally inconsistent
+   bundle/report that still hashes and commits successfully. Fix: wrap each assembly in one
+   transaction with FOR SHARE locks (matching `readCertificationLineage`), or `REPEATABLE READ`.
+3. **[MEDIUM, concurrency]** `generateSaneFinalReport` has no idempotency or per-Goal uniqueness
+   constraint (`sane_final_reports`, migration 0036, has no unique constraint on `goal_id`).
+   Concurrent/retried calls for the same Goal can produce two divergent "final" reports. Fix: add a
+   unique constraint/idempotency key scoping one final report per Goal.
+4. **[P1, domain correctness]** Evidence bundle assembly never queries `authority_records`/
+   `authority_decisions` (the durable grant/approval/deny audit trail), `independent_briefs` (the
+   actual sealed Council brief content — only aggregate `head_councils` fields are read), or
+   `goal_head_participations`/`head_activation_attempts`/`head_activation_edges` ("activated
+   organization and reasons"). This breaks Tests item 17 ("replay the bundle to reconstruct the
+   final decision") since the brief content that produced the Council decision is absent.
+   Separately, `generateSaneFinalReport` calls `recordEvidenceBundle` *before* inserting the
+   `sane_final_reports` row, so the bundle can structurally never contain the report content
+   plan/phase3.md's bundle-contents list also names. Fix: extend `assembleEvidenceBundle`'s queries
+   to include all three omitted sources; document or add a second post-report bundle snapshot.
+5. **[P1, domain correctness]** `evaluateCertificationCompleteness`
+   (packages/domain/src/sane-report.ts:62-111) never compares cost to budget and never checks
+   `budget_reservations` at all — there is no budget-related blocker reason in
+   `CertificationCompletenessBlockerReason`. A Goal that has blown its budget (see Phase 2 item 1)
+   can still report `success: true`. Separately, the reported `costCents` is a sum of *reservations*
+   (a planning artifact, itself double-counted per Phase 2 item 1), not actual incurred spend — no
+   `actual_cost`/spend accumulation exists anywhere in the codebase. Fix: add a budget-exceeded
+   blocker computed from corrected reservation accounting, plus a real actual-cost accumulation
+   distinct from reservations.
+6. **[HIGH, security]** The four new read-state routes (`GET /v1/goals/:goalId/{sentinel-challenges,
+   overwatch-council-rounds,certifications,sane-report}`, apps/control-plane/src/server.ts:149-152)
+   take only `goalId` — unlike `GET /v1/goals/:goalId`, which requires and checks `projectId`. The
+   wire contract itself has no `projectId` field to enforce against, so any authenticated operator
+   can read another project's Sentinel challenges, Council deliberation, certifications, and Sane
+   report by iterating/guessing goal UUIDs (a concrete IDOR). Fix: add `projectId` to all four
+   routes/schemas and the matching `ReadStateService` methods, matching `getGoal`'s pattern.
+7. Already-known Phase 3-rooted P0s from the first audit wave: no production write-command API
+   surface for Sentinel/Council/certification/report actions; Sentinel is a one-shot callable, not
+   a continuous scheduled/event-driven loop, and its rule set omits several plan-required finding
+   types; App/CLI/UI parity is read-contract-only, no forms/write surface, no dedicated Secretary
+   panels for these four record kinds.
+
+### Phase 4 — remaining open items
+Unchanged from Track B above (enrolled-device audit, 2026-09-04): no real device-agent transport
+or mutual authentication; local validation doesn't cover Goal/grant/expiry/fencing; no authenticated
+command dispatch or signed device receipts; device revocation doesn't cascade to issued grants;
+applications/data-scope/network-scope are declarative only, unenforced; no disconnect/dependent-work
+pause lifecycle; Sentinel has no device-access observation; grant expiry/closure has no durable
+automatic state transition. See Track B items 1-8 above for full detail — not re-numbered here to
+avoid duplicate item IDs.
+
+### Status
+- [not_started] Phase 1 remaining items 1-8 above.
+- [not_started] Phase 2 remaining items 1-9 above.
+- [not_started] Phase 3 remaining items 1-7 above.
+- [not_started] Phase 4 remaining items (= Track B items 1-8, unchanged).
+- [not_started / partially blind] Dedicated feature-completeness (real-world usability) sweep —
+  re-dispatch before treating any phase as usable; the aborted 2026-09-04 attempt delivered no
+  findings.
+
 ## Phase 5 remediation plan — operational usability (added 2026-09-04, supersedes prior "complete/complete_pending_independent_review" claims for P1-P4 runtime lanes)
 
 ### Why this phase exists
