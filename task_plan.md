@@ -184,9 +184,18 @@ feature-completeness audit before treating Phase 4 as usable.
    independently re-verified by the parent session directly (no reviewer subagent available/reliable
    this session) after merge: fresh `main` build clean, full real-PostgreSQL `npm run check`:
    94/95 files, 604 passed, 2 intentional live-Prime skips, 0 failed.
-3. **[LOW, security]** No TLS requirement when `MAESTRO_ALLOW_REMOTE=true` (apps/control-plane/src/config.ts:20,45-46);
-   bearer secrets would travel in cleartext on a non-loopback bind. Fix: fail closed on remote bind
-   without TLS configured.
+3. **[RESOLVED 2026-09-04, commit `3649279`]** `MAESTRO_ALLOW_REMOTE=true` previously accepted a
+   non-loopback bind with no TLS requirement. Fixed: `parseConfig` requires paired
+   `MAESTRO_TLS_CERT_FILE`/`MAESTRO_TLS_KEY_FILE` together whenever the resolved host is
+   non-loopback; `createControlPlane` enforces the same invariant again at the composition
+   boundary (a caller can construct `MaestroConfig` directly, bypassing `parseConfig`), reads the
+   cert/key files (failing closed before any listener exists if unreadable), and `buildServer` now
+   constructs a real Fastify HTTPS listener, not just a config field. Verified with a real
+   self-signed certificate generated via `openssl` in a real-PostgreSQL composition test: a remote
+   `createControlPlane` call throws synchronously without TLS or with an unreadable key file; a
+   real HTTPS request against the configured listener succeeds while a plain-HTTP request to the
+   same port fails outright (protocol mismatch). Full real-PostgreSQL `npm run check` on `main`:
+   94/95 files, 609 passed, 2 intentional live-Prime skips, 0 failed.
 4. **[P0-adjacent, concurrency/infra]** No production-safe migration runner exists anywhere in the
    codebase. The only runner (`packages/persistence/src/test-migrations.ts` `applyAllMigrations`)
    unconditionally `DROP SCHEMA ... CASCADE`s before applying all 47 migrations, has no

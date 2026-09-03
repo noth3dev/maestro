@@ -509,3 +509,46 @@
   required together whenever `MAESTRO_ALLOW_REMOTE=true`, wired through to a real Fastify HTTPS
   listener (not just config validation), with a composition-level regression proving a remote
   config without TLS never reaches `app.listen` as plain HTTP.
+
+## 2026-09-04 (continued) — Phase 1 re-patch item 3 (remote bind without TLS) resolved
+- Implemented directly (no subagent), test-first, in an isolated worktree
+  (`.worktrees/p1-tls-fail-closed`, branch `patch/p1-tls-fail-closed`), reusing the design this
+  session's `luna-p1-tls-audit` child already prepared: paired
+  `MAESTRO_TLS_CERT_FILE`/`MAESTRO_TLS_KEY_FILE`, required together whenever the resolved host is
+  non-loopback, wired through to a real Fastify HTTPS listener rather than only validated in config.
+- `config.ts`: `MaestroConfig` gains an optional `tls: { certFile, keyFile }`; `parseConfig` rejects
+  a remote bind (`MAESTRO_ALLOW_REMOTE=true` alone is no longer sufficient) missing either half of
+  the pair with `"Remote binding requires TLS certificate and key configuration"`; a loopback bind
+  ignores any supplied pair. `main.ts`'s `createControlPlane` enforces the same invariant again at
+  the composition boundary per the audit's caller-boundary note (a caller can construct
+  `MaestroConfig` directly, bypassing `parseConfig`), reads the cert/key files synchronously
+  (failing closed on a missing/unreadable file before any `ControlPlane` object exists), and passes
+  real bytes to `buildServer`'s new optional `https` param, which now constructs `Fastify({ https })`
+  instead of always plain HTTP.
+- A genuine TypeScript build defect was found and fixed during this slice (not present before):
+  `Fastify(https ? { https } : {})`'s object-literal union made TS select an ambiguous Fastify
+  HTTP2 overload instead of the intended HTTPS one, breaking `FastifyInstance`'s declared server
+  type. Fixed with an explicit two-branch construction. Also discovered
+  `apps/control-plane/dist/main.js` had never been built in this specific worktree (a worktree-setup
+  gap, not a symlink-staleness issue this time) -- the real-process kill-restart integration test
+  spawns that compiled file directly; `npm run build` in-worktree succeeded cleanly for this slice
+  (no cross-package interface change this time, so no node_modules-symlink dist-staleness hit).
+- Verification: a real-PostgreSQL composition test generates a genuine self-signed certificate via
+  `openssl req -x509 ...`, proves `createControlPlane` throws synchronously for a remote bind with
+  no TLS or an unreadable key file (before any listener exists), then proves a real HTTPS request
+  (Node's `https.request` with `rejectUnauthorized: false`, since the test's own throwaway
+  certificate is intentionally untrusted by the system CA store) against the configured listener
+  succeeds while a plain-HTTP request to the same port fails outright (protocol mismatch, not
+  silently downgraded). Full real-PostgreSQL `npm run check` (build + test) in the worktree: 94/95
+  files, 609 passed, 2 intentional live-Prime skips, 0 failed -- both build and test clean this time.
+- Independent review performed by the parent session directly (no independent-review subagent
+  spawned, per explicit user direction to continue without further subagents this session), then
+  merged to `main` (`3649279`). Post-merge re-verification on `main`: fresh `npm run build` and full
+  real-PostgreSQL `npm run check` both clean: 94/95 files, 609 passed, 2 intentional live-Prime
+  skips, 0 failed. Worktree, branch, and the disposable PostgreSQL container
+  (`maestro-p1-tls-postgres`) removed.
+- Next: Phase 1 re-patch item 4, the production-safe migration runner (`schema_migrations` ledger,
+  checksums, single `pg_advisory_lock`, additive-only, wired into control-plane startup before
+  `reconcileOnStartup`) -- design already prepared this session by the earlier
+  `luna-p1-migration-audit` child, though that child completed without sending its findings back
+  and was deleted per the dead-child protocol; this item's design work has not yet been redone.
