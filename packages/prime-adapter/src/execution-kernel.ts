@@ -128,7 +128,9 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
         // is only meaningful for a root spawn -- a child inherits its root's
         // already-scoped session, it cannot be independently re-scoped.
         const cwd = request.cwd ?? process.cwd();
-        const { session } = await factory.create({ cwd, capabilities: request.capabilities });
+        const { session } = await factory.create(
+          request.capabilities !== undefined ? { cwd, capabilities: request.capabilities } : { cwd },
+        );
         const execution = asExecutionRef(`execution-${++nextRoot}`);
         const invocation = nextPublicInvocation();
         sessions.set(execution, session);
