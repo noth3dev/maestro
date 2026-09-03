@@ -30,18 +30,37 @@ export class FireflyAuthenticationError extends FireflySignalError {}
 export class FireflyFreshnessError extends FireflySignalError {}
 export class FireflyReplayError extends FireflySignalError {}
 
-function text(v: unknown, field: string): asserts v is string { if (typeof v !== "string" || v.trim() === "") throw new FireflySignalError(`${field} is required`); }
+/** Bounds keep a signed watchdog payload small before it reaches durable storage. */
+export const FIREFLY_MAX_EVIDENCE_ITEMS = 16;
+export const FIREFLY_MAX_EVIDENCE_ITEM_LENGTH = 4096;
+const MAX_IDENTITY_FIELD_LENGTH = 256;
+const MAX_TIMESTAMP_LENGTH = 64;
+
+function text(v: unknown, field: string, maxLength = MAX_IDENTITY_FIELD_LENGTH): asserts v is string {
+  if (typeof v !== "string" || v.trim() === "") throw new FireflySignalError(`${field} is required`);
+  if (v.includes("\0")) throw new FireflySignalError(`${field} contains a NUL character`);
+  if (v.length > maxLength) throw new FireflySignalError(`${field} exceeds its size limit`);
+}
 export function assertValidFireflySignal(s: FireflySignal): void {
-  for (const [v, f] of [[s.incidentFingerprint,"incidentFingerprint"],[s.firstObservedAt,"firstObservedAt"],[s.lastObservedAt,"lastObservedAt"],[s.affectedComponent,"affectedComponent"],[s.affectedVersion,"affectedVersion"],[s.source,"source"],[s.sourceFreshness,"sourceFreshness"]] as const) text(v,f);
+  if (!s || typeof s !== "object" || Array.isArray(s)) throw new FireflySignalError("Firefly signal must be an object");
+  text(s.incidentFingerprint, "incidentFingerprint");
+  text(s.firstObservedAt, "firstObservedAt", MAX_TIMESTAMP_LENGTH);
+  text(s.lastObservedAt, "lastObservedAt", MAX_TIMESTAMP_LENGTH);
+  text(s.affectedComponent, "affectedComponent");
+  text(s.affectedVersion, "affectedVersion");
+  text(s.source, "source");
+  text(s.sourceFreshness, "sourceFreshness", MAX_TIMESTAMP_LENGTH);
   if (!["info","warning","critical"].includes(s.severity)) throw new FireflySignalError("invalid severity");
   if (!["healthy","degraded","unhealthy"].includes(s.fireflyHealthState)) throw new FireflySignalError("invalid Firefly health state");
   if (!["new","same","related"].includes(s.deduplicationRelationship)) throw new FireflySignalError("invalid deduplication relationship");
   if (!Number.isFinite(s.confidence) || s.confidence < 0 || s.confidence > 1) throw new FireflySignalError("confidence must be between 0 and 1");
   if (!Array.isArray(s.minimalReproductionEvidence)) throw new FireflySignalError("reproduction evidence must be an array");
-  for (const item of s.minimalReproductionEvidence) text(item, "reproduction evidence item");
+  if (s.minimalReproductionEvidence.length > FIREFLY_MAX_EVIDENCE_ITEMS) throw new FireflySignalError("reproduction evidence exceeds its item limit");
+  for (const item of s.minimalReproductionEvidence) text(item, "reproduction evidence item", FIREFLY_MAX_EVIDENCE_ITEM_LENGTH);
   const firstObserved = Date.parse(s.firstObservedAt);
   const lastObserved = Date.parse(s.lastObservedAt);
-  if (!Number.isFinite(firstObserved) || !Number.isFinite(lastObserved)) throw new FireflySignalError("observation timestamps must be ISO dates");
+  const sourceFreshness = Date.parse(s.sourceFreshness);
+  if (!Number.isFinite(firstObserved) || !Number.isFinite(lastObserved) || !Number.isFinite(sourceFreshness)) throw new FireflySignalError("observation timestamps must be ISO dates");
   if (lastObserved < firstObserved) throw new FireflySignalError("last observation cannot precede first observation");
 }
 function unsigned(e: Omit<AuthenticatedFireflySignal, "signature">): string { return canonicalJson(e); }
