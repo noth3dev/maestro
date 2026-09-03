@@ -196,3 +196,8 @@ Against plan/phase1.md's exit gate and Tests section, still missing:
 - Durable Firefly signal rows are audit records. Migration `0040_firefly_signal_hardening.sql` adds immutable-row triggers and database checks for observation order and JSON-array evidence. It is additive because `0039_firefly_signals.sql` is already committed.
 - Firefly's local buffer now verifies envelopes against its configured HMAC credential before appending. Its flush loop also records a concurrent flush request so a signal emitted during an in-flight delivery is not left pending when `emit` returns.
 - Fresh full-suite PostgreSQL failures are pre-existing per-file migration-list omissions, not Firefly defects: `sane-report.integration.test.ts` omitted budget migration `0027`; `certification-conflict.integration.test.ts` omitted semantic-review migration `0030`. Parent session is fixing these through a shared migration runner on a separate branch.
+
+## 2026-09-03 — P4S7 Firefly incident identity and silence findings
+- Incident identity is `(authenticated incident fingerprint, affected version)`. The derived fingerprint intentionally excludes version so a repeated anomaly on a new version is a separate incident without changing the anomaly identity; normalized evidence order/case/whitespace produces stable hashes.
+- Incident aggregation is monotonic: severity keeps the highest observed level and confidence keeps the strongest bounded value. Every accepted signal has one immutable incident link, making duplicate attachment idempotent and preserving source signal history.
+- Silence is represented only as watchdog uncertainty (`firefly_observation_missing` or `firefly_observation_silent`). No empty incident or "no incidents" conclusion is written from absent data.

@@ -21,3 +21,4 @@ export * from "./evidence-bundle.js";
 export * from "./sane-report.js";
 
 export * from "./firefly.js";
+export * from "./firefly-incident.js";
