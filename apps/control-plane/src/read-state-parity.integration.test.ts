@@ -11,6 +11,7 @@ import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubsta
 import {
   bootstrapPermanentOrganization,
   bootstrapLocalOperator,
+  grantProjectMembership,
   acquireGoalLease,
   createHeadCouncil,
   recordCouncilDecisionPacket,
@@ -178,7 +179,8 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
     const report = await generateSaneFinalReport(pool, goalId);
 
     const secret = "read-state-parity-test-secret";
-    const { credentialId } = await bootstrapLocalOperator(pool, { secret });
+    const { credentialId, operatorId } = await bootstrapLocalOperator(pool, { secret });
+    await grantProjectMembership(pool, operatorId, projectId);
     const bearerToken = `${credentialId}.${secret}`;
     const controlPlane = createControlPlane({
       databaseUrl: databaseUrl!, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0,

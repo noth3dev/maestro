@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { bootstrapLocalOperator } from "@maestro/persistence";
+import { bootstrapLocalOperator, grantProjectMembership } from "@maestro/persistence";
 import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
 
 // A real integration test that spawns the compiled control-plane
@@ -40,13 +40,14 @@ describe("control-plane real process kill-and-restart", () => {
   let setupPool: Pool;
   const secret = `kill-restart-secret-${randomUUID()}`;
   let credentialId: string;
+  let operatorId: string;
   const spawnedChildren: ChildProcessWithoutNullStreams[] = [];
 
   beforeAll(async () => {
     await basePool.query(`CREATE SCHEMA ${schema}`);
     setupPool = new Pool({ connectionString: scopedUrl });
     await applyAllMigrations(setupPool);
-    ({ credentialId } = await bootstrapLocalOperator(setupPool, { secret }));
+    ({ credentialId, operatorId } = await bootstrapLocalOperator(setupPool, { secret }));
   });
 
   afterEach(async () => {
@@ -147,6 +148,7 @@ describe("control-plane real process kill-and-restart", () => {
       const started = Date.now();
       const projectId = randomUUID();
       const goalId = randomUUID();
+      await grantProjectMembership(setupPool, operatorId, projectId);
       const headers = { authorization: `Bearer ${credentialId}.${secret}`, "content-type": "application/json" };
 
       // --- Process A: create and partially advance a real Goal over real HTTP.

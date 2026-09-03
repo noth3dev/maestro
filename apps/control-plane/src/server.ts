@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { OperatorAuthentication, OperatorContext } from "@maestro/persistence";
+import { ProjectMembershipRequiredError } from "@maestro/persistence";
 import {
   CreateGoalInputSchema,
   CriticalActionInputSchema,
@@ -45,6 +46,13 @@ export interface OperatorAuthenticator {
   authenticateBearerSecret(secret: string): Promise<OperatorAuthentication>;
 }
 
+export class ProjectAccessForbiddenError extends Error {}
+
+export interface ProjectMembershipChecker {
+  /** Fails closed unless the operator currently holds an active membership for this exact project. */
+  assertProjectMembership(operatorId: string, projectId: string): Promise<void>;
+}
+
 export interface PollingScheduler {
   setInterval(callback: () => void, milliseconds: number): unknown;
   clearInterval(handle: unknown): void;
@@ -55,7 +63,7 @@ const systemPollingScheduler: PollingScheduler = {
   clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
 };
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService, https }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService, https, projectMembership }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
@@ -64,6 +72,16 @@ export function buildServer({ goalService, authenticator, eventService, critical
   readStateService?: ReadStateService;
   /** When set, the listener is real HTTPS, not plain HTTP. */
   https?: { cert: Buffer; key: Buffer };
+  /**
+   * When set, every request that carries a projectId (body or query) is
+   * checked against durable project membership before its route handler
+   * runs. Optional only so existing tests/composition that do not yet
+   * exercise membership can omit it without inventing a fake always-allow
+   * checker; production composition (main.ts) always supplies a real one.
+   * Routes with no projectId field at all (the four read-state routes) are
+   * not covered here -- a separate, already-tracked gap (Phase 3 item 6).
+   */
+  projectMembership?: ProjectMembershipChecker;
 }): FastifyInstance {
   const app: FastifyInstance = https
     ? (Fastify({ https }) as unknown as FastifyInstance)
@@ -100,6 +118,21 @@ export function buildServer({ goalService, authenticator, eventService, critical
     if (authentication.outcome === "forbidden") throw new CredentialForbiddenError();
     if (authentication.outcome === "unavailable") throw new AuthenticationUnavailableError();
     (request as typeof request & { operator: OperatorContext }).operator = authentication.operator;
+  });
+
+  // Authentication alone only proves the credential is valid; it says
+  // nothing about which project that operator may act on. This hook runs
+  // after body/query parsing (preHandler, not onRequest) so it can read the
+  // request's stated projectId, then fails closed unless durable membership
+  // exists for it -- before the route handler (and thus goalService/
+  // criticalActionService/eventService) ever runs.
+  app.addHook("preHandler", async (request) => {
+    if (!request.url.startsWith("/v1/") || !projectMembership) return;
+    const operator = (request as typeof request & { operator?: OperatorContext }).operator;
+    if (!operator) return;
+    const candidate = requestProjectId(request);
+    if (candidate === undefined) return;
+    await projectMembership.assertProjectMembership(operator.operatorId, candidate);
   });
 
   app.setErrorHandler((error, _request, reply) => {
@@ -272,6 +305,21 @@ function requestOperator(request: { operator?: OperatorContext }): OperatorConte
   return request.operator;
 }
 
+/**
+ * Reads a projectId the request itself already states, without trusting it
+ * for anything beyond "which project to check membership for" -- the real
+ * UUID/shape validation still happens later via the route's own zod schema.
+ * Returns undefined for a route that carries no projectId at all (the four
+ * read-state routes), never a fabricated value.
+ */
+function requestProjectId(request: { query?: unknown; body?: unknown }): string | undefined {
+  const fromQuery = (request.query as { projectId?: unknown } | undefined)?.projectId;
+  if (typeof fromQuery === "string") return fromQuery;
+  const fromBody = (request.body as { projectId?: unknown } | undefined)?.projectId;
+  if (typeof fromBody === "string") return fromBody;
+  return undefined;
+}
+
 function mapError(error: unknown): { status: number; body: StableApiError } {
   if (isMalformedJsonError(error) || error instanceof RequestValidationError) return apiError(400, "validation_error", "Invalid request");
   if (error instanceof AuthenticationRequiredError) return apiError(401, "authentication_required", "Authentication is required");
@@ -287,6 +335,7 @@ function mapError(error: unknown): { status: number; body: StableApiError } {
   if (error instanceof CriticalActionRequiresApprovalError) return apiError(409, "critical_action_requires_approval", error.message);
   if (error instanceof CriticalActionUnavailableError) return apiError(503, "durable_store_unavailable", error.message);
   if (error instanceof DurableStoreUnavailableError) return apiError(503, "durable_store_unavailable", error.message);
+  if (error instanceof ProjectMembershipRequiredError) return apiError(403, "project_access_forbidden", error.message);
   return apiError(503, "durable_store_unavailable", "Durable store is unavailable");
 }
 
