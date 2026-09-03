@@ -608,3 +608,45 @@ HEAD
 - Amendments folded in: subagents default to `openai-codex/gpt-5.6-luna` (with `openrouter/openai/gpt-5.6-luna` as a same-model fallback before dropping to the inherited default), thinking level scaled medium/high/max by task difficulty; new worktrees symlink `node_modules` from `main` instead of a fresh `npm install`, with the exact caveat from the 2026-09-03 Phase 4 merge's stale-symlink incident; Karpathy guidelines declared the default engineering discipline for this repo.
 - Live behavior test (grill-me's closing step, not skipped): created a throwaway worktree `.worktrees/protocol-test`, symlinked `node_modules` from main, ran `npm run build` clean from inside it, then deleted the worktree per the protocol's own lifecycle rule. Confirmed the `task_plan.md` -> `docs/OPERATING_PROTOCOL.md` pointer chain resolves.
 - Committed at `d80adb0`. Saved a global cross-project memory (`session_continuity_operating_protocol_pattern_for_multi_session_software_project`) capturing the reusable pattern for future projects.
+
+
+## 2026-09-04 (continued) — Phase 1 re-patch item 5 (fast-check property coverage) resolved
+- Implemented directly (no subagent), in an isolated worktree (`.worktrees/p1-property-fencing`,
+  branch `patch/p1-property-fencing`), reusing this session's earlier `luna-p1-property-audit`
+  child's finding: `commands.ts` already has full fast-check property coverage
+  (`fencing.property.test.ts`) across every `GoalLeaseProof`-bearing state-writing method;
+  `reconciliation.ts`'s `renewReconcilerLeaderLease` was the one real remaining Phase-1 gap (it
+  accepts a `ReconcilerLeaseProof` and mirrors `GoalLeaseProof`'s exact fencing semantics, but had
+  only example/`it.each` tests). `auth.ts`/`authority.ts`/`evidence.ts` accept no lease/fencing
+  proof at all, so a stale-fencing property does not meaningfully apply to them without an
+  architectural change judged out of this item's scope.
+- Added `packages/persistence/src/reconciliation.fencing.property.test.ts`: 3 fast-check
+  properties -- every generated stale/forged fencing token, a wrong-owner proof at the real
+  current token, and an old (pre-takeover) proof after genuine expiry and successor acquisition --
+  each proving zero mutation of the singleton `reconciler_leader_lease` row and that the
+  real/successor proof still works correctly afterward.
+- Found and fixed a real test-authoring bug during first run: unlike Goal leases (a fresh
+  `randomUUID()` goalId per property iteration), the reconciler lease is a single, fixed singleton
+  row shared across every iteration of the same property; without truncating it at the start of
+  each iteration, the second and later generated cases failed with
+  `ReconcilerLeaseUnavailableError` (the still-unexpired lease from the first iteration). Fixed by
+  truncating `reconciler_leader_lease` as the first step inside each property callback.
+- Verification: 3/3 properties pass with real PostgreSQL (25 generated cases each for the first
+  two, 15 for the takeover property, since it sleeps past a genuine 1ms expiry per case). Also ran
+  alongside the existing `reconciliation.integration.test.ts` (shares the same table) to confirm no
+  cross-suite race, matching this project's established `vitest.config.ts` `fileParallelism: false`
+  precaution. Same-package test-only addition, so the node_modules-symlink cross-package staleness
+  limitation from items 1-4 did not apply; both `npm run build` and the full real-PostgreSQL
+  `npm run check` were clean in the isolated worktree on the first post-fix run: 96/97 files, 618
+  passed, 2 intentional live-Prime skips, 0 failed.
+- Independent review performed by the parent session directly (no independent-review subagent
+  spawned, per explicit user direction to continue without further subagents this session), then
+  merged to `main` (`6c40393`). Authoritative post-merge re-verification on `main`: fresh
+  `npm run build` and full real-PostgreSQL `npm run check` both clean: 96/97 files, 618 passed, 2
+  intentional live-Prime skips, 0 failed. Worktree, branch, and the disposable PostgreSQL container
+  (`maestro-p1-property-postgres`) removed.
+- Next: Phase 1 re-patch item 6 (evidence-hash-corruption tests at real certification/bundle/Sane
+  consumers, requiring a genuine production seam since none currently calls
+  `verifyEvidenceRecord`) and item 7 (config credential-key exclusion test, test-only, no
+  production change needed) -- both designs already prepared this session by the earlier
+  `luna-p1-testgaps-audit` child.

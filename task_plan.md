@@ -215,11 +215,18 @@ feature-completeness audit before treating Phase 4 as usable.
    PostgreSQL cases (fresh apply, idempotent no-op, incremental apply, two-runner advisory-lock
    race, checksum-mismatch rejection, shared-ledger no-re-execution). Full real-PostgreSQL
    `npm run check` on `main`: 95/96 files, 615 passed, 2 intentional live-Prime skips, 0 failed.
-5. **[HIGH, test quality]** fast-check property testing is almost entirely absent despite being a
-   locked-stack requirement (plan/phase1.md) and two explicit Phase 1 Tests items (#2, #3). Only
-   one file (`packages/persistence/src/fencing.property.test.ts`) uses fast-check at all, and it
-   only covers `commands.ts`. See Phase 2/3 items below for the 10 modules with zero stale/forged
-   fencing coverage.
+5. **[RESOLVED 2026-09-04, commit `6c40393`]** fast-check property testing covered only
+   `commands.ts` (`fencing.property.test.ts`); `reconciliation.ts`'s `renewReconcilerLeaderLease`
+   had only example/`it.each` coverage -- the one real remaining Phase-1 fencing property gap
+   (`auth.ts`/`authority.ts`/`evidence.ts` accept no `GoalLeaseProof`/fencing token at all, so a
+   stale-fencing property does not apply there without an architectural change out of scope).
+   Fixed: `packages/persistence/src/reconciliation.fencing.property.test.ts` adds 3 fast-check
+   properties (stale/forged token, wrong-owner-at-current-token, and old-proof-after-takeover),
+   each proving zero mutation of the singleton `reconciler_leader_lease` row and that the
+   real/successor proof still works afterward. Full real-PostgreSQL `npm run check` on `main`:
+   96/97 files, 618 passed, 2 intentional live-Prime skips, 0 failed. See Phase 2/3 items below
+   for the remaining 10 modules across those phases with zero stale/forged fencing coverage --
+   out of this Phase 1 item's scope.
 6. **[LOW-MEDIUM, test quality]** Evidence-hash corruption (Phase 1 Tests #9) is proven only at
    `getEvidenceMetadata` (packages/persistence/src/evidence.integration.test.ts:32), never at any
    of the actual "certification consumers" the spec names (certification, evidence-bundle, Sane
