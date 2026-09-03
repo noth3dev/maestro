@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { applyAllMigrations } from "./test-migrations.js";
 import fc from "fast-check";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { acquireGoalLease, executeGoalCommand, renewGoalLease, type GoalCommand, type GoalLeaseProof } from "./commands.js";
@@ -33,12 +32,7 @@ async function counts(pool: Pool): Promise<{ receipts: number; events: number; g
 describeDatabase("Goal lease fencing property tests with PostgreSQL", () => {
   const pool = new Pool({ connectionString: databaseUrl });
 
-  beforeAll(async () => {
-    for (const name of ["0001_phase1_core.sql", "0002_goal_leases.sql"]) {
-      const migration = await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8");
-      await pool.query(migration);
-    }
-  });
+  beforeAll(async () => { await applyAllMigrations(pool); });
 
   beforeEach(async () => {
     await pool.query("TRUNCATE goal_leases, outbox, goal_events, goals, command_receipts RESTART IDENTITY CASCADE");

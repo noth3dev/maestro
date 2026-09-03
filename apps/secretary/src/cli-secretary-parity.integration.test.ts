@@ -1,9 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { readFile, readdir } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { bootstrapLocalOperator } from "@maestro/persistence";
+import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
 import { executeCli } from "../../cli/src/main.js";
 import { createControlPlane } from "../../control-plane/src/main.js";
 import { loadGoalPageData } from "./goal-page.js";
@@ -28,10 +27,7 @@ if (!databaseUrl) {
     beforeAll(async () => {
       await basePool.query(`CREATE SCHEMA ${schema}`);
       setupPool = new Pool({ connectionString: scopedUrl });
-      const migrationsDirectory = fileURLToPath(new URL("../../../packages/persistence/migrations/", import.meta.url));
-      for (const name of (await readdir(migrationsDirectory)).filter((name) => name.endsWith(".sql")).sort()) {
-        await setupPool.query(await readFile(`${migrationsDirectory}/${name}`, "utf8"));
-      }
+      await applyAllMigrations(setupPool);
     });
 
     beforeEach(async () => {

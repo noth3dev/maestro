@@ -1,9 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { bootstrapAuthorityRecord, bootstrapLocalOperator, revokeAuthorityRecord } from "@maestro/persistence";
+import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
 import { createControlPlane } from "./main.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -26,18 +25,7 @@ if (!databaseUrl) {
   beforeAll(async () => {
     await basePool.query(`CREATE SCHEMA ${schema}`);
     setupPool = new Pool({ connectionString: scopedUrl });
-    for (const name of [
-      "0001_phase1_core.sql",
-      "0002_goal_leases.sql",
-      "0003_local_operator_auth.sql",
-      "0004_local_operator_credential_security.sql",
-      "0005_authority_records.sql",
-      "0007_goal_control.sql",
-      "0008_goal_pause_stop.sql",
-      "0009_reconciliation_leader_lease.sql",
-    ]) {
-      await setupPool.query(await readFile(fileURLToPath(new URL(`../../../packages/persistence/migrations/${name}`, import.meta.url)), "utf8"));
-    }
+    await applyAllMigrations(setupPool);
   });
 
   beforeEach(async () => {

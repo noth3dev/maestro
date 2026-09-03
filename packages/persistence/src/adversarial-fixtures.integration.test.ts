@@ -3,9 +3,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
+import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as gitAdapter from "@maestro/git-adapter";
 import { localGitPort } from "@maestro/git-adapter";
@@ -26,17 +26,6 @@ import { generateSaneFinalReport } from "./sane-report.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
-const migrations = [
-  "0001_phase1_core.sql", "0002_goal_leases.sql", "0003_local_operator_auth.sql", "0004_local_operator_credential_security.sql",
-  "0005_authority_records.sql", "0006_evidence.sql", "0007_goal_control.sql", "0008_goal_pause_stop.sql", "0009_reconciliation_leader_lease.sql",
-  "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql",
-  "0014_head_activation_runtime_safety.sql", "0015_council_protocol.sql", "0016_council_hardening.sql", "0018_role_identity_hardening.sql",
-  "0019_council_authority_hardening.sql", "0020_head_role_identity_hardening.sql", "0021_council_round_idempotency.sql", "0022_department_plans.sql",
-  "0023_mission_bundles.sql", "0024_workers.sql", "0025_team_lead_grants.sql", "0026_git_integration.sql", "0027_budget_reservations.sql",
-  "0028_sentinel_findings.sql", "0029_sentinel_challenges.sql", "0030_semantic_reviews.sql", "0031_overwatch_council.sql",
-  "0032_certifications.sql", "0033_conditional_certifications.sql", "0034_certification_waivers.sql", "0035_evidence_bundles.sql",
-  "0036_sane_final_reports.sql", "0037_sentinel_challenge_idempotency.sql", "0038_certification_report_hardening.sql",
-];
 const tables = [
   "sane_final_reports", "evidence_bundles", "certification_conflict_resolutions", "certification_waivers", "conditional_certifications",
   "quality_certifications", "certification_conflict_resolution_members", "department_acceptances", "goal_integration_revision_commits", "goal_integration_revisions", "overwatch_council_syntheses", "overwatch_council_judgments", "overwatch_council_rounds",
@@ -186,10 +175,7 @@ describeDatabase("Phase 3 adversarial fixtures with PostgreSQL", () => {
 
   beforeAll(async () => {
     await pool.query(`DROP TABLE IF EXISTS ${tables.join(", ")} CASCADE`);
-    for (const name of migrations) {
-      const sql = await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8");
-      await pool.query(sql);
-    }
+    await applyAllMigrations(pool);
   });
   beforeEach(async () => {
     repositoryPath = mkdtempSync(join(tmpdir(), "maestro-adversarial-"));

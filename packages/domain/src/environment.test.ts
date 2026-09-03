@@ -1,0 +1,4 @@
+import { describe, expect, it } from "vitest";
+import { environmentContentIdentity, assertValidEnvironmentRecord } from "./environment.js";
+const recipe=(input: string)=>({recipeVersion:1 as const,type:"local_worktree" as const,recipe:{runtime:"node"},resolvedInputs:{lockfile:input}});
+describe("environment identity",()=>{it("is stable for equivalent recipe inputs",()=>expect(environmentContentIdentity(recipe("a"))).toBe(environmentContentIdentity(recipe("a"))));it("changes when resolved inputs change",()=>expect(environmentContentIdentity(recipe("a"))).not.toBe(environmentContentIdentity(recipe("b"))));it("rejects secret values",()=>expect(()=>assertValidEnvironmentRecord({environmentId:"e",goalId:"g",departmentId:"d",workerId:"w",projectId:"p",missionId:"m",recipeVersion:1,contentIdentity:"a".repeat(64),capabilities:[],secretsReferences:["TOKEN=plaintext"]})).toThrow());});

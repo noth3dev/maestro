@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AuthorizedEffectExecutor, type ActionRequest, type AuthorityRepository } from "../../authority/src/authority.js";
 import {
@@ -28,14 +27,7 @@ describeDatabase("durable authorized effects with PostgreSQL", () => {
     action: "project.file.edit", target: "/workspace/file", policyVersion: 1, budgetEffectCents: 0, controlEpoch: "1",
   });
 
-  beforeAll(async () => {
-    const authorityMigration = await readFile(fileURLToPath(new URL("../migrations/0005_authority_records.sql", import.meta.url)), "utf8");
-    const controlMigration = await readFile(fileURLToPath(new URL("../migrations/0007_goal_control.sql", import.meta.url)), "utf8");
-    const pauseStopMigration = await readFile(fileURLToPath(new URL("../migrations/0008_goal_pause_stop.sql", import.meta.url)), "utf8");
-    await pool.query(authorityMigration);
-    await pool.query(controlMigration);
-    await pool.query(pauseStopMigration);
-  });
+  beforeAll(async () => { await applyAllMigrations(pool); });
   beforeEach(async () => { await pool.query("TRUNCATE authority_decisions, authority_records, goal_controls CASCADE"); });
   afterAll(async () => { await pool.end(); });
 

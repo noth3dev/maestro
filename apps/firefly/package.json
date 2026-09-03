@@ -1,0 +1,16 @@
+{
+  "name": "@maestro/firefly",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@maestro/domain": "*",
+    "@maestro/persistence": "*",
+    "@maestro/git-adapter": "*"
+  },
+  "scripts": {
+    "start": "node ./dist/main.js"
+  },
+  "devDependencies": {
+    "pg": "^8.23.0"
+  }
+}

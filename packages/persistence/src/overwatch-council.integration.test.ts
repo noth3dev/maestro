@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { ExecutionKernelPort } from "@maestro/domain";
 import { evaluateOverwatchCouncilTrigger, OverwatchCouncilError, runOverwatchCouncilReview } from "./overwatch-council.js";
@@ -12,7 +11,6 @@ import { raiseSentinelChallenge } from "./sentinel-challenge.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
-const migrations = ["0001_phase1_core.sql", "0002_goal_leases.sql", "0006_evidence.sql", "0010_permanent_organization.sql", "0011_task_contracts.sql", "0012_goal_head_participations.sql", "0013_council_briefs.sql", "0014_head_activation_runtime_safety.sql", "0015_council_protocol.sql", "0016_council_hardening.sql", "0018_role_identity_hardening.sql", "0019_council_authority_hardening.sql", "0020_head_role_identity_hardening.sql", "0021_council_round_idempotency.sql", "0028_sentinel_findings.sql", "0029_sentinel_challenges.sql", "0030_semantic_reviews.sql", "0031_overwatch_council.sql", "0037_sentinel_challenge_idempotency.sql"];
 
 const criteria = [{ criterionId: "safety", description: "does this preserve safety invariants" }];
 const sentinelContext = (label: string) => ({ actorId: "  overwatch-sentinel  ", sessionRef: `sentinel-session:${label}`, commandId: randomUUID() });
@@ -60,10 +58,7 @@ describeDatabase("Overwatch Council with PostgreSQL", () => {
 
   beforeAll(async () => {
     await pool.query("DROP TABLE IF EXISTS overwatch_council_syntheses, overwatch_council_judgments, overwatch_council_rounds, semantic_reviews, sentinel_challenge_findings, sentinel_challenges, sentinel_findings, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, departments, organization_groups, permanent_roles, permanent_head_roles, role_persona_axes, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
-    for (const name of migrations) {
-      const sql = await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8");
-      await pool.query(sql);
-    }
+    await applyAllMigrations(pool);
   });
   beforeEach(async () => {
     await pool.query("TRUNCATE overwatch_council_syntheses, overwatch_council_judgments, overwatch_council_rounds, semantic_reviews, sentinel_challenge_findings, sentinel_challenges, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals RESTART IDENTITY CASCADE");

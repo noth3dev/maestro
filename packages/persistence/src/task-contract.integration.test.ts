@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { TaskContractSubstance } from "@maestro/domain";
 import { ExactConfirmationRequiredError, TaskContractIntegrityError, createDurableTaskContract, launchConfirmedTaskContract, readTaskContract, recordExactTaskContractConfirmation, updateDurableTaskContract } from "./task-contract.js";
@@ -19,7 +18,7 @@ const substance = (): TaskContractSubstance => ({
 
 describeDatabase("Task Contract exact confirmation with PostgreSQL", () => {
   const pool = new Pool({ connectionString: databaseUrl });
-  beforeAll(async () => { await pool.query(await readFile(fileURLToPath(new URL("../migrations/0011_task_contracts.sql", import.meta.url)), "utf8")); });
+  beforeAll(async () => { await applyAllMigrations(pool); });
   beforeEach(async () => { await pool.query("TRUNCATE task_contract_confirmations, task_contract_decisions, task_contracts CASCADE"); });
   afterAll(async () => { await pool.end(); });
 

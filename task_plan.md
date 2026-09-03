@@ -165,3 +165,36 @@ Two independent read-only audits (P1-P3 usability audit, P4 enrolled-device audi
 ### Status
 - [not_started] Track A (P1-P3 control-plane runtime lanes), items 1-7.
 - [not_started] Track B (P4 enrolled-device runtime lanes), items 1-8.
+## 2026-09-04 — Phase 4 P4S1 environment foundation
+- [self_verified_pending_postgres] Implemented typed environment recipe/manifest and durable PostgreSQL environment lifecycle records in migration 0039. Identity is content-addressed from canonical recipe and resolved inputs; durable writes require current Goal lease plus actor/session context.
+- Focused/domain tests and build pass. Full check: 267 passed, 194 skipped, 0 failed; integration tests require the assigned disposable PostgreSQL instance and were not run in this runtime.
+## Phase 4 step 6 — Firefly foundation
+- Implemented Firefly authenticated signal schema, freshness and replay rejection, independent append-only buffer, and PostgreSQL receiving primitive.
+- Self-verification currently: build passed; focused Firefly tests **2 passed, 0 failed**. Real-Postgres integration remains pending.
+- [in_progress] 9. Phase 4 Track B (plan/phase4.md work-sequence steps 6-9): P4S6 Firefly signal foundation is self-verified with real-PostgreSQL focused evidence pending independent review; steps 7-9 are next. Track A remains isolated in `.worktrees/p4-env`.
+- [in_progress] 9. Phase 4 Track B (plan/phase4.md work-sequence steps 6-9): P4S6 hardening and P4S7 fingerprint/dedup/severity-confidence/silence slices are self-verified with real-PostgreSQL evidence, pending independent review; step 8 Incident Brief/triage/remediation composition is next. Track A remains isolated in `.worktrees/p4-env`.
+
+
+## 2026-09-03 — Phase 4 integration merge landed
+- [in_progress] 9. `phase4/integration` now carries environments (P4S1+P4S2), devices (P4S4), Firefly (P4S6+P4S7), and the shared migration-runner fix, merged and fresh-verified together: 532 passed, 2 intentional live-Prime skips, 0 failed, stable over 2 consecutive real-PostgreSQL runs. Migration numbering collision between environments/devices (0039-0041) and Firefly (previously 0039-0042) resolved by renumbering Firefly to 0042-0045.
+- Next: P4S3 (browser environment adapter, Playwright), P4S5 (Goal-scoped device grants/command channel), P4S8-P4S9 (Firefly Incident Brief through closure and improvement evidence), P4S10 (live gates).
+
+
+## 2026-09-03 (continued) — P4S3 and P4S5 integrated
+- [in_progress] 9. `phase4/integration` now also carries P4S3 (Playwright browser environment adapter) and P4S5 (Goal-scoped device grants + sequenced capability-authenticated command channel). Full real-PostgreSQL check: 568 passed, 2 intentional live-Prime skips, 0 failed.
+- Next: P4S8-P4S9 (Firefly Incident Brief through closure and improvement evidence), P4S10 (live gates).
+
+
+## 2026-09-03 (continued) — P4S8 integrated
+- [in_progress] 9. `phase4/integration` now also carries P4S8 (Firefly Incident Brief -> Goal linkage -> immediate safe pause -> remediation through the existing Phase 2/3 pipeline -> closure). Full real-PostgreSQL check: 577 passed, 2 intentional live-Prime skips, 0 failed, stable over 2 runs.
+- Next: P4S9 (incident outcome/false-positive improvement evidence, no automatic changes), P4S10 (device-scope and seeded-incident live gates -- the Phase 4 exit gate).
+
+
+## 2026-09-03 (continued) — P4S9 integrated
+- [in_progress] 9. `phase4/integration` now also carries P4S9 (durable Firefly improvement evidence recorded on incident closure, no automatic changes). Full real-PostgreSQL check: 580 passed, 2 intentional live-Prime skips, 0 failed.
+- Next: P4S10, the device-scope and seeded-incident live gates -- the Phase 4 exit gate itself.
+
+
+## 2026-09-03 (continued) — P4S10 integrated; Phase 4 work-sequence complete at code level
+- [complete_pending_independent_review] 9. Phase 4 (plan/phase4.md) work-sequence steps 1-10 are implemented and integrated on `phase4/integration`, with real-PostgreSQL verification stable over repeated runs (582 passed, 2 intentional live-Prime skips, 0 failed). The exit gate (device/local-policy narrow-grant task plus Firefly outage/recovery/dedupe/isolated-remediation) is evidenced by two composition tests. Self-reviewed only; independent (no-edit) review of the full Phase 4 surface is the recommended next step, and merge to `main` remains behind that review per this project's existing acceptance policy.
+- Branches merged into `phase4/integration`: `fix/shared-migration-runner`, `phase4/p4s1-environments` (S1+S2), `phase4/p4s4-devices` (S4), `phase4/p4s6-firefly` (S6+S7), `phase4/p4s5-device-grants` (S3+S5), `phase4/p4s8-incident-workflow` (S8), `phase4/p4s9-improvement-evidence` (S9), `phase4/p4s10-live-gate` (S10).
