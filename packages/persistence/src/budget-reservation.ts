@@ -93,9 +93,20 @@ export async function reserveDepartmentBudget(pool: Pool, councilId: string, dep
     if (goalReservation.rowCount !== 1) throw new BudgetReservationError("Goal budget envelope must be reserved before a Department allocation");
     const goalRow = goalReservation.rows[0]!;
     const allocatable = allocatableCentsAfterQualityReserve(Number(goalRow.amount_cents));
+    // Sum every live Department reservation for this Goal, not only the
+    // children of the single newest Goal-envelope row: reserveGoalBudget is
+    // strictly append-only, so a routine, CEO-approval-free re-reservation
+    // at the same (or lower) amount creates a new goal-scope row whose
+    // reservation_id differs from any prior one. Scoping this sum to
+    // parent_reservation_id alone would make every Department allocation
+    // parented to a now-superseded Goal row invisible to this check,
+    // letting the same allocatable ceiling be spent again for each new
+    // envelope revision -- exactly matching this codebase's own
+    // sane-report.ts departmentSpend query, which already (correctly) sums
+    // by goal_id, not by a single parent reservation id.
     const allocated = await client.query<{ total: string }>(
-      "SELECT COALESCE(sum(amount_cents), 0)::bigint AS total FROM budget_reservations WHERE parent_reservation_id = $1 AND scope = 'department'",
-      [goalRow.reservation_id],
+      "SELECT COALESCE(sum(amount_cents), 0)::bigint AS total FROM budget_reservations WHERE goal_id = $1 AND scope = 'department'",
+      [council.goalId],
     );
     const alreadyAllocated = Number(allocated.rows[0]!.total);
     if (alreadyAllocated + amountCents > allocatable) {
@@ -135,9 +146,14 @@ export async function reserveMissionBudget(pool: Pool, councilId: string, depart
     );
     if (deptReservation.rowCount !== 1) throw new BudgetReservationError("Department budget must be allocated before a Mission allocation");
     const deptRow = deptReservation.rows[0]!;
+    // Same fix as reserveDepartmentBudget above, one level down: sum every
+    // live Mission reservation for this exact (council, department) pair,
+    // not only the children of the single newest Department-envelope row,
+    // so a re-reservation of the Department's own budget cannot make prior
+    // Mission allocations invisible to this overrun check.
     const allocated = await client.query<{ total: string }>(
-      "SELECT COALESCE(sum(amount_cents), 0)::bigint AS total FROM budget_reservations WHERE parent_reservation_id = $1 AND scope = 'mission'",
-      [deptRow.reservation_id],
+      "SELECT COALESCE(sum(amount_cents), 0)::bigint AS total FROM budget_reservations WHERE council_id = $1 AND department_id = $2 AND scope = 'mission'",
+      [councilId, departmentId],
     );
     const alreadyAllocated = Number(allocated.rows[0]!.total);
     if (alreadyAllocated + amountCents > Number(deptRow.amount_cents)) {
