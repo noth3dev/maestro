@@ -334,6 +334,7 @@ export async function closeFireflyIncident(
   resolutionSummary: string,
   retainedRisk: string,
   context: CouncilActorContext,
+  proof?: GoalLeaseProof,
 ): Promise<FireflyIncidentRecord> {
   if (incidentId.trim() === "") throw new FireflyIncidentError("incidentId is required");
   if (resolutionSummary.trim() === "") throw new FireflyIncidentError("resolutionSummary is required");
@@ -346,10 +347,28 @@ export async function closeFireflyIncident(
     if (current.rowCount !== 1) throw new FireflyIncidentNotFoundError(`Firefly incident not found: ${incidentId}`);
     const incident = current.rows[0]!;
     if (incident.status === "resolved" || incident.status === "false_positive") {
+      await client.query("COMMIT");
+      open = false;
       return mapIncident(incident);
     }
     if (outcome === "resolved" && incident.linked_goal_id === null) {
       throw new FireflyIncidentError("A resolved incident requires a linked remediation Goal");
+    }
+    // Closing an incident linked to a Goal requires proof of the Goal's
+    // current lease, so an arbitrary caller cannot mark someone else's
+    // remediation Goal resolved. Unlike an ordinary in-flight Goal write,
+    // closure legitimately happens after the Goal has already progressed
+    // past `active` (for example `certifying`), so this checks lease
+    // ownership only, not the stricter active-only control latch.
+    if (incident.linked_goal_id !== null) {
+      if (proof === undefined || incident.linked_goal_id !== proof.goalId || proof.goalId === "" || proof.ownerId === "" || !isValidFencingToken(proof.fencingToken)) {
+        throw new StaleGoalLeaseError(proof?.goalId ?? incident.linked_goal_id);
+      }
+      const lease = await client.query(
+        "SELECT 1 FROM goal_leases WHERE goal_id = $1 AND owner_id = $2 AND fencing_token = $3::bigint AND expires_at > clock_timestamp() FOR UPDATE",
+        [proof.goalId, proof.ownerId, proof.fencingToken],
+      );
+      if (lease.rowCount !== 1) throw new StaleGoalLeaseError(proof.goalId);
     }
     const updated = await client.query<IncidentRow>(
       `UPDATE firefly_incidents

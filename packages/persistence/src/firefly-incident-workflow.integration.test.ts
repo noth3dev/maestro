@@ -226,7 +226,7 @@ describeDatabase("Phase 4 work-sequence step 8: Firefly incident through Task Co
     const report = await generateSaneFinalReport(pool, goalId);
     expect(report.success).toBe(true);
 
-    const closed = await closeFireflyIncident(pool, incident.incidentId, "resolved", "Fixed the health endpoint and certified independently.", "none", context("sane"));
+    const closed = await closeFireflyIncident(pool, incident.incidentId, "resolved", "Fixed the health endpoint and certified independently.", "none", context("sane"), proof);
     expect(closed.status).toBe("resolved");
     expect(closed.linkedGoalId).toBe(goalId);
     expect(closed.closedAt).not.toBeNull();
@@ -280,6 +280,23 @@ describeDatabase("Phase 4 work-sequence step 8: Firefly incident through Task Co
     await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
     await linkFireflyIncidentToGoal(pool, incident.incidentId, goalId, proof, context("sane"));
     await expect(requestFireflyImmediateSafePause(pool, incident.incidentId, projectId, proof, context("firefly"))).rejects.toBeInstanceOf(FireflyIncidentAuthorizationError);
+  });
+
+  it("rejects a resolved close without proof of the linked Goal's current lease", async () => {
+    const { incident } = await seedIncident({ severity: "warning", confidence: 0.3, affectedComponent: "unauthorized-close-component" });
+    const goalId = randomUUID();
+    const projectId = randomUUID();
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "control-plane", leaseDurationMs: 60_000 });
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "CreateGoal", expectedVersion: 0 }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
+    await linkFireflyIncidentToGoal(pool, incident.incidentId, goalId, proof, context("sane"));
+
+    await expect(closeFireflyIncident(pool, incident.incidentId, "resolved", "done", "none", context("attacker"))).rejects.toThrow();
+    const otherGoalProof = await acquireGoalLease(pool, { goalId: randomUUID(), ownerId: "control-plane", leaseDurationMs: 60_000 });
+    await expect(closeFireflyIncident(pool, incident.incidentId, "resolved", "done", "none", context("attacker"), otherGoalProof)).rejects.toThrow();
+    await expect(closeFireflyIncident(pool, incident.incidentId, "resolved", "done", "none", context("sane"), proof)).resolves.toMatchObject({ status: "resolved" });
   });
 
   it("closes a false positive without a linked Goal, and rejects a resolved close without one", async () => {

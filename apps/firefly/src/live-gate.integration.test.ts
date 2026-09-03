@@ -134,7 +134,7 @@ describeDatabase("Phase 4 exit gate: Firefly detects a seeded incident while the
     // retained-risk evidence, matching plan/phase4.md's "Close with
     // resolution, retained risk, false-positive result, and Firefly
     // feedback."
-    const closed = await closeFireflyIncident(pool, incident.incidentId, "resolved", "Health endpoint capacity increased and independently certified.", "monitor for recurrence for 7 days", context("sane"));
+    const closed = await closeFireflyIncident(pool, incident.incidentId, "resolved", "Health endpoint capacity increased and independently certified.", "monitor for recurrence for 7 days", context("sane"), proof);
     expect(closed.status).toBe("resolved");
     expect(closed.linkedGoalId).toBe(goalId);
   });
