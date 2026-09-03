@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { authenticateLocalOperator, getGoalControl, listGoalEvents, PostgresAuthorityRepository, reconcileOnStartup } from "@maestro/persistence";
 import type { ActionRequest } from "@maestro/authority";
@@ -22,6 +23,15 @@ export interface ControlPlaneOverrides {
 
 /** Compose only the Phase 1 local Goal API. Credential setup remains a controlled persistence operation. */
 export function createControlPlane(config: MaestroConfig, overrides: ControlPlaneOverrides = {}): ControlPlane {
+  // Enforce the TLS-fail-closed invariant at this composition boundary too,
+  // not only in parseConfig: a caller may construct MaestroConfig directly
+  // (bypassing parseConfig entirely), and bearer secrets must never travel
+  // in cleartext on a non-loopback bind either way.
+  const isRemoteBind = config.host !== "127.0.0.1" && config.host !== "localhost";
+  if (isRemoteBind && !config.tls) {
+    throw new Error("Remote binding requires TLS certificate and key configuration");
+  }
+  const https = config.tls ? { cert: readFileSync(config.tls.certFile), key: readFileSync(config.tls.keyFile) } : undefined;
   const pool = new Pool({ connectionString: config.databaseUrl });
   const goalService = createDurableGoalService({
     pool,
@@ -43,6 +53,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     eventService: { listEvents: (projectId, after) => listGoalEvents(pool, { projectId, after }) },
     criticalActionService,
     readStateService: createReadStateService(pool),
+    ...(https ? { https } : {}),
   });
   let closed = false;
 

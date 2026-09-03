@@ -334,5 +334,92 @@ if (!databaseUrl) {
     }
   });
 
+  it("fails closed before listening with a missing or partial TLS pair on a remote bind, and serves real HTTPS once both are configured (Phase 1 re-patch item 3)", async () => {
+    const { execFileSync } = await import("node:child_process");
+    const { mkdtempSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const httpsModule = await import("node:https");
+    const certDir = mkdtempSync(join(tmpdir(), "maestro-tls-test-"));
+    const certFile = join(certDir, "cert.pem");
+    const keyFile = join(certDir, "key.pem");
+    execFileSync("openssl", [
+      "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", keyFile, "-out", certFile,
+      "-days", "1", "-subj", "/CN=maestro-test-loopback",
+    ]);
+
+    try {
+      // Missing TLS entirely for a remote bind fails closed at the
+      // composition boundary (createControlPlane), even bypassing parseConfig.
+      expect(() => createControlPlane({
+        databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "0.0.0.0", port: 0,
+        primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `tls-missing-${randomUUID()}`,
+        reconcilerLeaseDurationMs: 30_000,
+      })).toThrow("Remote binding requires TLS certificate and key configuration");
+
+      // A cert/key pair pointing at a file that does not exist fails closed
+      // as early as possible -- before a listener is ever bound and before
+      // any ControlPlane object is even constructed -- never silently as
+      // plain HTTP.
+      expect(() => createControlPlane({
+        databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "0.0.0.0", port: 0,
+        primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `tls-partial-${randomUUID()}`,
+        reconcilerLeaseDurationMs: 30_000, tls: { certFile, keyFile: "/nonexistent/key.pem" },
+      })).toThrow(/ENOENT/);
+
+      const secret = "tls-test-secret-not-configured";
+      const { credentialId } = await bootstrapLocalOperator(setupPool, { secret });
+      const controlPlane = createControlPlane({
+        databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0,
+        primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `tls-real-${randomUUID()}`,
+        reconcilerLeaseDurationMs: 30_000, tls: { certFile, keyFile },
+      });
+      try {
+        await controlPlane.listen();
+        const address = controlPlane.app.server.address();
+        if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
+
+        const projectId = randomUUID();
+        const goalId = randomUUID();
+        const body = JSON.stringify({ projectId });
+        const status = await new Promise<number>((resolve, reject) => {
+          const request = httpsModule.request(
+            {
+              host: "127.0.0.1", port: address.port, path: "/v1/goals", method: "POST",
+              // The test's own freshly generated self-signed cert is intentionally
+              // untrusted by the system CA store; this loopback-only test proves the
+              // listener really is HTTPS (a plain-HTTP client would fail the TLS
+              // handshake entirely), not that this exact cert is otherwise trusted.
+              rejectUnauthorized: false,
+              headers: {
+                authorization: `Bearer ${credentialId}.${secret}`,
+                "content-type": "application/json",
+                "idempotency-key": goalId,
+                "content-length": Buffer.byteLength(body),
+              },
+            },
+            (response) => { response.resume(); resolve(response.statusCode ?? 0); },
+          );
+          request.on("error", reject);
+          request.end(body);
+        });
+        expect(status).toBe(201);
+
+        // A plain-HTTP request to the same port must fail the connection
+        // entirely (protocol mismatch), proving this is not silently
+        // serving HTTP alongside/instead of HTTPS.
+        await expect(fetch(`http://127.0.0.1:${address.port}/v1/goals`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${credentialId}.${secret}`, "content-type": "application/json" },
+          body: JSON.stringify({ projectId: randomUUID() }),
+        })).rejects.toThrow();
+      } finally {
+        await controlPlane.close();
+      }
+    } finally {
+      rmSync(certDir, { recursive: true, force: true });
+    }
+  });
+
 });
 }

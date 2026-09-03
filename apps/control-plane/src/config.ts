@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+export interface MaestroTlsConfig {
+  certFile: string;
+  keyFile: string;
+}
+
 export interface MaestroConfig {
   databaseUrl: string;
   evidenceDir: string;
@@ -10,6 +15,12 @@ export interface MaestroConfig {
   leaseOwnerId: string;
   /** Duration of the startup-only reconciliation-leader lease; never renewed after startup. */
   reconcilerLeaseDurationMs: number;
+  /**
+   * Only ever set for a non-loopback bind; a remote bind without it is
+   * rejected below before this config is ever returned. File paths only --
+   * the composition root reads and passes their bytes to the real listener.
+   */
+  tls?: MaestroTlsConfig;
 }
 
 const schema = z.object({
@@ -21,6 +32,8 @@ const schema = z.object({
   MAESTRO_ACTOR_ID: z.string().min(1).default("maestro-control-plane"),
   MAESTRO_INSTANCE_ID: z.string().min(1).default("local-control-plane"),
   MAESTRO_RECONCILER_LEASE_MS: z.coerce.number().int().positive().default(30_000),
+  MAESTRO_TLS_CERT_FILE: z.string().min(1).optional(),
+  MAESTRO_TLS_KEY_FILE: z.string().min(1).optional(),
 });
 
 export function parseConfig(
@@ -40,13 +53,24 @@ export function parseConfig(
     MAESTRO_ACTOR_ID: actorId,
     MAESTRO_INSTANCE_ID: leaseOwnerId,
     MAESTRO_RECONCILER_LEASE_MS: reconcilerLeaseDurationMs,
+    MAESTRO_TLS_CERT_FILE: certFile,
+    MAESTRO_TLS_KEY_FILE: keyFile,
   } = parsed.data;
 
-  if (host !== "127.0.0.1" && host !== "localhost" && allowRemote !== "true") {
+  const isRemoteBind = host !== "127.0.0.1" && host !== "localhost";
+  if (isRemoteBind && allowRemote !== "true") {
     throw new Error("Remote binding requires explicit MAESTRO_ALLOW_REMOTE=true");
   }
+  if (isRemoteBind && (certFile === undefined || keyFile === undefined)) {
+    // Bearer secrets must never travel in cleartext on a non-loopback bind.
+    // Fail closed rather than silently serving plain HTTP remotely.
+    throw new Error("Remote binding requires TLS certificate and key configuration");
+  }
 
-  return { databaseUrl, evidenceDir, host, port, primeAgentVersion: "0.8.0", actorId, leaseOwnerId, reconcilerLeaseDurationMs };
+  return {
+    databaseUrl, evidenceDir, host, port, primeAgentVersion: "0.8.0", actorId, leaseOwnerId, reconcilerLeaseDurationMs,
+    ...(isRemoteBind ? { tls: { certFile: certFile!, keyFile: keyFile! } } : {}),
+  };
 }
 
 
