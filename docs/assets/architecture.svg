@@ -1,0 +1,162 @@
+<svg width="900" height="960" viewBox="0 0 900 960" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .bg { fill: #0a0a0c; }
+    .card { fill: #121217; stroke: #272730; stroke-width: 1.5; rx: 12; }
+    .card-accent { fill: #161622; stroke: #3b3b4f; stroke-width: 1.5; rx: 12; }
+    .card-gate { fill: #1a1512; stroke: #5c3826; stroke-width: 1.5; rx: 12; }
+    .card-db { fill: #101924; stroke: #234768; stroke-width: 1.5; rx: 12; }
+    
+    .title-main { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 700; font-size: 16px; fill: #ffffff; letter-spacing: 0.5px; }
+    .title-sub { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 400; font-size: 12px; fill: #9494a8; }
+    .text-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace; font-size: 11px; fill: #c4c4d4; }
+    .text-dim { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace; font-size: 10px; fill: #717182; }
+    .badge { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 600; font-size: 10px; fill: #e2e2ec; }
+    
+    .flow-line { stroke: #4f4f66; stroke-width: 2; stroke-dasharray: 4 4; }
+    .solid-line { stroke: #636388; stroke-width: 2; }
+    .gate-line { stroke: #d97757; stroke-width: 2; }
+    .db-line { stroke: #38bdf8; stroke-width: 2; }
+    
+    .node-dot { fill: #636388; }
+    .gate-dot { fill: #d97757; }
+    .db-dot { fill: #38bdf8; }
+  </style>
+
+  <rect width="900" height="960" class="bg" rx="16" />
+
+  <!-- HEADER -->
+  <text x="450" y="45" text-anchor="middle" class="title-main" font-size="20" letter-spacing="2">MAESTRO ARCHITECTURE</text>
+  <text x="450" y="68" text-anchor="middle" class="title-sub">Durable Control Plane, Hierarchical Execution &amp; Fail-Closed Security</text>
+
+  <!-- 1. CEO / OPERATOR -->
+  <g transform="translate(250, 95)">
+    <rect width="400" height="65" class="card-accent" />
+    <circle cx="30" cy="32" r="14" fill="#2d2d3d" />
+    <path d="M30 24 L34 30 L38 24 L38 38 L22 38 L22 24 L26 30 Z" fill="#e2e2ec" />
+    <text x="58" y="32" class="title-main">CEO / Human Operator</text>
+    <text x="58" y="48" class="text-body">• Natural Language Outcome &amp; Scope</text>
+    <text x="270" y="48" class="text-body">• Single Launch Confirmation</text>
+  </g>
+
+  <!-- CONNECTOR 1 -->
+  <path d="M450 160 L450 190" class="solid-line" />
+  <polygon points="445,185 450,195 455,185" fill="#636388" />
+  <text x="460" y="180" class="text-dim">Natural Language Goal</text>
+
+  <!-- 2. SECRETARY OFFICE (SANE) -->
+  <g transform="translate(200, 195)">
+    <rect width="500" height="75" class="card" />
+    <rect x="16" y="16" width="42" height="42" rx="8" fill="#1e1e2a" />
+    <text x="37" y="42" text-anchor="middle" font-size="20" fill="#a5a5c7">🏛️</text>
+    <text x="70" y="34" class="title-main">Sane (Secretary Office Head)</text>
+    <text x="70" y="52" class="text-body">• Intakes Goals &amp; Coordinates Lifecycle State Machine</text>
+    <text x="70" y="66" class="text-dim">Reads durable PostgreSQL state; issues no direct code edits</text>
+  </g>
+
+  <!-- CONNECTOR 2 -->
+  <path d="M450 270 L450 300" class="solid-line" />
+  <polygon points="445,295 450,305 455,295" fill="#636388" />
+
+  <!-- 3. OVERTURE INTAKE CREW -->
+  <g transform="translate(150, 305)">
+    <rect width="600" height="90" class="card" />
+    <text x="20" y="28" class="title-main">🎼 Overture Crew (Intake &amp; Task Contract Drafting)</text>
+    <text x="20" y="48" class="text-body">Candidate Roles: Conversation Lead • Architecture Analyst • External Research Scout</text>
+    <text x="20" y="64" class="text-body">                Security Evaluator • Design &amp; Mock Specialist • Task Editor</text>
+    <rect x="440" y="32" width="140" height="42" rx="6" fill="#1a1a24" stroke="#333344" />
+    <text x="510" y="50" text-anchor="middle" class="badge" fill="#38bdf8">Task Contract</text>
+    <text x="510" y="64" text-anchor="middle" class="text-dim">task.md (Content Hash)</text>
+  </g>
+
+  <!-- CONNECTOR 3 (CEO CONFIRMATION GATE) -->
+  <path d="M450 395 L450 435" class="gate-line" />
+  <polygon points="445,430 450,440 455,430" fill="#d97757" />
+  <rect x="360" y="407" width="180" height="20" rx="4" fill="#2a1a14" stroke="#5c3826" />
+  <text x="450" y="421" text-anchor="middle" class="badge" fill="#d97757">Single Launch Confirmation</text>
+
+  <!-- 4. PERMANENT DEPARTMENTS & HEAD COUNCIL -->
+  <g transform="translate(100, 440)">
+    <rect width="700" height="115" class="card" />
+    <text x="20" y="28" class="title-main">👥 Permanent Groups &amp; Department Heads (Wake-on-Demand)</text>
+    
+    <!-- Groups Grid -->
+    <rect x="20" y="40" width="120" height="60" rx="6" fill="#161620" stroke="#2a2a38" />
+    <text x="80" y="58" text-anchor="middle" class="badge">Product Group</text>
+    <text x="80" y="74" text-anchor="middle" class="text-dim">Product • Design</text>
+    
+    <rect x="150" y="40" width="130" height="60" rx="6" fill="#161620" stroke="#2a2a38" />
+    <text x="215" y="58" text-anchor="middle" class="badge">Tech Group</text>
+    <text x="215" y="74" text-anchor="middle" class="text-dim">Eng • Sec • Infra</text>
+    
+    <rect x="290" y="40" width="130" height="60" rx="6" fill="#161620" stroke="#2a2a38" />
+    <text x="355" y="58" text-anchor="middle" class="badge">Intelligence</text>
+    <text x="355" y="74" text-anchor="middle" class="text-dim">Research • Data</text>
+
+    <rect x="430" y="40" width="120" height="60" rx="6" fill="#161620" stroke="#2a2a38" />
+    <text x="490" y="58" text-anchor="middle" class="badge">Assurance</text>
+    <text x="490" y="74" text-anchor="middle" class="text-dim">Quality • Safety</text>
+
+    <!-- Sealed Council Box -->
+    <rect x="560" y="40" width="120" height="60" rx="6" fill="#201a16" stroke="#4a3020" />
+    <text x="620" y="58" text-anchor="middle" class="badge" fill="#d97757">Head Council</text>
+    <text x="620" y="74" text-anchor="middle" class="text-dim">Sealed Submissions</text>
+  </g>
+
+  <!-- CONNECTOR 4 -->
+  <path d="M450 555 L450 585" class="solid-line" />
+  <polygon points="445,580 450,590 455,580" fill="#636388" />
+  <text x="460" y="575" class="text-dim">Mission Bundles</text>
+
+  <!-- 5. SCOUT & EXECUTION WORKERS -->
+  <g transform="translate(100, 590)">
+    <rect width="330" height="100" class="card" />
+    <text x="20" y="28" class="title-main">🛠️ Scout &amp; Execution Workers</text>
+    <text x="20" y="48" class="text-body">• Prime Agent Subagent Sessions</text>
+    <text x="20" y="64" class="text-body">• Isolated Git Worktrees (.worktrees/)</text>
+    <text x="20" y="80" class="text-dim">• Generates SHA-256 Evidence Bundles</text>
+  </g>
+
+  <!-- 6. AUTHORIZED EFFECT EXECUTOR (GATEWAY) -->
+  <g transform="translate(470, 590)">
+    <rect width="330" height="100" class="card-gate" />
+    <text x="20" y="28" class="title-main" fill="#d97757">🛡️ AuthorizedEffectExecutor</text>
+    <text x="20" y="48" class="text-body">• Default-Deny &amp; Action Classification</text>
+    <text x="20" y="64" class="text-body">• Audit-Before-Effect DB Intent Commit</text>
+    <text x="20" y="80" class="text-dim">• Fencing Token Lease Validation</text>
+  </g>
+
+  <!-- SIDE CONNECTOR WORKERS TO GATEWAY -->
+  <path d="M430 640 L470 640" class="gate-line" />
+  <polygon points="465,635 475,640 465,645" fill="#d97757" />
+
+  <!-- CONNECTOR 5 DOWN TO DB & OVERWATCH -->
+  <path d="M265 690 L265 730" class="solid-line" />
+  <polygon points="260,725 265,735 270,725" fill="#636388" />
+
+  <path d="M635 690 L635 730" class="db-line" />
+  <polygon points="630,725 635,735 640,725" fill="#38bdf8" />
+
+  <!-- 7. OVERWATCH & QUALITY CERTIFICATION -->
+  <g transform="translate(50, 735)">
+    <rect width="400" height="110" class="card" />
+    <text x="20" y="28" class="title-main">👁️ Overwatch &amp; Quality Certification</text>
+    <text x="20" y="48" class="text-body">• Sentinel: Real-time Event Stream Integrity</text>
+    <text x="20" y="64" class="text-body">• Quality Dept: Independent Test Execution</text>
+    <text x="20" y="80" class="text-body">• Overwatch Council: Cross-Dept Adjudication</text>
+    <text x="20" y="96" class="text-dim">Executors cannot self-certify work</text>
+  </g>
+
+  <!-- 8. POSTGRESQL 17 DURABLE CONTROL PLANE -->
+  <g transform="translate(470, 735)">
+    <rect width="380" height="110" class="card-db" />
+    <text x="20" y="28" class="title-main" fill="#38bdf8">💾 PostgreSQL 17 Control Plane</text>
+    <text x="20" y="48" class="text-body">• Sole Operational Single Source of Truth</text>
+    <text x="20" y="64" class="text-body">• Append-only Event Log (goal_events)</text>
+    <text x="20" y="80" class="text-body">• Monotonic Fencing Leases (goal_leases)</text>
+    <text x="20" y="96" class="text-dim">• Transactional Outbox &amp; Idempotency Keys</text>
+  </g>
+
+  <!-- FOOTER BOUNDARY -->
+  <rect x="50" y="870" width="800" height="40" rx="8" fill="#121218" stroke="#252533" />
+  <text x="450" y="894" text-anchor="middle" class="text-dim">Prime Agent SDK Execution Kernel Boundaries (<tspan fill="#38bdf8">packages/prime-adapter</tspan>) • Linux Runtime Isolated</text>
+</svg>

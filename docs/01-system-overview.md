@@ -4,45 +4,9 @@
 
 Maestro is designed to solve the fundamental unreliability, memory drift, and authority leakage inherent in single-loop agent systems. Rather than relying on a monolithic prompt-loop, Maestro implements an **enterprise organizational model** with strict **separation of powers**, **durable persistence**, and **fail-closed authority gates**.
 
-```text
-               ┌──────────────────────────────────────────────┐
-               │              CEO / Human Operator            │
-               └──────────────────────┬───────────────────────┘
-                                      │ Natural Language Outcome & Launch Confirmation
-                                      ▼
-               ┌──────────────────────────────────────────────┐
-               │            Secretary Office (Sane)           │
-               │   - Intakes goals & orchestrates workflow    │
-               │   - Reads durable state; issues no direct code│
-               └──────────────────────┬───────────────────────┘
-                                      │
-               ┌──────────────────────┴───────────────────────┐
-               │           Overture Intake Crew               │
-               │   - 6 Candidate Personas (Arch, Sec, etc.)   │
-               │   - Drafts immutable Task Contract (task.md) │
-               └──────────────────────┬───────────────────────┘
-                                      │ Single Launch Confirmation
-                                      ▼
-               ┌──────────────────────────────────────────────┐
-               │     Permanent Department Heads & Council     │
-               │   - Wake-on-Demand (Product, Tech, etc.)     │
-               │   - Write sealed briefs & Department Plans   │
-               └──────────────────────┬───────────────────────┘
-                                      │ Mission Bundles
-                                      ▼
-               ┌──────────────────────────────────────────────┐
-               │        Scout & Execution Workers             │
-               │   - Isolated Git Worktrees & Tool Execution  │
-               │   - Generates SHA-256 Evidence Bundles       │
-               └──────────────────────┬───────────────────────┘
-                                      │
-                                      ▼
-               ┌──────────────────────────────────────────────┐
-               │   Overwatch & Quality Certification          │
-               │   - Sentinel real-time event integrity check │
-               │   - Independent Quality certification        │
-               └──────────────────────────────────────────────┘
-```
+<p align="center">
+  <img alt="Maestro Architecture" src="assets/architecture.svg" width="100%" style="max-width: 900px;">
+</p>
 
 ---
 
