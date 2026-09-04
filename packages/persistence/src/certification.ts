@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { assertValidDepartmentAcceptanceSubstance, assertValidQualityCertificationSubstance, assertValidWaiverSubstance, certificationsConflict, type DepartmentAcceptanceSubstance, type QualityCertificationSubstance, type QualityVerdict, type WaiverSubstance } from "@maestro/domain";
 import { verifyEvidenceRecord, type EvidenceContentReader } from "@maestro/evidence";
-import { isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
-import type { Pool } from "pg";
+import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
+import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
+import type { Pool, PoolClient } from "pg";
 
 export class CertificationError extends Error {}
 export class CertificationNotFoundError extends CertificationError {}
@@ -45,19 +46,25 @@ export async function acceptDepartmentWorkerOutput(pool: Pool, workerId: string,
   await assertAuthorizedDepartmentHead(pool, councilId, departmentId, context);
   const commit = await pool.query<{ commit_sha: string }>("SELECT commit_sha FROM integration_commits WHERE worker_id = $1 ORDER BY recorded_at DESC LIMIT 1", [workerId]);
   if (commit.rowCount !== 1) throw new CertificationError("Worker has no recorded integration commit to accept");
-  const existing = await pool.query<AcceptanceRow>("SELECT acceptance_id, worker_id, commit_sha, reason, accepted_by FROM department_acceptances WHERE worker_id = $1", [workerId]);
-  if ((existing.rowCount ?? 0) > 0) {
-    const prior = existing.rows[0]!;
-    if (prior.reason === substance.reason.trim()) return mapAcceptance(prior);
-    throw new CertificationError("Worker output was already accepted with a different reason");
-  }
+  // check-then-insert on worker_id alone would race two concurrent callers
+  // for the same worker straight into the DB's UNIQUE (worker_id)
+  // constraint, surfacing a raw Postgres error instead of this codebase's
+  // usual idempotent-return pattern. INSERT ... ON CONFLICT DO NOTHING makes
+  // the insert itself the atomic check, and a real conflict re-reads the
+  // now-durable row instead of throwing.
   const inserted = await pool.query<AcceptanceRow>(
     `INSERT INTO department_acceptances (acceptance_id, worker_id, commit_sha, reason, accepted_by, session_ref)
      VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (worker_id) DO NOTHING
      RETURNING acceptance_id, worker_id, commit_sha, reason, accepted_by`,
     [randomUUID(), workerId, commit.rows[0]!.commit_sha, substance.reason.trim(), context.actorId, context.sessionRef],
   );
-  return mapAcceptance(inserted.rows[0]!);
+  if ((inserted.rowCount ?? 0) > 0) return mapAcceptance(inserted.rows[0]!);
+  const existing = await pool.query<AcceptanceRow>("SELECT acceptance_id, worker_id, commit_sha, reason, accepted_by FROM department_acceptances WHERE worker_id = $1", [workerId]);
+  if ((existing.rowCount ?? 0) !== 1) throw new CertificationError("Worker output acceptance could not be resolved after a concurrent insert");
+  const prior = existing.rows[0]!;
+  if (prior.reason === substance.reason.trim()) return mapAcceptance(prior);
+  throw new CertificationError("Worker output was already accepted with a different reason");
 }
 
 export interface QualityCertification {
@@ -139,13 +146,26 @@ interface CertificationLineage {
  * the accepted commit and the frozen Goal revision come from durable rows;
  * callers cannot supply a SHA or a contract version to certify.
  */
+/** A valid lease alone does not authorize a certification write once a Goal is paused, stopping, stopped, or emergency-stopped -- same invariant every other Phase 2/3 write module enforces. */
+async function lockGoalLease(client: PoolClient, proof: GoalLeaseProof): Promise<void> {
+  const lease = await client.query("SELECT 1 FROM goal_leases WHERE goal_id = $1 AND owner_id = $2 AND fencing_token = $3::bigint AND expires_at > clock_timestamp() FOR UPDATE", [proof.goalId, proof.ownerId, proof.fencingToken]);
+  if (lease.rowCount !== 1) throw new StaleGoalLeaseError(proof.goalId);
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 33))", [proof.goalId]);
+  await assertGoalControlOpen(client, proof.goalId);
+}
+
+function assertValidLeaseProofFor(goalId: string, proof: GoalLeaseProof): void {
+  if (goalId !== proof.goalId || proof.goalId === "" || proof.ownerId === "" || !isValidFencingToken(proof.fencingToken)) throw new StaleGoalLeaseError(proof.goalId);
+}
+
 async function readCertificationLineage(
   pool: Pool,
   kind: CertificationKind,
   workerId: string,
   certifyingDepartmentId: string,
+  proof: GoalLeaseProof,
   context: CouncilActorContext,
-): Promise<{ lineage: CertificationLineage; client: import("pg").PoolClient; council: Awaited<ReturnType<typeof readHeadCouncil>> }> {
+): Promise<{ lineage: CertificationLineage; client: PoolClient; council: Awaited<ReturnType<typeof readHeadCouncil>> }> {
   const worker = await pool.query<{ council_id: string; department_id: string }>("SELECT council_id, department_id FROM workers WHERE worker_id = $1", [workerId]);
   if (worker.rowCount !== 1) throw new CertificationNotFoundError(`Worker not found: ${workerId}`);
   const { council_id: councilId, department_id: producingDepartment } = worker.rows[0]!;
@@ -154,12 +174,14 @@ async function readCertificationLineage(
   if (certifyingDepartmentId !== requiredAuthority) throw new CertificationError(`${kind} certification requires the ${requiredAuthority} Department authority`);
   if (certifyingDepartmentId === producingDepartment) throw new CertificationError(`The producing Department cannot issue its own ${kind} certification`);
   const council = await readHeadCouncil(pool, councilId);
+  assertValidLeaseProofFor(council.goalId, proof);
   await assertAuthorizedDepartmentHead(pool, councilId, certifyingDepartmentId, context, council);
 
   const client = await pool.connect();
   let open = false;
   try {
     await client.query("BEGIN"); open = true;
+    await lockGoalLease(client, proof);
     const lockedWorker = await client.query<{ council_id: string; department_id: string; status: string }>(
       "SELECT council_id, department_id, status FROM workers WHERE worker_id = $1 FOR UPDATE", [workerId],
     );
@@ -227,11 +249,12 @@ async function createCertification(
   workerId: string,
   substance: QualityCertificationSubstance,
   certifyingDepartmentId: string,
+  proof: GoalLeaseProof,
   context: CouncilActorContext,
   content?: EvidenceContentReader,
 ): Promise<QualityCertification | ConditionalCertification> {
   assertValidQualityCertificationSubstance(substance);
-  const prepared = await readCertificationLineage(pool, kind, workerId, certifyingDepartmentId, context);
+  const prepared = await readCertificationLineage(pool, kind, workerId, certifyingDepartmentId, proof, context);
   const { lineage, client } = prepared;
   try {
     const project = await client.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [lineage.goalId]);
@@ -293,8 +316,8 @@ async function createCertification(
 }
 
 /** Quality is an independent Department path; it cannot be replaced by Security or Safety authority. */
-export async function certifyQuality(pool: Pool, workerId: string, substance: QualityCertificationSubstance, certifyingDepartmentId: string, context: CouncilActorContext, content?: EvidenceContentReader): Promise<QualityCertification> {
-  return await createCertification(pool, "quality", workerId, substance, certifyingDepartmentId, context, content) as QualityCertification;
+export async function certifyQuality(pool: Pool, workerId: string, substance: QualityCertificationSubstance, certifyingDepartmentId: string, proof: GoalLeaseProof, context: CouncilActorContext, content?: EvidenceContentReader): Promise<QualityCertification> {
+  return await createCertification(pool, "quality", workerId, substance, certifyingDepartmentId, proof, context, content) as QualityCertification;
 }
 
 export async function listQualityCertifications(pool: Pool, goalId: string): Promise<readonly QualityCertification[]> {
@@ -308,8 +331,8 @@ export async function listQualityCertifications(pool: Pool, goalId: string): Pro
 }
 
 /** Conditional certification is available only to its designated authority Department. */
-export async function certifyConditional(pool: Pool, kind: "security" | "safety_compliance", workerId: string, substance: QualityCertificationSubstance, certifyingDepartmentId: string, context: CouncilActorContext, content?: EvidenceContentReader): Promise<ConditionalCertification> {
-  return await createCertification(pool, kind, workerId, substance, certifyingDepartmentId, context, content) as ConditionalCertification;
+export async function certifyConditional(pool: Pool, kind: "security" | "safety_compliance", workerId: string, substance: QualityCertificationSubstance, certifyingDepartmentId: string, proof: GoalLeaseProof, context: CouncilActorContext, content?: EvidenceContentReader): Promise<ConditionalCertification> {
+  return await createCertification(pool, kind, workerId, substance, certifyingDepartmentId, proof, context, content) as ConditionalCertification;
 }
 
 export async function listConditionalCertifications(pool: Pool, goalId: string, kind?: "security" | "safety_compliance"): Promise<readonly ConditionalCertification[]> {
@@ -350,30 +373,44 @@ export async function grantCertificationWaiver(
   findingId: string,
   substance: WaiverSubstance,
   grantedByActorId: string,
+  proof: GoalLeaseProof,
 ): Promise<CertificationWaiver> {
   assertValidWaiverSubstance(substance);
   const table = certificationTable === "quality_certifications" ? "quality_certifications" : "conditional_certifications";
-  const cert = await pool.query<{ findings: { findingId: string; severity: "critical" | "noncritical" }[] }>(
-    `SELECT findings FROM ${table} WHERE certification_id = $1`,
-    [certificationId],
-  );
-  if (cert.rowCount !== 1) throw new CertificationNotFoundError(`Certification not found: ${certificationId}`);
-  const matchingFindings = cert.rows[0]!.findings.filter((candidate) => candidate.findingId === findingId);
-  if (matchingFindings.length === 0) throw new CertificationError(`Finding not found on certification: ${findingId}`);
-  if (matchingFindings.length > 1) throw new CertificationError(`Finding identity is ambiguous on certification: ${findingId}`);
-  if (matchingFindings[0]!.severity === "critical") throw new CertificationError("A critical finding cannot be waived to close the Goal");
-  const existing = await pool.query<WaiverRow>(
-    "SELECT waiver_id, certification_table, certification_id, finding_id, authority, reason FROM certification_waivers WHERE certification_table = $1 AND certification_id = $2 AND finding_id = $3",
-    [certificationTable, certificationId, findingId],
-  );
-  if ((existing.rowCount ?? 0) > 0) return mapWaiver(existing.rows[0]!);
-  const inserted = await pool.query<WaiverRow>(
-    `INSERT INTO certification_waivers (waiver_id, certification_table, certification_id, finding_id, authority, reason, consequence, follow_up, granted_by, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-     RETURNING waiver_id, certification_table, certification_id, finding_id, authority, reason`,
-    [randomUUID(), certificationTable, certificationId, findingId, substance.authority, substance.reason, substance.consequence, substance.followUp, grantedByActorId, substance.expiresAt],
-  );
-  return mapWaiver(inserted.rows[0]!);
+  const client = await pool.connect();
+  let open = false;
+  try {
+    await client.query("BEGIN"); open = true;
+    const cert = await client.query<{ goal_id: string; findings: { findingId: string; severity: "critical" | "noncritical" }[] }>(
+      `SELECT goal_id, findings FROM ${table} WHERE certification_id = $1`,
+      [certificationId],
+    );
+    if (cert.rowCount !== 1) throw new CertificationNotFoundError(`Certification not found: ${certificationId}`);
+    assertValidLeaseProofFor(cert.rows[0]!.goal_id, proof);
+    await lockGoalLease(client, proof);
+    const matchingFindings = cert.rows[0]!.findings.filter((candidate) => candidate.findingId === findingId);
+    if (matchingFindings.length === 0) throw new CertificationError(`Finding not found on certification: ${findingId}`);
+    if (matchingFindings.length > 1) throw new CertificationError(`Finding identity is ambiguous on certification: ${findingId}`);
+    if (matchingFindings[0]!.severity === "critical") throw new CertificationError("A critical finding cannot be waived to close the Goal");
+    const existing = await client.query<WaiverRow>(
+      "SELECT waiver_id, certification_table, certification_id, finding_id, authority, reason FROM certification_waivers WHERE certification_table = $1 AND certification_id = $2 AND finding_id = $3",
+      [certificationTable, certificationId, findingId],
+    );
+    if ((existing.rowCount ?? 0) > 0) { await client.query("COMMIT"); open = false; return mapWaiver(existing.rows[0]!); }
+    const inserted = await client.query<WaiverRow>(
+      `INSERT INTO certification_waivers (waiver_id, certification_table, certification_id, finding_id, authority, reason, consequence, follow_up, granted_by, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING waiver_id, certification_table, certification_id, finding_id, authority, reason`,
+      [randomUUID(), certificationTable, certificationId, findingId, substance.authority, substance.reason, substance.consequence, substance.followUp, grantedByActorId, substance.expiresAt],
+    );
+    await client.query("COMMIT"); open = false;
+    return mapWaiver(inserted.rows[0]!);
+  } catch (error) {
+    if (open) await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /** Reports whether the Goal's recorded certifications currently conflict (some passed, some failed/blocked). */
@@ -485,7 +522,8 @@ export async function isCertificationConflictResolved(
  * captures the current contract/revision identity, and stores the Council's
  * actual synthesis verdict.
  */
-export async function adjudicateCertificationConflict(pool: Pool, roundResult: { roundId: string }, goalId: string, conflictingVerdicts: readonly QualityVerdict[]): Promise<CertificationConflictResolution> {
+export async function adjudicateCertificationConflict(pool: Pool, roundResult: { roundId: string }, goalId: string, conflictingVerdicts: readonly QualityVerdict[], proof: GoalLeaseProof): Promise<CertificationConflictResolution> {
+  assertValidLeaseProofFor(goalId, proof);
   const round = await pool.query<{ goal_id: string; final_verdict: "proceed" | "do_not_proceed" | "escalate" }>(
     `SELECT round.goal_id, synthesis.final_verdict
        FROM overwatch_council_rounds round
@@ -505,6 +543,7 @@ export async function adjudicateCertificationConflict(pool: Pool, roundResult: {
   const client = await pool.connect(); let open = false;
   try {
     await client.query("BEGIN"); open = true;
+    await lockGoalLease(client, proof);
     await client.query(
       `INSERT INTO certification_conflict_resolutions
         (resolution_id, goal_id, round_id, conflicting_verdicts, resolution_verdict,

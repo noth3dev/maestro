@@ -183,7 +183,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
     await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "Head reviewed the integrated worker output" }, headContext("product"));
     const revision = await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
-    const quality = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: evidenceIds }, "quality", headContext("quality"));
+    const quality = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: evidenceIds }, "quality", proof, headContext("quality"));
     expect(quality.verdict).toBe("passed");
 
     const bundle = await recordEvidenceBundle(pool, goalId);
