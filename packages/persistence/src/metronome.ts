@@ -1,20 +1,20 @@
 import { randomUUID } from "node:crypto";
-import { detectMissingEvidenceFindings, detectMissingPlanItemFindings, detectStaleWorkerFindings, normalizeSentinelIdentity, type DepartmentPlanItem, type SentinelFinding } from "@maestro/domain";
+import { detectMissingEvidenceFindings, detectMissingPlanItemFindings, detectStaleWorkerFindings, normalizeMetronomeIdentity, type DepartmentPlanItem, type MetronomeFinding } from "@maestro/domain";
 import type { Pool } from "pg";
-import { assertSentinelMutationAuthorized, requireSentinelAuthorization, type SentinelActorContext } from "./sentinel-challenge.js";
+import { assertMetronomeMutationAuthorized, requireMetronomeAuthorization, type MetronomeActorContext } from "./metronome-challenge.js";
 import type { GoalLeaseProof } from "./commands.js";
 
-export interface SentinelFindingRecord extends SentinelFinding {
+export interface MetronomeFindingRecord extends MetronomeFinding {
   readonly findingId: string;
   readonly resolved: boolean;
 }
 
 interface FindingRow {
-  finding_id: string; goal_id: string; rule_id: SentinelFinding["ruleId"]; evidence_identity: string;
+  finding_id: string; goal_id: string; rule_id: MetronomeFinding["ruleId"]; evidence_identity: string;
   plan_version: number; details: Record<string, unknown>; resolved_at: Date | null;
 }
 
-function mapFinding(row: FindingRow): SentinelFindingRecord {
+function mapFinding(row: FindingRow): MetronomeFindingRecord {
   return {
     findingId: row.finding_id, goalId: row.goal_id, ruleId: row.rule_id, evidenceIdentity: row.evidence_identity,
     planVersion: row.plan_version, details: row.details, resolved: row.resolved_at !== null,
@@ -29,20 +29,20 @@ function mapFinding(row: FindingRow): SentinelFindingRecord {
  * plan-version), matching the required "deduplicate by Goal, rule, evidence
  * identity, and active plan version".
  */
-export async function scanGoalForSentinelFindings(
+export async function scanGoalForMetronomeFindings(
   pool: Pool,
   goalId: string,
   proof: GoalLeaseProof,
-  context: SentinelActorContext,
-): Promise<readonly SentinelFindingRecord[]> {
-  const normalizedGoalId = normalizeSentinelIdentity(goalId);
-  const authorization = requireSentinelAuthorization(proof, context);
+  context: MetronomeActorContext,
+): Promise<readonly MetronomeFindingRecord[]> {
+  const normalizedGoalId = normalizeMetronomeIdentity(goalId);
+  const authorization = requireMetronomeAuthorization(proof, context);
   const client = await pool.connect();
   let open = false;
   try {
     await client.query("BEGIN");
     open = true;
-    await assertSentinelMutationAuthorized(client, normalizedGoalId, authorization.proof, authorization.context, "sentinel");
+    await assertMetronomeMutationAuthorized(client, normalizedGoalId, authorization.proof, authorization.context, "metronome");
 
     const plans = await client.query<{ department_id: string; current_version: number; substance: { items: readonly DepartmentPlanItem[] } }>(
       "SELECT department_id, current_version, substance FROM department_plans WHERE goal_id = $1",
@@ -86,10 +86,10 @@ export async function scanGoalForSentinelFindings(
       ...detectMissingEvidenceFindings(normalizedGoalId, currentMaxPlanVersion, allReferences, durableEvidence),
     ];
 
-    const recorded: SentinelFindingRecord[] = [];
+    const recorded: MetronomeFindingRecord[] = [];
     for (const finding of findings) {
       const inserted = await client.query<FindingRow>(
-        `INSERT INTO sentinel_findings (finding_id, goal_id, rule_id, evidence_identity, plan_version, details)
+        `INSERT INTO metronome_findings (finding_id, goal_id, rule_id, evidence_identity, plan_version, details)
          VALUES ($1, $2, $3, $4, $5, $6::jsonb)
          ON CONFLICT (goal_id, rule_id, evidence_identity, plan_version) DO NOTHING
          RETURNING finding_id, goal_id, rule_id, evidence_identity, plan_version, details, resolved_at`,
@@ -108,50 +108,50 @@ export async function scanGoalForSentinelFindings(
   }
 }
 
-export async function listSentinelFindings(pool: Pool, goalId: string, includeResolved = false): Promise<readonly SentinelFindingRecord[]> {
+export async function listMetronomeFindings(pool: Pool, goalId: string, includeResolved = false): Promise<readonly MetronomeFindingRecord[]> {
   const result = await pool.query<FindingRow>(
     includeResolved
-      ? "SELECT finding_id, goal_id, rule_id, evidence_identity, plan_version, details, resolved_at FROM sentinel_findings WHERE goal_id = $1 ORDER BY detected_at"
-      : "SELECT finding_id, goal_id, rule_id, evidence_identity, plan_version, details, resolved_at FROM sentinel_findings WHERE goal_id = $1 AND resolved_at IS NULL ORDER BY detected_at",
+      ? "SELECT finding_id, goal_id, rule_id, evidence_identity, plan_version, details, resolved_at FROM metronome_findings WHERE goal_id = $1 ORDER BY detected_at"
+      : "SELECT finding_id, goal_id, rule_id, evidence_identity, plan_version, details, resolved_at FROM metronome_findings WHERE goal_id = $1 AND resolved_at IS NULL ORDER BY detected_at",
     [goalId],
   );
   return result.rows.map(mapFinding);
 }
 
-export class SentinelFindingNotFoundError extends Error {}
-export class SentinelFindingError extends Error {}
+export class MetronomeFindingNotFoundError extends Error {}
+export class MetronomeFindingError extends Error {}
 
 /** Resolving a finding is a one-way, auditable action; it requires a nonblank reason, a current Goal lease, and an authorized resolver identity/session. */
-export async function resolveSentinelFinding(
+export async function resolveMetronomeFinding(
   pool: Pool,
   findingId: string,
   reason: string,
   proof: GoalLeaseProof,
-  context: SentinelActorContext,
-): Promise<SentinelFindingRecord> {
-  if (reason.trim() === "") throw new SentinelFindingError("A Sentinel finding resolution requires a nonblank reason");
-  const authorization = requireSentinelAuthorization(proof, context);
+  context: MetronomeActorContext,
+): Promise<MetronomeFindingRecord> {
+  if (reason.trim() === "") throw new MetronomeFindingError("A Metronome finding resolution requires a nonblank reason");
+  const authorization = requireMetronomeAuthorization(proof, context);
   const client = await pool.connect(); let open = false;
   try {
     await client.query("BEGIN"); open = true;
     const candidate = await client.query<FindingRow>(
-      "SELECT finding_id, goal_id, rule_id, evidence_identity, plan_version, details, resolved_at FROM sentinel_findings WHERE finding_id = $1",
+      "SELECT finding_id, goal_id, rule_id, evidence_identity, plan_version, details, resolved_at FROM metronome_findings WHERE finding_id = $1",
       [findingId.trim()],
     );
-    if (candidate.rowCount !== 1) throw new SentinelFindingNotFoundError(`Sentinel finding not found: ${findingId}`);
-    await assertSentinelMutationAuthorized(client, candidate.rows[0]!.goal_id, authorization.proof, authorization.context, "resolver");
+    if (candidate.rowCount !== 1) throw new MetronomeFindingNotFoundError(`Metronome finding not found: ${findingId}`);
+    await assertMetronomeMutationAuthorized(client, candidate.rows[0]!.goal_id, authorization.proof, authorization.context, "resolver");
     const current = await client.query<FindingRow>(
-      "SELECT finding_id, goal_id, rule_id, evidence_identity, plan_version, details, resolved_at FROM sentinel_findings WHERE finding_id = $1 FOR UPDATE",
+      "SELECT finding_id, goal_id, rule_id, evidence_identity, plan_version, details, resolved_at FROM metronome_findings WHERE finding_id = $1 FOR UPDATE",
       [findingId.trim()],
     );
-    if (current.rowCount !== 1) throw new SentinelFindingNotFoundError(`Sentinel finding not found: ${findingId}`);
+    if (current.rowCount !== 1) throw new MetronomeFindingNotFoundError(`Metronome finding not found: ${findingId}`);
     const finding = current.rows[0]!;
     if (finding.resolved_at !== null) {
       await client.query("COMMIT"); open = false;
       return mapFinding(finding);
     }
     const updated = await client.query<FindingRow>(
-      "UPDATE sentinel_findings SET resolved_at = transaction_timestamp(), resolution_reason = $2 WHERE finding_id = $1 RETURNING finding_id, goal_id, rule_id, evidence_identity, plan_version, details, resolved_at",
+      "UPDATE metronome_findings SET resolved_at = transaction_timestamp(), resolution_reason = $2 WHERE finding_id = $1 RETURNING finding_id, goal_id, rule_id, evidence_identity, plan_version, details, resolved_at",
       [findingId.trim(), reason.trim()],
     );
     await client.query("COMMIT"); open = false;

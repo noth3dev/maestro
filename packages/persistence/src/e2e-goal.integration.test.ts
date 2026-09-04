@@ -18,7 +18,7 @@ import { observeWorker, spawnWorker } from "./worker.js";
 import { acceptDepartmentWorkerOutput, certifyQuality, certifyConditional } from "./certification.js";
 import { recordGoalIntegrationRevision } from "./git-integration.js";
 import { recordEvidenceBundle, verifyStoredEvidenceBundle, readEvidenceBundle } from "./evidence-bundle.js";
-import { generateSaneFinalReport } from "./sane-report.js";
+import { generateConcertmasterFinalReport } from "./concertmaster-report.js";
 import { reconcileOnStartup } from "./reconciliation.js";
 import { recordDepartmentBranch, recordGoalIntegrationBranch, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
 import { reserveDepartmentBudget, reserveGoalBudget, reserveMissionBudget } from "./budget-reservation.js";
@@ -68,11 +68,11 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
   });
 
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS sane_final_reports, evidence_bundles, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, certification_conflict_resolution_members, department_acceptances, goal_integration_revision_commits, goal_integration_revisions, encore_council_syntheses, encore_council_judgments, encore_council_rounds, semantic_reviews, sentinel_challenge_findings, sentinel_challenges, sentinel_findings, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
+    await pool.query("DROP TABLE IF EXISTS concertmaster_final_reports, evidence_bundles, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, certification_conflict_resolution_members, department_acceptances, goal_integration_revision_commits, goal_integration_revisions, encore_council_syntheses, encore_council_judgments, encore_council_rounds, semantic_reviews, metronome_challenge_findings, metronome_challenges, metronome_findings, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
     await applyAllMigrations(pool);
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE reconciler_leader_lease, sane_final_reports, evidence_bundles, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, certification_conflict_resolution_members, department_acceptances, goal_integration_revision_commits, goal_integration_revisions, encore_council_syntheses, encore_council_judgments, encore_council_rounds, semantic_reviews, sentinel_challenge_findings, sentinel_challenges, sentinel_findings, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE");
+    await pool.query("TRUNCATE reconciler_leader_lease, concertmaster_final_reports, evidence_bundles, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, certification_conflict_resolution_members, department_acceptances, goal_integration_revision_commits, goal_integration_revisions, encore_council_syntheses, encore_council_judgments, encore_council_rounds, semantic_reviews, metronome_challenge_findings, metronome_challenges, metronome_findings, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE");
     await bootstrapPermanentOrganization(pool);
   });
   afterAll(async () => { await pool.end(); });
@@ -83,10 +83,10 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "control-plane", leaseDurationMs: 120_000 });
 
     // 1. Durable Goal command lifecycle: draft -> ready_for_confirmation -> launched -> active.
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "CreateGoal", expectedVersion: 0 }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
-    const active = await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "CreateGoal", expectedVersion: 0 }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
+    const active = await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
     expect(active.outcome).toBe("succeeded");
 
     // 2. Task Contract: create, exact-confirm, launch.
@@ -196,12 +196,12 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     expect(recovery.results.find((result) => result.goalId === goalId)?.outcome).toBe("lease_contended");
     expect((await pool.query("SELECT count(*)::int AS count FROM workers WHERE worker_id = $1", [worker.workerId])).rows[0].count).toBe(1);
 
-    const certifying = await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 4, to: "certifying" }, proof);
+    const certifying = await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 4, to: "certifying" }, proof);
     expect(certifying.outcome).toBe("succeeded");
     const finalGoal = await pool.query<{ state: string }>("SELECT state FROM goals WHERE goal_id = $1", [goalId]);
     expect(finalGoal.rows[0]!.state).toBe("certifying");
 
-    const report = await generateSaneFinalReport(pool, goalId);
+    const report = await generateConcertmasterFinalReport(pool, goalId);
     expect(report.success).toBe(true);
     expect(report.evidenceBundleId).not.toBe(bundle.bundleId);
     await verifyStoredEvidenceBundle(pool, report.evidenceBundleId);

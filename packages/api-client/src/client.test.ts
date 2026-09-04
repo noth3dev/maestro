@@ -40,5 +40,5 @@ describe("createApiClient", () => {
 it("reads all four goal state resources with typed methods", async () => {
  const bodies=[{challenges:[]},{rounds:[]},{certifications:[]},{reportId:goalId,goalId,success:true,blockers:[],ceoRequest:"",whatChanged:"",userVisibleBehaviorPassed:true,participatingDepartments:[],keyDecisions:[],dissent:[],independentValidation:[],costCents:0,budgetCents:0,incidents:[],knownLimitations:[],criticalActionAwaitingApproval:false,evidenceBundleId:goalId}];
  const fetch=vi.fn().mockImplementation(async()=>new Response(JSON.stringify(bodies.shift()),{status:200})); const c=createApiClient({baseUrl:"https://maestro.test",token:"t",fetch});
- await expect(c.listSentinelChallenges(goalId)).resolves.toEqual({challenges:[]}); await expect(c.listEncoreCouncilRounds(goalId)).resolves.toEqual({rounds:[]}); await expect(c.listCertifications(goalId)).resolves.toEqual({certifications:[]}); await expect(c.getSaneReport(goalId)).resolves.toMatchObject({success:true});
+ await expect(c.listMetronomeChallenges(goalId)).resolves.toEqual({challenges:[]}); await expect(c.listEncoreCouncilRounds(goalId)).resolves.toEqual({rounds:[]}); await expect(c.listCertifications(goalId)).resolves.toEqual({certifications:[]}); await expect(c.getConcertmasterReport(goalId)).resolves.toMatchObject({success:true});
 });

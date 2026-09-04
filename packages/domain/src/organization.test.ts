@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   PERMANENT_DEPARTMENTS, PERMANENT_GROUPS, PERMANENT_ROLES, PHASE2_ROLE_REVIEW_VERSION,
-  SANE_ROLE, parseRoleCapabilityBoundary, parseRoleProvenance,
+  CONCERTMASTER_ROLE, parseRoleCapabilityBoundary, parseRoleProvenance,
 } from "./organization.js";
 import { parsePersonaProfile } from "./persona.js";
 
@@ -14,8 +14,8 @@ describe("permanent organization taxonomy", () => {
     expect(PERMANENT_DEPARTMENTS.every((department) => department.status === "sleeping" && department.activeSessionId === null && department.goalContext === null)).toBe(true);
   });
 
-  it("defines Sane as a durable role record, not a running Goal session", () => {
-    expect(SANE_ROLE).toMatchObject({ roleId: "sane", displayName: "Sane", status: "standing", activeSessionId: null, goalContext: null });
+  it("defines Concertmaster as a durable role record, not a running Goal session", () => {
+    expect(CONCERTMASTER_ROLE).toMatchObject({ roleId: "concertmaster", displayName: "Concertmaster", status: "standing", activeSessionId: null, goalContext: null });
   });
 });
 
@@ -31,15 +31,15 @@ describe("durable role catalog", () => {
     expect(heads.every((role) => role.departmentId !== null)).toBe(true);
   });
 
-  it("keeps Sane and oversight identities outside Departments", () => {
-    expect(SANE_ROLE.roleKind).toBe("sane");
-    expect(SANE_ROLE.departmentId).toBeNull();
+  it("keeps Concertmaster and oversight identities outside Departments", () => {
+    expect(CONCERTMASTER_ROLE.roleKind).toBe("concertmaster");
+    expect(CONCERTMASTER_ROLE.departmentId).toBeNull();
 
-    const sentinel = PERMANENT_ROLES.filter((role) => role.roleKind === "sentinel");
+    const metronome = PERMANENT_ROLES.filter((role) => role.roleKind === "metronome");
     const council = PERMANENT_ROLES.filter((role) => role.roleKind === "encore_council");
-    expect(sentinel).toHaveLength(1);
+    expect(metronome).toHaveLength(1);
     expect(council.length).toBeGreaterThanOrEqual(3);
-    expect([...sentinel, ...council].every((role) => role.departmentId === null)).toBe(true);
+    expect([...metronome, ...council].every((role) => role.departmentId === null)).toBe(true);
   });
 
   it("gives every standing role a reviewed charter, capability boundary, provenance, and normalized baseline", () => {
@@ -60,7 +60,7 @@ describe("durable role catalog", () => {
     });
     expect(() => parseRoleCapabilityBoundary({ allowed: [], forbidden: ["mutate"], extra: true })).toThrow();
 
-    const provenance = SANE_ROLE.provenance;
+    const provenance = CONCERTMASTER_ROLE.provenance;
     expect(parseRoleProvenance(provenance)).toEqual(provenance);
     expect(() => parseRoleProvenance({ ...provenance, reviewVersion: "" })).toThrow();
   });

@@ -145,8 +145,8 @@ node apps/cli/dist/main.js goal get <goalId>
 # Append-Only 도메인 이벤트 스트리밍
 node apps/cli/dist/main.js events list --goalId <goalId>
 
-# Sentinel 챌린지 및 Encore Council 라운드 조회
-node apps/cli/dist/main.js sentinel challenge <challengeId>
+# Metronome 챌린지 및 Encore Council 라운드 조회
+node apps/cli/dist/main.js metronome challenge <challengeId>
 node apps/cli/dist/main.js council round <roundId>
 
 # Quality 인증서 및 인증된 리포트 조회

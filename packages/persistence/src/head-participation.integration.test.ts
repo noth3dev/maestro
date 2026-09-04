@@ -23,12 +23,12 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
     contextScope: ["goal"] as const,
     budgetEffect: "none",
   };
-  const sane = (goalId: string, departmentId: string) => ({
-    goalId, departmentId, reason: "needed", requester: { role: "Sane" as const }, ...activationBrief,
+  const concertmaster = (goalId: string, departmentId: string) => ({
+    goalId, departmentId, reason: "needed", requester: { role: "Concertmaster" as const }, ...activationBrief,
   });
   async function active(goalId: string, departmentId: string) {
     const lease = await proof(goalId);
-    await activateHeadParticipation(pool, sane(goalId, departmentId), lease);
+    await activateHeadParticipation(pool, concertmaster(goalId, departmentId), lease);
     await markHeadParticipationActive(pool, goalId, departmentId, `opaque:${departmentId}`, lease);
     return lease;
   }
@@ -45,7 +45,7 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
 
   it("gives only the selected Product Head minimal Goal participation context", async () => {
     const goalId = await goal(); const lease = await proof(goalId);
-    await expect(activateHeadParticipation(pool, sane(goalId, "product"), lease)).resolves.toMatchObject({ goalId, departmentId: "product", status: "starting", activeSessionRef: null });
+    await expect(activateHeadParticipation(pool, concertmaster(goalId, "product"), lease)).resolves.toMatchObject({ goalId, departmentId: "product", status: "starting", activeSessionRef: null });
     const rows = await pool.query("SELECT department_id, status, active_session_ref FROM goal_head_participations WHERE goal_id = $1", [goalId]);
     expect(rows.rows).toEqual([{ department_id: "product", status: "starting", active_session_ref: null }]);
     expect((await pool.query("SELECT department_id, status FROM departments ORDER BY department_id")).rows).toHaveLength(10);
@@ -54,9 +54,9 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
 
   it("uses one reservation for sequential and concurrent duplicate activation", async () => {
     const goalId = await goal(); const lease = await proof(goalId);
-    await activateHeadParticipation(pool, sane(goalId, "product"), lease);
-    await expect(activateHeadParticipation(pool, sane(goalId, "product"), lease)).resolves.toMatchObject({ status: "starting" });
-    await Promise.all([activateHeadParticipation(pool, sane(goalId, "product"), lease), activateHeadParticipation(pool, sane(goalId, "product"), lease)]);
+    await activateHeadParticipation(pool, concertmaster(goalId, "product"), lease);
+    await expect(activateHeadParticipation(pool, concertmaster(goalId, "product"), lease)).resolves.toMatchObject({ status: "starting" });
+    await Promise.all([activateHeadParticipation(pool, concertmaster(goalId, "product"), lease), activateHeadParticipation(pool, concertmaster(goalId, "product"), lease)]);
     expect((await pool.query("SELECT count(*)::int AS count FROM goal_head_participations WHERE goal_id = $1", [goalId])).rows[0].count).toBe(1);
     expect((await pool.query("SELECT count(*)::int AS count FROM head_activation_attempts WHERE goal_id = $1", [goalId])).rows[0].count).toBe(4);
   });
@@ -110,7 +110,7 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
       goalId, departmentId: "product", headRoleId: "head:product", contractId, contextId,
       requestedContribution: "review the Product boundary", urgency: "high",
       contextScope: ["goal", "repository"], budgetEffect: "2 credits",
-      reason: "bind context", requester: { role: "Sane" },
+      reason: "bind context", requester: { role: "Concertmaster" },
     }, lease)).resolves.toMatchObject({
       goalId, departmentId: "product", headRoleId: "head:product", contractId, contextId,
       status: "starting", activeSessionRef: null,
@@ -124,27 +124,27 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
 
     await expect(activateHeadParticipation(pool, {
       goalId, departmentId: "product", headRoleId: "head:product", contractId, contextId,
-      ...activationBrief, reason: "same binding", requester: { role: "Sane" },
+      ...activationBrief, reason: "same binding", requester: { role: "Concertmaster" },
     }, lease)).resolves.toMatchObject({
       headRoleId: "head:product", contractId, contextId, status: "active", activeSessionRef: "opaque:product:bound",
     });
     await expect(activateHeadParticipation(pool, {
       goalId, departmentId: "product", headRoleId: "head:product", contractId: otherContractId,
-      contextId, ...activationBrief, reason: "different contract", requester: { role: "Sane" },
+      contextId, ...activationBrief, reason: "different contract", requester: { role: "Concertmaster" },
     }, lease)).rejects.toMatchObject({ code: "head_activation_binding_conflict" });
     await expect(activateHeadParticipation(pool, {
       goalId, departmentId: "product", headRoleId: "head:product", contractId,
-      contextId: `context:${goalId}:different`, ...activationBrief, reason: "different context", requester: { role: "Sane" },
+      contextId: `context:${goalId}:different`, ...activationBrief, reason: "different context", requester: { role: "Concertmaster" },
     }, lease)).rejects.toMatchObject({ code: "head_activation_binding_conflict" });
     await expect(activateHeadParticipation(pool, {
       goalId, departmentId: "product", headRoleId: "head:design", contractId, contextId,
-      ...activationBrief, reason: "wrong role", requester: { role: "Sane" },
+      ...activationBrief, reason: "wrong role", requester: { role: "Concertmaster" },
     }, lease)).rejects.toMatchObject({ code: "head_activation_binding_conflict" });
   });
 
   it("rejects every omitted activation brief field before durable state changes", async () => {
     const goalId = await goal(); const lease = await proof(goalId);
-    const base = { goalId, departmentId: "product", reason: "missing brief", requester: { role: "Sane" as const } };
+    const base = { goalId, departmentId: "product", reason: "missing brief", requester: { role: "Concertmaster" as const } };
     for (const field of ["requestedContribution", "urgency", "contextScope", "budgetEffect"] as const) {
       const incomplete = { ...base, ...activationBrief };
       delete (incomplete as unknown as Record<string, unknown>)[field];
@@ -157,29 +157,29 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
   it("rejects an empty activation brief field before durable state changes", async () => {
     const goalId = await goal(); const lease = await proof(goalId);
     await expect(activateHeadParticipation(pool, {
-      goalId, departmentId: "product", reason: "invalid brief", requester: { role: "Sane" },
+      goalId, departmentId: "product", reason: "invalid brief", requester: { role: "Concertmaster" },
       requestedContribution: "", urgency: "normal", contextScope: ["goal"], budgetEffect: "none",
     }, lease)).rejects.toThrow("requestedContribution");
     expect((await pool.query(`SELECT count(*)::int AS count FROM head_activation_attempts WHERE goal_id = $1`, [goalId])).rows[0].count).toBe(0);
   });
 
-  it("keeps Sane activation on the ordinary reservation path", async () => {
+  it("keeps Concertmaster activation on the ordinary reservation path", async () => {
     const goalId = await goal(); const lease = await proof(goalId);
-    await expect(activateHeadParticipation(pool, sane(goalId, "product"), lease)).resolves.toMatchObject({
+    await expect(activateHeadParticipation(pool, concertmaster(goalId, "product"), lease)).resolves.toMatchObject({
       goalId, departmentId: "product", status: "starting", activeSessionRef: null,
     });
     expect((await pool.query("SELECT requester_role, outcome FROM head_activation_attempts WHERE goal_id = $1", [goalId])).rows).toEqual([
-      { requester_role: "Sane", outcome: "reserved" },
+      { requester_role: "Concertmaster", outcome: "reserved" },
     ]);
   });
 
   it("rejects a persistent Head reservation already active in another Goal", async () => {
     const firstGoalId = await goal(); const firstLease = await proof(firstGoalId);
-    await activateHeadParticipation(pool, sane(firstGoalId, "product"), firstLease);
+    await activateHeadParticipation(pool, concertmaster(firstGoalId, "product"), firstLease);
     await markHeadParticipationActive(pool, firstGoalId, "product", "opaque:product:first", firstLease);
 
     const secondGoalId = await goal(); const secondLease = await proof(secondGoalId);
-    await expect(activateHeadParticipation(pool, sane(secondGoalId, "product"), secondLease))
+    await expect(activateHeadParticipation(pool, concertmaster(secondGoalId, "product"), secondLease))
       .rejects.toMatchObject({ code: "head_runtime_conflict" });
     expect((await pool.query("SELECT goal_id, department_id, status, active_session_ref FROM goal_head_participations ORDER BY goal_id")).rows).toEqual([
       { goal_id: firstGoalId, department_id: "product", status: "active", active_session_ref: "opaque:product:first" },
@@ -188,16 +188,16 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
 
   it("records a noncyclic duplicate as already_active without another session grant", async () => {
     const goalId = await goal(); const lease = await active(goalId, "product");
-    const result = await activateHeadParticipation(pool, sane(goalId, "product"), lease);
+    const result = await activateHeadParticipation(pool, concertmaster(goalId, "product"), lease);
     expect(result).toMatchObject({ status: "active", activeSessionRef: "opaque:product" });
     expect((await pool.query("SELECT outcome FROM head_activation_attempts WHERE goal_id = $1 ORDER BY recorded_at DESC LIMIT 1", [goalId])).rows[0].outcome).toBe("already_active");
   });
 
   it("does not bind one active session reference to two HeadRoleId and Goal pairs", async () => {
     const firstGoalId = await goal(); const firstLease = await proof(firstGoalId);
-    await activateHeadParticipation(pool, sane(firstGoalId, "product"), firstLease);
+    await activateHeadParticipation(pool, concertmaster(firstGoalId, "product"), firstLease);
     const secondGoalId = await goal(); const secondLease = await proof(secondGoalId);
-    await activateHeadParticipation(pool, sane(secondGoalId, "design"), secondLease);
+    await activateHeadParticipation(pool, concertmaster(secondGoalId, "design"), secondLease);
     await markHeadParticipationActive(pool, firstGoalId, "product", "opaque:shared", firstLease);
 
     await expect(markHeadParticipationActive(pool, secondGoalId, "design", "opaque:shared", secondLease))
@@ -212,7 +212,7 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
   it("sleeps by clearing the session and resumes the same row", async () => {
     const goalId = await goal(); const lease = await active(goalId, "product");
     await expect(sleepHeadParticipation(pool, goalId, "product", lease)).resolves.toMatchObject({ status: "sleeping", activeSessionRef: null });
-    await expect(activateHeadParticipation(pool, sane(goalId, "product"), lease)).resolves.toMatchObject({ status: "starting", activeSessionRef: null });
+    await expect(activateHeadParticipation(pool, concertmaster(goalId, "product"), lease)).resolves.toMatchObject({ status: "starting", activeSessionRef: null });
     expect((await pool.query("SELECT count(*)::int AS count FROM goal_head_participations WHERE goal_id = $1 AND department_id = 'product'", [goalId])).rows[0].count).toBe(1);
   });
 
@@ -220,7 +220,7 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
     const goalId = await goal(); const stale = await proof(goalId);
     await pool.query("UPDATE goal_leases SET expires_at = transaction_timestamp() - interval '1 second' WHERE goal_id = $1", [goalId]);
     await proof(goalId);
-    await expect(activateHeadParticipation(pool, sane(goalId, "product"), stale)).rejects.toMatchObject({ code: "stale_lease" });
+    await expect(activateHeadParticipation(pool, concertmaster(goalId, "product"), stale)).rejects.toMatchObject({ code: "stale_lease" });
     expect((await pool.query("SELECT (SELECT count(*) FROM goal_head_participations) AS participations, (SELECT count(*) FROM head_activation_attempts) AS attempts, (SELECT count(*) FROM head_activation_edges) AS edges")).rows[0]).toEqual({ participations: "0", attempts: "0", edges: "0" });
   });
 
@@ -240,19 +240,19 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
   it.each(controlLatchCases)("rejects Head activation once the Goal is $label, creating no participation or attempt row", async ({ setClause, pattern }) => {
     const goalId = await goal(); const lease = await proof(goalId);
     await setGoalControl(goalId, setClause);
-    await expect(activateHeadParticipation(pool, sane(goalId, "product"), lease)).rejects.toThrow(pattern);
+    await expect(activateHeadParticipation(pool, concertmaster(goalId, "product"), lease)).rejects.toThrow(pattern);
     expect((await pool.query("SELECT (SELECT count(*) FROM goal_head_participations WHERE goal_id = $1) AS participations, (SELECT count(*) FROM head_activation_attempts WHERE goal_id = $1) AS attempts", [goalId])).rows[0]).toEqual({ participations: "0", attempts: "0" });
   });
 
   it("still activates a Head normally once the Goal has an explicit but open control row", async () => {
     const goalId = await goal(); const lease = await proof(goalId);
     await setGoalControl(goalId, "pause_requested_at = NULL");
-    await expect(activateHeadParticipation(pool, sane(goalId, "product"), lease)).resolves.toMatchObject({ status: "starting" });
+    await expect(activateHeadParticipation(pool, concertmaster(goalId, "product"), lease)).resolves.toMatchObject({ status: "starting" });
   });
 
   it("rejects markHeadParticipationActive (resume) once the Goal is emergency-stopped, leaving the row starting", async () => {
     const goalId = await goal(); const lease = await proof(goalId);
-    await activateHeadParticipation(pool, sane(goalId, "product"), lease);
+    await activateHeadParticipation(pool, concertmaster(goalId, "product"), lease);
     await setGoalControl(goalId, "emergency_stopped_at = clock_timestamp()");
     await expect(markHeadParticipationActive(pool, goalId, "product", "opaque:blocked", lease)).rejects.toThrow(/emergency-stopped/);
     expect((await pool.query("SELECT status, active_session_ref FROM goal_head_participations WHERE goal_id = $1 AND department_id = 'product'", [goalId])).rows[0]).toEqual({ status: "starting", active_session_ref: null });

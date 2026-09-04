@@ -1,12 +1,12 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { parseConfig, type FireflyConfig } from "./config.js";
-import { verifyFireflySignal, type AuthenticatedFireflySignal } from "@maestro/domain";
-export interface FireflyDelivery { deliver(signal: AuthenticatedFireflySignal): Promise<void>; }
-export interface Firefly { readonly config: FireflyConfig; readonly pendingCount: () => number; emit(signal: AuthenticatedFireflySignal): Promise<void>; flush(): Promise<void>; listen(): Promise<void>; close(): Promise<void>; }
-type RecordLine = { readonly kind:"signal"; readonly signal: AuthenticatedFireflySignal } | { readonly kind:"delivered"; readonly nonce:string };
-export function createFirefly(config: FireflyConfig, delivery: FireflyDelivery): Firefly {
-  const pending = new Map<string, AuthenticatedFireflySignal>();
+import { parseConfig, type DiscordConfig } from "./config.js";
+import { verifyDiscordSignal, type AuthenticatedDiscordSignal } from "@maestro/domain";
+export interface DiscordDelivery { deliver(signal: AuthenticatedDiscordSignal): Promise<void>; }
+export interface Discord { readonly config: DiscordConfig; readonly pendingCount: () => number; emit(signal: AuthenticatedDiscordSignal): Promise<void>; flush(): Promise<void>; listen(): Promise<void>; close(): Promise<void>; }
+type RecordLine = { readonly kind:"signal"; readonly signal: AuthenticatedDiscordSignal } | { readonly kind:"delivered"; readonly nonce:string };
+export function createDiscord(config: DiscordConfig, delivery: DiscordDelivery): Discord {
+  const pending = new Map<string, AuthenticatedDiscordSignal>();
   let timer: ReturnType<typeof setInterval> | undefined;
   let closed = false;
   let loaded = false;
@@ -63,8 +63,8 @@ export function createFirefly(config: FireflyConfig, delivery: FireflyDelivery):
     config,
     pendingCount: () => pending.size,
     async emit(signal) {
-      if (closed) throw new Error("Firefly is closed");
-      verifyFireflySignal(signal, config.credential, Date.now(), config.freshnessWindowMs);
+      if (closed) throw new Error("Discord is closed");
+      verifyDiscordSignal(signal, config.credential, Date.now(), config.freshnessWindowMs);
       await load();
       if (!pending.has(signal.nonce)) {
         await append({ kind: "signal", signal });
@@ -86,5 +86,5 @@ export function createFirefly(config: FireflyConfig, delivery: FireflyDelivery):
     },
   };
 }
-export async function main(env=process.env): Promise<void> { const firefly=createFirefly(parseConfig(env),{deliver:async()=>{throw new Error("No delivery transport configured");}}); await firefly.listen(); }
+export async function main(env=process.env): Promise<void> { const discord=createDiscord(parseConfig(env),{deliver:async()=>{throw new Error("No delivery transport configured");}}); await discord.listen(); }
 if (import.meta.url===new URL(process.argv[1]!,"file:").href) void main().catch(()=>{process.exitCode=1;});

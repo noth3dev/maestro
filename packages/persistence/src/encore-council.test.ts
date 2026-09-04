@@ -20,7 +20,7 @@ function fakePool(): Pool {
     if (sql.startsWith("SELECT project_id FROM goals")) return { rowCount: 1, rows: [{ project_id: "project-1" }] };
     if (sql.startsWith("SELECT evidence_id, sha256 FROM evidence_records")) return { rowCount: 1, rows: [{ evidence_id: evidenceId, sha256: "sha-1" }] };
     if (sql.startsWith("SELECT decision_packet FROM head_councils")) return { rowCount: 0, rows: [] };
-    if (sql.includes("FROM sentinel_challenges")) return { rowCount: 1, rows: [{ count: "0" }] };
+    if (sql.includes("FROM metronome_challenges")) return { rowCount: 1, rows: [{ count: "0" }] };
     if (sql.includes("FROM semantic_reviews")) return { rowCount: 1, rows: [{ count: "0" }] };
     throw new Error(`Unexpected pool query: ${sql}`);
   });

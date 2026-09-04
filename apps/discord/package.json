@@ -1,5 +1,5 @@
 {
-  "name": "@maestro/firefly",
+  "name": "@maestro/discord",
   "private": true,
   "type": "module",
   "dependencies": {

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { FireflySignalError, type FireflySignal } from "./firefly.js";
-import { assessFireflySilence, buildFireflyIncidentBrief, computeFireflyImprovementEvidence, deriveFireflyIncidentFingerprint, requiresImmediateSafePause, routeFireflyIncidentDepartments, scoreFireflySignals } from "./firefly-incident.js";
+import { DiscordSignalError, type DiscordSignal } from "./discord.js";
+import { assessDiscordSilence, buildDiscordIncidentBrief, computeDiscordImprovementEvidence, deriveDiscordIncidentFingerprint, requiresImmediateSafePause, routeDiscordIncidentDepartments, scoreDiscordSignals } from "./discord-incident.js";
 
-const signal = (overrides: Partial<FireflySignal> = {}): FireflySignal => {
-  const value: FireflySignal = {
+const signal = (overrides: Partial<DiscordSignal> = {}): DiscordSignal => {
+  const value: DiscordSignal = {
     incidentFingerprint: "",
     firstObservedAt: "2026-01-01T00:00:01.000Z",
     lastObservedAt: "2026-01-01T00:00:02.000Z",
@@ -15,16 +15,16 @@ const signal = (overrides: Partial<FireflySignal> = {}): FireflySignal => {
     source: "Health-Probe",
     sourceFreshness: "2026-01-01T00:00:02.000Z",
     deduplicationRelationship: "new",
-    fireflyHealthState: "healthy",
+    discordHealthState: "healthy",
     ...overrides,
   };
-  return { ...value, incidentFingerprint: deriveFireflyIncidentFingerprint(value) };
+  return { ...value, incidentFingerprint: deriveDiscordIncidentFingerprint(value) };
 };
 
-describe("Firefly incident fingerprinting and scoring", () => {
+describe("Discord incident fingerprinting and scoring", () => {
   it("derives the same fingerprint for equivalent normalized evidence", () => {
-    const first = deriveFireflyIncidentFingerprint(signal());
-    const second = deriveFireflyIncidentFingerprint(signal({
+    const first = deriveDiscordIncidentFingerprint(signal());
+    const second = deriveDiscordIncidentFingerprint(signal({
       affectedComponent: " control-plane ",
       source: " health-probe ",
       minimalReproductionEvidence: ["  get /health   -> 503  "],
@@ -34,7 +34,7 @@ describe("Firefly incident fingerprinting and scoring", () => {
   });
 
   it("aggregates severity conservatively and confidence by the strongest corroborated signal", () => {
-    expect(scoreFireflySignals([
+    expect(scoreDiscordSignals([
       { severity: "info", confidence: 0.4 },
       { severity: "critical", confidence: 0.8 },
       { severity: "warning", confidence: 0.7 },
@@ -42,32 +42,32 @@ describe("Firefly incident fingerprinting and scoring", () => {
   });
 
   it("rejects an empty score input instead of fabricating an incident assessment", () => {
-    expect(() => scoreFireflySignals([])).toThrow(FireflySignalError);
+    expect(() => scoreDiscordSignals([])).toThrow(DiscordSignalError);
   });
 });
 
-describe("Firefly silence monitoring", () => {
+describe("Discord silence monitoring", () => {
   it("reports observing while the latest observation is within the allowed silence window", () => {
-    expect(assessFireflySilence("2026-01-01T00:00:00.000Z", "2026-01-01T00:00:05.000Z", { maxSilenceMs: 10_000 })).toEqual({
+    expect(assessDiscordSilence("2026-01-01T00:00:00.000Z", "2026-01-01T00:00:05.000Z", { maxSilenceMs: 10_000 })).toEqual({
       state: "observing", silenceMs: 5_000, reason: null,
     });
   });
 
   it("reports watchdog-health uncertainty after the window without inferring that incidents are absent", () => {
-    expect(assessFireflySilence("2026-01-01T00:00:00.000Z", "2026-01-01T00:00:11.000Z", { maxSilenceMs: 10_000 })).toEqual({
-      state: "uncertain", silenceMs: 11_000, reason: "firefly_observation_silent",
+    expect(assessDiscordSilence("2026-01-01T00:00:00.000Z", "2026-01-01T00:00:11.000Z", { maxSilenceMs: 10_000 })).toEqual({
+      state: "uncertain", silenceMs: 11_000, reason: "discord_observation_silent",
     });
   });
 
   it("reports uncertainty when there has never been an observation", () => {
-    expect(assessFireflySilence(null, "2026-01-01T00:00:11.000Z", { maxSilenceMs: 10_000 })).toEqual({
-      state: "uncertain", silenceMs: null, reason: "firefly_observation_missing",
+    expect(assessDiscordSilence(null, "2026-01-01T00:00:11.000Z", { maxSilenceMs: 10_000 })).toEqual({
+      state: "uncertain", silenceMs: null, reason: "discord_observation_missing",
     });
   });
 });
 
 
-describe("Firefly Incident Brief and routing", () => {
+describe("Discord Incident Brief and routing", () => {
   const summary = {
     incidentFingerprint: "f".repeat(64),
     affectedComponent: "control-plane",
@@ -80,16 +80,16 @@ describe("Firefly Incident Brief and routing", () => {
   };
 
   it("routes a crash to Operations and Engineering", () => {
-    expect(routeFireflyIncidentDepartments("crash")).toEqual(["operations", "engineering"]);
+    expect(routeDiscordIncidentDepartments("crash")).toEqual(["operations", "engineering"]);
   });
 
   it("routes a vulnerability to Security and Engineering", () => {
-    expect(routeFireflyIncidentDepartments("vulnerability")).toEqual(["security", "engineering"]);
+    expect(routeDiscordIncidentDepartments("vulnerability")).toEqual(["security", "engineering"]);
   });
 
   it("builds a bounded brief that caps evidence and never expands beyond the deterministic routing", () => {
     const evidence = Array.from({ length: 20 }, (_, i) => `evidence-${i}`);
-    const brief = buildFireflyIncidentBrief(summary, evidence, "crash");
+    const brief = buildDiscordIncidentBrief(summary, evidence, "crash");
     expect(brief.boundedEvidence).toHaveLength(5);
     expect(brief.boundedEvidence).toEqual(evidence.slice(0, 5));
     expect(brief.routedDepartments).toEqual(["operations", "engineering"]);
@@ -97,8 +97,8 @@ describe("Firefly Incident Brief and routing", () => {
   });
 
   it("rejects an invalid severity or confidence rather than fabricating a brief", () => {
-    expect(() => buildFireflyIncidentBrief({ ...summary, severity: "bogus" as never }, [], "crash")).toThrow(FireflySignalError);
-    expect(() => buildFireflyIncidentBrief({ ...summary, confidence: 1.5 }, [], "crash")).toThrow(FireflySignalError);
+    expect(() => buildDiscordIncidentBrief({ ...summary, severity: "bogus" as never }, [], "crash")).toThrow(DiscordSignalError);
+    expect(() => buildDiscordIncidentBrief({ ...summary, confidence: 1.5 }, [], "crash")).toThrow(DiscordSignalError);
   });
 
   it("requires immediate safe pause only for high-confidence critical severity", () => {
@@ -109,9 +109,9 @@ describe("Firefly Incident Brief and routing", () => {
 });
 
 
-describe("Firefly improvement evidence", () => {
+describe("Discord improvement evidence", () => {
   it("computes bounded detection-to-triage and triage-to-close durations", () => {
-    const evidence = computeFireflyImprovementEvidence(
+    const evidence = computeDiscordImprovementEvidence(
       "resolved", "critical", 0.9,
       "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:10.000Z", "2026-01-01T00:01:10.000Z",
     );
@@ -121,7 +121,7 @@ describe("Firefly improvement evidence", () => {
   });
 
   it("reports null durations for a false positive closed without ever linking a Goal", () => {
-    const evidence = computeFireflyImprovementEvidence(
+    const evidence = computeDiscordImprovementEvidence(
       "false_positive", "warning", 0.3,
       "2026-01-01T00:00:00.000Z", null, "2026-01-01T00:00:05.000Z",
     );
@@ -130,8 +130,8 @@ describe("Firefly improvement evidence", () => {
   });
 
   it("rejects out-of-order or invalid timestamps rather than fabricating a duration", () => {
-    expect(() => computeFireflyImprovementEvidence("resolved", "critical", 0.9, "2026-01-01T00:00:10.000Z", "2026-01-01T00:00:05.000Z", "2026-01-01T00:01:00.000Z")).toThrow();
-    expect(() => computeFireflyImprovementEvidence("resolved", "critical", 0.9, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:05.000Z", "2026-01-01T00:00:01.000Z")).toThrow();
-    expect(() => computeFireflyImprovementEvidence("resolved", "bogus" as never, 0.9, "2026-01-01T00:00:00.000Z", null, "2026-01-01T00:00:01.000Z")).toThrow();
+    expect(() => computeDiscordImprovementEvidence("resolved", "critical", 0.9, "2026-01-01T00:00:10.000Z", "2026-01-01T00:00:05.000Z", "2026-01-01T00:01:00.000Z")).toThrow();
+    expect(() => computeDiscordImprovementEvidence("resolved", "critical", 0.9, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:05.000Z", "2026-01-01T00:00:01.000Z")).toThrow();
+    expect(() => computeDiscordImprovementEvidence("resolved", "bogus" as never, 0.9, "2026-01-01T00:00:00.000Z", null, "2026-01-01T00:00:01.000Z")).toThrow();
   });
 });

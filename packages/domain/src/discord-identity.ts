@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import { canonicalJson } from "./task-contract.js";
-import type { FireflySignal } from "./firefly.js";
+import type { DiscordSignal } from "./discord.js";
 
 /** Base signal error. Declared here (a leaf module) so identity/redaction
  * helpers can fail closed with a typed domain error without a circular
- * import back to firefly.ts, which imports these helpers. */
-export class FireflySignalError extends Error {}
+ * import back to discord.ts, which imports these helpers. */
+export class DiscordSignalError extends Error {}
 
-/** Text that is safe to retain in bounded Firefly evidence and identity facts. */
+/** Text that is safe to retain in bounded Discord evidence and identity facts. */
 const REDACTED = "[REDACTED]";
 const SECRET_KEY = "(?:access[_ -]?token|api[_ -]?key|apikey|auth[_ -]?token|client[_ -]?secret|credential|password|passwd|private[_ -]?key|refresh[_ -]?token|secret|token)";
 
@@ -16,8 +16,8 @@ const SECRET_KEY = "(?:access[_ -]?token|api[_ -]?key|apikey|auth[_ -]?token|cli
  * This is intentionally deterministic so a sanitized signal can still be
  * authenticated and fingerprinted across process boundaries.
  */
-export function redactFireflySecretLikeText(value: string): string {
-  if (typeof value !== "string") throw new FireflySignalError("Firefly evidence text must be a string");
+export function redactDiscordSecretLikeText(value: string): string {
+  if (typeof value !== "string") throw new DiscordSignalError("Discord evidence text must be a string");
   let safe = value;
   safe = safe.replace(/-----BEGIN(?: [^-]*)? PRIVATE KEY-----[\s\S]*?-----END(?: [^-]*)? PRIVATE KEY-----/gi, REDACTED);
   safe = safe.replace(/((?:\bauthorization\s*:\s*)?\bbearer\s+)[^\s,;&]+/gi, `$1${REDACTED}`);
@@ -28,24 +28,24 @@ export function redactFireflySecretLikeText(value: string): string {
 }
 
 /** Apply the same redaction to every free-text signal field before hashing or storage. */
-export function sanitizeFireflySignal(signal: FireflySignal): FireflySignal {
+export function sanitizeDiscordSignal(signal: DiscordSignal): DiscordSignal {
   return {
     ...signal,
-    affectedComponent: redactFireflySecretLikeText(signal.affectedComponent),
-    affectedVersion: redactFireflySecretLikeText(signal.affectedVersion),
-    minimalReproductionEvidence: signal.minimalReproductionEvidence.map(redactFireflySecretLikeText),
-    source: redactFireflySecretLikeText(signal.source),
+    affectedComponent: redactDiscordSecretLikeText(signal.affectedComponent),
+    affectedVersion: redactDiscordSecretLikeText(signal.affectedVersion),
+    minimalReproductionEvidence: signal.minimalReproductionEvidence.map(redactDiscordSecretLikeText),
+    source: redactDiscordSecretLikeText(signal.source),
   };
 }
 
 /** Identity facts exclude mutable severity, confidence, timestamps, and version. */
-export function deriveFireflyIncidentFingerprint(
-  signal: Pick<FireflySignal, "affectedComponent" | "source" | "minimalReproductionEvidence">,
+export function deriveDiscordIncidentFingerprint(
+  signal: Pick<DiscordSignal, "affectedComponent" | "source" | "minimalReproductionEvidence">,
 ): string {
   const identity = {
     affectedComponent: normalize(signal.affectedComponent),
     source: normalize(signal.source),
-    evidence: signal.minimalReproductionEvidence.map((item) => normalize(redactFireflySecretLikeText(item))).filter(Boolean).sort(),
+    evidence: signal.minimalReproductionEvidence.map((item) => normalize(redactDiscordSecretLikeText(item))).filter(Boolean).sort(),
   };
   return createHash("sha256").update(canonicalJson(identity)).digest("hex");
 }

@@ -1,6 +1,6 @@
 export type EncoreTriggerReason =
   | "cross_department_material"
-  | "unresolved_sentinel_challenge"
+  | "unresolved_metronome_challenge"
   | "high_uncertainty_semantic_review";
 
 export interface EncoreTriggerFacts {
@@ -13,7 +13,7 @@ export interface EncoreTriggerFacts {
 export function evaluateEncoreTriggers(facts: EncoreTriggerFacts): readonly EncoreTriggerReason[] {
   const reasons: EncoreTriggerReason[] = [];
   if (facts.departmentOwnershipCount > 1) reasons.push("cross_department_material");
-  if (facts.openChallengeCount > 0) reasons.push("unresolved_sentinel_challenge");
+  if (facts.openChallengeCount > 0) reasons.push("unresolved_metronome_challenge");
   if (facts.ambiguousOrUnsupportedReviewCount > 0) reasons.push("high_uncertainty_semantic_review");
   return reasons;
 }

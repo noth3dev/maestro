@@ -60,7 +60,7 @@ describe("permanent role persistence", () => {
   it("lists durable roles with each complete persona and identity boundary", async () => {
     const expected = [
       PERMANENT_ROLES[0]!,
-      PERMANENT_ROLES.find((role) => role.roleKind === "sentinel")!,
+      PERMANENT_ROLES.find((role) => role.roleKind === "metronome")!,
     ];
     const pool = {
       query: async (text: string, values?: readonly unknown[]) => {

@@ -61,12 +61,12 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
 
   it("acquires an exact bigint fencing token", async () => {
     const goalId = randomUUID();
-    await expect(lease(goalId, "sane")).resolves.toEqual({ goalId, ownerId: "sane", fencingToken: "1" });
+    await expect(lease(goalId, "concertmaster")).resolves.toEqual({ goalId, ownerId: "concertmaster", fencingToken: "1" });
   });
 
   it("allows only one concurrent acquisition before expiry", async () => {
     const goalId = randomUUID();
-    const attempts = await Promise.allSettled([lease(goalId, "sane"), lease(goalId, "other")]);
+    const attempts = await Promise.allSettled([lease(goalId, "concertmaster"), lease(goalId, "other")]);
     expect(attempts.filter((attempt) => attempt.status === "fulfilled")).toHaveLength(1);
     const rejected = attempts.find((attempt) => attempt.status === "rejected");
     expect(rejected).toMatchObject({ reason: expect.any(LeaseUnavailableError) });
@@ -74,7 +74,7 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
 
   it("gives an expired lease successor a higher exact bigint token", async () => {
     const goalId = randomUUID();
-    const first = await lease(goalId, "sane");
+    const first = await lease(goalId, "concertmaster");
     await pool.query("UPDATE goal_leases SET fencing_token = 9007199254740992, expires_at = transaction_timestamp() - interval '1 millisecond' WHERE goal_id = $1", [goalId]);
     await expect(lease(goalId, "other")).resolves.toEqual({
       goalId, ownerId: "other", fencingToken: "9007199254740993",
@@ -83,12 +83,12 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
   });
 
   it("renews only a current matching proof and retains its token", async () => {
-    const proof = await lease(randomUUID(), "sane", 1_000);
+    const proof = await lease(randomUUID(), "concertmaster", 1_000);
     await expect(renewGoalLease(pool, proof, 60_000)).resolves.toEqual(proof);
   });
 
   it("rejects expired or forged renewal proofs", async () => {
-    const proof = await lease(randomUUID(), "sane");
+    const proof = await lease(randomUUID(), "concertmaster");
     await expect(renewGoalLease(pool, { ...proof, fencingToken: "999" }, 60_000))
       .rejects.toMatchObject({ code: "stale_lease" });
     await pool.query("UPDATE goal_leases SET expires_at = transaction_timestamp() - interval '1 millisecond' WHERE goal_id = $1", [proof.goalId]);
@@ -98,7 +98,7 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
   it("validates the lease proof before receipt lookup and preserves idempotency for a current proof", async () => {
     const command = {
       commandId: randomUUID(), projectId: randomUUID(), goalId: randomUUID(),
-      actorId: "sane", type: "CreateGoal", expectedVersion: 0,
+      actorId: "concertmaster", type: "CreateGoal", expectedVersion: 0,
     } as const;
     const proof = await lease(command.goalId, command.actorId);
     const first = await executeGoalCommand(pool, command, proof);
@@ -112,7 +112,7 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
   it("rolls back a pre-commit injected failure and retries CreateGoal exactly once", async () => {
     const command = {
       commandId: randomUUID(), projectId: randomUUID(), goalId: randomUUID(),
-      actorId: "sane", type: "CreateGoal", expectedVersion: 0,
+      actorId: "concertmaster", type: "CreateGoal", expectedVersion: 0,
     } as const;
     const proof = await lease(command.goalId, command.actorId);
     const injectedFailure = new Error("test pre-commit failure");
@@ -131,7 +131,7 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
   it("atomically creates receipt, event, projection, and outbox with a current proof", async () => {
     const command = {
       commandId: randomUUID(), projectId: randomUUID(), goalId: randomUUID(),
-      actorId: "sane", type: "CreateGoal", expectedVersion: 0,
+      actorId: "concertmaster", type: "CreateGoal", expectedVersion: 0,
     } as const;
     const proof = await lease(command.goalId, command.actorId);
 
@@ -177,11 +177,11 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
   it("allows only one command at an expected Goal version", async () => {
     const projectId = randomUUID();
     const goalId = randomUUID();
-    const proof = await lease(goalId, "sane");
+    const proof = await lease(goalId, "concertmaster");
     await executeGoalCommand(pool, {
-      commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "CreateGoal", expectedVersion: 0,
+      commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "CreateGoal", expectedVersion: 0,
     }, proof);
-    const base = { projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 1 } as const;
+    const base = { projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 1 } as const;
     const [a, b] = await Promise.all([
       executeGoalCommand(pool, { ...base, commandId: randomUUID(), to: "ready_for_confirmation" }, proof),
       executeGoalCommand(pool, { ...base, commandId: randomUUID(), to: "recovering" }, proof),
@@ -193,7 +193,7 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
   it("denies an old token from the same owner without changing persistent command state", async () => {
     const command = {
       commandId: randomUUID(), projectId: randomUUID(), goalId: randomUUID(),
-      actorId: "sane", type: "CreateGoal", expectedVersion: 0,
+      actorId: "concertmaster", type: "CreateGoal", expectedVersion: 0,
     } as const;
     const oldProof = await lease(command.goalId, command.actorId);
     await pool.query("UPDATE goal_leases SET expires_at = transaction_timestamp() - interval '1 millisecond' WHERE goal_id = $1", [command.goalId]);
@@ -209,7 +209,7 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
   it("rejects a forged proof without changing receipt, event, projection, or outbox", async () => {
     const command = {
       commandId: randomUUID(), projectId: randomUUID(), goalId: randomUUID(),
-      actorId: "sane", type: "CreateGoal", expectedVersion: 0,
+      actorId: "concertmaster", type: "CreateGoal", expectedVersion: 0,
     } as const;
     const proof = await lease(command.goalId, command.actorId);
     const before = await counts();
