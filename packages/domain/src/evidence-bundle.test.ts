@@ -4,7 +4,7 @@ import { canonicalJson } from "./task-contract.js";
 
 const bundle: Omit<EvidenceBundle, "assembledAt"> = {
   goalId: "goal-1", taskContract: { contractId: "c1" }, council: { councilId: "co1" }, departmentPlans: [], departmentPlanRevisions: [], workers: [],
-  gitIntegration: {}, certifications: {}, sentinelFindings: [], sentinelChallenges: [], encoreRounds: [], budgetReservations: [], evidenceRecords: [],
+  gitIntegration: {}, certifications: {}, metronomeFindings: [], metronomeChallenges: [], encoreRounds: [], budgetReservations: [], evidenceRecords: [],
 };
 
 describe("Evidence bundle integrity", () => {
@@ -23,7 +23,7 @@ describe("Evidence bundle integrity", () => {
   it("canonicalizes Date values as ISO strings so persisted evidence hashes survive a read", () => {
     const resolvedAt = new Date("2026-09-01T22:00:00.000Z");
     expect(canonicalJson({ resolvedAt })).toBe('{"resolvedAt":"2026-09-01T22:00:00.000Z"}');
-    const recorded = { ...bundle, sentinelFindings: [{ findingId: "finding-1", resolvedAt }] };
+    const recorded = { ...bundle, metronomeFindings: [{ findingId: "finding-1", resolvedAt }] };
     const persisted = JSON.parse(JSON.stringify(recorded)) as typeof recorded;
     expect(evidenceBundleContentHash(recorded)).toBe(evidenceBundleContentHash(persisted));
   });

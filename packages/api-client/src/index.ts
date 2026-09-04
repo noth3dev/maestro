@@ -4,8 +4,8 @@ import {
   GoalEventPageSchema,
   GoalQuerySchema,
   GoalResultSchema,
-  SentinelChallengeListSchema, EncoreCouncilRoundListSchema, CertificationListSchema, SaneFinalReportSchema,
-  type SentinelChallengeList, type EncoreCouncilRoundList, type CertificationList, type SaneFinalReport,
+  MetronomeChallengeListSchema, EncoreCouncilRoundListSchema, CertificationListSchema, ConcertmasterFinalReportSchema,
+  type MetronomeChallengeList, type EncoreCouncilRoundList, type CertificationList, type ConcertmasterFinalReport,
   StableApiErrorSchema,
   TransitionGoalInputSchema,
   UuidSchema,
@@ -36,10 +36,10 @@ export interface ApiClient {
   getGoal(goalId: string, query: GoalQuery): Promise<GoalResult>;
   transitionGoal(goalId: string, input: TransitionGoalInput, commandId: string): Promise<GoalResult>;
   listEvents(query: EventQuery): Promise<GoalEventPage>;
-  listSentinelChallenges(goalId: string): Promise<SentinelChallengeList>;
+  listMetronomeChallenges(goalId: string): Promise<MetronomeChallengeList>;
   listEncoreCouncilRounds(goalId: string): Promise<EncoreCouncilRoundList>;
   listCertifications(goalId: string): Promise<CertificationList>;
-  getSaneReport(goalId: string): Promise<SaneFinalReport>;
+  getConcertmasterReport(goalId: string): Promise<ConcertmasterFinalReport>;
 }
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -83,10 +83,10 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch }: { 
         body: JSON.stringify(TransitionGoalInputSchema.parse(input)),
       }, GoalResultSchema);
     },
-    listSentinelChallenges(goalId) { return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/sentinel-challenges`, { headers }, SentinelChallengeListSchema); },
+    listMetronomeChallenges(goalId) { return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/metronome-challenges`, { headers }, MetronomeChallengeListSchema); },
     listEncoreCouncilRounds(goalId) { return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/encore-council-rounds`, { headers }, EncoreCouncilRoundListSchema); },
     listCertifications(goalId) { return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/certifications`, { headers }, CertificationListSchema); },
-    getSaneReport(goalId) { return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/sane-report`, { headers }, SaneFinalReportSchema); },
+    getConcertmasterReport(goalId) { return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/concertmaster-report`, { headers }, ConcertmasterFinalReportSchema); },
     listEvents(query) {
       const parsed = EventQuerySchema.parse(query);
       return request(`v1/events?${new URLSearchParams({ projectId: parsed.projectId, after: parsed.after })}`, { headers }, GoalEventPageSchema);
@@ -94,4 +94,4 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch }: { 
   };
 }
 
-export type { CreateGoalInput, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalResult, TransitionGoalInput, SentinelChallengeList, EncoreCouncilRoundList, CertificationList, SaneFinalReport };
+export type { CreateGoalInput, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalResult, TransitionGoalInput, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport };

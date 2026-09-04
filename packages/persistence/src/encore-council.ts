@@ -36,14 +36,14 @@ export interface EncoreCouncilResult {
   readonly synthesis: EncoreSynthesis;
 }
 
-/** Advisory: reports which plan/phase3.md trigger conditions are currently true for this Goal, from real durable state. Does not itself gate round creation -- Sane/a Head decides whether to act on it. */
+/** Advisory: reports which plan/phase3.md trigger conditions are currently true for this Goal, from real durable state. Does not itself gate round creation -- Concertmaster/a Head decides whether to act on it. */
 export async function evaluateEncoreCouncilTrigger(pool: Pool, goalId: string): Promise<readonly EncoreTriggerReason[]> {
   const council = await pool.query<{ decision_packet: { departmentOwnership?: readonly unknown[] } | null }>(
     "SELECT decision_packet FROM head_councils WHERE goal_id = $1 AND state = 'resolved' ORDER BY created_at DESC LIMIT 1",
     [goalId],
   );
   const departmentOwnershipCount = council.rows[0]?.decision_packet?.departmentOwnership?.length ?? 0;
-  const challenges = await pool.query<{ count: string }>("SELECT count(*)::int AS count FROM sentinel_challenges WHERE goal_id = $1 AND status <> 'resolved'", [goalId]);
+  const challenges = await pool.query<{ count: string }>("SELECT count(*)::int AS count FROM metronome_challenges WHERE goal_id = $1 AND status <> 'resolved'", [goalId]);
   const reviews = await pool.query<{ count: string }>("SELECT count(*)::int AS count FROM semantic_reviews WHERE goal_id = $1 AND verdict IN ('unsupported', 'ambiguous')", [goalId]);
   return evaluateEncoreTriggers({
     departmentOwnershipCount,

@@ -175,7 +175,7 @@ Against plan/phase1.md's exit gate and Tests section, still missing:
 
 
 ## 2026-09-01 — Cross-phase plan consistency corrections
-- Preserved the deterministic-rule-first principle explicitly across Phase 3 Sentinel, Phase 5 Scheduler, and Phase 6 evaluation guards: model judgment is reserved for ambiguity and cannot write durable constrained state directly.
+- Preserved the deterministic-rule-first principle explicitly across Phase 3 Metronome, Phase 5 Scheduler, and Phase 6 evaluation guards: model judgment is reserved for ambiguity and cannot write durable constrained state directly.
 - Corrected Phase 6 main-body timing ambiguity: static persona baselines and evidence/candidates may exist earlier, but replay/synthetic/shadow evaluation and any adaptive live application begin only in Phase 6. The retained “Phase 4” wording is legacy design provenance, not delivery authorization.
 - Added the required `(HeadRoleId, GoalId)` runtime-context partitioning constraint to Phase 2 and a durable hierarchy projection-read-model contract for Phase 7.
 - Reframed Phase 8 Purpose as certification/hardening rather than a duplicate organization-definition section.
@@ -184,20 +184,20 @@ Against plan/phase1.md's exit gate and Tests section, still missing:
 ## 2026-09-01 — P2W5 Council re-scope after Luna-max audit
 - The uncommitted Council code is a persistence sketch, not a safe reusable sealed-submission boundary. Do not accept it as a narrow brief feature.
 - P2W5 is decomposed without advancing Phase 3: first a generic sealed-submission primitive with immutable frozen participant/session/contract/evidence identity, idempotency, deadline/disposition policy, reveal, append-only audit/event truth, and control/lease checks; then the Head Council-specific consumer with evidence-tagged complete rounds, durable novelty/stopping, and a non-executable escalation outcome.
-- Phase 3 will reuse the primitive for independent reviewer judgments and Sentinel will consume its durable event/evidence lineage. This adds no reviewer spawning or Sentinel implementation in Phase 2.
+- Phase 3 will reuse the primitive for independent reviewer judgments and Metronome will consume its durable event/evidence lineage. This adds no reviewer spawning or Metronome implementation in Phase 2.
 
 ## 2026-09-01 — Direct (no-subagent) resumption of P2S5
 - Prior subagent attempts (Terra, then Luna at max thinking) were spawned for read-only audits but were cancelled/completed without replying; discarded, no salvage needed.
 - Proceeded directly: implemented sealed-submission primitive and wired it into Head Council creation for real (not just present alongside it). Build+unit tests green; PostgreSQL integration tests remain environment-gated (Docker not available this session).
 - Department Plan work (step 6) can now begin against a durable, tamper-evident decision packet identity.
 
-## 2026-09-03 — P4S6 Firefly hardening findings
-- The initial `recordFireflySignal` receiver read `max(sequence)` without a writer serialization boundary. Two concurrent transactions could both accept values from the same stale high-water mark and commit an older sequence after a newer one. A deterministic PostgreSQL trigger/`NOTIFY` race reproduced this; `LOCK TABLE firefly_signals IN SHARE ROW EXCLUSIVE MODE` now serializes receiver writers before replay evaluation.
-- Durable Firefly signal rows are audit records. Migration `0040_firefly_signal_hardening.sql` adds immutable-row triggers and database checks for observation order and JSON-array evidence. It is additive because `0039_firefly_signals.sql` is already committed.
-- Firefly's local buffer now verifies envelopes against its configured HMAC credential before appending. Its flush loop also records a concurrent flush request so a signal emitted during an in-flight delivery is not left pending when `emit` returns.
-- Fresh full-suite PostgreSQL failures are pre-existing per-file migration-list omissions, not Firefly defects: `sane-report.integration.test.ts` omitted budget migration `0027`; `certification-conflict.integration.test.ts` omitted semantic-review migration `0030`. Parent session is fixing these through a shared migration runner on a separate branch.
+## 2026-09-03 — P4S6 Discord hardening findings
+- The initial `recordDiscordSignal` receiver read `max(sequence)` without a writer serialization boundary. Two concurrent transactions could both accept values from the same stale high-water mark and commit an older sequence after a newer one. A deterministic PostgreSQL trigger/`NOTIFY` race reproduced this; `LOCK TABLE discord_signals IN SHARE ROW EXCLUSIVE MODE` now serializes receiver writers before replay evaluation.
+- Durable Discord signal rows are audit records. Migration `0040_discord_signal_hardening.sql` adds immutable-row triggers and database checks for observation order and JSON-array evidence. It is additive because `0039_discord_signals.sql` is already committed.
+- Discord's local buffer now verifies envelopes against its configured HMAC credential before appending. Its flush loop also records a concurrent flush request so a signal emitted during an in-flight delivery is not left pending when `emit` returns.
+- Fresh full-suite PostgreSQL failures are pre-existing per-file migration-list omissions, not Discord defects: `concertmaster-report.integration.test.ts` omitted budget migration `0027`; `certification-conflict.integration.test.ts` omitted semantic-review migration `0030`. Parent session is fixing these through a shared migration runner on a separate branch.
 
-## 2026-09-03 — P4S7 Firefly incident identity and silence findings
+## 2026-09-03 — P4S7 Discord incident identity and silence findings
 - Incident identity is `(authenticated incident fingerprint, affected version)`. The derived fingerprint intentionally excludes version so a repeated anomaly on a new version is a separate incident without changing the anomaly identity; normalized evidence order/case/whitespace produces stable hashes.
 - Incident aggregation is monotonic: severity keeps the highest observed level and confidence keeps the strongest bounded value. Every accepted signal has one immutable incident link, making duplicate attachment idempotent and preserving source signal history.
-- Silence is represented only as watchdog uncertainty (`firefly_observation_missing` or `firefly_observation_silent`). No empty incident or "no incidents" conclusion is written from absent data.
+- Silence is represented only as watchdog uncertainty (`discord_observation_missing` or `discord_observation_silent`). No empty incident or "no incidents" conclusion is written from absent data.

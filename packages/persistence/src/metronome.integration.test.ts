@@ -9,8 +9,8 @@ import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, su
 import { createDepartmentPlan, reviseDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { spawnWorker } from "./worker.js";
-import { listSentinelFindings, resolveSentinelFinding, scanGoalForSentinelFindings, SentinelFindingNotFoundError } from "./sentinel.js";
-import { SentinelAuthorizationError } from "./sentinel-challenge.js";
+import { listMetronomeFindings, resolveMetronomeFinding, scanGoalForMetronomeFindings, MetronomeFindingNotFoundError } from "./metronome.js";
+import { MetronomeAuthorizationError } from "./metronome-challenge.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -28,7 +28,7 @@ const brief: IndependentBrief = { interpretation: "safe outcome", contribution: 
 const evidence = { references: [randomUUID(), randomUUID()] };
 const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `session:${label}`, commandId: randomUUID() });
 const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`, sessionRef: `opaque:${departmentId}`, commandId: randomUUID() });
-const sentinelContext = (label: string) => ({ actorId: "encore-sentinel", sessionRef: `sentinel-session:${label}`, commandId: randomUUID() });
+const metronomeContext = (label: string) => ({ actorId: "encore-metronome", sessionRef: `metronome-session:${label}`, commandId: randomUUID() });
 const intruderContext = (label: string) => ({ actorId: `intruder:${label}`, sessionRef: `intruder-session:${label}`, commandId: randomUUID() });
 
 const planSubstance = (itemId = "exec-1", contribution = "own the product slice"): DepartmentPlanSubstance => ({
@@ -61,7 +61,7 @@ function fakeKernel(): ExecutionKernelPort {
   };
 }
 
-describeDatabase("Sentinel deterministic findings with PostgreSQL", () => {
+describeDatabase("Metronome deterministic findings with PostgreSQL", () => {
   const pool = new Pool({ connectionString: databaseUrl });
 
   async function setupPlan(itemId = "exec-1") {
@@ -95,38 +95,38 @@ describeDatabase("Sentinel deterministic findings with PostgreSQL", () => {
   }
 
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS sentinel_findings, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
+    await pool.query("DROP TABLE IF EXISTS metronome_findings, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
     await applyAllMigrations(pool);
   });
-  beforeEach(async () => { await pool.query("TRUNCATE sentinel_findings, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
+  beforeEach(async () => { await pool.query("TRUNCATE metronome_findings, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
   afterAll(async () => { await pool.end(); });
 
-  it("rejects a finding scan without durable Sentinel authorization", async () => {
+  it("rejects a finding scan without durable Metronome authorization", async () => {
     const { goalId } = await setupPlan();
-    await expect(scanGoalForSentinelFindings(pool, goalId)).rejects.toBeInstanceOf(SentinelAuthorizationError);
+    await expect(scanGoalForMetronomeFindings(pool, goalId)).rejects.toBeInstanceOf(MetronomeAuthorizationError);
   });
 
   it("stays silent on a valid Goal with no violations", async () => {
     const { goalId, proof } = await setupPlan();
-    const findings = await scanGoalForSentinelFindings(pool, goalId, proof, { actorId: "encore-sentinel", sessionRef: "sentinel-session:valid", commandId: randomUUID() });
+    const findings = await scanGoalForMetronomeFindings(pool, goalId, proof, { actorId: "encore-metronome", sessionRef: "metronome-session:valid", commandId: randomUUID() });
     expect(findings).toHaveLength(0);
   });
 
   it("flags a worker as stale once its Department Plan is revised to a new version", async () => {
     const { goalId, plan, proof, council } = await setupPlan();
     await reviseDepartmentPlan(pool, council.councilId, "product", plan.version, planSubstance("exec-1", "own the product slice, revised"), "evidence changed", proof, headContext("product"));
-    const findings = await scanGoalForSentinelFindings(pool, goalId, proof, sentinelContext("stale-worker"));
+    const findings = await scanGoalForMetronomeFindings(pool, goalId, proof, metronomeContext("stale-worker"));
     expect(findings.some((finding) => finding.ruleId === "stale_worker_superseded_plan")).toBe(true);
-    const rescan = await scanGoalForSentinelFindings(pool, goalId, proof, sentinelContext("stale-worker-rescan"));
+    const rescan = await scanGoalForMetronomeFindings(pool, goalId, proof, metronomeContext("stale-worker-rescan"));
     expect(rescan).toHaveLength(0);
-    const listed = await listSentinelFindings(pool, goalId);
+    const listed = await listMetronomeFindings(pool, goalId);
     expect(listed.length).toBeGreaterThan(0);
   });
 
   it("flags a worker as stale once its item is superseded by a plan revision that changes the item set", async () => {
     const { goalId, plan, proof, council, worker } = await setupPlan("exec-1");
     await reviseDepartmentPlan(pool, council.councilId, "product", plan.version, planSubstance("exec-2"), "scope changed", proof, headContext("product"));
-    const findings = await scanGoalForSentinelFindings(pool, goalId, proof, sentinelContext("superseded-item"));
+    const findings = await scanGoalForMetronomeFindings(pool, goalId, proof, metronomeContext("superseded-item"));
     const staleFindings = findings.filter((finding) => finding.ruleId === "stale_worker_superseded_plan");
     expect(staleFindings.some((finding) => finding.evidenceIdentity === worker.workerId)).toBe(true);
   });
@@ -134,36 +134,36 @@ describeDatabase("Sentinel deterministic findings with PostgreSQL", () => {
   it("resolves a finding exactly once and rejects re-flagging it as new after resolution reappears identically", async () => {
     const { goalId, plan, proof, council } = await setupPlan();
     await reviseDepartmentPlan(pool, council.councilId, "product", plan.version, planSubstance("exec-1", "own the product slice, revised again"), "evidence changed", proof, headContext("product"));
-    const [finding] = await scanGoalForSentinelFindings(pool, goalId, proof, sentinelContext("resolve"));
+    const [finding] = await scanGoalForMetronomeFindings(pool, goalId, proof, metronomeContext("resolve"));
     expect(finding).toBeDefined();
-    const resolved = await resolveSentinelFinding(pool, finding!.findingId, "worker will be replaced next cycle", proof, headContext("product"));
+    const resolved = await resolveMetronomeFinding(pool, finding!.findingId, "worker will be replaced next cycle", proof, headContext("product"));
     expect(resolved.resolved).toBe(true);
-    const resolvedAgain = await resolveSentinelFinding(pool, finding!.findingId, "duplicate call", proof, headContext("product"));
+    const resolvedAgain = await resolveMetronomeFinding(pool, finding!.findingId, "duplicate call", proof, headContext("product"));
     expect(resolvedAgain).toEqual(resolved);
-    const unresolvedOnly = await listSentinelFindings(pool, goalId);
+    const unresolvedOnly = await listMetronomeFindings(pool, goalId);
     expect(unresolvedOnly.find((item) => item.findingId === finding!.findingId)).toBeUndefined();
-    const withResolved = await listSentinelFindings(pool, goalId, true);
+    const withResolved = await listMetronomeFindings(pool, goalId, true);
     expect(withResolved.find((item) => item.findingId === finding!.findingId)).toBeDefined();
-    await expect(pool.query("UPDATE sentinel_findings SET details = '{}'::jsonb WHERE finding_id = $1", [finding!.findingId])).rejects.toThrow();
+    await expect(pool.query("UPDATE metronome_findings SET details = '{}'::jsonb WHERE finding_id = $1", [finding!.findingId])).rejects.toThrow();
   });
 
   it("rejects an arbitrary actor from resolving a finding", async () => {
     const { goalId, plan, proof, council } = await setupPlan();
     await reviseDepartmentPlan(pool, council.councilId, "product", plan.version, planSubstance("exec-1", "revised for authorization"), "evidence changed", proof, headContext("product"));
-    const [finding] = await scanGoalForSentinelFindings(pool, goalId, proof, sentinelContext("authorization"));
+    const [finding] = await scanGoalForMetronomeFindings(pool, goalId, proof, metronomeContext("authorization"));
     expect(finding).toBeDefined();
-    await expect(resolveSentinelFinding(pool, finding!.findingId, "intruder resolution", proof, intruderContext("finding"))).rejects.toThrow();
-    const stillOpen = await listSentinelFindings(pool, goalId);
+    await expect(resolveMetronomeFinding(pool, finding!.findingId, "intruder resolution", proof, intruderContext("finding"))).rejects.toThrow();
+    const stillOpen = await listMetronomeFindings(pool, goalId);
     expect(stillOpen.some((item) => item.findingId === finding!.findingId)).toBe(true);
   });
 
-  it("throws SentinelFindingNotFoundError for a missing finding", async () => {
-    await expect(resolveSentinelFinding(
+  it("throws MetronomeFindingNotFoundError for a missing finding", async () => {
+    await expect(resolveMetronomeFinding(
       pool,
       randomUUID(),
       "reason",
       { goalId: randomUUID(), ownerId: "test", fencingToken: "1" },
       { actorId: "head:product", sessionRef: "opaque:product", commandId: randomUUID() },
-    )).rejects.toBeInstanceOf(SentinelFindingNotFoundError);
+    )).rejects.toBeInstanceOf(MetronomeFindingNotFoundError);
   });
 });

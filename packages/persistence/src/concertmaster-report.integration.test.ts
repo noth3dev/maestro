@@ -18,7 +18,7 @@ import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, spawnWorker } from "./worker.js";
 import { recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
 import { acceptDepartmentWorkerOutput, certifyQuality } from "./certification.js";
-import { generateSaneFinalReport, readSaneFinalReport, SaneReportError } from "./sane-report.js";
+import { generateConcertmasterFinalReport, readConcertmasterFinalReport, ConcertmasterReportError } from "./concertmaster-report.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -43,7 +43,7 @@ function fakeKernel(): ExecutionKernelPort {
   };
 }
 
-describeDatabase("Sane final report with PostgreSQL", () => {
+describeDatabase("Concertmaster final report with PostgreSQL", () => {
   const pool = new Pool({ connectionString: databaseUrl });
   let repositoryPath: string;
   let baseRevision: string;
@@ -124,28 +124,28 @@ describeDatabase("Sane final report with PostgreSQL", () => {
   }
 
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS sane_final_reports, evidence_bundles, certification_conflict_resolution_members, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, goal_integration_revision_commits, goal_integration_revisions, department_acceptances, integration_commits, worker_worktrees, department_branches, goal_integration_branches, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
+    await pool.query("DROP TABLE IF EXISTS concertmaster_final_reports, evidence_bundles, certification_conflict_resolution_members, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, goal_integration_revision_commits, goal_integration_revisions, department_acceptances, integration_commits, worker_worktrees, department_branches, goal_integration_branches, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
     await applyAllMigrations(pool);
   });
-  beforeEach(async () => { await pool.query("TRUNCATE sane_final_reports, evidence_bundles, quality_certifications, department_acceptances, integration_commits, worker_worktrees, department_branches, goal_integration_branches, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
+  beforeEach(async () => { await pool.query("TRUNCATE concertmaster_final_reports, evidence_bundles, quality_certifications, department_acceptances, integration_commits, worker_worktrees, department_branches, goal_integration_branches, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
   afterAll(async () => { await pool.end(); });
 
   it("reports success with independent validation when the required certification passes cleanly, and blocks it once a challenge opens", async () => {
     const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
     await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
-    const report = await generateSaneFinalReport(pool, goalId);
+    const report = await generateConcertmasterFinalReport(pool, goalId);
     expect(report.success).toBe(true);
     expect(report.blockers).toHaveLength(0);
     expect(report.userVisibleBehaviorPassed).toBe(true);
     expect(report.independentValidation).toContain("quality: passed");
     expect(report.criticalActionAwaitingApproval).toBe(false);
-    const read = await readSaneFinalReport(pool, report.reportId);
+    const read = await readConcertmasterFinalReport(pool, report.reportId);
     expect(read).toEqual(report);
   });
 
   it("reports failure with a missing_required_certification blocker when Quality never certified", async () => {
     const { goalId } = await setupWorkerWithCommit();
-    const report = await generateSaneFinalReport(pool, goalId);
+    const report = await generateConcertmasterFinalReport(pool, goalId);
     expect(report.success).toBe(false);
     expect(report.blockers.some((blocker) => blocker.reason === "missing_required_certification")).toBe(true);
   });
@@ -153,7 +153,7 @@ describeDatabase("Sane final report with PostgreSQL", () => {
   it("reports failure and flags an awaiting critical action when a critical finding is unwaived", async () => {
     const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
     await certifyQuality(pool, worker.workerId, { verdict: "failed", findings: [{ findingId: "f1", severity: "critical", description: "security hole" }], testEvidenceIds: [] }, "quality", proof, headContext("quality"));
-    const report = await generateSaneFinalReport(pool, goalId);
+    const report = await generateConcertmasterFinalReport(pool, goalId);
     expect(report.success).toBe(false);
     expect(report.criticalActionAwaitingApproval).toBe(true);
     expect(report.blockers.some((blocker) => blocker.reason === "unwaived_critical_finding")).toBe(true);
@@ -162,21 +162,21 @@ describeDatabase("Sane final report with PostgreSQL", () => {
   it("includes real Git integration evidence in whatChanged and durably links a real evidence bundle", async () => {
     const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
     await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
-    const report = await generateSaneFinalReport(pool, goalId);
+    const report = await generateConcertmasterFinalReport(pool, goalId);
     expect(report.whatChanged).toContain("mission: implement");
     expect(report.evidenceBundleId).toBeTruthy();
   });
 
-  it("throws SaneReportError when no resolved Council decision exists for the Goal", async () => {
-    await expect(generateSaneFinalReport(pool, randomUUID())).rejects.toBeInstanceOf(SaneReportError);
+  it("throws ConcertmasterReportError when no resolved Council decision exists for the Goal", async () => {
+    await expect(generateConcertmasterFinalReport(pool, randomUUID())).rejects.toBeInstanceOf(ConcertmasterReportError);
   });
 
   it("rejects the final report when a supplied content reader detects a corrupted evidence artifact hash (Phase 1 re-patch item 6)", async () => {
     const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
-    const store = new FileEvidenceStore(await mkdtemp(join(tmpdir(), "maestro-sane-evidence-")));
+    const store = new FileEvidenceStore(await mkdtemp(join(tmpdir(), "maestro-concertmaster-evidence-")));
     const captured = await store.capture({
       context: { correlationId: randomUUID(), commandId: randomUUID(), projectId: randomUUID(), goalId, actorId: "test" },
-      bytes: Buffer.from("real sane-report evidence artifact"), kind: "test-result", mediaType: "text/plain",
+      bytes: Buffer.from("real concertmaster-report evidence artifact"), kind: "test-result", mediaType: "text/plain",
     });
     // Repoint every evidence row for this Goal at the same genuinely stored
     // content -- assembleEvidenceBundle verifies all of a Goal's evidence,
@@ -193,7 +193,7 @@ describeDatabase("Sane final report with PostgreSQL", () => {
     await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
 
     // Genuinely matching content produces a report cleanly when a real reader is supplied.
-    const report = await generateSaneFinalReport(pool, goalId, store);
+    const report = await generateConcertmasterFinalReport(pool, goalId, store);
     expect(report.success).toBe(true);
 
     // Corrupt one evidence row's durable sha256 so it no longer matches its actual stored bytes.
@@ -204,11 +204,11 @@ describeDatabase("Sane final report with PostgreSQL", () => {
       await pool.query("ALTER TABLE evidence_records ENABLE TRIGGER evidence_records_immutable");
     }
 
-    await expect(generateSaneFinalReport(pool, goalId, store)).rejects.toThrow();
+    await expect(generateConcertmasterFinalReport(pool, goalId, store)).rejects.toThrow();
 
     // Without a content reader, existing metadata-only-trust behavior is unchanged (documented,
     // not silently strengthened for callers that do not yet supply one): the same corrupted row
     // no longer blocks report generation once no reader is supplied.
-    await expect(generateSaneFinalReport(pool, goalId)).resolves.toBeDefined();
+    await expect(generateConcertmasterFinalReport(pool, goalId)).resolves.toBeDefined();
   });
 });

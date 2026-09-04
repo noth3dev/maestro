@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Allow multiple Goals and projects to run concurrently without mixing context, authority, budgets, workers, Git, evidence, or certification. When capacity conflicts, affected Heads and Overwatch make an evidence-backed portfolio decision while respecting CEO-pinned priority and safe pause points.
+Allow multiple Goals and projects to run concurrently without mixing context, authority, budgets, workers, Git, evidence, or certification. When capacity conflicts, affected Heads and Encore make an evidence-backed portfolio decision while respecting CEO-pinned priority and safe pause points.
 
 ## Isolation unit
 
@@ -17,7 +17,7 @@ Every active Goal owns separate:
 - Prime Agent invocation bindings and workers;
 - environments and device grants;
 - Git base, branches, worktrees, and integration revision;
-- Sentinel findings, Council judgments, certifications, and reports;
+- Metronome findings, Council judgments, certifications, and reports;
 - radial-tree sector and notifications.
 
 A persistent Head may participate in multiple Goals, but each participation is a separate runtime context. Durable Department knowledge can inform another Goal only through approved knowledge boundaries.
@@ -44,8 +44,8 @@ Invoke when Goals compete materially or an incident proposes preemption.
 Participants:
 
 - affected Department Heads;
-- Overwatch evidence providers and adjudicators as required;
-- Sane as coordinator and reporter.
+- Encore evidence providers and adjudicators as required;
+- Concertmaster as coordinator and reporter.
 
 Inputs:
 
@@ -57,7 +57,7 @@ Inputs:
 - resource contention;
 - Quality and safety risk;
 - prior performance and current evidence;
-- Firefly incident urgency;
+- Discord incident urgency;
 - opportunity cost.
 
 Outputs:
@@ -82,7 +82,7 @@ A CEO-pinned Goal cannot be silently deprioritized. Immediate credible safety ri
 7. Reforecast at milestones and significant failures.
 8. Pause at declared safe points; fence old workers before reallocating.
 9. Resume from durable plan items and evidence without repeating completed work.
-10. Emit portfolio events and update Sane reports.
+10. Emit portfolio events and update Concertmaster reports.
 
 Use deterministic scheduling for hard constraints. Use Council judgment for value, uncertainty, and tradeoffs. A model never writes scheduler state directly.
 
@@ -115,7 +115,7 @@ Use deterministic scheduling for hard constraints. Use Council judgment for valu
 - Provider throttles unexpectedly: reforecast and queue; do not steal validation reserve.
 - Paused worker continues: revoke grant and fence token before reallocating.
 - High-priority Goal repeatedly starves others: apply recorded reconsideration and aging rules unless CEO pin forbids.
-- Firefly incident is low-confidence: gather bounded evidence before disruptive preemption.
+- Discord incident is low-confidence: gather bounded evidence before disruptive preemption.
 - Portfolio decision depends on private evidence from another project: use only allowed generalized signal.
 - Goal completes while queued for Council: reconcile and cancel obsolete decision work.
 
@@ -137,7 +137,7 @@ Use deterministic scheduling for hard constraints. Use Council judgment for valu
 
 ## Exit gate
 
-At least three Goals across two projects run under constrained capacity. The Portfolio Council records an evidence-backed decision, safely pauses one Goal, reallocates resources, and later resumes it without duplicate work. No context, authority, budget, Git change, evidence, or certification crosses Goal boundaries. CEO-pinned priority and Firefly safety preemption behave exactly as declared.
+At least three Goals across two projects run under constrained capacity. The Portfolio Council records an evidence-backed decision, safely pauses one Goal, reallocates resources, and later resumes it without duplicate work. No context, authority, budget, Git change, evidence, or certification crosses Goal boundaries. CEO-pinned priority and Discord safety preemption behave exactly as declared.
 
 ## Requirements preserved in this phase
 
@@ -148,18 +148,18 @@ At least three Goals across two projects run under constrained capacity. The Por
 - A persistent Department Head may participate in more than one Goal, but each participation uses a separate Goal context and does not merge transcripts or project-private data.
 - Durable Department knowledge may inform multiple Goals only under the agreed project and cross-project knowledge boundaries.
 - When safe concurrency capacity is exhausted, new Goals queue rather than degrading all active Goals.
-- A high-confidence severe Firefly incident may preempt ordinary work under an explicit priority and safe-pause process.
-- Sane coordinates portfolio priority, forecast, and CEO reporting. Overwatch observes whether concurrency harms quality, cost, latency, recovery, or context isolation and may refine bounded concurrency policy.
+- A high-confidence severe Discord incident may preempt ordinary work under an explicit priority and safe-pause process.
+- Concertmaster coordinates portfolio priority, forecast, and CEO reporting. Encore observes whether concurrency harms quality, cost, latency, recovery, or context isolation and may refine bounded concurrency policy.
 
-### 54. Overwatch and Department Heads decide portfolio priority
+### 54. Encore and Department Heads decide portfolio priority
 
-Goal priority, resource contention, and preemption are decided by a selective **Portfolio Council** composed of Overwatch and only the Department Heads materially affected by the competing Goals.
+Goal priority, resource contention, and preemption are decided by a selective **Portfolio Council** composed of Encore and only the Department Heads materially affected by the competing Goals.
 
-- Sane supplies current Goal commitments, CEO intent, deadlines, blockers, Task Contracts, forecasts, and consequences of delay, and chairs the process without unilaterally setting priority.
+- Concertmaster supplies current Goal commitments, CEO intent, deadlines, blockers, Task Contracts, forecasts, and consequences of delay, and chairs the process without unilaterally setting priority.
 - Affected Department Heads independently state operational cost, dependency, interruption risk, safe pause points, and expected value from their Department perspective.
-- Overwatch supplies cross-Goal evidence: severity, confidence, historical outcomes, cost, token use, quality, risk, opportunity cost, resource contention, and likely system-wide consequences.
+- Encore supplies cross-Goal evidence: severity, confidence, historical outcomes, cost, token use, quality, risk, opportunity cost, resource contention, and likely system-wide consequences.
 - The Council decides ordering, concurrency, resource reallocation, pause points, and review time. The decision records evidence, dissent, confidence, and reconsideration triggers.
 - A CEO-pinned Goal remains an explicit authority constraint and cannot be silently deprioritized.
 - A credible immediate safety, security, or data-loss signal may trigger an automatic safe pause before deliberation. The Portfolio Council then decides the sustained response and resource plan.
-- Only affected Heads are awakened. Routine Overwatch improvement work yields to active CEO Goals unless the improvement is itself required to restore safe operation.
-- Sane executes the portfolio decision and reports material schedule effects to the CEO.
+- Only affected Heads are awakened. Routine Encore improvement work yields to active CEO Goals unless the improvement is itself required to restore safe operation.
+- Concertmaster executes the portfolio decision and reports material schedule effects to the CEO.

@@ -132,9 +132,9 @@ describeDatabase("Department acceptance and independent Quality certification wi
     const { worker, evidenceIds, proof } = await setupWorkerWithCommit();
     const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [{ findingId: "f1", severity: "noncritical", description: "minor style issue" }], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     const future = new Date(Date.now() + 86_400_000);
-    const waiver = await grantCertificationWaiver(pool, "quality_certifications", certified.certificationId, "f1", { authority: "ceo", reason: "not blocking", consequence: "tracked as debt", followUp: "fix next sprint", expiresAt: future }, "sane", proof);
+    const waiver = await grantCertificationWaiver(pool, "quality_certifications", certified.certificationId, "f1", { authority: "ceo", reason: "not blocking", consequence: "tracked as debt", followUp: "fix next sprint", expiresAt: future }, "concertmaster", proof);
     expect(waiver.authority).toBe("ceo");
-    const replay = await grantCertificationWaiver(pool, "quality_certifications", certified.certificationId, "f1", { authority: "ceo", reason: "not blocking", consequence: "tracked as debt", followUp: "fix next sprint", expiresAt: future }, "sane", proof);
+    const replay = await grantCertificationWaiver(pool, "quality_certifications", certified.certificationId, "f1", { authority: "ceo", reason: "not blocking", consequence: "tracked as debt", followUp: "fix next sprint", expiresAt: future }, "concertmaster", proof);
     expect(replay).toEqual(waiver);
   });
 
@@ -142,7 +142,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
     const { worker, evidenceIds, proof } = await setupWorkerWithCommit();
     const certified = await certifyQuality(pool, worker.workerId, { verdict: "failed", findings: [{ findingId: "f1", severity: "critical", description: "security hole" }], testEvidenceIds: [] }, "quality", proof, headContext("quality"));
     const future = new Date(Date.now() + 86_400_000);
-    await expect(grantCertificationWaiver(pool, "quality_certifications", certified.certificationId, "f1", { authority: "ceo", reason: "just close it", consequence: "none", followUp: "none", expiresAt: future }, "sane", proof)).rejects.toBeInstanceOf(CertificationError);
+    await expect(grantCertificationWaiver(pool, "quality_certifications", certified.certificationId, "f1", { authority: "ceo", reason: "just close it", consequence: "none", followUp: "none", expiresAt: future }, "concertmaster", proof)).rejects.toBeInstanceOf(CertificationError);
   });
 
   it("rejects duplicate certification finding identities at the database boundary", async () => {
@@ -177,7 +177,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
   it("rejects direct tampering with an immutable waiver", async () => {
     const { worker, evidenceIds, proof } = await setupWorkerWithCommit();
     const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [{ findingId: "f1", severity: "noncritical", description: "minor" }], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
-    const waiver = await grantCertificationWaiver(pool, "quality_certifications", certified.certificationId, "f1", { authority: "ceo", reason: "ok", consequence: "tracked", followUp: "later", expiresAt: new Date(Date.now() + 86_400_000) }, "sane", proof);
+    const waiver = await grantCertificationWaiver(pool, "quality_certifications", certified.certificationId, "f1", { authority: "ceo", reason: "ok", consequence: "tracked", followUp: "later", expiresAt: new Date(Date.now() + 86_400_000) }, "concertmaster", proof);
     await expect(pool.query("UPDATE certification_waivers SET reason = 'tampered' WHERE waiver_id = $1", [waiver.waiverId])).rejects.toThrow();
   });
 

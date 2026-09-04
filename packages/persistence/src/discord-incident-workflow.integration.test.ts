@@ -8,14 +8,14 @@ import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { localGitPort } from "@maestro/git-adapter";
 import {
-  buildFireflyIncidentBrief,
-  deriveFireflyIncidentFingerprint,
-  routeFireflyIncidentDepartments,
-  signFireflySignal,
+  buildDiscordIncidentBrief,
+  deriveDiscordIncidentFingerprint,
+  routeDiscordIncidentDepartments,
+  signDiscordSignal,
   type DecisionPacket,
   type DepartmentPlanSubstance,
   type ExecutionKernelPort,
-  type FireflySignal,
+  type DiscordSignal,
   type IndependentBrief,
   type MissionBundleSubstance,
   type TaskContractSubstance,
@@ -30,17 +30,17 @@ import { observeWorker, spawnWorker } from "./worker.js";
 import { acceptDepartmentWorkerOutput, certifyQuality } from "./certification.js";
 import { recordGoalIntegrationRevision, recordDepartmentBranch, recordGoalIntegrationBranch, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
 import { recordEvidenceBundle, verifyStoredEvidenceBundle } from "./evidence-bundle.js";
-import { generateSaneFinalReport } from "./sane-report.js";
-import { recordFireflySignal } from "./firefly.js";
+import { generateConcertmasterFinalReport } from "./concertmaster-report.js";
+import { recordDiscordSignal } from "./discord.js";
 import {
-  FireflyIncidentAuthorizationError,
-  FireflyIncidentError,
-  closeFireflyIncident,
-  linkFireflyIncidentToGoal,
-  listFireflyImprovementEvidence,
-  listFireflyIncidents,
-  requestFireflyImmediateSafePause,
-} from "./firefly-incident.js";
+  DiscordIncidentAuthorizationError,
+  DiscordIncidentError,
+  closeDiscordIncident,
+  linkDiscordIncidentToGoal,
+  listDiscordImprovementEvidence,
+  listDiscordIncidents,
+  requestDiscordImmediateSafePause,
+} from "./discord-incident.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -69,9 +69,9 @@ function fakeKernel(): ExecutionKernelPort {
   };
 }
 
-function signal(overrides: Partial<FireflySignal> = {}): FireflySignal {
+function signal(overrides: Partial<DiscordSignal> = {}): DiscordSignal {
   const now = Date.now();
-  const value: FireflySignal = {
+  const value: DiscordSignal = {
     incidentFingerprint: "",
     firstObservedAt: new Date(now - 2000).toISOString(),
     lastObservedAt: new Date(now - 1000).toISOString(),
@@ -83,13 +83,13 @@ function signal(overrides: Partial<FireflySignal> = {}): FireflySignal {
     source: "health-probe",
     sourceFreshness: new Date(now - 1000).toISOString(),
     deduplicationRelationship: "new",
-    fireflyHealthState: "healthy",
+    discordHealthState: "healthy",
     ...overrides,
   };
-  return { ...value, incidentFingerprint: deriveFireflyIncidentFingerprint(value) };
+  return { ...value, incidentFingerprint: deriveDiscordIncidentFingerprint(value) };
 }
 
-describeDatabase("Phase 4 work-sequence step 8: Firefly incident through Task Contract, Council, remediation, and closure", () => {
+describeDatabase("Phase 4 work-sequence step 8: Discord incident through Task Contract, Council, remediation, and closure", () => {
   const pool = new Pool({ connectionString: databaseUrl });
   let repositoryPath: string;
   let baseRevision: string;
@@ -107,41 +107,41 @@ describeDatabase("Phase 4 work-sequence step 8: Firefly incident through Task Co
   });
 
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS firefly_watchdog_checks, firefly_incident_signals, firefly_incidents, firefly_signals, sane_final_reports, evidence_bundles, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, certification_conflict_resolution_members, department_acceptances, goal_integration_revision_commits, goal_integration_revisions, encore_council_syntheses, encore_council_judgments, encore_council_rounds, semantic_reviews, sentinel_challenge_findings, sentinel_challenges, sentinel_findings, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls, device_grants, device_command_results, devices, device_policies CASCADE");
+    await pool.query("DROP TABLE IF EXISTS discord_watchdog_checks, discord_incident_signals, discord_incidents, discord_signals, concertmaster_final_reports, evidence_bundles, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, certification_conflict_resolution_members, department_acceptances, goal_integration_revision_commits, goal_integration_revisions, encore_council_syntheses, encore_council_judgments, encore_council_rounds, semantic_reviews, metronome_challenge_findings, metronome_challenges, metronome_findings, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls, device_grants, device_command_results, devices, device_policies CASCADE");
     await applyAllMigrations(pool);
     await bootstrapPermanentOrganization(pool);
   });
   afterAll(async () => { await pool.end(); });
 
   let signalSequence = 0;
-  async function seedIncident(overrides: Partial<FireflySignal> = {}) {
+  async function seedIncident(overrides: Partial<DiscordSignal> = {}) {
     signalSequence += 1;
-    const envelope = signFireflySignal(signal(overrides), "firefly-e2e-secret", randomUUID(), signalSequence);
-    const stored = await recordFireflySignal(pool, envelope, "firefly-e2e-secret");
-    const [incident] = await listFireflyIncidents(pool, stored.incidentFingerprint);
+    const envelope = signDiscordSignal(signal(overrides), "discord-e2e-secret", randomUUID(), signalSequence);
+    const stored = await recordDiscordSignal(pool, envelope, "discord-e2e-secret");
+    const [incident] = await listDiscordIncidents(pool, stored.incidentFingerprint);
     return { stored, incident: incident! };
   }
 
-  it("runs one real Firefly-triggered incident from Brief through remediation to a resolved closure", async () => {
+  it("runs one real Discord-triggered incident from Brief through remediation to a resolved closure", async () => {
     const { stored, incident } = await seedIncident({ severity: "critical", confidence: 0.5 });
     const kind = "crash" as const;
-    expect(routeFireflyIncidentDepartments(kind)).toEqual(["operations", "engineering"]);
-    const incidentBrief = buildFireflyIncidentBrief(incident, stored.minimalReproductionEvidence, kind);
+    expect(routeDiscordIncidentDepartments(kind)).toEqual(["operations", "engineering"]);
+    const incidentBrief = buildDiscordIncidentBrief(incident, stored.minimalReproductionEvidence, kind);
     expect(incidentBrief.boundedEvidence).toEqual(stored.minimalReproductionEvidence);
     expect(incidentBrief.routedDepartments).toEqual(["operations", "engineering"]);
 
     const projectId = randomUUID();
     const goalId = randomUUID();
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "control-plane", leaseDurationMs: 120_000 });
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "CreateGoal", expectedVersion: 0 }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "CreateGoal", expectedVersion: 0 }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
 
-    const linked = await linkFireflyIncidentToGoal(pool, incident.incidentId, goalId, proof, context("sane"));
+    const linked = await linkDiscordIncidentToGoal(pool, incident.incidentId, goalId, proof, context("concertmaster"));
     expect(linked.status).toBe("triaging");
     expect(linked.linkedGoalId).toBe(goalId);
-    const relinked = await linkFireflyIncidentToGoal(pool, incident.incidentId, goalId, proof, context("sane"));
+    const relinked = await linkDiscordIncidentToGoal(pool, incident.incidentId, goalId, proof, context("concertmaster"));
     expect(relinked).toEqual(linked);
 
     const contractId = randomUUID();
@@ -222,18 +222,18 @@ describeDatabase("Phase 4 work-sequence step 8: Firefly incident through Task Co
     const bundle = await recordEvidenceBundle(pool, goalId);
     await verifyStoredEvidenceBundle(pool, bundle.bundleId);
 
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 4, to: "certifying" }, proof);
-    const report = await generateSaneFinalReport(pool, goalId);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 4, to: "certifying" }, proof);
+    const report = await generateConcertmasterFinalReport(pool, goalId);
     expect(report.success).toBe(true);
 
-    const closed = await closeFireflyIncident(pool, incident.incidentId, "resolved", "Fixed the health endpoint and certified independently.", "none", context("sane"), proof);
+    const closed = await closeDiscordIncident(pool, incident.incidentId, "resolved", "Fixed the health endpoint and certified independently.", "none", context("concertmaster"), proof);
     expect(closed.status).toBe("resolved");
     expect(closed.linkedGoalId).toBe(goalId);
     expect(closed.closedAt).not.toBeNull();
 
-    await expect(pool.query("UPDATE firefly_incidents SET status = 'open' WHERE incident_id = $1", [incident.incidentId])).rejects.toThrow();
+    await expect(pool.query("UPDATE discord_incidents SET status = 'open' WHERE incident_id = $1", [incident.incidentId])).rejects.toThrow();
 
-    const improvementEvidence = (await listFireflyImprovementEvidence(pool)).find((e) => e.incidentId === incident.incidentId);
+    const improvementEvidence = (await listDiscordImprovementEvidence(pool)).find((e) => e.incidentId === incident.incidentId);
     expect(improvementEvidence).toMatchObject({ outcome: "resolved", severity: "critical" });
     expect(improvementEvidence!.detectionToTriageMs).not.toBeNull();
     expect(improvementEvidence!.triageToCloseMs).not.toBeNull();
@@ -246,13 +246,13 @@ describeDatabase("Phase 4 work-sequence step 8: Firefly incident through Task Co
     const projectId = randomUUID();
     const goalId = randomUUID();
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "control-plane", leaseDurationMs: 120_000 });
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "CreateGoal", expectedVersion: 0 }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
-    await linkFireflyIncidentToGoal(pool, incident.incidentId, goalId, proof, context("sane"));
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "CreateGoal", expectedVersion: 0 }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
+    await linkDiscordIncidentToGoal(pool, incident.incidentId, goalId, proof, context("concertmaster"));
 
-    const paused = await requestFireflyImmediateSafePause(pool, incident.incidentId, projectId, proof, context("firefly"));
+    const paused = await requestDiscordImmediateSafePause(pool, incident.incidentId, projectId, proof, context("discord"));
     expect(paused.incidentId).toBe(incident.incidentId);
     const control = await pool.query<{ pause_requested_at: Date | null }>("SELECT pause_requested_at FROM goal_controls WHERE goal_id = $1", [goalId]);
     expect(control.rows[0]!.pause_requested_at).not.toBeNull();
@@ -274,18 +274,18 @@ describeDatabase("Phase 4 work-sequence step 8: Firefly incident through Task Co
     const projectId = randomUUID();
     const goalId = randomUUID();
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "control-plane", leaseDurationMs: 120_000 });
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "CreateGoal", expectedVersion: 0 }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
-    await linkFireflyIncidentToGoal(pool, incident.incidentId, goalId, proof, context("sane"));
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "CreateGoal", expectedVersion: 0 }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
+    await linkDiscordIncidentToGoal(pool, incident.incidentId, goalId, proof, context("concertmaster"));
 
     const forgedProof = { goalId, ownerId: "attacker", fencingToken: proof.fencingToken };
-    await expect(requestFireflyImmediateSafePause(pool, incident.incidentId, projectId, forgedProof, context("firefly"))).rejects.toThrow();
+    await expect(requestDiscordImmediateSafePause(pool, incident.incidentId, projectId, forgedProof, context("discord"))).rejects.toThrow();
     const control = await pool.query<{ pause_requested_at: Date | null }>("SELECT pause_requested_at FROM goal_controls WHERE goal_id = $1", [goalId]);
     expect(control.rows[0]?.pause_requested_at ?? null).toBeNull();
 
-    await expect(requestFireflyImmediateSafePause(pool, incident.incidentId, projectId, proof, context("firefly"))).resolves.toMatchObject({ incidentId: incident.incidentId });
+    await expect(requestDiscordImmediateSafePause(pool, incident.incidentId, projectId, proof, context("discord"))).resolves.toMatchObject({ incidentId: incident.incidentId });
   });
 
   it("rejects linking an incident to a Goal with a stale/forged fencing token, zero durable mutation, and the real proof still works afterward (Phase 2 re-patch item 8)", async () => {
@@ -293,18 +293,18 @@ describeDatabase("Phase 4 work-sequence step 8: Firefly incident through Task Co
     const projectId = randomUUID();
     const goalId = randomUUID();
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "control-plane", leaseDurationMs: 120_000 });
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "CreateGoal", expectedVersion: 0 }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "CreateGoal", expectedVersion: 0 }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
 
     const forgedProof = { goalId, ownerId: proof.ownerId, fencingToken: String(BigInt(proof.fencingToken) + 1n) };
-    await expect(linkFireflyIncidentToGoal(pool, incident.incidentId, goalId, forgedProof, context("sane"))).rejects.toBeInstanceOf(StaleGoalLeaseError);
-    const unlinked = (await listFireflyIncidents(pool)).find((i) => i.incidentId === incident.incidentId);
+    await expect(linkDiscordIncidentToGoal(pool, incident.incidentId, goalId, forgedProof, context("concertmaster"))).rejects.toBeInstanceOf(StaleGoalLeaseError);
+    const unlinked = (await listDiscordIncidents(pool)).find((i) => i.incidentId === incident.incidentId);
     expect(unlinked?.linkedGoalId ?? null).toBeNull();
     expect(unlinked?.status).toBe("open");
 
-    const linked = await linkFireflyIncidentToGoal(pool, incident.incidentId, goalId, proof, context("sane"));
+    const linked = await linkDiscordIncidentToGoal(pool, incident.incidentId, goalId, proof, context("concertmaster"));
     expect(linked.linkedGoalId).toBe(goalId);
     expect(linked.status).toBe("triaging");
   });
@@ -314,12 +314,12 @@ describeDatabase("Phase 4 work-sequence step 8: Firefly incident through Task Co
     const projectId = randomUUID();
     const goalId = randomUUID();
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "control-plane", leaseDurationMs: 120_000 });
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "CreateGoal", expectedVersion: 0 }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
-    await linkFireflyIncidentToGoal(pool, incident.incidentId, goalId, proof, context("sane"));
-    await expect(requestFireflyImmediateSafePause(pool, incident.incidentId, projectId, proof, context("firefly"))).rejects.toBeInstanceOf(FireflyIncidentAuthorizationError);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "CreateGoal", expectedVersion: 0 }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
+    await linkDiscordIncidentToGoal(pool, incident.incidentId, goalId, proof, context("concertmaster"));
+    await expect(requestDiscordImmediateSafePause(pool, incident.incidentId, projectId, proof, context("discord"))).rejects.toBeInstanceOf(DiscordIncidentAuthorizationError);
   });
 
   it("rejects a resolved close without proof of the linked Goal's current lease", async () => {
@@ -327,29 +327,29 @@ describeDatabase("Phase 4 work-sequence step 8: Firefly incident through Task Co
     const goalId = randomUUID();
     const projectId = randomUUID();
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "control-plane", leaseDurationMs: 60_000 });
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "CreateGoal", expectedVersion: 0 }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
-    await linkFireflyIncidentToGoal(pool, incident.incidentId, goalId, proof, context("sane"));
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "CreateGoal", expectedVersion: 0 }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
+    await linkDiscordIncidentToGoal(pool, incident.incidentId, goalId, proof, context("concertmaster"));
 
-    await expect(closeFireflyIncident(pool, incident.incidentId, "resolved", "done", "none", context("attacker"))).rejects.toThrow();
+    await expect(closeDiscordIncident(pool, incident.incidentId, "resolved", "done", "none", context("attacker"))).rejects.toThrow();
     const otherGoalProof = await acquireGoalLease(pool, { goalId: randomUUID(), ownerId: "control-plane", leaseDurationMs: 60_000 });
-    await expect(closeFireflyIncident(pool, incident.incidentId, "resolved", "done", "none", context("attacker"), otherGoalProof)).rejects.toThrow();
-    await expect(closeFireflyIncident(pool, incident.incidentId, "resolved", "done", "none", context("sane"), proof)).resolves.toMatchObject({ status: "resolved" });
+    await expect(closeDiscordIncident(pool, incident.incidentId, "resolved", "done", "none", context("attacker"), otherGoalProof)).rejects.toThrow();
+    await expect(closeDiscordIncident(pool, incident.incidentId, "resolved", "done", "none", context("concertmaster"), proof)).resolves.toMatchObject({ status: "resolved" });
   });
 
   it("closes a false positive without a linked Goal, and rejects a resolved close without one", async () => {
     const { incident } = await seedIncident({ severity: "warning", confidence: 0.3, affectedComponent: "false-positive-component" });
-    const closed = await closeFireflyIncident(pool, incident.incidentId, "false_positive", "The named version is unaffected.", "none", context("security"));
+    const closed = await closeDiscordIncident(pool, incident.incidentId, "false_positive", "The named version is unaffected.", "none", context("security"));
     expect(closed.status).toBe("false_positive");
     expect(closed.linkedGoalId).toBeNull();
-    const improvementEvidence = (await listFireflyImprovementEvidence(pool)).find((e) => e.incidentId === incident.incidentId);
+    const improvementEvidence = (await listDiscordImprovementEvidence(pool)).find((e) => e.incidentId === incident.incidentId);
     expect(improvementEvidence).toMatchObject({ outcome: "false_positive" });
     expect(improvementEvidence!.detectionToTriageMs).toBeNull();
     expect(improvementEvidence!.triageToCloseMs).toBeNull();
 
     const { incident: second } = await seedIncident({ severity: "warning", confidence: 0.3, affectedComponent: "unlinked-resolve-attempt-component" });
-    await expect(closeFireflyIncident(pool, second.incidentId, "resolved", "done", "none", context("security"))).rejects.toBeInstanceOf(FireflyIncidentError);
+    await expect(closeDiscordIncident(pool, second.incidentId, "resolved", "done", "none", context("security"))).rejects.toBeInstanceOf(DiscordIncidentError);
   });
 });

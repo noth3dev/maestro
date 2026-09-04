@@ -27,7 +27,7 @@ export function parsePersonaProfile(value: unknown): PersonaProfile {
   return personaProfileSchema.parse(value);
 }
 
-export const SANE_PERSONA_BASELINE: PersonaProfile = Object.freeze({
+export const CONCERTMASTER_PERSONA_BASELINE: PersonaProfile = Object.freeze({
   agreeableness: 0.70,
   extraversion: 0.75,
   imagination: 0.65,

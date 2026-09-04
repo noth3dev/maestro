@@ -7,10 +7,10 @@ import {
   CriticalActionResultSchema,
   GoalQuerySchema,
   GoalResultSchema,
-  SentinelChallengeListSchema,
+  MetronomeChallengeListSchema,
   EncoreCouncilRoundListSchema,
   CertificationListSchema,
-  SaneFinalReportSchema,
+  ConcertmasterFinalReportSchema,
   EventQuerySchema,
   EventCursorSchema,
   GoalEventPageSchema,
@@ -88,7 +88,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
     : Fastify();
   const activeStreams = new Set<() => void>();
   const events = eventService ?? { listEvents: async () => { throw new DurableStoreUnavailableError(); } };
-  const readState = readStateService ?? { listSentinelChallenges: async () => { throw new DurableStoreUnavailableError(); }, listEncoreCouncilRounds: async () => { throw new DurableStoreUnavailableError(); }, listCertifications: async () => { throw new DurableStoreUnavailableError(); }, getSaneReport: async () => { throw new DurableStoreUnavailableError(); } };
+  const readState = readStateService ?? { listMetronomeChallenges: async () => { throw new DurableStoreUnavailableError(); }, listEncoreCouncilRounds: async () => { throw new DurableStoreUnavailableError(); }, listCertifications: async () => { throw new DurableStoreUnavailableError(); }, getConcertmasterReport: async () => { throw new DurableStoreUnavailableError(); } };
   const criticalActions = criticalActionService ?? {
     performCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
   };
@@ -183,10 +183,10 @@ export function buildServer({ goalService, authenticator, eventService, critical
     return reply.status(200).send(GoalResultSchema.parse(result));
   });
 
-  app.get("/v1/goals/:goalId/sentinel-challenges", async (request, reply) => { const goalId=parse(UuidSchema,(request.params as {goalId?:unknown}).goalId); return reply.send(SentinelChallengeListSchema.parse({challenges: await readState.listSentinelChallenges(goalId)})); });
+  app.get("/v1/goals/:goalId/metronome-challenges", async (request, reply) => { const goalId=parse(UuidSchema,(request.params as {goalId?:unknown}).goalId); return reply.send(MetronomeChallengeListSchema.parse({challenges: await readState.listMetronomeChallenges(goalId)})); });
   app.get("/v1/goals/:goalId/encore-council-rounds", async (request, reply) => { const goalId=parse(UuidSchema,(request.params as {goalId?:unknown}).goalId); return reply.send(EncoreCouncilRoundListSchema.parse({rounds: await readState.listEncoreCouncilRounds(goalId)})); });
   app.get("/v1/goals/:goalId/certifications", async (request, reply) => { const goalId=parse(UuidSchema,(request.params as {goalId?:unknown}).goalId); return reply.send(CertificationListSchema.parse({certifications: await readState.listCertifications(goalId)})); });
-  app.get("/v1/goals/:goalId/sane-report", async (request, reply) => { const goalId=parse(UuidSchema,(request.params as {goalId?:unknown}).goalId); const report=await readState.getSaneReport(goalId); if (!report) throw new GoalNotFoundError(); return reply.send(SaneFinalReportSchema.parse(report)); });
+  app.get("/v1/goals/:goalId/concertmaster-report", async (request, reply) => { const goalId=parse(UuidSchema,(request.params as {goalId?:unknown}).goalId); const report=await readState.getConcertmasterReport(goalId); if (!report) throw new GoalNotFoundError(); return reply.send(ConcertmasterFinalReportSchema.parse(report)); });
 
   app.get("/v1/events", async (request, reply) => {
     const query = parse(EventQuerySchema, request.query);

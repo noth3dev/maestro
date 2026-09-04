@@ -1,13 +1,13 @@
 import { z } from "zod";
-import { SANE_PERSONA_BASELINE, parsePersonaProfile, type PersonaProfile } from "./persona.js";
+import { CONCERTMASTER_PERSONA_BASELINE, parsePersonaProfile, type PersonaProfile } from "./persona.js";
 
 export type DepartmentStatus = "sleeping";
 export type PermanentRoleStatus = "standing";
 
 export const PERMANENT_ROLE_KINDS = Object.freeze([
-  "sane",
+  "concertmaster",
   "department_head",
-  "sentinel",
+  "metronome",
   "encore_council",
 ] as const);
 export const PermanentRoleKindSchema = z.enum(PERMANENT_ROLE_KINDS);
@@ -150,26 +150,26 @@ function defineRole(definition: RoleDefinition): PermanentRole {
   });
 }
 
-const SANE_ALLOWED = [
+const CONCERTMASTER_ALLOWED = [
   "coordinate the Secretary Office",
   "maintain canonical records",
   "present CEO decisions",
 ] as const;
-const SANE_FORBIDDEN = [
+const CONCERTMASTER_FORBIDDEN = [
   "change CEO intent without confirmation",
   "execute unapproved critical actions",
   "spawn production workers directly",
 ] as const;
 
-export const SANE_ROLE: PermanentRole = defineRole({
-  roleId: "sane",
-  displayName: "Sane",
-  roleKind: "sane",
+export const CONCERTMASTER_ROLE: PermanentRole = defineRole({
+  roleId: "concertmaster",
+  displayName: "Concertmaster",
+  roleKind: "concertmaster",
   departmentId: null,
   charter: "Coordinate the Secretary Office on behalf of the CEO while preserving intent and canonical records.",
-  allowedCapabilities: SANE_ALLOWED,
-  forbiddenCapabilities: SANE_FORBIDDEN,
-  persona: SANE_PERSONA_BASELINE,
+  allowedCapabilities: CONCERTMASTER_ALLOWED,
+  forbiddenCapabilities: CONCERTMASTER_FORBIDDEN,
+  persona: CONCERTMASTER_PERSONA_BASELINE,
 });
 
 const HEAD_ALLOWED = [
@@ -246,25 +246,25 @@ const DEPARTMENT_HEAD_DEFINITIONS: readonly RoleDefinition[] = [
   },
 ];
 
-const SENTINEL_ALLOWED = [
+const METRONOME_ALLOWED = [
   "observe durable orchestration state",
   "record boundary findings",
   "request a safe pause",
 ] as const;
-const SENTINEL_FORBIDDEN = [
+const METRONOME_FORBIDDEN = [
   "choose product direction",
   "spawn production workers",
   "weaken safety or authority boundaries",
 ] as const;
 
-export const SENTINEL_ROLE: PermanentRole = defineRole({
-  roleId: "encore-sentinel",
-  displayName: "Encore Sentinel",
-  roleKind: "sentinel",
+export const METRONOME_ROLE: PermanentRole = defineRole({
+  roleId: "encore-metronome",
+  displayName: "Encore Metronome",
+  roleKind: "metronome",
   departmentId: null,
   charter: "Observe orchestration boundaries and surface evidence of risk, drift, or inconsistency without directing product work.",
-  allowedCapabilities: SENTINEL_ALLOWED,
-  forbiddenCapabilities: SENTINEL_FORBIDDEN,
+  allowedCapabilities: METRONOME_ALLOWED,
+  forbiddenCapabilities: METRONOME_FORBIDDEN,
   persona: reviewedBaseline({ agreeableness: 0.42, extraversion: 0.58, imagination: 0.42, realism: 0.95, conscientiousness: 0.98, caution: 0.99, initiative: 0.72, empathy: 0.62, adaptability: 0.78, sociability: 0.46 }),
 });
 
@@ -301,11 +301,11 @@ export const ENCORE_COUNCIL_ROLES: readonly PermanentRole[] = Object.freeze([
 ]);
 
 export const PERMANENT_ROLES: readonly PermanentRole[] = Object.freeze([
-  SANE_ROLE,
+  CONCERTMASTER_ROLE,
   ...DEPARTMENT_HEAD_DEFINITIONS.map(defineRole),
-  SENTINEL_ROLE,
+  METRONOME_ROLE,
   ...ENCORE_COUNCIL_ROLES,
 ]);
 
 // Explicit aliases make the stable oversight identities discoverable without adding behavior.
-export const ENCORE_SENTINEL_ROLE = SENTINEL_ROLE;
+export const ENCORE_METRONOME_ROLE = METRONOME_ROLE;

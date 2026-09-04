@@ -14,8 +14,8 @@ describe("Encore Council trigger policy", () => {
   it("triggers on a cross-Department Goal", () => {
     expect(evaluateEncoreTriggers({ departmentOwnershipCount: 2, openChallengeCount: 0, ambiguousOrUnsupportedReviewCount: 0 })).toContain("cross_department_material");
   });
-  it("triggers on an unresolved Sentinel challenge", () => {
-    expect(evaluateEncoreTriggers({ departmentOwnershipCount: 1, openChallengeCount: 1, ambiguousOrUnsupportedReviewCount: 0 })).toContain("unresolved_sentinel_challenge");
+  it("triggers on an unresolved Metronome challenge", () => {
+    expect(evaluateEncoreTriggers({ departmentOwnershipCount: 1, openChallengeCount: 1, ambiguousOrUnsupportedReviewCount: 0 })).toContain("unresolved_metronome_challenge");
   });
   it("triggers on high uncertainty from semantic review", () => {
     expect(evaluateEncoreTriggers({ departmentOwnershipCount: 1, openChallengeCount: 0, ambiguousOrUnsupportedReviewCount: 1 })).toContain("high_uncertainty_semantic_review");
