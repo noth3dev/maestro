@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS firefly_signals (
+CREATE TABLE IF NOT EXISTS discord_signals (
   signal_id uuid PRIMARY KEY,
   incident_fingerprint text NOT NULL,
   first_observed_at timestamptz NOT NULL,
@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS firefly_signals (
   source text NOT NULL,
   source_freshness text NOT NULL,
   deduplication_relationship text NOT NULL CHECK (deduplication_relationship IN ('new','same','related')),
-  firefly_health_state text NOT NULL CHECK (firefly_health_state IN ('healthy','degraded','unhealthy')),
+  discord_health_state text NOT NULL CHECK (discord_health_state IN ('healthy','degraded','unhealthy')),
   nonce text NOT NULL UNIQUE,
   sequence bigint NOT NULL,
   issued_at timestamptz NOT NULL,

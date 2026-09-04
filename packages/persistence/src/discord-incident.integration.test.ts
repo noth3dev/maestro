@@ -9,20 +9,11 @@ import { attachDiscordSignalToIncident, listDiscordIncidents, listDiscordSilence
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
-// These reference the real on-disk migration filenames, which still say
-// "firefly" (existing, already-applied migrations are never renamed -- see
-// 0052_rename_sane_firefly_sentinel.sql's header comment for why). This
-// test builds an isolated schema directly from those files' SQL content
-// with an in-memory firefly->discord substitution, rather than running the
-// full production migration/rename chain (which also touches unrelated
-// tables this focused test never creates).
-const migrations = ["0042_firefly_signals.sql", "0043_firefly_signal_hardening.sql", "0044_firefly_incidents.sql", "0045_firefly_integrity.sql", "0047_firefly_incident_workflow.sql", "0048_firefly_improvement_evidence.sql"];
-const renameFireflyToDiscord = (sql: string): string =>
-  sql
-    .replace(/FIREFLY/g, "DISCORD")
-    .replace(/Firefly/g, "Discord")
-    .replace(/firefly/g, "discord");
-
+// This test builds an isolated schema directly from the relevant migration
+// files' SQL content, rather than running the full production migration
+// chain (which also touches unrelated tables this focused test never
+// creates).
+const migrations = ["0042_discord_signals.sql", "0043_discord_signal_hardening.sql", "0044_discord_incidents.sql", "0045_discord_integrity.sql", "0047_discord_incident_workflow.sql", "0048_discord_improvement_evidence.sql"];
 const signal = (overrides: Partial<DiscordSignal> = {}): DiscordSignal => {
   const value: DiscordSignal = {
     incidentFingerprint: "",
@@ -57,7 +48,7 @@ describeDatabase("Discord incident records with PostgreSQL", () => {
     await pool.query("DROP TABLE IF EXISTS discord_watchdog_checks, discord_incident_signals, discord_incidents, discord_signals CASCADE");
     for (const name of migrations) {
       const sql = await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8");
-      await pool.query(renameFireflyToDiscord(sql));
+      await pool.query(sql);
     }
   });
   beforeEach(async () => { await pool.query("TRUNCATE discord_watchdog_checks, discord_incident_signals, discord_incidents, discord_signals"); });
