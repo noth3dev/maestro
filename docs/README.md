@@ -49,7 +49,7 @@ Maestro is built around four core architectural guarantees:
   - Every mutation is idempotent via public `commandId` / `Idempotency-Key` tracking.
 
 - **Evidence-Driven Self-Improvement & Adaptation:**
-  - **Overwatch Learning & Improvement Lab** curates milestone execution evidence into compact **Improvement Digests**.
+  - **Encore Learning & Improvement Lab** curates milestone execution evidence into compact **Improvement Digests**.
   - **Shadow-First & Replay Evaluation:** Proposed prompt guidance, role overlays, and routing updates are evaluated in isolated replay/synthetic shadow runs without live execution authority.
   - **Ten-Axis Persona Adaptation:** Fine-tunes 10 canonical personality traits per role and task class based on empirical quality, safety, latency, and cost deltas.
   - **Bounded & Reversible Rollouts:** Self-improvement is strictly contained and can *never* alter security boundaries, authority permissions, credentials, budget ceilings, or core safety policies.
@@ -83,7 +83,7 @@ flowchart TD
         W -->|11. Submit Evidence Bundle| EB[SHA-256 Evidence]
         EB -->|12. Verify Integrity| METRONOME[Metronome / Quality Certification]
         METRONOME -->|13. Final Certified Report| CONCERTMASTER
-        EB -.->|14. Milestone Evidence| OW[Overwatch Self-Improvement Lab]
+        EB -.->|14. Milestone Evidence| OW[Encore Self-Improvement Lab]
         OW -.->|15. Replay / Shadow Feedback| DH
     end
     

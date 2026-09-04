@@ -51,7 +51,7 @@ Maestro는 네 가지 핵심 아키텍처 보증을 중심으로 구축되었습
   - 공개 `commandId` / `Idempotency-Key` 추적을 통해 모든 변경은 멱등적(Idempotent)입니다.
 
 - **증거 기반 자가 개선 및 적응 (Evidence-Driven Self-Improvement & Adaptation):**
-  - **오버워치 학습 및 개선 연구소 (Overwatch Learning & Improvement Lab)**: 마일스톤 실행 증거를 compact **Improvement Digest**로 큐레이션합니다.
+  - **앙코르 학습 및 개선 연구소 (Encore Learning & Improvement Lab)**: 마일스톤 실행 증거를 compact **Improvement Digest**로 큐레이션합니다.
   - **Shadow-First & Replay 평가**: 제안된 프롬프트 가이드, 역할 오버레이, 라우팅 업데이트를 실시간 실행 권한이 없는 격리된 Replay/Synthetic Shadow 실행에서 평가합니다.
   - **10축 페르소나 적응 (Ten-Axis Persona Adaptation)**: 실증적 품질, 안전성, 지연 시간, 비용 변화 지표를 바탕으로 역할 및 작업 클래스별 10가지 정규 성격 축을 맞춤 조정합니다.
   - **제한되고 가역적인 롤아웃 (Bounded & Reversible Rollouts)**: 자가 개선은 엄격히 제한되며 보안 경계, 권한 허가, 인증서, 예산 한도 또는 핵심 안전 정책을 절대로 *변경할 수 없습니다*.
@@ -85,7 +85,7 @@ flowchart TD
         W -->|11. 증거 번들 제출| EB[SHA-256 증거 스냅샷]
         EB -->|12. 무결성 검증| METRONOME[Metronome / Quality 인증]
         METRONOME -->|13. 최종 인증 리포트| CONCERTMASTER
-        EB -.->|14. 마일스톤 실행 증거| OW[Overwatch 자가 개선 연구소]
+        EB -.->|14. 마일스톤 실행 증거| OW[Encore 자가 개선 연구소]
         OW -.->|15. Replay / Shadow 피드백| DH
     end
     
