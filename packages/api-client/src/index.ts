@@ -49,6 +49,8 @@ import {
   MetronomeChallengeListSchema, EncoreCouncilRoundListSchema, CertificationListSchema, ConcertmasterFinalReportSchema,
   type MetronomeChallengeList, type EncoreCouncilRoundList, type CertificationList, type ConcertmasterFinalReport,
   StableApiErrorSchema,
+  ProjectAccessProvisionInputSchema,
+  ProjectAccessProvisionResultSchema,
   TransitionGoalInputSchema,
   UuidSchema,
   type CreateGoalInput,
@@ -101,6 +103,8 @@ import {
   type EncoreCouncilResult,
   type StableApiError,
   type TransitionGoalInput,
+  type ProjectAccessProvisionInput,
+  type ProjectAccessProvisionResult,
 } from "@maestro/contracts";
 
 export class ApiError extends Error {
@@ -124,6 +128,7 @@ export interface ApiClient {
   confirmTaskContract(contractId: string, input: TaskContractConfirmationInput, commandId?: string): Promise<void>;
   launchTaskContract(contractId: string, projectId: string, commandId?: string): Promise<TaskContract>;
   listGoals(projectId: string): Promise<GoalList>;
+  provisionProjectAccess(input: ProjectAccessProvisionInput): Promise<ProjectAccessProvisionResult>;
   getGoal(goalId: string, query: GoalQuery): Promise<GoalResult>;
   transitionGoal(goalId: string, input: TransitionGoalInput, commandId: string): Promise<GoalResult>;
   approveAndRunCriticalAction(goalId: string, input: CriticalActionApprovalInput, commandId: string): Promise<CriticalActionResult>;
@@ -233,6 +238,13 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
     listGoals(projectId) {
       const parsedProjectId = UuidSchema.parse(projectId);
       return request(`v1/goals?${new URLSearchParams({ projectId: parsedProjectId })}`, { headers }, GoalListSchema);
+    },
+    provisionProjectAccess(input) {
+      return request("v1/admin/project-access", {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json" },
+        body: JSON.stringify(ProjectAccessProvisionInputSchema.parse(input)),
+      }, ProjectAccessProvisionResultSchema);
     },
     getGoal(goalId, query) {
       const parsedGoalId = UuidSchema.parse(goalId);
@@ -420,4 +432,4 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
   };
 }
 
-export type { CreateGoalInput, CreateTaskContractInput, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, GoalBudgetSummary, GoalResult, TransitionGoalInput, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport };
+export type { CreateGoalInput, CreateTaskContractInput, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport };

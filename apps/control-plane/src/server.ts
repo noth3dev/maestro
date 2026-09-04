@@ -13,7 +13,13 @@ import {
   MissionBundleError,
   MissionBundleNotFoundError,
 } from "@maestro/persistence";
-import { ProjectMembershipRequiredError, ProjectRoleRequiredError } from "@maestro/persistence";
+import {
+  ProjectAccessAdminRequiredError,
+  ProjectAccessRoleNotFoundError,
+  ProjectAccessTargetNotFoundError,
+  ProjectMembershipRequiredError,
+  ProjectRoleRequiredError,
+} from "@maestro/persistence";
 import {
   CreateGoalInputSchema,
   CriticalActionInputSchema,
@@ -39,6 +45,8 @@ import {
   OvertureRoleSelectionResultSchema,
   TaskContractConfirmationInputSchema,
   StableApiErrorSchema,
+  ProjectAccessProvisionInputSchema,
+  ProjectAccessProvisionResultSchema,
   TransitionGoalInputSchema,
   UuidSchema,
   HeadParticipationInputSchema,
@@ -151,6 +159,11 @@ export interface ProjectMembershipChecker {
   assertProjectMembership(operatorId: string, projectId: string): Promise<void>;
 }
 
+export interface ProjectAccessProvisioner {
+  /** Grants a target operator exact standing project roles under an explicit admin policy. */
+  provisionProjectAccess(requesterOperatorId: string, input: import("@maestro/contracts").ProjectAccessProvisionInput): Promise<import("@maestro/contracts").ProjectAccessProvisionResult>;
+}
+
 export interface PollingScheduler {
   setInterval(callback: () => void, milliseconds: number): unknown;
   clearInterval(handle: unknown): void;
@@ -161,7 +174,7 @@ const systemPollingScheduler: PollingScheduler = {
   clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
 };
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, https, projectMembership, readinessCheck }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, https, projectMembership, projectAccess, readinessCheck }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
@@ -190,6 +203,8 @@ export function buildServer({ goalService, authenticator, eventService, critical
    * route handler runs.
    */
   projectMembership?: ProjectMembershipChecker;
+  /** Explicitly configured admin-only project membership and role provisioning. */
+  projectAccess?: ProjectAccessProvisioner;
   /** Dependency probe used by /readyz. Liveness never calls this check. */
   readinessCheck?: () => Promise<void>;
 }): FastifyInstance {
@@ -295,7 +310,9 @@ export function buildServer({ goalService, authenticator, eventService, critical
   // exists for it -- before the route handler (and thus goalService/
   // criticalActionService/eventService) ever runs.
   app.addHook("preHandler", async (request) => {
-    if (!request.url.startsWith("/v1/") || !projectMembership) return;
+    // Provisioning is a global admin operation, not a project-scoped action:
+    // its own explicit admin policy replaces membership for this route.
+    if (!request.url.startsWith("/v1/") || isProjectAccessProvisioningRoute(request.url) || !projectMembership) return;
     const operator = (request as typeof request & { operator?: OperatorContext }).operator;
     if (!operator) return;
     const candidate = requestProjectId(request);
@@ -316,6 +333,13 @@ export function buildServer({ goalService, authenticator, eventService, critical
     } catch {
       return reply.status(503).send({ status: "not_ready" });
     }
+  });
+
+  app.post("/v1/admin/project-access", async (request, reply) => {
+    if (!projectAccess) throw new DurableStoreUnavailableError();
+    const input = parse(ProjectAccessProvisionInputSchema, request.body);
+    const result = await projectAccess.provisionProjectAccess(requestOperator(request as { operator?: OperatorContext }).operatorId, input);
+    return reply.status(200).send(ProjectAccessProvisionResultSchema.parse(result));
   });
 
   app.post("/v1/goals", async (request, reply) => {
@@ -836,6 +860,10 @@ function requestOperator(request: { operator?: OperatorContext }): OperatorConte
  * Returns undefined for a route that carries no projectId at all (the four
  * read-state routes), never a fabricated value.
  */
+function isProjectAccessProvisioningRoute(url: string): boolean {
+  return url === "/v1/admin/project-access" || url.startsWith("/v1/admin/project-access?");
+}
+
 function requestProjectId(request: { query?: unknown; body?: unknown }): string | undefined {
   const fromQuery = (request.query as { projectId?: unknown } | undefined)?.projectId;
   const fromBody = (request.body as { projectId?: unknown } | undefined)?.projectId;
@@ -904,6 +932,8 @@ function mapError(error: unknown): { status: number; body: StableApiError } {
   if (error instanceof CriticalActionApprovalConflictError) return apiError(409, "command_id_reused", error.message);
   if (error instanceof CriticalActionUnavailableError) return apiError(503, "durable_store_unavailable", error.message);
   if (error instanceof DurableStoreUnavailableError) return apiError(503, "durable_store_unavailable", error.message);
+  if (error instanceof ProjectAccessAdminRequiredError) return apiError(403, "authority_denied", error.message);
+  if (error instanceof ProjectAccessTargetNotFoundError || error instanceof ProjectAccessRoleNotFoundError) return apiError(400, "validation_error", "Invalid project access request");
   if (error instanceof ProjectMembershipRequiredError || error instanceof ProjectRoleRequiredError) return apiError(403, "project_access_forbidden", error.message);
   return apiError(503, "durable_store_unavailable", "Durable store is unavailable");
 }

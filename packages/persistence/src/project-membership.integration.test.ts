@@ -13,6 +13,10 @@ import {
   assertProjectRole,
   grantProjectRole,
   ProjectRoleRequiredError,
+  ProjectAccessAdminRequiredError,
+  ProjectAccessRoleNotFoundError,
+  ProjectAccessTargetNotFoundError,
+  provisionProjectAccess,
 } from "./project-membership.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -21,7 +25,7 @@ const describeDatabase = databaseUrl ? describe : describe.skip;
 describeDatabase("project membership (Phase 1 re-patch item 8)", () => {
   const pool = new Pool({ connectionString: databaseUrl });
 
-  beforeAll(async () => { await applyAllMigrations(pool); });
+  beforeAll(async () => { await applyAllMigrations(pool); await bootstrapPermanentOrganization(pool); });
   beforeEach(async () => {
     await pool.query("TRUNCATE operator_project_memberships, local_operator_credentials, local_operators CASCADE");
   });
@@ -92,4 +96,43 @@ describeDatabase("project membership (Phase 1 re-patch item 8)", () => {
 
     await expect(assertProjectMembership(pool, operatorId, projectId)).resolves.toBeUndefined();
   });
+
+
+  it("atomically provisions an active operator with exact standing roles", async () => {
+    const { operatorId: adminOperatorId } = await bootstrapLocalOperator(pool, { secret: "provision-admin" });
+    const { operatorId: targetOperatorId } = await bootstrapLocalOperator(pool, { secret: "provision-target" });
+    const projectId = randomUUID();
+    const result = await provisionProjectAccess(pool, adminOperatorId, { operatorId: targetOperatorId, projectId, roles: ["concertmaster", "head-product"] }, { adminOperatorId });
+
+    expect(result).toEqual({ operatorId: targetOperatorId, projectId, roles: ["concertmaster", "head-product"] });
+    await expect(assertProjectMembership(pool, targetOperatorId, projectId)).resolves.toBeUndefined();
+    const roles = await pool.query<{ role_id: string }>("SELECT role_id FROM operator_project_roles WHERE operator_id = $1 AND project_id = $2 AND active = true ORDER BY role_id", [targetOperatorId, projectId]);
+    expect(roles.rows.map((row) => row.role_id)).toEqual(["concertmaster", "head-product"]);
+  });
+
+  it("rejects non-admin callers before writing any access rows", async () => {
+    const { operatorId: callerOperatorId } = await bootstrapLocalOperator(pool, { secret: "provision-caller" });
+    const { operatorId: targetOperatorId } = await bootstrapLocalOperator(pool, { secret: "provision-target-2" });
+    const projectId = randomUUID();
+    await expect(provisionProjectAccess(pool, callerOperatorId, { operatorId: targetOperatorId, projectId, roles: ["concertmaster"] }, { adminOperatorId: randomUUID() })).rejects.toBeInstanceOf(ProjectAccessAdminRequiredError);
+    await expect(assertProjectMembership(pool, targetOperatorId, projectId)).rejects.toBeInstanceOf(ProjectMembershipRequiredError);
+  });
+
+  it("rejects an unknown role and rolls back membership plus all roles", async () => {
+    const { operatorId: adminOperatorId } = await bootstrapLocalOperator(pool, { secret: "provision-admin-2" });
+    const { operatorId: targetOperatorId } = await bootstrapLocalOperator(pool, { secret: "provision-target-3" });
+    const projectId = randomUUID();
+    await expect(provisionProjectAccess(pool, adminOperatorId, { operatorId: targetOperatorId, projectId, roles: ["concertmaster", "not-a-permanent-role"] }, { adminOperatorId })).rejects.toBeInstanceOf(ProjectAccessRoleNotFoundError);
+    await expect(assertProjectMembership(pool, targetOperatorId, projectId)).rejects.toBeInstanceOf(ProjectMembershipRequiredError);
+    const grants = await pool.query("SELECT 1 FROM operator_project_roles WHERE operator_id = $1 AND project_id = $2", [targetOperatorId, projectId]);
+    expect(grants.rowCount).toBe(0);
+  });
+
+  it("rejects an inactive target operator", async () => {
+    const { operatorId: adminOperatorId } = await bootstrapLocalOperator(pool, { secret: "provision-admin-3" });
+    const { operatorId: targetOperatorId } = await bootstrapLocalOperator(pool, { secret: "provision-target-4" });
+    await pool.query("UPDATE local_operators SET active = false WHERE operator_id = $1", [targetOperatorId]);
+    await expect(provisionProjectAccess(pool, adminOperatorId, { operatorId: targetOperatorId, projectId: randomUUID(), roles: ["concertmaster"] }, { adminOperatorId })).rejects.toBeInstanceOf(ProjectAccessTargetNotFoundError);
+  });
+
 });

@@ -123,6 +123,25 @@ export const GoalBudgetSummarySchema = z.object({
 }).strict();
 export type GoalBudgetSummary = z.infer<typeof GoalBudgetSummarySchema>;
 
+/** Project access provisioning request. Roles are canonical permanent role IDs, never free-form capabilities. */
+const ProjectRoleIdSchema = z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid project role ID").max(128);
+export const ProjectAccessProvisionInputSchema = z.object({
+  operatorId: UuidSchema,
+  projectId: UuidSchema,
+  roles: z.array(ProjectRoleIdSchema).min(1).max(32),
+}).strict().superRefine((input, context) => {
+  if (new Set(input.roles).size !== input.roles.length) {
+    context.addIssue({ code: "custom", path: ["roles"], message: "roles must not contain duplicates" });
+  }
+});
+export type ProjectAccessProvisionInput = z.infer<typeof ProjectAccessProvisionInputSchema>;
+export const ProjectAccessProvisionResultSchema = z.object({
+  operatorId: UuidSchema,
+  projectId: UuidSchema,
+  roles: z.array(ProjectRoleIdSchema).min(1).max(32),
+}).strict();
+export type ProjectAccessProvisionResult = z.infer<typeof ProjectAccessProvisionResultSchema>;
+
 export const StableApiErrorCodeSchema = z.enum([
   "validation_error", "version_conflict", "invalid_transition", "goal_not_found",
   "stale_lease", "lease_unavailable", "command_id_reused", "durable_store_unavailable",

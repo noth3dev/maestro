@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { AuthorizedEffectExecutor, type ActionRequest } from "@maestro/authority";
 import { createLocalGitPort } from "@maestro/git-adapter";
 import type { ExecutionKernelPort, GitPort } from "@maestro/domain";
-import { assertProjectMembership, authenticateLocalOperator, getGoalControl, listGoalEvents, PostgresAuthorityRepository, reconcileOnStartup, runMigrations } from "@maestro/persistence";
+import { assertProjectMembership, authenticateLocalOperator, bootstrapPermanentOrganization, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, reconcileOnStartup, runMigrations } from "@maestro/persistence";
 import { createPrimeExecutionKernel } from "@maestro/prime-adapter";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
@@ -42,7 +42,7 @@ export interface ControlPlaneOverrides {
   gitPort?: GitPort;
 }
 
-/** Compose the local Goal API and expose only authority-backed effect gateways. Credential setup remains a controlled persistence operation. */
+/** Compose the local Goal API and expose only authority-backed effect gateways. Credential setup remains controlled; project access uses the explicit admin gateway. */
 export function createControlPlane(config: MaestroConfig, overrides: ControlPlaneOverrides = {}): ControlPlane {
   // Enforce the TLS-fail-closed invariant at this composition boundary too,
   // not only in parseConfig: a caller may construct MaestroConfig directly
@@ -114,6 +114,16 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     readStateService: createReadStateService(pool),
     taskContractService: createDurableTaskContractService(pool),
     projectMembership: { assertProjectMembership: (operatorId, projectId) => assertProjectMembership(pool, operatorId, projectId) },
+    ...(config.operatorProvisioningAdminId === undefined ? {} : {
+      projectAccess: {
+        provisionProjectAccess: (requesterOperatorId, input) => provisionProjectAccess(
+          pool,
+          requesterOperatorId,
+          input,
+          { adminOperatorId: config.operatorProvisioningAdminId! },
+        ),
+      },
+    }),
     readinessCheck: async () => { await pool.query("SELECT 1"); },
     ...(https ? { https } : {}),
   });
@@ -137,6 +147,9 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       // ever queries goal/lease/control tables that a pending migration
       // might still be introducing.
       await runMigrations(pool);
+      // Seed the immutable canonical organization before provisioning can
+      // validate requested roles. This is idempotent and creates no sessions.
+      await bootstrapPermanentOrganization(pool);
       // Fail closed: a real process must prove durable Goal/lease state is
       // consistent (or durably marked "recovering") before it ever serves
       // traffic. If the startup reconciliation leader lease cannot be

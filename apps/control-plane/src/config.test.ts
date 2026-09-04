@@ -26,6 +26,10 @@ describe("parseConfig", () => {
     expect(parseConfig({ ...required, MAESTRO_CEO_OPERATOR_ID: "ceo-operator" }).ceoOperatorId).toBe("ceo-operator");
   });
 
+  it("accepts an explicit project-access provisioning admin identity", () => {
+    expect(parseConfig({ ...required, MAESTRO_OPERATOR_PROVISIONING_ADMIN_ID: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05" }).operatorProvisioningAdminId).toBe("018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05");
+  });
+
   it("accepts an explicit startup reconciler leader-lease duration override", () => {
     expect(parseConfig({ ...required, MAESTRO_RECONCILER_LEASE_MS: "1000" }).reconcilerLeaseDurationMs).toBe(1_000);
   });

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { ProjectAccessProvisionInput, ProjectAccessProvisionResult } from "@maestro/contracts";
 import type { Pool, PoolClient } from "pg";
 
 export class ProjectMembershipError extends Error {}
@@ -102,4 +103,100 @@ export async function revokeProjectRole(pool: Pool, operatorId: string, projectI
       WHERE operator_id = $1 AND project_id = $2 AND role_id = $3 AND active = true`,
     [operatorId, projectId, roleId],
   );
+}
+
+
+export class ProjectAccessAdminRequiredError extends ProjectMembershipError {
+  constructor() {
+    super("Project access provisioning requires the configured operator admin");
+    this.name = "ProjectAccessAdminRequiredError";
+  }
+}
+
+export class ProjectAccessTargetNotFoundError extends ProjectMembershipError {
+  constructor() {
+    super("Target operator does not exist or is not active");
+    this.name = "ProjectAccessTargetNotFoundError";
+  }
+}
+
+export class ProjectAccessRoleNotFoundError extends ProjectMembershipError {
+  constructor(readonly roleId: string) {
+    super(`Project role is not a standing permanent role: ${roleId}`);
+    this.name = "ProjectAccessRoleNotFoundError";
+  }
+}
+
+/**
+ * Atomically grants a target operator membership and exact standing permanent
+ * roles. The explicit admin identity is checked before any write; the target
+ * must already be an active authenticated-operator record. This is the only
+ * production provisioning path and never accepts free-form capabilities.
+ */
+export async function provisionProjectAccess(
+  pool: Pool,
+  requesterOperatorId: string,
+  input: ProjectAccessProvisionInput,
+  options: { adminOperatorId: string },
+): Promise<ProjectAccessProvisionResult> {
+  if (requesterOperatorId !== options.adminOperatorId) throw new ProjectAccessAdminRequiredError();
+  const roleIds = input.roles.map((roleId) => roleId.trim());
+  if (roleIds.length === 0 || roleIds.some((roleId) => roleId.length === 0) || new Set(roleIds).size !== roleIds.length) {
+    throw new Error("Project roles must be non-empty and unique");
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const admin = await client.query<{ active: boolean }>(
+      "SELECT active FROM local_operators WHERE operator_id = $1 FOR SHARE",
+      [requesterOperatorId],
+    );
+    if (admin.rowCount !== 1 || !admin.rows[0]!.active) throw new ProjectAccessAdminRequiredError();
+
+    const target = await client.query<{ active: boolean }>(
+      "SELECT active FROM local_operators WHERE operator_id = $1 FOR UPDATE",
+      [input.operatorId],
+    );
+    if (target.rowCount !== 1 || !target.rows[0]!.active) throw new ProjectAccessTargetNotFoundError();
+
+    const standingRoles = await client.query<{ role_id: string }>(
+      `SELECT role_id FROM permanent_roles
+        WHERE role_id = ANY($1::text[]) AND status = 'standing'`,
+      [roleIds],
+    );
+    const standingRoleIds = new Set(standingRoles.rows.map((row) => row.role_id));
+    const unknownRole = roleIds.find((roleId) => !standingRoleIds.has(roleId));
+    if (unknownRole !== undefined) throw new ProjectAccessRoleNotFoundError(unknownRole);
+
+    await client.query(
+      `INSERT INTO operator_project_memberships (membership_id, operator_id, project_id, active)
+       SELECT $1, $2, $3, true
+       WHERE NOT EXISTS (
+         SELECT 1 FROM operator_project_memberships
+         WHERE operator_id = $2 AND project_id = $3 AND active = true
+       )
+       ON CONFLICT (operator_id, project_id) WHERE active DO NOTHING`,
+      [randomUUID(), input.operatorId, input.projectId],
+    );
+    for (const roleId of roleIds) {
+      await client.query(
+        `INSERT INTO operator_project_roles (grant_id, operator_id, project_id, role_id, active)
+         SELECT $1, $2, $3, $4, true
+         WHERE NOT EXISTS (
+           SELECT 1 FROM operator_project_roles
+           WHERE operator_id = $2 AND project_id = $3 AND role_id = $4 AND active = true
+         )
+         ON CONFLICT (operator_id, project_id, role_id) WHERE active DO NOTHING`,
+        [randomUUID(), input.operatorId, input.projectId, roleId],
+      );
+    }
+    await client.query("COMMIT");
+    return { operatorId: input.operatorId, projectId: input.projectId, roles: roleIds };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }

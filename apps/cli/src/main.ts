@@ -28,6 +28,8 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       strict: true,
       options: {
         "project-id": { type: "string" },
+        "operator-id": { type: "string" },
+        "roles-json": { type: "string" },
         "goal-id": { type: "string" },
         "command-id": { type: "string" },
         "contract-id": { type: "string" },
@@ -74,6 +76,12 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     const value = (name: keyof typeof parsed.values) => parsed.values[name];
     const string = (name: keyof typeof parsed.values) => requiredOption(value(name), `--${name}`);
     const json = parsed.values.json === true;
+
+    if (resource === "admin" && action === "project-access") {
+      const result = await client.provisionProjectAccess({ operatorId: string("operator-id"), projectId: string("project-id"), roles: parseJsonOption(string("roles-json"), "--roles-json") });
+      printState(io.stdout, result, json);
+      return 0;
+    }
 
     if (resource === "task-contract" && action === "create") {
       const result = await client.createTaskContract({ projectId: string("project-id"), substance: parseJsonOption(string("substance-json"), "--substance-json") }, string("contract-id"));
@@ -279,7 +287,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       else printEvents(io.stdout, page.events, page.nextCursor);
       return 0;
     }
-    throw new Error("Usage: maestro goals list|goal create|get|transition|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|observe|cancel|accept|certify|certify-conditional|git goal-branch|git department-branch|git worker-worktree|git goal-revision|metronome scan|metronome challenge|encore review|critical-action approve-and-run|budget ... | maestro events list ...");
+    throw new Error("Usage: maestro admin project-access|goals list|goal create|get|transition|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|observe|cancel|accept|certify|certify-conditional|git goal-branch|git department-branch|worker-worktree|goal-revision|metronome scan|metronome challenge|encore review|critical-action approve-and-run|budget ... | maestro events list ...");
   } catch (error) {
     const message = error instanceof ApiError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : "Command failed";
     io.stderr(`${message}\n`);
@@ -288,7 +296,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
 }
 
 function helpText(): string {
-  return `Maestro CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  goal create|get|transition\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  git goal-branch|department-branch|worker-worktree|goal-revision\n  metronome scan|challenge\n  encore review\n  critical-action approve-and-run\n  events list\n\nUse --json for machine-readable output.\n`;
+  return `Maestro CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  admin project-access --operator-id --project-id --roles-json\n  goal create|get|transition\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  git goal-branch|department-branch|worker-worktree|goal-revision\n  metronome scan|challenge\n  encore review\n  critical-action approve-and-run\n  events list\n\nUse --json for machine-readable output.\n`;
 }
 
 function nonNegativeInteger(value: string, option: string): number {

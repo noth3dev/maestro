@@ -120,3 +120,14 @@ it("drives the authenticated Head Council lifecycle", async () => {
   await expect(client.revealCouncil(councilId, projectId, commandId)).resolves.toBeUndefined();
   await expect(client.decideCouncil(councilId, { projectId, packet }, commandId)).resolves.toEqual(council);
 });
+
+
+describe("project access provisioning", () => {
+  it("sends the exact project and role set to the admin endpoint", async () => {
+    const operatorId = "66666666-6666-4666-8666-666666666666";
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ operatorId, projectId, roles: ["concertmaster", "head-product"] }), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+    await expect(client.provisionProjectAccess({ operatorId, projectId, roles: ["concertmaster", "head-product"] })).resolves.toEqual({ operatorId, projectId, roles: ["concertmaster", "head-product"] });
+    expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/admin/project-access", expect.objectContaining({ method: "POST", headers: { authorization: "Bearer secret", "content-type": "application/json" }, body: JSON.stringify({ operatorId, projectId, roles: ["concertmaster", "head-product"] }) }));
+  });
+});
