@@ -341,11 +341,12 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    latch through the existing `assertGoalControlOpen` helper before a participation row is created or
    transitioned. Real-PostgreSQL regressions cover blocked activation, sleep, and resume; merged to
    `main`.
-6. **[LOW/MEDIUM, concurrency]** `acceptDepartmentWorkerOutput`
-   (packages/persistence/src/certification.ts:38) is an unguarded check-then-insert race, saved
-   only by a DB unique constraint whose violation surfaces as a raw Postgres error instead of this
-   codebase's usual idempotent-return pattern. Fix: `INSERT ... ON CONFLICT (worker_id) DO NOTHING
-   RETURNING ...`, re-read on conflict.
+6. **[RESOLVED 2026-09-04, commit `c50d142`]** `acceptDepartmentWorkerOutput` now uses
+   `INSERT ... ON CONFLICT (worker_id) DO NOTHING RETURNING ...` and re-reads the durable row on
+   conflict, so concurrent identical calls return the same acceptance instead of surfacing a raw
+   unique-constraint error. A real-PostgreSQL concurrent regression covers the race. The same commit
+   also closed the certification.ts portion of Phase 3 item 1; that remaining item tracks the other
+   three write modules separately.
 7. **[HIGH, security]** No path/repository containment check before Git worktree/branch
    operations. `recordGoalIntegrationBranch`/`recordDepartmentBranch`/`recordWorkerWorktree`
    (packages/persistence/src/git-integration.ts:26,134,170) and `createWorktree`/`createBranch`
@@ -364,18 +365,18 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    Contract/Council/Plan/worker/Git actions.
 
 ### Phase 3 — remaining open items
-1. **[P0, concurrency]** `certification.ts`, `evidence-bundle.ts`, `concertmaster-report.ts`, and
-   `encore-council.ts` have **zero** goal_lease/fencing check and **zero** control-latch
-   (pause/stop/emergency-stop) check — unlike every other Phase 2/3 write module. Unguarded entry
-   points: `certifyQuality`/`certifyConditional`/`grantCertificationWaiver`/
-   `adjudicateCertificationConflict` (certification.ts:280,295,330), `assembleEvidenceBundle`/
-   `recordEvidenceBundle` (evidence-bundle.ts:13,205), `generateConcertmasterFinalReport`
-   (concertmaster-report.ts:35), `runEncoreCouncilReview` (encore-council.ts:106, which spawns real
-   Prime Agent subagents and incurs real cost). A stale/fenced-out actor can therefore certify, run
-   a full Council round, assemble an evidence bundle, or produce a Concertmaster final report on a
-   paused/emergency-stopped Goal. Fix: thread a `GoalLeaseProof`/authorized-actor context through
-   all five entry points; lock the lease row FOR UPDATE and call `assertGoalControlOpen` before any
-   write; add a fencing/pause-bypass regression test per module.
+1. **[PARTIALLY RESOLVED 2026-09-04, certification.ts fixed in commit `c50d142`]**
+   `evidence-bundle.ts`, `concertmaster-report.ts`, and `encore-council.ts` still have **zero**
+   goal_lease/fencing check and **zero** control-latch (pause/stop/emergency-stop) check. The
+   remaining unguarded entry points are `assembleEvidenceBundle`/`recordEvidenceBundle`,
+   `generateConcertmasterFinalReport`, and `runEncoreCouncilReview` (which spawns real Prime Agent
+   subagents and incurs real cost). A stale/fenced-out actor can therefore assemble an evidence
+   bundle, produce a Concertmaster final report, or run a full Encore Council round on a paused or
+   emergency-stopped Goal. Thread a `GoalLeaseProof` through these three modules, lock the lease row
+   `FOR UPDATE`, call `assertGoalControlOpen` before any write or provider spawn, and add a
+   fencing/pause-bypass regression per module. The certification.ts entry points already enforce
+   this invariant and have real-PostgreSQL regressions.
+
 2. **[MEDIUM/HIGH, concurrency]** `assembleEvidenceBundle` and `generateConcertmasterFinalReport` each issue
    10-15+ sequential, non-transactional reads across ~10 tables — unlike `certification.ts`'s own
    `readCertificationLineage` (line 141), which correctly opens one transaction with FOR SHARE/FOR
@@ -473,11 +474,11 @@ concrete illustration each, plus two smaller cross-cutting gaps not previously c
 - [complete_pending_independent_review] Phase 1 remaining items 1-8 above: all 8 items resolved and accepted (see each item's own status line above for commit hashes). Self-plus-parent-reviewed only this session; a formal independent (no-edit) review of the full Phase 1 re-patch diff is the recommended next step before treating Phase 1 as re-accepted, per this project's own acceptance policy.
 - [in_progress] Phase 2 remaining items 1-9 above: items 1 (budget double-counting), 2 (Mission
   Bundle capability scoping to real spawn call), 3 (team-lead duration/task-scope ceilings), 4
-  (Mission persona overlay derivation/expiry), 5 (Head activation/sleep/resume control-latch),
-  and 8 (fencing-token regression coverage) resolved and merged to `main`. Item 3's monetary
-  cost-ceiling sub-scope is explicitly deferred pending a real cost source/accounting unit.
-  Items 6, 7, 9 not started (feature-completeness item 1 above illustrates item 9's write-API gap
-  concretely; fix together).
+  (Mission persona overlay derivation/expiry), 5 (Head activation/sleep/resume control-latch), 6
+  (acceptance race), and 8 (fencing-token regression coverage) resolved and merged to `main`.
+  Item 3's monetary cost-ceiling sub-scope is explicitly deferred pending a real cost source/
+  accounting unit. Items 7 and 9 remain open; feature-completeness item 1 above illustrates item
+  9's write-API gap concretely.
 - [not_started] Phase 3 remaining items 1-7 above.
 - [not_started] Phase 4 remaining items (= Track B items 1-8, unchanged; feature-completeness item 2
   above is a Discord-specific instance to fix alongside Track B).

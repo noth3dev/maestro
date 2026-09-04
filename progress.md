@@ -1001,3 +1001,9 @@ HEAD
 - Reviewed and merged the SQL migration cleanup (`ad0c888`): historical migration filenames and SQL identifiers now use Concertmaster, Discord, Metronome, and Encore terminology; redundant rename migrations were removed. The migration reset integration test received a 30-second timeout because the real PostgreSQL Docker run exceeded the old 5-second test default; its focused verification passed 2/2.
 - Reviewed and merged `bef23a1` as `7c22714`: team-lead helper spawning now enforces duration and exact Department Plan version ceilings. Monetary cost enforcement remains explicitly deferred because no real per-helper cost source or accounting unit exists. Focused real-PostgreSQL verification passed 7/7.
 - Full merged-tree verification passed with a fresh disposable PostgreSQL database: `npm run check` reported 97/98 files passed, 680 tests passed, 2 intentional live-Prime skips, and 0 failures. Next is Phase 2 item 6, followed by items 7 and 9, then Phase 3-5.
+
+
+## 2026-09-04 (continued) — Phase 2 item 6 already resolved
+- Direct inspection found the acceptance race was already fixed in `c50d142`, which uses an atomic `ON CONFLICT DO NOTHING` insert and durable re-read. That commit also fixed the certification write guards tracked as the certification portion of Phase 3 item 1.
+- The merged main tree's fresh real-PostgreSQL check passed 97/98 files, 680 tests, 2 intentional live-Prime skips, and 0 failures. Task-plan status was corrected before moving to the next open item.
+- Next: Phase 2 item 7, Git repository/worktree path containment.
