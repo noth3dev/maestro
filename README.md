@@ -1,20 +1,19 @@
-
-
 <p align="center">
   <a href="docs/README.md">
     <img alt="Maestro" src="docs/assets/logo.svg" width="280" style="max-width: 100%;">
   </a>
 </p>
 
+<h3 align="center">
+Maestro: Self-Improving &amp; Durable Agent Orchestration
+</h3>
 <p align="center">
-Maestro: Self-Improving & Durable Agent Orchestration
-</p>
-<p align="center">
-  <a href="docs/README.md"><b>Documentation</b></a> &bull;
-  <a href="docs/01-system-overview.md"><b>Architecture</b></a> &bull;
-  <a href="docs/02-hierarchical-orchestration.md"><b>Hierarchy</b></a> &bull;
-  <a href="docs/04-security-and-authority-model.md"><b>Security Model</b></a> &bull;
-  <a href="docs/05-roadmap-and-phase-status.md"><b>Roadmap</b></a>
+  <a href="docs/en/README.md"><b>Documentation (EN)</b></a> &bull;
+  <a href="docs/ko/README.md"><b>문서 (한국어)</b></a> &bull;
+  <a href="docs/en/01-system-overview.md"><b>Architecture</b></a> &bull;
+  <a href="docs/en/02-hierarchical-orchestration.md"><b>Hierarchy</b></a> &bull;
+  <a href="docs/en/04-security-and-authority-model.md"><b>Security Model</b></a> &bull;
+  <a href="docs/en/05-roadmap-and-phase-status.md"><b>Roadmap</b></a>
 </p>
 
 <p align="center">
