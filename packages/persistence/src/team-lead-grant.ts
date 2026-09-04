@@ -38,6 +38,7 @@ interface GrantRow {
   duration_ceiling: string;
   task_scope: string;
   reporting_requirement: string;
+  granted_at: Date;
   revoked_at: Date | null;
 }
 
@@ -68,7 +69,37 @@ function mapGrant(row: GrantRow): TeamLeadGrant {
 }
 
 function grantSelectSql(): string {
-  return "SELECT grant_id, worker_id, council_id, department_id, plan_version, item_id, reason, max_helpers, cost_ceiling, duration_ceiling, task_scope, reporting_requirement, revoked_at FROM team_lead_grants";
+  return "SELECT grant_id, worker_id, council_id, department_id, plan_version, item_id, reason, max_helpers, cost_ceiling, duration_ceiling, task_scope, reporting_requirement, granted_at, revoked_at FROM team_lead_grants";
+}
+
+/**
+ * `durationCeiling` is a free-text string (e.g. "1 day") -- there is no
+ * domain-wide unit system for it. This parser recognizes the documented
+ * "<number> <unit>" convention already used by every grant substance in
+ * this codebase and returns `null` when the ceiling does not match it, in
+ * which case it is not machine-enforceable and spawnHelperWorker does not
+ * claim to enforce it (fails open on genuinely free-form text, never
+ * fabricates a violation it cannot prove).
+ *
+ * Cost ceiling enforcement is deliberately out of scope for this fix: this
+ * codebase has no actual or estimated per-helper cost model, so a
+ * "<number> <unit>" free-text costCeiling cannot be truthfully enforced as
+ * a monetary ceiling (a prior candidate that charged an invented "one unit
+ * per helper" against it was reviewed and rejected for exactly this
+ * reason). Defining a real cost accounting source/unit is a separate,
+ * still-open decision.
+ */
+const DURATION_UNIT_MS: Record<string, number> = {
+  millisecond: 1, second: 1_000, minute: 60_000, hour: 3_600_000, day: 86_400_000,
+};
+
+function parseDurationMs(text: string): number | null {
+  const match = /^\s*(\d+(?:\.\d+)?)\s*(millisecond|second|minute|hour|day)s?\b/i.exec(text);
+  if (match === null) return null;
+  const amount = Number(match[1]);
+  const unitMs = DURATION_UNIT_MS[match[2]!.toLowerCase()];
+  if (!Number.isFinite(amount) || unitMs === undefined) return null;
+  return amount * unitMs;
 }
 
 async function lockGoalLease(client: PoolClient, proof: GoalLeaseProof): Promise<void> {
@@ -154,7 +185,17 @@ export async function revokeTeamLeadGrant(pool: Pool, grantId: string, proof: Go
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 
-/** Spawns one helper worker under an active, unrevoked grant, bounded by its maxHelpers ceiling. The helper is parented to the team lead's own execution (Prime's native hierarchy) and remains visible under the same Department Plan mission. */
+/**
+ * Spawns one helper worker under an active, unrevoked grant, bounded by
+ * three of its four grant ceilings: maxHelpers (helper count), durationCeiling
+ * (parsed "<number> <unit>" elapsed time since the grant was issued), and
+ * the grant's task scope (the exact Department Plan version it was issued
+ * against -- a later plan revision supersedes the grant's scope). costCeiling
+ * enforcement is deliberately out of scope (see parseDurationMs's doc
+ * comment). The helper is parented to the team lead's own execution (Prime's
+ * native hierarchy) and remains visible under the same Department Plan
+ * mission.
+ */
 export async function spawnHelperWorker(pool: Pool, kernel: ExecutionKernelPort, grantId: string, proof: GoalLeaseProof, context: CouncilActorContext): Promise<Worker> {
   const client = await pool.connect(); let open = false;
   try {
@@ -170,11 +211,23 @@ export async function spawnHelperWorker(pool: Pool, kernel: ExecutionKernelPort,
       [grant.worker_id],
     );
     if (teamLead.rowCount !== 1) throw new WorkerNotFoundError(`Team-lead worker not found: ${grant.worker_id}`);
+    const durationMs = parseDurationMs(grant.duration_ceiling);
+    if (durationMs !== null && Date.now() - grant.granted_at.getTime() > durationMs) {
+      throw new TeamLeadGrantError(`Team-lead grant duration ceiling exceeded: ${grant.duration_ceiling}`);
+    }
+    const currentPlan = await client.query<{ current_version: number }>(
+      "SELECT current_version FROM department_plans WHERE council_id = $1 AND department_id = $2",
+      [grant.council_id, grant.department_id],
+    );
+    if (currentPlan.rowCount === 1 && currentPlan.rows[0]!.current_version !== grant.plan_version) {
+      throw new TeamLeadGrantError(`Team-lead grant task scope ceiling exceeded: mission plan was revised from version ${grant.plan_version} to ${currentPlan.rows[0]!.current_version}`);
+    }
     const helperCount = await client.query<{ count: string }>("SELECT count(*)::int AS count FROM workers WHERE grant_id = $1", [grantId]);
+    const nextHelperNumber = Number(helperCount.rows[0]!.count) + 1;
     if (Number(helperCount.rows[0]!.count) >= grant.max_helpers) throw new TeamLeadGrantError(`Team-lead grant helper ceiling reached: ${grant.max_helpers}`);
-    const spawned = await kernel.spawn({ name: `helper:${grant.item_id}:${Number(helperCount.rows[0]!.count) + 1}`, parent: teamLead.rows[0]!.execution_ref as unknown as ExecutionRef });
+    const spawned = await kernel.spawn({ name: `helper:${grant.item_id}:${nextHelperNumber}`, parent: teamLead.rows[0]!.execution_ref as unknown as ExecutionRef });
     const workerId = randomUUID();
-    const helperAttempt = Number(helperCount.rows[0]!.count) + 1;
+    const helperAttempt = nextHelperNumber;
     const inserted = await client.query<{
       worker_id: string; council_id: string; department_id: string; plan_version: number; item_id: string;
       bundle_content_hash: string; attempt: number; execution_ref: string; invocation_ref: string; status: string;
