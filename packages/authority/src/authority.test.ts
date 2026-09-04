@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AuthorizedEffectExecutor, evaluateAction, type ActionRequest, type AuthorityRecord, type AuthorityRepository } from "./authority.js";
+import { AuthorityClaimConflictError, AuthorizedEffectExecutor, evaluateAction, type ActionRequest, type AuthorityRecord, type AuthorityRepository } from "./authority.js";
 
 const request: ActionRequest = {
   commandId: "command-1",
@@ -99,6 +99,18 @@ describe("evaluateAction", () => {
 
 
 describe("AuthorizedEffectExecutor effect claims", () => {
+  it("denies a reused command identity when its durable scope changed", async () => {
+    const repository: AuthorityRepository = {
+      load: async () => [exactApproval],
+      appendDecision: async () => {},
+      recheckControl: async () => ({ effect: "allow" }),
+      claimEffect: async () => { throw new AuthorityClaimConflictError(); },
+    };
+    await expect(new AuthorizedEffectExecutor(repository, () => now).execute(request, async () => {
+      throw new Error("effect must not run");
+    })).resolves.toMatchObject({ effect: "deny", reason: "command_id_reused" });
+  });
+
   it("does not invoke a claimed durable command twice", async () => {
     let claimed = false;
     let calls = 0;

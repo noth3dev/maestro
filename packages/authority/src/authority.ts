@@ -144,6 +144,13 @@ export function evaluateAction(
 }
 
 
+export class AuthorityClaimConflictError extends Error {
+  constructor() {
+    super("Authority effect claim identity was reused with different scope");
+    this.name = "AuthorityClaimConflictError";
+  }
+}
+
 export interface AuthorityDecisionAudit {
   decision: AuthorityDecision;
   decidedAt: Date;
@@ -225,7 +232,8 @@ export class AuthorizedEffectExecutor {
       let claimed: boolean;
       try {
         claimed = await this.repository.claimEffect(request);
-      } catch {
+      } catch (error) {
+        if (error instanceof AuthorityClaimConflictError) return { ...final, effect: "deny", reason: "command_id_reused" };
         return unavailableDecision(request);
       }
       if (!claimed) return { ...final, reason: "already_executed" };

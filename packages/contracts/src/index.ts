@@ -177,13 +177,17 @@ export type GoalEventPage = z.infer<typeof GoalEventPageSchema>;
 export const ActionClassificationSchema = z.enum(["ordinary", "critical", "forbidden", "ambiguous"]);
 export type ActionClassification = z.infer<typeof ActionClassificationSchema>;
 
+/** Single-effect budget cap: ten million dollars expressed in cents. */
+export const MaxBudgetEffectCents = 1_000_000_000;
+export const BudgetEffectCentsSchema = z.number().int().nonnegative().safe().max(MaxBudgetEffectCents);
+
 /** Body for the single critical-action gateway call site (Phase 1 exit gate). */
 export const CriticalActionInputSchema = z.object({
   projectId: UuidSchema,
   action: z.string().min(1),
   target: z.string().min(1),
   policyVersion: z.number().int().min(0),
-  budgetEffectCents: z.number().int(),
+  budgetEffectCents: BudgetEffectCentsSchema,
 }).strict();
 export type CriticalActionInput = z.infer<typeof CriticalActionInputSchema>;
 
