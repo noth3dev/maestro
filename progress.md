@@ -1090,3 +1090,11 @@ HEAD
   the membership hook and durable Goal/project verification.
 - Added typed API-client methods and CLI commands: `goals list` and `budget get`. The real parity
   fixture now checks both surfaces and confirms cross-project rejection for all derived reads.
+
+
+## 2026-09-04 (continued) — effect gateway composition tightened
+- Exposed the same durable `AuthorizedEffectExecutor` from `createControlPlane` as the required
+  runtime/browser authority gateway. Git, runtime, and browser adapter constructors remain gateway
+  required; no unauthenticated adapter constructor is available. Full production orchestration of
+  runtime/browser commands remains part of the write-API work, while Git deny-before-spawn coverage
+  is complete.

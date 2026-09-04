@@ -17,6 +17,8 @@ export interface ControlPlane {
   config: MaestroConfig;
   listen(): Promise<void>;
   close(): Promise<void>;
+  /** The production authority gateway for runtime/browser effect adapters. */
+  createEnvironmentAuthority(): AuthorizedEffectExecutor;
   /** Builds a Git port whose every operation is audited and control-checked. */
   createGitPort(context: Omit<ActionRequest, "action" | "target">): GitPort;
 }
@@ -26,7 +28,7 @@ export interface ControlPlaneOverrides {
   criticalActionEffect?: (request: ActionRequest) => Promise<void>;
 }
 
-/** Compose only the Phase 1 local Goal API. Credential setup remains a controlled persistence operation. */
+/** Compose the local Goal API and expose only authority-backed effect gateways. Credential setup remains a controlled persistence operation. */
 export function createControlPlane(config: MaestroConfig, overrides: ControlPlaneOverrides = {}): ControlPlane {
   // Enforce the TLS-fail-closed invariant at this composition boundary too,
   // not only in parseConfig: a caller may construct MaestroConfig directly
@@ -69,6 +71,9 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     app,
     pool,
     config,
+    createEnvironmentAuthority() {
+      return authorityExecutor;
+    },
     createGitPort(context) {
       return createLocalGitPort({ authority: authorityExecutor, context });
     },
