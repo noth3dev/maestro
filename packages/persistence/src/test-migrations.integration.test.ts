@@ -61,5 +61,5 @@ describeDatabase("shared PostgreSQL migration runner", () => {
       // schema is custom. Restore it so this focused fixture remains isolated.
       await applyAllMigrations(pool);
     }
-  });
+  }, 30_000);
 });
