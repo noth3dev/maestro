@@ -73,7 +73,7 @@ Maestro is structured as an **npm workspace monorepo**:
 * **`apps/control-plane`**: Fastify 5 REST & Server-Sent Events (SSE) server for durable commands and real-time state streaming.
 * **`apps/cli`**: Command-line interface providing complete operational parity with the control plane API.
 * **`apps/secretary`**: Next.js 16 / React 19 web application (Concertmaster Office) featuring radial portfolio graphs.
-* **`apps/firefly`**: Independent out-of-band Discord daemon for incident detection and system health probes.
+* **`apps/firefly`** (Discord Daemon): Independent out-of-band Discord daemon for incident detection and system health probes.
 * **`packages/domain`**: Pure TypeScript domain aggregates (Goal, TaskContract, HeadCouncil, DepartmentPlan).
 * **`packages/contracts`**: Shared Zod schemas, HTTP REST contracts, and SSE event payloads.
 * **`packages/persistence`**: PostgreSQL 17 schema definitions, Drizzle ORM queries, and migration files.
