@@ -5,7 +5,7 @@
 </p>
 
 <h3 align="center">
-Maestro: Self-Improving &amp; Durable Agent Orchestration
+Maestro: Self-Improving &amp; Durable Agent Orchestration for Versatile Tasks
 </h3>
 <p align="center">
   <a href="docs/en/README.md"><b>Documentation (EN)</b></a> &bull;
@@ -28,7 +28,7 @@ Maestro is an open-source enterprise AI orchestration framework designed for rel
 
 ## Core Architecture & Pillars
 
-Maestro is built around three core architectural guarantees:
+Maestro is built around four core architectural guarantees:
 
 - **Hierarchical Organization & Separation of Powers:**
   - **Concertmaster (Secretary Office)** orchestrates natural-language goals with the Conductor.
@@ -46,6 +46,48 @@ Maestro is built around three core architectural guarantees:
   - **PostgreSQL 17** serves as the sole operational source of truth using append-only domain event sourcing (`goal_events`) and a transactional outbox.
   - **Monotonic Fencing Token Leases** (`goal_leases`) handle signed `bigint` precision to prevent zombie processes and phantom writes.
   - Every mutation is idempotent via public `commandId` / `Idempotency-Key` tracking.
+
+- **Evidence-Driven Self-Improvement & Adaptation:**
+  - **Overwatch Learning & Improvement Lab** curates milestone execution evidence into compact **Improvement Digests**.
+  - **Shadow-First & Replay Evaluation:** Proposed prompt guidance, role overlays, and routing updates are evaluated in isolated replay/synthetic shadow runs without live execution authority.
+  - **Ten-Axis Persona Adaptation:** Fine-tunes 10 canonical personality traits per role and task class based on empirical quality, safety, latency, and cost deltas.
+  - **Bounded & Reversible Rollouts:** Self-improvement is strictly contained and can *never* alter security boundaries, authority permissions, credentials, budget ceilings, or core safety policies.
+
+### End-to-End Orchestration Flow
+
+```mermaid
+flowchart TD
+    CONDUCTOR([Conductor / User]) -->|1. Natural Language Goal| CONCERTMASTER[Concertmaster]
+    
+    subgraph IntakePhase [Intake & Framing]
+        CONCERTMASTER -->|2. Activate Overture Roles| OC[Overture Crew]
+        OC -->|3. Draft task.md| TC[Task Contract]
+        TC -->|4. Submit for Approval| CONDUCTOR
+    end
+    
+    CONDUCTOR -->|5. Single Launch Confirmation| CONCERTMASTER
+    
+    subgraph DeliberationPhase [Deliberation & Planning]
+        CONCERTMASTER -->|6. Wake Required Heads| DH[Department Heads]
+        DH -->|7. Sealed Brief Submissions| HC[Head Council Deliberation]
+        HC -->|8. Formulate Decision Packet| DP[Department Plans]
+    end
+    
+    subgraph ExecutionPhase [Execution & Side-Effect Control]
+        DP -->|9. Dispatch Mission Bundles| W[Scout & Execution Workers]
+        W -->|10. Isolated Execution| GIT[(Git Worktree & AuthorizedEffectExecutor)]
+    end
+    
+    subgraph VerificationPhase [Certification & Self-Improvement]
+        W -->|11. Submit Evidence Bundle| EB[SHA-256 Evidence]
+        EB -->|12. Verify Integrity| METRONOME[Metronome / Quality Certification]
+        METRONOME -->|13. Final Certified Report| CONCERTMASTER
+        EB -.->|14. Milestone Evidence| OW[Overwatch Self-Improvement Lab]
+        OW -.->|15. Replay / Shadow Feedback| DH
+    end
+    
+    CONCERTMASTER -->|16. Deliver Report| CONDUCTOR
+```
 
 ---
 
