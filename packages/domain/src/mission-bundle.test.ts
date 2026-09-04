@@ -8,7 +8,7 @@ import {
   type MissionBundleSubstance,
   type MissionPersonaOverlayInputs,
 } from "./mission-bundle.js";
-import { PERSONA_AXES, SANE_PERSONA_BASELINE, type PersonaProfile } from "./persona.js";
+import { PERSONA_AXES, CONCERTMASTER_PERSONA_BASELINE, type PersonaProfile } from "./persona.js";
 
 const substance = (overrides: Partial<MissionBundleSubstance> = {}): MissionBundleSubstance => ({
   role: "scout", profileRef: "profile-1", goalBrief: "assess risk before implementation",
@@ -63,7 +63,7 @@ describe("Mission persona overlay derivation", () => {
     agreeableness: 0.6, extraversion: 0.6, imagination: 0.5, realism: 0.6, conscientiousness: 0.7,
     caution: 0.6, initiative: 0.5, empathy: 0.6, adaptability: 0.6, sociability: 0.6,
   };
-  const headChoice: PersonaProfile = SANE_PERSONA_BASELINE;
+  const headChoice: PersonaProfile = CONCERTMASTER_PERSONA_BASELINE;
 
   function overlayInputs(overrides: Partial<MissionPersonaOverlayInputs> = {}): MissionPersonaOverlayInputs {
     return {
@@ -137,18 +137,18 @@ describe("Mission persona overlay expiry", () => {
   const identity = { councilId: "c1", departmentId: "product", planVersion: 1, itemId: "scout-1" };
 
   it("is not expired before its explicit expiresAt", () => {
-    const overlay = { ...identity, persona: SANE_PERSONA_BASELINE, issuedAt: new Date(0).toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString() };
+    const overlay = { ...identity, persona: CONCERTMASTER_PERSONA_BASELINE, issuedAt: new Date(0).toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString() };
     expect(isMissionPersonaOverlayExpired(overlay, new Date())).toBe(false);
   });
 
   it("is expired once now passes its explicit expiresAt -- the mission has ended", () => {
-    const overlay = { ...identity, persona: SANE_PERSONA_BASELINE, issuedAt: new Date(0).toISOString(), expiresAt: new Date(Date.now() - 1).toISOString() };
+    const overlay = { ...identity, persona: CONCERTMASTER_PERSONA_BASELINE, issuedAt: new Date(0).toISOString(), expiresAt: new Date(Date.now() - 1).toISOString() };
     expect(isMissionPersonaOverlayExpired(overlay, new Date())).toBe(true);
   });
 
   it("is unavailable exactly at its explicit expiresAt boundary", () => {
     const expiresAt = new Date("2026-01-01T00:00:00.000Z");
-    const overlay = { ...identity, persona: SANE_PERSONA_BASELINE, issuedAt: new Date(0).toISOString(), expiresAt: expiresAt.toISOString() };
+    const overlay = { ...identity, persona: CONCERTMASTER_PERSONA_BASELINE, issuedAt: new Date(0).toISOString(), expiresAt: expiresAt.toISOString() };
     expect(isMissionPersonaOverlayExpired(overlay, expiresAt)).toBe(true);
   });
 

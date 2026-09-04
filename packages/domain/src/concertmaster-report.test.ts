@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateCertificationCompleteness, type CertificationRecordFact } from "./sane-report.js";
+import { evaluateCertificationCompleteness, type CertificationRecordFact } from "./concertmaster-report.js";
 
 const record = (overrides: Partial<CertificationRecordFact> = {}): CertificationRecordFact => ({
   kind: "quality", verdict: "passed", contractId: "c1", contractVersion: 1, integratedCommitSha: "a".repeat(40), hasUnwaivedCriticalFinding: false,
@@ -31,7 +31,7 @@ describe("Certification completeness gate", () => {
     });
     expect(blockers.some((b) => b.reason === "certification_identity_mismatch")).toBe(true);
   });
-  it("blocks on any unresolved Sentinel challenge", () => {
+  it("blocks on any unresolved Metronome challenge", () => {
     const blockers = evaluateCertificationCompleteness({ requiredKinds: ["quality"], records: [record()], openChallengeCount: 1 });
     expect(blockers.some((b) => b.reason === "unresolved_challenge")).toBe(true);
   });

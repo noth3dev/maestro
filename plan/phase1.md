@@ -19,7 +19,7 @@ This phase establishes the technical rules every later phase must use. Later pha
 apps/control-plane
 apps/secretary-office
 apps/cli
-apps/firefly                 # created in Phase 4
+apps/discord                 # created in Phase 4
 packages/domain
 packages/contracts
 packages/persistence
@@ -197,7 +197,7 @@ Only critical actions stop for CEO approval before execution. Critical actions a
 - Connecting a new external service.
 - Taking an action with material security, privacy, legal, or compliance consequences.
 - Changing an operating policy in a way that is difficult for the CEO to reverse.
-- Any action for which Sentinel detects a credible risk of unrecoverable harm.
+- Any action for which Metronome detects a credible risk of unrecoverable harm.
 
 All other work uses execute-then-report within existing permissions and budget. This includes code changes in isolated worktrees, local commits, tests, documentation, refactoring, bounded worker creation, analysis, and replay/synthetic shadow experiments.
 
@@ -210,7 +210,7 @@ Maestro should not treat all data as one shared memory. Data is separated by pur
 1. **Project source and artifacts** — repositories, files, local commits, reports, screenshots, generated assets, and deliverables. Git or the project's native artifact system remains the source of truth where applicable.
 2. **Operational state** — Goals, active Groups and Departments, Head Council membership, worker missions, leases, decisions, approvals, device grants, and current execution status.
 3. **Organizational knowledge** — project-specific facts, Department playbooks, reusable procedures, CEO preferences, learned constraints, and prior decision rationales. Every item carries source, scope, owner, confidence, and freshness information.
-4. **Evidence and telemetry** — Council transcripts, Sentinel findings, command and tool records, evaluation results, cost, token use, latency, failures, rollback evidence, and Overwatch improvement comparisons. This evidence is append-oriented and cannot be silently rewritten by the candidate it evaluates.
+4. **Evidence and telemetry** — Council transcripts, Metronome findings, command and tool records, evaluation results, cost, token use, latency, failures, rollback evidence, and Encore improvement comparisons. This evidence is append-oriented and cannot be silently rewritten by the candidate it evaluates.
 5. **Secrets and authority** — credentials, tokens, device enrollment material, and access grants. These remain in a separate protected store and are referenced by capability, never copied into ordinary prompts, memory, reports, or logs.
 
 Additional principles:
@@ -219,7 +219,7 @@ Additional principles:
 - Temporary worker environments are disposable. A worker's scratch data does not automatically become organizational memory.
 - Before a worker terminates, its Department Head promotes only the required deliverables, evidence, decisions, and useful lessons into the appropriate durable layer.
 - Current state may be updated, but material transitions also produce durable events so recovery and audit do not depend on mutable snapshots alone.
-- Data shown to Overwatch should be sufficient for evaluation while minimizing unrelated content and secret exposure.
+- Data shown to Encore should be sufficient for evaluation while minimizing unrelated content and secret exposure.
 - Deletion and retention follow the critical-action boundary and must not be hidden inside routine cleanup.
 
 ### 19. Data retention and deletion
@@ -242,7 +242,7 @@ Maestro is designed to run **on top of Prime Agent**, not to replace Prime Agent
 
 Responsibility boundary:
 
-- **Maestro owns:** CEO Goals, Secretary workflow, Groups and Departments, Head Council policy, selective activation, Department Context Packs, data and authority policy, budget and critical-action gates, organizational UI, outcome reporting, and Overwatch improvement objectives.
+- **Maestro owns:** CEO Goals, Secretary workflow, Groups and Departments, Head Council policy, selective activation, Department Context Packs, data and authority policy, budget and critical-action gates, organizational UI, outcome reporting, and Encore improvement objectives.
 - **Prime Agent owns:** model execution, recursive subagent spawning, parent/child messaging, observation, task environments, tool execution, skill and plugin availability, model selection surfaces, and the continual harness used by refinement.
 
 Runtime mapping:
@@ -251,8 +251,8 @@ Runtime mapping:
 - A Head spawns Scout or Execution Workers as its direct Prime Agent children. This preserves the intended reporting hierarchy in the runtime itself.
 - Sleeping a Department Head terminates active execution while preserving the Head's approved identity, Department Context Pack, traits, and durable organizational knowledge.
 - The Secretary is the root organizational coordinator. Head Council communication uses bounded agent messaging and produces a shared decision packet.
-- Sentinel observes the Prime Agent family, event stream, costs, tool use, authority grants, and Maestro Goal state without becoming a worker's execution parent.
-- The multi-model Overwatch Council uses separate Prime Agent subagents and, when available and approved, distinct model selectors to create genuinely independent judgments.
+- Metronome observes the Prime Agent family, event stream, costs, tool use, authority grants, and Maestro Goal state without becoming a worker's execution parent.
+- The multi-model Encore Council uses separate Prime Agent subagents and, when available and approved, distinct model selectors to create genuinely independent judgments.
 
 ### 34. Automatic recovery within Goal bounds
 
@@ -260,7 +260,7 @@ Runtime mapping:
 - A retry requires new information, a changed hypothesis, a changed method, or a justified model, skill, environment, or worker change. Blind repetition of the same failed attempt is prohibited.
 - Failed worker branch state, evidence, commands, and partial deliverables are preserved until reviewed. Useful partial commits may be retained and integrated through normal review.
 - Other independent Department work continues when safe; a single worker or Department failure does not automatically cancel the Goal.
-- Missing expertise may wake another existing Department under the agreed rule. Creating a new Department still requires Overwatch Council approval.
+- Missing expertise may wake another existing Department under the agreed rule. Creating a new Department still requires Encore Council approval.
 - Process or environment recovery resumes from durable Goal state and recorded Git revisions, verifies leases and enrolled-device authority, and prevents duplicate active workers before writing resumes.
 - Noncritical unrecoverable failure does not interrupt the CEO mid-run. The system exhausts useful bounded alternatives, then reports the failure, attempts, evidence, preserved results, and next options.
 - Critical risk follows the existing immediate CEO approval or safe-stop boundary.
@@ -270,13 +270,13 @@ Runtime mapping:
 
 - **Pause:** stops new workers and new work, brings active commands to a safe pause point, suspends enrolled-device write authority, and preserves branches, worktrees, environments, context, and resumable state.
 - **Resume:** revalidates the Task Contract, base and active Git revisions, leases, environment health, device authority, budgets, and worker identity before work continues. It does not blindly restart stale processes.
-- **Stop:** cancels workers, revokes active external and device grants, closes Council execution, preserves incomplete branches, commits, evidence, and useful results, and produces a Sane stop report with completed work, unfinished work, spend, side effects, and resume options. Stop does not delete results automatically.
-- **Emergency stop:** blocks execution immediately where possible, revokes all write authority, prevents automatic resume, and asks Firefly and Sentinel to verify remaining processes and observed side effects. Any already completed external effect becomes an incident record.
+- **Stop:** cancels workers, revokes active external and device grants, closes Council execution, preserves incomplete branches, commits, evidence, and useful results, and produces a Concertmaster stop report with completed work, unfinished work, spend, side effects, and resume options. Stop does not delete results automatically.
+- **Emergency stop:** blocks execution immediately where possible, revokes all write authority, prevents automatic resume, and asks Discord and Metronome to verify remaining processes and observed side effects. Any already completed external effect becomes an incident record.
 - Deleting preserved results or evidence remains a separate critical action.
 
 ### 52. Durable restart and safe resume
 
-- A restart restores Sane, launched Task Contracts, active Goals, Council decisions, participating Groups and Departments, budgets, authority grants, certification state, and the radial-tree view from durable records.
+- A restart restores Concertmaster, launched Task Contracts, active Goals, Council decisions, participating Groups and Departments, budgets, authority grants, certification state, and the radial-tree view from durable records.
 - Recovery reconciles durable state with actual Prime Agent children, Git branches and worktrees, commits, environments, commands or processes, leases, device grants, and evidence before any write resumes.
 - Work with valid completion evidence is not repeated.
 - Ambiguous or stale workers enter a no-write recovery state. The system checks whether their mission is still required and prevents duplicate execution before resuming or creating a successor identity.
@@ -288,18 +288,18 @@ Runtime mapping:
 ### 55. Continuous control plane with an optional app client
 
 - Maestro's control plane operates continuously and is not tied to the app window or an interactive chat session.
-- Closing the app does not stop launched Goals, Sane state, Overwatch observation, Firefly monitoring, durable leases, or safe remote and virtual-environment work.
+- Closing the app does not stop launched Goals, Concertmaster state, Encore observation, Discord monitoring, durable leases, or safe remote and virtual-environment work.
 - Department Heads and workers remain selectively activated and do not run merely because the control plane is online.
 - Work requiring a disconnected or powered-off enrolled device pauses at the affected boundary; independent work in available environments may continue.
-- Reopening the app restores current Sane conversation, Goal portfolio, radial tree, incidents, Git, budget, evidence, and certification state from reconciled durable truth.
-- Severe incidents use the approved out-of-band Firefly channel. Noncritical notifications may be grouped during CEO-configured quiet hours.
+- Reopening the app restores current Concertmaster conversation, Goal portfolio, radial tree, incidents, Git, budget, evidence, and certification state from reconciled durable truth.
+- Severe incidents use the approved out-of-band Discord channel. Noncritical notifications may be grouped during CEO-configured quiet hours.
 
 ### 57. Direct replacement with a Prime Agent-native Maestro
 
 The target architecture may replace the current standalone Maestro execution model and existing Web UI rather than preserving backward compatibility with their internal design.
 
 - Prime Agent becomes the native execution kernel from the beginning of the replacement.
-- The new Secretary Office, Group and Department hierarchy, recursive Head and worker spawning, skill and plugin assignment, continual-harness refinement, Overwatch organization, Firefly integration, Git hierarchy, data model, and radial app are designed as one coherent system.
+- The new Secretary Office, Group and Department hierarchy, recursive Head and worker spawning, skill and plugin assignment, continual-harness refinement, Encore organization, Discord integration, Git hierarchy, data model, and radial app are designed as one coherent system.
 - Existing `runner`, `spawner`, provider-routing, flat agent assumptions, and legacy Web UI interfaces are not compatibility constraints and may be retired when the replacement clears its acceptance gates.
 - Verified safety properties remain requirements even when their old implementation is discarded: default-deny authority, bounded budgets, critical-action approval, immutable execution identity, lease and fencing protection, Git isolation, external receipt or evidence integrity, crash recovery, auditability, and shadow-first self-improvement.
 - Replacement development still occurs in isolated Git branches and worktrees with a reversible cutover. “Direct replacement” means no obligation to preserve the old architecture, not destructive editing without evidence or rollback.
@@ -309,6 +309,6 @@ The target architecture may replace the current standalone Maestro execution mod
 
 - The replacement imports no legacy Maestro operational state, active Goals, workers, leases, authority grants, UI state, routing state, telemetry, Council transcripts, or unverified memory.
 - The new system starts with an empty operational database and no implied active execution.
-- The approved hierarchical design, Sane identity and trait seed, organizational taxonomy, safety boundaries, and app direction are new-system requirements, not migrated runtime records.
+- The approved hierarchical design, Concertmaster identity and trait seed, organizational taxonomy, safety boundaries, and app direction are new-system requirements, not migrated runtime records.
 - Existing project Git repositories remain independent source systems and may be enrolled into the new Maestro as fresh projects. They are not deleted as part of clearing Maestro state.
 - Historical legacy data is not required for new-system behavior or evaluation. Removal at cutover follows the agreed critical deletion and reversible Git or backup process, but no compatibility or import path is required.

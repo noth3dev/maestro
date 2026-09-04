@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { PERSONA_AXES, SANE_PERSONA_BASELINE, taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type IndependentBrief, type MissionBundleSubstance, type MissionPersonaOverlayInputs, type TaskContractSubstance } from "@maestro/domain";
+import { PERSONA_AXES, CONCERTMASTER_PERSONA_BASELINE, taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type IndependentBrief, type MissionBundleSubstance, type MissionPersonaOverlayInputs, type TaskContractSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
@@ -148,8 +148,8 @@ describeDatabase("Mission Bundles with PostgreSQL", () => {
 
 function overlayInputs(overrides: Partial<MissionPersonaOverlayInputs> = {}): MissionPersonaOverlayInputs {
   return {
-    departmentStyle: SANE_PERSONA_BASELINE,
-    headChoice: SANE_PERSONA_BASELINE,
+    departmentStyle: CONCERTMASTER_PERSONA_BASELINE,
+    headChoice: CONCERTMASTER_PERSONA_BASELINE,
     taskAmbiguity: 0.5, risk: 0.5, collaborationDemand: 0.5, evidenceBurden: 0.5,
     ...overrides,
   };
@@ -256,7 +256,7 @@ describeDatabase("Mission Persona Overlays with PostgreSQL", () => {
 
   it("rejects an out-of-range persisted persona axis at the database boundary", async () => {
     const { council, plan, bundle } = await setupBundle();
-    const invalidPersona = { ...SANE_PERSONA_BASELINE, caution: 1.1 };
+    const invalidPersona = { ...CONCERTMASTER_PERSONA_BASELINE, caution: 1.1 };
     await expect(pool.query(
       `INSERT INTO mission_persona_overlays
          (council_id, department_id, plan_version, item_id, persona, expires_at)

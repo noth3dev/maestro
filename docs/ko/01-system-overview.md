@@ -73,7 +73,7 @@ Maestro는 **npm workspaces** 기반의 모노레포 구조로 정리되어 있�
 * **`apps/control-plane`**: 내구성 있는 명령 및 실시간 상태 스트리밍을 위한 Fastify 5 REST & SSE 서버.
 * **`apps/cli`**: 제어 평면 API와 완전한 기능적 패리티를 제공하는 명령줄 인터페이스.
 * **`apps/secretary`**: 방사형 포트폴리오 그래프를 제공하는 Next.js 16 / React 19 웹 애플리케이션 (Concertmaster Office).
-* **`apps/firefly`** (Discord 데몬): 인시던트 감지 및 시스템 상태 프로브를 위한 독립 외곽 Discord 데몬.
+* **`apps/discord`** (Discord 데몬): 인시던트 감지 및 시스템 상태 프로브를 위한 독립 외곽 Discord 데몬.
 * **`packages/domain`**: 순수 TypeScript 도메인 모델 (Goal, TaskContract, HeadCouncil, DepartmentPlan).
 * **`packages/contracts`**: 공통 Zod 스키마, HTTP REST 계약 및 SSE 이벤트 페이로드.
 * **`packages/persistence`**: PostgreSQL 17 스키마 정의, Drizzle ORM 쿼리 및 마이그레이션.

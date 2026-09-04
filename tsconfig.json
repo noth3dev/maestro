@@ -38,7 +38,7 @@
       "path": "packages/persistence"
     },
     {
-      "path": "apps/firefly"
+      "path": "apps/discord"
     }
   ],
   "compilerOptions": {

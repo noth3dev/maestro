@@ -1,7 +1,7 @@
 import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { PERMANENT_DEPARTMENTS, PERMANENT_GROUPS, PERMANENT_ROLES, SANE_PERSONA_BASELINE } from "@maestro/domain";
+import { PERMANENT_DEPARTMENTS, PERMANENT_GROUPS, PERMANENT_ROLES, CONCERTMASTER_PERSONA_BASELINE } from "@maestro/domain";
 import { bootstrapPermanentOrganization, getPermanentRole, listPermanentOrganization, listPermanentRoles } from "./organization.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -23,8 +23,8 @@ describeDatabase("permanent organization with PostgreSQL", () => {
     expect(taxonomy.departments).toHaveLength(10);
     expect(taxonomy.departments.every((department) => department.status === "sleeping" && department.activeSessionId === null && department.goalContext === null)).toBe(true);
 
-    await expect(getPermanentRole(pool, "sane")).resolves.toMatchObject({
-      roleId: "sane", persona: SANE_PERSONA_BASELINE, activeSessionId: null, goalContext: null,
+    await expect(getPermanentRole(pool, "concertmaster")).resolves.toMatchObject({
+      roleId: "concertmaster", persona: CONCERTMASTER_PERSONA_BASELINE, activeSessionId: null, goalContext: null,
     });
     await expect(listPermanentRoles(pool)).resolves.toEqual(
       [...PERMANENT_ROLES].sort((a, b) => a.roleId.localeCompare(b.roleId)),

@@ -2,9 +2,9 @@
 
 ## Outcome
 
-Turn the durable foundation into the complete execution hierarchy for one local software Goal. Sane conducts intake, the Overture Crew produces one Task Contract, the CEO confirms once, only required Heads wake, each Head writes a Department Plan, and bounded Scout and Execution workers deliver isolated Git results.
+Turn the durable foundation into the complete execution hierarchy for one local software Goal. Concertmaster conducts intake, the Overture Crew produces one Task Contract, the CEO confirms once, only required Heads wake, each Head writes a Department Plan, and bounded Scout and Execution workers deliver isolated Git results.
 
-Overwatch certification is completed in Phase 3, so Phase 2 cannot yet report a Goal as fully successful.
+Encore certification is completed in Phase 3, so Phase 2 cannot yet report a Goal as fully successful.
 
 ## Organization implemented
 
@@ -28,18 +28,18 @@ Operations Group
   Operations Department
 ```
 
-Groups are containers, not agents. Sane convenes Goal-scoped Department Heads directly. Sleeping Departments have durable identity and knowledge but no running session and receive no Goal context.
+Groups are containers, not agents. Concertmaster convenes Goal-scoped Department Heads directly. Sleeping Departments have durable identity and knowledge but no running session and receive no Goal context.
 
-## Sane and Task Contract flow
+## Concertmaster and Task Contract flow
 
 1. CEO states an outcome in plain language through app or CLI.
-2. Sane creates a draft Goal and activates the smallest required Overture Crew roles from the six-role candidate pool.
+2. Concertmaster creates a draft Goal and activates the smallest required Overture Crew roles from the six-role candidate pool.
 3. Architecture Analyst reads authorized project evidence, codebase structure, dependencies, and system topology.
 4. External Research Scout activates only when current outside evidence is needed.
 5. Conversation Lead and Task Editor identify outcomes, non-goals, priorities, edge cases, and acceptance behavior; Security Evaluator records material risk, budget, and critical-action boundaries.
 6. Design & Mock Specialist creates disposable previews only when seeing an option is necessary.
 7. Task Editor maintains one versioned `task.md`.
-8. Sane presents the complete contract, expected effects, initial budget range, and authority boundary.
+8. Concertmaster presents the complete contract, expected effects, initial budget range, and authority boundary.
 9. CEO gives one explicit launch confirmation bound to the exact content identity.
 10. The Goal launches; ordinary in-scope work proceeds without repeated approvals.
 11. Material intent change creates a visible amendment and new content identity.
@@ -65,7 +65,7 @@ Nothing may spawn an execution worker before step 9.
 
 ### Activation
 
-Sane activates the smallest likely set. An active Head may request another existing Head by supplying Goal, reason, evidence, requested contribution, urgency, context scope, and budget effect. The control plane prevents duplicate and cyclic activation. Each Head participation and Prime session binding is keyed by `(HeadRoleId, GoalId)`; a persistent Head never receives two Goals in one runtime context. New Departments remain outside this phase and require later Council approval.
+Concertmaster activates the smallest likely set. An active Head may request another existing Head by supplying Goal, reason, evidence, requested contribution, urgency, context scope, and budget effect. The control plane prevents duplicate and cyclic activation. Each Head participation and Prime session binding is keyed by `(HeadRoleId, GoalId)`; a persistent Head never receives two Goals in one runtime context. New Departments remain outside this phase and require later Council approval.
 
 ### Independent briefs
 
@@ -100,7 +100,7 @@ After the Goal decision and before execution workers, each active Head owns a ve
 - risks, safe pause points, and escalation triggers;
 - evidence and Department validation criteria.
 
-The Head Council reconciles overlap, gaps, and contradictions. Sane records the agreed set without silently rewriting domain judgment. Workers bind to an active plan version and link every result to satisfied plan items.
+The Head Council reconciles overlap, gaps, and contradictions. Concertmaster records the agreed set without silently rewriting domain judgment. Workers bind to an active plan version and link every result to satisfied plan items.
 
 A Head may revise its plan when evidence changes. The revision records cause, affected items, workers, cost, schedule, and cross-department effect. In-scope changes proceed automatically. Cross-department changes return to the Head Council. Goal, budget-ceiling, authority, or critical-effect changes return to the CEO boundary.
 
@@ -109,7 +109,7 @@ A Head may revise its plan when evidence changes. The revision records cause, af
 - Only a Department Head may create ordinary workers.
 - A worker that needs help requests it from its Head; it cannot silently create a child hierarchy.
 - A Head may designate a bounded team-lead worker only for a large mission. The grant fixes maximum helpers, cost, duration, task scope, reporting, and revocation.
-- Helpers created under that exception still belong to the Department Plan and remain visible to the Head and Sentinel.
+- Helpers created under that exception still belong to the Department Plan and remain visible to the Head and Metronome.
 - Unbounded recursive spawning is forbidden.
 - Scout workers are read-only by default.
 - Execution workers receive isolated worktrees and uniquely owned branches.
@@ -130,7 +130,7 @@ Every persistent role and temporary worker has exactly these normalized axes:
 9. `adaptability`
 10. `sociability`
 
-Sane starts at:
+Concertmaster starts at:
 
 ```text
 agreeableness      0.70
@@ -145,7 +145,7 @@ adaptability       0.88
 sociability        0.82
 ```
 
-Persistent Heads, Sentinel, and Council personas receive reviewed duty-derived baselines. Temporary workers receive a mission profile derived from Department style, Head choice, task ambiguity, risk, collaboration demand, and evidence burden. Worker overlays expire with the mission.
+Persistent Heads, Metronome, and Council personas receive reviewed duty-derived baselines. Temporary workers receive a mission profile derived from Department style, Head choice, task ambiguity, risk, collaboration demand, and evidence burden. Worker overlays expire with the mission.
 
 Traits influence style, exploration, initiative, collaboration, challenge, escalation tendency, and adaptation. They never grant permission, change budget, override evidence, weaken safety, or decide truth. Professional duty wins over personality. Evidence collection for later adaptation starts now, while live automatic trait updates remain disabled until Phase 6.
 
@@ -168,7 +168,7 @@ Installed capability is not automatically assigned capability. Missing capabilit
 ## Model and capability routing
 
 - Meet quality and safety first; then choose the lowest-cost demonstrated model.
-- Sane and Heads use models strong enough for continuity, planning, delegation, and synthesis.
+- Concertmaster and Heads use models strong enough for continuity, planning, delegation, and synthesis.
 - Scouts prefer lower-cost retrieval models and escalate on conflict or complexity.
 - Workers use the smallest model proven for that mission rather than inheriting the Head model.
 - Skills are selected per mission to reduce context and authority surface.
@@ -191,12 +191,12 @@ Use `child_process.spawn` with argument arrays. No shell-interpolated Git comman
 
 ## Budget behavior
 
-Overwatch policy produces an initial range using task uncertainty, historical evidence when available, model cost, expected validation, and recovery reserve. Sane and the Head Council may reallocate inside the CEO ceiling. Each Head allocates its Department budget. Quality and recovery floors cannot be reduced to make execution appear affordable. Increasing the total ceiling requires CEO approval.
+Encore policy produces an initial range using task uncertainty, historical evidence when available, model cost, expected validation, and recovery reserve. Concertmaster and the Head Council may reallocate inside the CEO ceiling. Each Head allocates its Department budget. Quality and recovery floors cannot be reduced to make execution appear affordable. Increasing the total ceiling requires CEO approval.
 
 ## Work sequence
 
 1. Implement permanent organization and durable role/persona records.
-2. Implement Sane session binding and Overture Crew selection.
+2. Implement Concertmaster session binding and Overture Crew selection.
 3. Implement Task Contract editor, content identity, amendment, and confirmation.
 4. Implement Head activation, sleep/resume, duplicate prevention, and bounded Head-to-Head calls.
 5. Implement the reusable sealed-submission primitive, then the Head Council consumer: immutable frozen participant/session/contract/evidence snapshot; idempotent sealed submission; deadline/absence policy; reveal; append-only events/audit; evidence-tagged complete discussion rounds; novelty and stopping; and a non-executable escalation outcome distinct from an executable resolved decision.
@@ -257,19 +257,19 @@ A plain-language request must become one confirmed Task Contract. Only the neces
 - Workers are temporary, task-scoped agents spawned by a Department Head.
 - Workers report to their spawning Head rather than joining a flat global agent pool.
 - Departments that are not needed remain asleep or on standby.
-- Overwatch observes the whole orchestration system from outside the execution hierarchy.
+- Encore observes the whole orchestration system from outside the execution hierarchy.
 
 ### 2. Selective department activation
 
 Use a two-stage activation model:
 
-1. Sane initially wakes the smallest set of Departments likely to be required.
+1. Concertmaster initially wakes the smallest set of Departments likely to be required.
 2. During discussion or execution, an awakened Department Head may directly wake another existing Department Head when missing expertise, a new dependency, or an independent challenge is discovered.
 3. The calling Head supplies a bounded activation brief with the Goal, reason, evidence, requested contribution, urgency, context scope, and expected budget impact.
-4. Sane records the activation, prevents duplicates, updates Council membership and context routing, and coordinates budget or schedule effects, but does not act as a routine approval gate.
-5. Sentinel detects cyclic, duplicative, unjustified, or runaway activation. Creating a new Department still requires Overwatch Council approval.
+4. Concertmaster records the activation, prevents duplicates, updates Council membership and context routing, and coordinates budget or schedule effects, but does not act as a routine approval gate.
+5. Metronome detects cyclic, duplicative, unjustified, or runaway activation. Creating a new Department still requires Encore Council approval.
 
-**Reason:** This avoids waking every Department for every Goal, does not require Sane to predict every dependency at intake time, and lets domain experts bring in the expertise they discover they need without administrative delay.
+**Reason:** This avoids waking every Department for every Goal, does not require Concertmaster to predict every dependency at intake time, and lets domain experts bring in the expertise they discover they need without administrative delay.
 
 ### 6. Default permanent departments
 
@@ -281,7 +281,7 @@ Start with five permanent departments:
 4. **Quality & Safety** — independent testing, review, security, safety, and acceptance validation. This department remains organizationally separate from implementation.
 5. **Operations** — Goal operations, incidents, state, cost, Git/worktree coordination, and operational readiness.
 
-The Secretary is the CEO's Chief of Staff, not a department. Overwatch is an independent oversight layer, not a department. A recurring capability may become a new permanent department only after Overwatch Council approval.
+The Secretary is the CEO's Chief of Staff, not a department. Encore is an independent oversight layer, not a department. A recurring capability may become a new permanent department only after Encore Council approval.
 
 ### 7. Permanent Groups and Departments — corrected interpretation
 
@@ -304,7 +304,7 @@ This clarification reopens the earlier five-department list for regrouping: the 
 - Groups do not have persistent Group Head agents in the initial organization.
 - The Secretary directly convenes the relevant Department Heads across Groups for each Goal.
 - This avoids an extra reporting layer, unnecessary deliberation, and token cost.
-- A Group Head may be proposed later only when the Group has grown enough that repeated coordination failures demonstrate a real need. Creating that role requires Overwatch Council approval under the same capability-expansion rule used for new departments.
+- A Group Head may be proposed later only when the Group has grown enough that repeated coordination failures demonstrate a real need. Creating that role requires Encore Council approval under the same capability-expansion rule used for new departments.
 
 ### 9. Initial Group and Department taxonomy
 
@@ -337,7 +337,7 @@ All departments remain asleep unless selected for a Goal. The number of permanen
 - Duplicate workers, overlapping ownership, and workers without a concrete deliverable are prohibited.
 - A worker terminates when its mission completes, becomes unnecessary, exceeds its bounds, or cannot make useful progress.
 - Material expansion beyond the Goal's expected scope or budget returns to the Head Council for review.
-- Sentinel monitors worker multiplication, duplicated effort, idle time, cost, and scope drift and may request a safe pause.
+- Metronome monitors worker multiplication, duplicated effort, idle time, cost, and scope drift and may request a safe pause.
 
 ### 15. Bounded cross-department worker collaboration
 
@@ -356,7 +356,7 @@ All departments remain asleep unless selected for a Goal. The number of permanen
 - Scout findings return to the spawning Department Head with source references, uncertainty, and observed limitations, then become available to the Head Council.
 - Scout Workers terminate after returning their evidence.
 - **Execution Workers** are spawned only after the Head Council has established the execution decision, ownership, boundaries, and validation criteria.
-- Sentinel detects Scouts that drift into implementation or are used to bypass the Council decision boundary.
+- Metronome detects Scouts that drift into implementation or are used to bypass the Council decision boundary.
 
 ### 22. Head Council deliberation protocol
 
@@ -364,7 +364,7 @@ All departments remain asleep unless selected for a Goal. The number of permanen
 2. **Evidence gathering:** A Head may request a bounded Scout Worker when a material factual question cannot be resolved from available evidence.
 3. **Open deliberation:** Heads challenge assumptions, surface cross-department conflicts, identify missing expertise, and add only new evidence or a distinct argument rather than repeating positions.
 4. **Decision packet:** The Council records the selected direction, rejected alternatives and reasons, Department ownership, worker plan, completion and failure criteria, dissent, uncertainty, and any critical action.
-5. **Stopping rule:** The discussion ends when material issues are resolved. It stops if two rounds add no new evidence or argument. Unresolved material conflict, high uncertainty, or a valid challenge routes to the selective Overwatch Council. Critical actions route to the CEO under the agreed boundary.
+5. **Stopping rule:** The discussion ends when material issues are resolved. It stops if two rounds add no new evidence or argument. Unresolved material conflict, high uncertainty, or a valid challenge routes to the selective Encore Council. Critical actions route to the CEO under the agreed boundary.
 
 The Secretary chairs, keeps scope and records, and coordinates the result. The Secretary does not dominate domain judgments or erase dissent.
 
@@ -389,7 +389,7 @@ Context assembly principles:
 - A worker receives a smaller Mission Context derived by its Head: mission, bounded inputs, required interfaces, completion criteria, relevant evidence, and authority. It does not inherit the entire Head or Council context.
 - Context entries retain provenance and freshness. Contradicted or stale entries are marked rather than silently trusted.
 - Department data remains scoped. Cross-department sharing should expose the minimum evidence required for collaboration and decision-making.
-- After milestones, useful outcomes flow through the agreed knowledge-promotion and Overwatch Digest processes rather than being appended indiscriminately to every future prompt.
+- After milestones, useful outcomes flow through the agreed knowledge-promotion and Encore Digest processes rather than being appended indiscriminately to every future prompt.
 
 ### 24. Minimum necessary cross-department data sharing
 
@@ -417,11 +417,11 @@ Every agent identity uses the existing ten normalized personality axes:
 
 Application rules:
 
-- Every persistent Department Head, the Secretary, Overwatch Sentinel, and each Overwatch Council persona has a stable identity, role charter, capabilities, limitations, current state, and ten-axis baseline.
+- Every persistent Department Head, the Secretary, Encore Metronome, and each Encore Council persona has a stable identity, role charter, capabilities, limitations, current state, and ten-axis baseline.
 - Every temporary worker also has a ten-axis profile for the life of its mission. The profile is derived from the Department's working style, the Head's delegation choice, and the mission's needs rather than cloning the Head or choosing random traits without purpose.
 - Traits influence communication style, exploration versus restraint, initiative, collaboration, challenge behavior, escalation tendency, and adaptation. They do not grant permissions, change budgets, override evidence, weaken safety policy, or determine whether a claim is true.
 - Department charter and professional duty take precedence over personality when they conflict.
-- The Head Council should contain useful personality diversity. The multi-model Overwatch Council should also preserve independent perspectives rather than converging all personas toward the same agreeable profile.
+- The Head Council should contain useful personality diversity. The multi-model Encore Council should also preserve independent perspectives rather than converging all personas toward the same agreeable profile.
 - Trait changes are evidence-backed improvement candidates. Initial changes are evaluated in replay/synthetic shadow mode and cannot silently alter live authority or policy.
 - The app shows identity and the three most distinctive axes by default, with the complete ten-axis profile available on expansion. The CEO can inspect and later edit an agent's persona and avatar.
 
@@ -433,11 +433,11 @@ The approved Secretary seed remains:
 
 ### 26. Persona initialization and editing
 
-- Initial Department Head, Overwatch, and worker trait profiles are generated from each role's duty, perspective, and expected behavior.
+- Initial Department Head, Encore, and worker trait profiles are generated from each role's duty, perspective, and expected behavior.
 - The CEO may inspect and edit all ten axes and the visible persona in the app.
 - The app explains the expected behavioral effect of a proposed trait change before application.
 - Trait changes are evaluated against representative replay/synthetic scenarios before live use and retain a rollback target.
-- Worker profiles are mission-derived and expire with the worker. Persistent Head and Overwatch profiles are durable and versioned.
+- Worker profiles are mission-derived and expire with the worker. Persistent Head and Encore profiles are durable and versioned.
 
 ### 28. Skill, plugin, model, and capability assignment at spawn
 
@@ -500,9 +500,9 @@ Accepted worker commits flow to the responsible Department branch, then accepted
 
 The CEO-facing coordination layer is a permanent **Secretary Office**.
 
-- **Sane** is the current primary Secretary identity and the CEO's continuous conversational interface. Sane receives requests, maintains continuity, coordinates the Overture Crew, presents the final Task Contract, launches approved Goals, reports outcomes, and surfaces only critical interruptions.
+- **Concertmaster** is the current primary Secretary identity and the CEO's continuous conversational interface. Concertmaster receives requests, maintains continuity, coordinates the Overture Crew, presents the final Task Contract, launches approved Goals, reports outcomes, and surfaces only critical interruptions.
 - **Overture Crew** (or **Overture**) is a selectively activated intake and task-definition team. It works with the CEO in a `grill-me`-style conversation and produces one canonical `task.md` before orchestration begins.
-- The Overture Crew is not a flat always-on chat room. Sane wakes only the roles needed for the request.
+- The Overture Crew is not a flat always-on chat room. Concertmaster wakes only the roles needed for the request.
 
 Overture candidate pool (six selectively activated roles):
 
@@ -513,7 +513,7 @@ Overture candidate pool (six selectively activated roles):
 - **Design & Mock Specialist** — creates disposable design explorations, visual options, or other previews only when seeing a candidate is necessary to clarify intent. A preview is not production implementation.
 - **Task Editor** — maintains the canonical Task Contract, resolves contradictions, cites evidence and approved previews, and ensures the document is ready to launch.
 
-A domain-specific specialist is not an always-on Overture role. When the Architecture Analyst identifies a bounded domain question, Sane may create a read-only bounded Scout under the existing Scout-worker rules, with an explicit question, evidence scope, and termination condition. The Crew may later gain another permanent role only through the same evidence and Overwatch Council process used for organizational capability expansion.
+A domain-specific specialist is not an always-on Overture role. When the Architecture Analyst identifies a bounded domain question, Concertmaster may create a read-only bounded Scout under the existing Scout-worker rules, with an explicit question, evidence scope, and termination condition. The Crew may later gain another permanent role only through the same evidence and Encore Council process used for organizational capability expansion.
 
 ### 36. `task.md` as the Goal launch contract
 
@@ -529,12 +529,12 @@ The Overture Crew produces one versioned `task.md` containing:
 - Acceptance evidence required before success may be reported.
 - Document version, decision history, CEO launch state, and a content identity binding the launched Goal to the agreed contract.
 
-Once launched, the Task Contract becomes the stable source of intent for Sane, the Head Council, Department Context assembly, workers, Quality, Overwatch, and final reporting. Material scope changes create a visible amendment and revised contract identity rather than silently changing the active Goal.
+Once launched, the Task Contract becomes the stable source of intent for Concertmaster, the Head Council, Department Context assembly, workers, Quality, Encore, and final reporting. Material scope changes create a visible amendment and revised contract identity rather than silently changing the active Goal.
 
 ### 37. Single Goal launch confirmation
 
 - Completing `task.md` does not silently start execution.
-- Sane presents a concise plain-language summary of the final Task Contract and asks for one explicit launch confirmation from the CEO.
+- Concertmaster presents a concise plain-language summary of the final Task Contract and asks for one explicit launch confirmation from the CEO.
 - The confirmation binds the launched Goal to that Task Contract version and content identity.
 - After launch, the organization proceeds end to end without intermediate approval requests unless a critical action, material contract amendment, or genuinely unrecoverable ambiguity crosses an agreed boundary.
 - Ordinary retries, replanning, Department activation, worker spawning, local Git work, testing, and bounded environment or enrolled-device actions continue automatically and are reported afterward.
@@ -542,41 +542,41 @@ Once launched, the Task Contract becomes the stable source of intent for Sane, t
 ### 38. Role-aware model, skill, and plugin selection
 
 - Selection is quality-gated and then cost-optimized: among models demonstrated capable of meeting the mission's quality and safety requirements, choose the lowest-cost suitable option.
-- Sane uses a stable high-quality model appropriate for persistent CEO interaction and judgment continuity.
+- Concertmaster uses a stable high-quality model appropriate for persistent CEO interaction and judgment continuity.
 - The Overture Conversation Lead and Task Editor use models capable of accurately preserving intent and resolving contradictions.
 - Project and External Scouts prefer lower-cost retrieval and synthesis models and escalate only when evidence conflict or complexity requires it.
 - Department Heads use strong reasoning models appropriate for planning, delegation, negotiation, and evidence synthesis.
 - Workers receive the smallest model demonstrated capable of their specific mission. Model size is not inherited automatically from the Head.
-- Sentinel uses deterministic checks before model judgment and invokes a low-cost model only for ambiguity that rules cannot resolve.
-- The Overwatch Council uses genuinely distinct approved models when available. If only one provider or model family is available, it uses independently isolated contexts and diverse personas and reports the limitation honestly.
+- Metronome uses deterministic checks before model judgment and invokes a low-cost model only for ambiguity that rules cannot resolve.
+- The Encore Council uses genuinely distinct approved models when available. If only one provider or model family is available, it uses independently isolated contexts and diverse personas and reports the limitation honestly.
 - A creator does not evaluate its own candidate when an independent approved evaluator is available. At minimum, evaluation uses isolated context and criteria fixed before candidate execution.
 - Skills and plugins are selected per mission from the approved Prime Agent catalog. Installed availability does not imply assignment.
 - The assignment bundle includes only capabilities that contribute to the mission, reducing context, authority, and attack surface.
-- Outcome telemetry continuously measures role/model/skill combinations. Overwatch may refine routing under the staged-improvement authority without lowering the required quality floor.
+- Outcome telemetry continuously measures role/model/skill combinations. Encore may refine routing under the staged-improvement authority without lowering the required quality floor.
 
 ### 39. Evidence-driven flexible Goal budgeting
 
 Budget allocation is adaptive rather than a fixed percentage template.
 
-- Overwatch analyzes the final Task Contract, relevant project state, similar historical Goals, Improvement Digests, Department and role success rates, model and skill cost, token use, latency, retry patterns, uncertainty, and expected validation burden.
-- It produces an initial allocation range for initiation, deliberation, each active Department, independent validation, recovery reserve, and Overwatch evidence processing.
-- Sane and the Head Council may reallocate unused budget inside the approved Goal ceiling as evidence and progress change.
+- Encore analyzes the final Task Contract, relevant project state, similar historical Goals, Improvement Digests, Department and role success rates, model and skill cost, token use, latency, retry patterns, uncertainty, and expected validation burden.
+- It produces an initial allocation range for initiation, deliberation, each active Department, independent validation, recovery reserve, and Encore evidence processing.
+- Concertmaster and the Head Council may reallocate unused budget inside the approved Goal ceiling as evidence and progress change.
 - Department Heads allocate their current Department budget among Scouts and Execution Workers.
 - Forecasts update after meaningful milestones. The system may reduce unnecessary workers, discussion, context, or model cost before consuming recovery reserve.
 - Quality, required Security or Safety review, and minimum recovery capacity retain protected floors appropriate to the Goal. They cannot be reduced to zero to make execution appear affordable.
 - Historical data guides but does not dictate allocation. New Departments, novel work, and sparse data receive explicit uncertainty and an exploration allowance rather than being starved because they lack a track record.
 - Recent relevant evidence is weighted more strongly than stale or superficially similar history. Outcomes are evaluated for quality and safety, not only low spend.
-- Overwatch may optimize allocation within the approved ceiling. Increasing the total ceiling remains a critical budget action requiring CEO approval.
+- Encore may optimize allocation within the approved ceiling. Increasing the total ceiling remains a critical budget action requiring CEO approval.
 - The CEO can inspect current spend, forecast, allocation changes, evidence behind the changes, and remaining probability of completion in the app.
 
 ### 60. Department Plans owned by Department Heads
 
 - Every activated Department Head writes and owns a versioned **Department Plan** after the Head Council establishes the Goal decision and before that Head spawns execution workers.
 - A Department Plan states the Department's contribution, non-goals, dependencies, worker assignments, order and safe parallelism, budget and time expectations, Git integration path, risks, evidence requirements, and validation criteria.
-- Department Plans are first-class Goal artifacts visible to Sane, the other activated Heads, Sentinel, Quality, and the CEO.
-- The Head Council reconciles overlaps, gaps, conflicting assumptions, and cross-department dependencies before execution begins. Sane records the agreed plan set but does not silently rewrite a Head's domain judgment.
+- Department Plans are first-class Goal artifacts visible to Concertmaster, the other activated Heads, Metronome, Quality, and the CEO.
+- The Head Council reconciles overlaps, gaps, conflicting assumptions, and cross-department dependencies before execution begins. Concertmaster records the agreed plan set but does not silently rewrite a Head's domain judgment.
 - Workers receive the active Department Plan version and a bounded worker brief. Their results link back to the plan items they satisfy.
 - A Head may update its Department Plan as evidence changes. Every revision records the reason, affected work, cost or schedule effect, and whether another Department is affected.
 - Routine revisions inside the approved Goal, authority, and budget proceed without renewed CEO approval. A material cross-department change returns to the Head Council. A Goal change or critical authority, budget, external-effect, or irreversible change follows the CEO approval boundary.
-- Sentinel detects work that has no active plan item, stale workers running against superseded plans, hidden scope growth, contradictory Department Plans, and execution that diverges from the Council decision.
+- Metronome detects work that has no active plan item, stale workers running against superseded plans, hidden scope growth, contradictory Department Plans, and execution that diverges from the Council decision.
 - Final certification checks both the Goal contract and the fulfilled Department Plans. A completed task list alone cannot override a failed Goal outcome.

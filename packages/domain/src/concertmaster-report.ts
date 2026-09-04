@@ -54,7 +54,7 @@ export interface CertificationCompletenessFacts {
 }
 
 /**
- * Sane's gate requires independent sources of truth: successful durable worker
+ * Concertmaster's gate requires independent sources of truth: successful durable worker
  * execution and Department acceptance, a frozen Goal integration revision, and
  * certifications bound to the current Contract and that revision. Completion
  * percentage and worker self-report are deliberately not inputs.
@@ -105,12 +105,12 @@ export function evaluateCertificationCompleteness(facts: CertificationCompletene
     blockers.push({ reason: "unresolved_certification_conflict", detail: "Conflicting certifications have no durable Council resolution for the current Goal revision" });
   }
   if (facts.openChallengeCount > 0) {
-    blockers.push({ reason: "unresolved_challenge", detail: `${facts.openChallengeCount} unresolved Sentinel challenge(s)` });
+    blockers.push({ reason: "unresolved_challenge", detail: `${facts.openChallengeCount} unresolved Metronome challenge(s)` });
   }
   return blockers;
 }
 
-export interface SaneFinalReportSubstance {
+export interface ConcertmasterFinalReportSubstance {
   readonly ceoRequest: string;
   readonly whatChanged: string;
   readonly userVisibleBehaviorPassed: boolean;

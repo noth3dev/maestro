@@ -1,4 +1,0 @@
-import { z } from "zod";
-export interface FireflyConfig { readonly bufferPath: string; readonly credential: string; readonly flushIntervalMs: number; readonly freshnessWindowMs: number; }
-const schema = z.object({ FIREFLY_BUFFER_PATH: z.string().min(1), FIREFLY_CREDENTIAL: z.string().min(1), FIREFLY_FLUSH_INTERVAL_MS: z.coerce.number().int().positive().default(1000), FIREFLY_FRESHNESS_WINDOW_MS: z.coerce.number().int().positive().default(300000) });
-export function parseConfig(env: Record<string,string|undefined>): FireflyConfig { const p=schema.safeParse(env); if (!p.success) throw new Error("Invalid Firefly configuration",{cause:p.error}); return {bufferPath:p.data.FIREFLY_BUFFER_PATH,credential:p.data.FIREFLY_CREDENTIAL,flushIntervalMs:p.data.FIREFLY_FLUSH_INTERVAL_MS,freshnessWindowMs:p.data.FIREFLY_FRESHNESS_WINDOW_MS}; }

@@ -25,7 +25,7 @@ Before certification:
 
 ### Security and authority
 
-- Threat-model prompt injection, malicious repository content, compromised worker, stale session, forged Firefly signal, stolen device token, approval replay, evidence tampering, path escape, shell injection, and provider credential leakage.
+- Threat-model prompt injection, malicious repository content, compromised worker, stale session, forged Discord signal, stolen device token, approval replay, evidence tampering, path escape, shell injection, and provider credential leakage.
 - Verify every effectful adapter enforces authority and fencing below prompts.
 - Verify critical approvals bind exact action, target, artifact, Goal, expiry, and policy version.
 - Verify remote push, deployment, external send, payment, deletion, permission change, and provider enrollment fail closed.
@@ -41,7 +41,7 @@ Inject:
 - worker timeout, cancellation, late result, and duplicate reply;
 - partial Git operation and merge conflict;
 - environment or device disconnect;
-- Firefly outage, duplicate signal, stale signal, and silence;
+- Discord outage, duplicate signal, stale signal, and silence;
 - evaluator crash during Council, Quality, and persona rollout;
 - app disconnect and stale command;
 - disk pressure and evidence write failure.
@@ -69,7 +69,7 @@ Measure:
 - model and skill routing cost;
 - Quality and Council overhead;
 - radial graph behavior under large portfolios;
-- Firefly detection and delivery time;
+- Discord detection and delivery time;
 - PostgreSQL query and storage growth;
 - idle improvement budget.
 
@@ -80,8 +80,8 @@ Quality, safety, authority, and evidence remain hard floors. Performance optimiz
 - Complete WCAG 2.2 AA audit.
 - Keyboard and screen-reader walkthrough of every critical flow.
 - Emergency-stop and recovery drills from app and CLI.
-- Operator documentation for startup, backup, restore, model outage, database failure, stale lease, device revocation, Firefly silence, and failed rollout.
-- Sane documentation stewardship checks canonical behavior against generated documentation and detects drift.
+- Operator documentation for startup, backup, restore, model outage, database failure, stale lease, device revocation, Discord silence, and failed rollout.
+- Concertmaster documentation stewardship checks canonical behavior against generated documentation and detects drift.
 
 ### Long-running operation
 
@@ -92,7 +92,7 @@ Run a soak period with:
 - app disconnect/reconnect;
 - provider rotation and controlled unavailability;
 - periodic restart;
-- Firefly probes;
+- Discord probes;
 - persona evidence collection without uncontrolled drift;
 - resource, cost, and storage monitoring.
 
@@ -149,7 +149,7 @@ If a required scenario fails:
 4. Prime Agent compatibility matrix and live parent/child behavior.
 5. Git isolation, conflict, cleanup, and remote denial.
 6. Device enrollment, expiry, revocation, and replay resistance.
-7. Firefly independence, authentication, deduplication, and silence.
+7. Discord independence, authentication, deduplication, and silence.
 8. Concurrent Goal contamination and capacity tests.
 9. Council independence, same-model labeling, and non-convergence.
 10. Quality defect-seeding and certification invalidation.
@@ -169,16 +169,16 @@ All required scenarios and audits pass on one frozen candidate. Backup and resto
 
 The Prime Agent-native replacement is ready for cutover only when all ten representative live scenarios pass end to end:
 
-1. **Overture:** Sane activates only the needed Overture Crew roles, incorporates project context, external evidence or a design mock when required, produces one coherent `task.md`, and obtains the single CEO launch confirmation.
-2. **Hierarchical execution:** only relevant Heads wake; independent briefs, Head Council, Scout evidence, worker spawning, hierarchical Git integration, independent Quality validation, and Sane reporting all complete.
+1. **Overture:** Concertmaster activates only the needed Overture Crew roles, incorporates project context, external evidence or a design mock when required, produces one coherent `task.md`, and obtains the single CEO launch confirmation.
+2. **Hierarchical execution:** only relevant Heads wake; independent briefs, Head Council, Scout evidence, worker spawning, hierarchical Git integration, independent Quality validation, and Concertmaster reporting all complete.
 3. **Head-to-Head activation:** a Head directly calls another existing Head during a Goal; context, Council membership and budget update without duplicate activation.
 4. **Environment and enrolled device:** a worker safely uses a virtual environment, project CLI and browser or device access inside scope while a critical out-of-scope effect is blocked.
 5. **Restart recovery:** Maestro or Prime Agent restarts mid-Goal and reconciles durable state without duplicate workers, stale authority, lost accepted work, or false success.
-6. **Firefly incident:** external detection wakes the correct Heads in triage mode, produces an Incident Task Contract, drives bounded remediation, and reaches independent certification.
-7. **Overwatch improvement:** milestone evidence becomes a curated Digest, an improvement candidate is shadow-evaluated, the multi-model Council judges it, and an allowed `refine` change applies or rolls back from measured evidence.
-8. **Portfolio Council:** competing Goals are prioritized by Overwatch and affected Heads, with safe pause, resource reallocation, and resume.
+6. **Discord incident:** external detection wakes the correct Heads in triage mode, produces an Incident Task Contract, drives bounded remediation, and reaches independent certification.
+7. **Encore improvement:** milestone evidence becomes a curated Digest, an improvement candidate is shadow-evaluated, the multi-model Council judges it, and an allowed `refine` change applies or rolls back from measured evidence.
+8. **Portfolio Council:** competing Goals are prioritized by Encore and affected Heads, with safe pause, resource reallocation, and resume.
 9. **Critical gate:** remote push or external sending remains blocked until the exact CEO approval and cannot expand beyond the approved action.
-10. **Radial app:** Sane is central; Goal, Group, Head, worker, Git, context, Overwatch and incident lineage expand radially; interactive node actions, avatars, persona, diff, pause and evidence remain legible in the approved restrained shadcn direction.
+10. **Radial app:** Concertmaster is central; Goal, Group, Head, worker, Git, context, Encore and incident lineage expand radially; interactive node actions, avatars, persona, diff, pause and evidence remain legible in the approved restrained shadcn direction.
 
 Passing requires exercising real behavior, not only parsing, unit tests, static screenshots, or mocked success. Failure of any required scenario blocks cutover.
 

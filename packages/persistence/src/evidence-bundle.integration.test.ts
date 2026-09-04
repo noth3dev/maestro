@@ -81,10 +81,10 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "control-plane", leaseDurationMs: 120_000 });
 
     // 1. Durable Goal command lifecycle: draft -> ready_for_confirmation -> launched -> active.
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "CreateGoal", expectedVersion: 0 }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
-    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
-    const active = await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "CreateGoal", expectedVersion: 0 }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 1, to: "ready_for_confirmation" }, proof);
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 2, to: "launched" }, proof);
+    const active = await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 3, to: "active" }, proof);
     expect(active.outcome).toBe("succeeded");
 
     // 2. Task Contract: create, exact-confirm, launch.
@@ -174,7 +174,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     expect(missionReservation.amountCents).toBe(10_000);
 
     // 10. Stop at "awaiting certification" (certifying), not final succeeded/failed -- per plan/phase2.md work-sequence step 12.
-    const certifying = await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "sane", type: "TransitionGoal", expectedVersion: 4, to: "certifying" }, proof);
+    const certifying = await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 4, to: "certifying" }, proof);
     expect(certifying.outcome).toBe("succeeded");
     const finalGoal = await pool.query<{ state: string }>("SELECT state FROM goals WHERE goal_id = $1", [goalId]);
     expect(finalGoal.rows[0]!.state).toBe("certifying");

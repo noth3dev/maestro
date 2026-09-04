@@ -19,7 +19,7 @@ export interface ActivateHeadRequest {
   readonly contextScope: readonly string[];
   readonly budgetEffect: string;
   readonly requester?:
-    | { readonly role: "Sane" }
+    | { readonly role: "Concertmaster" }
     | { readonly role: "Head"; readonly departmentId: string; readonly headRoleId?: string };
   readonly reason: string;
   readonly evidence?: Record<string, unknown>;
@@ -62,7 +62,7 @@ type ParticipationRow = {
   active_session_ref: string | null;
 };
 type HeadRequester =
-  | { readonly role: "Sane" }
+  | { readonly role: "Concertmaster" }
   | { readonly role: "Head"; readonly departmentId: string; readonly headRoleId?: string };
 type AttemptOutcome = "reserved" | "already_active" | "cycle_rejected" | "runtime_conflict" | "binding_conflict";
 type ActivationBrief = {
@@ -83,7 +83,7 @@ export async function activateHeadParticipation(
 ): Promise<GoalHeadParticipation> {
   if (request.goalId !== proof.goalId || !validProof(proof)) throw new StaleGoalLeaseError(request.goalId);
   assertActivationRequest(request);
-  const requester = request.requester ?? { role: "Sane" as const };
+  const requester = request.requester ?? { role: "Concertmaster" as const };
   const requestedContractId = request.contractId;
   const requestedContextId = request.contextId;
   const client = await pool.connect();

@@ -16,8 +16,8 @@ export interface EvidenceBundle {
   readonly workers: readonly Readonly<Record<string, unknown>>[];
   readonly gitIntegration: Readonly<Record<string, unknown>>;
   readonly certifications: Readonly<Record<string, unknown>>;
-  readonly sentinelFindings: readonly Readonly<Record<string, unknown>>[];
-  readonly sentinelChallenges: readonly Readonly<Record<string, unknown>>[];
+  readonly metronomeFindings: readonly Readonly<Record<string, unknown>>[];
+  readonly metronomeChallenges: readonly Readonly<Record<string, unknown>>[];
   readonly encoreRounds: readonly Readonly<Record<string, unknown>>[];
   readonly budgetReservations: readonly Readonly<Record<string, unknown>>[];
   /** Full durable evidence metadata referenced by certification and replay. */
