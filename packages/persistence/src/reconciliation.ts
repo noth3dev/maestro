@@ -6,6 +6,8 @@ import {
   acquireGoalLease,
   executeGoalCommand,
   isValidFencingToken,
+  releaseGoalLease,
+  renewGoalLease,
 } from "./commands.js";
 import { observeWorker } from "./worker.js";
 
@@ -159,10 +161,19 @@ const STOP_ACKNOWLEDGED_STATES: ReadonlySet<GoalState> = new Set(["stopped", "st
 function classifyGoalConsistency(input: {
   state: GoalState;
   leaseExpiresAt: Date | null;
-  emergencyStoppedAt: Date | null;
+  control: {
+    exists: boolean;
+    emergencyStoppedAt: Date | null;
+    pauseRequestedAt: Date | null;
+    pausedAt: Date | null;
+    stoppingAt: Date | null;
+    stoppedAt: Date | null;
+  };
   now: Date;
 }): { consistent: boolean; reasons: readonly string[] } {
   const reasons: string[] = [];
+  if (!input.control.exists) reasons.push("goal_control_missing");
+  const control = input.control;
   if (input.leaseExpiresAt !== null && input.leaseExpiresAt > input.now) {
     // A goal_leases row that is still unexpired after a reconciler restart
     // means the fencing token it grants could still be in flight elsewhere;
@@ -170,9 +181,17 @@ function classifyGoalConsistency(input: {
     // trusted.
     reasons.push("goal_lease_held_across_reconciliation");
   }
-  if (input.emergencyStoppedAt !== null && !STOP_ACKNOWLEDGED_STATES.has(input.state)) {
+  if (control.emergencyStoppedAt !== null && !STOP_ACKNOWLEDGED_STATES.has(input.state)) {
     reasons.push("emergency_stop_state_mismatch");
   }
+  if (control.pauseRequestedAt !== null && !["pausing", "paused"].includes(input.state)) reasons.push("pause_request_state_mismatch");
+  if (control.pausedAt !== null && input.state !== "paused") reasons.push("paused_state_mismatch");
+  if (control.stoppingAt !== null && !["stopping", "stopped", "blocked"].includes(input.state)) reasons.push("stopping_state_mismatch");
+  if (control.stoppedAt !== null && !["stopped", "blocked"].includes(input.state)) reasons.push("stopped_state_mismatch");
+  if (input.state === "pausing" && control.pauseRequestedAt === null) reasons.push("pausing_latch_missing");
+  if (input.state === "paused" && control.pausedAt === null) reasons.push("paused_latch_missing");
+  if (input.state === "stopping" && control.stoppingAt === null) reasons.push("stopping_latch_missing");
+  if (input.state === "stopped" && control.stoppedAt === null && control.emergencyStoppedAt === null) reasons.push("stopped_latch_missing");
   return { consistent: reasons.length === 0, reasons };
 }
 
@@ -190,7 +209,10 @@ export async function reconcileOnStartup(
 ): Promise<ReconciliationReport> {
   const leaderLeaseDurationMs = options.leaderLeaseDurationMs ?? 60_000;
   const goalLeaseDurationMs = options.goalLeaseDurationMs ?? 30_000;
-  const leaderProof = await acquireReconcilerLeaderLease(pool, options.ownerId, leaderLeaseDurationMs);
+  let leaderProof = await acquireReconcilerLeaderLease(pool, options.ownerId, leaderLeaseDurationMs);
+  const renewLeader = async (): Promise<void> => {
+    leaderProof = await renewReconcilerLeaderLease(pool, leaderProof, leaderLeaseDurationMs);
+  };
 
   const goalsResult = await pool.query<{ goal_id: string; project_id: string; state: GoalState; version: string }>(
     `SELECT goal_id, project_id, state, version FROM goals ORDER BY goal_id`,
@@ -199,10 +221,14 @@ export async function reconcileOnStartup(
 
   const results: GoalReconciliationResult[] = [];
   for (const row of nonterminalGoals) {
+    // Goal/provider inspection can exceed the singleton lease duration. Renew
+    // before each pass and before every worker observation so an expired leader
+    // cannot continue issuing fenced mutations after another instance takes over.
+    await renewLeader();
     const [leaseRow, controlRow] = await Promise.all([
       pool.query<{ expires_at: Date }>("SELECT expires_at FROM goal_leases WHERE goal_id = $1", [row.goal_id]),
-      pool.query<{ emergency_stopped_at: Date | null }>(
-        "SELECT emergency_stopped_at FROM goal_controls WHERE project_id = $1 AND goal_id = $2",
+      pool.query<{ emergency_stopped_at: Date | null; pause_requested_at: Date | null; paused_at: Date | null; stopping_at: Date | null; stopped_at: Date | null }>(
+        "SELECT emergency_stopped_at, pause_requested_at, paused_at, stopping_at, stopped_at FROM goal_controls WHERE project_id = $1 AND goal_id = $2",
         [row.project_id, row.goal_id],
       ),
     ]);
@@ -212,7 +238,14 @@ export async function reconcileOnStartup(
     const { consistent, reasons } = classifyGoalConsistency({
       state: row.state,
       leaseExpiresAt,
-      emergencyStoppedAt: controlRow.rowCount === 1 ? controlRow.rows[0]!.emergency_stopped_at : null,
+      control: {
+        exists: controlRow.rowCount === 1,
+        emergencyStoppedAt: controlRow.rowCount === 1 ? controlRow.rows[0]!.emergency_stopped_at : null,
+        pauseRequestedAt: controlRow.rowCount === 1 ? controlRow.rows[0]!.pause_requested_at : null,
+        pausedAt: controlRow.rowCount === 1 ? controlRow.rows[0]!.paused_at : null,
+        stoppingAt: controlRow.rowCount === 1 ? controlRow.rows[0]!.stopping_at : null,
+        stoppedAt: controlRow.rowCount === 1 ? controlRow.rows[0]!.stopped_at : null,
+      },
       now,
     });
 
@@ -221,7 +254,7 @@ export async function reconcileOnStartup(
     // the real session (lease_contended below never reaches here), so
     // forcing observation would be premature, not merely redundant.
     const reconciledWorkerIds = !leaseIsLive
-      ? await reconcileOrphanedWorkers(pool, options.kernel, row.goal_id, `reconciler:${options.ownerId}`, goalLeaseDurationMs)
+      ? await reconcileOrphanedWorkers(pool, options.kernel, row.goal_id, `reconciler:${options.ownerId}`, goalLeaseDurationMs, renewLeader)
       : [];
 
     if (consistent) {
@@ -295,6 +328,7 @@ async function reconcileOrphanedWorkers(
   goalId: string,
   ownerId: string,
   leaseDurationMs: number,
+  renewLeader: () => Promise<void>,
 ): Promise<readonly string[]> {
   if (!kernel) return [];
   const workersResult = await pool.query<{ worker_id: string }>(
@@ -311,20 +345,20 @@ async function reconcileOrphanedWorkers(
   let proof: Awaited<ReturnType<typeof acquireGoalLease>>;
   try {
     proof = await acquireGoalLease(pool, { goalId, ownerId, leaseDurationMs });
-  } catch {
-    return [];
+  } catch (error) {
+    if (error instanceof LeaseUnavailableError) return [];
+    throw error;
   }
   const reconciled: string[] = [];
-  for (const { worker_id: workerId } of workersResult.rows) {
-    try {
+  try {
+    for (const { worker_id: workerId } of workersResult.rows) {
+      await renewLeader();
+      proof = await renewGoalLease(pool, proof, leaseDurationMs);
       await observeWorker(pool, kernel, workerId, proof);
       reconciled.push(workerId);
-    } catch {
-      // A concurrent legitimate transition (e.g. another reconciler
-      // instance, or the worker's owning Head, already observed or
-      // cancelled it first) is not this pass's failure; skip it silently
-      // rather than aborting the whole startup reconciliation for it.
     }
+  } finally {
+    try { await releaseGoalLease(pool, proof); } catch { /* stale proof is already fenced */ }
   }
   return reconciled;
 }

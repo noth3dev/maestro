@@ -127,6 +127,17 @@ export async function renewGoalLease(
   return { goalId: row.goal_id, ownerId: row.owner_id, fencingToken: row.fencing_token };
 }
 
+/** Release a lease held by this exact fence proof. A stale owner cannot release a newer lease. */
+export async function releaseGoalLease(pool: Pool, proof: GoalLeaseProof): Promise<void> {
+  if (!isValidLeaseProof(proof)) throw new StaleGoalLeaseError(proof.goalId);
+  const result = await pool.query(
+    `UPDATE goal_leases SET expires_at = transaction_timestamp(), updated_at = transaction_timestamp()
+     WHERE goal_id = $1 AND owner_id = $2 AND fencing_token = $3::bigint`,
+    [proof.goalId, proof.ownerId, proof.fencingToken],
+  );
+  if (result.rowCount !== 1) throw new StaleGoalLeaseError(proof.goalId);
+}
+
 export async function executeGoalCommand(
   pool: Pool,
   command: GoalCommand,
