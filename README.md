@@ -8,8 +8,8 @@
 Maestro: Self-Improving &amp; Durable Agent Orchestration for Versatile Tasks
 </h3>
 <p align="center">
-  <a href="docs/ko/README.md"><b>문서 (한국어)</b></a> &bull;
-  <a href="docs/en/README.md"><b>Documentation (EN)</b></a> &bull;
+  <a href="docs/ko/README.md"><b>한국어 (ko)</b></a> &bull;
+  <a href="docs/en/README.md"><b>English (en)</b></a> &bull;
   <a href="docs/en/01-system-overview.md"><b>Architecture</b></a> &bull;
   <a href="docs/en/02-hierarchical-orchestration.md"><b>Hierarchy</b></a> &bull;
   <a href="docs/en/04-security-and-authority-model.md"><b>Security Model</b></a> &bull;
@@ -25,7 +25,7 @@ Maestro: Self-Improving &amp; Durable Agent Orchestration for Versatile Tasks
 
 ---
 
-> **Languages:** English | [**한국어 (Korean)**](docs/ko/README.md)
+> **Languages:** [**English (en)**](docs/en/README.md) | [**한국어 (ko)**](docs/ko/README.md)
 
 Maestro is an open-source enterprise AI orchestration framework designed for reliable, long-running, multi-agent goal execution. Built on top of the **Prime Agent SDK**, Maestro models real human organization structures—incorporating separation of powers, permanent domain departments, monotonic fencing leases, and cryptographic auditability to ensure zero unapproved side effects.
 
@@ -158,21 +158,21 @@ node apps/cli/dist/main.js report get <goalId>
 
 ## Documentation Index
 
-Full documentation is available in both **English** and **한국어 (Korean)**:
+Full documentation is available in both **English (en)** and **한국어 (ko)**:
 
-- **[Documentation Index (EN)](docs/en/README.md)** &bull; **[문서 목차 (한국어)](docs/ko/README.md)**
+- **[Documentation Index (en)](docs/en/README.md)** &bull; **[문서 목차 (ko)](docs/ko/README.md)**
 - **System Overview** — Architectural philosophy, design principles, and monorepo structure.
-  - [English](docs/en/01-system-overview.md) | [한국어](docs/ko/01-system-overview.md)
+  - [English (en)](docs/en/01-system-overview.md) | [한국어 (ko)](docs/ko/01-system-overview.md)
 - **Hierarchical Orchestration** — End-to-end execution flow, departments, personas, sealed briefs, and certification.
-  - [English](docs/en/02-hierarchical-orchestration.md) | [한국어](docs/ko/02-hierarchical-orchestration.md)
+  - [English (en)](docs/en/02-hierarchical-orchestration.md) | [한국어 (ko)](docs/ko/02-hierarchical-orchestration.md)
 - **Durable Control Plane** — PostgreSQL 17 event sourcing, monotonic leases, fencing tokens, and crash reconciliation.
-  - [English](docs/en/03-durable-control-plane.md) | [한국어](docs/ko/03-durable-control-plane.md)
+  - [English (en)](docs/en/03-durable-control-plane.md) | [한국어 (ko)](docs/ko/03-durable-control-plane.md)
 - **Security & Authority Model** — Action classification, `AuthorizedEffectExecutor`, and sealed submission snapshots.
-  - [English](docs/en/04-security-and-authority-model.md) | [한국어](docs/ko/04-security-and-authority-model.md)
+  - [English (en)](docs/en/04-security-and-authority-model.md) | [한국어 (ko)](docs/ko/04-security-and-authority-model.md)
 - **Roadmap & Phase Status** — Milestone phases (Phases 1–8), usability gates, and the **Luthiery** dynamic MCP extension.
-  - [English](docs/en/05-roadmap-and-phase-status.md) | [한국어](docs/ko/05-roadmap-and-phase-status.md)
+  - [English (en)](docs/en/05-roadmap-and-phase-status.md) | [한국어 (ko)](docs/ko/05-roadmap-and-phase-status.md)
 - **Developer & Operations Guide** — Workspace package layout, build/test scripts, and operating protocol guidelines.
-  - [English](docs/en/06-developer-and-operations-guide.md) | [한국어](docs/ko/06-developer-and-operations-guide.md)
+  - [English (en)](docs/en/06-developer-and-operations-guide.md) | [한국어 (ko)](docs/ko/06-developer-and-operations-guide.md)
 
 ---
 
