@@ -299,7 +299,7 @@ function nonNegativeInteger(value: string, option: string): number {
 
 function safeInteger(value: string, option: string): number {
   const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) throw new Error(`${option} must be a safe integer`);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 1_000_000_000) throw new Error(`${option} must be a nonnegative safe integer no greater than 1000000000`);
   return parsed;
 }
 
