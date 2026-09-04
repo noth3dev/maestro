@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
+import { AuthorityClaimConflictError } from "@maestro/authority";
 import type { ActionRequest, AuthorityDecisionAudit, AuthorityRecord, AuthorityRepository, ControlRecheck } from "@maestro/authority";
 
 export interface BootstrapAuthorityRecordInput extends Omit<ActionRequest, "controlEpoch" | "commandId"> {
@@ -114,7 +115,17 @@ export class PostgresAuthorityRepository implements AuthorityRepository {
       [request.commandId, request.projectId, request.goalId, request.actorId, request.action, request.target,
         request.policyVersion, String(request.budgetEffectCents)],
     );
-    return result.rowCount === 1;
+    if (result.rowCount === 1) return true;
+    const existing = await this.pool.query<{ project_id: string; goal_id: string; actor_id: string; policy_version: number; budget_effect_cents: string }>(
+      `SELECT project_id, goal_id, actor_id, policy_version, budget_effect_cents
+       FROM authority_effect_claims WHERE command_id = $1 AND action = $2 AND target = $3`,
+      [request.commandId, request.action, request.target],
+    );
+    const claim = existing.rows[0];
+    if (claim === undefined || claim.project_id !== request.projectId || claim.goal_id !== request.goalId ||
+        claim.actor_id !== request.actorId || claim.policy_version !== request.policyVersion ||
+        claim.budget_effect_cents !== String(request.budgetEffectCents)) throw new AuthorityClaimConflictError();
+    return false;
   }
 
   async recheckControl(request: ActionRequest): Promise<ControlRecheck> {

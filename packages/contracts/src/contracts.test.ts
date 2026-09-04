@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CreateGoalInputSchema,
+  CriticalActionInputSchema,
   GoalStateSchema,
   StableApiErrorSchema,
   TransitionGoalInputSchema,
@@ -19,6 +20,14 @@ describe("goal HTTP contracts", () => {
   it("does not expose actor, approval, or fencing fields", () => {
     expect(CreateGoalInputSchema.safeParse({ projectId, actorId: "operator" }).success).toBe(false);
     expect(TransitionGoalInputSchema.safeParse({ projectId, expectedVersion: 1, to: "active", fencingToken: "1" }).success).toBe(false);
+  });
+
+  it("rejects negative, unsafe, or oversized effect budgets", () => {
+    const base = { projectId, action: "payment.spend", target: "merchant", policyVersion: 1 };
+    expect(CriticalActionInputSchema.safeParse({ ...base, budgetEffectCents: -1 }).success).toBe(false);
+    expect(CriticalActionInputSchema.safeParse({ ...base, budgetEffectCents: Number.MAX_SAFE_INTEGER + 1 }).success).toBe(false);
+    expect(CriticalActionInputSchema.safeParse({ ...base, budgetEffectCents: 1_000_000_001 }).success).toBe(false);
+    expect(CriticalActionInputSchema.safeParse({ ...base, budgetEffectCents: 1_000_000_000 }).success).toBe(true);
   });
 
   it("provides closed goal states and stable errors", () => {
