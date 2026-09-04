@@ -13,7 +13,7 @@ Maestro uses **npm workspaces** to manage packages and applications:
 │   ├── control-plane/     # Fastify 5 REST & SSE Backend Server
 │   ├── cli/               # Maestro Command Line Interface (CLI)
 │   ├── secretary/         # Next.js Secretary Office Dashboard
-│   └── firefly/           # Out-of-band Health & Incident Monitor
+│   └── firefly/           # Out-of-band Discord Incident Daemon
 ├── packages/
 │   ├── contracts/         # Zod schemas, API contracts & event definitions
 │   ├── domain/            # Core business models (Goal, TaskContract, HeadCouncil)
