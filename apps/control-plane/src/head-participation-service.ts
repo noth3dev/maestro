@@ -9,7 +9,6 @@ import {
   resetHeadActivationAfterCancellation,
   markHeadActivationOrphaned,
   markHeadParticipationActive,
-  sleepHeadParticipation,
   assertProjectRole,
   type OperatorContext,
 } from "@maestro/persistence";
@@ -22,7 +21,15 @@ export interface HeadParticipationService {
 export interface HeadParticipationServiceDependencies {
   pool: Pool;
   kernel: ExecutionKernelPort;
-  withGoalLease: <T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
+  withGoalLease: <T>(
+    goalId: string,
+    operation: (
+      proof: import("@maestro/persistence").GoalLeaseProof,
+      renew?: () => Promise<import("@maestro/persistence").GoalLeaseProof>,
+    ) => Promise<T>,
+  ) => Promise<T>;
+  /** Heartbeat period while a provider call is in flight. */
+  goalLeaseRenewalIntervalMs?: number;
 }
 
 export class HeadGoalNotFoundError extends Error {
@@ -64,7 +71,18 @@ export function createHeadParticipationService(deps: HeadParticipationServiceDep
           throw new HeadContractMismatchError();
         }
       }
-      return deps.withGoalLease(goalId, async (proof) => {
+      return deps.withGoalLease(goalId, async (initialProof, renewGoalLease) => {
+        let proof = initialProof;
+        const renew = async (): Promise<void> => {
+          if (renewGoalLease !== undefined) proof = await renewGoalLease();
+        };
+        const runProviderCall = <T>(call: () => Promise<T>, failOnRenewalError = true): Promise<T> => withLeaseHeartbeat(
+          call,
+          renewGoalLease,
+          (nextProof) => { proof = nextProof; },
+          deps.goalLeaseRenewalIntervalMs,
+          failOnRenewalError,
+        );
         const reserved = await activateHeadParticipation(deps.pool, {
           goalId,
           departmentId: input.departmentId,
@@ -84,22 +102,27 @@ export function createHeadParticipationService(deps: HeadParticipationServiceDep
         if (!shouldSpawn) return toWire(reserved);
         let spawned: import("@maestro/domain").SpawnedInvocation;
         try {
-          spawned = await deps.kernel.spawn({ name: `head:${reserved.departmentId}:${randomUUID()}` });
+          // Keep the successful provider result if the post-call heartbeat
+          // fails; the result is needed to bind opaque ownership before any
+          // fail-closed cancellation attempt.
+          spawned = await runProviderCall(() => deps.kernel.spawn({ name: `head:${reserved.departmentId}:${randomUUID()}` }), false);
         } catch (error) {
-          await resetHeadActivationAfterSpawnFailure(deps.pool, goalId, reserved.departmentId, _commandId).catch(() => {});
+          await resetHeadActivationAfterSpawnFailure(deps.pool, goalId, reserved.departmentId, _commandId, proof).catch(() => {});
           throw error;
         }
         try {
+          await renew();
           const bound = await bindHeadActivationInvocation(deps.pool, goalId, reserved.departmentId, _commandId, spawned.execution, spawned.invocation);
           if (!bound) throw new Error("Head activation provider binding was not accepted");
         } catch (error) {
-          const cancellation = await deps.kernel.cancel(spawned.invocation).catch(() => ({ cancelled: false }));
-          if (cancellation.cancelled) await resetHeadActivationAfterCancellation(deps.pool, goalId, reserved.departmentId, _commandId).catch(() => {});
-          else await markHeadActivationOrphaned(deps.pool, goalId, reserved.departmentId, _commandId).catch(() => {});
+          const cancellation = await runProviderCall(() => deps.kernel.cancel(spawned.invocation)).catch(() => ({ cancelled: false }));
+          if (cancellation.cancelled) await resetHeadActivationAfterCancellation(deps.pool, goalId, reserved.departmentId, _commandId, proof).catch(() => {});
+          else await markHeadActivationOrphaned(deps.pool, goalId, reserved.departmentId, _commandId, proof).catch(() => {});
           throw error;
         }
         let active: GoalHeadParticipation;
         try {
+          await renew();
           active = await markHeadParticipationActive(
           deps.pool,
           goalId,
@@ -110,9 +133,9 @@ export function createHeadParticipationService(deps: HeadParticipationServiceDep
           _commandId,
         );
         } catch (error) {
-          const cancellation = await deps.kernel.cancel(spawned.invocation).catch(() => ({ cancelled: false }));
-          if (cancellation.cancelled) await resetHeadActivationAfterCancellation(deps.pool, goalId, reserved.departmentId, _commandId).catch(() => {});
-          else await markHeadActivationOrphaned(deps.pool, goalId, reserved.departmentId, _commandId).catch(() => {});
+          const cancellation = await runProviderCall(() => deps.kernel.cancel(spawned.invocation)).catch(() => ({ cancelled: false }));
+          if (cancellation.cancelled) await resetHeadActivationAfterCancellation(deps.pool, goalId, reserved.departmentId, _commandId, proof).catch(() => {});
+          else await markHeadActivationOrphaned(deps.pool, goalId, reserved.departmentId, _commandId, proof).catch(() => {});
           throw error;
         }
         // Activation must dispatch the bounded Goal context; an active Head
@@ -120,7 +143,7 @@ export function createHeadParticipationService(deps: HeadParticipationServiceDep
         // This happens after the durable active transition, so provider work
         // never holds the persistence transaction.
         try {
-          await deps.kernel.prompt(spawned.execution, [
+          await runProviderCall(() => deps.kernel.prompt(spawned.execution, [
             `You are the ${reserved.departmentId} Department Head for Goal ${goalId}.`,
             `Contribution: ${input.requestedContribution}.`,
             `Urgency: ${input.urgency}.`,
@@ -128,17 +151,17 @@ export function createHeadParticipationService(deps: HeadParticipationServiceDep
             `Budget effect: ${input.budgetEffect}.`,
             `Reason: ${input.reason}.`,
             "Work only within this Goal and report evidence and blockers; do not perform unapproved critical actions.",
-          ].join("\n"));
+          ].join("\n")));
         } catch (error) {
           // A failed initial dispatch must not leave a live provider session
           // behind an apparently active durable Head.
-          const cancellation = await deps.kernel.cancel(spawned.invocation).catch(() => ({ cancelled: false }));
+          const cancellation = await runProviderCall(() => deps.kernel.cancel(spawned.invocation)).catch(() => ({ cancelled: false }));
           if (cancellation.cancelled) {
-            await sleepHeadParticipation(deps.pool, goalId, reserved.departmentId, proof, reserved.headRoleId).catch(async () => {
-              await markHeadActivationOrphaned(deps.pool, goalId, reserved.departmentId, _commandId).catch(() => {});
+            await resetHeadActivationAfterCancellation(deps.pool, goalId, reserved.departmentId, _commandId, proof).catch(async () => {
+              await markHeadActivationOrphaned(deps.pool, goalId, reserved.departmentId, _commandId, proof).catch(() => {});
             });
           } else {
-            await markHeadActivationOrphaned(deps.pool, goalId, reserved.departmentId, _commandId).catch(() => {});
+            await markHeadActivationOrphaned(deps.pool, goalId, reserved.departmentId, _commandId, proof).catch(() => {});
           }
           throw error;
         }
@@ -146,6 +169,37 @@ export function createHeadParticipationService(deps: HeadParticipationServiceDep
       });
     },
   };
+}
+
+async function withLeaseHeartbeat<T>(
+  call: () => Promise<T>,
+  renewGoalLease: (() => Promise<import("@maestro/persistence").GoalLeaseProof>) | undefined,
+  updateProof: (proof: import("@maestro/persistence").GoalLeaseProof) => void,
+  intervalMs = 10_000,
+  failOnRenewalError = true,
+): Promise<T> {
+  if (renewGoalLease === undefined) return call();
+  let renewal: Promise<void> | undefined;
+  let renewalError: unknown;
+  const renewOnce = async (): Promise<void> => {
+    if (renewal !== undefined) return renewal;
+    renewal = renewGoalLease()
+      .then(updateProof)
+      .catch((error) => { renewalError ??= error; throw error; })
+      .finally(() => { renewal = undefined; });
+    try { await renewal; } catch { /* the provider result is still handled fail-closed */ }
+  };
+  const timer = setInterval(() => { void renewOnce(); }, Math.max(100, Math.floor(intervalMs)));
+  try {
+    await renewOnce();
+    if (renewalError !== undefined) throw renewalError;
+    const result = await call();
+    await renewOnce();
+    if (failOnRenewalError && renewalError !== undefined) throw renewalError;
+    return result;
+  } finally {
+    clearInterval(timer);
+  }
 }
 
 function toWire(value: GoalHeadParticipation): HeadParticipation {
