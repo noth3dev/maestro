@@ -24,7 +24,7 @@ flowchart TD
     subgraph PersistenceOversightLayer [Durable Storage & Oversight]
         ENCORE[⏱️ Encore & Quality Certification<br/>• Metronome: Real-time Event Stream Integrity<br/>• Quality Dept: Independent Test Execution<br/>• Cannot self-certify work]
         POSTGRES[(💾 PostgreSQL 17 Control Plane<br/>• Sole Operational Single Source of Truth<br/>• Append-only Event Log goal_events<br/>• Monotonic Fencing Leases goal_leases<br/>• Transactional Outbox & Idempotency)]
-        OVERWATCH[👁️ Overwatch Self-Improvement Lab<br/>• Milestone Improvement Digests<br/>• Replay / Synthetic Shadow Evaluation<br/>• Ten-Axis Persona Adaptation]
+        ENCORE_LAB[👁️ Encore Self-Improvement Lab<br/>• Milestone Improvement Digests<br/>• Replay / Synthetic Shadow Evaluation<br/>• Ten-Axis Persona Adaptation]
     end
 
     CONDUCTOR -->|1. Natural Language Goal| CONCERTMASTER
@@ -36,8 +36,8 @@ flowchart TD
     EXECUTOR -->|7. Audit Pre-log| POSTGRES
     WORKERS -->|8. SHA-256 Evidence Bundle| ENCORE
     ENCORE -->|9. Certified Status Report| CONCERTMASTER
-    ENCORE -.->|10. Milestone Evidence| OVERWATCH
-    OVERWATCH -.->|11. Shadow/Replay Feedback| DEPARTMENTS
+    ENCORE -.->|10. Milestone Evidence| ENCORE_LAB
+    ENCORE_LAB -.->|11. Shadow/Replay Feedback| DEPARTMENTS
 ```
 
 ---
@@ -49,7 +49,7 @@ flowchart TD
 3. **Fail-Closed & Default-Deny Security**: All tool calls and side effects must pass through `AuthorizedEffectExecutor`. Any unclassified, unauthorized, or out-of-scope effect is denied immediately.
 4. **Content-Addressed Auditability**: All inputs, plans, briefs, and deliverables are hashed using SHA-256 canonical serialization (`Sealed Submission`), ensuring cryptographically immutable record lineage.
 5. **No Speculative Re-invention**: Maestro builds on top of the native features of the **Prime Agent SDK** (session tracking, recursive subagent spawning, tool calling) while keeping domain authority within the control plane.
-6. **Evidence-Driven Self-Improvement (Shadow-First Evolution)**: Overwatch curates execution evidence into compact Improvement Digests to optimize persona axes, role guidance, and routing templates in replay/synthetic shadow runs—without permitting autonomous changes to security authority or safety boundaries.
+6. **Evidence-Driven Self-Improvement (Shadow-First Evolution)**: Encore curates execution evidence into compact Improvement Digests to optimize persona axes, role guidance, and routing templates in replay/synthetic shadow runs—without permitting autonomous changes to security authority or safety boundaries.
 
 ---
 
