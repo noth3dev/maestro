@@ -1,11 +1,11 @@
-# Maestro: Self-Improving & Durable Agent Orchestration
+
 
 <p align="center">
   <a href="docs/README.md">
     <img alt="Maestro" src="docs/assets/logo.svg" width="280" style="max-width: 100%;">
   </a>
 </p>
-
+# #Maestro: Self-Improving & Durable Agent Orchestration
 <p align="center">
   <a href="docs/README.md"><b>Documentation</b></a> &bull;
   <a href="docs/01-system-overview.md"><b>Architecture</b></a> &bull;
