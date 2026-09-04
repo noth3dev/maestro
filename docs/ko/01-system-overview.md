@@ -4,9 +4,41 @@
 
 Maestro는 단일 에이전트 루프 시스템의 근본적인 신뢰성 부족, 메모리 표류(Memory Drift), 권한 유출 문제를 해결하기 위해 설계되었습니다. 단일 프롬프트 루프에 의존하는 대신, Maestro는 엄격한 **권력 분립(Separation of Powers)**, **내구성 있는 영속성(Durable Persistence)**, **Fail-Closed 보안 게이트**를 갖춘 **기업 조직 모델**을 구현합니다.
 
-<p align="center">
-  <img alt="Maestro Architecture" src="../assets/architecture.svg" width="100%" style="max-width: 900px;">
-</p>
+```mermaid
+flowchart TD
+    subgraph UserLayer [Conductor / 사용자]
+        CONDUCTOR[Conductor / 사용자<br/>• 자연어 목표 및 범위 정의<br/>• 단일 단행 승인 Single Launch Confirmation]
+    end
+
+    subgraph ControlPlaneLayer [Maestro 제어 평면 Control Plane]
+        CONCERTMASTER[🎼 Concertmaster / 비서실<br/>• 목표 수신 및 라이프사이클 상태 머신 제어]
+        OVERTURE[🎶 Overture Intake Crew<br/>• Conversation Lead • Architecture Analyst • Security Evaluator<br/>• task.md 작업 계약서 작성]
+        DEPARTMENTS[👥 영구 부서장 Wake-on-Demand<br/>• Product • Tech • Intelligence • Assurance 그룹<br/>• Head Council 봉인 심의 Sealed Submissions]
+    end
+
+    subgraph ExecutionSecurityLayer [실행 및 보안 격리]
+        WORKERS[🛠️ Scout & Execution 워커<br/>• Prime Agent 서브에이전트 세션<br/>• 격리된 Git Worktrees .worktrees/ ]
+        EXECUTOR[🛡️ AuthorizedEffectExecutor<br/>• Default-Deny 기본 거부 & 액션 분류<br/>• Audit-Before-Effect DB 사전 감사 커밋<br/>• 단조 펜싱 토큰 리스 검증]
+    end
+
+    subgraph PersistenceOversightLayer [내구성 저장소 및 검증/자가개선]
+        ENCORE[⏱️ Encore & Quality 인증<br/>• Metronome: 이벤트 스트림 실시간 무결성<br/>• Quality Dept: 독립적 테스트 수행 및 검증<br/>• 자가 검증 Self-Certify 금지]
+        POSTGRES[(💾 PostgreSQL 17 Control Plane<br/>• 단일 운영 신뢰 원천 Single Source of Truth<br/>• Append-only 이벤트 로그 goal_events<br/>• 단조 펜싱 리스 goal_leases<br/>• 트랜잭셔널 아웃박스 & 멱등성)]
+        OVERWATCH[👁️ Overwatch 자가 개선 연구소<br/>• 마일스톤 Improvement Digest 큐레이션<br/>• Replay / Synthetic Shadow 평가<br/>• 10축 페르소나 맞춤 적응]
+    end
+
+    CONDUCTOR -->|1. 자연어 목표 전달| CONCERTMASTER
+    CONCERTMASTER -->|2. 분석 및 프레이밍| OVERTURE
+    OVERTURE -->|3. task.md 해시| CONDUCTOR
+    CONDUCTOR -->|4. 단일 실행 승인| DEPARTMENTS
+    DEPARTMENTS -->|5. Mission Bundle 하사| WORKERS
+    WORKERS -->|6. 도구 실행| EXECUTOR
+    EXECUTOR -->|7. 사전 감사 로그| POSTGRES
+    WORKERS -->|8. SHA-256 증거 번들| ENCORE
+    ENCORE -->|9. 인증 상태 리포트| CONCERTMASTER
+    ENCORE -.->|10. 마일스톤 실행 증거| OVERWATCH
+    OVERWATCH -.->|11. Shadow/Replay 피드백| DEPARTMENTS
+```
 
 ---
 

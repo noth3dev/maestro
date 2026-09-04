@@ -4,9 +4,41 @@
 
 Maestro is designed to solve the fundamental unreliability, memory drift, and authority leakage inherent in single-loop agent systems. Rather than relying on a monolithic prompt-loop, Maestro implements an **enterprise organizational model** with strict **separation of powers**, **durable persistence**, and **fail-closed authority gates**.
 
-<p align="center">
-  <img alt="Maestro Architecture" src="assets/architecture.svg" width="100%" style="max-width: 900px;">
-</p>
+```mermaid
+flowchart TD
+    subgraph UserLayer [Conductor / Human Operator]
+        CONDUCTOR[Conductor / User<br/>• Natural Language Outcome & Scope<br/>• Single Launch Confirmation]
+    end
+
+    subgraph ControlPlaneLayer [Maestro Control Plane]
+        CONCERTMASTER[🎼 Concertmaster / Secretary Office<br/>• Intakes Goals & Coordinates Lifecycle State Machine]
+        OVERTURE[🎶 Overture Intake Crew<br/>• Conversation Lead • Architecture Analyst • Security Evaluator<br/>• Drafts task.md Task Contract]
+        DEPARTMENTS[👥 Permanent Department Heads - Wake-on-Demand<br/>• Product Group • Tech Group • Intelligence Group • Assurance Group<br/>• Sealed Submissions Deliberation in Head Council]
+    end
+
+    subgraph ExecutionSecurityLayer [Execution & Security Containment]
+        WORKERS[🛠️ Scout & Execution Workers<br/>• Prime Agent Subagent Sessions<br/>• Isolated Git Worktrees .worktrees/ ]
+        EXECUTOR[🛡️ AuthorizedEffectExecutor<br/>• Default-Deny & Action Classification<br/>• Audit-Before-Effect DB Commit<br/>• Monotonic Fencing Lease Validation]
+    end
+
+    subgraph PersistenceOversightLayer [Durable Storage & Oversight]
+        ENCORE[⏱️ Encore & Quality Certification<br/>• Metronome: Real-time Event Stream Integrity<br/>• Quality Dept: Independent Test Execution<br/>• Cannot self-certify work]
+        POSTGRES[(💾 PostgreSQL 17 Control Plane<br/>• Sole Operational Single Source of Truth<br/>• Append-only Event Log goal_events<br/>• Monotonic Fencing Leases goal_leases<br/>• Transactional Outbox & Idempotency)]
+        OVERWATCH[👁️ Overwatch Self-Improvement Lab<br/>• Milestone Improvement Digests<br/>• Replay / Synthetic Shadow Evaluation<br/>• Ten-Axis Persona Adaptation]
+    end
+
+    CONDUCTOR -->|1. Natural Language Goal| CONCERTMASTER
+    CONCERTMASTER -->|2. Intake & Frame| OVERTURE
+    OVERTURE -->|3. task.md Hash| CONDUCTOR
+    CONDUCTOR -->|4. Single Launch Confirmation| DEPARTMENTS
+    DEPARTMENTS -->|5. Mission Bundles| WORKERS
+    WORKERS -->|6. Tool Execution| EXECUTOR
+    EXECUTOR -->|7. Audit Pre-log| POSTGRES
+    WORKERS -->|8. SHA-256 Evidence Bundle| ENCORE
+    ENCORE -->|9. Certified Status Report| CONCERTMASTER
+    ENCORE -.->|10. Milestone Evidence| OVERWATCH
+    OVERWATCH -.->|11. Shadow/Replay Feedback| DEPARTMENTS
+```
 
 ---
 
