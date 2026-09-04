@@ -364,9 +364,13 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    `device-grant.ts`, `environment.ts`, `discord-incident.ts`, and `metronome-challenge.ts` remains
    in place. Each regression proves the forged proof produces no durable mutation and that the
    real proof still succeeds afterward.
-9. Already-known Phase 2-rooted P0 from the first audit wave: effect adapters (Git) not enforced
-   through `AuthorizedEffectExecutor`; no production write-command API surface for Task
-   Contract/Council/Plan/worker/Git actions.
+9. **[RESOLVED 2026-09-04, current work]** The Git effect adapter now exposes only
+   `createLocalGitPort`, which requires an `AuthorizedEffectExecutor`-compatible gateway and routes
+   branch, worktree, commit, revision, and cleanup operations through it before spawning Git. The
+   control-plane composition root exposes an authority-backed Git-port factory; no unauthenticated
+   local Git operation is exported. Real ephemeral-repository tests reject expired, forged-actor,
+   and out-of-scope grants before a Git process can run. The broader Task Contract/Council/Plan/
+   worker write-command API remains Phase 5 Track A item 3.
 
 ### Phase 3 — remaining open items
 1. **[PARTIALLY RESOLVED 2026-09-04, certification.ts fixed in commit `c50d142`]**
@@ -481,8 +485,8 @@ concrete illustration each, plus two smaller cross-cutting gaps not previously c
   (Mission persona overlay derivation/expiry), 5 (Head activation/sleep/resume control-latch), 6
   (acceptance race), and 8 (fencing-token regression coverage) resolved and merged to `main`.
   Item 3's monetary cost-ceiling sub-scope is explicitly deferred pending a real cost source/
-  accounting unit. Items 7 and 9 remain open; feature-completeness item 1 above illustrates item
-  9's write-API gap concretely.
+  accounting unit. Items 7 and 9 are resolved in commits `cc751ff` and the current Git authority
+  adapter slice; feature-completeness item 1 remains the separate Phase 5 write-API gap.
 - [not_started] Phase 3 remaining items 1-7 above.
 - [not_started] Phase 4 remaining items (= Track B items 1-8, unchanged; feature-completeness item 2
   above is a Discord-specific instance to fix alongside Track B).

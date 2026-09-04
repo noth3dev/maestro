@@ -21,7 +21,7 @@ import {
   listDiscordIncidents,
   listDiscordSignals,
 } from "@maestro/persistence";
-import { localGitPort } from "@maestro/git-adapter";
+import { localGitPort } from "../../../test/git-port.js";
 import { createDiscord } from "./main.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
