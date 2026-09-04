@@ -9,7 +9,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { localGitPort } from "@maestro/git-adapter";
 import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
-import { acquireGoalLease } from "./commands.js";
+import { acquireGoalLease, StaleGoalLeaseError } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
@@ -142,6 +142,29 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     expect(recorded.commitSha).toBe(commitResult.commitSha);
     const replayCommit = await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: add change", [...evidence.references]);
     expect(replayCommit).toEqual(recorded);
+  });
+
+  it("rejects every Git integration write with a stale fencing token and leaves durable state unchanged", async () => {
+    const { goalId, council, worker, proof } = await setupPlan();
+    const forgedProof = { goalId, ownerId: proof.ownerId, fencingToken: String(BigInt(proof.fencingToken) + 1n) };
+    const worktreePath = join(repositoryPath, "..", `maestro-stale-fencing-worker-${randomUUID()}`);
+    worktreePaths.push(worktreePath);
+
+    await expect(recordGoalIntegrationBranch(pool, localGitPort, goalId, repositoryPath, "goal/integration", baseRevision, forgedProof))
+      .rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect((await pool.query("SELECT count(*)::int AS count FROM goal_integration_branches WHERE goal_id = $1", [goalId])).rows[0]!.count).toBe(0);
+    await recordGoalIntegrationBranch(pool, localGitPort, goalId, repositoryPath, "goal/integration", baseRevision, proof);
+
+    await expect(recordDepartmentBranch(pool, localGitPort, council.councilId, "product", forgedProof, headContext("product")))
+      .rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect((await pool.query("SELECT count(*)::int AS count FROM department_branches WHERE goal_id = $1", [goalId])).rows[0]!.count).toBe(0);
+    await recordDepartmentBranch(pool, localGitPort, council.councilId, "product", proof, headContext("product"));
+
+    await expect(recordWorkerWorktree(pool, localGitPort, worker.workerId, worktreePath, forgedProof, headContext("product")))
+      .rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect((await pool.query("SELECT count(*)::int AS count FROM worker_worktrees WHERE worker_id = $1", [worker.workerId])).rows[0]!.count).toBe(0);
+    const created = await recordWorkerWorktree(pool, localGitPort, worker.workerId, worktreePath, proof, headContext("product"));
+    expect(created.workerId).toBe(worker.workerId);
   });
 
   it("rejects a Department branch before the Goal integration branch exists", async () => {
