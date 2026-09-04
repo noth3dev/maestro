@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b",
     "check": "npm run build && npm test",
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "worktree:add": "node scripts/create-worktree.mjs"
   },
   "engines": {
     "node": ">=24"
