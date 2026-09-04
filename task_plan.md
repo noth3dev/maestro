@@ -347,19 +347,20 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    unique-constraint error. A real-PostgreSQL concurrent regression covers the race. The same commit
    also closed the certification.ts portion of Phase 3 item 1; that remaining item tracks the other
    three write modules separately.
-7. **[HIGH, security]** No path/repository containment check before Git worktree/branch
-   operations. `recordGoalIntegrationBranch`/`recordDepartmentBranch`/`recordWorkerWorktree`
-   (packages/persistence/src/git-integration.ts:26,134,170) and `createWorktree`/`createBranch`
-   (packages/git-adapter/src/git-ops.ts:20-27) accept caller-supplied paths with no containment
-   check against an allow-listed workspace root; `git worktree add` will materialize a checkout at
-   any writable absolute path (no shell injection since `spawn` uses argv arrays, but no path
-   containment either). Fix: canonicalize and assert `repositoryPath`/`worktreePath` fall under a
-   configured single workspace root (e.g. `MAESTRO_WORKTREE_ROOT`) at the persistence boundary.
+7. **[RESOLVED 2026-09-04, commit `cc751ff`]** Git repository and worktree paths are now
+   canonicalized and rejected unless they resolve beneath the configured `MAESTRO_WORKTREE_ROOT`.
+   The guard runs at the persistence boundary before database transactions or Git calls and again
+   in every local Git operation, including paths loaded from durable records. Existing ancestors
+   are resolved for not-yet-created worktrees, so symlink escapes are rejected; missing root
+   configuration fails closed. Regression coverage verifies outside repository/worktree paths,
+   missing configuration, symlink escapes, and no Git/DB invocation after rejection. Fresh
+   real-PostgreSQL `npm run check`: 98/99 files passed, 685 passed, 2 intentional live-Prime
+   skips, 0 failed.
 8. **[PARTIALLY RESOLVED 2026-09-04, commit `bcbd15b` / merge `e160af5`]** Stale/forged
    fencing-token regressions now cover `council.ts`, `department-plan.ts`, `device-grant.ts`,
    `environment.ts`, `discord-incident.ts`, and `metronome-challenge.ts`. The remaining Phase 2
-   modules are `budget-reservation.ts`, `mission-bundle.ts`, `team-lead-grant.ts`, and
-   `git-integration.ts`; cover each while its owning item lands. 
+   modules are `budget-reservation.ts`, `mission-bundle.ts`, and `team-lead-grant.ts`; cover
+   each while its owning item lands.
 9. Already-known Phase 2-rooted P0 from the first audit wave: effect adapters (Git) not enforced
    through `AuthorizedEffectExecutor`; no production write-command API surface for Task
    Contract/Council/Plan/worker/Git actions.

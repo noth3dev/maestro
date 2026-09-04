@@ -1007,3 +1007,21 @@ HEAD
 - Direct inspection found the acceptance race was already fixed in `c50d142`, which uses an atomic `ON CONFLICT DO NOTHING` insert and durable re-read. That commit also fixed the certification write guards tracked as the certification portion of Phase 3 item 1.
 - The merged main tree's fresh real-PostgreSQL check passed 97/98 files, 680 tests, 2 intentional live-Prime skips, and 0 failures. Task-plan status was corrected before moving to the next open item.
 - Next: Phase 2 item 7, Git repository/worktree path containment.
+
+
+## 2026-09-04 (continued) — Phase 2 item 7 Git path containment resolved
+- Implemented `MAESTRO_WORKTREE_ROOT` containment in `packages/git-adapter/src/path-containment.ts`.
+  Every local Git operation now canonicalizes repository/worktree paths and rejects paths outside
+  the configured root, including symlink escapes and paths whose final worktree does not yet exist.
+  Missing or invalid root configuration fails closed.
+- Added the same guard at the persistence boundary in `git-integration.ts` before opening a
+  transaction for caller paths and before using repository/worktree paths loaded from durable rows.
+  Canonical paths are stored and returned for new Git integration records. Added outside-path,
+  missing-root, symlink, and no-invocation regression coverage.
+- Added the required test-only `/tmp` root setup and documented the production environment variable
+  in `.env.example`.
+- Direct review and fresh verification on `main`: `npm run check` with a disposable PostgreSQL
+  16 container passed **98/99 files**, **685 tests**, **2 intentional live-Prime skips**, and **0
+  failures**. Focused path tests passed 10/10. Commit: `cc751ff`.
+- Next: Phase 2 item 8 remaining fencing coverage, then Phase 2 item 9's authorized effect
+  executor boundary, before proceeding to the remaining Phase 3–5 work.
