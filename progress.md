@@ -967,3 +967,30 @@ HEAD
 - Resumed against clean `main` at `d931bd2`; repository state showed Phase 2 items 5 (`9157324`) and 8 (`bcbd15b`/`e160af5`) already merged even though the remediation text was stale. The first still-open Phase 2 item is item 3.
 - Independently reviewed the clean candidate `patch/p2-team-lead-ceilings` commit `9135765`. Its duration check (grant age) and scope check (Department Plan version) are concrete, but its proposed cost enforcement parses a free-text string such as `1 USD` and charges an invented one unit per helper. No actual/estimated worker cost field or pricing unit exists in the repository, so this cannot truthfully enforce a monetary ceiling.
 - Result: **NOT ACCEPTABLE; not merged.** Recorded the blocker in `task_plan.md`. Next requires a user decision defining the helper-spawn cost accounting source/unit (or explicitly changing the ceiling to a non-monetary helper-count rule). The candidate worktree and its disposable PostgreSQL container remain intact pending that decision.
+
+
+## 2026-09-04 (continued) — Phase 2 re-patch item 4 (Mission persona overlay) resolved; no subagents this pass
+- Per user direction, working sequentially without subagent delegation for this pass. Reviewed the
+  ready `p2-persona-overlay` candidate worktree (branch `patch/p2-persona-overlay`, commit
+  `06fab8d`) directly.
+- Confirmed scope match against the item 4 finding text (derivation + mission-lifetime expiry +
+  [0,1] bounds test + post-mission unavailability test -- explicitly not real-spawn wiring, unlike
+  item 2). `deriveMissionPersonaOverlay` averages Department-style and Head-choice ten-axis
+  profiles then nudges per-axis by four [0,1] scalar factors, clamping every axis before
+  re-validation. `mission_persona_overlays` (migration `0050`) is append-only with a DB-level
+  axis-bounds trigger, idempotent issuance, and expiry-aware reads.
+- Verified independently (no-edit read of the diff) in the candidate worktree: `npm run build`
+  clean; full real-PostgreSQL `npm run check`: 97/98 files, 660 passed, 2 intentional live-Prime
+  skips, 0 failed. Focused re-run of the two new test files alone: 34/34 passed, including the
+  new "expires correctly once the mission's explicit lifetime bound has passed" case (previously
+  untestable per Phase 2 Tests #11).
+- Merged to `main` (`b294a95`). Post-merge re-verification on `main`: fresh `npm run build` clean;
+  full real-PostgreSQL `npm run check`: 97/98 files, 672 passed, 2 intentional live-Prime skips, 0
+  failed. Worktree, branch, and disposable PostgreSQL container removed. Pushed to `origin/main`
+  per explicit user go-ahead this session.
+- Also corrected the Phase 2 remediation-plan "Status" summary line, which was stale even before
+  this pass (items 5 and 8 were already merged in a prior session but the summary line still said
+  "items 3-9 not started").
+- Next: Phase 2 item 6 (`acceptDepartmentWorkerOutput` unguarded check-then-insert race), reviewing
+  the ready `p2-worker-output-race` candidate worktree. Item 3 stays blocked pending the user's
+  cost-accounting decision.

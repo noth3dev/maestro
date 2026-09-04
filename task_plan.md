@@ -322,11 +322,21 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    needed:** define the cost accounting unit/source for helper spawns (or explicitly define a
    non-monetary helper-count interpretation). Then implement the smallest matching enforcement and
    three ceiling-exceeded regressions.
-4. **[MEDIUM, test quality]** Mission persona overlay (plan/phase2.md "Ten-axis persona baseline")
-   has zero implementation — `mission-bundle.ts` only carries an opaque `profileRef: string`; no
-   derivation or mission-lifetime expiry exists to test (Phase 2 Tests #11's "expire correctly"
-   half is untestable as-is). Fix: implement a durable mission-persona-overlay derivation bound to
-   mission lifetime with explicit expiry, then test [0,1] bounds and post-mission unavailability.
+4. **[RESOLVED 2026-09-04, commit `b294a95` (merge of `06fab8d`)]** Mission persona overlay
+   (plan/phase2.md "Ten-axis persona baseline") previously had zero implementation. Fixed:
+   `packages/domain/src/mission-bundle.ts` adds `deriveMissionPersonaOverlay` (Department style +
+   Head choice ten-axis profiles averaged, then nudged per-axis by four [0,1] scalar factors —
+   taskAmbiguity, risk, collaborationDemand, evidenceBurden — every axis explicitly clamped to
+   [0,1] and re-validated); `packages/persistence/src/mission-bundle.ts` adds a durable
+   `mission_persona_overlays` table (migration `0050`, one row per Mission Bundle, append-only,
+   axis-bounds trigger) with idempotent issuance (identical-content retry returns the same row,
+   differing retry conflicts) and expiry-aware reads. Not wired into the real spawn call (out of
+   this item's stated scope, unlike item 2's capability threading). Verified with a real-artifact
+   [0,1]-bounds regression and a real "expires correctly once the mission lifetime bound has
+   passed" regression (previously untestable, Phase 2 Tests #11's other half). Independently
+   reviewed by the parent session directly, then merged to `main` and re-verified: full
+   real-PostgreSQL `npm run check` on `main`: 97/98 files, 672 passed, 2 intentional live-Prime
+   skips, 0 failed. Worktree/branch/container removed; pushed to `origin`.
 5. **[RESOLVED 2026-09-04, commit `9157324` / merge `acfb6c4`]** Head activation/sleep/resume
    (packages/persistence/src/head-participation.ts) now checks the pause/stop/emergency-stop control
    latch through the existing `assertGoalControlOpen` helper before a participation row is created or
@@ -462,8 +472,11 @@ concrete illustration each, plus two smaller cross-cutting gaps not previously c
 
 ### Status
 - [complete_pending_independent_review] Phase 1 remaining items 1-8 above: all 8 items resolved and accepted (see each item's own status line above for commit hashes). Self-plus-parent-reviewed only this session; a formal independent (no-edit) review of the full Phase 1 re-patch diff is the recommended next step before treating Phase 1 as re-accepted, per this project's own acceptance policy.
-- [in_progress] Phase 2 remaining items 1-9 above: items 1 (budget double-counting) and 2 (Mission
-  Bundle capability scoping to real spawn call) resolved and merged to `main`; items 3-9 not
+- [in_progress] Phase 2 remaining items 1-9 above: items 1 (budget double-counting), 2 (Mission
+  Bundle capability scoping to real spawn call), 4 (Mission persona overlay derivation/expiry),
+  5 (Head activation/sleep/resume control-latch), and 8 (fencing-token regression coverage)
+  resolved and merged to `main`. Item 3 (team-lead grant ceilings) is blocked pending a user
+  decision on cost-accounting source/unit (see item 3's own status line). Items 6, 7, 9 not
   started (feature-completeness item 1 above illustrates item 9's write-API gap concretely; fix
   together).
 - [not_started] Phase 3 remaining items 1-7 above.
