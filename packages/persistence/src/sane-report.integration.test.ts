@@ -120,7 +120,7 @@ describeDatabase("Sane final report with PostgreSQL", () => {
     await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
     await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product"));
     await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
-    return { goalId, council: resolved, worker, evidenceIds };
+    return { goalId, council: resolved, worker, evidenceIds, proof };
   }
 
   beforeAll(async () => {
@@ -131,8 +131,8 @@ describeDatabase("Sane final report with PostgreSQL", () => {
   afterAll(async () => { await pool.end(); });
 
   it("reports success with independent validation when the required certification passes cleanly, and blocks it once a challenge opens", async () => {
-    const { goalId, worker, evidenceIds } = await setupWorkerWithCommit();
-    await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
+    const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
+    await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     const report = await generateSaneFinalReport(pool, goalId);
     expect(report.success).toBe(true);
     expect(report.blockers).toHaveLength(0);
@@ -151,8 +151,8 @@ describeDatabase("Sane final report with PostgreSQL", () => {
   });
 
   it("reports failure and flags an awaiting critical action when a critical finding is unwaived", async () => {
-    const { goalId, worker, evidenceIds } = await setupWorkerWithCommit();
-    await certifyQuality(pool, worker.workerId, { verdict: "failed", findings: [{ findingId: "f1", severity: "critical", description: "security hole" }], testEvidenceIds: [] }, "quality", headContext("quality"));
+    const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
+    await certifyQuality(pool, worker.workerId, { verdict: "failed", findings: [{ findingId: "f1", severity: "critical", description: "security hole" }], testEvidenceIds: [] }, "quality", proof, headContext("quality"));
     const report = await generateSaneFinalReport(pool, goalId);
     expect(report.success).toBe(false);
     expect(report.criticalActionAwaitingApproval).toBe(true);
@@ -160,8 +160,8 @@ describeDatabase("Sane final report with PostgreSQL", () => {
   });
 
   it("includes real Git integration evidence in whatChanged and durably links a real evidence bundle", async () => {
-    const { goalId, worker, evidenceIds } = await setupWorkerWithCommit();
-    await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
+    const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
+    await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     const report = await generateSaneFinalReport(pool, goalId);
     expect(report.whatChanged).toContain("mission: implement");
     expect(report.evidenceBundleId).toBeTruthy();
@@ -172,7 +172,7 @@ describeDatabase("Sane final report with PostgreSQL", () => {
   });
 
   it("rejects the final report when a supplied content reader detects a corrupted evidence artifact hash (Phase 1 re-patch item 6)", async () => {
-    const { goalId, worker, evidenceIds } = await setupWorkerWithCommit();
+    const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
     const store = new FileEvidenceStore(await mkdtemp(join(tmpdir(), "maestro-sane-evidence-")));
     const captured = await store.capture({
       context: { correlationId: randomUUID(), commandId: randomUUID(), projectId: randomUUID(), goalId, actorId: "test" },
@@ -190,7 +190,7 @@ describeDatabase("Sane final report with PostgreSQL", () => {
     } finally {
       await pool.query("ALTER TABLE evidence_records ENABLE TRIGGER evidence_records_immutable");
     }
-    await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
+    await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
 
     // Genuinely matching content produces a report cleanly when a real reader is supplied.
     const report = await generateSaneFinalReport(pool, goalId, store);

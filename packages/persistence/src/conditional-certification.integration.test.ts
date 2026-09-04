@@ -117,7 +117,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
     await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
     await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product"));
     await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
-    return { goalId, council: resolved, worker, evidenceIds };
+    return { goalId, council: resolved, worker, evidenceIds, proof };
   }
 
   beforeAll(async () => {
@@ -128,9 +128,9 @@ describeDatabase("Department acceptance and independent Quality certification wi
   afterAll(async () => { await pool.end(); });
 
   it("lets an independent Department certify Security but rejects the producing Department certifying itself", async () => {
-    const { worker, evidenceIds } = await setupWorkerWithCommit();
-    await expect(certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "product", headContext("product"))).rejects.toBeInstanceOf(CertificationError);
-    const certified = await certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "security", headContext("security"));
+    const { worker, evidenceIds, proof } = await setupWorkerWithCommit();
+    await expect(certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "product", proof, headContext("product"))).rejects.toBeInstanceOf(CertificationError);
+    const certified = await certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "security", proof, headContext("security"));
     expect(certified.kind).toBe("security");
     expect(certified.certifiedByDepartment).toBe("security");
     const listed = await listConditionalCertifications(pool, certified.goalId, "security");
@@ -138,23 +138,23 @@ describeDatabase("Department acceptance and independent Quality certification wi
   });
 
   it("certifies Safety & Compliance independently of Security, both listed together", async () => {
-    const { goalId, worker, evidenceIds } = await setupWorkerWithCommit();
-    await certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "security", headContext("security"));
-    await certifyConditional(pool, "safety_compliance", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "safety-compliance", headContext("safety-compliance"));
+    const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
+    await certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "security", proof, headContext("security"));
+    await certifyConditional(pool, "safety_compliance", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "safety-compliance", proof, headContext("safety-compliance"));
     const all = await listConditionalCertifications(pool, goalId);
     expect(all).toHaveLength(2);
     expect(all.map((cert) => cert.kind).sort()).toEqual(["safety_compliance", "security"]);
   });
 
   it("rejects a passed certification with fabricated test evidence or an unauthorized certifier", async () => {
-    const { worker } = await setupWorkerWithCommit();
-    await expect(certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: ["fabricated"] }, "security", headContext("security"))).rejects.toThrow();
-    await expect(certifyConditional(pool, "security", worker.workerId, { verdict: "failed", findings: [], testEvidenceIds: [] }, "security", context("not-the-head"))).rejects.toBeInstanceOf(CertificationError);
+    const { worker, proof } = await setupWorkerWithCommit();
+    await expect(certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: ["fabricated"] }, "security", proof, headContext("security"))).rejects.toThrow();
+    await expect(certifyConditional(pool, "security", worker.workerId, { verdict: "failed", findings: [], testEvidenceIds: [] }, "security", proof, context("not-the-head"))).rejects.toBeInstanceOf(CertificationError);
   });
 
   it("rejects direct tampering with immutable conditional certification records", async () => {
-    const { worker, evidenceIds } = await setupWorkerWithCommit();
-    const certified = await certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "security", headContext("security"));
+    const { worker, evidenceIds, proof } = await setupWorkerWithCommit();
+    const certified = await certifyConditional(pool, "security", worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "security", proof, headContext("security"));
     await expect(pool.query("UPDATE conditional_certifications SET verdict = 'failed' WHERE certification_id = $1", [certified.certificationId])).rejects.toThrow();
   });
 });

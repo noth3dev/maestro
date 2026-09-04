@@ -18,6 +18,8 @@ import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, spawnWorker } from "./worker.js";
 import { recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
 import { acceptDepartmentWorkerOutput, CertificationError, certifyQuality, listQualityCertifications } from "./certification.js";
+import { StaleGoalLeaseError, type GoalLeaseProof } from "./commands.js";
+import { CouncilProtocolError } from "./council.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -139,10 +141,28 @@ describeDatabase("Department acceptance and independent Quality certification wi
     expect(replay).toEqual(accepted);
   });
 
+  // Phase 2 re-patch item 6: acceptDepartmentWorkerOutput was an unguarded
+  // check-then-insert race, saved only by the DB's UNIQUE (worker_id)
+  // constraint whose violation surfaced as a raw Postgres error instead of
+  // this codebase's usual idempotent-return pattern. Two genuinely concurrent
+  // callers for the same worker_id must both resolve successfully to the same
+  // logical (durable) row -- no raw DB error, no thrown unique-violation.
+  it("resolves two concurrent acceptDepartmentWorkerOutput calls for the same worker to the same durable row with no raw DB error", async () => {
+    const { worker } = await setupWorkerWithCommit();
+    const [first, second] = await Promise.all([
+      acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product")),
+      acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product")),
+    ]);
+    expect(first).toEqual(second);
+    const rows = await pool.query("SELECT acceptance_id FROM department_acceptances WHERE worker_id = $1", [worker.workerId]);
+    expect(rows.rowCount).toBe(1);
+    expect(rows.rows[0]!.acceptance_id).toBe(first.acceptanceId);
+  });
+
   it("lets an independent Department certify Quality but rejects the producing Department certifying itself", async () => {
-    const { worker, evidenceIds } = await setupWorkerWithCommit(true);
-    await expect(certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "product", headContext("product"))).rejects.toBeInstanceOf(CertificationError);
-    const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
+    const { worker, evidenceIds, proof } = await setupWorkerWithCommit(true);
+    await expect(certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "product", proof, headContext("product"))).rejects.toBeInstanceOf(CertificationError);
+    const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     expect(certified.certifiedByDepartment).toBe("quality");
     expect(certified.producingDepartment).toBe("product");
     const listed = await listQualityCertifications(pool, certified.goalId);
@@ -150,7 +170,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
   });
 
   it("rejects certification when a supplied content reader detects a cited evidence artifact's real bytes no longer match its durable metadata (Phase 1 re-patch item 6)", async () => {
-    const { worker, evidenceIds } = await setupWorkerWithCommit(true);
+    const { worker, evidenceIds, proof } = await setupWorkerWithCommit(true);
     const store = new FileEvidenceStore(await mkdtemp(join(tmpdir(), "maestro-cert-evidence-")));
     const captured = await store.capture({
       context: { correlationId: randomUUID(), commandId: randomUUID(), projectId: randomUUID(), goalId: randomUUID(), actorId: "test" },
@@ -166,7 +186,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
     }
 
     // With genuinely matching content, certification succeeds when a real reader is supplied.
-    const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"), store);
+    const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"), store);
     expect(certified.certifiedByDepartment).toBe("quality");
     const beforeCorruptionCount = (await listQualityCertifications(pool, certified.goalId)).length;
 
@@ -180,7 +200,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
     }
 
     await expect(
-      certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[1]!] }, "quality", headContext("quality"), store),
+      certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[1]!] }, "quality", proof, headContext("quality"), store),
     ).rejects.toBeInstanceOf(CertificationError);
     // No new certification row was written by the rejected attempt.
     expect((await listQualityCertifications(pool, certified.goalId)).length).toBe(beforeCorruptionCount);
@@ -188,13 +208,13 @@ describeDatabase("Department acceptance and independent Quality certification wi
     // Without a content reader, existing metadata-only-trust behavior is unchanged (documented,
     // not silently strengthened for callers that do not yet supply one).
     await expect(
-      certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[1]!] }, "quality", headContext("quality")),
+      certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[1]!] }, "quality", proof, headContext("quality")),
     ).resolves.toBeDefined();
   });
 
   it("binds the certification to the exact Task Contract identity and integrated commit", async () => {
-    const { worker, evidenceIds, council } = await setupWorkerWithCommit(true);
-    const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
+    const { worker, evidenceIds, council, proof } = await setupWorkerWithCommit(true);
+    const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     expect(certified.contractId).toBe(council.contractId);
     expect(certified.integratedCommitSha).toMatch(/^[0-9a-f]{40}$/);
   });
@@ -213,19 +233,49 @@ describeDatabase("Department acceptance and independent Quality certification wi
     const revision = await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
     expect(revision.commitSha).toBe(revisionHead);
     expect(revision.commitSha).not.toBe(workerCommit);
-    const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
+    const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     expect(certified.integratedCommitSha).toBe(revisionHead);
   });
 
   it("rejects a passed certification with fabricated test evidence or an unauthorized certifier", async () => {
-    const { worker } = await setupWorkerWithCommit(true);
-    await expect(certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: ["fabricated"] }, "quality", headContext("quality"))).rejects.toThrow();
-    await expect(certifyQuality(pool, worker.workerId, { verdict: "failed", findings: [], testEvidenceIds: [] }, "quality", context("not-the-head"))).rejects.toBeInstanceOf(CertificationError);
+    const { worker, proof } = await setupWorkerWithCommit(true);
+    await expect(certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: ["fabricated"] }, "quality", proof, headContext("quality"))).rejects.toThrow();
+    await expect(certifyQuality(pool, worker.workerId, { verdict: "failed", findings: [], testEvidenceIds: [] }, "quality", proof, context("not-the-head"))).rejects.toBeInstanceOf(CertificationError);
   });
 
   it("rejects direct tampering with immutable certification records", async () => {
-    const { worker, evidenceIds } = await setupWorkerWithCommit(true);
-    const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
+    const { worker, evidenceIds, proof } = await setupWorkerWithCommit(true);
+    const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     await expect(pool.query("UPDATE quality_certifications SET verdict = 'failed' WHERE certification_id = $1", [certified.certificationId])).rejects.toThrow();
+  });
+
+  // Phase 3 re-patch item 1 (certification.ts portion): certifyQuality previously
+  // performed zero goal_lease/fencing check and zero control-latch (pause/stop/
+  // emergency-stop) check. These three regressions prove the fix: a stale/forged
+  // lease is rejected, a paused/stopped/emergency-stopped Goal is rejected, and a
+  // genuine current lease on an open Goal still succeeds (the last case is already
+  // covered by every other test above, which all pass their real `proof`).
+  it("rejects certifyQuality with a stale/forged lease fencing token", async () => {
+    const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit(true);
+    const forged: GoalLeaseProof = { ...proof, fencingToken: String(BigInt(proof.fencingToken) + 1n) };
+    await expect(
+      certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", forged, headContext("quality")),
+    ).rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect(await listQualityCertifications(pool, goalId)).toEqual([]);
+  });
+
+  it.each([
+    ["paused", "INSERT INTO goal_controls (project_id, goal_id, pause_requested_at, paused_at) VALUES ($1, $2, clock_timestamp(), clock_timestamp()) ON CONFLICT (project_id, goal_id) DO UPDATE SET pause_requested_at = clock_timestamp(), paused_at = clock_timestamp()"],
+    ["stopping", "INSERT INTO goal_controls (project_id, goal_id, stopping_at) VALUES ($1, $2, clock_timestamp()) ON CONFLICT (project_id, goal_id) DO UPDATE SET stopping_at = clock_timestamp()"],
+    ["stopped", "INSERT INTO goal_controls (project_id, goal_id, stopping_at, stopped_at) VALUES ($1, $2, clock_timestamp(), clock_timestamp()) ON CONFLICT (project_id, goal_id) DO UPDATE SET stopping_at = clock_timestamp(), stopped_at = clock_timestamp()"],
+    ["emergency-stopped", "INSERT INTO goal_controls (project_id, goal_id, emergency_stopped_at) VALUES ($1, $2, clock_timestamp()) ON CONFLICT (project_id, goal_id) DO UPDATE SET emergency_stopped_at = clock_timestamp()"],
+  ])("rejects certifyQuality once the Goal is %s", async (_label, insertSql) => {
+    const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit(true);
+    const projectId = (await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId])).rows[0]!.project_id;
+    await pool.query(insertSql, [projectId, goalId]);
+    await expect(
+      certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality")),
+    ).rejects.toBeInstanceOf(CouncilProtocolError);
+    expect(await listQualityCertifications(pool, goalId)).toEqual([]);
   });
 });
