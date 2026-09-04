@@ -4,7 +4,7 @@ import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { taskContractContentHash, type DecisionPacket, type IndependentBrief, type TaskContractSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
-import { acquireGoalLease } from "./commands.js";
+import { acquireGoalLease, StaleGoalLeaseError } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
 import { BudgetReservationError, BudgetReservationNotFoundError, listBudgetForecasts, readBudgetReservation, recordBudgetForecast, reserveDepartmentBudget, reserveGoalBudget, reserveMissionBudget } from "./budget-reservation.js";
 
@@ -158,6 +158,28 @@ describeDatabase("Budget reservations with PostgreSQL", () => {
     await expect(reserveDepartmentBudget(pool, council.councilId, "engineering", 1_000, "unowned", proof, headContext("engineering"))).rejects.toBeInstanceOf(BudgetReservationError);
     const owned = await reserveDepartmentBudget(pool, council.councilId, "product", 1_000, "owned", proof, headContext("product"));
     expect(owned.departmentId).toBe("product");
+  });
+
+  it("rejects every budget write with a stale fencing token and leaves each reservation scope unchanged", async () => {
+    const { goalId, council, proof } = await setupResolvedCouncil();
+    const forgedProof = { goalId, ownerId: proof.ownerId, fencingToken: String(BigInt(proof.fencingToken) + 1n) };
+
+    await expect(reserveGoalBudget(pool, goalId, 100_000, "forged goal envelope", forgedProof, context("secretary")))
+      .rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect((await pool.query("SELECT count(*)::int AS count FROM budget_reservations WHERE goal_id = $1 AND scope = 'goal'", [goalId])).rows[0]!.count).toBe(0);
+    const goalReservation = await reserveGoalBudget(pool, goalId, 100_000, "real goal envelope", proof, context("secretary"));
+
+    await expect(reserveDepartmentBudget(pool, council.councilId, "product", 10_000, "forged department allocation", forgedProof, headContext("product")))
+      .rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect((await pool.query("SELECT count(*)::int AS count FROM budget_reservations WHERE goal_id = $1 AND scope = 'department'", [goalId])).rows[0]!.count).toBe(0);
+    const departmentReservation = await reserveDepartmentBudget(pool, council.councilId, "product", 10_000, "real department allocation", proof, headContext("product"));
+
+    await expect(reserveMissionBudget(pool, council.councilId, "product", 1, "mission-1", 1_000, "forged mission allocation", forgedProof, headContext("product")))
+      .rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect((await pool.query("SELECT count(*)::int AS count FROM budget_reservations WHERE goal_id = $1 AND scope = 'mission'", [goalId])).rows[0]!.count).toBe(0);
+    const missionReservation = await reserveMissionBudget(pool, council.councilId, "product", 1, "mission-1", 1_000, "real mission allocation", proof, headContext("product"));
+    expect(missionReservation.parentReservationId).toBe(departmentReservation.reservationId);
+    expect(departmentReservation.parentReservationId).toBe(goalReservation.reservationId);
   });
 
   it("throws BudgetReservationNotFoundError for a missing reservation", async () => {
