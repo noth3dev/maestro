@@ -8,6 +8,7 @@ import type {
   WorkerWorktree,
 } from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
+import { assertWorkspacePath } from "@maestro/git-adapter";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
 import { WorkerNotFoundError } from "./worker.js";
@@ -24,6 +25,7 @@ async function lockGoalLease(client: PoolClient, proof: GoalLeaseProof): Promise
 
 /** Creates the Goal integration branch through the real Git port and records it once, durably. Idempotent for an exact repeat of the same repository/branch/base. */
 export async function recordGoalIntegrationBranch(pool: Pool, git: GitPort, goalId: string, repositoryPath: string, branchName: string, baseRevision: string, proof: GoalLeaseProof): Promise<GoalIntegrationBranch> {
+  const canonicalRepositoryPath = assertWorkspacePath(repositoryPath, "repositoryPath");
   if (goalId !== proof.goalId || proof.goalId === "" || proof.ownerId === "" || !isValidFencingToken(proof.fencingToken)) throw new StaleGoalLeaseError(proof.goalId);
   const client = await pool.connect(); let open = false;
   try {
@@ -34,19 +36,19 @@ export async function recordGoalIntegrationBranch(pool: Pool, git: GitPort, goal
     );
     if ((existing.rowCount ?? 0) > 0) {
       const prior = existing.rows[0]!;
-      if (prior.repository_path === repositoryPath && prior.branch_name === branchName && prior.base_revision === baseRevision) {
+      if (prior.repository_path === canonicalRepositoryPath && prior.branch_name === branchName && prior.base_revision === baseRevision) {
         await client.query("COMMIT"); open = false;
-        return { goalId, repositoryPath, branchName, baseRevision };
+        return { goalId, repositoryPath: canonicalRepositoryPath, branchName, baseRevision };
       }
       throw new GitIntegrationError("A Goal integration branch already exists with different identity");
     }
-    await git.createBranch(repositoryPath, branchName, baseRevision);
+    await git.createBranch(canonicalRepositoryPath, branchName, baseRevision);
     await client.query(
       "INSERT INTO goal_integration_branches (goal_id, repository_path, branch_name, base_revision) VALUES ($1, $2, $3, $4)",
-      [goalId, repositoryPath, branchName, baseRevision],
+      [goalId, canonicalRepositoryPath, branchName, baseRevision],
     );
     await client.query("COMMIT"); open = false;
-    return { goalId, repositoryPath, branchName, baseRevision };
+    return { goalId, repositoryPath: canonicalRepositoryPath, branchName, baseRevision };
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 
@@ -67,7 +69,8 @@ export async function recordGoalIntegrationRevision(pool: Pool, git: GitPort, go
     );
     if (branch.rowCount !== 1) throw new GitIntegrationError("Goal integration branch must exist before freezing a revision");
     const branchIdentity = branch.rows[0]!;
-    const commitSha = (await git.headRevision(branchIdentity.repository_path, branchIdentity.branch_name)).trim();
+    const canonicalRepositoryPath = assertWorkspacePath(branchIdentity.repository_path, "repositoryPath");
+    const commitSha = (await git.headRevision(canonicalRepositoryPath, branchIdentity.branch_name)).trim();
     if (!/^[0-9a-f]{40}$/.test(commitSha)) throw new GitIntegrationError("Git returned an invalid Goal integration revision SHA");
     if (commitSha === branchIdentity.base_revision) throw new GitIntegrationError("Goal integration branch has no integrated commit to freeze");
     const accepted = await client.query<{ worker_id: string; commit_sha: string }>(
@@ -90,7 +93,7 @@ export async function recordGoalIntegrationRevision(pool: Pool, git: GitPort, go
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (goal_id, commit_sha) DO NOTHING
        RETURNING revision_id, revision_number, goal_id, repository_path, branch_name, base_revision, commit_sha`,
-      [randomUUID(), goalId, branchIdentity.repository_path, branchIdentity.branch_name, commitSha, branchIdentity.base_revision],
+      [randomUUID(), goalId, canonicalRepositoryPath, branchIdentity.branch_name, commitSha, branchIdentity.base_revision],
     );
     const revisionResult = inserted.rowCount === 1
       ? inserted
@@ -116,7 +119,7 @@ export async function recordGoalIntegrationRevision(pool: Pool, git: GitPort, go
       revisionId: revision.revision_id,
       revisionNumber: Number(revision.revision_number),
       goalId: revision.goal_id,
-      repositoryPath: revision.repository_path,
+      repositoryPath: canonicalRepositoryPath,
       branchName: revision.branch_name,
       baseRevision: revision.base_revision,
       commitSha: revision.commit_sha.trim(),
@@ -149,7 +152,8 @@ export async function recordDepartmentBranch(pool: Pool, git: GitPort, councilId
     }
     const goalBranch = await client.query<{ repository_path: string; branch_name: string }>("SELECT repository_path, branch_name FROM goal_integration_branches WHERE goal_id = $1 FOR KEY SHARE", [council.goalId]);
     if (goalBranch.rowCount !== 1) throw new GitIntegrationError("Goal integration branch must exist before a Department branch");
-    const { repository_path: repositoryPath, branch_name: baseBranchName } = goalBranch.rows[0]!;
+    const { repository_path: storedRepositoryPath, branch_name: baseBranchName } = goalBranch.rows[0]!;
+    const repositoryPath = assertWorkspacePath(storedRepositoryPath, "repositoryPath");
     const branchName = `department/${departmentId}`;
     const existing = await client.query<{ branch_name: string }>("SELECT branch_name FROM department_branches WHERE goal_id = $1 AND department_id = $2 FOR UPDATE", [council.goalId, departmentId]);
     if ((existing.rowCount ?? 0) > 0) {
@@ -168,6 +172,7 @@ export async function recordDepartmentBranch(pool: Pool, git: GitPort, councilId
 
 /** Creates a uniquely owned worktree and branch for one Execution worker, off its Department branch. */
 export async function recordWorkerWorktree(pool: Pool, git: GitPort, workerId: string, worktreePath: string, proof: GoalLeaseProof, context: CouncilActorContext): Promise<WorkerWorktree> {
+  const canonicalWorktreePath = assertWorkspacePath(worktreePath, "worktreePath");
   const client = await pool.connect(); let open = false;
   try {
     await client.query("BEGIN"); open = true;
@@ -185,22 +190,24 @@ export async function recordWorkerWorktree(pool: Pool, git: GitPort, workerId: s
     if (!authorized) throw new GitIntegrationError("Actor is not bound to the captured Head identity and session");
     const deptBranch = await client.query<{ repository_path: string; branch_name: string }>("SELECT repository_path, branch_name FROM department_branches WHERE goal_id = $1 AND department_id = $2 FOR KEY SHARE", [council.goalId, departmentId]);
     if (deptBranch.rowCount !== 1) throw new GitIntegrationError("Department branch must exist before a worker worktree");
-    const { repository_path: repositoryPath, branch_name: baseBranchName } = deptBranch.rows[0]!;
+    const { repository_path: storedRepositoryPath, branch_name: baseBranchName } = deptBranch.rows[0]!;
+    const repositoryPath = assertWorkspacePath(storedRepositoryPath, "repositoryPath");
     const existing = await client.query<{ worktree_path: string; branch_name: string }>("SELECT worktree_path, branch_name FROM worker_worktrees WHERE worker_id = $1 FOR UPDATE", [workerId]);
     if ((existing.rowCount ?? 0) > 0) {
       await client.query("COMMIT"); open = false;
       const row = existing.rows[0]!;
-      return { workerId, repositoryPath, worktreePath: row.worktree_path, branchName: row.branch_name, baseBranchName };
+      const storedWorktreePath = assertWorkspacePath(row.worktree_path, "worktreePath");
+      return { workerId, repositoryPath, worktreePath: storedWorktreePath, branchName: row.branch_name, baseBranchName };
     }
     const branchName = `worker/${workerId}`;
     await git.createBranch(repositoryPath, branchName, baseBranchName);
-    await git.createWorktree(repositoryPath, worktreePath, branchName);
+    await git.createWorktree(repositoryPath, canonicalWorktreePath, branchName);
     await client.query(
       "INSERT INTO worker_worktrees (worker_id, repository_path, worktree_path, branch_name, base_branch_name) VALUES ($1, $2, $3, $4, $5)",
-      [workerId, repositoryPath, worktreePath, branchName, baseBranchName],
+      [workerId, repositoryPath, canonicalWorktreePath, branchName, baseBranchName],
     );
     await client.query("COMMIT"); open = false;
-    return { workerId, repositoryPath, worktreePath, branchName, baseBranchName };
+    return { workerId, repositoryPath, worktreePath: canonicalWorktreePath, branchName, baseBranchName };
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 
