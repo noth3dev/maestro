@@ -1,9 +1,15 @@
 import { randomUUID } from "node:crypto";
 import {
   assertValidMissionBundleSubstance,
+  assertValidMissionPersonaOverlay,
+  deriveMissionPersonaOverlay,
+  isMissionPersonaOverlayExpired,
   missionBundleSubstanceContentHash,
+  PERSONA_AXES,
   type MissionBundle,
   type MissionBundleSubstance,
+  type MissionPersonaOverlay,
+  type MissionPersonaOverlayInputs,
 } from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
@@ -12,6 +18,8 @@ import { readDepartmentPlan } from "./department-plan.js";
 
 export class MissionBundleError extends Error {}
 export class MissionBundleNotFoundError extends MissionBundleError {}
+export class MissionPersonaOverlayNotFoundError extends MissionBundleError {}
+export class MissionPersonaOverlayExpiredError extends MissionBundleError {}
 
 export interface CreateMissionBundleRequest {
   readonly councilId: string;
@@ -119,4 +127,138 @@ export async function readMissionBundle(pool: Pool, councilId: string, departmen
 export async function listMissionBundlesForPlan(pool: Pool, councilId: string, departmentId: string, planVersion: number): Promise<readonly MissionBundle[]> {
   const result = await pool.query<MissionBundleRow>(bundleSelectSql() + " WHERE council_id = $1 AND department_id = $2 AND plan_version = $3 ORDER BY item_id", [councilId, departmentId, planVersion]);
   return result.rows.map(mapBundle);
+}
+
+export interface IssueMissionPersonaOverlayRequest {
+  readonly councilId: string;
+  readonly departmentId: string;
+  readonly planVersion: number;
+  readonly itemId: string;
+  readonly inputs: MissionPersonaOverlayInputs;
+  /** Explicit mission-lifetime bound: expiresAt = issuedAt + missionLifetimeMs. */
+  readonly missionLifetimeMs: number;
+}
+
+interface MissionPersonaOverlayRow {
+  council_id: string;
+  department_id: string;
+  plan_version: number;
+  item_id: string;
+  persona: unknown;
+  issued_at: Date | string;
+  expires_at: Date | string;
+}
+
+function mapPersonaOverlay(row: MissionPersonaOverlayRow): MissionPersonaOverlay {
+  const overlay = {
+    councilId: row.council_id,
+    departmentId: row.department_id,
+    planVersion: row.plan_version,
+    itemId: row.item_id,
+    persona: row.persona,
+    issuedAt: new Date(row.issued_at).toISOString(),
+    expiresAt: new Date(row.expires_at).toISOString(),
+  };
+  assertValidMissionPersonaOverlay(overlay);
+  return { ...overlay, persona: Object.freeze({ ...overlay.persona }) };
+}
+
+function personaOverlaySelectSql(): string {
+  return "SELECT council_id, department_id, plan_version, item_id, persona, issued_at, expires_at FROM mission_persona_overlays";
+}
+
+/**
+ * Derives and durably issues a Mission persona overlay for an existing
+ * Mission Bundle (identified the same way as `readMissionBundle`).
+ * Identical-content retry (same derived persona) is idempotent, matching
+ * this file's existing Mission Bundle pattern; a differing retry for the
+ * same bundle is a conflict.
+ */
+export async function issueMissionPersonaOverlay(pool: Pool, request: IssueMissionPersonaOverlayRequest): Promise<MissionPersonaOverlay> {
+  if (!Number.isSafeInteger(request.missionLifetimeMs) || request.missionLifetimeMs <= 0) {
+    throw new MissionBundleError("Mission persona overlay requires a positive whole-millisecond missionLifetimeMs");
+  }
+  const persona = deriveMissionPersonaOverlay(request.inputs);
+  const client = await pool.connect(); let open = false;
+  try {
+    await client.query("BEGIN"); open = true;
+    const bundle = await client.query(
+      "SELECT 1 FROM mission_bundles WHERE council_id = $1 AND department_id = $2 AND plan_version = $3 AND item_id = $4 FOR UPDATE",
+      [request.councilId, request.departmentId, request.planVersion, request.itemId],
+    );
+    if (bundle.rowCount !== 1) throw new MissionBundleNotFoundError(`Mission Bundle not found: ${request.councilId}/${request.departmentId}/${request.planVersion}/${request.itemId}`);
+    const existing = await client.query<MissionPersonaOverlayRow>(
+      personaOverlaySelectSql() + " WHERE council_id = $1 AND department_id = $2 AND plan_version = $3 AND item_id = $4 FOR UPDATE",
+      [request.councilId, request.departmentId, request.planVersion, request.itemId],
+    );
+    if ((existing.rowCount ?? 0) > 0) {
+      const prior = mapPersonaOverlay(existing.rows[0]!);
+      if (isMissionPersonaOverlayExpired(prior, new Date())) {
+        throw new MissionPersonaOverlayExpiredError(`Mission Persona Overlay expired: ${request.councilId}/${request.departmentId}/${request.planVersion}/${request.itemId}`);
+      }
+      // jsonb does not preserve key order, so compare axis-by-axis rather
+      // than relying on JSON.stringify's insertion-order-dependent output.
+      const samePersona = PERSONA_AXES.every((axis) => prior.persona[axis] === persona[axis]);
+      if (samePersona) { await client.query("COMMIT"); open = false; return prior; }
+      throw new MissionBundleError("A Mission Persona Overlay already exists for this bundle with different derived values");
+    }
+    const inserted = await client.query<MissionPersonaOverlayRow>(
+      `INSERT INTO mission_persona_overlays (council_id, department_id, plan_version, item_id, persona, expires_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, transaction_timestamp() + ($6::bigint * interval '1 millisecond'))
+       RETURNING council_id, department_id, plan_version, item_id, persona, issued_at, expires_at`,
+      [request.councilId, request.departmentId, request.planVersion, request.itemId, JSON.stringify(persona), request.missionLifetimeMs],
+    );
+    await client.query("COMMIT"); open = false;
+    return mapPersonaOverlay(inserted.rows[0]!);
+  } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+}
+
+async function readStoredMissionPersonaOverlay(pool: Pool, councilId: string, departmentId: string, planVersion: number, itemId: string): Promise<MissionPersonaOverlay> {
+  const result = await pool.query<MissionPersonaOverlayRow>(
+    personaOverlaySelectSql() + " WHERE council_id = $1 AND department_id = $2 AND plan_version = $3 AND item_id = $4",
+    [councilId, departmentId, planVersion, itemId],
+  );
+  if (result.rowCount !== 1) throw new MissionPersonaOverlayNotFoundError(`Mission Persona Overlay not found: ${councilId}/${departmentId}/${planVersion}/${itemId}`);
+  return mapPersonaOverlay(result.rows[0]!);
+}
+
+function assertMissionPersonaOverlayAvailable(
+  overlay: MissionPersonaOverlay,
+  councilId: string,
+  departmentId: string,
+  planVersion: number,
+  itemId: string,
+  now: Date,
+): MissionPersonaOverlay {
+  if (isMissionPersonaOverlayExpired(overlay, now)) {
+    throw new MissionPersonaOverlayExpiredError(`Mission Persona Overlay expired: ${councilId}/${departmentId}/${planVersion}/${itemId}`);
+  }
+  return overlay;
+}
+
+/** Reads the overlay only while its explicit mission-lifetime expiry is active. */
+export async function readMissionPersonaOverlay(
+  pool: Pool,
+  councilId: string,
+  departmentId: string,
+  planVersion: number,
+  itemId: string,
+  now: Date = new Date(),
+): Promise<MissionPersonaOverlay> {
+  return assertMissionPersonaOverlayAvailable(
+    await readStoredMissionPersonaOverlay(pool, councilId, departmentId, planVersion, itemId),
+    councilId, departmentId, planVersion, itemId, now,
+  );
+}
+
+/** Explicit alias for callers that want to state the active-lifetime requirement. */
+export async function readActiveMissionPersonaOverlay(
+  pool: Pool,
+  councilId: string,
+  departmentId: string,
+  planVersion: number,
+  itemId: string,
+  now: Date = new Date(),
+): Promise<MissionPersonaOverlay> {
+  return readMissionPersonaOverlay(pool, councilId, departmentId, planVersion, itemId, now);
 }
