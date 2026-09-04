@@ -176,6 +176,12 @@ node apps/cli/dist/main.js report get <goalId>
 
 ---
 
+## 기여 가이드 (Contributing)
+
+커뮤니티의 기여를 환영합니다! 개발 워크플로우, 아키텍처 가이드라인 및 제출 프로토콜에 대한 자세한 내용은 [기여 가이드](../../CONTRIBUTING.md)를 참조하세요.
+
+---
+
 ## 보안 정책 (Security Policy)
 
 취약점 공개, 격리 경계 및 의존성 보안 권고에 대한 자세한 내용은 [보안 정책](../../SECURITY.md)을 검토해 주세요.
