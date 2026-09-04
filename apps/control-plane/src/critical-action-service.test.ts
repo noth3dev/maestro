@@ -15,6 +15,14 @@ function fakeRepository(overrides: Partial<AuthorityRepository> = {}): Authority
 }
 
 describe("critical action service", () => {
+  it("requires a real Goal/project binding before evaluating an effect", async () => {
+    const effect = vi.fn(async () => {});
+    const binding = vi.fn(async () => { throw new Error("goal_project_mismatch"); });
+    const service = createCriticalActionService({ repository: fakeRepository(), effect, getControlEpoch: async () => "1", assertGoalProjectBinding: binding });
+    await expect(service.performCriticalAction(randomUUID(), { projectId: randomUUID(), action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0 }, randomUUID(), operator)).rejects.toThrow("goal_project_mismatch");
+    expect(effect).not.toHaveBeenCalled();
+  });
+
   it("evaluates git.remote.push as critical and requires approval without any bootstrapped approval, never invoking the effect", async () => {
     const effect = vi.fn(async () => {});
     const service = createCriticalActionService({

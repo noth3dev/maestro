@@ -10,6 +10,9 @@ import {
   ProjectMembershipRequiredError,
   revokeProjectMembership,
   assertProjectMembership,
+  assertProjectRole,
+  grantProjectRole,
+  ProjectRoleRequiredError,
 } from "./project-membership.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -38,6 +41,17 @@ describeDatabase("project membership (Phase 1 re-patch item 8)", () => {
     await expect(listProjectMemberships(pool, operatorId)).resolves.toEqual([projectId]);
     // A different project the operator was never granted is still rejected.
     await expect(assertProjectMembership(pool, operatorId, randomUUID())).rejects.toBeInstanceOf(ProjectMembershipRequiredError);
+  });
+
+  it("requires an active project role in addition to membership", async () => {
+    const { operatorId } = await bootstrapLocalOperator(pool, { secret: "role-bound" });
+    const projectId = randomUUID();
+    await grantProjectMembership(pool, operatorId, projectId);
+
+    await expect(assertProjectRole(pool, operatorId, projectId, "engineering")).rejects.toBeInstanceOf(ProjectRoleRequiredError);
+    await grantProjectRole(pool, operatorId, projectId, "engineering");
+    await expect(assertProjectRole(pool, operatorId, projectId, "engineering")).resolves.toBeUndefined();
+    await expect(assertProjectRole(pool, operatorId, projectId, "security")).rejects.toBeInstanceOf(ProjectRoleRequiredError);
   });
 
   it("granting an already-active membership again is an idempotent no-op", async () => {

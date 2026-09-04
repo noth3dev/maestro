@@ -11,7 +11,7 @@ import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubsta
 import {
   bootstrapPermanentOrganization,
   bootstrapLocalOperator,
-  grantProjectMembership,
+  grantProjectMembership, grantProjectRole,
   acquireGoalLease,
   createHeadCouncil,
   recordCouncilDecisionPacket,
@@ -163,7 +163,7 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
     const commitResult = await localGitPort.commit(worktreePath, "mission: implement", "worker", "worker@example.com");
     await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: implement", evidenceIds);
     await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
-    await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product"));
+    await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, proof, headContext("product"));
     await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
 
     // Real durable state for all four kinds Tests item 18 requires: a Metronome
@@ -181,9 +181,10 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
     const secret = "read-state-parity-test-secret";
     const { credentialId, operatorId } = await bootstrapLocalOperator(pool, { secret });
     await grantProjectMembership(pool, operatorId, projectId);
+    await grantProjectRole(pool, operatorId, projectId, "concertmaster");
     const bearerToken = `${credentialId}.${secret}`;
     const controlPlane = createControlPlane({
-      databaseUrl: databaseUrl!, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0,
+      databaseUrl: databaseUrl!, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0,
       primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `read-state-parity-${randomUUID()}`,
       reconcilerLeaseDurationMs: 30_000,
     });

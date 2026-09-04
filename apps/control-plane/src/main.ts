@@ -2,14 +2,23 @@ import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { AuthorizedEffectExecutor, type ActionRequest } from "@maestro/authority";
 import { createLocalGitPort } from "@maestro/git-adapter";
-import type { GitPort } from "@maestro/domain";
+import type { ExecutionKernelPort, GitPort } from "@maestro/domain";
 import { assertProjectMembership, authenticateLocalOperator, getGoalControl, listGoalEvents, PostgresAuthorityRepository, reconcileOnStartup, runMigrations } from "@maestro/persistence";
 import { createPrimeExecutionKernel } from "@maestro/prime-adapter";
 import { parseConfig, type MaestroConfig } from "./config.js";
-import { createCriticalActionService } from "./critical-action-service.js";
+import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
 import { createDurableGoalService } from "./goal-service.js";
 import { createReadStateService } from "./read-state-service.js";
 import { createDurableTaskContractService } from "./task-contract-service.js";
+import { createHeadParticipationService } from "./head-participation-service.js";
+import { createCouncilService } from "./council-service.js";
+import { createDepartmentPlanService } from "./department-plan-service.js";
+import { createMissionBundleService } from "./mission-bundle-service.js";
+import { createWorkerService } from "./worker-service.js";
+import { createGitIntegrationService } from "./git-integration-service.js";
+import { createCertificationService } from "./certification-service.js";
+import { createMetronomeService } from "./metronome-service.js";
+import { createEncoreService } from "./encore-service.js";
 import { buildServer, type OperatorAuthenticator } from "./server.js";
 
 export interface ControlPlane {
@@ -25,8 +34,12 @@ export interface ControlPlane {
 }
 
 export interface ControlPlaneOverrides {
-  /** Test-only injection point for the critical-action effect callback. Production defaults to a safe no-op. */
+  /** Test-only injection point for the critical-action effect callback. Production fails closed until a real adapter is configured. */
   criticalActionEffect?: (request: ActionRequest) => Promise<void>;
+  /** Test-only kernel injection; production uses the pinned Prime Agent kernel. */
+  executionKernel?: ExecutionKernelPort;
+  /** Test-only Git injection; production always uses the authority-backed local adapter. */
+  gitPort?: GitPort;
 }
 
 /** Compose the local Goal API and expose only authority-backed effect gateways. Credential setup remains a controlled persistence operation. */
@@ -41,6 +54,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   }
   const https = config.tls ? { cert: readFileSync(config.tls.certFile), key: readFileSync(config.tls.keyFile) } : undefined;
   const pool = new Pool({ connectionString: config.databaseUrl });
+  const executionKernel = overrides.executionKernel ?? createPrimeExecutionKernel();
   const goalService = createDurableGoalService({
     pool,
     actorId: config.actorId,
@@ -56,17 +70,51 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     ...(config.ceoOperatorId === undefined ? {} : { ceoOperatorId: config.ceoOperatorId }),
     repository: authorityRepository,
     getControlEpoch: async (projectId, goalId) => (await getGoalControl(pool, projectId, goalId)).controlEpoch,
-    // The gateway is the point of this endpoint; no real external effect is wired in Phase 1.
-    effect: overrides.criticalActionEffect ?? (async () => {}),
+    assertGoalProjectBinding: async (projectId, goalId) => {
+      const goal = await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId]);
+      if (goal.rowCount !== 1) throw new CriticalActionGoalNotFoundError();
+      if (goal.rows[0]!.project_id !== projectId) throw new CriticalActionProjectMismatchError();
+    },
+    // Do not claim an authorized effect when no concrete adapter is composed.
+    // A missing production adapter fails closed instead of returning allow for
+    // a no-op callback. Tests may inject a real observable effect.
+    effect: overrides.criticalActionEffect ?? (async () => { throw new Error("No critical-action effect adapter is configured"); }),
   });
+  const headParticipationService = createHeadParticipationService({
+    pool,
+    kernel: executionKernel,
+    withGoalLease: goalService.withGoalLease!,
+  });
+  const councilService = createCouncilService({ pool, withGoalLease: goalService.withGoalLease! });
+  const departmentPlanService = createDepartmentPlanService({ pool, withGoalLease: goalService.withGoalLease! });
+  const missionBundleService = createMissionBundleService({ pool, withGoalLease: goalService.withGoalLease! });
+  const workerService = createWorkerService({ pool, kernel: executionKernel, withGoalLease: goalService.withGoalLease! });
+  const gitIntegrationService = createGitIntegrationService({
+    pool, withGoalLease: goalService.withGoalLease!,
+    createGitPort: (context) => overrides.gitPort ?? createLocalGitPort({ authority: authorityExecutor, context, workspaceRoot: config.worktreeRoot }),
+    getControlEpoch: async (projectId, goalId) => (await getGoalControl(pool, projectId, goalId)).controlEpoch,
+  });
+  const certificationService = createCertificationService({ pool, withGoalLease: goalService.withGoalLease! });
+  const metronomeService = createMetronomeService({ pool, withGoalLease: goalService.withGoalLease! });
+  const encoreService = createEncoreService({ pool, kernel: executionKernel, withGoalLease: goalService.withGoalLease! });
   const app = buildServer({
     goalService,
+    headParticipationService,
+    councilService,
+    departmentPlanService,
+    missionBundleService,
+    workerService,
+    gitIntegrationService,
+    certificationService,
+    metronomeService,
+    encoreService,
     authenticator,
     eventService: { listEvents: (projectId, after) => listGoalEvents(pool, { projectId, after }) },
     criticalActionService,
     readStateService: createReadStateService(pool),
     taskContractService: createDurableTaskContractService(pool),
     projectMembership: { assertProjectMembership: (operatorId, projectId) => assertProjectMembership(pool, operatorId, projectId) },
+    readinessCheck: async () => { await pool.query("SELECT 1"); },
     ...(https ? { https } : {}),
   });
   let closed = false;
@@ -79,7 +127,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       return authorityExecutor;
     },
     createGitPort(context) {
-      return createLocalGitPort({ authority: authorityExecutor, context });
+      return createLocalGitPort({ authority: authorityExecutor, context, workspaceRoot: config.worktreeRoot });
     },
     async listen() {
       // The schema must be current before any reconciliation or traffic:
@@ -103,7 +151,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       await reconcileOnStartup(pool, {
         ownerId: config.leaseOwnerId,
         leaderLeaseDurationMs: config.reconcilerLeaseDurationMs,
-        kernel: createPrimeExecutionKernel(),
+        kernel: executionKernel,
       });
       await app.listen({ host: config.host, port: config.port });
     },
@@ -111,6 +159,9 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       if (closed) return;
       closed = true;
       try {
+        // Stop provider work before releasing the HTTP and database resources.
+        // This prevents shutdown from orphaning active Head/worker sessions.
+        await executionKernel.close?.();
         await app.close();
       } finally {
         await pool.end();

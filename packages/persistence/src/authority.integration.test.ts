@@ -23,13 +23,18 @@ const describeDatabase = databaseUrl ? describe : describe.skip;
 describeDatabase("durable authorized effects with PostgreSQL", () => {
   const pool = new Pool({ connectionString: databaseUrl });
   const repository = new PostgresAuthorityRepository(pool);
+  const authorityProjectId = "11111111-1111-4111-8111-111111111111";
+  const authorityGoalId = "22222222-2222-4222-8222-222222222222";
   const request = (): ActionRequest => ({
-    commandId: randomUUID(), projectId: randomUUID(), goalId: randomUUID(), actorId: "operator-1",
+    commandId: randomUUID(), projectId: authorityProjectId, goalId: authorityGoalId, actorId: "operator-1",
     action: "project.file.edit", target: "/workspace/file", policyVersion: 1, budgetEffectCents: 0, controlEpoch: "1",
   });
 
   beforeAll(async () => { await applyAllMigrations(pool); });
-  beforeEach(async () => { await pool.query("TRUNCATE authority_effect_claims, authority_decisions, authority_records, goal_controls CASCADE"); });
+  beforeEach(async () => {
+    await pool.query("TRUNCATE authority_effect_claims, authority_decisions, authority_records, goal_controls, goals CASCADE");
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [authorityGoalId, authorityProjectId]);
+  });
   afterAll(async () => { await pool.end(); });
 
   it("claims an allowed command only once and makes approval issuance idempotent", async () => {
@@ -57,6 +62,20 @@ describeDatabase("durable authorized effects with PostgreSQL", () => {
     await executor.execute(current, async () => { calls += 1; });
     expect(calls).toBe(1);
     expect((await pool.query("SELECT count(*)::int AS count FROM authority_effect_claims WHERE command_id = $1", [current.commandId])).rows[0]!.count).toBe(1);
+  });
+
+  it("permits one parent command to authorize distinct effect targets independently", async () => {
+    const parent = request();
+    const first = { ...parent, action: "git.local.branch.create", target: "refs/heads/integration" };
+    const second = { ...parent, action: "git.local.worktree.create", target: "/workspace/worktree" };
+    await bootstrapAuthorityRecord(pool, { ...first, recordId: randomUUID(), kind: "grant", commandId: null, expiresAt: new Date("2030-01-01T00:00:00Z") });
+    await bootstrapAuthorityRecord(pool, { ...second, recordId: randomUUID(), kind: "grant", commandId: null, expiresAt: new Date("2030-01-01T00:00:00Z") });
+    const executor = new AuthorizedEffectExecutor(repository, () => new Date("2029-01-01T00:00:00Z"));
+    let calls = 0;
+    await expect(executor.execute(first, async () => { calls += 1; })).resolves.toMatchObject({ effect: "allow" });
+    await expect(executor.execute(second, async () => { calls += 1; })).resolves.toMatchObject({ effect: "allow" });
+    expect(calls).toBe(2);
+    expect((await pool.query("SELECT count(*)::int AS count FROM authority_effect_claims WHERE command_id = $1", [parent.commandId])).rows[0]!.count).toBe(2);
   });
 
   it("records an allowed exact ordinary grant before one callback, then denies after final revocation", async () => {

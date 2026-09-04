@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { once } from "node:events";
 import { request as httpRequest, type IncomingMessage } from "node:http";
-import { buildServer, type EventService, type GoalService, type OperatorAuthenticator } from "./server.js";
+import { buildServer, type EventService, type GoalService, type OperatorAuthenticator, type HeadParticipationService, type CouncilService, type EncoreService } from "./server.js";
 import type { ReadStateService } from "./read-state-service.js";
-import { ProjectMembershipRequiredError } from "@maestro/persistence";
+import { ProjectMembershipRequiredError, StaleGoalLeaseError, HeadActivationRequesterInactiveError } from "@maestro/persistence";
 
 const goal = { goalId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02", projectId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01", state: "draft" as const, version: 1 };
 
@@ -31,6 +31,21 @@ function fakeService(overrides: Partial<GoalService> = {}): GoalService {
   };
 }
 
+describe("health routes", () => {
+  it("serves unauthenticated liveness and readiness checks", async () => {
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readinessCheck: async () => {} });
+    expect((await app.inject({ method: "GET", url: "/healthz" })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/readyz" })).statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("fails readiness when the configured dependency check fails", async () => {
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readinessCheck: async () => { throw new Error("database unavailable"); } });
+    expect((await app.inject({ method: "GET", url: "/readyz" })).statusCode).toBe(503);
+    await app.close();
+  });
+});
+
 describe("read state routes", () => {
   it("lists Goals and returns a project-bound budget summary", async () => {
     const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readStateService: state });
@@ -47,6 +62,76 @@ describe("read state routes", () => {
     expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/encore-council-rounds?projectId=${goal.projectId}`, headers })).json()).toEqual({ rounds: [] });
     expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/certifications?projectId=${goal.projectId}`, headers })).json()).toEqual({ certifications: [] });
     expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/concertmaster-report?projectId=${goal.projectId}`, headers })).statusCode).toBe(404);
+    await app.close();
+  });
+});
+
+describe("head participation routes", () => {
+  it("passes only validated project-bound activation input and the authenticated operator", async () => {
+    const participation = { goalId: goal.goalId, departmentId: "product", headRoleId: "head:product", contractId: null, contextId: null, status: "active" as const, activeSessionRef: "execution-1" };
+    const activate = vi.fn(async () => participation);
+    const headParticipationService: HeadParticipationService = { activate };
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), headParticipationService });
+    const input = {
+      projectId: goal.projectId, departmentId: "product", requestedContribution: "implement", urgency: "normal",
+      contextScope: ["contract"], budgetEffect: "none", reason: "goal launch",
+    };
+    const commandId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f0a";
+    const response = await app.inject({ method: "POST", url: `/v1/goals/${goal.goalId}/head-participations`, headers: { authorization: "Bearer test-secret", "idempotency-key": commandId }, payload: input });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(participation);
+    expect(activate).toHaveBeenCalledWith(goal.goalId, input, operator, commandId);
+    await app.close();
+  });
+});
+
+describe("Head Council routes", () => {
+  it("uses authenticated, idempotent command identities for council lifecycle writes", async () => {
+    const council = { councilId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f07", goalId: goal.goalId, contractId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f08", briefDeadline: "2030-01-01T00:00:00.000Z", state: "resolved" as const, noNewEvidenceStreak: 0, decisionPacket: null, snapshotHash: "a".repeat(64), snapshot: {} };
+    const create = vi.fn(async () => council);
+    const submitBrief = vi.fn(async () => {});
+    const reveal = vi.fn(async () => {});
+    const decide = vi.fn(async () => council);
+    const councils: CouncilService = { create, get: async () => council, submitBrief, reveal, decide };
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), councilService: councils });
+    const headers = { authorization: "Bearer test-secret", "content-type": "application/json" };
+    const commandId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f09";
+    const createInput = { projectId: goal.projectId, contractId: council.contractId, briefDeadline: council.briefDeadline, evidence: {} };
+    const created = await app.inject({ method: "POST", url: `/v1/goals/${goal.goalId}/councils`, headers: { ...headers, "idempotency-key": commandId }, payload: createInput });
+    expect(created.statusCode).toBe(201);
+    expect(create).toHaveBeenCalledWith(goal.goalId, createInput, commandId, operator);
+    const submitted = await app.inject({ method: "POST", url: `/v1/councils/${council.councilId}/briefs/product`, headers: { ...headers, "idempotency-key": commandId }, payload: { projectId: goal.projectId, brief: { interpretation: "safe", contribution: "review", nonGoals: [], assumptions: [], evidenceGaps: [], risks: [], dependencies: [], proposedValidation: [], expectedWorkers: [], expectedCost: "1", expectedTime: "1", objectionsToLikelyAlternatives: [] } } });
+    expect(submitted.statusCode).toBe(204);
+    expect(submitBrief).toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe("Encore and persistence error routes", () => {
+  it("forwards the idempotency key to Encore and maps stale durable leases", async () => {
+    const commandId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f0a";
+    const input = { projectId: goal.projectId, question: "should we proceed?", criteria: [{ criterionId: "safety", description: "preserve safety" }], evidenceIds: [], reviewerCount: 1 };
+    const result = { roundId: commandId, judgments: [{ modelProvider: "prime", modelId: "kimi", verdict: "proceed" as const, confidence: "high" as const, reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [] }], synthesis: { finalVerdict: "proceed" as const, sameModelOnly: true, escalated: false, dissentNotes: [] } };
+    const review = vi.fn(async (_goalId: string, _input: typeof input, receivedCommandId: string) => { expect(receivedCommandId).toBe(commandId); return result; });
+    const encore: EncoreService = { review };
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), encoreService: encore });
+    const response = await app.inject({ method: "POST", url: `/v1/goals/${goal.goalId}/encore/reviews`, headers: { authorization: "Bearer test-secret", "idempotency-key": commandId }, payload: input });
+    expect(response.statusCode).toBe(201);
+    expect(review).toHaveBeenCalledWith(goal.goalId, input, commandId);
+    await app.close();
+
+    const stale = buildServer({ goalService: fakeService(), authenticator: authenticated(), encoreService: { review: async () => { throw new StaleGoalLeaseError(goal.goalId); } } });
+    const staleResponse = await stale.inject({ method: "POST", url: `/v1/goals/${goal.goalId}/encore/reviews`, headers: { authorization: "Bearer test-secret", "idempotency-key": commandId }, payload: input });
+    expect(staleResponse.statusCode).toBe(409);
+    expect(staleResponse.json().error.code).toBe("stale_lease");
+    await stale.close();
+  });
+
+  it("maps an inactive Head requester to a stable conflict", async () => {
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), headParticipationService: { activate: async () => { throw new HeadActivationRequesterInactiveError(); } } });
+    const response = await app.inject({ method: "POST", url: `/v1/goals/${goal.goalId}/head-participations`, headers: { authorization: "Bearer test-secret", "idempotency-key": "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f0a" }, payload: { projectId: goal.projectId, departmentId: "product", requestedContribution: "implement", urgency: "normal", contextScope: ["goal"], budgetEffect: "none", reason: "launch" } });
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error.code).toBe("head_activation_conflict");
     await app.close();
   });
 });
@@ -341,6 +426,22 @@ describe("project-scoped authorization (Phase 1 re-patch item 8)", () => {
     expect(response.statusCode).toBe(403);
     expect(response.json()).toMatchObject({ error: { code: "project_access_forbidden" } });
     expect(goalService.createGoal).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("fails closed when query and body project bindings disagree", async () => {
+    const projectMembership = checker([goal.projectId]);
+    const createGoal = vi.fn(fakeService().createGoal);
+    const app = buildServer({ goalService: fakeService({ createGoal }), authenticator: authenticated(), projectMembership });
+    const otherProject = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f99";
+    const response = await app.inject({
+      method: "POST", url: `/v1/goals?projectId=${goal.projectId}`,
+      headers: { authorization: "Bearer test-secret", "idempotency-key": "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f09" },
+      payload: { projectId: otherProject },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(projectMembership.assertProjectMembership).not.toHaveBeenCalled();
+    expect(createGoal).not.toHaveBeenCalled();
     await app.close();
   });
 

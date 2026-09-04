@@ -120,7 +120,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
     await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: implement", evidenceIds);
     if (prepareCertification) {
       await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
-      await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product"));
+      await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, proof, headContext("product"));
       await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
     }
     return { goalId, council: resolved, worker, evidenceIds, proof };
@@ -134,10 +134,10 @@ describeDatabase("Department acceptance and independent Quality certification wi
   afterAll(async () => { await pool.end(); });
 
   it("lets the Executing Head accept its own worker output", async () => {
-    const { worker } = await setupWorkerWithCommit();
-    const accepted = await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product"));
+    const { worker, proof } = await setupWorkerWithCommit();
+    const accepted = await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, proof, headContext("product"));
     expect(accepted.workerId).toBe(worker.workerId);
-    const replay = await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product"));
+    const replay = await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, proof, headContext("product"));
     expect(replay).toEqual(accepted);
   });
 
@@ -148,10 +148,10 @@ describeDatabase("Department acceptance and independent Quality certification wi
   // callers for the same worker_id must both resolve successfully to the same
   // logical (durable) row -- no raw DB error, no thrown unique-violation.
   it("resolves two concurrent acceptDepartmentWorkerOutput calls for the same worker to the same durable row with no raw DB error", async () => {
-    const { worker } = await setupWorkerWithCommit();
+    const { worker, proof } = await setupWorkerWithCommit();
     const [first, second] = await Promise.all([
-      acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product")),
-      acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product")),
+      acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, proof, headContext("product")),
+      acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, proof, headContext("product")),
     ]);
     expect(first).toEqual(second);
     const rows = await pool.query("SELECT acceptance_id FROM department_acceptances WHERE worker_id = $1", [worker.workerId]);
@@ -167,6 +167,18 @@ describeDatabase("Department acceptance and independent Quality certification wi
     expect(certified.producingDepartment).toBe("product");
     const listed = await listQualityCertifications(pool, certified.goalId);
     expect(listed).toHaveLength(1);
+  });
+
+  it("replays a certification by command identity without creating a duplicate", async () => {
+    const { worker, evidenceIds, proof } = await setupWorkerWithCommit(true);
+    // setupWorkerWithCommit(true) already records the durable acceptance and frozen revision.
+
+    const certificationContext = headContext("quality");
+    const input = { verdict: "passed" as const, findings: [], testEvidenceIds: [evidenceIds[0]!] };
+    const first = await certifyQuality(pool, worker.workerId, input, "quality", proof, certificationContext);
+    const replay = await certifyQuality(pool, worker.workerId, input, "quality", proof, certificationContext);
+    expect(replay.certificationId).toBe(first.certificationId);
+    expect((await pool.query("SELECT count(*)::int AS count FROM quality_certifications WHERE worker_id = $1", [worker.workerId])).rows[0]!.count).toBe(1);
   });
 
   it("rejects certification when a supplied content reader detects a cited evidence artifact's real bytes no longer match its durable metadata (Phase 1 re-patch item 6)", async () => {
@@ -223,7 +235,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
     const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
     const workerCommit = (await pool.query<{ commit_sha: string }>("SELECT commit_sha FROM integration_commits WHERE worker_id = $1", [worker.workerId])).rows[0]!.commit_sha.trim();
     await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, workerCommit);
-    await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product"));
+    await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, proof, headContext("product"));
     const integrationWorktree = join(repositoryPath, "..", `maestro-cert-integration-${randomUUID()}`);
     worktreePaths.push(integrationWorktree);
     await localGitPort.createWorktree(repositoryPath, integrationWorktree, "goal/integration");

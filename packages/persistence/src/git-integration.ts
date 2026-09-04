@@ -147,6 +147,14 @@ export async function recordDepartmentBranch(pool: Pool, git: GitPort, councilId
       ? isAuthorizedHeadCouncilActor(context, captured)
       : context.actorId === captured.participantId && context.sessionRef === captured.sessionRef;
     if (!authorized) throw new GitIntegrationError("Actor is not bound to the captured Head identity and session");
+    const activeParticipation = await client.query(
+      `SELECT 1 FROM goal_head_participations
+        WHERE goal_id = $1 AND department_id = $2 AND contract_id = $3
+          AND head_role_id = $4 AND status = 'active' AND active_session_ref = $5
+        FOR SHARE`,
+      [council.goalId, departmentId, council.contractId, captured.headRoleId ?? captured.participantId, captured.sessionRef],
+    );
+    if (activeParticipation.rowCount !== 1) throw new GitIntegrationError("Captured Head session is no longer authorized for Git integration");
     if (council.state !== "resolved" || council.decisionPacket === null || !council.decisionPacket.departmentOwnership.some((ownership) => ownership.departmentId === departmentId)) {
       throw new GitIntegrationError("The Council decision must be resolved and assign ownership to this Department before it may create a Department branch");
     }
@@ -188,6 +196,14 @@ export async function recordWorkerWorktree(pool: Pool, git: GitPort, workerId: s
       ? isAuthorizedHeadCouncilActor(context, captured)
       : context.actorId === captured.participantId && context.sessionRef === captured.sessionRef;
     if (!authorized) throw new GitIntegrationError("Actor is not bound to the captured Head identity and session");
+    const activeParticipation = await client.query(
+      `SELECT 1 FROM goal_head_participations
+        WHERE goal_id = $1 AND department_id = $2 AND contract_id = $3
+          AND head_role_id = $4 AND status = 'active' AND active_session_ref = $5
+        FOR SHARE`,
+      [council.goalId, departmentId, council.contractId, captured.headRoleId ?? captured.participantId, captured.sessionRef],
+    );
+    if (activeParticipation.rowCount !== 1) throw new GitIntegrationError("Captured Head session is no longer authorized for Git integration");
     const deptBranch = await client.query<{ repository_path: string; branch_name: string }>("SELECT repository_path, branch_name FROM department_branches WHERE goal_id = $1 AND department_id = $2 FOR KEY SHARE", [council.goalId, departmentId]);
     if (deptBranch.rowCount !== 1) throw new GitIntegrationError("Department branch must exist before a worker worktree");
     const { repository_path: storedRepositoryPath, branch_name: baseBranchName } = deptBranch.rows[0]!;
@@ -197,6 +213,7 @@ export async function recordWorkerWorktree(pool: Pool, git: GitPort, workerId: s
       await client.query("COMMIT"); open = false;
       const row = existing.rows[0]!;
       const storedWorktreePath = assertWorkspacePath(row.worktree_path, "worktreePath");
+      if (storedWorktreePath !== canonicalWorktreePath) throw new GitIntegrationError("Worker worktree already exists at a different path");
       return { workerId, repositoryPath, worktreePath: storedWorktreePath, branchName: row.branch_name, baseBranchName };
     }
     const branchName = `worker/${workerId}`;

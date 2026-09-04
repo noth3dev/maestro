@@ -156,12 +156,29 @@ export async function createDepartmentPlan(pool: Pool, request: CreateDepartment
 export async function readDepartmentPlan(pool: Pool, councilId: string, departmentId: string): Promise<DepartmentPlan> {
   const result = await pool.query<DepartmentPlanRow>(planSelectSql() + " WHERE council_id = $1 AND department_id = $2", [councilId, departmentId]);
   if (result.rowCount !== 1) throw new DepartmentPlanNotFoundError(`Department Plan not found: ${councilId}/${departmentId}`);
-  return mapPlan(result.rows[0]!);
+  const row = result.rows[0]!;
+  let substance: DepartmentPlanSubstance;
+  try {
+    assertValidDepartmentPlanSubstance(row.substance);
+    substance = row.substance;
+  } catch {
+    throw new DepartmentPlanError("Stored Department Plan substance is invalid");
+  }
+  const expectedHash = departmentPlanSubstanceContentHash(substance);
+  if (row.content_hash.trim() !== expectedHash) throw new DepartmentPlanError("Stored Department Plan content hash is invalid");
+  const council = await readHeadCouncil(pool, councilId);
+  if (council.goalId !== row.goal_id || council.snapshot.projectId !== row.project_id || council.snapshotHash !== row.council_snapshot_hash.trim()) {
+    throw new DepartmentPlanError("Stored Department Plan Council binding is invalid");
+  }
+  if (council.decisionPacket === null || decisionPacketContentHash(council.decisionPacket) !== row.decision_packet_hash.trim()) {
+    throw new DepartmentPlanError("Stored Department Plan decision binding is invalid");
+  }
+  return mapPlan({ ...row, substance });
 }
 
 export async function listDepartmentPlansForCouncil(pool: Pool, councilId: string): Promise<readonly DepartmentPlan[]> {
-  const result = await pool.query<DepartmentPlanRow>(planSelectSql() + " WHERE council_id = $1 ORDER BY department_id", [councilId]);
-  return result.rows.map(mapPlan);
+  const result = await pool.query<{ department_id: string }>("SELECT department_id FROM department_plans WHERE council_id = $1 ORDER BY department_id", [councilId]);
+  return Promise.all(result.rows.map((row) => readDepartmentPlan(pool, councilId, row.department_id)));
 }
 
 /** Append-only version increment with an optimistic expected-version check; the Council/Contract binding never changes. */

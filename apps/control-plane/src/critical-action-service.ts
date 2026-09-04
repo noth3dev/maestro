@@ -32,6 +32,8 @@ export interface CriticalActionServiceDependencies {
   effect: (request: ActionRequest) => Promise<void>;
   /** Current durable Goal control epoch, read the same way the rest of the control plane reads it. */
   getControlEpoch: (projectId: string, goalId: string) => Promise<string>;
+  /** Production composition must verify the Goal exists and belongs to the stated project. */
+  assertGoalProjectBinding?: (projectId: string, goalId: string) => Promise<void>;
   clock?: () => Date;
 }
 
@@ -60,6 +62,12 @@ export class CriticalActionUnavailableError extends Error {
     this.name = new.target.name;
   }
 }
+export class CriticalActionGoalNotFoundError extends Error {
+  constructor() { super("Goal was not found"); this.name = new.target.name; }
+}
+export class CriticalActionProjectMismatchError extends Error {
+  constructor() { super("Critical action project does not match the Goal project"); this.name = new.target.name; }
+}
 
 /**
  * Builds the single Phase 1 critical-action call site on top of the pure
@@ -71,6 +79,7 @@ export function createCriticalActionService(deps: CriticalActionServiceDependenc
   const executor = new AuthorizedEffectExecutor(deps.repository, deps.clock);
   return {
     async performCriticalAction(goalId, input, commandId, operator) {
+      await deps.assertGoalProjectBinding?.(input.projectId, goalId);
       let controlEpoch: string;
       try {
         controlEpoch = await deps.getControlEpoch(input.projectId, goalId);
@@ -94,6 +103,7 @@ export function createCriticalActionService(deps: CriticalActionServiceDependenc
       if (deps.ceoOperatorId === undefined || operator.operatorId !== deps.ceoOperatorId) {
         throw new CriticalActionApprovalForbiddenError();
       }
+      await deps.assertGoalProjectBinding?.(input.projectId, goalId);
       const expiresAt = new Date(input.expiresAt);
       if (!Number.isFinite(expiresAt.getTime()) || expiresAt <= (deps.clock?.() ?? new Date())) {
         throw new CriticalActionApprovalExpiredError();

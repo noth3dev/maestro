@@ -16,6 +16,8 @@ export interface GoalService {
   createGoal(input: CreateGoalInput, commandId: string, operator: OperatorContext): Promise<GoalResult>;
   transitionGoal(goalId: string, input: TransitionGoalInput, commandId: string, operator: OperatorContext): Promise<GoalResult>;
   getGoal(goalId: string, projectId: string): Promise<GoalResult>;
+  /** Internal composition seam for other authenticated lifecycle commands. */
+  withGoalLease?<T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>): Promise<T>;
 }
 
 class GoalServiceError extends Error {
@@ -89,10 +91,13 @@ export function createDurableGoalService(options: DurableGoalServiceOptions): Go
 
   return {
     async createGoal(input, commandId, operator) {
-      return execute(commandId, { commandId, projectId: input.projectId, goalId: commandId, actorId: operator.operatorId, type: "CreateGoal", expectedVersion: 0, ...(input.contractId === undefined ? {} : { contractId: input.contractId }) });
+      return execute(commandId, { commandId, projectId: input.projectId, goalId: commandId, actorId: operator.operatorId, type: "CreateGoal", expectedVersion: 0, requiredRole: "concertmaster", ...(input.contractId === undefined ? {} : { contractId: input.contractId }) });
     },
     async transitionGoal(goalId, input, commandId, operator) {
-      return execute(goalId, { commandId, projectId: input.projectId, goalId, actorId: operator.operatorId, type: "TransitionGoal", expectedVersion: input.expectedVersion, to: input.to });
+      return execute(goalId, { commandId, projectId: input.projectId, goalId, actorId: operator.operatorId, type: "TransitionGoal", expectedVersion: input.expectedVersion, requiredRole: "concertmaster", to: input.to });
+    },
+    async withGoalLease(goalId, operation) {
+      return operation(await leaseFor(goalId));
     },
     async getGoal(goalId, projectId) {
       try {

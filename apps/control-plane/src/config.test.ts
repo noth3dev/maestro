@@ -4,6 +4,7 @@ import { parseConfig, redactConfig } from "./config.js";
 const required = {
   DATABASE_URL: "postgresql://localhost/maestro",
   MAESTRO_EVIDENCE_DIR: "/tmp/maestro-evidence",
+  MAESTRO_WORKTREE_ROOT: "/tmp/maestro-workspaces",
 };
 
 describe("parseConfig", () => {
@@ -11,6 +12,7 @@ describe("parseConfig", () => {
     expect(parseConfig(required)).toEqual({
       databaseUrl: required.DATABASE_URL,
       evidenceDir: required.MAESTRO_EVIDENCE_DIR,
+      worktreeRoot: required.MAESTRO_WORKTREE_ROOT,
       host: "127.0.0.1",
       port: 4310,
       primeAgentVersion: "0.8.0",
@@ -105,7 +107,7 @@ describe("parseConfig", () => {
     // never leak into the returned config, regardless of its value.
     expect(withCredentials).toEqual(withoutCredentials);
     expect(Object.keys(withCredentials).sort()).toEqual([
-      "actorId", "databaseUrl", "evidenceDir", "host", "leaseOwnerId", "port", "primeAgentVersion", "reconcilerLeaseDurationMs",
+      "actorId", "databaseUrl", "evidenceDir", "host", "leaseOwnerId", "port", "primeAgentVersion", "reconcilerLeaseDurationMs", "worktreeRoot",
     ]);
     const serialized = JSON.stringify(withCredentials);
     for (const secret of Object.values(providerCredentialMetronomes)) {

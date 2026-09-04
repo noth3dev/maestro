@@ -93,6 +93,21 @@ describeDatabase("Encore Council with PostgreSQL", () => {
     expect(models.rows).toEqual([{ model_provider: "prime", model_id: "kimi" }, { model_provider: "openai", model_id: "gpt" }]);
   });
 
+  it("replays a completed review by command identity without spawning reviewers again", async () => {
+    const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
+    const kernel = fakeKernelWithVerdicts([
+      { provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
+    ]);
+    const spawn = vi.spyOn(kernel, "spawn");
+    const commandId = randomUUID();
+    const request = { goalId, proof, commandId, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 1 };
+    const first = await runEncoreCouncilReview(pool, kernel, request);
+    const replay = await runEncoreCouncilReview(pool, kernel, request);
+    expect(replay.roundId).toBe(first.roundId);
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect((await pool.query("SELECT count(*)::int AS count FROM encore_council_rounds WHERE goal_id = $1", [goalId])).rows[0]!.count).toBe(1);
+  });
+
   it("escalates and preserves the dissent note when reviewers materially disagree", async () => {
     const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
     const kernel = fakeKernelWithVerdicts([

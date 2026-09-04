@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { applyAllMigrations, bootstrapLocalOperator, grantProjectMembership } from "@maestro/persistence";
+import { applyAllMigrations, bootstrapLocalOperator, grantProjectMembership, grantProjectRole } from "@maestro/persistence";
 import { createControlPlane } from "./main.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -31,7 +31,8 @@ describeDatabase("Task Contract control-plane API", () => {
     const projectId = randomUUID();
     const contractId = randomUUID();
     await grantProjectMembership(setupPool, operatorId, projectId);
-    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `task-contract-${randomUUID()}` });
+    await grantProjectRole(setupPool, operatorId, projectId, "concertmaster");
+    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `task-contract-${randomUUID()}` });
     try {
       await controlPlane.listen();
       const address = controlPlane.app.server.address();

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { GoalHeadParticipation, HeadParticipationStatus } from "@maestro/domain";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen } from "./council.js";
@@ -7,6 +7,8 @@ import type { Pool, PoolClient } from "pg";
 export interface ActivateHeadRequest {
   readonly goalId: string;
   readonly departmentId: string;
+  /** Stable API command identity used for replay-safe activation. */
+  readonly commandId?: string;
   /** Stable permanent Head identity. The database verifies it maps to departmentId. */
   readonly headRoleId?: string;
   /** The selected Task Contract, when one exists. No contract body is copied here. */
@@ -72,6 +74,17 @@ type ActivationBrief = {
   readonly budgetEffect: string;
 };
 
+function activationRequestHash(request: ActivateHeadRequest, targetHeadRoleId: string): string {
+  return createHash("sha256").update(JSON.stringify({
+    goalId: request.goalId, departmentId: request.departmentId, headRoleId: targetHeadRoleId,
+    contractId: request.contractId ?? null, contextId: request.contextId ?? null,
+    requestedContribution: request.requestedContribution, urgency: request.urgency,
+    contextScope: request.contextScope, budgetEffect: request.budgetEffect,
+    requester: request.requester ?? { role: "Concertmaster" }, reason: request.reason,
+    evidence: request.evidence ?? {},
+  })).digest("hex");
+}
+
 /**
  * Atomically reserves (or resumes) one Goal-scoped Head. This intentionally
  * performs no provider call: a separate caller may mark the reservation active.
@@ -107,6 +120,27 @@ export async function activateHeadParticipation(
     }
     if (requestedContractId !== undefined) await assertLaunchedContract(client, requestedContractId);
 
+    let commandStatus: "reserved" | "spawn_started" | "active" | undefined;
+    if (request.commandId !== undefined) {
+      const requestHash = activationRequestHash(request, targetHeadRoleId);
+      const insertedCommand = await client.query<{ status: "reserved" | "spawn_started" | "active" }>(
+        `INSERT INTO head_activation_commands (command_id, goal_id, department_id, request_hash, status)
+         VALUES ($1, $2, $3, $4, 'reserved') ON CONFLICT (command_id) DO NOTHING RETURNING status`,
+        [request.commandId, request.goalId, request.departmentId, requestHash],
+      );
+      if (insertedCommand.rowCount === 1) commandStatus = "reserved";
+      else {
+        const priorCommand = await client.query<{ goal_id: string; department_id: string; request_hash: string; status: "reserved" | "spawn_started" | "active" }>(
+          `SELECT goal_id, department_id, request_hash, status FROM head_activation_commands WHERE command_id = $1 FOR UPDATE`, [request.commandId],
+        );
+        const prior = priorCommand.rows[0];
+        if (prior === undefined || prior.goal_id !== request.goalId || prior.department_id !== request.departmentId || prior.request_hash.trim() !== requestHash) {
+          throw new HeadActivationBindingConflictError("Head activation command identity was reused with different content");
+        }
+        commandStatus = prior.status;
+      }
+    }
+
     const existing = await client.query<ParticipationRow>(
       `SELECT goal_id, department_id, head_role_id, contract_id, context_id, status, active_session_ref
        FROM goal_head_participations
@@ -122,6 +156,15 @@ export async function activateHeadParticipation(
       throw new HeadActivationBindingConflictError("A different HeadRoleId is already active for this Department and Goal");
     }
     const current = existing.rows.find((candidate) => candidate.head_role_id === targetHeadRoleId);
+    if (request.commandId !== undefined && current?.status === "starting") {
+      const inFlight = await client.query<{ command_id: string }>(
+        `SELECT command_id FROM head_activation_commands
+          WHERE goal_id = $1 AND department_id = $2 AND status IN ('reserved', 'spawn_started')
+            AND command_id <> $3 FOR UPDATE`,
+        [request.goalId, request.departmentId, request.commandId],
+      );
+      if (inFlight.rowCount !== 0) throw new HeadActivationBindingConflictError("Head activation is already in progress");
+    }
 
     const activeElsewhere = await client.query(
       `SELECT 1 FROM goal_head_participations
@@ -159,6 +202,9 @@ export async function activateHeadParticipation(
     if (current?.status === "active") {
       row = current;
       outcome = "already_active";
+    } else if (current && request.commandId !== undefined && commandStatus !== "reserved") {
+      row = current;
+      outcome = "reserved";
     } else if (current) {
       const updated = await client.query<ParticipationRow>(
         `UPDATE goal_head_participations
@@ -184,6 +230,12 @@ export async function activateHeadParticipation(
       outcome = "reserved";
     }
 
+    if (request.commandId !== undefined && row.status === "active") {
+      await client.query(
+        `UPDATE head_activation_commands SET status = 'active', active_session_ref = $2, updated_at = transaction_timestamp()
+          WHERE command_id = $1`, [request.commandId, row.active_session_ref],
+      );
+    }
     if (requester.role === "Head") {
       await client.query(
         `INSERT INTO head_activation_edges
@@ -201,6 +253,131 @@ export async function activateHeadParticipation(
   } finally { client.release(); }
 }
 
+/** Atomically claims the provider-spawn step for one activation command. */
+export async function markHeadActivationSpawnStarted(
+  pool: Pool,
+  goalId: string,
+  departmentId: string,
+  commandId: string,
+  proof: GoalLeaseProof,
+): Promise<boolean> {
+  if (goalId !== proof.goalId || !validProof(proof) || commandId.trim() === "") throw new StaleGoalLeaseError(goalId);
+  const client = await pool.connect(); let open = false;
+  try {
+    await client.query("BEGIN"); open = true;
+    await assertCurrentGoalLease(client, proof);
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 12))", [goalId]);
+    await assertGoalControlOpen(client, goalId);
+    const result = await client.query(
+      `UPDATE head_activation_commands
+          SET status = 'spawn_started', updated_at = transaction_timestamp()
+        WHERE command_id = $1 AND goal_id = $2 AND department_id = $3 AND status = 'reserved'`,
+      [commandId, goalId, departmentId],
+    );
+    await client.query("COMMIT"); open = false;
+    return result.rowCount === 1;
+  } catch (error) {
+    if (open) await client.query("ROLLBACK");
+    throw error;
+  } finally { client.release(); }
+}
+
+/**
+ * Binds provider identity independently of the lease. This is deliberately
+ * limited to the command's still-pending row: it closes the crash window
+ * between provider spawn and the fenced durable activation write.
+ */
+export async function bindHeadActivationInvocation(
+  pool: Pool,
+  goalId: string,
+  departmentId: string,
+  commandId: string,
+  executionRef: string,
+  invocationRef: string,
+): Promise<boolean> {
+  if ([goalId, departmentId, commandId, executionRef, invocationRef].some((value) => value.trim() === "")) return false;
+  const result = await pool.query(
+    `UPDATE head_activation_commands
+        SET provider_execution_ref = $4, provider_invocation_ref = $5, updated_at = transaction_timestamp()
+      WHERE command_id = $1 AND goal_id = $2 AND department_id = $3
+        AND status = 'spawn_started'
+        AND provider_execution_ref IS NULL AND provider_invocation_ref IS NULL`,
+    [commandId, goalId, departmentId, executionRef, invocationRef],
+  );
+  return result.rowCount === 1;
+}
+
+/** Reset only a spawn that is confirmed to have produced no provider session. */
+export async function resetHeadActivationAfterSpawnFailure(
+  pool: Pool,
+  goalId: string,
+  departmentId: string,
+  commandId: string,
+): Promise<boolean> {
+  const client = await pool.connect(); let open = false;
+  try {
+    await client.query("BEGIN"); open = true;
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 12))", [goalId]);
+    const command = await client.query(
+      `UPDATE head_activation_commands
+          SET status = 'reserved', provider_execution_ref = NULL, provider_invocation_ref = NULL,
+              active_session_ref = NULL, updated_at = transaction_timestamp()
+        WHERE command_id = $1 AND goal_id = $2 AND department_id = $3 AND status = 'spawn_started'
+          AND provider_execution_ref IS NULL AND provider_invocation_ref IS NULL`,
+      [commandId, goalId, departmentId],
+    );
+    if (command.rowCount !== 1) { await client.query("COMMIT"); open = false; return false; }
+    await client.query(
+      `UPDATE goal_head_participations SET status = 'sleeping', active_session_ref = NULL, updated_at = transaction_timestamp()
+        WHERE goal_id = $1 AND department_id = $2 AND status = 'starting'`, [goalId, departmentId],
+    );
+    await client.query("COMMIT"); open = false; return true;
+  } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+}
+
+/** Reopens a provider-backed reservation only after cancellation was confirmed. */
+export async function resetHeadActivationAfterCancellation(
+  pool: Pool,
+  goalId: string,
+  departmentId: string,
+  commandId: string,
+): Promise<boolean> {
+  const client = await pool.connect(); let open = false;
+  try {
+    await client.query("BEGIN"); open = true;
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 12))", [goalId]);
+    const command = await client.query(
+      `UPDATE head_activation_commands
+          SET status = 'reserved', provider_execution_ref = NULL, provider_invocation_ref = NULL,
+              active_session_ref = NULL, updated_at = transaction_timestamp()
+        WHERE command_id = $1 AND goal_id = $2 AND department_id = $3
+          AND status IN ('spawn_started', 'orphaned')`,
+      [commandId, goalId, departmentId],
+    );
+    if (command.rowCount !== 1) { await client.query("COMMIT"); open = false; return false; }
+    await client.query(
+      `UPDATE goal_head_participations SET status = 'sleeping', active_session_ref = NULL, updated_at = transaction_timestamp()
+        WHERE goal_id = $1 AND department_id = $2 AND status IN ('starting', 'active')`, [goalId, departmentId],
+    );
+    await client.query("COMMIT"); open = false; return true;
+  } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+}
+
+/** Mark a provider-backed activation as orphaned when cancellation is not confirmed. */
+export async function markHeadActivationOrphaned(
+  pool: Pool,
+  goalId: string,
+  departmentId: string,
+  commandId: string,
+): Promise<boolean> {
+  const result = await pool.query(
+    `UPDATE head_activation_commands SET status = 'orphaned', updated_at = transaction_timestamp()
+      WHERE command_id = $1 AND goal_id = $2 AND department_id = $3 AND status = 'spawn_started'`,
+    [commandId, goalId, departmentId],
+  );
+  return result.rowCount === 1;
+}
+
 export async function markHeadParticipationActive(
   pool: Pool,
   goalId: string,
@@ -208,6 +385,7 @@ export async function markHeadParticipationActive(
   activeSessionRef: string,
   proof: GoalLeaseProof,
   headRoleId?: string,
+  commandId?: string,
 ): Promise<GoalHeadParticipation> {
   if (goalId !== proof.goalId || !validProof(proof) || activeSessionRef.trim() === "") {
     throw new StaleGoalLeaseError(goalId);
@@ -222,6 +400,7 @@ export async function markHeadParticipationActive(
     "starting",
     headRoleId,
     activeSessionRef,
+    commandId,
   );
 }
 
@@ -255,6 +434,7 @@ async function mutateParticipation(
   expected: HeadParticipationStatus,
   requestedHeadRoleId?: string,
   requestedSessionRef?: string,
+  activationCommandId?: string,
 ): Promise<GoalHeadParticipation> {
   if (requestedHeadRoleId !== undefined && requestedHeadRoleId.trim() === "") {
     throw new HeadActivationBindingConflictError("headRoleId must be a non-empty string");
@@ -313,6 +493,14 @@ async function mutateParticipation(
       values,
     );
     if (result.rowCount !== 1) throw new Error(`Head participation is not ${expected}`);
+    if (activationCommandId !== undefined) {
+      await client.query(
+        `UPDATE head_activation_commands
+            SET status = 'active', active_session_ref = $2, updated_at = transaction_timestamp()
+          WHERE command_id = $1 AND goal_id = $3 AND department_id = $4 AND status = 'spawn_started'`,
+        [activationCommandId, requestedSessionRef, goalId, departmentId],
+      );
+    }
     await client.query("COMMIT"); open = false; return mapParticipation(result.rows[0]!);
   } catch (error) {
     if (open) await client.query("ROLLBACK");

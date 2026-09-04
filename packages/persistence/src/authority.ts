@@ -110,7 +110,7 @@ export class PostgresAuthorityRepository implements AuthorityRepository {
       `INSERT INTO authority_effect_claims
        (command_id, project_id, goal_id, actor_id, action, target, policy_version, budget_effect_cents)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT (command_id) DO NOTHING`,
+       ON CONFLICT (command_id, action, target) DO NOTHING`,
       [request.commandId, request.projectId, request.goalId, request.actorId, request.action, request.target,
         request.policyVersion, String(request.budgetEffectCents)],
     );
@@ -118,9 +118,17 @@ export class PostgresAuthorityRepository implements AuthorityRepository {
   }
 
   async recheckControl(request: ActionRequest): Promise<ControlRecheck> {
-    // A Goal with no explicit control action yet is implicitly open at epoch 1,
-    // matching getGoalControl's lazily created default. Ensure that row exists
-    // so comparison below is against durable truth rather than an absent row.
+    // Never create authority state for a forged Goal identity. The Goal
+    // projection is the source of truth for project binding and lifecycle.
+    const goal = await this.pool.query<{ state: string }>(
+      "SELECT state FROM goals WHERE goal_id = $1 AND project_id = $2",
+      [request.goalId, request.projectId],
+    );
+    if (goal.rowCount !== 1) return { effect: "deny", reason: "goal_not_found" };
+    if (!["launched", "active", "pausing", "resuming", "certifying"].includes(goal.rows[0]!.state)) {
+      return { effect: "deny", reason: "goal_not_executable" };
+    }
+    // A Goal with no explicit control action yet is implicitly open at epoch 1.
     await this.pool.query(
       `INSERT INTO goal_controls (project_id, goal_id) VALUES ($1, $2)
        ON CONFLICT (project_id, goal_id) DO NOTHING`,

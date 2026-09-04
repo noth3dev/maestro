@@ -20,6 +20,8 @@ export class EncoreCouncilError extends Error {}
 export interface EncoreCouncilRoundRequest {
   readonly goalId: string;
   readonly proof: GoalLeaseProof;
+  /** Stable API idempotency identity; omitted for internal legacy callers. */
+  readonly commandId?: string;
   readonly question: string;
   readonly criteria: readonly { readonly criterionId: string; readonly description: string }[];
   readonly evidenceIds: readonly string[];
@@ -111,6 +113,63 @@ function parseJudgmentOutput(rawText: string): RawJudgmentOutput {
  * answers" is enforced by construction: no judgment row exists in the
  * database until every reviewer's answer has already been produced.
  */
+type StoredEncoreResult = EncoreCouncilResult & {
+  goalId: string;
+  question: string;
+  criteria: readonly { readonly criterionId: string; readonly description: string }[];
+  evidenceIds: readonly string[];
+  reviewerCount: number;
+};
+
+async function readEncoreResult(client: Pick<PoolClient, "query">, roundId: string): Promise<StoredEncoreResult | undefined> {
+  const round = await client.query<{
+    round_id: string;
+    goal_id: string;
+    question: string;
+    criteria: { criterionId: string; description: string }[];
+    evidence_ids: string[];
+    reviewer_count: number;
+    final_verdict: EncoreVerdict;
+    same_model_only: boolean;
+    escalated: boolean;
+    dissent_notes: string[];
+  }>(
+    `SELECT r.round_id, r.goal_id, r.question, r.criteria, r.evidence_ids, r.reviewer_count,
+            s.final_verdict, s.same_model_only, s.escalated, s.dissent_notes
+       FROM encore_council_rounds r
+       JOIN encore_council_syntheses s ON s.round_id = r.round_id
+      WHERE r.round_id = $1`,
+    [roundId],
+  );
+  if (round.rowCount !== 1) return undefined;
+  const row = round.rows[0]!;
+  const judgments = await client.query<{
+    model_provider: string; model_id: string; verdict: EncoreVerdict; confidence: "low" | "medium" | "high";
+    reasoning: string; conditions: string[]; dissent_note: string | null; cited_evidence_ids: string[];
+  }>(
+    `SELECT model_provider, model_id, verdict, confidence, reasoning, conditions, dissent_note, cited_evidence_ids
+       FROM encore_council_judgments WHERE round_id = $1 ORDER BY reviewer_index`,
+    [roundId],
+  );
+  return {
+    roundId: row.round_id,
+    goalId: row.goal_id,
+    judgments: judgments.rows.map((judgment) => ({
+      modelProvider: judgment.model_provider, modelId: judgment.model_id, verdict: judgment.verdict,
+      confidence: judgment.confidence, reasoning: judgment.reasoning, conditions: judgment.conditions,
+      dissentNote: judgment.dissent_note, citedEvidenceIds: judgment.cited_evidence_ids,
+    })),
+    synthesis: {
+      finalVerdict: row.final_verdict, sameModelOnly: row.same_model_only,
+      escalated: row.escalated, dissentNotes: row.dissent_notes,
+    },
+    question: row.question,
+    criteria: row.criteria,
+    evidenceIds: row.evidence_ids,
+    reviewerCount: row.reviewer_count,
+  };
+}
+
 export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernelPort, request: EncoreCouncilRoundRequest): Promise<EncoreCouncilResult> {
   if (request.reviewerCount < 1) throw new EncoreCouncilError("Encore Council review requires at least one reviewer");
   const spawnedReviewers: { execution: unknown; invocation: unknown }[] = [];
@@ -118,6 +177,17 @@ export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernel
     const result = await withGoalAuthority(pool, request.proof, 43, async (client) => {
       const goal = await client.query("SELECT 1 FROM goals WHERE goal_id = $1", [request.goalId]);
       if (goal.rowCount !== 1) throw new EncoreCouncilError("Goal not found for Encore Council review");
+      const roundId = request.commandId ?? randomUUID();
+      if (request.commandId !== undefined) {
+        const prior = await readEncoreResult(client, roundId);
+        if (prior !== undefined) {
+          const sameRequest = prior.goalId === request.goalId && prior.question === request.question &&
+            prior.reviewerCount === request.reviewerCount && JSON.stringify(prior.criteria) === JSON.stringify(request.criteria) &&
+            JSON.stringify(prior.evidenceIds) === JSON.stringify(request.evidenceIds);
+          if (!sameRequest) throw new EncoreCouncilError("Encore command identity was reused with different review content");
+          return { roundId: prior.roundId, judgments: prior.judgments, synthesis: prior.synthesis };
+        }
+      }
       const project = await client.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [request.goalId]);
       const durable = await client.query<{ evidence_id: string; sha256: string }>("SELECT evidence_id, sha256 FROM evidence_records WHERE goal_id = $1 AND project_id = $2", [request.goalId, project.rows[0]!.project_id]);
       const durableIds = new Set(durable.rows.flatMap((row) => [row.evidence_id.trim(), row.sha256.trim()]));
@@ -175,7 +245,6 @@ export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernel
       }
 
       const synthesis = synthesizeEncoreJudgments(judgments);
-      const roundId = randomUUID();
       await client.query(
         `INSERT INTO encore_council_rounds (round_id, goal_id, question, criteria, evidence_ids, trigger_reasons, reviewer_count)
          VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7)`,
@@ -194,7 +263,11 @@ export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernel
          VALUES ($1, $2, $3, $4, $5::jsonb)`,
         [roundId, synthesis.finalVerdict, synthesis.sameModelOnly, synthesis.escalated, JSON.stringify(synthesis.dissentNotes)],
       );
-      return { roundId, judgments, synthesis };
+      return {
+        roundId,
+        judgments: judgments.map(({ executionRef: _executionRef, invocationRef: _invocationRef, ...judgment }) => judgment),
+        synthesis,
+      };
     });
     // Release only after the authorized transaction commits; a failed
     // transaction keeps reviewer state available for reconciliation.
