@@ -136,12 +136,12 @@ describe("browser environment adapter", () => {
 
   it("denies a browser provider that is absent from the capability manifest before authority or driver", async () => {
     const driver: BrowserDriver = { newPage: vi.fn() };
-    const { authority } = permissiveAuthority();
+    const { authority, calls } = permissiveAuthority();
     const environment = makeEnvironment({ capabilities: [] });
     const adapter = createBrowserEnvironmentAdapter(environment, authority, { driver });
 
     await expect(adapter.start(command())).rejects.toBeInstanceOf(EnvironmentBoundaryError);
-    expect(authority.execute).not.toHaveBeenCalled();
+    expect(calls).toEqual([]);
     expect(driver.newPage).not.toHaveBeenCalled();
   });
 
