@@ -8,8 +8,8 @@
 Maestro: 다채로운 작업을 위한 자가 개선 및 내구성 있는 에이전트 오케스트레이션
 </h3>
 <p align="center">
-  <a href="../en/README.md"><b>Documentation (EN)</b></a> &bull;
-  <a href="README.md"><b>문서 (한국어)</b></a> &bull;
+  <a href="README.md"><b>한국어 (ko)</b></a> &bull;
+  <a href="../en/README.md"><b>English (en)</b></a> &bull;
   <a href="01-system-overview.md"><b>아키텍처</b></a> &bull;
   <a href="02-hierarchical-orchestration.md"><b>계층 구조</b></a> &bull;
   <a href="04-security-and-authority-model.md"><b>보안 모델</b></a> &bull;
@@ -24,6 +24,8 @@ Maestro: 다채로운 작업을 위한 자가 개선 및 내구성 있는 에이
 </p>
 
 ---
+
+> **언어 선택:** [**한국어 (ko)**](README.md) | [**English (en)**](../en/README.md)
 
 Maestro는 신뢰할 수 있고 장시간 실행되는 다중 에이전트 목표 실행을 위해 설계된 오픈 소스 엔터프라이즈 AI 오케스트레이션 프레임워크입니다. **Prime Agent SDK**를 기반으로 구축된 Maestro는 실제 인간 조직 구조를 모델링하며, 권력 분립, 영구 도메인 부서, 단조 펜싱 리스, 암호화적 감사 가능성을 결합하여 승인되지 않은 부작용(Side Effect)이 발생하지 않도록 보장합니다.
 
@@ -156,21 +158,21 @@ node apps/cli/dist/main.js report get <goalId>
 
 ## 문서 목차 (Documentation Index)
 
-모든 세부 문서는 **한국어** 및 **English**로 제공됩니다:
+모든 세부 문서는 **한국어 (ko)** 및 **English (en)**로 제공됩니다:
 
-- **[문서 목차 (한국어)](README.md)** &bull; **[Documentation Index (EN)](../en/README.md)**
+- **[문서 목차 (ko)](README.md)** &bull; **[Documentation Index (en)](../en/README.md)**
 - **시스템 개요 (System Overview)** — 아키텍처 철학, 설계 원칙, 증거 기반 자가 개선 및 모노레포 구조.
-  - [한국어](01-system-overview.md) | [English](../en/01-system-overview.md)
+  - [한국어 (ko)](01-system-overview.md) | [English (en)](../en/01-system-overview.md)
 - **계층형 오케스트레이션 (Hierarchical Orchestration)** — 엔드투엔드 실행 흐름, 부서, 페르소나, 봉인된 의견서 및 인증.
-  - [한국어](02-hierarchical-orchestration.md) | [English](../en/02-hierarchical-orchestration.md)
+  - [한국어 (ko)](02-hierarchical-orchestration.md) | [English (en)](../en/02-hierarchical-orchestration.md)
 - **내구성 제어 평면 (Durable Control Plane)** — PostgreSQL 17 이벤트 소싱, 단조 리스, 펜싱 토큰 및 장애 복구.
-  - [한국어](03-durable-control-plane.md) | [English](../en/03-durable-control-plane.md)
+  - [한국어 (ko)](03-durable-control-plane.md) | [English (en)](../en/03-durable-control-plane.md)
 - **보안 및 권한 모델 (Security & Authority Model)** — 액션 분류, `AuthorizedEffectExecutor` 및 봉인 제출 스냅샷.
-  - [한국어](04-security-and-authority-model.md) | [English](../en/04-security-and-authority-model.md)
+  - [한국어 (ko)](04-security-and-authority-model.md) | [English (en)](../en/04-security-and-authority-model.md)
 - **단계별 로드맵 및 구현 현황 (Roadmap & Phase Status)** — 마일스톤 단계(Phase 1–8), 사용성 게이트 및 **Luthiery** 동적 MCP 확장.
-  - [한국어](05-roadmap-and-phase-status.md) | [English](../en/05-roadmap-and-phase-status.md)
+  - [한국어 (ko)](05-roadmap-and-phase-status.md) | [English (en)](../en/05-roadmap-and-phase-status.md)
 - **개발자 및 운영 가이드 (Developer & Operations Guide)** — 워크스페이스 패키지 레이아웃, 빌드/테스트 스크립트 및 운영 프로토콜 가이드라인.
-  - [한국어](06-developer-and-operations-guide.md) | [English](../en/06-developer-and-operations-guide.md)
+  - [한국어 (ko)](06-developer-and-operations-guide.md) | [English (en)](../en/06-developer-and-operations-guide.md)
 
 ---
 
