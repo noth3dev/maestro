@@ -50,6 +50,7 @@ import {
   type MetronomeChallengeList, type EncoreCouncilRoundList, type CertificationList, type ConcertmasterFinalReport,
   StableApiErrorSchema,
   TransitionGoalInputSchema,
+  GoalControlInputSchema,
   UuidSchema,
   type CreateGoalInput,
   type CreateTaskContractInput,
@@ -101,6 +102,7 @@ import {
   type EncoreCouncilResult,
   type StableApiError,
   type TransitionGoalInput,
+  type GoalControlInput,
 } from "@maestro/contracts";
 
 export class ApiError extends Error {
@@ -126,6 +128,10 @@ export interface ApiClient {
   listGoals(projectId: string): Promise<GoalList>;
   getGoal(goalId: string, query: GoalQuery): Promise<GoalResult>;
   transitionGoal(goalId: string, input: TransitionGoalInput, commandId: string): Promise<GoalResult>;
+  pauseGoal(goalId: string, input: GoalControlInput, commandId: string): Promise<GoalResult>;
+  stopGoal(goalId: string, input: GoalControlInput, commandId: string): Promise<GoalResult>;
+  resumeGoal(goalId: string, input: GoalControlInput, commandId: string): Promise<GoalResult>;
+  emergencyStopGoal(goalId: string, input: GoalControlInput, commandId: string): Promise<GoalResult>;
   approveAndRunCriticalAction(goalId: string, input: CriticalActionApprovalInput, commandId: string): Promise<CriticalActionResult>;
   activateHead(goalId: string, input: HeadParticipationInput, commandId: string): Promise<HeadParticipation>;
   createCouncil(goalId: string, input: CreateHeadCouncilInput, commandId: string): Promise<HeadCouncil>;
@@ -187,6 +193,14 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
     return parse.parse(body);
   };
   const headers = { authorization: `Bearer ${token}` };
+  const controlGoal = (goalId: string, input: GoalControlInput, commandId: string, action: "pause" | "stop" | "resume" | "emergency-stop") => {
+    const parsedGoalId = UuidSchema.parse(goalId);
+    return request(`v1/goals/${encodeURIComponent(parsedGoalId)}/${action}`, {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
+      body: JSON.stringify(GoalControlInputSchema.parse(input)),
+    }, GoalResultSchema);
+  };
 
   return {
     createGoal(input, commandId) {
@@ -249,6 +263,18 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
         headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
         body: JSON.stringify(TransitionGoalInputSchema.parse(input)),
       }, GoalResultSchema);
+    },
+    pauseGoal(goalId, input, commandId) {
+      return controlGoal(goalId, input, commandId, "pause");
+    },
+    stopGoal(goalId, input, commandId) {
+      return controlGoal(goalId, input, commandId, "stop");
+    },
+    resumeGoal(goalId, input, commandId) {
+      return controlGoal(goalId, input, commandId, "resume");
+    },
+    emergencyStopGoal(goalId, input, commandId) {
+      return controlGoal(goalId, input, commandId, "emergency-stop");
     },
     approveAndRunCriticalAction(goalId, input, commandId) {
       return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/critical-actions/approve-and-run`, {

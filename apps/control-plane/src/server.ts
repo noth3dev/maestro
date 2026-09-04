@@ -40,6 +40,7 @@ import {
   TaskContractConfirmationInputSchema,
   StableApiErrorSchema,
   TransitionGoalInputSchema,
+  GoalControlInputSchema,
   UuidSchema,
   HeadParticipationInputSchema,
   HeadParticipationSchema,
@@ -549,6 +550,38 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const input = parse(TransitionGoalInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
     const result = await goalService.transitionGoal(goalId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(GoalResultSchema.parse(result));
+  });
+
+  app.post("/v1/goals/:goalId/pause", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const input = parse(GoalControlInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const result = await goalService.pauseGoal(goalId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(GoalResultSchema.parse(result));
+  });
+
+  app.post("/v1/goals/:goalId/stop", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const input = parse(GoalControlInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const result = await goalService.stopGoal(goalId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(GoalResultSchema.parse(result));
+  });
+
+  app.post("/v1/goals/:goalId/resume", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const input = parse(GoalControlInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const result = await goalService.resumeGoal(goalId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(GoalResultSchema.parse(result));
+  });
+
+  app.post("/v1/goals/:goalId/emergency-stop", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const input = parse(GoalControlInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const result = await goalService.emergencyStopGoal(goalId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
     return reply.status(200).send(GoalResultSchema.parse(result));
   });
 

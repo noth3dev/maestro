@@ -128,7 +128,8 @@ describeDatabase("Reconciliation leader lease and startup consistency scaffold",
   it("durably marks a Goal recovering when its emergency-stop control latch is inconsistent with its state", async () => {
     const { goalId, projectId } = await createGoal("active");
     await pool.query(
-      `INSERT INTO goal_controls (project_id, goal_id, emergency_stopped_at) VALUES ($1, $2, transaction_timestamp())`,
+      `INSERT INTO goal_controls (project_id, goal_id, emergency_stopped_at) VALUES ($1, $2, transaction_timestamp())
+       ON CONFLICT (project_id, goal_id) DO UPDATE SET emergency_stopped_at = EXCLUDED.emergency_stopped_at`,
       [projectId, goalId],
     );
 
@@ -164,7 +165,8 @@ describeDatabase("Reconciliation leader lease and startup consistency scaffold",
   it("only one of two concurrent reconciler instances mutates an inconsistent Goal, and it mutates exactly once", async () => {
     const { goalId, projectId } = await createGoal("active");
     await pool.query(
-      `INSERT INTO goal_controls (project_id, goal_id, emergency_stopped_at) VALUES ($1, $2, transaction_timestamp())`,
+      `INSERT INTO goal_controls (project_id, goal_id, emergency_stopped_at) VALUES ($1, $2, transaction_timestamp())
+       ON CONFLICT (project_id, goal_id) DO UPDATE SET emergency_stopped_at = EXCLUDED.emergency_stopped_at`,
       [projectId, goalId],
     );
 

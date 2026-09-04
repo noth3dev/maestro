@@ -269,6 +269,19 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       printGoal(io.stdout, result, json);
       return 0;
     }
+    if (resource === "goal" && (action === "pause" || action === "stop" || action === "resume" || action === "emergency-stop")) {
+      const input = { projectId: string("project-id"), expectedVersion: nonNegativeInteger(string("expected-version"), "--expected-version") };
+      const commandId = string("command-id");
+      const result = action === "pause"
+        ? await client.pauseGoal(string("goal-id"), input, commandId)
+        : action === "stop"
+          ? await client.stopGoal(string("goal-id"), input, commandId)
+          : action === "resume"
+            ? await client.resumeGoal(string("goal-id"), input, commandId)
+            : await client.emergencyStopGoal(string("goal-id"), input, commandId);
+      printGoal(io.stdout, result, json);
+      return 0;
+    }
     if (resource === "metronome-challenges" && action === "list") { const result=await client.listMetronomeChallenges(string("goal-id"), { projectId: string("project-id") }); printState(io.stdout,result,json); return 0; }
     if (resource === "encore-council" && action === "list") { const result=await client.listEncoreCouncilRounds(string("goal-id"), { projectId: string("project-id") }); printState(io.stdout,result,json); return 0; }
     if (resource === "certifications" && action === "list") { const result=await client.listCertifications(string("goal-id"), { projectId: string("project-id") }); printState(io.stdout,result,json); return 0; }
@@ -279,7 +292,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       else printEvents(io.stdout, page.events, page.nextCursor);
       return 0;
     }
-    throw new Error("Usage: maestro goals list|goal create|get|transition|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|observe|cancel|accept|certify|certify-conditional|git goal-branch|git department-branch|git worker-worktree|git goal-revision|metronome scan|metronome challenge|encore review|critical-action approve-and-run|budget ... | maestro events list ...");
+    throw new Error("Usage: maestro goals list|goal create|get|transition|pause|stop|resume|emergency-stop|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|observe|cancel|accept|certify|certify-conditional|git goal-branch|git department-branch|git worker-worktree|git goal-revision|metronome scan|metronome challenge|encore review|critical-action approve-and-run|budget ... | maestro events list ...");
   } catch (error) {
     const message = error instanceof ApiError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : "Command failed";
     io.stderr(`${message}\n`);
@@ -288,7 +301,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
 }
 
 function helpText(): string {
-  return `Maestro CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  goal create|get|transition\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  git goal-branch|department-branch|worker-worktree|goal-revision\n  metronome scan|challenge\n  encore review\n  critical-action approve-and-run\n  events list\n\nUse --json for machine-readable output.\n`;
+  return `Maestro CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  goal create|get|transition|pause|stop|resume|emergency-stop\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  git goal-branch|department-branch|worker-worktree|goal-revision\n  metronome scan|challenge\n  encore review\n  critical-action approve-and-run\n  events list\n\nUse --json for machine-readable output.\n`;
 }
 
 function nonNegativeInteger(value: string, option: string): number {

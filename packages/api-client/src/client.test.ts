@@ -28,6 +28,26 @@ describe("createApiClient", () => {
     }
   });
 
+  it("sends project-bound idempotent Goal control operations", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ goalId, projectId, state: "pausing", version: 1 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ goalId, projectId, state: "stopping", version: 2 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ goalId, projectId, state: "resuming", version: 3 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ goalId, projectId, state: "stopped", version: 4 }), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+    const input = { projectId, expectedVersion: 0 };
+
+    await expect(client.pauseGoal(goalId, input, commandId)).resolves.toMatchObject({ state: "pausing" });
+    await expect(client.stopGoal(goalId, input, "44444444-4444-4444-8444-444444444444")).resolves.toMatchObject({ state: "stopping" });
+    await expect(client.resumeGoal(goalId, input, "55555555-5555-4555-8555-555555555555")).resolves.toMatchObject({ state: "resuming" });
+    await expect(client.emergencyStopGoal(goalId, input, "66666666-6666-4666-8666-666666666666")).resolves.toMatchObject({ state: "stopped" });
+
+    expect(fetch).toHaveBeenNthCalledWith(1, `https://maestro.test/v1/goals/${goalId}/pause`, expect.objectContaining({ method: "POST", body: JSON.stringify(input), headers: expect.objectContaining({ "idempotency-key": commandId }) }));
+    expect(fetch).toHaveBeenNthCalledWith(2, `https://maestro.test/v1/goals/${goalId}/stop`, expect.objectContaining({ method: "POST" }));
+    expect(fetch).toHaveBeenNthCalledWith(3, `https://maestro.test/v1/goals/${goalId}/resume`, expect.objectContaining({ method: "POST" }));
+    expect(fetch).toHaveBeenNthCalledWith(4, `https://maestro.test/v1/goals/${goalId}/emergency-stop`, expect.objectContaining({ method: "POST" }));
+  });
+
   it("encodes goal queries and validates paged events", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ events: [], nextCursor: "7" }), { status: 200 }));
     const client = createApiClient({ baseUrl: "https://maestro.test/api", token: "secret", fetch });

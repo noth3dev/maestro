@@ -34,7 +34,9 @@ export class StaleGoalLeaseError extends Error {
 
 export type GoalCommand =
   | { commandId: string; projectId: string; goalId: string; actorId: string; type: "CreateGoal"; expectedVersion: 0; contractId?: string; requiredRole?: string }
-  | { commandId: string; projectId: string; goalId: string; actorId: string; type: "TransitionGoal"; expectedVersion: number; to: GoalState; requiredRole?: string };
+  | { commandId: string; projectId: string; goalId: string; actorId: string; type: "TransitionGoal"; expectedVersion: number; to: GoalState; requiredRole?: string }
+  /** Emergency stop is a narrow terminal command, not an arbitrary transition. */
+  | { commandId: string; projectId: string; goalId: string; actorId: string; type: "EmergencyStopGoal"; expectedVersion: number; requiredRole?: string };
 
 export interface CommandResult {
   outcome: "succeeded" | "version_conflict" | "rejected";
@@ -164,8 +166,8 @@ export async function executeGoalCommand(
 
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 2))", [command.goalId]);
     const current = await client.query<{ project_id: string; state: GoalState; version: string; created_at: Date }>(
-      "SELECT project_id, state, version, created_at FROM goals WHERE goal_id = $1 FOR UPDATE",
-      [command.goalId],
+      "SELECT project_id, state, version, created_at FROM goals WHERE goal_id = $1 AND project_id = $2 FOR UPDATE",
+      [command.goalId, command.projectId],
     );
     const actualVersion = current.rowCount === 1 ? Number(current.rows[0]!.version) : 0;
 
@@ -224,8 +226,34 @@ export async function executeGoalCommand(
         transactionOpen = false;
         return result;
       }
+      if (command.type === "EmergencyStopGoal") {
+        if (["stopped", "succeeded", "failed"].includes(current.rows[0]!.state)) {
+          const result: CommandResult = { outcome: "rejected", goalId: command.goalId, code: "invalid_transition" };
+          await insertReceipt(client, command, hash, "rejected", result);
+          await client.query("COMMIT");
+          transactionOpen = false;
+          return result;
+        }
+        nextState = "stopped";
+        eventType = "GoalEmergencyStopped";
+      } else {
+        try {
+          nextState = transitionGoal(current.rows[0]!.state, command.to);
+        } catch (error) {
+          if (!(error instanceof InvalidGoalTransitionError)) throw error;
+          const result: CommandResult = { outcome: "rejected", goalId: command.goalId, code: "invalid_transition" };
+          await insertReceipt(client, command, hash, "rejected", result);
+          await client.query("COMMIT");
+          transactionOpen = false;
+          return result;
+        }
+        eventType = "GoalTransitioned";
+      }
+    }
+
+    if (command.type !== "CreateGoal") {
       try {
-        nextState = transitionGoal(current.rows[0]!.state, command.to);
+        await applyGoalControlTransition(client, command, current.rows[0]!.state, nextState);
       } catch (error) {
         if (!(error instanceof InvalidGoalTransitionError)) throw error;
         const result: CommandResult = { outcome: "rejected", goalId: command.goalId, code: "invalid_transition" };
@@ -234,7 +262,6 @@ export async function executeGoalCommand(
         transactionOpen = false;
         return result;
       }
-      eventType = "GoalTransitioned";
     }
 
     const nextVersion = command.expectedVersion + 1;
@@ -257,6 +284,10 @@ export async function executeGoalCommand(
         `INSERT INTO goals (goal_id, project_id, state, version, task_contract_id, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, transaction_timestamp(), transaction_timestamp())`,
         [command.goalId, command.projectId, nextState, nextVersion, command.contractId ?? null],
+      );
+      await client.query(
+        `INSERT INTO goal_controls (project_id, goal_id) VALUES ($1, $2)`,
+        [command.projectId, command.goalId],
       );
     } else {
       const updated = await client.query(
@@ -282,6 +313,159 @@ export async function executeGoalCommand(
     throw error;
   } finally {
     client.release();
+  }
+}
+
+
+type StoredGoalControlForTransition = {
+  emergency_stopped_at: Date | null;
+  pause_requested_at: Date | null;
+  paused_at: Date | null;
+  stopping_at: Date | null;
+  stopped_at: Date | null;
+};
+
+type ControlModeForTransition = "emergency_stopped" | "stopped" | "stopping" | "paused" | "pause_requested" | "open";
+
+function controlModeForTransition(control: StoredGoalControlForTransition): ControlModeForTransition {
+  if (control.emergency_stopped_at !== null) return "emergency_stopped";
+  if (control.stopped_at !== null) return "stopped";
+  if (control.stopping_at !== null) return "stopping";
+  if (control.paused_at !== null) return "paused";
+  if (control.pause_requested_at !== null) return "pause_requested";
+  return "open";
+}
+
+/**
+ * Couple every Goal lifecycle transition to its durable control latch while
+ * holding both rows in the command transaction. This prevents a caller from
+ * moving the projection to a pause/stop/resume state without fencing effects.
+ */
+async function applyGoalControlTransition(
+  client: { query: <T>(text: string, values?: readonly unknown[]) => Promise<{ rowCount: number | null; rows: T[] }> },
+  command: Extract<GoalCommand, { type: "TransitionGoal" | "EmergencyStopGoal" }>,
+  from: GoalState,
+  to: GoalState,
+): Promise<void> {
+  await client.query(
+    `INSERT INTO goal_controls (project_id, goal_id) VALUES ($1, $2)
+     ON CONFLICT (project_id, goal_id) DO NOTHING`,
+    [command.projectId, command.goalId],
+  );
+  const result = await client.query<StoredGoalControlForTransition>(
+    `SELECT emergency_stopped_at, pause_requested_at, paused_at, stopping_at, stopped_at
+       FROM goal_controls WHERE project_id = $1 AND goal_id = $2 FOR UPDATE`,
+    [command.projectId, command.goalId],
+  );
+  if (result.rowCount !== 1) throw new Error("Goal control invariant violated");
+  const mode = controlModeForTransition(result.rows[0]!);
+  const update = async (sql: string, values: readonly unknown[] = [command.projectId, command.goalId]) => {
+    await client.query(sql, values);
+  };
+
+  if (command.type === "EmergencyStopGoal") {
+    if (mode === "emergency_stopped") return;
+    await update(
+      `UPDATE goal_controls
+          SET control_epoch = control_epoch + 1,
+              emergency_stopped_at = transaction_timestamp(),
+              stopping_at = COALESCE(stopping_at, transaction_timestamp()),
+              stopped_at = COALESCE(stopped_at, transaction_timestamp())
+        WHERE project_id = $1 AND goal_id = $2`,
+    );
+    await client.query(
+      `UPDATE authority_records SET revoked_at = transaction_timestamp()
+        WHERE project_id = $1 AND goal_id = $2 AND revoked_at IS NULL`,
+      [command.projectId, command.goalId],
+    );
+    return;
+  }
+
+  if (to === "pausing") {
+    if (mode === "pause_requested") return;
+    if (mode !== "open" || from !== "active") throw new InvalidGoalTransitionError(from, to);
+    await update(
+      `UPDATE goal_controls SET control_epoch = control_epoch + 1, pause_requested_at = transaction_timestamp()
+        WHERE project_id = $1 AND goal_id = $2`,
+    );
+    return;
+  }
+  if (to === "paused") {
+    if (mode === "paused") return;
+    if (mode === "pause_requested" && from === "pausing") {
+      await update(
+        `UPDATE goal_controls SET control_epoch = control_epoch + 1, paused_at = transaction_timestamp()
+          WHERE project_id = $1 AND goal_id = $2`,
+      );
+      return;
+    }
+    // Recovery may restore a durably known paused Goal in one atomic write;
+    // both timestamps are required so effects stay fenced throughout it.
+    if (mode === "open" && from === "recovering") {
+      await update(
+        `UPDATE goal_controls
+            SET control_epoch = control_epoch + 1,
+                pause_requested_at = transaction_timestamp(),
+                paused_at = transaction_timestamp()
+          WHERE project_id = $1 AND goal_id = $2`,
+      );
+      return;
+    }
+    throw new InvalidGoalTransitionError(from, to);
+  }
+  if (to === "resuming") {
+    if (mode !== "paused" || from !== "paused") throw new InvalidGoalTransitionError(from, to);
+    await update(
+      `UPDATE goal_controls SET control_epoch = control_epoch + 1, pause_requested_at = NULL, paused_at = NULL
+        WHERE project_id = $1 AND goal_id = $2`,
+    );
+    return;
+  }
+  if (to === "stopping") {
+    if (mode === "stopping") return;
+    const validSource = from === "active" || from === "paused";
+    if (!validSource || !["open", "pause_requested", "paused"].includes(mode)) {
+      throw new InvalidGoalTransitionError(from, to);
+    }
+    await update(
+      `UPDATE goal_controls SET control_epoch = control_epoch + 1, stopping_at = transaction_timestamp()
+        WHERE project_id = $1 AND goal_id = $2`,
+    );
+    return;
+  }
+  if (to === "stopped") {
+    if (mode === "stopped") return;
+    if (from !== "stopping" && from !== "blocked" && from !== "recovering") {
+      throw new InvalidGoalTransitionError(from, to);
+    }
+    await update(
+      `UPDATE goal_controls
+          SET control_epoch = control_epoch + 1,
+              stopping_at = COALESCE(stopping_at, transaction_timestamp()),
+              stopped_at = transaction_timestamp()
+        WHERE project_id = $1 AND goal_id = $2`,
+    );
+    await client.query(
+      `UPDATE authority_records SET revoked_at = transaction_timestamp()
+        WHERE project_id = $1 AND goal_id = $2 AND revoked_at IS NULL`,
+      [command.projectId, command.goalId],
+    );
+    return;
+  }
+
+  // Recovery may explicitly clear an interrupted pause before re-entering
+  // execution. Stop and emergency latches remain terminal and cannot be
+  // bypassed by a generic transition.
+  if (to === "active" && from === "recovering" && (mode === "paused" || mode === "pause_requested")) {
+    await update(
+      `UPDATE goal_controls SET control_epoch = control_epoch + 1, pause_requested_at = NULL, paused_at = NULL
+        WHERE project_id = $1 AND goal_id = $2`,
+    );
+    return;
+  }
+  if (["emergency_stopped", "stopped", "stopping", "paused", "pause_requested"].includes(mode) &&
+      (to === "active" || to === "certifying" || to === "succeeded" || to === "failed")) {
+    throw new InvalidGoalTransitionError(from, to);
   }
 }
 
