@@ -378,7 +378,7 @@ export async function closeFireflyIncident(
     );
     const closed = updated.rows[0]!;
     // Every closure durably records improvement evidence in the same
-    // transaction. This is read-only evidence for a later Overwatch
+    // transaction. This is read-only evidence for a later Encore
     // Improvement Digest; it never triggers a change by itself.
     const linkedAtRow = await client.query<{ linked_at: Date | null }>(
       "SELECT linked_at FROM firefly_incidents WHERE incident_id = $1", [incidentId],
@@ -494,7 +494,7 @@ function mapImprovementEvidence(row: ImprovementEvidenceRow): FireflyImprovement
   };
 }
 
-/** Read-only evidence for a later Overwatch Improvement Digest. Nothing in
+/** Read-only evidence for a later Encore Improvement Digest. Nothing in
  * this module consumes it to trigger a change. */
 export async function listFireflyImprovementEvidence(pool: Pick<Pool, "query">): Promise<readonly FireflyImprovementEvidenceRecord[]> {
   const result = await pool.query<ImprovementEvidenceRow>(

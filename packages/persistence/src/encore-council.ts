@@ -1,21 +1,21 @@
 import { randomUUID } from "node:crypto";
 import {
-  assertValidOverwatchJudgmentSubstance,
-  evaluateOverwatchTriggers,
-  synthesizeOverwatchJudgments,
+  assertValidEncoreJudgmentSubstance,
+  evaluateEncoreTriggers,
+  synthesizeEncoreJudgments,
   type ExecutionKernelPort,
   type InvocationObservation,
   type InvocationStatus,
-  type OverwatchJudgmentSubstance,
-  type OverwatchSynthesis,
-  type OverwatchTriggerReason,
-  type OverwatchVerdict,
+  type EncoreJudgmentSubstance,
+  type EncoreSynthesis,
+  type EncoreTriggerReason,
+  type EncoreVerdict,
 } from "@maestro/domain";
 import type { Pool } from "pg";
 
-export class OverwatchCouncilError extends Error {}
+export class EncoreCouncilError extends Error {}
 
-export interface OverwatchCouncilRoundRequest {
+export interface EncoreCouncilRoundRequest {
   readonly goalId: string;
   readonly question: string;
   readonly criteria: readonly { readonly criterionId: string; readonly description: string }[];
@@ -23,21 +23,21 @@ export interface OverwatchCouncilRoundRequest {
   readonly reviewerCount: number;
 }
 
-export interface OverwatchCouncilRound {
+export interface EncoreCouncilRound {
   readonly roundId: string; readonly goalId: string; readonly question: string;
   readonly criteria: readonly { readonly criterionId: string; readonly description: string }[];
   readonly evidenceIds: readonly string[]; readonly triggerReasons: readonly string[]; readonly reviewerCount: number;
-  readonly judgments: readonly OverwatchJudgmentSubstance[]; readonly synthesis: OverwatchSynthesis;
+  readonly judgments: readonly EncoreJudgmentSubstance[]; readonly synthesis: EncoreSynthesis;
 }
 
-export interface OverwatchCouncilResult {
+export interface EncoreCouncilResult {
   readonly roundId: string;
-  readonly judgments: readonly OverwatchJudgmentSubstance[];
-  readonly synthesis: OverwatchSynthesis;
+  readonly judgments: readonly EncoreJudgmentSubstance[];
+  readonly synthesis: EncoreSynthesis;
 }
 
 /** Advisory: reports which plan/phase3.md trigger conditions are currently true for this Goal, from real durable state. Does not itself gate round creation -- Sane/a Head decides whether to act on it. */
-export async function evaluateOverwatchCouncilTrigger(pool: Pool, goalId: string): Promise<readonly OverwatchTriggerReason[]> {
+export async function evaluateEncoreCouncilTrigger(pool: Pool, goalId: string): Promise<readonly EncoreTriggerReason[]> {
   const council = await pool.query<{ decision_packet: { departmentOwnership?: readonly unknown[] } | null }>(
     "SELECT decision_packet FROM head_councils WHERE goal_id = $1 AND state = 'resolved' ORDER BY created_at DESC LIMIT 1",
     [goalId],
@@ -45,7 +45,7 @@ export async function evaluateOverwatchCouncilTrigger(pool: Pool, goalId: string
   const departmentOwnershipCount = council.rows[0]?.decision_packet?.departmentOwnership?.length ?? 0;
   const challenges = await pool.query<{ count: string }>("SELECT count(*)::int AS count FROM sentinel_challenges WHERE goal_id = $1 AND status <> 'resolved'", [goalId]);
   const reviews = await pool.query<{ count: string }>("SELECT count(*)::int AS count FROM semantic_reviews WHERE goal_id = $1 AND verdict IN ('unsupported', 'ambiguous')", [goalId]);
-  return evaluateOverwatchTriggers({
+  return evaluateEncoreTriggers({
     departmentOwnershipCount,
     openChallengeCount: Number(challenges.rows[0]!.count),
     ambiguousOrUnsupportedReviewCount: Number(reviews.rows[0]!.count),
@@ -53,7 +53,7 @@ export async function evaluateOverwatchCouncilTrigger(pool: Pool, goalId: string
 }
 
 interface RawJudgmentOutput {
-  readonly verdict: OverwatchVerdict;
+  readonly verdict: EncoreVerdict;
   readonly confidence: "low" | "medium" | "high";
   readonly reasoning: string;
   readonly conditions: readonly string[];
@@ -85,9 +85,9 @@ async function observeTerminal(
 
 function parseJudgmentOutput(rawText: string): RawJudgmentOutput {
   const parsed = JSON.parse(rawText) as Record<string, unknown>;
-  if (parsed.verdict !== "proceed" && parsed.verdict !== "do_not_proceed" && parsed.verdict !== "escalate") throw new OverwatchCouncilError("Invalid Overwatch judgment verdict");
-  if (parsed.confidence !== "low" && parsed.confidence !== "medium" && parsed.confidence !== "high") throw new OverwatchCouncilError("Invalid Overwatch judgment confidence");
-  if (typeof parsed.reasoning !== "string" || parsed.reasoning.trim() === "") throw new OverwatchCouncilError("Overwatch judgment reasoning is required");
+  if (parsed.verdict !== "proceed" && parsed.verdict !== "do_not_proceed" && parsed.verdict !== "escalate") throw new EncoreCouncilError("Invalid Encore judgment verdict");
+  if (parsed.confidence !== "low" && parsed.confidence !== "medium" && parsed.confidence !== "high") throw new EncoreCouncilError("Invalid Encore judgment confidence");
+  if (typeof parsed.reasoning !== "string" || parsed.reasoning.trim() === "") throw new EncoreCouncilError("Encore judgment reasoning is required");
   const conditions = Array.isArray(parsed.conditions) ? parsed.conditions.filter((item): item is string => typeof item === "string") : [];
   const citedEvidenceIds = Array.isArray(parsed.citedEvidenceIds) ? parsed.citedEvidenceIds.filter((item): item is string => typeof item === "string") : [];
   const dissentNote = typeof parsed.dissentNote === "string" && parsed.dissentNote.trim() !== "" ? parsed.dissentNote : null;
@@ -103,18 +103,18 @@ function parseJudgmentOutput(rawText: string): RawJudgmentOutput {
  * answers" is enforced by construction: no judgment row exists in the
  * database until every reviewer's answer has already been produced.
  */
-export async function runOverwatchCouncilReview(pool: Pool, kernel: ExecutionKernelPort, request: OverwatchCouncilRoundRequest): Promise<OverwatchCouncilResult> {
-  if (request.reviewerCount < 1) throw new OverwatchCouncilError("Overwatch Council review requires at least one reviewer");
+export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernelPort, request: EncoreCouncilRoundRequest): Promise<EncoreCouncilResult> {
+  if (request.reviewerCount < 1) throw new EncoreCouncilError("Encore Council review requires at least one reviewer");
   const goal = await pool.query("SELECT 1 FROM goals WHERE goal_id = $1", [request.goalId]);
-  if (goal.rowCount !== 1) throw new OverwatchCouncilError("Goal not found for Overwatch Council review");
+  if (goal.rowCount !== 1) throw new EncoreCouncilError("Goal not found for Encore Council review");
   const project = await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [request.goalId]);
   const durable = await pool.query<{ evidence_id: string; sha256: string }>("SELECT evidence_id, sha256 FROM evidence_records WHERE goal_id = $1 AND project_id = $2", [request.goalId, project.rows[0]!.project_id]);
   const durableIds = new Set(durable.rows.flatMap((row) => [row.evidence_id.trim(), row.sha256.trim()]));
-  for (const evidenceId of request.evidenceIds) if (!durableIds.has(evidenceId.trim())) throw new OverwatchCouncilError(`Overwatch Council evidence reference is not durable: ${evidenceId}`);
+  for (const evidenceId of request.evidenceIds) if (!durableIds.has(evidenceId.trim())) throw new EncoreCouncilError(`Encore Council evidence reference is not durable: ${evidenceId}`);
 
-  const triggerReasons = await evaluateOverwatchCouncilTrigger(pool, request.goalId);
+  const triggerReasons = await evaluateEncoreCouncilTrigger(pool, request.goalId);
   const prompt = [
-    "You are one of several fully independent Overwatch Council reviewers. You cannot see any other reviewer's answer.",
+    "You are one of several fully independent Encore Council reviewers. You cannot see any other reviewer's answer.",
     `Question: ${request.question}`,
     `Criteria: ${request.criteria.map((criterion) => `[${criterion.criterionId}] ${criterion.description}`).join("; ")}`,
     `Evidence ids you may cite: ${request.evidenceIds.join(", ") || "(none)"}`,
@@ -126,9 +126,9 @@ export async function runOverwatchCouncilReview(pool: Pool, kernel: ExecutionKer
   const spawnedReviewers: { execution: unknown; invocation: unknown }[] = [];
   for (let index = 0; index < request.reviewerCount; index += 1) {
     // A root spawn admits an isolated session; it does not submit this prompt.
-    spawnedReviewers.push(await kernel.spawn({ name: `overwatch-review:${randomUUID()}:${index}`, cwd: process.cwd() }));
+    spawnedReviewers.push(await kernel.spawn({ name: `encore-review:${randomUUID()}:${index}`, cwd: process.cwd() }));
   }
-  const judgments: (OverwatchJudgmentSubstance & { executionRef: string; invocationRef: string })[] = [];
+  const judgments: (EncoreJudgmentSubstance & { executionRef: string; invocationRef: string })[] = [];
   for (const spawned of spawnedReviewers) {
     const model = await kernel.getModelIdentity(spawned.execution as never);
     let observation: InvocationObservation | undefined;
@@ -155,36 +155,36 @@ export async function runOverwatchCouncilReview(pool: Pool, kernel: ExecutionKer
         citedEvidenceIds: [],
       };
     }
-    const substance: OverwatchJudgmentSubstance = {
+    const substance: EncoreJudgmentSubstance = {
       modelProvider: model.provider, modelId: model.id, verdict: output.verdict, confidence: output.confidence,
       reasoning: output.reasoning, conditions: output.conditions, dissentNote: output.dissentNote,
       citedEvidenceIds: output.citedEvidenceIds,
     };
-    assertValidOverwatchJudgmentSubstance(substance);
+    assertValidEncoreJudgmentSubstance(substance);
     judgments.push({ ...substance, executionRef: String(spawned.execution), invocationRef: String(spawned.invocation) });
   }
 
-  const synthesis = synthesizeOverwatchJudgments(judgments);
+  const synthesis = synthesizeEncoreJudgments(judgments);
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const roundId = randomUUID();
     await client.query(
-      `INSERT INTO overwatch_council_rounds (round_id, goal_id, question, criteria, evidence_ids, trigger_reasons, reviewer_count)
+      `INSERT INTO encore_council_rounds (round_id, goal_id, question, criteria, evidence_ids, trigger_reasons, reviewer_count)
        VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7)`,
       [roundId, request.goalId, request.question, JSON.stringify(request.criteria), JSON.stringify(request.evidenceIds), JSON.stringify(triggerReasons), request.reviewerCount],
     );
     // Sealed: every judgment is written together, in the same transaction, only now that all reviewers have already answered.
     for (const [index, judgment] of judgments.entries()) {
       await client.query(
-        `INSERT INTO overwatch_council_judgments (judgment_id, round_id, reviewer_index, model_provider, model_id, verdict, confidence, reasoning, conditions, dissent_note, cited_evidence_ids, execution_ref, invocation_ref)
+        `INSERT INTO encore_council_judgments (judgment_id, round_id, reviewer_index, model_provider, model_id, verdict, confidence, reasoning, conditions, dissent_note, cited_evidence_ids, execution_ref, invocation_ref)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11::jsonb, $12, $13)`,
         [randomUUID(), roundId, index, judgment.modelProvider, judgment.modelId, judgment.verdict, judgment.confidence, judgment.reasoning, JSON.stringify(judgment.conditions), judgment.dissentNote, JSON.stringify(judgment.citedEvidenceIds), judgment.executionRef, judgment.invocationRef],
       );
     }
     await client.query(
-      `INSERT INTO overwatch_council_syntheses (round_id, final_verdict, same_model_only, escalated, dissent_notes)
+      `INSERT INTO encore_council_syntheses (round_id, final_verdict, same_model_only, escalated, dissent_notes)
        VALUES ($1, $2, $3, $4, $5::jsonb)`,
       [roundId, synthesis.finalVerdict, synthesis.sameModelOnly, synthesis.escalated, JSON.stringify(synthesis.dissentNotes)],
     );
@@ -203,19 +203,19 @@ export async function runOverwatchCouncilReview(pool: Pool, kernel: ExecutionKer
 }
 
 
-/** Reads complete, immutable Overwatch rounds for one Goal. */
-export async function listOverwatchCouncilRounds(pool: Pool, goalId: string): Promise<readonly OverwatchCouncilRound[]> {
-  const rounds = await pool.query<{ round_id: string; goal_id: string; question: string; criteria: { criterionId: string; description: string }[]; evidence_ids: string[]; trigger_reasons: string[]; reviewer_count: number; final_verdict: OverwatchVerdict; same_model_only: boolean; escalated: boolean; dissent_notes: string[] }>(
+/** Reads complete, immutable Encore rounds for one Goal. */
+export async function listEncoreCouncilRounds(pool: Pool, goalId: string): Promise<readonly EncoreCouncilRound[]> {
+  const rounds = await pool.query<{ round_id: string; goal_id: string; question: string; criteria: { criterionId: string; description: string }[]; evidence_ids: string[]; trigger_reasons: string[]; reviewer_count: number; final_verdict: EncoreVerdict; same_model_only: boolean; escalated: boolean; dissent_notes: string[] }>(
     `SELECT r.round_id, r.goal_id, r.question, r.criteria, r.evidence_ids, r.trigger_reasons, r.reviewer_count,
             s.final_verdict, s.same_model_only, s.escalated, s.dissent_notes
-       FROM overwatch_council_rounds r JOIN overwatch_council_syntheses s ON s.round_id = r.round_id
+       FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id
       WHERE r.goal_id = $1 ORDER BY r.created_at, r.round_id`, [goalId],
   );
-  const result: OverwatchCouncilRound[] = [];
+  const result: EncoreCouncilRound[] = [];
   for (const row of rounds.rows) {
-    const judgments = await pool.query<{ model_provider: string; model_id: string; verdict: OverwatchVerdict; confidence: "low"|"medium"|"high"; reasoning: string; conditions: string[]; dissent_note: string|null; cited_evidence_ids: string[] }>(
+    const judgments = await pool.query<{ model_provider: string; model_id: string; verdict: EncoreVerdict; confidence: "low"|"medium"|"high"; reasoning: string; conditions: string[]; dissent_note: string|null; cited_evidence_ids: string[] }>(
       `SELECT model_provider, model_id, verdict, confidence, reasoning, conditions, dissent_note, cited_evidence_ids
-         FROM overwatch_council_judgments WHERE round_id = $1 ORDER BY reviewer_index`, [row.round_id],
+         FROM encore_council_judgments WHERE round_id = $1 ORDER BY reviewer_index`, [row.round_id],
     );
     result.push({ roundId: row.round_id, goalId: row.goal_id, question: row.question, criteria: row.criteria, evidenceIds: row.evidence_ids, triggerReasons: row.trigger_reasons, reviewerCount: row.reviewer_count, judgments: judgments.rows.map((judgment) => ({ modelProvider: judgment.model_provider, modelId: judgment.model_id, verdict: judgment.verdict, confidence: judgment.confidence, reasoning: judgment.reasoning, conditions: judgment.conditions, dissentNote: judgment.dissent_note, citedEvidenceIds: judgment.cited_evidence_ids })), synthesis: { finalVerdict: row.final_verdict, sameModelOnly: row.same_model_only, escalated: row.escalated, dissentNotes: row.dissent_notes } });
   }

@@ -8,7 +8,7 @@ export const PERMANENT_ROLE_KINDS = Object.freeze([
   "sane",
   "department_head",
   "sentinel",
-  "overwatch_council",
+  "encore_council",
 ] as const);
 export const PermanentRoleKindSchema = z.enum(PERMANENT_ROLE_KINDS);
 export type PermanentRoleKind = (typeof PERMANENT_ROLE_KINDS)[number];
@@ -258,8 +258,8 @@ const SENTINEL_FORBIDDEN = [
 ] as const;
 
 export const SENTINEL_ROLE: PermanentRole = defineRole({
-  roleId: "overwatch-sentinel",
-  displayName: "Overwatch Sentinel",
+  roleId: "encore-sentinel",
+  displayName: "Encore Sentinel",
   roleKind: "sentinel",
   departmentId: null,
   charter: "Observe orchestration boundaries and surface evidence of risk, drift, or inconsistency without directing product work.",
@@ -279,21 +279,21 @@ const COUNCIL_FORBIDDEN = [
   "self-approve a critical action",
 ] as const;
 
-export const OVERWATCH_COUNCIL_ROLES: readonly PermanentRole[] = Object.freeze([
+export const ENCORE_COUNCIL_ROLES: readonly PermanentRole[] = Object.freeze([
   defineRole({
-    roleId: "overwatch-council-1", displayName: "Overwatch Council — Evidence", roleKind: "overwatch_council", departmentId: null,
-    charter: "Independently review evidence quality and provenance for Overwatch records.",
+    roleId: "encore-council-1", displayName: "Encore Council — Evidence", roleKind: "encore_council", departmentId: null,
+    charter: "Independently review evidence quality and provenance for Encore records.",
     allowedCapabilities: COUNCIL_ALLOWED, forbiddenCapabilities: COUNCIL_FORBIDDEN,
     persona: reviewedBaseline({ agreeableness: 0.58, extraversion: 0.62, imagination: 0.55, realism: 0.94, conscientiousness: 0.97, caution: 0.92, initiative: 0.68, empathy: 0.58, adaptability: 0.72, sociability: 0.52 }),
   }),
   defineRole({
-    roleId: "overwatch-council-2", displayName: "Overwatch Council — Challenge", roleKind: "overwatch_council", departmentId: null,
-    charter: "Independently challenge assumptions, safety boundaries, and unresolved dissent in Overwatch records.",
+    roleId: "encore-council-2", displayName: "Encore Council — Challenge", roleKind: "encore_council", departmentId: null,
+    charter: "Independently challenge assumptions, safety boundaries, and unresolved dissent in Encore records.",
     allowedCapabilities: COUNCIL_ALLOWED, forbiddenCapabilities: COUNCIL_FORBIDDEN,
     persona: reviewedBaseline({ agreeableness: 0.32, extraversion: 0.58, imagination: 0.68, realism: 0.88, conscientiousness: 0.93, caution: 0.96, initiative: 0.76, empathy: 0.48, adaptability: 0.70, sociability: 0.42 }),
   }),
   defineRole({
-    roleId: "overwatch-council-3", displayName: "Overwatch Council — Synthesis", roleKind: "overwatch_council", departmentId: null,
+    roleId: "encore-council-3", displayName: "Encore Council — Synthesis", roleKind: "encore_council", departmentId: null,
     charter: "Independently compare reviewer findings and document conditions, dissent, and confidence for later adjudication.",
     allowedCapabilities: COUNCIL_ALLOWED, forbiddenCapabilities: COUNCIL_FORBIDDEN,
     persona: reviewedBaseline({ agreeableness: 0.74, extraversion: 0.70, imagination: 0.72, realism: 0.86, conscientiousness: 0.95, caution: 0.88, initiative: 0.72, empathy: 0.76, adaptability: 0.84, sociability: 0.74 }),
@@ -304,8 +304,8 @@ export const PERMANENT_ROLES: readonly PermanentRole[] = Object.freeze([
   SANE_ROLE,
   ...DEPARTMENT_HEAD_DEFINITIONS.map(defineRole),
   SENTINEL_ROLE,
-  ...OVERWATCH_COUNCIL_ROLES,
+  ...ENCORE_COUNCIL_ROLES,
 ]);
 
 // Explicit aliases make the stable oversight identities discoverable without adding behavior.
-export const OVERWATCH_SENTINEL_ROLE = SENTINEL_ROLE;
+export const ENCORE_SENTINEL_ROLE = SENTINEL_ROLE;

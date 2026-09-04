@@ -9,7 +9,7 @@ const describeDatabase = databaseUrl ? describe : describe.skip;
 const expectedTables = [
   "sane_final_reports", "evidence_bundles", "certification_conflict_resolutions", "certification_waivers", "conditional_certifications",
   "quality_certifications", "certification_conflict_resolution_members", "department_acceptances", "goal_integration_revision_commits", "goal_integration_revisions",
-  "overwatch_council_syntheses", "overwatch_council_judgments", "overwatch_council_rounds", "semantic_reviews", "sentinel_challenge_findings",
+  "encore_council_syntheses", "encore_council_judgments", "encore_council_rounds", "semantic_reviews", "sentinel_challenge_findings",
   "sentinel_challenges", "sentinel_findings", "budget_forecasts", "budget_reservations", "integration_commits", "worker_worktrees", "goal_integration_branches",
   "team_lead_grants", "workers", "mission_bundles", "department_branches", "department_plan_revisions", "department_plans", "council_protocol_events", "council_round_contributions",
   "council_rounds", "independent_briefs", "council_participants", "head_councils", "goal_head_participations", "task_contract_confirmations",

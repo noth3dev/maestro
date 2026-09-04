@@ -8,7 +8,7 @@ import type {
   SpawnedInvocation,
 } from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
-import { runOverwatchCouncilReview } from "./overwatch-council.js";
+import { runEncoreCouncilReview } from "./encore-council.js";
 
 const criteria = [{ criterionId: "safety", description: "preserve safety invariants" }];
 const goalId = "goal-1";
@@ -32,8 +32,8 @@ function fakePool(): Pool {
 
 function observation(index: number, status: InvocationStatus, answer: InvocationAnswer): InvocationObservation {
   return {
-    invocation: `overwatch-invocation-${index}` as never,
-    name: "overwatch-review",
+    invocation: `encore-invocation-${index}` as never,
+    name: "encore-review",
     status,
     toolEvents: { state: "empty", events: [] },
     usage: { state: "unknown" },
@@ -50,8 +50,8 @@ function fakeKernel(sequences: readonly (readonly InvocationObservation[])[]): E
 } {
   const calls: string[] = [];
   const spawned: SpawnedInvocation[] = sequences.map((_, index) => ({
-    execution: `overwatch-execution-${index}` as never,
-    invocation: `overwatch-invocation-${index}` as never,
+    execution: `encore-execution-${index}` as never,
+    invocation: `encore-invocation-${index}` as never,
   }));
   const observationIndexes = sequences.map(() => 0);
   return {
@@ -85,7 +85,7 @@ function fakeKernel(sequences: readonly (readonly InvocationObservation[])[]): E
   };
 }
 
-describe("Overwatch Council execution", () => {
+describe("Encore Council execution", () => {
   const proceed = JSON.stringify({
     verdict: "proceed",
     confidence: "high",
@@ -107,7 +107,7 @@ describe("Overwatch Council execution", () => {
       ],
     ]);
 
-    const result = await runOverwatchCouncilReview(fakePool(), kernel, {
+    const result = await runEncoreCouncilReview(fakePool(), kernel, {
       goalId,
       question: "should we proceed?",
       criteria,
@@ -128,8 +128,8 @@ describe("Overwatch Council execution", () => {
     // one transaction), so every isolated reviewer's kernel record may now
     // be released (Phase 1 re-patch item 2).
     expect(kernel.release).toHaveBeenCalledTimes(2);
-    expect(kernel.release).toHaveBeenCalledWith("overwatch-invocation-0");
-    expect(kernel.release).toHaveBeenCalledWith("overwatch-invocation-1");
+    expect(kernel.release).toHaveBeenCalledWith("encore-invocation-0");
+    expect(kernel.release).toHaveBeenCalledWith("encore-invocation-1");
   });
 
   it("escalates when the only available answer was observed before terminal completion", async () => {
@@ -138,7 +138,7 @@ describe("Overwatch Council execution", () => {
       observation(0, "succeeded", { state: "unavailable", reason: "provider-does-not-expose-answer-text" }),
     ]]);
 
-    const result = await runOverwatchCouncilReview(fakePool(), kernel, {
+    const result = await runEncoreCouncilReview(fakePool(), kernel, {
       goalId,
       question: "should we proceed?",
       criteria,
@@ -150,7 +150,7 @@ describe("Overwatch Council execution", () => {
     expect(result.judgments[0]).toMatchObject({ verdict: "escalate", confidence: "low" });
     expect(result.synthesis.finalVerdict).toBe("escalate");
     expect(result.synthesis.escalated).toBe(true);
-    expect(kernel.release).toHaveBeenCalledWith("overwatch-invocation-0");
+    expect(kernel.release).toHaveBeenCalledWith("encore-invocation-0");
   });
 
   it("still returns the durably committed round even when the kernel's release call fails for a reviewer", async () => {
@@ -162,7 +162,7 @@ describe("Overwatch Council execution", () => {
     ]);
     kernel.release = vi.fn(async () => { throw new Error("kernel eviction backend unavailable"); });
 
-    const result = await runOverwatchCouncilReview(fakePool(), kernel, {
+    const result = await runEncoreCouncilReview(fakePool(), kernel, {
       goalId,
       question: "should we proceed?",
       criteria,
