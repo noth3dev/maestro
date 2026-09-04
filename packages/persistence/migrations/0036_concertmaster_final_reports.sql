@@ -1,8 +1,8 @@
--- Phase 3 work-sequence step 9: Sane final reporting, gated on real
+-- Phase 3 work-sequence step 9: Concertmaster final reporting, gated on real
 -- certification completeness -- never on plan-item completion percentage
 -- or worker self-report. Additive only.
 
-CREATE TABLE IF NOT EXISTS sane_final_reports (
+CREATE TABLE IF NOT EXISTS concertmaster_final_reports (
   report_id uuid PRIMARY KEY,
   goal_id uuid NOT NULL REFERENCES goals (goal_id),
   success boolean NOT NULL,
@@ -25,15 +25,15 @@ CREATE TABLE IF NOT EXISTS sane_final_reports (
   -- Success can never be reported alongside a recorded blocker.
   CHECK (NOT success OR jsonb_array_length(blockers) = 0)
 );
-CREATE INDEX IF NOT EXISTS sane_final_reports_goal_idx ON sane_final_reports (goal_id, created_at);
+CREATE INDEX IF NOT EXISTS concertmaster_final_reports_goal_idx ON concertmaster_final_reports (goal_id, created_at);
 
-CREATE OR REPLACE FUNCTION reject_sane_final_report_mutation()
+CREATE OR REPLACE FUNCTION reject_concertmaster_final_report_mutation()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  RAISE EXCEPTION 'Sane final reports are immutable once issued';
+  RAISE EXCEPTION 'Concertmaster final reports are immutable once issued';
 END;
 $$;
-DROP TRIGGER IF EXISTS sane_final_reports_immutable ON sane_final_reports;
-CREATE TRIGGER sane_final_reports_immutable
-  BEFORE UPDATE OR DELETE ON sane_final_reports
-  FOR EACH ROW EXECUTE FUNCTION reject_sane_final_report_mutation();
+DROP TRIGGER IF EXISTS concertmaster_final_reports_immutable ON concertmaster_final_reports;
+CREATE TRIGGER concertmaster_final_reports_immutable
+  BEFORE UPDATE OR DELETE ON concertmaster_final_reports
+  FOR EACH ROW EXECUTE FUNCTION reject_concertmaster_final_report_mutation();

@@ -30,12 +30,12 @@ CREATE TRIGGER certification_waivers_immutable
   BEFORE UPDATE OR DELETE ON certification_waivers
   FOR EACH ROW EXECUTE FUNCTION reject_certification_waiver_mutation();
 
--- Links a certification conflict to the Overwatch Council round that
+-- Links a certification conflict to the Encore Council round that
 -- adjudicated it, so the ruling is traceable and durable.
 CREATE TABLE IF NOT EXISTS certification_conflict_resolutions (
   resolution_id uuid PRIMARY KEY,
   goal_id uuid NOT NULL REFERENCES goals (goal_id),
-  round_id uuid NOT NULL REFERENCES overwatch_council_rounds (round_id),
+  round_id uuid NOT NULL REFERENCES encore_council_rounds (round_id),
   conflicting_verdicts jsonb NOT NULL CHECK (jsonb_typeof(conflicting_verdicts) = 'array'),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   retention retention_class NOT NULL DEFAULT 'project_lifetime'

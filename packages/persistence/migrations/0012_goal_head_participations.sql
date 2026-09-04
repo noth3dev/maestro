@@ -16,12 +16,12 @@ CREATE TABLE IF NOT EXISTS head_activation_attempts (
   goal_id uuid NOT NULL REFERENCES goals(goal_id),
   department_id text NOT NULL REFERENCES departments(department_id),
   requester_department_id text REFERENCES departments(department_id),
-  requester_role text NOT NULL CHECK (requester_role IN ('Sane', 'Head')),
+  requester_role text NOT NULL CHECK (requester_role IN ('Concertmaster', 'Head')),
   outcome text NOT NULL CHECK (outcome IN ('reserved', 'already_active', 'cycle_rejected')),
   reason text NOT NULL CHECK (reason <> ''),
   evidence jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(evidence) = 'object'),
   recorded_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
-  CHECK ((requester_role = 'Sane' AND requester_department_id IS NULL)
+  CHECK ((requester_role = 'Concertmaster' AND requester_department_id IS NULL)
       OR (requester_role = 'Head' AND requester_department_id IS NOT NULL))
 );
 CREATE INDEX IF NOT EXISTS head_activation_attempts_goal_idx ON head_activation_attempts (goal_id, recorded_at, attempt_id);

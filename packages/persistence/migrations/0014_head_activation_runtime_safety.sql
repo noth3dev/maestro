@@ -166,7 +166,7 @@ BEGIN
   ) THEN
     ALTER TABLE head_activation_attempts
       ADD CONSTRAINT head_activation_attempts_role_binding_check
-      CHECK ((requester_role = 'Sane' AND requester_head_role_id IS NULL)
+      CHECK ((requester_role = 'Concertmaster' AND requester_head_role_id IS NULL)
           OR (requester_role = 'Head' AND requester_head_role_id IS NOT NULL));
   END IF;
   -- 0012's original check did not include durable runtime/binding rejections.
