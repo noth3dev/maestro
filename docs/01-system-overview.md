@@ -17,6 +17,7 @@ Maestro is designed to solve the fundamental unreliability, memory drift, and au
 3. **Fail-Closed & Default-Deny Security**: All tool calls and side effects must pass through `AuthorizedEffectExecutor`. Any unclassified, unauthorized, or out-of-scope effect is denied immediately.
 4. **Content-Addressed Auditability**: All inputs, plans, briefs, and deliverables are hashed using SHA-256 canonical serialization (`Sealed Submission`), ensuring cryptographically immutable record lineage.
 5. **No Speculative Re-invention**: Maestro builds on top of the native features of the **Prime Agent SDK** (session tracking, recursive subagent spawning, tool calling) while keeping domain authority within the control plane.
+6. **Evidence-Driven Self-Improvement (Shadow-First Evolution)**: Overwatch curates execution evidence into compact Improvement Digests to optimize persona axes, role guidance, and routing templates in replay/synthetic shadow runs—without permitting autonomous changes to security authority or safety boundaries.
 
 ---
 

@@ -17,6 +17,7 @@ Maestro는 단일 에이전트 루프 시스템의 근본적인 신뢰성 부족
 3. **Fail-Closed & Default-Deny 보안**: 모든 도구 호출 및 부작용(Side Effects)은 `AuthorizedEffectExecutor`를 통과해야 합니다. 분류되지 않거나 권한이 없거나 범위 밖의 액션은 즉시 거부됩니다.
 4. **암호화적 감사 가능성 (Content-Addressed Auditability)**: 모든 입력, 계획, 의견서 및 결과물은 SHA-256 정규화 직렬화(`Sealed Submission`)를 사용하여 해시화되어 불변의 감사 이력을 보장합니다.
 5. **투기적 재발명 금지 (No Speculative Re-invention)**: Maestro는 **Prime Agent SDK**의 기본 기능(세션 추적, 재귀적 서브에이전트 스폰, 도구 호출)을 기반으로 구축하되, 도메인 권한 및 통제는 제어 평면(Control Plane) 내에 유지합니다.
+6. **증거 기반 자가 개선 (Shadow-First Self-Improvement & Evolution)**: 오버워치(Overwatch)가 마일스톤 실행 증거를 **Improvement Digest**로 큐레이션하여 Shadow/Replay 실행 모드에서 페르소나 10축, 역할 가이드라인 및 라우팅 템플릿을 피드백하고 최적화하되, 보안 권한이나 안전 경계를 임의 변경하지 못하도록 엄격히 격리합니다.
 
 ---
 
