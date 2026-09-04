@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, symlinkSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { join, relative } from "node:path";
 
 const [, , branch, base = "HEAD"] = process.argv;
 if (!branch || !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(branch) || branch.includes("..")) {
@@ -21,6 +21,6 @@ if (!lstatSync(sharedModules, { throwIfNoEntry: false })) {
   console.error(`Shared node_modules is missing: ${sharedModules}`);
   process.exit(1);
 }
-symlinkSync(relative(dirname(worktree), sharedModules), join(worktree, "node_modules"), "junction");
+symlinkSync(relative(worktree, sharedModules), join(worktree, "node_modules"), "junction");
 console.log(`Created ${worktree}`);
 console.log(`node_modules -> ${relative(worktree, sharedModules)}`);
