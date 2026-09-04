@@ -430,16 +430,12 @@ Contract flow. This is additional to (not a duplicate of) the known "no write-co
 P0 items already listed per-phase above; it grounds two of those gaps in their single sharpest
 concrete illustration each, plus two smaller cross-cutting gaps not previously called out.
 
-1. **[Phase 2, illustrates known P0]** "Concertmaster" (the intake persona meant to turn a plain-language
-   CEO request into a draft Goal + Task Contract, per plan/phase2.md line 5/36) exists in code only
-   as a display-name string (`packages/domain/src/organization.ts:166`). The actual Task Contract
-   lifecycle functions (`createDurableTaskContract`, `selectAndRecordOvertureRoles`,
-   `recordExactTaskContractConfirmation`, `launchConfirmedTaskContract`, all in
-   `packages/persistence/src/task-contract.ts`) have no CLI command and no HTTP route calling them
-   — `apps/cli/src/main.ts` only has `goal create --project-id` (a bare Goal, no Task Contract
-   substance field exists in `CreateGoalInputSchema` at all) and `apps/control-plane/src/server.ts`
-   has no `/task-contracts` route. There is currently no way, through any user-facing surface, for
-   a CEO to actually start a Goal with a plain-language outcome.
+1. **[PARTIALLY RESOLVED 2026-09-04]** Task Contract intake is now available through authenticated
+   HTTP and CLI surfaces. The API supports create/read/amend, deterministic Overture role selection,
+   exact confirmation, and launch; project membership is checked before handlers and the durable
+   service rechecks the contract project binding. The CLI exposes the same lifecycle using
+   `task-contract create|get|amend|select-roles|confirm|launch`. The remaining gap is linking a
+   launched contract to Goal creation and exposing the dependent Head/Council/Plan/worker commands.
 2. **[Phase 4, illustrates known Discord notification gap]** `apps/discord/src/main.ts:89`'s
    `main()` wires Discord's own delivery transport to a stub that immediately throws `"No delivery
    transport configured"` — there is no default delivery implementation at all, and no Discord/
@@ -472,7 +468,8 @@ concrete illustration each, plus two smaller cross-cutting gaps not previously c
   (acceptance race), and 8 (fencing-token regression coverage) resolved and merged to `main`.
   Item 3's monetary cost-ceiling sub-scope is explicitly deferred pending a real cost source/
   accounting unit. Items 7 and 9 are resolved in commits `cc751ff` and the current Git authority
-  adapter slice; feature-completeness item 1 remains the separate Phase 5 write-API gap.
+   adapter slice; the remaining Council/Plan/worker write API is Phase 5 Track A item 3, while
+   Task Contract intake itself is now exposed through the authenticated API and CLI.
 - [in_progress] Phase 3 remaining items 1-7 above: items 1-4 (Goal lease/control guards and
   consistent aggregation transactions, report idempotency, complete evidence replay sources,
   actual-cost budget enforcement, and project-scoped derived reads) are resolved in the current
@@ -496,7 +493,13 @@ Two independent read-only audits (P1-P3 usability audit, P4 enrolled-device audi
    operation calls that gateway before spawning `git`. Forged/expired/out-of-scope real Git tests
    pass with zero process spawn. Remaining work is to compose and exercise runtime/browser effects
    in the full production orchestration path, tracked with Track A item 3.
-3. **Production orchestration path.** `apps/control-plane/src/main.ts`/`server.ts` only expose Goal create/transition/critical-action and reads; no route exists to confirm/amend a Task Contract, activate Heads, submit/reveal Council briefs, create Department Plans/Mission Bundles, spawn/observe/cancel workers, run Metronome/Council/Quality, approve/revoke authority, or request a final report. Required: expose the minimal write-command surface for one full Goal lifecycle through the actual HTTP API (not direct persistence calls in a test). Test: drive one real Goal from Task Contract through Concertmaster final report using only the HTTP API + CLI, no direct persistence-layer calls.
+3. **[PARTIALLY RESOLVED 2026-09-04] Production orchestration path.** The control plane now
+   exposes the first real intake slice: Task Contract create/read/amend/role-selection/confirmation/
+   launch, with typed API-client and CLI parity, durable project authorization, replay-safe create and
+   role-selection commands, exact confirmation, and immutable project boundaries. The remaining
+   dependent write commands (Goal linkage, Head activation, Council, Department Plan, Mission Bundle,
+   worker, Git integration, Metronome/certification/report) still need authenticated routes before
+   the full HTTP-only lifecycle can be claimed.
 4. **Project-scoped operator authorization.** `server.ts` authenticates but never checks project membership/role/capability; `goal-service.ts` forwards any authenticated operator to any supplied project/Goal ID. Required: add project/role/capability authorization checks on every route, not just authentication. Test: an authenticated operator without project membership is rejected reading/writing another project's Goal.
 5. **User-facing CEO approval/critical-action completion.** No endpoint/CLI/UI records a required approval and reruns the concrete effect; `CreateGoalInputSchema` has no outcome/Task-Contract/confirmation fields. Required: add the minimal approve-and-rerun command path end-to-end (API + CLI at least). Test: a critical action that requires approval is approved through a real user-facing command and then actually executes the effect exactly once.
 6. **Continuous Metronome observation (P1, not blocking exit but required before "usable").** `scanGoalForMetronomeFindings` is a one-shot callable with no scheduler/consumer composed in `main.ts`, and its rule set omits unsupported-claims/circular-discussion/activation-cycle/scope-budget-authority-divergence/unreviewed-integration findings from the plan. Required: compose a real scheduled/event-driven Metronome loop and complete its rule set. Test: a seeded violation is caught by the running loop without being manually invoked.
@@ -519,7 +522,9 @@ Two independent read-only audits (P1-P3 usability audit, P4 enrolled-device audi
 - No phase in this remediation plan may be marked `complete` on self-review alone; each requires independent (no-edit) review plus real-PostgreSQL (and, where applicable, real-process/real-device-agent) verification per this project's existing acceptance policy.
 
 ### Status
-- [not_started] Track A (P1-P3 control-plane runtime lanes), items 1-7.
+- [in_progress] Track A (P1-P3 control-plane runtime lanes): item 2 Git authority is resolved;
+  item 3 has its Task Contract intake slice implemented; dependent lifecycle commands and runtime
+  orchestration remain open.
 - [not_started] Track B (P4 enrolled-device runtime lanes), items 1-8.
 ## 2026-09-04 — Phase 4 P4S1 environment foundation
 - [self_verified_pending_postgres] Implemented typed environment recipe/manifest and durable PostgreSQL environment lifecycle records in migration 0039. Identity is content-addressed from canonical recipe and resolved inputs; durable writes require current Goal lease plus actor/session context.

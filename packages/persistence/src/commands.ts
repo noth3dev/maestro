@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { InvalidGoalTransitionError, transitionGoal, type GoalState } from "@maestro/domain";
+import { InvalidGoalTransitionError, assertValidTaskContractSubstance, taskContractContentHash, transitionGoal, type GoalState, type TaskContractSubstance } from "@maestro/domain";
 import type { Pool } from "pg";
 
 export interface GoalLeaseProof {
@@ -32,7 +32,7 @@ export class StaleGoalLeaseError extends Error {
 }
 
 export type GoalCommand =
-  | { commandId: string; projectId: string; goalId: string; actorId: string; type: "CreateGoal"; expectedVersion: 0 }
+  | { commandId: string; projectId: string; goalId: string; actorId: string; type: "CreateGoal"; expectedVersion: 0; contractId?: string }
   | { commandId: string; projectId: string; goalId: string; actorId: string; type: "TransitionGoal"; expectedVersion: number; to: GoalState };
 
 export interface CommandResult {
@@ -41,6 +41,7 @@ export interface CommandResult {
   version?: number;
   state?: GoalState;
   eventId?: string;
+  contractId?: string;
   code?: string;
   expectedVersion?: number;
   actualVersion?: number;
@@ -180,6 +181,33 @@ export async function executeGoalCommand(
       return result;
     }
 
+    if (command.type === "CreateGoal" && command.contractId !== undefined) {
+      const contract = await client.query<{ launch_state: string; project_id: string; content: TaskContractSubstance; content_hash: string }>(
+        "SELECT launch_state, content->'project'->>'projectId' AS project_id, content, content_hash FROM task_contracts WHERE contract_id = $1 FOR KEY SHARE",
+        [command.contractId],
+      );
+      let code: string | undefined;
+      if (contract.rowCount === 0) code = "task_contract_not_found";
+      else {
+        const stored = contract.rows[0]!;
+        try {
+          assertValidTaskContractSubstance(stored.content);
+          if (taskContractContentHash(stored.content) !== stored.content_hash.trim()) code = "task_contract_integrity_error";
+        } catch {
+          code = "task_contract_integrity_error";
+        }
+        if (code === undefined && stored.project_id !== command.projectId) code = "task_contract_project_mismatch";
+        if (code === undefined && stored.launch_state !== "launched") code = "task_contract_not_launched";
+      }
+      if (code !== undefined) {
+        const result: CommandResult = { outcome: "rejected", goalId: command.goalId, code };
+        await insertReceipt(client, command, hash, "rejected", result);
+        await client.query("COMMIT");
+        transactionOpen = false;
+        return result;
+      }
+    }
+
     let nextState: GoalState;
     let eventType: string;
     if (command.type === "CreateGoal") {
@@ -212,20 +240,21 @@ export async function executeGoalCommand(
     const result: CommandResult = {
       outcome: "succeeded", goalId: command.goalId, version: nextVersion,
       state: nextState, eventId,
+      ...(command.type === "CreateGoal" && command.contractId !== undefined ? { contractId: command.contractId } : {}),
     };
     await insertReceipt(client, command, hash, "succeeded", result);
     await client.query(
       `INSERT INTO goal_events
        (event_id, project_id, goal_id, aggregate_version, event_type, schema_version, payload, command_id)
        VALUES ($1, $2, $3, $4, $5, 1, $6::jsonb, $7)`,
-      [eventId, command.projectId, command.goalId, nextVersion, eventType, JSON.stringify({ state: nextState }), command.commandId],
+      [eventId, command.projectId, command.goalId, nextVersion, eventType, JSON.stringify({ state: nextState, ...(command.type === "CreateGoal" && command.contractId !== undefined ? { taskContractId: command.contractId } : {}) }), command.commandId],
     );
 
     if (command.type === "CreateGoal") {
       await client.query(
-        `INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, transaction_timestamp(), transaction_timestamp())`,
-        [command.goalId, command.projectId, nextState, nextVersion],
+        `INSERT INTO goals (goal_id, project_id, state, version, task_contract_id, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, transaction_timestamp(), transaction_timestamp())`,
+        [command.goalId, command.projectId, nextState, nextVersion, command.contractId ?? null],
       );
     } else {
       const updated = await client.query(

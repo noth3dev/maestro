@@ -10,6 +10,8 @@ import {
   renewGoalLease,
 } from "./commands.js";
 import { listGoalEvents } from "./events.js";
+import { createDurableTaskContract, launchConfirmedTaskContract, recordExactTaskContractConfirmation } from "./task-contract.js";
+import type { TaskContractSubstance } from "@maestro/domain";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -33,7 +35,7 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
   beforeAll(async () => { await applyAllMigrations(pool); });
 
   beforeEach(async () => {
-    await pool.query("TRUNCATE goal_leases, outbox, goal_events, goals, command_receipts RESTART IDENTITY CASCADE");
+    await pool.query("TRUNCATE goal_leases, outbox, goal_events, goals, command_receipts, task_contract_confirmations, task_contract_decisions, task_contracts RESTART IDENTITY CASCADE");
   });
 
   afterAll(async () => { await pool.end(); });
@@ -172,6 +174,31 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
     );
     await expect(executeGoalCommand(pool, command, proof)).rejects.toMatchObject({ code: "stale_lease" });
     expect(await counts()).toEqual(before);
+  });
+
+  it("creates a Goal only from a launched project-matching Task Contract", async () => {
+    const projectId = randomUUID();
+    const contractId = randomUUID();
+    const contractSubstance: TaskContractSubstance = {
+      desiredOutcome: "Ship", userVisibleBehavior: ["Works"], successCriteria: ["Passes"], liveEvidence: ["Live"], scope: ["Feature"], nonGoals: ["Other"], priorities: ["Safety"], acceptableTradeoffs: ["Time"], constraints: ["Local"], knownEdgeCases: ["Retry"],
+      project: { projectId, repository: "/repo", immutableBaseRevision: "abc", dataBoundary: "repo" }, evidenceReferences: ["spec"], approvedPreviewReferences: [], expectedGroups: ["Product"], expectedDepartments: ["Product"], criticalActionExpectations: ["Approval"], forbiddenEffects: ["Deploy"], environmentAssumptions: ["DB"], externalServiceAssumptions: ["None"], budget: { ceiling: "10", reportingExpectations: ["Report"], stoppingConditions: ["Stop"] },
+    };
+    const contract = await createDurableTaskContract(pool, contractId, contractSubstance);
+    const goalId = randomUUID();
+    const proof = await lease(goalId, "concertmaster");
+    const command = { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "CreateGoal" as const, expectedVersion: 0, contractId };
+    await expect(executeGoalCommand(pool, command, proof)).resolves.toMatchObject({ outcome: "rejected", code: "task_contract_not_launched" });
+    expect((await pool.query("SELECT count(*)::int AS count FROM goals WHERE goal_id = $1", [goalId])).rows[0]!.count).toBe(0);
+
+    await recordExactTaskContractConfirmation(pool, contract.contractId, contract.version, contract.contentHash, "ceo");
+    await launchConfirmedTaskContract(pool, contract.contractId);
+    const created = await executeGoalCommand(pool, { ...command, commandId: randomUUID() }, proof);
+    expect(created).toMatchObject({ outcome: "succeeded", goalId, state: "draft" });
+    expect((await pool.query("SELECT task_contract_id FROM goals WHERE goal_id = $1", [goalId])).rows[0]!.task_contract_id).toBe(contractId);
+
+    const mismatchGoalId = randomUUID();
+    const mismatchProof = await lease(mismatchGoalId, "concertmaster");
+    await expect(executeGoalCommand(pool, { ...command, commandId: randomUUID(), goalId: mismatchGoalId, projectId: randomUUID() }, mismatchProof)).resolves.toMatchObject({ outcome: "rejected", code: "task_contract_project_mismatch" });
   });
 
   it("allows only one command at an expected Goal version", async () => {

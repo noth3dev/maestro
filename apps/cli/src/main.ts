@@ -22,7 +22,13 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
         "project-id": { type: "string" },
         "goal-id": { type: "string" },
         "command-id": { type: "string" },
+        "contract-id": { type: "string" },
+        "substance-json": { type: "string" },
+        "content-hash": { type: "string" },
+        version: { type: "string" },
         "expected-version": { type: "string" },
+        "outside-evidence": { type: "boolean", default: false },
+        "preview-needed": { type: "boolean", default: false },
         to: { type: "string" },
         after: { type: "string" },
         json: { type: "boolean", default: false },
@@ -34,6 +40,38 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     const string = (name: keyof typeof parsed.values) => requiredOption(value(name), `--${name}`);
     const json = parsed.values.json === true;
 
+    if (resource === "task-contract" && action === "create") {
+      const result = await client.createTaskContract({ projectId: string("project-id"), substance: parseJsonOption(string("substance-json")) }, string("contract-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "task-contract" && action === "get") {
+      const result = await client.getTaskContract(string("contract-id"), { projectId: string("project-id") });
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "task-contract" && action === "amend") {
+      const expectedVersion = nonNegativeInteger(string("expected-version"), "--expected-version");
+      const result = await client.updateTaskContract(string("contract-id"), { projectId: string("project-id"), expectedVersion, substance: parseJsonOption(string("substance-json")) });
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "task-contract" && action === "select-roles") {
+      const result = await client.selectOvertureRoles(string("contract-id"), { projectId: string("project-id"), outsideEvidenceRequested: value("outside-evidence") === true, previewNeeded: value("preview-needed") === true }, value("command-id") === undefined ? undefined : string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "task-contract" && action === "confirm") {
+      const version = nonNegativeInteger(string("version"), "--version");
+      await client.confirmTaskContract(string("contract-id"), { projectId: string("project-id"), version, contentHash: string("content-hash") }, value("command-id") === undefined ? undefined : string("command-id"));
+      printState(io.stdout, { confirmed: true }, json);
+      return 0;
+    }
+    if (resource === "task-contract" && action === "launch") {
+      const result = await client.launchTaskContract(string("contract-id"), string("project-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
     if (resource === "goals" && action === "list") {
       const result = await client.listGoals(string("project-id"));
       printState(io.stdout, result, json);
@@ -45,7 +83,8 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       return 0;
     }
     if (resource === "goal" && action === "create") {
-      const result = await client.createGoal({ projectId: string("project-id") }, string("command-id"));
+      const contractId = value("contract-id");
+      const result = await client.createGoal({ projectId: string("project-id"), ...(contractId === undefined ? {} : { contractId: string("contract-id") }) }, string("command-id"));
       printGoal(io.stdout, result, json);
       return 0;
     }
@@ -55,8 +94,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       return 0;
     }
     if (resource === "goal" && action === "transition") {
-      const expectedVersion = Number(string("expected-version"));
-      if (!Number.isInteger(expectedVersion) || expectedVersion < 0) throw new Error("--expected-version must be a non-negative integer");
+      const expectedVersion = nonNegativeInteger(string("expected-version"), "--expected-version");
       const result = await client.transitionGoal(string("goal-id"), { projectId: string("project-id"), expectedVersion, to: string("to") as GoalResult["state"] }, string("command-id"));
       printGoal(io.stdout, result, json);
       return 0;
@@ -77,6 +115,16 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     io.stderr(`${message}\n`);
     return error instanceof ApiError ? 1 : 2;
   }
+}
+
+function nonNegativeInteger(value: string, option: string): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error(`${option} must be a non-negative integer`);
+  return parsed;
+}
+
+function parseJsonOption(value: string): any {
+  try { return JSON.parse(value); } catch { throw new Error("--substance-json must contain valid JSON"); }
 }
 
 function requireEnvironment(env: Env, name: string): string {

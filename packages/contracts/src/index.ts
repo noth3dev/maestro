@@ -9,7 +9,7 @@ export const GoalStateSchema = z.enum([
 ]);
 export type GoalState = z.infer<typeof GoalStateSchema>;
 
-export const CreateGoalInputSchema = z.object({ projectId: UuidSchema }).strict();
+export const CreateGoalInputSchema = z.object({ projectId: UuidSchema, contractId: UuidSchema.optional() }).strict();
 export type CreateGoalInput = z.infer<typeof CreateGoalInputSchema>;
 
 export const TransitionGoalInputSchema = z.object({
@@ -28,12 +28,91 @@ export type GoalScopedReadQuery = GoalQuery;
 export const GoalResultSchema = z.object({
   goalId: UuidSchema,
   projectId: UuidSchema,
+  contractId: UuidSchema.optional(),
   state: GoalStateSchema,
   version: CommandVersionSchema,
 }).strict();
 export type GoalResult = z.infer<typeof GoalResultSchema>;
 export const GoalListSchema = z.object({ goals: z.array(GoalResultSchema) }).strict();
 export type GoalList = z.infer<typeof GoalListSchema>;
+
+const NonEmptyStringListSchema = z.array(z.string().min(1)).readonly();
+const TaskContractProjectSchema = z.object({
+  projectId: UuidSchema,
+  repository: z.string().min(1),
+  immutableBaseRevision: z.string().min(1),
+  dataBoundary: z.string().min(1),
+}).strict();
+const TaskContractBudgetSchema = z.object({
+  ceiling: z.string().min(1),
+  reportingExpectations: NonEmptyStringListSchema,
+  stoppingConditions: NonEmptyStringListSchema,
+}).strict();
+export const TaskContractSubstanceSchema = z.object({
+  desiredOutcome: z.string().min(1),
+  userVisibleBehavior: NonEmptyStringListSchema,
+  successCriteria: NonEmptyStringListSchema,
+  liveEvidence: NonEmptyStringListSchema,
+  scope: NonEmptyStringListSchema,
+  nonGoals: NonEmptyStringListSchema,
+  priorities: NonEmptyStringListSchema,
+  acceptableTradeoffs: NonEmptyStringListSchema,
+  constraints: NonEmptyStringListSchema,
+  knownEdgeCases: NonEmptyStringListSchema,
+  project: TaskContractProjectSchema,
+  evidenceReferences: NonEmptyStringListSchema,
+  approvedPreviewReferences: z.array(z.string()).readonly(),
+  expectedGroups: NonEmptyStringListSchema,
+  expectedDepartments: NonEmptyStringListSchema,
+  criticalActionExpectations: NonEmptyStringListSchema,
+  forbiddenEffects: NonEmptyStringListSchema,
+  environmentAssumptions: NonEmptyStringListSchema,
+  externalServiceAssumptions: NonEmptyStringListSchema,
+  budget: TaskContractBudgetSchema,
+}).strict();
+export type TaskContractSubstance = z.infer<typeof TaskContractSubstanceSchema>;
+const TaskContractDecisionSchema = z.object({
+  decisionId: UuidSchema,
+  kind: z.enum(["created", "amended", "overture_selected"]),
+  evidence: z.record(z.string(), z.unknown()),
+}).strict();
+export const TaskContractSchema = TaskContractSubstanceSchema.extend({
+  contractId: UuidSchema,
+  schemaVersion: z.literal(1),
+  version: CommandVersionSchema,
+  decisionHistory: z.array(TaskContractDecisionSchema).readonly(),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  launchState: z.enum(["awaiting_confirmation", "launched"]),
+}).strict();
+export type TaskContract = z.infer<typeof TaskContractSchema>;
+export const CreateTaskContractInputSchema = z.object({
+  projectId: UuidSchema,
+  substance: TaskContractSubstanceSchema,
+}).strict();
+export type CreateTaskContractInput = z.infer<typeof CreateTaskContractInputSchema>;
+export const UpdateTaskContractInputSchema = z.object({
+  projectId: UuidSchema,
+  expectedVersion: CommandVersionSchema,
+  substance: TaskContractSubstanceSchema,
+  evidence: z.record(z.string(), z.unknown()).optional(),
+}).strict();
+export type UpdateTaskContractInput = z.infer<typeof UpdateTaskContractInputSchema>;
+export const TaskContractQuerySchema = z.object({ projectId: UuidSchema }).strict();
+export type TaskContractQuery = z.infer<typeof TaskContractQuerySchema>;
+export const OvertureSelectionInputSchema = z.object({
+  projectId: UuidSchema,
+  outsideEvidenceRequested: z.boolean(),
+  previewNeeded: z.boolean(),
+}).strict();
+export type OvertureSelectionInput = z.infer<typeof OvertureSelectionInputSchema>;
+export const TaskContractConfirmationInputSchema = z.object({
+  projectId: UuidSchema,
+  version: CommandVersionSchema,
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+}).strict();
+export type TaskContractConfirmationInput = z.infer<typeof TaskContractConfirmationInputSchema>;
+export const OvertureRoleSelectionResultSchema = z.object({ roles: z.array(z.string().min(1)) }).strict();
+export type OvertureRoleSelectionResult = z.infer<typeof OvertureRoleSelectionResultSchema>;
 
 /** Human/operator budget view: envelope, planned allocations, and incurred spend are separate. */
 export const GoalBudgetSummarySchema = z.object({
@@ -49,6 +128,8 @@ export const StableApiErrorCodeSchema = z.enum([
   "stale_lease", "lease_unavailable", "command_id_reused", "durable_store_unavailable",
   "authentication_required", "authentication_unavailable", "credential_forbidden",
   "critical_action_denied", "critical_action_requires_approval", "project_access_forbidden",
+  "task_contract_not_found", "task_contract_conflict", "task_contract_version_conflict",
+  "exact_confirmation_required", "task_contract_integrity_error",
 ]);
 export const StableApiErrorSchema = z.object({
   error: z.object({ code: StableApiErrorCodeSchema, message: z.string().min(1) }).strict(),

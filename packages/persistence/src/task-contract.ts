@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { TASK_CONTRACT_SCHEMA_VERSION, amendTaskContract, assertValidTaskContractSubstance, createTaskContract, selectOvertureRoles, taskContractContentHash, type OvertureRoleId, type OvertureSelectionInput, type TaskContract, type TaskContractDecision, type TaskContractSubstance } from "@maestro/domain";
+import { TASK_CONTRACT_SCHEMA_VERSION, amendTaskContract, assertValidTaskContractSubstance, canonicalJson, createTaskContract, selectOvertureRoles, taskContractContentHash, type OvertureRoleId, type OvertureSelectionInput, type TaskContract, type TaskContractDecision, type TaskContractSubstance } from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
 
 export class TaskContractNotFoundError extends Error {}
 export class TaskContractVersionConflictError extends Error {}
+export class TaskContractConflictError extends Error {}
+export class TaskContractProjectBoundaryError extends Error {}
 export class ExactConfirmationRequiredError extends Error {}
 export class TaskContractIntegrityError extends Error {}
 
@@ -16,7 +18,17 @@ export async function createDurableTaskContract(pool: Pool, contractId: string, 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await insertContract(client, contract);
+    const inserted = await insertContract(client, contract);
+    if (!inserted) {
+      const existing = await readContractRow(client, contractId);
+      if (!existing) throw new TaskContractNotFoundError(`Task contract not found: ${contractId}`);
+      assertContractIntegrity(existing.row);
+      if (existing.row.content_hash.trim() !== contract.contentHash) {
+        throw new TaskContractConflictError(`Task contract already exists with different content: ${contractId}`);
+      }
+      await client.query("COMMIT");
+      return toContract(existing.row, existing.decisions);
+    }
     await insertDecisions(client, contract);
     await client.query("COMMIT");
     return contract;
@@ -24,11 +36,10 @@ export async function createDurableTaskContract(pool: Pool, contractId: string, 
 }
 
 export async function readTaskContract(pool: Queryable, contractId: string): Promise<TaskContract | undefined> {
-  const row = await pool.query<ContractRow>("SELECT contract_id, schema_version, version, content, content_hash, launch_state FROM task_contracts WHERE contract_id = $1", [contractId]);
-  if (row.rowCount !== 1) return undefined;
-  assertContractIntegrity(row.rows[0]!);
-  const decisions = await pool.query<{ decision_id: string; kind: TaskContractDecision["kind"]; evidence: Record<string, unknown> }>("SELECT decision_id, kind, evidence FROM task_contract_decisions WHERE contract_id = $1 ORDER BY recorded_at, decision_id", [contractId]);
-  return toContract(row.rows[0]!, decisions.rows);
+  const existing = await readContractRow(pool, contractId);
+  if (!existing) return undefined;
+  assertContractIntegrity(existing.row);
+  return toContract(existing.row, existing.decisions);
 }
 
 export async function updateDurableTaskContract(pool: Pool, contractId: string, expectedVersion: number, substance: TaskContractSubstance, evidence: Record<string, unknown> = {}): Promise<TaskContract> {
@@ -39,21 +50,30 @@ export async function updateDurableTaskContract(pool: Pool, contractId: string, 
     const existing = await client.query<ContractRow>("SELECT contract_id, schema_version, version, content, content_hash, launch_state FROM task_contracts WHERE contract_id = $1 FOR UPDATE", [contractId]);
     if (existing.rowCount !== 1) throw new TaskContractNotFoundError(`Task contract not found: ${contractId}`);
     assertContractIntegrity(existing.rows[0]!);
-    const prior = toContract(existing.rows[0]!, []);
-    if (prior.version !== expectedVersion) throw new TaskContractVersionConflictError(`Expected Task Contract version ${expectedVersion}, got ${prior.version}`);
+    const priorDecisions = await client.query<{ decision_id: string; kind: TaskContractDecision["kind"]; evidence: Record<string, unknown> }>("SELECT decision_id, kind, evidence FROM task_contract_decisions WHERE contract_id = $1 ORDER BY recorded_at, decision_id", [contractId]);
+    const prior = toContract(existing.rows[0]!, priorDecisions.rows);
+    if (prior.project.projectId !== substance.project.projectId) {
+      throw new TaskContractProjectBoundaryError("Task Contract project boundary cannot change");
+    }
+    // A lost response may be retried after the amendment committed. Returning
+    // the already-current identical content is the safe idempotent outcome;
+    // only a genuinely different content hash needs the expected-version check.
     if (taskContractContentHash(substance) === prior.contentHash) { await client.query("COMMIT"); return prior; }
+    if (prior.version !== expectedVersion) throw new TaskContractVersionConflictError(`Expected Task Contract version ${expectedVersion}, got ${prior.version}`);
     const nextHash = taskContractContentHash(substance);
     const decision: TaskContractDecision = { decisionId: randomUUID(), kind: "amended", evidence: { ...evidence, previousContentHash: prior.contentHash, nextContentHash: nextHash } };
     const amended = amendTaskContract(prior, substance, decision);
     await client.query("UPDATE task_contracts SET version = $2, content = $3::jsonb, content_hash = $4, launch_state = $5, updated_at = transaction_timestamp() WHERE contract_id = $1", [contractId, amended.version, JSON.stringify(substance), amended.contentHash, amended.launchState]);
-    await insertDecisions(client, amended);
+    // Only the new amendment decision is inserted; prior history is already durable.
+    await insertDecisions(client, { ...amended, decisionHistory: [decision] });
     await client.query("COMMIT");
-    return { ...amended, decisionHistory: [decision] };
+    return amended;
   } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 
-export async function selectAndRecordOvertureRoles(pool: Pool, contractId: string, input: OvertureSelectionInput): Promise<readonly OvertureRoleId[]> {
+export async function selectAndRecordOvertureRoles(pool: Pool, contractId: string, input: OvertureSelectionInput, decisionId?: string): Promise<readonly OvertureRoleId[]> {
   const roles = selectOvertureRoles(input);
+  const selectionDecisionId = decisionId ?? randomUUID();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -61,7 +81,20 @@ export async function selectAndRecordOvertureRoles(pool: Pool, contractId: strin
     if (row.rowCount !== 1) throw new TaskContractNotFoundError(`Task contract not found: ${contractId}`);
     assertContractIntegrity(row.rows[0]!);
     const current = row.rows[0]!;
-    await client.query("INSERT INTO task_contract_decisions (decision_id, contract_id, contract_version, kind, evidence, content_hash) VALUES ($1, $2, $3, 'overture_selected', $4::jsonb, $5)", [randomUUID(), contractId, current.version, JSON.stringify({ input, roles }), current.content_hash.trim()]);
+    const evidence = { input, roles };
+    const prior = await client.query<{ contract_id: string; contract_version: string; kind: TaskContractDecision["kind"]; evidence: Record<string, unknown> }>(
+      "SELECT contract_id, contract_version, kind, evidence FROM task_contract_decisions WHERE decision_id = $1",
+      [selectionDecisionId],
+    );
+    if (prior.rowCount === 1) {
+      const existing = prior.rows[0]!;
+      if (existing.contract_id !== contractId || existing.contract_version !== current.version || existing.kind !== "overture_selected" || canonicalJson(existing.evidence) !== canonicalJson(evidence)) {
+        throw new TaskContractConflictError("Task Contract selection command was reused with different content");
+      }
+      await client.query("COMMIT");
+      return roles;
+    }
+    await client.query("INSERT INTO task_contract_decisions (decision_id, contract_id, contract_version, kind, evidence, content_hash) VALUES ($1, $2, $3, 'overture_selected', $4::jsonb, $5)", [selectionDecisionId, contractId, current.version, JSON.stringify(evidence), current.content_hash.trim()]);
     await client.query("COMMIT");
     return roles;
   } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
@@ -101,8 +134,16 @@ export async function launchConfirmedTaskContract(pool: Pool, contractId: string
   } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 
-async function insertContract(client: PoolClient, contract: TaskContract): Promise<void> {
-  await client.query("INSERT INTO task_contracts (contract_id, schema_version, version, content, content_hash, launch_state) VALUES ($1, $2, $3, $4::jsonb, $5, $6)", [contract.contractId, TASK_CONTRACT_SCHEMA_VERSION, contract.version, JSON.stringify(substanceOf(contract)), contract.contentHash, contract.launchState]);
+async function readContractRow(queryable: Queryable, contractId: string): Promise<{ row: ContractRow; decisions: readonly { decision_id: string; kind: TaskContractDecision["kind"]; evidence: Record<string, unknown> }[] } | undefined> {
+  const result = await queryable.query<ContractRow>("SELECT contract_id, schema_version, version, content, content_hash, launch_state FROM task_contracts WHERE contract_id = $1", [contractId]);
+  if (result.rowCount !== 1) return undefined;
+  const decisions = await queryable.query<{ decision_id: string; kind: TaskContractDecision["kind"]; evidence: Record<string, unknown> }>("SELECT decision_id, kind, evidence FROM task_contract_decisions WHERE contract_id = $1 ORDER BY recorded_at, decision_id", [contractId]);
+  return { row: result.rows[0]!, decisions: decisions.rows };
+}
+
+async function insertContract(client: PoolClient, contract: TaskContract): Promise<boolean> {
+  const result = await client.query("INSERT INTO task_contracts (contract_id, schema_version, version, content, content_hash, launch_state) VALUES ($1, $2, $3, $4::jsonb, $5, $6) ON CONFLICT (contract_id) DO NOTHING", [contract.contractId, TASK_CONTRACT_SCHEMA_VERSION, contract.version, JSON.stringify(substanceOf(contract)), contract.contentHash, contract.launchState]);
+  return result.rowCount === 1;
 }
 async function insertDecisions(client: PoolClient, contract: TaskContract): Promise<void> {
   for (const decision of contract.decisionHistory) await client.query("INSERT INTO task_contract_decisions (decision_id, contract_id, contract_version, kind, evidence, content_hash) VALUES ($1, $2, $3, $4, $5::jsonb, $6)", [decision.decisionId, contract.contractId, contract.version, decision.kind, JSON.stringify(decision.evidence), contract.contentHash]);

@@ -17,6 +17,13 @@ import {
   EventCursorSchema,
   GoalEventPageSchema,
   type EventCursor,
+  CreateTaskContractInputSchema,
+  TaskContractSchema,
+  TaskContractQuerySchema,
+  UpdateTaskContractInputSchema,
+  OvertureSelectionInputSchema,
+  OvertureRoleSelectionResultSchema,
+  TaskContractConfirmationInputSchema,
   StableApiErrorSchema,
   TransitionGoalInputSchema,
   UuidSchema,
@@ -30,13 +37,25 @@ import {
   LeaseUnavailableError,
   StaleLeaseError,
   VersionConflictError,
+  TaskContractIntegrityError as GoalTaskContractIntegrityError,
   type GoalService,
 } from "./goal-service.js";
 import { CriticalActionUnavailableError, type CriticalActionService } from "./critical-action-service.js";
 import { ReadStateGoalNotFoundError, type ReadStateService } from "./read-state-service.js";
+import {
+  ExactConfirmationRequiredError,
+  TaskContractConflictError,
+  TaskContractIntegrityError,
+  TaskContractNotFoundError,
+  TaskContractProjectBoundaryError,
+  TaskContractProjectMismatchError,
+  TaskContractVersionConflictError,
+  type TaskContractService,
+} from "./task-contract-service.js";
 
 export type { GoalService } from "./goal-service.js";
 export type { CriticalActionService } from "./critical-action-service.js";
+export type { TaskContractService } from "./task-contract-service.js";
 
 export interface ReadStateUnavailableService extends ReadStateService {}
 
@@ -65,13 +84,14 @@ const systemPollingScheduler: PollingScheduler = {
   clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
 };
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService, https, projectMembership }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, https, projectMembership }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
   criticalActionService?: CriticalActionService;
   pollingScheduler?: PollingScheduler;
   readStateService?: ReadStateService;
+  taskContractService?: TaskContractService;
   /** When set, the listener is real HTTPS, not plain HTTP. */
   https?: { cert: Buffer; key: Buffer };
   /**
@@ -101,6 +121,14 @@ export function buildServer({ goalService, authenticator, eventService, critical
   const criticalActions = criticalActionService ?? {
     performCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
   };
+  const taskContracts = taskContractService ?? {
+    createTaskContract: async () => { throw new DurableStoreUnavailableError(); },
+    getTaskContract: async () => { throw new DurableStoreUnavailableError(); },
+    updateTaskContract: async () => { throw new DurableStoreUnavailableError(); },
+    selectOvertureRoles: async () => { throw new DurableStoreUnavailableError(); },
+    confirmTaskContract: async () => { throw new DurableStoreUnavailableError(); },
+    launchTaskContract: async () => { throw new DurableStoreUnavailableError(); },
+  } satisfies TaskContractService;
   // preClose runs while Fastify can still release open HTTP responses. onClose is too late:
   // Fastify waits for those connections before it invokes onClose.
   app.addHook("preClose", async () => {
@@ -183,6 +211,49 @@ export function buildServer({ goalService, authenticator, eventService, critical
       classification: decision.classification,
       ...(decision.recordId === undefined ? {} : { recordId: decision.recordId }),
     }));
+  });
+
+  app.post("/v1/task-contracts", async (request, reply) => {
+    const contractId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const input = parse(CreateTaskContractInputSchema, request.body);
+    const result = await taskContracts.createTaskContract(contractId, input);
+    return reply.status(201).send(TaskContractSchema.parse(result));
+  });
+
+  app.get("/v1/task-contracts/:contractId", async (request, reply) => {
+    const contractId = parse(UuidSchema, (request.params as { contractId?: unknown }).contractId);
+    const query = parse(TaskContractQuerySchema, request.query);
+    const result = await taskContracts.getTaskContract(contractId, query.projectId);
+    return reply.status(200).send(TaskContractSchema.parse(result));
+  });
+
+  app.put("/v1/task-contracts/:contractId", async (request, reply) => {
+    const contractId = parse(UuidSchema, (request.params as { contractId?: unknown }).contractId);
+    const input = parse(UpdateTaskContractInputSchema, request.body);
+    const result = await taskContracts.updateTaskContract(contractId, input, requestOperator(request as { operator?: OperatorContext }).operatorId);
+    return reply.status(200).send(TaskContractSchema.parse(result));
+  });
+
+  app.post("/v1/task-contracts/:contractId/overture-selection", async (request, reply) => {
+    const contractId = parse(UuidSchema, (request.params as { contractId?: unknown }).contractId);
+    const input = parse(OvertureSelectionInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"] ?? contractId);
+    const roles = await taskContracts.selectOvertureRoles(contractId, input, commandId);
+    return reply.status(200).send(OvertureRoleSelectionResultSchema.parse({ roles }));
+  });
+
+  app.post("/v1/task-contracts/:contractId/confirmation", async (request, reply) => {
+    const contractId = parse(UuidSchema, (request.params as { contractId?: unknown }).contractId);
+    const input = parse(TaskContractConfirmationInputSchema, request.body);
+    await taskContracts.confirmTaskContract(contractId, input, requestOperator(request as { operator?: OperatorContext }).operatorId);
+    return reply.status(204).send();
+  });
+
+  app.post("/v1/task-contracts/:contractId/launch", async (request, reply) => {
+    const contractId = parse(UuidSchema, (request.params as { contractId?: unknown }).contractId);
+    const input = parse(TaskContractQuerySchema, request.body);
+    const result = await taskContracts.launchTaskContract(contractId, input.projectId);
+    return reply.status(200).send(TaskContractSchema.parse(result));
   });
 
   app.get("/v1/goals", async (request, reply) => {
@@ -363,6 +434,13 @@ function mapError(error: unknown): { status: number; body: StableApiError } {
   if (error instanceof AuthenticationRequiredError) return apiError(401, "authentication_required", "Authentication is required");
   if (error instanceof CredentialForbiddenError) return apiError(403, "credential_forbidden", "Credential is not active");
   if (error instanceof AuthenticationUnavailableError) return apiError(429, "authentication_unavailable", "Authentication is temporarily unavailable");
+  if (error instanceof TaskContractProjectMismatchError || error instanceof TaskContractProjectBoundaryError) return apiError(400, "validation_error", error.message);
+  if (error instanceof TaskContractIntegrityError || error instanceof GoalTaskContractIntegrityError) return apiError(503, "task_contract_integrity_error", error.message);
+  if (error instanceof TaskContractNotFoundError) return apiError(404, "task_contract_not_found", "Task Contract was not found");
+  if (error instanceof TaskContractConflictError) return apiError(409, "task_contract_conflict", error.message);
+  if (error instanceof TaskContractVersionConflictError) return apiError(409, "task_contract_version_conflict", error.message);
+  if (error instanceof ExactConfirmationRequiredError) return apiError(409, "exact_confirmation_required", error.message);
+  if (error instanceof TaskContractIntegrityError || error instanceof GoalTaskContractIntegrityError) return apiError(503, "task_contract_integrity_error", error.message);
   if (error instanceof VersionConflictError) return apiError(409, "version_conflict", error.message);
   if (error instanceof InvalidTransitionError) return apiError(422, "invalid_transition", error.message);
   if (error instanceof GoalNotFoundError || error instanceof ReadStateGoalNotFoundError) return apiError(404, "goal_not_found", "Goal was not found");
