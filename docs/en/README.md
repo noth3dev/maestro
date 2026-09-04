@@ -145,7 +145,7 @@ node apps/cli/dist/main.js goal get <goalId>
 # Stream append-only domain events
 node apps/cli/dist/main.js events list --goalId <goalId>
 
-# Query Sentinel challenges & Overwatch Council rounds
+# Query Sentinel challenges & Encore Council rounds
 node apps/cli/dist/main.js sentinel challenge <challengeId>
 node apps/cli/dist/main.js council round <roundId>
 
