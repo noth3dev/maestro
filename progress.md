@@ -1035,3 +1035,16 @@ HEAD
 - Focused verification passed: budget reservations 9/9, Mission Bundles 18/18, team-lead grants
   8/8, and Git integration 6/6. Build and diff checks were clean. Commits: `b397305`, `a378b06`.
 - Next: Phase 2 item 9, the missing AuthorizedEffectExecutor enforcement around effect adapters.
+
+
+## 2026-09-04 (continued) — Phase 2 item 9 / Phase 5 Track A item 2 Git authority boundary resolved
+- Replaced the unauthenticated `localGitPort` export with `createLocalGitPort`, which requires an
+  `AuthorizedEffectExecutor`-compatible authority gateway. Branch creation/advancement, worktree
+  creation/removal, commits, and revision reads now all build an exact scoped action request and
+  invoke the authority gateway before the private Git subprocess helper can spawn `git`.
+- Added ordinary classifications for the local Git actions and wired `createControlPlane` to expose
+  an authority-backed `createGitPort` factory using the durable PostgreSQL authority repository.
+  Test-only real-Git fixtures now also use `AuthorizedEffectExecutor`, rather than bypassing it.
+- Added real ephemeral-repository regressions for expired, forged-actor, and out-of-scope grants;
+  each is rejected before a branch appears. Focused Git tests passed 11/11 and `npm run build`
+  passed. Full disposable-PostgreSQL verification remains the next gate before commit.

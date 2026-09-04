@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
+import { AuthorizedEffectExecutor, type ActionRequest } from "@maestro/authority";
+import { createLocalGitPort } from "@maestro/git-adapter";
+import type { GitPort } from "@maestro/domain";
 import { assertProjectMembership, authenticateLocalOperator, getGoalControl, listGoalEvents, PostgresAuthorityRepository, reconcileOnStartup, runMigrations } from "@maestro/persistence";
 import { createPrimeExecutionKernel } from "@maestro/prime-adapter";
-import type { ActionRequest } from "@maestro/authority";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService } from "./critical-action-service.js";
 import { createDurableGoalService } from "./goal-service.js";
@@ -15,6 +17,8 @@ export interface ControlPlane {
   config: MaestroConfig;
   listen(): Promise<void>;
   close(): Promise<void>;
+  /** Builds a Git port whose every operation is audited and control-checked. */
+  createGitPort(context: Omit<ActionRequest, "action" | "target">): GitPort;
 }
 
 export interface ControlPlaneOverrides {
@@ -42,8 +46,10 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   const authenticator: OperatorAuthenticator = {
     authenticateBearerSecret: (secret) => authenticateLocalOperator(pool, secret),
   };
+  const authorityRepository = new PostgresAuthorityRepository(pool);
+  const authorityExecutor = new AuthorizedEffectExecutor(authorityRepository);
   const criticalActionService = createCriticalActionService({
-    repository: new PostgresAuthorityRepository(pool),
+    repository: authorityRepository,
     getControlEpoch: async (projectId, goalId) => (await getGoalControl(pool, projectId, goalId)).controlEpoch,
     // The gateway is the point of this endpoint; no real external effect is wired in Phase 1.
     effect: overrides.criticalActionEffect ?? (async () => {}),
@@ -63,6 +69,9 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     app,
     pool,
     config,
+    createGitPort(context) {
+      return createLocalGitPort({ authority: authorityExecutor, context });
+    },
     async listen() {
       // The schema must be current before any reconciliation or traffic:
       // apply every not-yet-recorded migration (additive-only, advisory-

@@ -9,6 +9,7 @@
     }
   },
   "dependencies": {
+    "@maestro/authority": "file:../authority",
     "@maestro/domain": "file:../domain"
   },
   "main": "./dist/index.js",

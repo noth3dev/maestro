@@ -42,7 +42,12 @@ function classifyAction(action: string): ActionClassification {
   switch (action) {
     case "project.file.edit":
     case "project.test.run":
+    case "git.local.branch.create":
+    case "git.local.branch.advance":
     case "git.local.commit":
+    case "git.local.revision.read":
+    case "git.local.worktree.create":
+    case "git.local.worktree.remove":
       return "ordinary";
     case "git.remote.push":
     case "deployment.release":

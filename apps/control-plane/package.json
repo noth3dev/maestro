@@ -5,6 +5,8 @@
   "dependencies": {
     "@maestro/authority": "*",
     "@maestro/contracts": "*",
+    "@maestro/domain": "*",
+    "@maestro/git-adapter": "*",
     "@maestro/persistence": "*",
     "@maestro/prime-adapter": "*",
     "fastify": "^5.0.0",

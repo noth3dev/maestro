@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { localGitPort } from "@maestro/git-adapter";
+import { localGitPort } from "../../../test/git-port.js";
 import {
   buildDiscordIncidentBrief,
   deriveDiscordIncidentFingerprint,
