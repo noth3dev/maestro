@@ -220,7 +220,9 @@ export async function reconcileOnStartup(
     // live lease means some other process could still legitimately hold
     // the real session (lease_contended below never reaches here), so
     // forcing observation would be premature, not merely redundant.
-    const reconciledWorkerIds = !leaseIsLive ? await reconcileOrphanedWorkers(pool, options.kernel, row.goal_id) : [];
+    const reconciledWorkerIds = !leaseIsLive
+      ? await reconcileOrphanedWorkers(pool, options.kernel, row.goal_id, `reconciler:${options.ownerId}`, goalLeaseDurationMs)
+      : [];
 
     if (consistent) {
       results.push({ goalId: row.goal_id, projectId: row.project_id, priorState: row.state, outcome: "consistent", reasons: [], reconciledWorkerIds });
@@ -287,7 +289,13 @@ export async function reconcileOnStartup(
  * logged into the returned list as skipped, never allowed to abort startup
  * for every other Goal/worker.
  */
-async function reconcileOrphanedWorkers(pool: Pool, kernel: ExecutionKernelPort | undefined, goalId: string): Promise<readonly string[]> {
+async function reconcileOrphanedWorkers(
+  pool: Pool,
+  kernel: ExecutionKernelPort | undefined,
+  goalId: string,
+  ownerId: string,
+  leaseDurationMs: number,
+): Promise<readonly string[]> {
   if (!kernel) return [];
   const workersResult = await pool.query<{ worker_id: string }>(
     `SELECT w.worker_id
@@ -296,14 +304,24 @@ async function reconcileOrphanedWorkers(pool: Pool, kernel: ExecutionKernelPort 
       WHERE hc.goal_id = $1 AND w.status IN ('spawned', 'running')`,
     [goalId],
   );
+  if (workersResult.rowCount === 0) return [];
+  // Reacquire a current fenced Goal lease before every observation/write. The
+  // earlier startup snapshot is only a hint; a legitimate owner may have
+  // acquired the Goal between that snapshot and this reconciliation pass.
+  let proof: Awaited<ReturnType<typeof acquireGoalLease>>;
+  try {
+    proof = await acquireGoalLease(pool, { goalId, ownerId, leaseDurationMs });
+  } catch {
+    return [];
+  }
   const reconciled: string[] = [];
   for (const { worker_id: workerId } of workersResult.rows) {
     try {
-      await observeWorker(pool, kernel, workerId);
+      await observeWorker(pool, kernel, workerId, proof);
       reconciled.push(workerId);
     } catch {
       // A concurrent legitimate transition (e.g. another reconciler
-      // instance, or the worker's own owning Head, already observed or
+      // instance, or the worker's owning Head, already observed or
       // cancelled it first) is not this pass's failure; skip it silently
       // rather than aborting the whole startup reconciliation for it.
     }

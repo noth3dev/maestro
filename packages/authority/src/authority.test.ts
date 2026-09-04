@@ -72,6 +72,12 @@ describe("evaluateAction", () => {
     expect(evaluateAction(ordinary, [grant], now)).toMatchObject({ effect: "allow", reason: "exact_grant", recordId: "grant-1" });
   });
 
+  it("classifies browser commands as ordinary scoped effects", () => {
+    const browser: ActionRequest = { ...request, commandId: "browser-1", action: "browser.click", target: "#submit" };
+    const grant: AuthorityRecord = { ...exactApproval, recordId: "browser-grant", kind: "grant", commandId: null, action: browser.action, target: browser.target };
+    expect(evaluateAction(browser, [grant], now)).toMatchObject({ effect: "allow", classification: "ordinary", reason: "exact_grant" });
+  });
+
   it("denies actions forbidden by policy", () => {
     expect(evaluateAction({ ...request, action: "system.policy.bypass" }, [exactApproval], now)).toMatchObject({ effect: "deny", reason: "forbidden", classification: "forbidden" });
   });

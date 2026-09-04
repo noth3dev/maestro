@@ -121,7 +121,14 @@ export async function createMissionBundle(pool: Pool, request: CreateMissionBund
 export async function readMissionBundle(pool: Pool, councilId: string, departmentId: string, planVersion: number, itemId: string): Promise<MissionBundle> {
   const result = await pool.query<MissionBundleRow>(bundleSelectSql() + " WHERE council_id = $1 AND department_id = $2 AND plan_version = $3 AND item_id = $4", [councilId, departmentId, planVersion, itemId]);
   if (result.rowCount !== 1) throw new MissionBundleNotFoundError(`Mission Bundle not found: ${councilId}/${departmentId}/${planVersion}/${itemId}`);
-  return mapBundle(result.rows[0]!);
+  const row = result.rows[0]!;
+  try { assertValidMissionBundleSubstance(row.substance); } catch { throw new MissionBundleError("Stored Mission Bundle substance is invalid"); }
+  if (row.content_hash.trim() !== missionBundleSubstanceContentHash(row.substance)) throw new MissionBundleError("Stored Mission Bundle content hash is invalid");
+  const plan = await readDepartmentPlan(pool, councilId, departmentId);
+  if (plan.version !== row.plan_version || plan.contentHash !== row.plan_content_hash.trim()) throw new MissionBundleError("Stored Mission Bundle Plan binding is invalid");
+  const item = plan.substance.items.find((candidate) => candidate.itemId === itemId);
+  if (item === undefined || item.kind !== row.substance.role) throw new MissionBundleError("Stored Mission Bundle item binding is invalid");
+  return mapBundle(row);
 }
 
 export async function listMissionBundlesForPlan(pool: Pool, councilId: string, departmentId: string, planVersion: number): Promise<readonly MissionBundle[]> {

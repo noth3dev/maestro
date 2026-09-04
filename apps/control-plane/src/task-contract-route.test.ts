@@ -47,7 +47,7 @@ describe("Task Contract API routes", () => {
     const created = await app.inject({ method: "POST", url: "/v1/task-contracts", headers: { ...authHeaders, "idempotency-key": contractId }, payload: { projectId, substance } });
     expect(created.statusCode).toBe(201);
     expect(created.json()).toEqual(contract);
-    expect(taskContracts.createTaskContract).toHaveBeenCalledWith(contractId, { projectId, substance });
+    expect(taskContracts.createTaskContract).toHaveBeenCalledWith(contractId, { projectId, substance }, operator);
 
     const read = await app.inject({ method: "GET", url: `/v1/task-contracts/${contractId}?projectId=${projectId}`, headers: authHeaders });
     expect(read.statusCode).toBe(200);
@@ -55,16 +55,16 @@ describe("Task Contract API routes", () => {
 
     const updated = await app.inject({ method: "PUT", url: `/v1/task-contracts/${contractId}`, headers: authHeaders, payload: { projectId, expectedVersion: 1, substance, evidence: { reason: "CEO edit" } } });
     expect(updated.statusCode).toBe(200);
-    expect(taskContracts.updateTaskContract).toHaveBeenCalledWith(contractId, { projectId, expectedVersion: 1, substance, evidence: { reason: "CEO edit" } }, operator.operatorId);
+    expect(taskContracts.updateTaskContract).toHaveBeenCalledWith(contractId, { projectId, expectedVersion: 1, substance, evidence: { reason: "CEO edit" } }, operator, contractId);
 
     const selected = await app.inject({ method: "POST", url: `/v1/task-contracts/${contractId}/overture-selection`, headers: authHeaders, payload: { projectId, outsideEvidenceRequested: true, previewNeeded: false } });
     expect(selected.statusCode).toBe(200);
     expect(selected.json()).toEqual({ roles: ["conversation-lead", "security-evaluator", "task-editor"] });
-    expect(taskContracts.selectOvertureRoles).toHaveBeenCalledWith(contractId, { projectId, outsideEvidenceRequested: true, previewNeeded: false }, contractId);
+    expect(taskContracts.selectOvertureRoles).toHaveBeenCalledWith(contractId, { projectId, outsideEvidenceRequested: true, previewNeeded: false }, contractId, operator);
 
     const confirmed = await app.inject({ method: "POST", url: `/v1/task-contracts/${contractId}/confirmation`, headers: authHeaders, payload: { projectId, version: 1, contentHash: contract.contentHash } });
     expect(confirmed.statusCode).toBe(204);
-    expect(taskContracts.confirmTaskContract).toHaveBeenCalledWith(contractId, { projectId, version: 1, contentHash: contract.contentHash }, operator.operatorId);
+    expect(taskContracts.confirmTaskContract).toHaveBeenCalledWith(contractId, { projectId, version: 1, contentHash: contract.contentHash }, operator, contractId);
 
     const launched = await app.inject({ method: "POST", url: `/v1/task-contracts/${contractId}/launch`, headers: authHeaders, payload: { projectId } });
     expect(launched.statusCode).toBe(200);

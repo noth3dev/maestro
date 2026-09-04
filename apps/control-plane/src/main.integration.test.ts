@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { bootstrapLocalOperator, grantProjectMembership, revokeAuthorityRecord } from "@maestro/persistence";
+import { bootstrapLocalOperator, grantProjectMembership, grantProjectRole, revokeAuthorityRecord } from "@maestro/persistence";
 import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
 import { createControlPlane } from "./main.js";
 
@@ -45,7 +45,7 @@ if (!databaseUrl) {
     const { credentialId, operatorId } = await bootstrapLocalOperator(setupPool, { secret });
     const controlPlane = createControlPlane({
       databaseUrl: scopedUrl,
-      evidenceDir: "/tmp/maestro-evidence",
+      evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp",
       host: "127.0.0.1",
       port: 0,
       primeAgentVersion: "0.8.0",
@@ -59,6 +59,7 @@ if (!databaseUrl) {
     const projectId = randomUUID();
     const goalId = randomUUID();
     await grantProjectMembership(setupPool, operatorId, projectId);
+    await grantProjectRole(setupPool, operatorId, projectId, "concertmaster");
 
     try {
       const unauthorized = await fetch(`${baseUrl}/v1/goals`, {
@@ -99,13 +100,14 @@ if (!databaseUrl) {
   it("streams durable replay over loopback, resumes without duplicate IDs, and stops on disconnect", async () => {
     const secret = "sse-secret-not-configured";
     const { credentialId, operatorId } = await bootstrapLocalOperator(setupPool, { secret });
-    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `sse-${randomUUID()}` });
+    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `sse-${randomUUID()}` });
     await controlPlane.listen();
     const address = controlPlane.app.server.address();
     if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
     const baseUrl = `http://127.0.0.1:${address.port}`;
     const projectId = randomUUID();
     await grantProjectMembership(setupPool, operatorId, projectId);
+    await grantProjectRole(setupPool, operatorId, projectId, "concertmaster");
     const headers = { authorization: `Bearer ${credentialId}.${secret}`, "content-type": "application/json" };
     const create = async (goalId: string) => fetch(`${baseUrl}/v1/goals`, { method: "POST", headers: { ...headers, "idempotency-key": goalId }, body: JSON.stringify({ projectId }) });
     const readChunk = async (reader: ReadableStreamDefaultReader<Uint8Array>, label: string) => {
@@ -165,12 +167,13 @@ if (!databaseUrl) {
   it("closes an open raw SSE response within a bounded interval", async () => {
     const secret = "sse-close-secret-not-configured";
     const { credentialId, operatorId } = await bootstrapLocalOperator(setupPool, { secret });
-    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `sse-close-${randomUUID()}` });
+    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `sse-close-${randomUUID()}` });
     await controlPlane.listen();
     const address = controlPlane.app.server.address();
     if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
     const streamProjectId = randomUUID();
     await grantProjectMembership(setupPool, operatorId, streamProjectId);
+    await grantProjectRole(setupPool, operatorId, streamProjectId, "concertmaster");
     const response = await fetch(`http://127.0.0.1:${address.port}/v1/events/stream?projectId=${streamProjectId}`, { headers: { authorization: `Bearer ${credentialId}.${secret}` } });
     const reader = response.body!.getReader();
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -202,7 +205,7 @@ if (!databaseUrl) {
   it("runs reconcileOnStartup before serving traffic and records the leader lease", async () => {
     const controlPlane = createControlPlane({
       databaseUrl: scopedUrl,
-      evidenceDir: "/tmp/maestro-evidence",
+      evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp",
       host: "127.0.0.1",
       port: 0,
       primeAgentVersion: "0.8.0",
@@ -231,7 +234,7 @@ if (!databaseUrl) {
     );
     const controlPlane = createControlPlane({
       databaseUrl: scopedUrl,
-      evidenceDir: "/tmp/maestro-evidence",
+      evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp",
       host: "127.0.0.1",
       port: 0,
       primeAgentVersion: "0.8.0",
@@ -260,7 +263,7 @@ if (!databaseUrl) {
     const { credentialId, operatorId } = localOperator;
     const effect = vi.fn(async () => {});
     const controlPlane = createControlPlane(
-      { databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `critical-${randomUUID()}`, ceoOperatorId: operatorId },
+      { databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `critical-${randomUUID()}`, ceoOperatorId: operatorId },
       { criticalActionEffect: effect },
     );
     await controlPlane.listen();
@@ -269,7 +272,9 @@ if (!databaseUrl) {
     const baseUrl = `http://127.0.0.1:${address.port}`;
     const projectId = randomUUID();
     const goalId = randomUUID();
+    await setupPool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
     await grantProjectMembership(setupPool, operatorId, projectId);
+    await grantProjectRole(setupPool, operatorId, projectId, "concertmaster");
     const headers = { authorization: `Bearer ${credentialId}.${secret}`, "content-type": "application/json" };
     const body = { projectId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0 };
 
@@ -357,7 +362,7 @@ if (!databaseUrl) {
       // Missing TLS entirely for a remote bind fails closed at the
       // composition boundary (createControlPlane), even bypassing parseConfig.
       expect(() => createControlPlane({
-        databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "0.0.0.0", port: 0,
+        databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "0.0.0.0", port: 0,
         primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `tls-missing-${randomUUID()}`,
         reconcilerLeaseDurationMs: 30_000,
       })).toThrow("Remote binding requires TLS certificate and key configuration");
@@ -367,7 +372,7 @@ if (!databaseUrl) {
       // any ControlPlane object is even constructed -- never silently as
       // plain HTTP.
       expect(() => createControlPlane({
-        databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "0.0.0.0", port: 0,
+        databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "0.0.0.0", port: 0,
         primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `tls-partial-${randomUUID()}`,
         reconcilerLeaseDurationMs: 30_000, tls: { certFile, keyFile: "/nonexistent/key.pem" },
       })).toThrow(/ENOENT/);
@@ -375,7 +380,7 @@ if (!databaseUrl) {
       const secret = "tls-test-secret-not-configured";
       const { credentialId, operatorId } = await bootstrapLocalOperator(setupPool, { secret });
       const controlPlane = createControlPlane({
-        databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0,
+        databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0,
         primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `tls-real-${randomUUID()}`,
         reconcilerLeaseDurationMs: 30_000, tls: { certFile, keyFile },
       });
@@ -387,6 +392,7 @@ if (!databaseUrl) {
         const projectId = randomUUID();
         const goalId = randomUUID();
         await grantProjectMembership(setupPool, operatorId, projectId);
+    await grantProjectRole(setupPool, operatorId, projectId, "concertmaster");
         const body = JSON.stringify({ projectId });
         const status = await new Promise<number>((resolve, reject) => {
           const request = httpsModule.request(

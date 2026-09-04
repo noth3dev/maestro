@@ -125,7 +125,11 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
   it("spawns a worker for a real Mission Bundle by the captured Head and observes it to a terminal state", async () => {
     const { council, plan, proof } = await setupBundle();
     const kernel = fakeKernel("succeeded");
+    let promptCalls = 0;
+    const prompt = kernel.prompt.bind(kernel);
+    kernel.prompt = async (...args) => { promptCalls += 1; await prompt(...args); };
     const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    expect(promptCalls).toBe(1);
     expect(worker.status).toBe("spawned");
     expect(worker.attempt).toBe(1);
     const observed = await observeWorker(pool, kernel, worker.workerId);
@@ -134,6 +138,33 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     expect(observed.usageTotalTokens).toBe(42);
     const reobserved = await observeWorker(pool, kernel, worker.workerId);
     expect(reobserved).toEqual(observed);
+  });
+
+  it("records a pending worker identity before provider spawn", async () => {
+    const { council, plan, proof } = await setupBundle();
+    const kernel = fakeKernel("succeeded");
+    const spawn = kernel.spawn.bind(kernel);
+    let pendingRows = 0;
+    kernel.spawn = async (request) => {
+      const result = await pool.query<{ count: string }>("SELECT count(*) AS count FROM workers WHERE status = 'spawned' AND execution_ref LIKE 'pending:%'");
+      pendingRows = Number(result.rows[0]!.count);
+      return spawn(request);
+    };
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    expect(pendingRows).toBe(1);
+    expect(worker.executionRef).not.toMatch(/^pending:/);
+  });
+
+  it("replays a worker spawn by command identity and rejects changed content", async () => {
+    const { council, plan, proof } = await setupBundle();
+    const kernel = fakeKernel("succeeded");
+    const commandId = randomUUID();
+    const request = { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1", commandId };
+    const first = await spawnWorker(pool, kernel, request, proof, headContext("product"));
+    const replay = await spawnWorker(pool, kernel, request, proof, headContext("product"));
+    expect(replay.workerId).toBe(first.workerId);
+    expect(kernel.spawnedCount).toBe(1);
+    await expect(spawnWorker(pool, kernel, { ...request, itemId: "different-item" }, proof, headContext("product"))).rejects.toThrow();
   });
 
   it("threads the exact Mission Bundle capability grant (allowedTools/allowedSkills) through to the real spawn call (Phase 2 re-patch item 2)", async () => {
@@ -352,6 +383,16 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     // Already-terminal (cancelled) worker: observeWorker's early-return path
     // never calls the kernel again, so no second release.
     expect(kernel.releasedInvocations).toEqual([worker.invocationRef]);
+  });
+
+  it("does not mark a worker cancelled when the provider refuses cancellation", async () => {
+    const { council, plan, proof } = await setupBundle();
+    const kernel = fakeKernel("succeeded");
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    kernel.cancel = async () => ({ cancelled: false });
+    const result = await cancelWorker(pool, kernel, worker.workerId, proof, headContext("product"));
+    expect(result.status).toBe("succeeded");
+    expect(result.answerText).toBe("done");
   });
 
   it("rejects direct tampering with immutable worker identity/binding and terminal status", async () => {

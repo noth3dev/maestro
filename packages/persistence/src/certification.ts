@@ -21,7 +21,7 @@ function mapAcceptance(row: AcceptanceRow): DepartmentAcceptance {
   return { acceptanceId: row.acceptance_id, workerId: row.worker_id, commitSha: row.commit_sha, reason: row.reason, acceptedBy: row.accepted_by };
 }
 
-async function assertAuthorizedDepartmentHead(pool: Pool, councilId: string, departmentId: string, context: CouncilActorContext, councilOverride?: Awaited<ReturnType<typeof readHeadCouncil>>): Promise<void> {
+async function assertAuthorizedDepartmentHead(pool: Pool, councilId: string, departmentId: string, context: CouncilActorContext, councilOverride?: Awaited<ReturnType<typeof readHeadCouncil>>, client?: PoolClient): Promise<void> {
   const council = councilOverride ?? await readHeadCouncil(pool, councilId);
   const captured = council.snapshot.participants.find((participant) => (participant.departmentId ?? participant.participantId) === departmentId);
   if (captured === undefined) throw new CertificationError(`Department is not a captured Council participant: ${departmentId}`);
@@ -29,7 +29,7 @@ async function assertAuthorizedDepartmentHead(pool: Pool, councilId: string, dep
     ? isAuthorizedHeadCouncilActor(context, captured)
     : context.actorId === captured.participantId && context.sessionRef === captured.sessionRef;
   if (!authorized) throw new CertificationError("Actor is not bound to the captured Head identity and session");
-  const active = await pool.query(
+  const active = await (client ?? pool).query(
     "SELECT 1 FROM goal_head_participations WHERE goal_id = $1 AND department_id = $2 AND contract_id = $3 AND head_role_id = $4 AND status = 'active' AND active_session_ref = $5",
     [council.goalId, departmentId, council.contractId, captured.headRoleId ?? captured.participantId, captured.sessionRef],
   );
@@ -37,34 +37,59 @@ async function assertAuthorizedDepartmentHead(pool: Pool, councilId: string, dep
 }
 
 /** The Executing Head accepts its own worker's output/integration. Requires the worker to have actually terminated successfully and have a real recorded integration commit. */
-export async function acceptDepartmentWorkerOutput(pool: Pool, workerId: string, substance: DepartmentAcceptanceSubstance, context: CouncilActorContext): Promise<DepartmentAcceptance> {
+export async function acceptDepartmentWorkerOutput(
+  pool: Pool,
+  workerId: string,
+  substance: DepartmentAcceptanceSubstance,
+  proof: GoalLeaseProof,
+  context: CouncilActorContext,
+): Promise<DepartmentAcceptance> {
   assertValidDepartmentAcceptanceSubstance(substance);
-  const worker = await pool.query<{ council_id: string; department_id: string; status: string }>("SELECT council_id, department_id, status FROM workers WHERE worker_id = $1", [workerId]);
-  if (worker.rowCount !== 1) throw new CertificationNotFoundError(`Worker not found: ${workerId}`);
-  const { council_id: councilId, department_id: departmentId, status } = worker.rows[0]!;
-  if (status !== "succeeded") throw new CertificationError("Only a worker that terminated successfully can be accepted");
-  await assertAuthorizedDepartmentHead(pool, councilId, departmentId, context);
-  const commit = await pool.query<{ commit_sha: string }>("SELECT commit_sha FROM integration_commits WHERE worker_id = $1 ORDER BY recorded_at DESC LIMIT 1", [workerId]);
-  if (commit.rowCount !== 1) throw new CertificationError("Worker has no recorded integration commit to accept");
-  // check-then-insert on worker_id alone would race two concurrent callers
-  // for the same worker straight into the DB's UNIQUE (worker_id)
-  // constraint, surfacing a raw Postgres error instead of this codebase's
-  // usual idempotent-return pattern. INSERT ... ON CONFLICT DO NOTHING makes
-  // the insert itself the atomic check, and a real conflict re-reads the
-  // now-durable row instead of throwing.
-  const inserted = await pool.query<AcceptanceRow>(
-    `INSERT INTO department_acceptances (acceptance_id, worker_id, commit_sha, reason, accepted_by, session_ref)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (worker_id) DO NOTHING
-     RETURNING acceptance_id, worker_id, commit_sha, reason, accepted_by`,
-    [randomUUID(), workerId, commit.rows[0]!.commit_sha, substance.reason.trim(), context.actorId, context.sessionRef],
-  );
-  if ((inserted.rowCount ?? 0) > 0) return mapAcceptance(inserted.rows[0]!);
-  const existing = await pool.query<AcceptanceRow>("SELECT acceptance_id, worker_id, commit_sha, reason, accepted_by FROM department_acceptances WHERE worker_id = $1", [workerId]);
-  if ((existing.rowCount ?? 0) !== 1) throw new CertificationError("Worker output acceptance could not be resolved after a concurrent insert");
-  const prior = existing.rows[0]!;
-  if (prior.reason === substance.reason.trim()) return mapAcceptance(prior);
-  throw new CertificationError("Worker output was already accepted with a different reason");
+  const client = await pool.connect();
+  let open = false;
+  try {
+    await client.query("BEGIN"); open = true;
+    const worker = await client.query<{ council_id: string; department_id: string; status: string }>(
+      "SELECT council_id, department_id, status FROM workers WHERE worker_id = $1 FOR UPDATE", [workerId],
+    );
+    if (worker.rowCount !== 1) throw new CertificationNotFoundError(`Worker not found: ${workerId}`);
+    const row = worker.rows[0]!;
+    const council = await readHeadCouncil(pool, row.council_id);
+    assertValidLeaseProofFor(council.goalId, proof);
+    await lockGoalLease(client, proof);
+    if (row.status !== "succeeded") throw new CertificationError("Only a worker that terminated successfully can be accepted");
+    await assertAuthorizedDepartmentHead(pool, row.council_id, row.department_id, context, council, client);
+    const commit = await client.query<{ commit_sha: string }>(
+      "SELECT commit_sha FROM integration_commits WHERE worker_id = $1 ORDER BY recorded_at DESC LIMIT 1 FOR SHARE", [workerId],
+    );
+    if (commit.rowCount !== 1) throw new CertificationError("Worker has no recorded integration commit to accept");
+    const inserted = await client.query<AcceptanceRow>(
+      `INSERT INTO department_acceptances (acceptance_id, worker_id, commit_sha, reason, accepted_by, session_ref)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (worker_id) DO NOTHING
+       RETURNING acceptance_id, worker_id, commit_sha, reason, accepted_by`,
+      [randomUUID(), workerId, commit.rows[0]!.commit_sha, substance.reason.trim(), context.actorId, context.sessionRef],
+    );
+    if ((inserted.rowCount ?? 0) > 0) {
+      await client.query("COMMIT"); open = false;
+      return mapAcceptance(inserted.rows[0]!);
+    }
+    const existing = await client.query<AcceptanceRow>(
+      "SELECT acceptance_id, worker_id, commit_sha, reason, accepted_by FROM department_acceptances WHERE worker_id = $1 FOR SHARE", [workerId],
+    );
+    if ((existing.rowCount ?? 0) !== 1) throw new CertificationError("Worker output acceptance could not be resolved after a concurrent insert");
+    const prior = existing.rows[0]!;
+    if (prior.reason === substance.reason.trim()) {
+      await client.query("COMMIT"); open = false;
+      return mapAcceptance(prior);
+    }
+    throw new CertificationError("Worker output was already accepted with a different reason");
+  } catch (error) {
+    if (open) await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export interface QualityCertification {
@@ -85,7 +110,7 @@ export interface QualityCertification {
 interface CertRow {
   certification_id: string; goal_id: string; contract_id: string; contract_version: string; contract_content_hash: string;
   integrated_commit_sha: string; worker_id: string; department_acceptance_id: string; integration_revision_id: string;
-  verdict: QualityVerdict; certified_by_department: string; producing_department: string;
+  verdict: QualityVerdict; findings: unknown[]; test_evidence_ids: unknown[]; certified_by_department: string; producing_department: string;
 }
 function mapCert(row: CertRow): QualityCertification {
   return {
@@ -116,7 +141,7 @@ interface ConditionalCertRow {
   certification_id: string; kind: "security" | "safety_compliance"; goal_id: string; contract_id: string;
   contract_version: string; contract_content_hash: string; integrated_commit_sha: string;
   worker_id: string; department_acceptance_id: string; integration_revision_id: string;
-  verdict: QualityVerdict; certified_by_department: string; producing_department: string;
+  verdict: QualityVerdict; findings: unknown[]; test_evidence_ids: unknown[]; certified_by_department: string; producing_department: string;
 }
 function mapConditionalCert(row: ConditionalCertRow): ConditionalCertification {
   return {
@@ -277,7 +302,7 @@ async function createCertification(
         await verifyEvidenceRecord({ sha256: row.sha256, byteLength: Number(row.byte_length) }, content);
       }
     }
-    const certificationId = randomUUID();
+    const certificationId = context.commandId;
     if (kind === "quality") {
       const inserted = await client.query<CertRow>(
         `INSERT INTO quality_certifications
@@ -285,11 +310,32 @@ async function createCertification(
            integrated_commit_sha, verdict, findings, test_evidence_ids, certified_by_department,
            producing_department, worker_id, department_acceptance_id, integration_revision_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12, $13, $14)
+         ON CONFLICT (certification_id) DO NOTHING
          RETURNING certification_id, goal_id, contract_id, contract_version, contract_content_hash,
            integrated_commit_sha, worker_id, department_acceptance_id, integration_revision_id,
-           verdict, certified_by_department, producing_department`,
+           verdict, findings, test_evidence_ids, certified_by_department, producing_department`,
         [certificationId, lineage.goalId, lineage.contractId, lineage.contractVersion, lineage.contractContentHash, lineage.integratedCommitSha, substance.verdict, JSON.stringify(substance.findings), JSON.stringify(substance.testEvidenceIds), certifyingDepartmentId, lineage.producingDepartment, lineage.workerId, lineage.departmentAcceptanceId, lineage.integrationRevisionId],
       );
+      if ((inserted.rowCount ?? 0) === 0) {
+        const prior = await client.query<CertRow>(
+          `SELECT certification_id, goal_id, contract_id, contract_version, contract_content_hash,
+             integrated_commit_sha, worker_id, department_acceptance_id, integration_revision_id,
+             verdict, findings, test_evidence_ids, certified_by_department, producing_department
+             FROM quality_certifications WHERE certification_id = $1`,
+          [certificationId],
+        );
+        const existing = prior.rows[0];
+        const same = existing !== undefined && existing.goal_id === lineage.goalId && existing.contract_id === lineage.contractId &&
+          Number(existing.contract_version) === Number(lineage.contractVersion) && existing.contract_content_hash.trim() === lineage.contractContentHash &&
+          existing.integrated_commit_sha.trim() === lineage.integratedCommitSha && existing.worker_id === lineage.workerId &&
+          existing.department_acceptance_id === lineage.departmentAcceptanceId && existing.integration_revision_id === lineage.integrationRevisionId &&
+          existing.verdict === substance.verdict && JSON.stringify(existing.findings) === JSON.stringify(substance.findings) &&
+          JSON.stringify(existing.test_evidence_ids) === JSON.stringify(substance.testEvidenceIds) &&
+          existing.certified_by_department === certifyingDepartmentId && existing.producing_department === lineage.producingDepartment;
+        if (!same) throw new CertificationError("Certification command identity was reused with different content");
+        await client.query("COMMIT");
+        return mapCert(existing);
+      }
       await client.query("COMMIT");
       return mapCert(inserted.rows[0]!);
     }
@@ -299,11 +345,32 @@ async function createCertification(
          integrated_commit_sha, verdict, findings, test_evidence_ids, certified_by_department,
          producing_department, worker_id, department_acceptance_id, integration_revision_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, $13, $14, $15)
+       ON CONFLICT (certification_id) DO NOTHING
        RETURNING certification_id, kind, goal_id, contract_id, contract_version, contract_content_hash,
          integrated_commit_sha, worker_id, department_acceptance_id, integration_revision_id,
-         verdict, certified_by_department, producing_department`,
+         verdict, findings, test_evidence_ids, certified_by_department, producing_department`,
       [certificationId, kind, lineage.goalId, lineage.contractId, lineage.contractVersion, lineage.contractContentHash, lineage.integratedCommitSha, substance.verdict, JSON.stringify(substance.findings), JSON.stringify(substance.testEvidenceIds), certifyingDepartmentId, lineage.producingDepartment, lineage.workerId, lineage.departmentAcceptanceId, lineage.integrationRevisionId],
     );
+    if ((inserted.rowCount ?? 0) === 0) {
+      const prior = await client.query<ConditionalCertRow>(
+        `SELECT certification_id, kind, goal_id, contract_id, contract_version, contract_content_hash,
+           integrated_commit_sha, worker_id, department_acceptance_id, integration_revision_id,
+           verdict, findings, test_evidence_ids, certified_by_department, producing_department
+           FROM conditional_certifications WHERE certification_id = $1`,
+        [certificationId],
+      );
+      const existing = prior.rows[0];
+      const same = existing !== undefined && existing.kind === kind && existing.goal_id === lineage.goalId && existing.contract_id === lineage.contractId &&
+        Number(existing.contract_version) === Number(lineage.contractVersion) && existing.contract_content_hash.trim() === lineage.contractContentHash &&
+        existing.integrated_commit_sha.trim() === lineage.integratedCommitSha && existing.worker_id === lineage.workerId &&
+        existing.department_acceptance_id === lineage.departmentAcceptanceId && existing.integration_revision_id === lineage.integrationRevisionId &&
+        existing.verdict === substance.verdict && JSON.stringify(existing.findings) === JSON.stringify(substance.findings) &&
+        JSON.stringify(existing.test_evidence_ids) === JSON.stringify(substance.testEvidenceIds) &&
+        existing.certified_by_department === certifyingDepartmentId && existing.producing_department === lineage.producingDepartment;
+      if (!same) throw new CertificationError("Certification command identity was reused with different content");
+      await client.query("COMMIT");
+      return mapConditionalCert(existing);
+    }
     await client.query("COMMIT");
     return mapConditionalCert(inserted.rows[0]!);
   } catch (error) {

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { InvalidGoalTransitionError, assertValidTaskContractSubstance, taskContractContentHash, transitionGoal, type GoalState, type TaskContractSubstance } from "@maestro/domain";
 import type { Pool } from "pg";
+import { assertProjectRole } from "./project-membership.js";
 
 export interface GoalLeaseProof {
   goalId: string;
@@ -32,8 +33,8 @@ export class StaleGoalLeaseError extends Error {
 }
 
 export type GoalCommand =
-  | { commandId: string; projectId: string; goalId: string; actorId: string; type: "CreateGoal"; expectedVersion: 0; contractId?: string }
-  | { commandId: string; projectId: string; goalId: string; actorId: string; type: "TransitionGoal"; expectedVersion: number; to: GoalState };
+  | { commandId: string; projectId: string; goalId: string; actorId: string; type: "CreateGoal"; expectedVersion: 0; contractId?: string; requiredRole?: string }
+  | { commandId: string; projectId: string; goalId: string; actorId: string; type: "TransitionGoal"; expectedVersion: number; to: GoalState; requiredRole?: string };
 
 export interface CommandResult {
   outcome: "succeeded" | "version_conflict" | "rejected";
@@ -143,6 +144,7 @@ export async function executeGoalCommand(
     await client.query("SET LOCAL lock_timeout = '5s'");
     await client.query("SET LOCAL statement_timeout = '15s'");
     await assertCurrentGoalLease(client, command, proof);
+    if (command.requiredRole !== undefined) await assertProjectRole(client, command.actorId, command.projectId, command.requiredRole);
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 1))", [command.commandId]);
 
     const hash = commandHash(command);

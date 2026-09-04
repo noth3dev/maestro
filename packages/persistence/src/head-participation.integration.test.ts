@@ -173,6 +173,16 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
     ]);
   });
 
+  it("rejects a changed replay for the same activation command", async () => {
+    const goalId = await goal(); const lease = await proof(goalId);
+    const commandId = randomUUID();
+    const request = { ...concertmaster(goalId, "product"), commandId };
+    const first = await activateHeadParticipation(pool, request, lease);
+    await markHeadParticipationActive(pool, goalId, "product", "opaque:product", lease, first.headRoleId);
+    await expect(activateHeadParticipation(pool, request, lease)).resolves.toMatchObject({ status: "active", activeSessionRef: "opaque:product" });
+    await expect(activateHeadParticipation(pool, { ...request, reason: "changed after approval" }, lease)).rejects.toMatchObject({ code: "head_activation_binding_conflict" });
+  });
+
   it("rejects a persistent Head reservation already active in another Goal", async () => {
     const firstGoalId = await goal(); const firstLease = await proof(firstGoalId);
     await activateHeadParticipation(pool, concertmaster(firstGoalId, "product"), firstLease);

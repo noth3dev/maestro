@@ -48,6 +48,11 @@ function classifyAction(action: string): ActionClassification {
     case "git.local.revision.read":
     case "git.local.worktree.create":
     case "git.local.worktree.remove":
+    case "browser.navigate":
+    case "browser.click":
+    case "browser.fill":
+    case "browser.get_text":
+    case "browser.screenshot":
       return "ordinary";
     case "git.remote.push":
     case "deployment.release":
@@ -149,7 +154,7 @@ export type ControlRecheck =
   | { effect: "allow" }
   | {
       effect: "deny";
-      reason: "emergency_stop" | "stale_control_epoch" | "pause_requested" | "paused" | "stopping" | "stopped";
+      reason: "emergency_stop" | "stale_control_epoch" | "pause_requested" | "paused" | "stopping" | "stopped" | "goal_not_found" | "goal_not_executable";
     };
 
 export interface AuthorityRepository {

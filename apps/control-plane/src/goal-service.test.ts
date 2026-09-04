@@ -4,6 +4,7 @@ const persistence = vi.hoisted(() => ({
   acquireGoalLease: vi.fn(),
   renewGoalLease: vi.fn(),
   executeGoalCommand: vi.fn(),
+  assertProjectRole: vi.fn(),
 }));
 
 vi.mock("@maestro/persistence", async (importOriginal) => ({

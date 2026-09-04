@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { bootstrapLocalOperator, grantProjectMembership } from "@maestro/persistence";
+import { bootstrapLocalOperator, grantProjectMembership, grantProjectRole } from "@maestro/persistence";
 import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
 
 // A real integration test that spawns the compiled control-plane
@@ -149,6 +149,7 @@ describe("control-plane real process kill-and-restart", () => {
       const projectId = randomUUID();
       const goalId = randomUUID();
       await grantProjectMembership(setupPool, operatorId, projectId);
+    await grantProjectRole(setupPool, operatorId, projectId, "concertmaster");
       const headers = { authorization: `Bearer ${credentialId}.${secret}`, "content-type": "application/json" };
 
       // --- Process A: create and partially advance a real Goal over real HTTP.
