@@ -37,8 +37,10 @@ describe("createApiClient", () => {
   });
 });
 
-it("reads all four goal state resources with typed methods", async () => {
- const bodies=[{challenges:[]},{rounds:[]},{certifications:[]},{reportId:goalId,goalId,success:true,blockers:[],ceoRequest:"",whatChanged:"",userVisibleBehaviorPassed:true,participatingDepartments:[],keyDecisions:[],dissent:[],independentValidation:[],costCents:0,budgetCents:0,incidents:[],knownLimitations:[],criticalActionAwaitingApproval:false,evidenceBundleId:goalId}];
+it("reads goal listing, budget, and derived state with typed methods", async () => {
+ const bodies=[{goals:[{goalId,projectId,state:"draft",version:0}]},{goalId,projectId,budgetCents:10,reservedCents:4,costCents:3},{challenges:[]},{rounds:[]},{certifications:[]},{reportId:goalId,goalId,success:true,blockers:[],ceoRequest:"",whatChanged:"",userVisibleBehaviorPassed:true,participatingDepartments:[],keyDecisions:[],dissent:[],independentValidation:[],costCents:0,budgetCents:0,incidents:[],knownLimitations:[],criticalActionAwaitingApproval:false,evidenceBundleId:goalId}];
  const fetch=vi.fn().mockImplementation(async()=>new Response(JSON.stringify(bodies.shift()),{status:200})); const c=createApiClient({baseUrl:"https://maestro.test",token:"t",fetch});
- await expect(c.listMetronomeChallenges(goalId, { projectId })).resolves.toEqual({challenges:[]}); await expect(c.listEncoreCouncilRounds(goalId, { projectId })).resolves.toEqual({rounds:[]}); await expect(c.listCertifications(goalId, { projectId })).resolves.toEqual({certifications:[]}); await expect(c.getConcertmasterReport(goalId, { projectId })).resolves.toMatchObject({success:true});
+ await expect(c.listGoals(projectId)).resolves.toEqual({goals:[{goalId,projectId,state:"draft",version:0}]}); await expect(c.getBudgetSummary(goalId, { projectId })).resolves.toEqual({goalId,projectId,budgetCents:10,reservedCents:4,costCents:3}); await expect(c.listMetronomeChallenges(goalId, { projectId })).resolves.toEqual({challenges:[]}); await expect(c.listEncoreCouncilRounds(goalId, { projectId })).resolves.toEqual({rounds:[]}); await expect(c.listCertifications(goalId, { projectId })).resolves.toEqual({certifications:[]}); await expect(c.getConcertmasterReport(goalId, { projectId })).resolves.toMatchObject({success:true});
+ expect(fetch).toHaveBeenNthCalledWith(1, `https://maestro.test/v1/goals?projectId=${projectId}`, expect.anything());
+ expect(fetch).toHaveBeenNthCalledWith(2, `https://maestro.test/v1/goals/${goalId}/budget?projectId=${projectId}`, expect.anything());
 });

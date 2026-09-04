@@ -3,6 +3,8 @@ import {
   EventQuerySchema,
   GoalEventPageSchema,
   GoalQuerySchema,
+  GoalListSchema,
+  GoalBudgetSummarySchema,
   GoalResultSchema,
   MetronomeChallengeListSchema, EncoreCouncilRoundListSchema, CertificationListSchema, ConcertmasterFinalReportSchema,
   type MetronomeChallengeList, type EncoreCouncilRoundList, type CertificationList, type ConcertmasterFinalReport,
@@ -14,6 +16,8 @@ import {
   type GoalEventPage,
   type GoalEvent,
   type GoalQuery,
+  type GoalList,
+  type GoalBudgetSummary,
   type GoalResult,
   type StableApiError,
   type TransitionGoalInput,
@@ -33,8 +37,10 @@ export class ApiError extends Error {
 
 export interface ApiClient {
   createGoal(input: CreateGoalInput, commandId: string): Promise<GoalResult>;
+  listGoals(projectId: string): Promise<GoalList>;
   getGoal(goalId: string, query: GoalQuery): Promise<GoalResult>;
   transitionGoal(goalId: string, input: TransitionGoalInput, commandId: string): Promise<GoalResult>;
+  getBudgetSummary(goalId: string, query: GoalQuery): Promise<GoalBudgetSummary>;
   listEvents(query: EventQuery): Promise<GoalEventPage>;
   listMetronomeChallenges(goalId: string, query: GoalQuery): Promise<MetronomeChallengeList>;
   listEncoreCouncilRounds(goalId: string, query: GoalQuery): Promise<EncoreCouncilRoundList>;
@@ -71,10 +77,18 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch }: { 
         body: JSON.stringify(CreateGoalInputSchema.parse(input)),
       }, GoalResultSchema);
     },
+    listGoals(projectId) {
+      const parsedProjectId = UuidSchema.parse(projectId);
+      return request(`v1/goals?${new URLSearchParams({ projectId: parsedProjectId })}`, { headers }, GoalListSchema);
+    },
     getGoal(goalId, query) {
       const parsedGoalId = UuidSchema.parse(goalId);
       const parsedQuery = GoalQuerySchema.parse(query);
       return request(`v1/goals/${encodeURIComponent(parsedGoalId)}?${new URLSearchParams({ projectId: parsedQuery.projectId })}`, { headers }, GoalResultSchema);
+    },
+    getBudgetSummary(goalId, query) {
+      const parsed = GoalQuerySchema.parse(query);
+      return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/budget?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, GoalBudgetSummarySchema);
     },
     transitionGoal(goalId, input, commandId) {
       return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/transitions`, {
@@ -106,4 +120,4 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch }: { 
   };
 }
 
-export type { CreateGoalInput, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalResult, TransitionGoalInput, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport };
+export type { CreateGoalInput, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, GoalBudgetSummary, GoalResult, TransitionGoalInput, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport };
