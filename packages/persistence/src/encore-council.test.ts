@@ -15,7 +15,7 @@ const goalId = "goal-1";
 const evidenceId = "evidence-1";
 const proof = { goalId, ownerId: "owner-1", fencingToken: "1" };
 
-function fakePool(): Pool {
+function fakePool(onClientQuery: (sql: string, parameters?: readonly unknown[]) => void = () => {}): Pool {
   const query = vi.fn(async (sql: string) => {
     if (sql.startsWith("SELECT 1 FROM goals")) return { rowCount: 1, rows: [{}] };
     if (sql.startsWith("SELECT project_id FROM goals")) return { rowCount: 1, rows: [{ project_id: "project-1" }] };
@@ -25,7 +25,8 @@ function fakePool(): Pool {
     if (sql.includes("FROM semantic_reviews")) return { rowCount: 1, rows: [{ count: "0" }] };
     throw new Error(`Unexpected pool query: ${sql}`);
   });
-  const clientQuery = vi.fn(async (sql: string) => {
+  const clientQuery = vi.fn(async (sql: string, parameters?: readonly unknown[]) => {
+    onClientQuery(sql, parameters);
     if (sql.startsWith("SELECT 1 FROM goal_leases")) return { rowCount: 1, rows: [{}] };
     if (sql.startsWith("SELECT project_id, state FROM goals")) return { rowCount: 1, rows: [{ project_id: "project-1", state: "active" }] };
     if (sql.startsWith("INSERT INTO goal_controls")) return { rowCount: 1, rows: [] };
@@ -85,7 +86,7 @@ function fakeKernel(sequences: readonly (readonly InvocationObservation[])[]): E
       return [current];
     }),
     async sendMessage() {},
-    async cancel() { return { cancelled: true }; },
+    cancel: vi.fn(async (invocation: SpawnedInvocation["invocation"]) => { calls.push(`cancel-${String(invocation)}`); return { cancelled: true }; }),
     async getModelIdentity() { return { provider: "fake", id: "model" }; },
     async getToolEvents() { return { state: "empty", events: [] }; },
     async getUsage() { return { state: "unknown" }; },
@@ -165,6 +166,119 @@ describe("Encore Council execution", () => {
     expect(result.synthesis.finalVerdict).toBe("escalate");
     expect(result.synthesis.escalated).toBe(true);
     expect(kernel.release).toHaveBeenCalledWith("encore-invocation-0");
+  });
+
+  it("rejects reviewer fan-out above the production maximum before spawning", async () => {
+    const kernel = fakeKernel([]);
+
+    await expect(runEncoreCouncilReview(fakePool(), kernel, {
+      goalId,
+      proof,
+      question: "should we proceed?",
+      criteria,
+      evidenceIds: [evidenceId],
+      reviewerCount: 9,
+    })).rejects.toThrow(/between 1 and 8 reviewers/);
+    expect(kernel.spawn).not.toHaveBeenCalled();
+  });
+
+  it("rejects a reviewer answer that cites evidence outside the requested durable set", async () => {
+    const kernel = fakeKernel([[
+      observation(0, "succeeded", { state: "available", text: JSON.stringify({
+        verdict: "proceed",
+        confidence: "high",
+        reasoning: "unsafe fabricated support",
+        conditions: [],
+        dissentNote: null,
+        citedEvidenceIds: ["fabricated-evidence"],
+      }) }),
+    ]]);
+    const judgmentParameters: unknown[][] = [];
+    const pool = fakePool((sql, parameters) => {
+      if (sql.includes("INSERT INTO encore_council_judgments")) judgmentParameters.push([...(parameters ?? [])]);
+    });
+
+    const result = await runEncoreCouncilReview(pool, kernel, {
+      goalId,
+      proof,
+      question: "should we proceed?",
+      criteria,
+      evidenceIds: [evidenceId],
+      reviewerCount: 1,
+    });
+
+    expect(result.judgments[0]).toMatchObject({ verdict: "escalate", confidence: "low", citedEvidenceIds: [] });
+    expect(JSON.parse(String(judgmentParameters[0]![10]))).toEqual([]);
+  });
+
+  it("does not hold a Goal transaction while spawning, prompting, or observing reviewers", async () => {
+    let transactionOpen = false;
+    const providerTransactionStates: boolean[] = [];
+    const pool = fakePool((sql) => {
+      if (sql === "BEGIN") transactionOpen = true;
+      if (sql === "COMMIT" || sql === "ROLLBACK") transactionOpen = false;
+    });
+    const kernel = fakeKernel([[
+      observation(0, "succeeded", { state: "available", text: proceed }),
+    ]]);
+    kernel.spawn.mockImplementation(async (request: SpawnRequest) => {
+      providerTransactionStates.push(transactionOpen);
+      return { execution: "encore-execution-0" as never, invocation: "encore-invocation-0" as never };
+    });
+    kernel.prompt.mockImplementation(async () => { providerTransactionStates.push(transactionOpen); });
+    kernel.observe.mockImplementation(async (execution: SpawnedInvocation["execution"]) => {
+      providerTransactionStates.push(transactionOpen);
+      return [observation(0, "succeeded", { state: "available", text: proceed })];
+    });
+
+    await runEncoreCouncilReview(pool, kernel, {
+      goalId,
+      proof,
+      question: "should we proceed?",
+      criteria,
+      evidenceIds: [evidenceId],
+      reviewerCount: 1,
+    });
+
+    expect(providerTransactionStates).toEqual([false, false, false]);
+  });
+
+  it("cancels a reviewer after bounded non-terminal observation and confirms terminal state", async () => {
+    const running = observation(0, "running", { state: "unavailable", reason: "provider-does-not-expose-answer-text" });
+    const kernel = fakeKernel([
+      [...Array.from({ length: 8 }, () => running), observation(0, "cancelled", { state: "unavailable", reason: "provider-does-not-expose-answer-text" })],
+    ]);
+
+    const result = await runEncoreCouncilReview(fakePool(), kernel, {
+      goalId,
+      proof,
+      question: "should we proceed?",
+      criteria,
+      evidenceIds: [evidenceId],
+      reviewerCount: 1,
+    });
+
+    expect(kernel.cancel).toHaveBeenCalledTimes(1);
+    expect(result.judgments[0]).toMatchObject({ verdict: "escalate", confidence: "low" });
+    expect(kernel.release).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not release a reviewer session when cancellation has no terminal confirmation", async () => {
+    const running = observation(0, "running", { state: "unavailable", reason: "provider-does-not-expose-answer-text" });
+    const kernel = fakeKernel([Array.from({ length: 9 }, () => running)]);
+    kernel.cancel.mockResolvedValue({ cancelled: true });
+
+    await runEncoreCouncilReview(fakePool(), kernel, {
+      goalId,
+      proof,
+      question: "should we proceed?",
+      criteria,
+      evidenceIds: [evidenceId],
+      reviewerCount: 1,
+    });
+
+    expect(kernel.cancel).toHaveBeenCalledTimes(1);
+    expect(kernel.release).not.toHaveBeenCalled();
   });
 
   it("still returns the durably committed round even when the kernel's release call fails for a reviewer", async () => {

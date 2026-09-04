@@ -6,6 +6,7 @@ import {
   type ExecutionKernelPort,
   type InvocationObservation,
   type InvocationStatus,
+  type SpawnedInvocation,
   type EncoreJudgmentSubstance,
   type EncoreSynthesis,
   type EncoreTriggerReason,
@@ -71,26 +72,61 @@ interface RawJudgmentOutput {
   readonly citedEvidenceIds: readonly string[];
 }
 
+export const MAX_ENCORE_REVIEWERS = 8;
 const MAX_TERMINAL_OBSERVATIONS = 8;
+const OBSERVE_DEADLINE_MS = 15_000;
 
 function isTerminalStatus(status: InvocationStatus): boolean {
   return status === "succeeded" || status === "failed" || status === "cancelled";
 }
 
-/** Observe until the adapter reports a terminal status, without trusting one
- * queued/running/unknown snapshot as a submitted judgment. */
+interface TerminalObservation {
+  readonly observation: InvocationObservation | undefined;
+  readonly terminalConfirmed: boolean;
+}
+
+function withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T | undefined> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), timeoutMs);
+  });
+  return Promise.race([operation, timeout]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
+}
+
+/** Observe until terminal, but never wait indefinitely on a provider. */
 async function observeTerminal(
   kernel: ExecutionKernelPort,
   execution: Parameters<ExecutionKernelPort["observe"]>[0],
   invocation: Parameters<ExecutionKernelPort["cancel"]>[0],
-): Promise<InvocationObservation | undefined> {
+): Promise<TerminalObservation> {
   let latest: InvocationObservation | undefined;
+  const deadline = Date.now() + OBSERVE_DEADLINE_MS;
   for (let attempt = 0; attempt < MAX_TERMINAL_OBSERVATIONS; attempt += 1) {
-    const observations = await kernel.observe(execution);
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    let observations: readonly InvocationObservation[] | undefined;
+    try {
+      observations = await withTimeout(kernel.observe(execution), remaining);
+    } catch {
+      break;
+    }
+    if (observations === undefined) break;
     latest = observations.find((candidate) => candidate.invocation === invocation);
-    if (latest && isTerminalStatus(latest.status)) return latest;
+    if (latest && isTerminalStatus(latest.status)) return { observation: latest, terminalConfirmed: true };
   }
-  return latest;
+  return { observation: latest, terminalConfirmed: false };
+}
+
+/** Cancel once after observation is bounded, then require a terminal snapshot. */
+async function cancelAndConfirmTerminal(
+  kernel: ExecutionKernelPort,
+  execution: Parameters<ExecutionKernelPort["observe"]>[0],
+  invocation: Parameters<ExecutionKernelPort["cancel"]>[0],
+): Promise<TerminalObservation> {
+  await withTimeout(kernel.cancel(invocation), OBSERVE_DEADLINE_MS).catch(() => undefined);
+  return observeTerminal(kernel, execution, invocation);
 }
 
 function parseJudgmentOutput(rawText: string): RawJudgmentOutput {
@@ -109,9 +145,8 @@ function parseJudgmentOutput(rawText: string): RawJudgmentOutput {
  * isolated reviewers (each a fresh parentless execution, so none can see
  * any peer's answer), records each one's ACTUAL model/provider identity,
  * and writes every judgment together in one sealed transaction only after
- * all reviewers have answered -- "Collect judgments before revealing peer
- * answers" is enforced by construction: no judgment row exists in the
- * database until every reviewer's answer has already been produced.
+ * every reviewer has either answered or reached a confirmed terminal state
+ * after cancellation. Provider work runs outside Goal authority locks.
  */
 type StoredEncoreResult = EncoreCouncilResult & {
   goalId: string;
@@ -170,87 +205,156 @@ async function readEncoreResult(client: Pick<PoolClient, "query">, roundId: stri
   };
 }
 
+function isSameEncoreRequest(prior: StoredEncoreResult, request: EncoreCouncilRoundRequest): boolean {
+  return prior.goalId === request.goalId && prior.question === request.question &&
+    prior.reviewerCount === request.reviewerCount && JSON.stringify(prior.criteria) === JSON.stringify(request.criteria) &&
+    JSON.stringify(prior.evidenceIds) === JSON.stringify(request.evidenceIds);
+}
+
+async function readDurableEncoreEvidence(client: Pick<PoolClient, "query">, goalId: string): Promise<Set<string>> {
+  const project = await client.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId]);
+  const durable = await client.query<{ evidence_id: string; sha256: string }>("SELECT evidence_id, sha256 FROM evidence_records WHERE goal_id = $1 AND project_id = $2", [goalId, project.rows[0]!.project_id]);
+  return new Set(durable.rows.flatMap((row) => [row.evidence_id.trim(), row.sha256.trim()]));
+}
+
+function assertRequestedEncoreEvidence(request: EncoreCouncilRoundRequest, durableIds: ReadonlySet<string>): void {
+  for (const evidenceId of request.evidenceIds) if (!durableIds.has(evidenceId.trim())) throw new EncoreCouncilError(`Encore Council evidence reference is not durable: ${evidenceId}`);
+}
+
 export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernelPort, request: EncoreCouncilRoundRequest): Promise<EncoreCouncilResult> {
-  if (request.reviewerCount < 1) throw new EncoreCouncilError("Encore Council review requires at least one reviewer");
-  const spawnedReviewers: { execution: unknown; invocation: unknown }[] = [];
+  if (!Number.isSafeInteger(request.reviewerCount) || request.reviewerCount < 1 || request.reviewerCount > MAX_ENCORE_REVIEWERS) {
+    throw new EncoreCouncilError(`Encore Council review requires between 1 and ${MAX_ENCORE_REVIEWERS} reviewers`);
+  }
+
+  const roundId = request.commandId ?? randomUUID();
+  const prepared = await withGoalAuthority(pool, request.proof, 43, async (client) => {
+    const goal = await client.query("SELECT 1 FROM goals WHERE goal_id = $1", [request.goalId]);
+    if (goal.rowCount !== 1) throw new EncoreCouncilError("Goal not found for Encore Council review");
+    if (request.commandId !== undefined) {
+      const prior = await readEncoreResult(client, roundId);
+      if (prior !== undefined) {
+        if (!isSameEncoreRequest(prior, request)) throw new EncoreCouncilError("Encore command identity was reused with different review content");
+        return { prior: { roundId: prior.roundId, judgments: prior.judgments, synthesis: prior.synthesis } };
+      }
+    }
+
+    const durableIds = await readDurableEncoreEvidence(client, request.goalId);
+    assertRequestedEncoreEvidence(request, durableIds);
+
+    const triggerReasons = await evaluateEncoreCouncilTriggerWithClient(client, request.goalId);
+    const prompt = [
+      "You are one of several fully independent Encore Council reviewers. You cannot see any other reviewer's answer.",
+      `Question: ${request.question}`,
+      `Criteria: ${request.criteria.map((criterion) => `[${criterion.criterionId}] ${criterion.description}`).join("; ")}`,
+      `Evidence ids you may cite: ${request.evidenceIds.join(", ") || "(none)"}`,
+      'Reply with exactly one JSON object: {"verdict":"proceed"|"do_not_proceed"|"escalate","confidence":"low"|"medium"|"high","reasoning":string,"conditions":string[],"dissentNote":string|null,"citedEvidenceIds":string[]}',
+    ].join("\n");
+
+    // This short transaction freezes the request and validates its evidence.
+    // Provider fan-out starts only after withGoalAuthority commits.
+    return {
+      roundId,
+      triggerReasons,
+      prompt,
+      requestedEvidenceIds: new Set(request.evidenceIds.map((evidenceId) => evidenceId.trim())),
+    };
+  });
+  if ("prior" in prepared) return prepared.prior;
+
+  const spawnedReviewers: SpawnedInvocation[] = [];
+  const terminalConfirmations = new Map<string, boolean>();
+  const judgments: (EncoreJudgmentSubstance & { executionRef: string; invocationRef: string })[] = [];
   try {
-    const result = await withGoalAuthority(pool, request.proof, 43, async (client) => {
-      const goal = await client.query("SELECT 1 FROM goals WHERE goal_id = $1", [request.goalId]);
-      if (goal.rowCount !== 1) throw new EncoreCouncilError("Goal not found for Encore Council review");
-      const roundId = request.commandId ?? randomUUID();
+    // Admit every reviewer before prompting any reviewer. Each root is a
+    // fresh, parentless execution and no database transaction is open here.
+    for (let index = 0; index < request.reviewerCount; index += 1) {
+      spawnedReviewers.push(await kernel.spawn({ name: `encore-review:${randomUUID()}:${index}`, cwd: process.cwd() }));
+    }
+
+    for (const spawned of spawnedReviewers) {
+      const model = await kernel.getModelIdentity(spawned.execution);
+      let terminal: TerminalObservation;
+      let promptError: unknown;
+      let promptFailed = false;
+      try {
+        await kernel.prompt(spawned.execution, prepared.prompt);
+      } catch (error) {
+        promptFailed = true;
+        promptError = error;
+      }
+      if (promptFailed) {
+        // A failed prompt can leave provider work running. Cancel it and
+        // require a terminal snapshot before considering this reviewer done.
+        terminal = await cancelAndConfirmTerminal(kernel, spawned.execution, spawned.invocation);
+      } else {
+        terminal = await observeTerminal(kernel, spawned.execution, spawned.invocation);
+        if (!terminal.terminalConfirmed) terminal = await cancelAndConfirmTerminal(kernel, spawned.execution, spawned.invocation);
+      }
+      terminalConfirmations.set(String(spawned.invocation), terminal.terminalConfirmed);
+
+      const observation = terminal.observation;
+      const rawText = terminal.terminalConfirmed && observation?.status === "succeeded" && observation.answer.state === "available"
+        ? observation.answer.text
+        : "";
+      let output: RawJudgmentOutput;
+      try {
+        output = parseJudgmentOutput(rawText);
+        const invalidEvidence = output.citedEvidenceIds.find((evidenceId) => !prepared.requestedEvidenceIds.has(evidenceId.trim()));
+        if (invalidEvidence !== undefined) throw new EncoreCouncilError(`Encore judgment cited evidence outside the requested durable set: ${invalidEvidence}`);
+        output = { ...output, citedEvidenceIds: output.citedEvidenceIds.map((evidenceId) => evidenceId.trim()) };
+      } catch (error) {
+        output = {
+          verdict: "escalate",
+          confidence: "low",
+          reasoning: promptError instanceof Error
+            ? `reviewer prompt failed: ${promptError.message}`
+            : !terminal.terminalConfirmed
+              ? "reviewer did not reach terminal state before the observation deadline"
+              : error instanceof Error
+                ? `invalid reviewer output: ${error.message}`
+                : "invalid reviewer output",
+          conditions: [],
+          dissentNote: null,
+          citedEvidenceIds: [],
+        };
+      }
+      const substance: EncoreJudgmentSubstance = {
+        modelProvider: model.provider, modelId: model.id, verdict: output.verdict, confidence: output.confidence,
+        reasoning: output.reasoning, conditions: output.conditions, dissentNote: output.dissentNote,
+        citedEvidenceIds: output.citedEvidenceIds,
+      };
+      assertValidEncoreJudgmentSubstance(substance);
+      judgments.push({ ...substance, executionRef: String(spawned.execution), invocationRef: String(spawned.invocation) });
+    }
+
+    const synthesis = synthesizeEncoreJudgments(judgments);
+    const result: EncoreCouncilResult = {
+      roundId,
+      judgments: judgments.map(({ executionRef: _executionRef, invocationRef: _invocationRef, ...judgment }) => judgment),
+      synthesis,
+    };
+
+    // Re-acquire authority only for this short durable write. A lease that
+    // expires during provider work therefore fails closed without holding a
+    // Goal lock for the duration of that work.
+    const committed = await withGoalAuthority(pool, request.proof, 43, async (client) => {
       if (request.commandId !== undefined) {
         const prior = await readEncoreResult(client, roundId);
         if (prior !== undefined) {
-          const sameRequest = prior.goalId === request.goalId && prior.question === request.question &&
-            prior.reviewerCount === request.reviewerCount && JSON.stringify(prior.criteria) === JSON.stringify(request.criteria) &&
-            JSON.stringify(prior.evidenceIds) === JSON.stringify(request.evidenceIds);
-          if (!sameRequest) throw new EncoreCouncilError("Encore command identity was reused with different review content");
+          if (!isSameEncoreRequest(prior, request)) throw new EncoreCouncilError("Encore command identity was reused with different review content");
           return { roundId: prior.roundId, judgments: prior.judgments, synthesis: prior.synthesis };
         }
       }
-      const project = await client.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [request.goalId]);
-      const durable = await client.query<{ evidence_id: string; sha256: string }>("SELECT evidence_id, sha256 FROM evidence_records WHERE goal_id = $1 AND project_id = $2", [request.goalId, project.rows[0]!.project_id]);
-      const durableIds = new Set(durable.rows.flatMap((row) => [row.evidence_id.trim(), row.sha256.trim()]));
-      for (const evidenceId of request.evidenceIds) if (!durableIds.has(evidenceId.trim())) throw new EncoreCouncilError(`Encore Council evidence reference is not durable: ${evidenceId}`);
+      const durableIds = await readDurableEncoreEvidence(client, request.goalId);
+      assertRequestedEncoreEvidence(request, durableIds);
 
-      const triggerReasons = await evaluateEncoreCouncilTriggerWithClient(client, request.goalId);
-      const prompt = [
-        "You are one of several fully independent Encore Council reviewers. You cannot see any other reviewer's answer.",
-        `Question: ${request.question}`,
-        `Criteria: ${request.criteria.map((criterion) => `[${criterion.criterionId}] ${criterion.description}`).join("; ")}`,
-        `Evidence ids you may cite: ${request.evidenceIds.join(", ") || "(none)"}`,
-        'Reply with exactly one JSON object: {"verdict":"proceed"|"do_not_proceed"|"escalate","confidence":"low"|"medium"|"high","reasoning":string,"conditions":string[],"dissentNote":string|null,"citedEvidenceIds":string[]}',
-      ].join("\n");
-
-      // Spawn every reviewer as its own fresh, parentless execution -- an
-      // isolated lane, not a shared conversation -- before collecting any answer.
-      for (let index = 0; index < request.reviewerCount; index += 1) {
-        // A root spawn admits an isolated session; it does not submit this prompt.
-        spawnedReviewers.push(await kernel.spawn({ name: `encore-review:${randomUUID()}:${index}`, cwd: process.cwd() }));
-      }
-      const judgments: (EncoreJudgmentSubstance & { executionRef: string; invocationRef: string })[] = [];
-      for (const spawned of spawnedReviewers) {
-        const model = await kernel.getModelIdentity(spawned.execution as never);
-        let observation: InvocationObservation | undefined;
-        let promptError: unknown;
-        try {
-          await kernel.prompt(spawned.execution as never, prompt);
-          observation = await observeTerminal(kernel, spawned.execution as never, spawned.invocation as never);
-        } catch (error) {
-          promptError = error;
-        }
-        const rawText = observation?.status === "succeeded" && observation.answer.state === "available"
-          ? observation.answer.text
-          : "";
-        let output: RawJudgmentOutput;
-        try {
-          output = parseJudgmentOutput(rawText);
-        } catch {
-          output = {
-            verdict: "escalate",
-            confidence: "low",
-            reasoning: promptError instanceof Error ? `reviewer prompt failed: ${promptError.message}` : "unparseable reviewer output",
-            conditions: [],
-            dissentNote: null,
-            citedEvidenceIds: [],
-          };
-        }
-        const substance: EncoreJudgmentSubstance = {
-          modelProvider: model.provider, modelId: model.id, verdict: output.verdict, confidence: output.confidence,
-          reasoning: output.reasoning, conditions: output.conditions, dissentNote: output.dissentNote,
-          citedEvidenceIds: output.citedEvidenceIds,
-        };
-        assertValidEncoreJudgmentSubstance(substance);
-        judgments.push({ ...substance, executionRef: String(spawned.execution), invocationRef: String(spawned.invocation) });
-      }
-
-      const synthesis = synthesizeEncoreJudgments(judgments);
       await client.query(
         `INSERT INTO encore_council_rounds (round_id, goal_id, question, criteria, evidence_ids, trigger_reasons, reviewer_count)
          VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7)`,
-        [roundId, request.goalId, request.question, JSON.stringify(request.criteria), JSON.stringify(request.evidenceIds), JSON.stringify(triggerReasons), request.reviewerCount],
+        [roundId, request.goalId, request.question, JSON.stringify(request.criteria), JSON.stringify(request.evidenceIds), JSON.stringify(prepared.triggerReasons), request.reviewerCount],
       );
-      // Sealed: every judgment is written together only after every reviewer has answered.
+      // Sealed: every judgment is written together only after every reviewer
+      // has been observed or explicitly cancellation-settled.
       for (const [index, judgment] of judgments.entries()) {
         await client.query(
           `INSERT INTO encore_council_judgments (judgment_id, round_id, reviewer_index, model_provider, model_id, verdict, confidence, reasoning, conditions, dissent_note, cited_evidence_ids, execution_ref, invocation_ref)
@@ -263,20 +367,25 @@ export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernel
          VALUES ($1, $2, $3, $4, $5::jsonb)`,
         [roundId, synthesis.finalVerdict, synthesis.sameModelOnly, synthesis.escalated, JSON.stringify(synthesis.dissentNotes)],
       );
-      return {
-        roundId,
-        judgments: judgments.map(({ executionRef: _executionRef, invocationRef: _invocationRef, ...judgment }) => judgment),
-        synthesis,
-      };
+      return result;
     });
-    // Release only after the authorized transaction commits; a failed
-    // transaction keeps reviewer state available for reconciliation.
-    for (const spawned of spawnedReviewers) await kernel.release?.(spawned.invocation as never).catch(() => {});
-    return result;
+
+    // Release is an explicit post-durable-write acknowledgement. Do not
+    // release a session whose cancellation could not be terminally confirmed.
+    for (const spawned of spawnedReviewers) {
+      if (terminalConfirmations.get(String(spawned.invocation)) === true) await kernel.release?.(spawned.invocation).catch(() => {});
+    }
+    return committed;
   } catch (error) {
-    // Best-effort cleanup after a failed transaction. Never turn the original
-    // authority/provider failure into a different error.
-    for (const spawned of spawnedReviewers) await kernel.release?.(spawned.invocation as never).catch(() => {});
+    // If admission or model lookup fails before a reviewer is settled, stop
+    // those provider sessions. Their records remain available for recovery
+    // because no durable judgment exists to authorize release yet.
+    for (const spawned of spawnedReviewers) {
+      if (!terminalConfirmations.has(String(spawned.invocation))) {
+        const terminal = await cancelAndConfirmTerminal(kernel, spawned.execution, spawned.invocation);
+        terminalConfirmations.set(String(spawned.invocation), terminal.terminalConfirmed);
+      }
+    }
     throw error;
   }
 }
