@@ -173,7 +173,7 @@ ALTER TABLE head_activation_attempts
 ALTER TABLE head_activation_attempts DROP CONSTRAINT IF EXISTS head_activation_attempts_role_binding_check;
 ALTER TABLE head_activation_attempts
   ADD CONSTRAINT head_activation_attempts_role_binding_check
-  CHECK ((requester_role = 'Sane' AND requester_head_role_id IS NULL)
+  CHECK ((requester_role = 'Concertmaster' AND requester_head_role_id IS NULL)
       OR (requester_role = 'Head' AND requester_head_role_id IS NOT NULL));
 ALTER TABLE head_activation_attempts DROP CONSTRAINT IF EXISTS head_activation_attempts_outcome_check;
 ALTER TABLE head_activation_attempts

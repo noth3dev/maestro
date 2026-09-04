@@ -34,11 +34,11 @@ ALTER TABLE permanent_roles ADD COLUMN IF NOT EXISTS provenance jsonb;
 -- required metadata columns. Unknown role rows fail the NOT NULL transition
 -- below instead of receiving guessed identity facts.
 UPDATE permanent_roles
-   SET role_kind = COALESCE(role_kind, 'sane'),
+   SET role_kind = COALESCE(role_kind, 'concertmaster'),
        role_charter = COALESCE(role_charter, 'Coordinate the Secretary Office on behalf of the CEO while preserving intent and canonical records.'),
        capability_boundary = COALESCE(capability_boundary, '{"allowed":["coordinate the Secretary Office","maintain canonical records","present CEO decisions"],"forbidden":["change CEO intent without confirmation","execute unapproved critical actions","spawn production workers directly"]}'::jsonb),
        provenance = COALESCE(provenance, '{"source":"plan/phase2.md §25–26","sourceRevision":"ac65c8d","reviewedBy":"Phase 2 organization review","reviewedAt":"2026-09-01","reviewVersion":"phase2-role-baselines-v1"}'::jsonb)
- WHERE role_id = 'sane'
+ WHERE role_id = 'concertmaster'
    AND (role_kind IS NULL OR role_charter IS NULL OR capability_boundary IS NULL OR provenance IS NULL);
 
 ALTER TABLE permanent_roles ALTER COLUMN role_kind SET NOT NULL;
@@ -48,7 +48,7 @@ ALTER TABLE permanent_roles ALTER COLUMN provenance SET NOT NULL;
 
 ALTER TABLE permanent_roles DROP CONSTRAINT IF EXISTS permanent_roles_role_kind_check;
 ALTER TABLE permanent_roles ADD CONSTRAINT permanent_roles_role_kind_check
-  CHECK (role_kind IN ('sane', 'department_head', 'sentinel', 'overwatch_council'));
+  CHECK (role_kind IN ('concertmaster', 'department_head', 'metronome', 'encore_council'));
 
 ALTER TABLE permanent_roles DROP CONSTRAINT IF EXISTS permanent_roles_role_department_check;
 ALTER TABLE permanent_roles ADD CONSTRAINT permanent_roles_role_department_check
