@@ -161,16 +161,16 @@ export async function assembleEvidenceBundle(pool: Pool, goalId: string, content
        FROM sentinel_challenges challenge WHERE challenge.goal_id = $1
        ORDER BY challenge.created_at, challenge.challenge_id`, [goalId],
   )).rows;
-  const overwatchRounds = (await pool.query<Record<string, unknown>>(
+  const encoreRounds = (await pool.query<Record<string, unknown>>(
     `SELECT round.round_id, round.goal_id, round.question, round.criteria, round.evidence_ids,
             round.trigger_reasons, round.reviewer_count, round.created_at, round.retention,
             synthesis.final_verdict, synthesis.same_model_only, synthesis.escalated,
             synthesis.dissent_notes, synthesis.created_at AS synthesis_created_at,
             COALESCE((SELECT jsonb_agg(to_jsonb(judgment) ORDER BY judgment.reviewer_index)
-                        FROM overwatch_council_judgments judgment
+                        FROM encore_council_judgments judgment
                        WHERE judgment.round_id = round.round_id), '[]'::jsonb) AS judgments
-       FROM overwatch_council_rounds round
-       LEFT JOIN overwatch_council_syntheses synthesis ON synthesis.round_id = round.round_id
+       FROM encore_council_rounds round
+       LEFT JOIN encore_council_syntheses synthesis ON synthesis.round_id = round.round_id
       WHERE round.goal_id = $1 ORDER BY round.created_at, round.round_id`, [goalId],
   )).rows;
   const budgetReservations = (await pool.query<Record<string, unknown>>(
@@ -204,7 +204,7 @@ export async function assembleEvidenceBundle(pool: Pool, goalId: string, content
     certifications: { quality: qualityCertifications, conditional: conditionalCertifications, acceptances, waivers, conflictResolutions },
     sentinelFindings,
     sentinelChallenges,
-    overwatchRounds,
+    encoreRounds,
     budgetReservations,
     evidenceRecords,
   };

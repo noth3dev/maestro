@@ -517,7 +517,7 @@ export async function isCertificationConflictResolved(
 }
 
 /**
- * Routes a real conflicting certification set through an existing Overwatch
+ * Routes a real conflicting certification set through an existing Encore
  * Council round. The database row names every immutable certification member,
  * captures the current contract/revision identity, and stores the Council's
  * actual synthesis verdict.
@@ -526,11 +526,11 @@ export async function adjudicateCertificationConflict(pool: Pool, roundResult: {
   assertValidLeaseProofFor(goalId, proof);
   const round = await pool.query<{ goal_id: string; final_verdict: "proceed" | "do_not_proceed" | "escalate" }>(
     `SELECT round.goal_id, synthesis.final_verdict
-       FROM overwatch_council_rounds round
-       JOIN overwatch_council_syntheses synthesis ON synthesis.round_id = round.round_id
+       FROM encore_council_rounds round
+       JOIN encore_council_syntheses synthesis ON synthesis.round_id = round.round_id
       WHERE round.round_id = $1`, [roundResult.roundId],
   );
-  if (round.rowCount !== 1 || round.rows[0]!.goal_id !== goalId) throw new CertificationError("Overwatch Council round is not bound to this Goal");
+  if (round.rowCount !== 1 || round.rows[0]!.goal_id !== goalId) throw new CertificationError("Encore Council round is not bound to this Goal");
   const actualRows = await readConflictCertificationRows(pool, goalId);
   const identity = await currentCertificationIdentity(pool, goalId);
   if (identity === null) throw new CertificationError("Cannot adjudicate a conflict without a current Goal integration identity");

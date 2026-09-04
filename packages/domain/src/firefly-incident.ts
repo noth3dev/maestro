@@ -138,7 +138,7 @@ export interface FireflyImprovementEvidence {
 /**
  * Derive bounded improvement-evidence facts from real durable timestamps
  * only. This never triggers a change by itself; it is durable evidence for
- * a later Overwatch Improvement Digest to consume.
+ * a later Encore Improvement Digest to consume.
  */
 export function computeFireflyImprovementEvidence(
   outcome: "resolved" | "false_positive",

@@ -36,7 +36,7 @@ describe("durable role catalog", () => {
     expect(SANE_ROLE.departmentId).toBeNull();
 
     const sentinel = PERMANENT_ROLES.filter((role) => role.roleKind === "sentinel");
-    const council = PERMANENT_ROLES.filter((role) => role.roleKind === "overwatch_council");
+    const council = PERMANENT_ROLES.filter((role) => role.roleKind === "encore_council");
     expect(sentinel).toHaveLength(1);
     expect(council.length).toBeGreaterThanOrEqual(3);
     expect([...sentinel, ...council].every((role) => role.departmentId === null)).toBe(true);
