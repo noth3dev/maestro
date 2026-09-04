@@ -40,6 +40,20 @@ Before submitting code, please ensure your changes adhere to Maestro's foundatio
    npm install
    ```
 
+### Parallel worktrees
+
+Create each parallel task in its own branch and worktree. The helper links the
+worktree to the repository's already-installed dependencies, so `npm install`
+is not repeated per worktree:
+
+```bash
+npm run worktree:add -- hardening/my-task hardening/lifecycle
+cd .worktrees/hardening-my-task
+```
+
+Commit and push from the worktree. Do not edit the same files from multiple
+worktrees; merge or cherry-pick completed branches into the integration branch.
+
 3. **Build all monorepo packages**:
    ```bash
    npm run build
