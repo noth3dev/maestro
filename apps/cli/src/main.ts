@@ -11,6 +11,14 @@ export interface CliIo {
 type Env = Record<string, string | undefined>;
 
 export async function executeCli(args: string[], env: Env, io: CliIo): Promise<number> {
+  if (args.includes("--help") || args[0] === "help") {
+    io.stdout(helpText());
+    return 0;
+  }
+  if (args[0] === "--version" || args[0] === "-V") {
+    io.stdout("maestro development\n");
+    return 0;
+  }
   try {
     const baseUrl = requireEnvironment(env, "MAESTRO_API_URL");
     const token = requireEnvironment(env, "MAESTRO_API_TOKEN");
@@ -24,6 +32,28 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
         "command-id": { type: "string" },
         "contract-id": { type: "string" },
         "substance-json": { type: "string" },
+        "activation-json": { type: "string" },
+        "council-json": { type: "string" },
+        "brief-json": { type: "string" },
+        "packet-json": { type: "string" },
+        "plan-json": { type: "string" },
+        "bundle-json": { type: "string" },
+        "worker-json": { type: "string" },
+        "worker-id": { type: "string" },
+        "repository-path": { type: "string" },
+        "branch-name": { type: "string" },
+        "base-revision": { type: "string" },
+        "worktree-path": { type: "string" },
+        "certification-json": { type: "string" },
+        "certification-kind": { type: "string" },
+        "review-json": { type: "string" },
+        "finding-ids": { type: "string" },
+        "evidence-references": { type: "string" },
+        reason: { type: "string" },
+        "plan-version": { type: "string" },
+        "department-id": { type: "string" },
+        "item-id": { type: "string" },
+        "council-id": { type: "string" },
         "content-hash": { type: "string" },
         "expires-at": { type: "string" },
         action: { type: "string" },
@@ -40,12 +70,13 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     });
     const client = createApiClient({ baseUrl, token, ...(io.fetch === undefined ? {} : { fetch: io.fetch }) });
     const [resource, action] = parsed.positionals;
+    if (parsed.positionals.length > 2) throw new Error("Unexpected positional argument");
     const value = (name: keyof typeof parsed.values) => parsed.values[name];
     const string = (name: keyof typeof parsed.values) => requiredOption(value(name), `--${name}`);
     const json = parsed.values.json === true;
 
     if (resource === "task-contract" && action === "create") {
-      const result = await client.createTaskContract({ projectId: string("project-id"), substance: parseJsonOption(string("substance-json")) }, string("contract-id"));
+      const result = await client.createTaskContract({ projectId: string("project-id"), substance: parseJsonOption(string("substance-json"), "--substance-json") }, string("contract-id"));
       printState(io.stdout, result, json);
       return 0;
     }
@@ -56,7 +87,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     }
     if (resource === "task-contract" && action === "amend") {
       const expectedVersion = nonNegativeInteger(string("expected-version"), "--expected-version");
-      const result = await client.updateTaskContract(string("contract-id"), { projectId: string("project-id"), expectedVersion, substance: parseJsonOption(string("substance-json")) });
+      const result = await client.updateTaskContract(string("contract-id"), { projectId: string("project-id"), expectedVersion, substance: parseJsonOption(string("substance-json"), "--substance-json") }, value("command-id") === undefined ? undefined : string("command-id"));
       printState(io.stdout, result, json);
       return 0;
     }
@@ -72,7 +103,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       return 0;
     }
     if (resource === "task-contract" && action === "launch") {
-      const result = await client.launchTaskContract(string("contract-id"), string("project-id"));
+      const result = await client.launchTaskContract(string("contract-id"), string("project-id"), value("command-id") === undefined ? undefined : string("command-id"));
       printState(io.stdout, result, json);
       return 0;
     }
@@ -83,6 +114,128 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     }
     if (resource === "budget" && action === "get") {
       const result = await client.getBudgetSummary(string("goal-id"), { projectId: string("project-id") });
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "head" && action === "activate") {
+      const result = await client.activateHead(string("goal-id"), parseJsonOption(string("activation-json"), "--activation-json"), string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "council" && action === "create") {
+      const result = await client.createCouncil(string("goal-id"), parseJsonOption(string("council-json"), "--council-json"), string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "council" && action === "get") {
+      const result = await client.getCouncil(string("council-id"), string("project-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "council" && action === "submit-brief") {
+      await client.submitCouncilBrief(string("council-id"), string("department-id"), parseJsonOption(string("brief-json"), "--brief-json"), string("command-id"));
+      printState(io.stdout, { submitted: true }, json);
+      return 0;
+    }
+    if (resource === "council" && action === "reveal") {
+      await client.revealCouncil(string("council-id"), string("project-id"), string("command-id"));
+      printState(io.stdout, { revealed: true }, json);
+      return 0;
+    }
+    if (resource === "council" && action === "decide") {
+      const result = await client.decideCouncil(string("council-id"), parseJsonOption(string("packet-json"), "--packet-json"), string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "department-plan" && action === "create") {
+      const result = await client.createDepartmentPlan(string("council-id"), string("department-id"), parseJsonOption(string("plan-json"), "--plan-json"), string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "department-plan" && action === "get") {
+      const result = await client.getDepartmentPlan(string("council-id"), string("department-id"), string("project-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "mission-bundle" && action === "create") {
+      const result = await client.createMissionBundle(string("council-id"), string("department-id"), string("item-id"), parseJsonOption(string("bundle-json"), "--bundle-json"), string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "encore" && action === "review") {
+      const result = await client.runEncoreReview(string("goal-id"), { ...parseJsonOption(string("review-json"), "--review-json"), projectId: string("project-id") }, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "metronome" && action === "scan") {
+      const result = await client.scanMetronome(string("goal-id"), { projectId: string("project-id") }, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "metronome" && action === "challenge") {
+      const result = await client.raiseMetronomeChallenge(string("goal-id"), { projectId: string("project-id"), findingIds: parseJsonOption(string("finding-ids"), "--finding-ids"), reason: string("reason"), evidenceReferences: parseJsonOption(string("evidence-references"), "--evidence-references") }, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "git" && action === "goal-branch") {
+      const result = await client.createGoalIntegrationBranch(string("goal-id"), { projectId: string("project-id"), repositoryPath: string("repository-path"), branchName: string("branch-name"), baseRevision: string("base-revision") }, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "git" && action === "department-branch") {
+      const result = await client.createDepartmentBranch(string("council-id"), string("department-id"), { projectId: string("project-id") }, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "git" && action === "worker-worktree") {
+      const result = await client.createWorkerWorktree(string("worker-id"), { projectId: string("project-id"), worktreePath: string("worktree-path") }, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "git" && action === "goal-revision") {
+      const result = await client.freezeGoalIntegrationRevision(string("goal-id"), { projectId: string("project-id") }, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "worker" && action === "spawn") {
+      const result = await client.spawnWorker(string("council-id"), string("department-id"), parseJsonOption(string("worker-json"), "--worker-json"), string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "worker" && action === "get") {
+      const result = await client.getWorker(string("worker-id"), string("project-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "worker" && action === "accept") {
+      const result = await client.acceptWorker(string("worker-id"), { projectId: string("project-id"), reason: string("reason") }, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "worker" && (action === "certify" || action === "certify-conditional")) {
+      const certification = parseJsonOption(string("certification-json"), "--certification-json");
+      const input = { ...certification, projectId: string("project-id") };
+      const result = action === "certify"
+        ? await client.certifyWorker(string("worker-id"), input, string("command-id"))
+        : await client.certifyConditionalWorker(string("worker-id"), string("certification-kind") as "security" | "safety_compliance", input, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "worker" && (action === "observe" || action === "cancel")) {
+      const input = { projectId: string("project-id") };
+      const result = action === "observe"
+        ? await client.observeWorker(string("worker-id"), input, string("command-id"))
+        : await client.cancelWorker(string("worker-id"), input, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "mission-bundle" && action === "get") {
+      const result = await client.getMissionBundle(string("council-id"), string("department-id"), Number(string("plan-version")), string("item-id"), string("project-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "department-plan" && action === "revise") {
+      const result = await client.reviseDepartmentPlan(string("council-id"), string("department-id"), { ...parseJsonOption(string("plan-json"), "--plan-json"), reason: string("reason") }, string("command-id"));
       printState(io.stdout, result, json);
       return 0;
     }
@@ -126,12 +279,16 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       else printEvents(io.stdout, page.events, page.nextCursor);
       return 0;
     }
-    throw new Error("Usage: maestro goals list|goal create|get|transition|critical-action approve-and-run|budget ... | maestro events list ...");
+    throw new Error("Usage: maestro goals list|goal create|get|transition|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|observe|cancel|accept|certify|certify-conditional|git goal-branch|git department-branch|git worker-worktree|git goal-revision|metronome scan|metronome challenge|encore review|critical-action approve-and-run|budget ... | maestro events list ...");
   } catch (error) {
     const message = error instanceof ApiError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : "Command failed";
     io.stderr(`${message}\n`);
     return error instanceof ApiError ? 1 : 2;
   }
+}
+
+function helpText(): string {
+  return `Maestro CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  goal create|get|transition\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  git goal-branch|department-branch|worker-worktree|goal-revision\n  metronome scan|challenge\n  encore review\n  critical-action approve-and-run\n  events list\n\nUse --json for machine-readable output.\n`;
 }
 
 function nonNegativeInteger(value: string, option: string): number {
@@ -146,8 +303,8 @@ function safeInteger(value: string, option: string): number {
   return parsed;
 }
 
-function parseJsonOption(value: string): any {
-  try { return JSON.parse(value); } catch { throw new Error("--substance-json must contain valid JSON"); }
+function parseJsonOption(value: string, option: string): any {
+  try { return JSON.parse(value); } catch { throw new Error(`${option} must contain valid JSON`); }
 }
 
 function requireEnvironment(env: Env, name: string): string {

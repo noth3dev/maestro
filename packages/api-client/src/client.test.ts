@@ -85,3 +85,38 @@ it("approves and runs a critical action with the exact command identity", async 
   await expect(client.approveAndRunCriticalAction(goalId, input, commandId)).resolves.toMatchObject({ effect: "allow", recordId: commandId });
   expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/critical-actions/approve-and-run`, expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "idempotency-key": commandId }), body: JSON.stringify(input) }));
 });
+
+
+it("activates a Goal-scoped Head through the typed client", async () => {
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    goalId, departmentId: "product", headRoleId: "head:product", contractId: null, contextId: null,
+    status: "active", activeSessionRef: "execution-1",
+  }), { status: 200 }));
+  const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+  const input = { projectId, departmentId: "product", requestedContribution: "implement", urgency: "normal", contextScope: ["contract"], budgetEffect: "none", reason: "launch" };
+  const commandId = "33333333-3333-4333-8333-333333333333";
+  await expect(client.activateHead(goalId, input, commandId)).resolves.toMatchObject({ goalId, departmentId: "product", status: "active" });
+  expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/head-participations`, expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "idempotency-key": commandId }), body: JSON.stringify(input) }));
+});
+
+
+it("drives the authenticated Head Council lifecycle", async () => {
+  const councilId = "44444444-4444-4444-8444-444444444444";
+  const contractId = "55555555-5555-4555-8555-555555555555";
+  const council = { councilId, goalId, contractId, briefDeadline: "2030-01-01T00:00:00.000Z", state: "resolved", noNewEvidenceStreak: 0, decisionPacket: null, snapshotHash: "a".repeat(64), snapshot: {} };
+  const fetch = vi.fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(council), { status: 201 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify(council), { status: 200 }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify(council), { status: 200 }));
+  const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+  const createInput = { projectId, contractId, briefDeadline: council.briefDeadline, evidence: {} };
+  const brief = { interpretation: "safe", contribution: "review", nonGoals: [], assumptions: [], evidenceGaps: [], risks: [], dependencies: [], proposedValidation: [], expectedWorkers: [], expectedCost: "1", expectedTime: "1", objectionsToLikelyAlternatives: [] };
+  const packet = { outcome: "decided", executionDisposition: "executable", selectedDirection: "ship", rejectedAlternatives: [], departmentOwnership: [{ departmentId: "product", responsibility: "implement" }], workerPlan: [], completionCriteria: ["pass"], failureCriteria: ["fail"], dissent: [], uncertainty: [], criticalActions: [], unresolvedConflicts: [], evidenceReferences: [] };
+  await expect(client.createCouncil(goalId, createInput, commandId)).resolves.toEqual(council);
+  await expect(client.getCouncil(councilId, projectId)).resolves.toEqual(council);
+  await expect(client.submitCouncilBrief(councilId, "product", { projectId, brief }, commandId)).resolves.toBeUndefined();
+  await expect(client.revealCouncil(councilId, projectId, commandId)).resolves.toBeUndefined();
+  await expect(client.decideCouncil(councilId, { projectId, packet }, commandId)).resolves.toEqual(council);
+});
