@@ -26,6 +26,10 @@ function fakeService(overrides: Partial<GoalService> = {}): GoalService {
   return {
     createGoal: async () => goal,
     transitionGoal: async () => ({ ...goal, state: "ready_for_confirmation", version: 2 }),
+    pauseGoal: async () => ({ ...goal, state: "pausing", version: 2 }),
+    stopGoal: async () => ({ ...goal, state: "stopping", version: 2 }),
+    resumeGoal: async () => ({ ...goal, state: "resuming", version: 2 }),
+    emergencyStopGoal: async () => ({ ...goal, state: "stopped", version: 2 }),
     getGoal: async () => goal,
     ...overrides,
   };
@@ -500,6 +504,16 @@ describe("project-scoped authorization (Phase 1 re-patch item 8)", () => {
       payload: { projectId: goal.projectId, expectedVersion: 1, to: "ready_for_confirmation" },
     });
     expect(transition.statusCode).toBe(403);
+    const pauseGoal = vi.fn(fakeService().pauseGoal);
+    const pauseApp = buildServer({ goalService: fakeService({ pauseGoal }), authenticator: authenticated(), projectMembership });
+    const pause = await pauseApp.inject({
+      method: "POST", url: `/v1/goals/${goal.goalId}/pause`,
+      headers: { authorization: "Bearer test-secret", "idempotency-key": "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f10" },
+      payload: { projectId: goal.projectId, expectedVersion: 1 },
+    });
+    expect(pause.statusCode).toBe(403);
+    expect(pauseGoal).not.toHaveBeenCalled();
+    await pauseApp.close();
     await app.close();
   });
 
@@ -523,6 +537,32 @@ describe("project-scoped authorization (Phase 1 re-patch item 8)", () => {
       payload: { projectId: goal.projectId },
     });
     expect(response.statusCode).toBe(201);
+    await app.close();
+  });
+});
+
+
+describe("Goal control routes", () => {
+  it("requires auth, validates project-scoped input, and dispatches each narrow operation", async () => {
+    const operations = {
+      pauseGoal: vi.fn(async () => ({ ...goal, state: "pausing" as const, version: 2 })),
+      stopGoal: vi.fn(async () => ({ ...goal, state: "stopping" as const, version: 2 })),
+      resumeGoal: vi.fn(async () => ({ ...goal, state: "resuming" as const, version: 2 })),
+      emergencyStopGoal: vi.fn(async () => ({ ...goal, state: "stopped" as const, version: 2 })),
+    };
+    const app = buildServer({ goalService: fakeService(operations), authenticator: authenticated() });
+    const headers = { authorization: "Bearer test-secret", "content-type": "application/json" };
+    for (const [path, operation] of [["pause", operations.pauseGoal], ["stop", operations.stopGoal], ["resume", operations.resumeGoal], ["emergency-stop", operations.emergencyStopGoal]] as const) {
+      const commandId = `018f3c9b-7e71-7b44-ae23-3b5d4e8c9f${path === "pause" ? "01" : path === "stop" ? "02" : path === "resume" ? "03" : "04"}`;
+      const response = await app.inject({
+        method: "POST",
+        url: `/v1/goals/${goal.goalId}/${path}`,
+        headers: { ...headers, "idempotency-key": commandId },
+        payload: { projectId: goal.projectId, expectedVersion: 1 },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(operation).toHaveBeenCalledWith(goal.goalId, { projectId: goal.projectId, expectedVersion: 1 }, commandId, operator);
+    }
     await app.close();
   });
 });

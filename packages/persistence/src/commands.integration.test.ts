@@ -244,4 +244,49 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
       .rejects.toMatchObject({ code: "stale_lease" });
     expect(await counts()).toEqual(before);
   });
+
+
+  it("couples generic lifecycle transitions to durable Goal control latches and makes emergency stop terminal", async () => {
+    const projectId = randomUUID();
+    const goalId = randomUUID();
+    const proof = await lease(goalId, "control-plane");
+    const command = async (to: import("@maestro/domain").GoalState, expectedVersion: number) =>
+      executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "operator", type: "TransitionGoal", expectedVersion, to }, proof);
+
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "operator", type: "CreateGoal", expectedVersion: 0 }, proof);
+    await command("ready_for_confirmation", 1);
+    await command("launched", 2);
+    await command("active", 3);
+
+    const pauseCommand = { commandId: randomUUID(), projectId, goalId, actorId: "operator", type: "TransitionGoal" as const, expectedVersion: 4, to: "pausing" as const };
+    const pausedRequest = await executeGoalCommand(pool, pauseCommand, proof);
+    await expect(executeGoalCommand(pool, pauseCommand, proof)).resolves.toEqual(pausedRequest);
+    expect(pausedRequest).toMatchObject({ state: "pausing", version: 5 });
+    await expect(pool.query<{ control_epoch: string; pause_requested_at: Date | null; paused_at: Date | null }>(
+      "SELECT control_epoch, pause_requested_at, paused_at FROM goal_controls WHERE project_id = $1 AND goal_id = $2", [projectId, goalId],
+    )).resolves.toMatchObject({ rows: [{ control_epoch: "2", pause_requested_at: expect.any(Date), paused_at: null }] });
+    await expect(command("paused", 5)).resolves.toMatchObject({ state: "paused", version: 6 });
+    await expect(command("resuming", 6)).resolves.toMatchObject({ state: "resuming", version: 7 });
+    await expect(pool.query<{ control_epoch: string; pause_requested_at: Date | null; paused_at: Date | null }>(
+      "SELECT control_epoch, pause_requested_at, paused_at FROM goal_controls WHERE project_id = $1 AND goal_id = $2", [projectId, goalId],
+    )).resolves.toMatchObject({ rows: [{ control_epoch: "4", pause_requested_at: null, paused_at: null }] });
+    await expect(command("active", 7)).resolves.toMatchObject({ state: "active", version: 8 });
+    await expect(command("stopping", 8)).resolves.toMatchObject({ state: "stopping", version: 9 });
+    await expect(command("stopped", 9)).resolves.toMatchObject({ state: "stopped", version: 10 });
+    await expect(pool.query<{ stopping_at: Date | null; stopped_at: Date | null }>(
+      "SELECT stopping_at, stopped_at FROM goal_controls WHERE project_id = $1 AND goal_id = $2", [projectId, goalId],
+    )).resolves.toMatchObject({ rows: [{ stopping_at: expect.any(Date), stopped_at: expect.any(Date) }] });
+
+    const emergencyGoalId = randomUUID();
+    const emergencyProof = await lease(emergencyGoalId, "control-plane");
+    const emergencyCommand = { commandId: randomUUID(), projectId, goalId: emergencyGoalId, actorId: "operator", type: "EmergencyStopGoal" as const, expectedVersion: 1 };
+    await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId: emergencyGoalId, actorId: "operator", type: "CreateGoal", expectedVersion: 0 }, emergencyProof);
+    const emergency = await executeGoalCommand(pool, emergencyCommand, emergencyProof);
+    await expect(executeGoalCommand(pool, emergencyCommand, emergencyProof)).resolves.toEqual(emergency);
+    expect(emergency).toMatchObject({ outcome: "succeeded", state: "stopped", version: 2 });
+    await expect(pool.query<{ state: string; control_epoch: string; emergency_stopped_at: Date | null; stopped_at: Date | null }>(
+      "SELECT g.state, c.control_epoch, c.emergency_stopped_at, c.stopped_at FROM goals g JOIN goal_controls c USING (project_id, goal_id) WHERE g.project_id = $1 AND g.goal_id = $2", [projectId, emergencyGoalId],
+    )).resolves.toMatchObject({ rows: [{ state: "stopped", control_epoch: "2", emergency_stopped_at: expect.any(Date), stopped_at: expect.any(Date) }] });
+  });
+
 });

@@ -60,6 +60,23 @@ describe("executeCli", () => {
     expect(stdout.lines).toEqual([`Goal ${goalId}: draft (version 0)\n`, `Goal ${goalId}: ready_for_confirmation (version 1)\n`]);
   });
 
+  it("runs project-bound Goal control operations with idempotency keys", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ goalId, projectId, state: "pausing", version: 1 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ goalId, projectId, state: "stopping", version: 2 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ goalId, projectId, state: "resuming", version: 3 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ goalId, projectId, state: "stopped", version: 4 }), { status: 200 }));
+    const stdout = output();
+    const stderr = output();
+    for (const [action, expectedState, actionCommandId] of [["pause", "pausing", commandId], ["stop", "stopping", "44444444-4444-4444-8444-444444444444"], ["resume", "resuming", "55555555-5555-4555-8555-555555555555"], ["emergency-stop", "stopped", "66666666-6666-4666-8666-666666666666"]] as const) {
+      await expect(executeCli(["goal", action, "--goal-id", goalId, "--project-id", projectId, "--expected-version", "0", "--command-id", actionCommandId, "--json"], env, { fetch, stdout: stdout.write, stderr: stderr.write })).resolves.toBe(0);
+      expect(JSON.parse(stdout.lines.at(-1)!)).toMatchObject({ state: expectedState });
+    }
+    expect(fetch).toHaveBeenNthCalledWith(1, `https://maestro.test/v1/goals/${goalId}/pause`, expect.objectContaining({ method: "POST", body: JSON.stringify({ projectId, expectedVersion: 0 }) }));
+    expect(fetch).toHaveBeenNthCalledWith(4, `https://maestro.test/v1/goals/${goalId}/emergency-stop`, expect.objectContaining({ method: "POST" }));
+    expect(stderr.lines).toEqual([]);
+  });
+
   it("lists Goals and shows the budget summary with project binding", async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ goals: [{ goalId, projectId, state: "draft", version: 0 }] }), { status: 200 }))

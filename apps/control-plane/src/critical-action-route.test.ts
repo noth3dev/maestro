@@ -15,7 +15,15 @@ function authenticated(outcome: "authenticated" | "invalid" = "authenticated"): 
 }
 
 function fakeGoalService(): GoalService {
-  return { createGoal: async () => goal, transitionGoal: async () => goal, getGoal: async () => goal };
+  return {
+    createGoal: async () => goal,
+    transitionGoal: async () => goal,
+    pauseGoal: async () => goal,
+    stopGoal: async () => goal,
+    resumeGoal: async () => goal,
+    emergencyStopGoal: async () => ({ ...goal, state: "stopped" }),
+    getGoal: async () => goal,
+  };
 }
 
 function fakeRepository(overrides: Partial<AuthorityRepository> = {}): AuthorityRepository {

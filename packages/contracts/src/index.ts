@@ -19,6 +19,13 @@ export const TransitionGoalInputSchema = z.object({
 }).strict();
 export type TransitionGoalInput = z.infer<typeof TransitionGoalInputSchema>;
 
+/** Project-bound optimistic concurrency input shared by narrow Goal controls. */
+export const GoalControlInputSchema = z.object({
+  projectId: UuidSchema,
+  expectedVersion: CommandVersionSchema,
+}).strict();
+export type GoalControlInput = z.infer<typeof GoalControlInputSchema>;
+
 export const GoalQuerySchema = z.object({ projectId: UuidSchema }).strict();
 export type GoalQuery = z.infer<typeof GoalQuerySchema>;
 /** Project binding required for every Goal-scoped read, including derived state. */
