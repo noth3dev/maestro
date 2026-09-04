@@ -62,7 +62,7 @@ CREATE TRIGGER team_lead_grants_no_delete
   FOR EACH ROW EXECUTE FUNCTION reject_team_lead_grant_delete();
 
 -- Helper workers spawned under a grant still belong to the same Department
--- Plan mission and remain visible to the Head and Sentinel. A helper cannot
+-- Plan mission and remain visible to the Head and Metronome. A helper cannot
 -- itself receive a grant (unbounded recursive spawning is forbidden), so
 -- `parent_worker_id` is only ever one level deep by application discipline
 -- (enforced in application code: grantTeamLead rejects a worker that is
