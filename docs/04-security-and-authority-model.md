@@ -11,7 +11,7 @@ All system actions are categorized into four explicit security levels (`packages
 | Classification | Action Types | Default Security Policy |
 | :--- | :--- | :--- |
 | **`ordinary`** | `project.file.edit`, `project.test.run`, `git.local.commit` | Allowed autonomously within an active Task Contract and Mission Bundle. |
-| **`critical`** | `git.remote.push`, `deployment.release`, `external.send`, `permanent.delete`, `payment.spend`, `authority.change`, `external.connect` | Requires explicit, pre-recorded CEO / Authority confirmation. |
+| **`critical`** | `git.remote.push`, `deployment.release`, `external.send`, `permanent.delete`, `payment.spend`, `authority.change`, `external.connect` | Requires explicit, pre-recorded Conductor / Authority confirmation. |
 | **`forbidden`** | `system.policy.bypass`, unauthorized privilege escalation | Permanently blocked. Raises a security audit violation immediately. |
 | **`ambiguous`** | Unrecognized or unclassified action strings | Default-denied. Requires explicit classification review before execution. |
 
@@ -28,12 +28,12 @@ flowchart TD
     GATE --> CLASS[Action Classification Check]
     CLASS -->|Forbidden / Ambiguous| DENY[Immediate Rejection & Audit Log]
     CLASS -->|Ordinary| CHECK_GRANT{Valid Goal / Mission Grant?}
-    CLASS -->|Critical| CHECK_APPROVAL{Valid Pre-recorded CEO Approval?}
+    CLASS -->|Critical| CHECK_APPROVAL{Valid Pre-recorded Conductor Approval?}
     
     CHECK_GRANT -->|No| DENY
     CHECK_GRANT -->|Yes| AUDIT[Audit Log Written to DB]
     
-    CHECK_APPROVAL -->|No| PAUSE[Execution Paused & CEO Approval Prompted]
+    CHECK_APPROVAL -->|No| PAUSE[Execution Paused & Conductor Approval Prompted]
     CHECK_APPROVAL -->|Yes| AUDIT
     
     AUDIT --> EXEC[Execute Tool / Side Effect]

@@ -16,8 +16,8 @@ This document records approved post-certification architectural ideas and extens
 ### Core Specifications
 
 #### 1. Governance & Separation of Powers
-- **Production Ownership**: Positioned under the **Infrastructure / Operations Group** as a tool-manufacturing engine. It MUST NOT be directly owned by Overwatch to prevent self-auditing conflicts of interest (Separation of Powers).
-- **Overwatch Auditing**: **Sentinel** monitors live tool executions for safety breaches, while the **Phase 6 Replay Lab** analyzes offline token inflation and queues inefficient tools for Luthiery refactoring.
+- **Production Ownership**: Positioned under the **Infrastructure / Operations Group** as a tool-manufacturing engine. It MUST NOT be directly owned by Encore to prevent self-auditing conflicts of interest (Separation of Powers).
+- **Encore Auditing**: **Metronome** monitors live tool executions for safety breaches, while the **Phase 6 Replay Lab** analyzes offline token inflation and queues inefficient tools for Luthiery refactoring.
 
 #### 2. Isolation & Process Lifecycle
 - **Task Sandbox Execution**: Dynamic MCP daemons execute exclusively within Phase 4 Task-scoped containers/sandboxes.
@@ -62,7 +62,7 @@ This document records approved post-certification architectural ideas and extens
 ### Core Specifications
 
 #### 1. Pre-funded Capital Model (사용자 충전식 펀딩 모델)
-- **Orchestration-Owned Funds**: The wallet stores funds pre-charged/deposited by the CEO/Operator (User).
+- **Orchestration-Owned Funds**: The wallet stores funds pre-charged/deposited by the Conductor/Operator (User).
 - **Multi-Rail Payment Adapters**: Supports both Web3 crypto assets (USDC, ETH, Solana smart contracts) and traditional fiat APIs (Stripe, Plaid API adapters).
 
 #### 2. Governance & Treasury Department (재무부 소속)
@@ -71,12 +71,12 @@ This document records approved post-certification architectural ideas and extens
 
 #### 3. Authority & Multi-Tier Spending Policy (지출 권한 제어)
 - **Default Autonomous Execution**: Spending within the Task Contract's approved budget executes autonomously via `payment.spend` actions.
-- **Optional 2-Step Confirmation**: Operator can toggle a mandatory 2-step approval rule for high-value transactions, requiring explicit CEO authorization via `AuthorizedEffectExecutor` when thresholds are exceeded.
+- **Optional 2-Step Confirmation**: Operator can toggle a mandatory 2-step approval rule for high-value transactions, requiring explicit Conductor authorization via `AuthorizedEffectExecutor` when thresholds are exceeded.
 - **Audit-Before-Spend**: Transaction intent, recipient, and amount must be immutably recorded in PostgreSQL prior to dispatching any network payment transaction.
 
 #### 4. Audit & Double-Entry Ledger Persistence (이중 기입 장부 영속성)
 - **Durable Outbox Receipts**: Every spending transaction emits a signed `PaymentReceipt` containing transaction hashes, invoice hashes, and fencing token proofs.
-- **Sentinel Financial Auditing**: **Sentinel** continuously monitors for unusual spend velocity, unauthorized address transfers, or budget leaks.
+- **Metronome Financial Auditing**: **Metronome** continuously monitors for unusual spend velocity, unauthorized address transfers, or budget leaks.
 
 ---
 

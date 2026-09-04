@@ -82,16 +82,16 @@ node apps/cli/dist/main.js goal get <goalId>
 # List append-only domain events for a Goal
 node apps/cli/dist/main.js events list --goalId <goalId>
 
-# Query a Sentinel challenge
+# Query a Metronome challenge
 node apps/cli/dist/main.js sentinel challenge <challengeId>
 
-# Query an Overwatch Council deliberation round
+# Query an Encore Council deliberation round
 node apps/cli/dist/main.js council round <roundId>
 
 # Retrieve a Quality certification record
 node apps/cli/dist/main.js certification get <certificationId>
 
-# Retrieve the final certified Sane report for a Goal
+# Retrieve the final certified Concertmaster report for a Goal
 node apps/cli/dist/main.js report get <goalId>
 ```
 

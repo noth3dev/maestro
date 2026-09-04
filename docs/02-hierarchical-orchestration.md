@@ -8,18 +8,18 @@ Maestro models human organizational structures by dividing responsibilities acro
 
 ```mermaid
 flowchart TD
-    CEO([CEO / User]) -->|1. Natural Language Goal| SANE[Sane Secretary]
+    CONDUCTOR([Conductor / User]) -->|1. Natural Language Goal| CONCERTMASTER[Concertmaster]
     
     subgraph IntakePhase [Intake & Framing Phase]
-        SANE -->|2. Activate Overture Roles| OC[Overture Crew]
+        CONCERTMASTER -->|2. Activate Overture Roles| OC[Overture Crew]
         OC -->|3. Draft task.md| TC[Task Contract]
-        TC -->|4. Submit for Approval| CEO
+        TC -->|4. Submit for Approval| CONDUCTOR
     end
     
-    CEO -->|5. Single Launch Confirmation| SANE
+    CONDUCTOR -->|5. Single Launch Confirmation| CONCERTMASTER
     
     subgraph DeliberationPhase [Deliberation & Planning Phase]
-        SANE -->|6. Wake Required Heads| DH[Department Heads]
+        CONCERTMASTER -->|6. Wake Required Heads| DH[Department Heads]
         DH -->|7. Sealed Brief Submissions| HC[Head Council Deliberation]
         HC -->|8. Formulate Decision Packet| DP[Department Plans]
     end
@@ -29,32 +29,32 @@ flowchart TD
         W -->|10. Isolated Execution| GIT[(Git Worktree/Branch)]
     end
     
-    subgraph VerificationPhase [Overwatch & Certification Phase]
+    subgraph VerificationPhase [Encore & Certification Phase]
         W -->|11. Submit Evidence Bundle| EB[SHA-256 Evidence]
-        EB -->|12. Real-time Integrity Check| SENTINEL[Sentinel / Overwatch Council]
-        SENTINEL -->|13. Quality Verification| QC[Quality Department Certification]
-        QC -->|14. Handshake to Sane| SANE
+        EB -->|12. Real-time Integrity Check| METRONOME[Metronome / Encore Council]
+        METRONOME -->|13. Quality Verification| QC[Quality Department Certification]
+        QC -->|14. Handshake to Concertmaster| CONCERTMASTER
     end
     
-    SANE -->|15. Final Certified Report| CEO
+    CONCERTMASTER -->|15. Final Certified Report| CONDUCTOR
 ```
 
 ---
 
 ## 2. Key Personas and Organizational Roles
 
-### 1) CEO (User / Operator)
+### 1) Conductor (User / Operator)
 * Expresses natural-language outcomes and receives certified status reports.
 * **Single Launch Confirmation**: Issues a single approval bound to the exact content hash of the Overture Task Contract (`task.md`).
 * Intervenes only when budget limits are breached or `critical` actions require explicit approval.
 
-### 2) Sane (Secretary Office Head)
-* Oversees the entire Goal lifecycle and maintains dialogue with the CEO.
+### 2) Concertmaster (Secretary Office Head)
+* Oversees the entire Goal lifecycle and maintains dialogue with the Conductor.
 * Coordinates state transitions (`draft` ➔ `active` ➔ `completed` / `failed`) without executing code or directly touching repositories.
 
 ### 3) Overture Crew (Intake & Contract Drafting)
 Activates the minimum required roles from a candidate pool of six specialized personas upon goal creation:
-* **Conversation Lead**: Clarifies intent and bounds expectations with the CEO.
+* **Conversation Lead**: Clarifies intent and bounds expectations with the Conductor.
 * **Architecture Analyst**: Analyzes existing repository topology, code dependencies, and technology stack.
 * **External Research Scout**: Researches external documentation and third-party APIs (activated on demand).
 * **Security Evaluator**: Maps threat boundaries, budget ceilings, and critical-action expectations.
@@ -107,9 +107,9 @@ To eliminate cognitive bias and bandwagon effects during planning, Department He
 
 ---
 
-## 6. Overwatch & Independent Certification
+## 6. Encore & Independent Certification
 
 * **Separation of Verification**: Neither workers nor Department Heads can certify their own output.
-* **Sentinel**: Continuously streams domain events and outbox logs to detect process violations, unapproved scope expansion, or fake consensus.
-* **Overwatch Council**: Convened for complex cross-department disputes or ambiguous failures.
+* **Metronome**: Continuously streams domain events and outbox logs to detect process violations, unapproved scope expansion, or fake consensus.
+* **Encore Council**: Convened for complex cross-department disputes or ambiguous failures.
 * **Quality Certification**: The Quality Department independently executes test suites against the final Git commit. A `certified` status is issued only when all criteria match the Task Contract's frozen content hash.

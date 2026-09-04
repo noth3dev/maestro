@@ -13,7 +13,7 @@ Maestro is designed to solve the fundamental unreliability, memory drift, and au
 ## 2. Core Design Principles
 
 1. **Durable Truth First**: PostgreSQL 17 is the single source of truth for all domain aggregates, events, and transactional outboxes. In-memory states are non-canonical projections.
-2. **Separation of Powers**: Executing agents (Workers/Heads) are strictly prohibited from certifying their own work. Verification is handled independently by Quality and Overwatch (Sentinel & Overwatch Council).
+2. **Separation of Powers**: Executing agents (Workers/Heads) are strictly prohibited from certifying their own work. Verification is handled independently by Quality and Encore (Metronome & Encore Council).
 3. **Fail-Closed & Default-Deny Security**: All tool calls and side effects must pass through `AuthorizedEffectExecutor`. Any unclassified, unauthorized, or out-of-scope effect is denied immediately.
 4. **Content-Addressed Auditability**: All inputs, plans, briefs, and deliverables are hashed using SHA-256 canonical serialization (`Sealed Submission`), ensuring cryptographically immutable record lineage.
 5. **No Speculative Re-invention**: Maestro builds on top of the native features of the **Prime Agent SDK** (session tracking, recursive subagent spawning, tool calling) while keeping domain authority within the control plane.
@@ -29,7 +29,7 @@ Maestro maintains a clear boundary between the underlying execution kernel and t
 | **Model & Session Management** | Model session lifecycle, prompt submission, token usage, subagent delegation | Goal lifecycle state machine, department assignment, budget ceilings |
 | **Tool Execution** | Native skill loading, tool call dispatching, environment execution | Authority checks via `AuthorizedEffectExecutor`, audit pre-logging |
 | **Persistence & Truth** | Diagnostic logs, raw session transcripts | PostgreSQL 17 domain event log (`goal_events`), monotonic fencing leases |
-| **Oversight & Quality** | Raw agent outputs | Sentinel integrity validation, Quality certification, CEO reporting |
+| **Oversight & Quality** | Raw agent outputs | Metronome integrity validation, Quality certification, Conductor reporting |
 
 ---
 
@@ -39,8 +39,8 @@ Maestro is structured as an **npm workspace monorepo**:
 
 * **`apps/control-plane`**: Fastify 5 REST & Server-Sent Events (SSE) server for durable commands and real-time state streaming.
 * **`apps/cli`**: Command-line interface providing complete operational parity with the control plane API.
-* **`apps/secretary`**: Next.js 16 / React 19 web application (Secretary Office) featuring radial portfolio graphs.
-* **`apps/firefly`**: Independent out-of-band monitoring daemon for incident detection and system health probes.
+* **`apps/secretary`**: Next.js 16 / React 19 web application (Concertmaster Office) featuring radial portfolio graphs.
+* **`apps/firefly`**: Independent out-of-band Discord daemon for incident detection and system health probes.
 * **`packages/domain`**: Pure TypeScript domain aggregates (Goal, TaskContract, HeadCouncil, DepartmentPlan).
 * **`packages/contracts`**: Shared Zod schemas, HTTP REST contracts, and SSE event payloads.
 * **`packages/persistence`**: PostgreSQL 17 schema definitions, Drizzle ORM queries, and migration files.

@@ -18,7 +18,7 @@ This documentation set provides a detailed breakdown of Maestro's system archite
 * Prime Agent SDK boundary vs Maestro control-plane responsibilities.
 
 ### 2. [Hierarchical Orchestration](file:///home/ubuntu/projects/ms/docs/02-hierarchical-orchestration.md)
-* End-to-end execution lifecycle: CEO ➔ Sane ➔ Overture Crew ➔ Department Heads ➔ Head Council ➔ Workers ➔ Overwatch / Certification.
+* End-to-end execution lifecycle: Conductor ➔ Concertmaster ➔ Overture Crew ➔ Department Heads ➔ Head Council ➔ Workers ➔ Encore / Certification.
 * Permanent Groups & Departments structure, personas, and wake-on-demand mechanics.
 
 ### 3. [Durable Control Plane & Durability](file:///home/ubuntu/projects/ms/docs/03-durable-control-plane.md)

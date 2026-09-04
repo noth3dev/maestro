@@ -30,11 +30,11 @@ Maestro is an open-source enterprise AI orchestration framework designed for rel
 Maestro is built around three core architectural guarantees:
 
 - **Hierarchical Organization & Separation of Powers:**
-  - **Sane (Secretary Office)** orchestrates natural-language goals with the CEO.
+  - **Concertmaster (Secretary Office)** orchestrates natural-language goals with the Conductor.
   - **Overture Crew** (6 candidate personas) analyzes requirements and drafts an immutable **Task Contract** (`task.md`).
   - **Permanent Department Heads** (Product, Tech, Security, Quality, Operations) wake on demand and deliberate using **Sealed Submissions**.
   - **Scout & Execution Workers** operate inside isolated Git worktrees under strict least-privilege Mission Bundles.
-  - **Independent Quality & Overwatch (Sentinel)** verify evidence and issue cryptographic certifications—executing agents can *never* self-certify.
+  - **Independent Quality & Encore (Metronome)** verify evidence and issue cryptographic certifications—executing agents can *never* self-certify.
 
 - **Fail-Closed & Default-Deny Security:**
   - All system actions are strictly categorized (`ordinary`, `critical`, `forbidden`, `ambiguous`).

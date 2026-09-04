@@ -28,12 +28,12 @@
   <text x="450" y="45" text-anchor="middle" class="title-main" font-size="20" letter-spacing="2">MAESTRO ARCHITECTURE</text>
   <text x="450" y="68" text-anchor="middle" class="title-sub">Durable Control Plane, Hierarchical Execution &amp; Fail-Closed Security</text>
 
-  <!-- 1. CEO / OPERATOR -->
+  <!-- 1. CONDUCTOR / OPERATOR -->
   <g transform="translate(250, 95)">
     <rect width="400" height="65" class="card-accent" />
     <circle cx="30" cy="32" r="14" fill="#2d2d3d" />
     <path d="M30 24 L34 30 L38 24 L38 38 L22 38 L22 24 L26 30 Z" fill="#e2e2ec" />
-    <text x="58" y="32" class="title-main">CEO / Human Operator</text>
+    <text x="58" y="32" class="title-main">Conductor / Human Operator</text>
     <text x="58" y="48" class="text-body">• Natural Language Outcome &amp; Scope</text>
     <text x="270" y="48" class="text-body">• Single Launch Confirmation</text>
   </g>
@@ -43,12 +43,12 @@
   <polygon points="445,185 450,195 455,185" fill="#636388" />
   <text x="460" y="180" class="text-dim">Natural Language Goal</text>
 
-  <!-- 2. SECRETARY OFFICE (SANE) -->
+  <!-- 2. CONCERTMASTER OFFICE -->
   <g transform="translate(200, 195)">
     <rect width="500" height="75" class="card" />
     <rect x="16" y="16" width="42" height="42" rx="8" fill="#1e1e2a" />
-    <text x="37" y="42" text-anchor="middle" font-size="20" fill="#a5a5c7">🏛️</text>
-    <text x="70" y="34" class="title-main">Sane (Secretary Office Head)</text>
+    <text x="37" y="42" text-anchor="middle" font-size="20" fill="#a5a5c7">🎼</text>
+    <text x="70" y="34" class="title-main">Concertmaster (Secretary Office Head)</text>
     <text x="70" y="52" class="text-body">• Intakes Goals &amp; Coordinates Lifecycle State Machine</text>
     <text x="70" y="66" class="text-dim">Reads durable PostgreSQL state; issues no direct code edits</text>
   </g>
@@ -60,7 +60,7 @@
   <!-- 3. OVERTURE INTAKE CREW -->
   <g transform="translate(150, 305)">
     <rect width="600" height="90" class="card" />
-    <text x="20" y="28" class="title-main">🎼 Overture Crew (Intake &amp; Task Contract Drafting)</text>
+    <text x="20" y="28" class="title-main">🎶 Overture Crew (Intake &amp; Task Contract Drafting)</text>
     <text x="20" y="48" class="text-body">Candidate Roles: Conversation Lead • Architecture Analyst • External Research Scout</text>
     <text x="20" y="64" class="text-body">                Security Evaluator • Design &amp; Mock Specialist • Task Editor</text>
     <rect x="440" y="32" width="140" height="42" rx="6" fill="#1a1a24" stroke="#333344" />
@@ -68,7 +68,7 @@
     <text x="510" y="64" text-anchor="middle" class="text-dim">task.md (Content Hash)</text>
   </g>
 
-  <!-- CONNECTOR 3 (CEO CONFIRMATION GATE) -->
+  <!-- CONNECTOR 3 (CONDUCTOR CONFIRMATION GATE) -->
   <path d="M450 395 L450 435" class="gate-line" />
   <polygon points="445,430 450,440 455,430" fill="#d97757" />
   <rect x="360" y="407" width="180" height="20" rx="4" fill="#2a1a14" stroke="#5c3826" />
@@ -129,20 +129,20 @@
   <path d="M430 640 L470 640" class="gate-line" />
   <polygon points="465,635 475,640 465,645" fill="#d97757" />
 
-  <!-- CONNECTOR 5 DOWN TO DB & OVERWATCH -->
+  <!-- CONNECTOR 5 DOWN TO DB & ENCORE -->
   <path d="M265 690 L265 730" class="solid-line" />
   <polygon points="260,725 265,735 270,725" fill="#636388" />
 
   <path d="M635 690 L635 730" class="db-line" />
   <polygon points="630,725 635,735 640,725" fill="#38bdf8" />
 
-  <!-- 7. OVERWATCH & QUALITY CERTIFICATION -->
+  <!-- 7. ENCORE & QUALITY CERTIFICATION -->
   <g transform="translate(50, 735)">
     <rect width="400" height="110" class="card" />
-    <text x="20" y="28" class="title-main">👁️ Overwatch &amp; Quality Certification</text>
-    <text x="20" y="48" class="text-body">• Sentinel: Real-time Event Stream Integrity</text>
+    <text x="20" y="28" class="title-main">⏱️ Encore &amp; Quality Certification</text>
+    <text x="20" y="48" class="text-body">• Metronome: Real-time Event Stream Integrity</text>
     <text x="20" y="64" class="text-body">• Quality Dept: Independent Test Execution</text>
-    <text x="20" y="80" class="text-body">• Overwatch Council: Cross-Dept Adjudication</text>
+    <text x="20" y="80" class="text-body">• Encore Council: Cross-Dept Adjudication</text>
     <text x="20" y="96" class="text-dim">Executors cannot self-certify work</text>
   </g>
 
