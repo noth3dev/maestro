@@ -155,12 +155,21 @@ node apps/cli/dist/main.js report get <goalId>
 
 ## Documentation Index
 
-- **[System Overview](docs/01-system-overview.md)** — Architectural philosophy, design principles, and monorepo structure.
-- **[Hierarchical Orchestration](docs/02-hierarchical-orchestration.md)** — End-to-end execution flow, departments, personas, sealed briefs, and certification.
-- **[Durable Control Plane](docs/03-durable-control-plane.md)** — PostgreSQL 17 event sourcing, monotonic leases, fencing tokens, and crash reconciliation.
-- **[Security & Authority Model](docs/04-security-and-authority-model.md)** — Action classification, `AuthorizedEffectExecutor`, and sealed submission snapshots.
-- **[Roadmap & Phase Status](docs/05-roadmap-and-phase-status.md)** — Milestone phases (Phases 1–8), usability gates, and the **Luthiery** dynamic MCP extension.
-- **[Developer & Operations Guide](docs/06-developer-and-operations-guide.md)** — Workspace package layout, build/test scripts, and operating protocol guidelines.
+Full documentation is available in both **English** and **한국어 (Korean)**:
+
+- **[Documentation Index (EN)](docs/en/README.md)** &bull; **[문서 목차 (한국어)](docs/ko/README.md)**
+- **System Overview** — Architectural philosophy, design principles, and monorepo structure.
+  - [English](docs/en/01-system-overview.md) | [한국어](docs/ko/01-system-overview.md)
+- **Hierarchical Orchestration** — End-to-end execution flow, departments, personas, sealed briefs, and certification.
+  - [English](docs/en/02-hierarchical-orchestration.md) | [한국어](docs/ko/02-hierarchical-orchestration.md)
+- **Durable Control Plane** — PostgreSQL 17 event sourcing, monotonic leases, fencing tokens, and crash reconciliation.
+  - [English](docs/en/03-durable-control-plane.md) | [한국어](docs/ko/03-durable-control-plane.md)
+- **Security & Authority Model** — Action classification, `AuthorizedEffectExecutor`, and sealed submission snapshots.
+  - [English](docs/en/04-security-and-authority-model.md) | [한국어](docs/ko/04-security-and-authority-model.md)
+- **Roadmap & Phase Status** — Milestone phases (Phases 1–8), usability gates, and the **Luthiery** dynamic MCP extension.
+  - [English](docs/en/05-roadmap-and-phase-status.md) | [한국어](docs/ko/05-roadmap-and-phase-status.md)
+- **Developer & Operations Guide** — Workspace package layout, build/test scripts, and operating protocol guidelines.
+  - [English](docs/en/06-developer-and-operations-guide.md) | [한국어](docs/ko/06-developer-and-operations-guide.md)
 
 ---
 

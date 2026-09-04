@@ -156,12 +156,21 @@ node apps/cli/dist/main.js report get <goalId>
 
 ## 문서 목차 (Documentation Index)
 
-- **[시스템 개요 (System Overview)](01-system-overview.md)** — 아키텍처 철학, 설계 원칙, 증거 기반 자가 개선 및 모노레포 구조.
-- **[계층형 오케스트레이션 (Hierarchical Orchestration)](02-hierarchical-orchestration.md)** — 엔드투엔드 실행 흐름, 부서, 페르소나, 봉인된 의견서 및 인증.
-- **[내구성 제어 평면 (Durable Control Plane)](03-durable-control-plane.md)** — PostgreSQL 17 이벤트 소싱, 단조 리스, 펜싱 토큰 및 장애 복구.
-- **[보안 및 권한 모델 (Security & Authority Model)](04-security-and-authority-model.md)** — 액션 분류, `AuthorizedEffectExecutor` 및 봉인 제출 스냅샷.
-- **[단계별 로드맵 및 구현 현황 (Roadmap & Phase Status)](05-roadmap-and-phase-status.md)** — 마일스톤 단계(Phase 1–8), 사용성 게이트 및 **Luthiery** 동적 MCP 확장.
-- **[개발자 및 운영 가이드 (Developer & Operations Guide)](06-developer-and-operations-guide.md)** — 워크스페이스 패키지 레이아웃, 빌드/테스트 스크립트 및 운영 프로토콜 가이드라인.
+모든 세부 문서는 **한국어** 및 **English**로 제공됩니다:
+
+- **[문서 목차 (한국어)](README.md)** &bull; **[Documentation Index (EN)](../en/README.md)**
+- **시스템 개요 (System Overview)** — 아키텍처 철학, 설계 원칙, 증거 기반 자가 개선 및 모노레포 구조.
+  - [한국어](01-system-overview.md) | [English](../en/01-system-overview.md)
+- **계층형 오케스트레이션 (Hierarchical Orchestration)** — 엔드투엔드 실행 흐름, 부서, 페르소나, 봉인된 의견서 및 인증.
+  - [한국어](02-hierarchical-orchestration.md) | [English](../en/02-hierarchical-orchestration.md)
+- **내구성 제어 평면 (Durable Control Plane)** — PostgreSQL 17 이벤트 소싱, 단조 리스, 펜싱 토큰 및 장애 복구.
+  - [한국어](03-durable-control-plane.md) | [English](../en/03-durable-control-plane.md)
+- **보안 및 권한 모델 (Security & Authority Model)** — 액션 분류, `AuthorizedEffectExecutor` 및 봉인 제출 스냅샷.
+  - [한국어](04-security-and-authority-model.md) | [English](../en/04-security-and-authority-model.md)
+- **단계별 로드맵 및 구현 현황 (Roadmap & Phase Status)** — 마일스톤 단계(Phase 1–8), 사용성 게이트 및 **Luthiery** 동적 MCP 확장.
+  - [한국어](05-roadmap-and-phase-status.md) | [English](../en/05-roadmap-and-phase-status.md)
+- **개발자 및 운영 가이드 (Developer & Operations Guide)** — 워크스페이스 패키지 레이아웃, 빌드/테스트 스크립트 및 운영 프로토콜 가이드라인.
+  - [한국어](06-developer-and-operations-guide.md) | [English](../en/06-developer-and-operations-guide.md)
 
 ---
 
