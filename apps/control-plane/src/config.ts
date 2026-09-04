@@ -16,6 +16,8 @@ export interface MaestroConfig {
   leaseOwnerId: string;
   /** Optional explicit CEO identity; approvals fail closed when absent. */
   ceoOperatorId?: string;
+  /** Optional explicit operator allowed to provision project memberships and roles. */
+  operatorProvisioningAdminId?: string;
   /** Duration of the startup-only reconciliation-leader lease; never renewed after startup. */
   reconcilerLeaseDurationMs: number;
   /**
@@ -35,6 +37,7 @@ const schema = z.object({
   MAESTRO_ALLOW_REMOTE: z.enum(["true", "false"]).default("false"),
   MAESTRO_ACTOR_ID: z.string().min(1).default("maestro-control-plane"),
   MAESTRO_CEO_OPERATOR_ID: z.string().min(1).optional(),
+  MAESTRO_OPERATOR_PROVISIONING_ADMIN_ID: z.string().uuid().optional(),
   MAESTRO_INSTANCE_ID: z.string().min(1).default("local-control-plane"),
   MAESTRO_RECONCILER_LEASE_MS: z.coerce.number().int().positive().default(30_000),
   MAESTRO_TLS_CERT_FILE: z.string().min(1).optional(),
@@ -58,6 +61,7 @@ export function parseConfig(
     MAESTRO_ALLOW_REMOTE: allowRemote,
     MAESTRO_ACTOR_ID: actorId,
     MAESTRO_CEO_OPERATOR_ID: ceoOperatorId,
+    MAESTRO_OPERATOR_PROVISIONING_ADMIN_ID: operatorProvisioningAdminId,
     MAESTRO_INSTANCE_ID: leaseOwnerId,
     MAESTRO_RECONCILER_LEASE_MS: reconcilerLeaseDurationMs,
     MAESTRO_TLS_CERT_FILE: certFile,
@@ -77,6 +81,7 @@ export function parseConfig(
   return {
     databaseUrl, evidenceDir, worktreeRoot, host, port, primeAgentVersion: "0.8.0", actorId, leaseOwnerId, reconcilerLeaseDurationMs,
     ...(ceoOperatorId === undefined ? {} : { ceoOperatorId }),
+    ...(operatorProvisioningAdminId === undefined ? {} : { operatorProvisioningAdminId }),
     ...(isRemoteBind ? { tls: { certFile: certFile!, keyFile: keyFile! } } : {}),
   };
 }
