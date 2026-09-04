@@ -28,6 +28,7 @@ export async function recordActualCost(
   if (goalId !== proof.goalId || !Number.isSafeInteger(amountCents) || amountCents < 0 || source.trim() === "") {
     throw new ActualCostError("Actual cost has an invalid Goal, amount, or source");
   }
+  const commandId = context.commandId ?? randomUUID();
   return withGoalAuthority(pool, proof, 44, async (client) => {
     const inserted = await client.query<{
       cost_id: string; goal_id: string; command_id: string; amount_cents: string; source: string; actor_id: string; session_ref: string;
@@ -36,14 +37,14 @@ export async function recordActualCost(
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (goal_id, command_id) DO NOTHING
        RETURNING cost_id, goal_id, command_id, amount_cents, source, actor_id, session_ref`,
-      [randomUUID(), goalId, context.commandId, amountCents, source.trim(), context.actorId, context.sessionRef],
+      [randomUUID(), goalId, commandId, amountCents, source.trim(), context.actorId, context.sessionRef],
     );
     if (inserted.rowCount === 1) return map(inserted.rows[0]!);
     const replay = await client.query<{
       cost_id: string; goal_id: string; command_id: string; amount_cents: string; source: string; actor_id: string; session_ref: string;
     }>(
       "SELECT cost_id, goal_id, command_id, amount_cents, source, actor_id, session_ref FROM goal_actual_costs WHERE goal_id = $1 AND command_id = $2 FOR SHARE",
-      [goalId, context.commandId],
+      [goalId, commandId],
     );
     if (replay.rowCount !== 1) throw new ActualCostError("Actual cost idempotency record disappeared");
     const row = replay.rows[0]!;
