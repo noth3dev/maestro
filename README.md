@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-#Maestro: Self-Improving & Durable Agent Orchestration
+Maestro: Self-Improving & Durable Agent Orchestration
 </p>
 <p align="center">
   <a href="docs/README.md"><b>Documentation</b></a> &bull;
