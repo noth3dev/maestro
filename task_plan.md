@@ -356,11 +356,14 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    missing configuration, symlink escapes, and no Git/DB invocation after rejection. Fresh
    real-PostgreSQL `npm run check`: 98/99 files passed, 685 passed, 2 intentional live-Prime
    skips, 0 failed.
-8. **[PARTIALLY RESOLVED 2026-09-04, commit `bcbd15b` / merge `e160af5`]** Stale/forged
-   fencing-token regressions now cover `council.ts`, `department-plan.ts`, `device-grant.ts`,
-   `environment.ts`, `discord-incident.ts`, and `metronome-challenge.ts`. The remaining Phase 2
-   modules are `budget-reservation.ts`, `mission-bundle.ts`, and `team-lead-grant.ts`; cover
-   each while its owning item lands.
+8. **[RESOLVED 2026-09-04, commits `b397305` and `a378b06`]** Stale/forged fencing-token
+   regression coverage now spans the remaining Phase 2 write modules: `budget-reservation.ts`
+   (Goal, Department, and Mission reservations), `mission-bundle.ts`, `team-lead-grant.ts`
+   (grant, helper spawn, and revoke), and `git-integration.ts` (Goal branch, Department branch,
+   and worker worktree). The earlier coverage for `council.ts`, `department-plan.ts`,
+   `device-grant.ts`, `environment.ts`, `discord-incident.ts`, and `metronome-challenge.ts` remains
+   in place. Each regression proves the forged proof produces no durable mutation and that the
+   real proof still succeeds afterward.
 9. Already-known Phase 2-rooted P0 from the first audit wave: effect adapters (Git) not enforced
    through `AuthorizedEffectExecutor`; no production write-command API surface for Task
    Contract/Council/Plan/worker/Git actions.
