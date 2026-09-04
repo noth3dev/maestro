@@ -153,3 +153,13 @@ it("creates a Head Council through the CLI", async () => {
   expect(await executeCli(["council", "create", "--goal-id", goalId, "--council-json", JSON.stringify(input), "--command-id", commandId, "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).toBe(0);
   expect(JSON.parse(stdout.lines[0]!)).toEqual(council);
 });
+
+
+it("provisions exact project roles through the authenticated admin command", async () => {
+  const operatorId = "66666666-6666-4666-8666-666666111111";
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ operatorId, projectId, roles: ["concertmaster", "head-product"] }), { status: 200 }));
+  const stdout = output();
+  expect(await executeCli(["admin", "project-access", "--operator-id", operatorId, "--project-id", projectId, "--roles-json", JSON.stringify(["concertmaster", "head-product"]), "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).toBe(0);
+  expect(JSON.parse(stdout.lines[0]!)).toEqual({ operatorId, projectId, roles: ["concertmaster", "head-product"] });
+  expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/admin/project-access", expect.objectContaining({ method: "POST" }));
+});

@@ -97,7 +97,26 @@ node apps/cli/dist/main.js report get <goalId>
 
 ---
 
-## 5. Operating Protocol Summary
+## 5. Provisioning project access
+
+Project membership and roles are granted through the authenticated admin endpoint. Set `MAESTRO_OPERATOR_PROVISIONING_ADMIN_ID` to the UUID of an active operator during deployment. If it is not set, the endpoint stays unavailable; no authenticated operator can grant access.
+
+```bash
+# The token is the existing credential envelope: <credential-id>.<secret>.
+node apps/cli/dist/main.js admin project-access \
+  --operator-id <target-operator-uuid> \
+  --project-id <project-uuid> \
+  --roles-json '["concertmaster","head-product"]' \
+  --json
+```
+
+The endpoint is `POST /v1/admin/project-access` with the same JSON body. It requires a bearer token for the configured admin operator. The target operator must already exist and be active. Every requested role must be an exact standing role from `permanent_roles`; arbitrary capability strings, wildcard roles, inactive targets, duplicate roles, and partial grants are rejected. Membership and all roles commit in one transaction. Revocation remains one-way, so regranting creates new durable rows.
+
+The admin route is intentionally not covered by the ordinary project-membership hook. Its explicit admin identity check is the authorization boundary, and the target project ID is never taken from the caller identity or inferred from another project.
+
+---
+
+## 6. Operating Protocol Summary
 
 When working on the Maestro codebase, strictly adhere to the project operating protocol (`docs/OPERATING_PROTOCOL.md`):
 

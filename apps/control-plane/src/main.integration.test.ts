@@ -97,6 +97,50 @@ if (!databaseUrl) {
     await expect(controlPlane.pool.query("SELECT 1")).rejects.toThrow();
   });
 
+  it("provisions a fresh authenticated operator through the explicit admin route", async () => {
+    const adminSecret = `provision-admin-${randomUUID()}`;
+    const targetSecret = `provision-target-${randomUUID()}`;
+    const admin = await bootstrapLocalOperator(setupPool, { secret: adminSecret });
+    const target = await bootstrapLocalOperator(setupPool, { secret: targetSecret });
+    const projectId = randomUUID();
+    const controlPlane = createControlPlane({
+      databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0,
+      primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `provision-${randomUUID()}`,
+      operatorProvisioningAdminId: admin.operatorId,
+    });
+    await controlPlane.listen();
+    const address = controlPlane.app.server.address();
+    if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+    try {
+      const body = { operatorId: target.operatorId, projectId, roles: ["concertmaster"] };
+      const provisioned = await fetch(`${baseUrl}/v1/admin/project-access`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${admin.credentialId}.${adminSecret}`, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      expect(provisioned.status).toBe(200);
+      expect(await provisioned.json()).toEqual(body);
+
+      const denied = await fetch(`${baseUrl}/v1/admin/project-access`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${target.credentialId}.${targetSecret}`, "content-type": "application/json" },
+        body: JSON.stringify({ ...body, projectId: randomUUID() }),
+      });
+      expect(denied.status).toBe(403);
+
+      const goalId = randomUUID();
+      const created = await fetch(`${baseUrl}/v1/goals`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${target.credentialId}.${targetSecret}`, "content-type": "application/json", "idempotency-key": goalId },
+        body: JSON.stringify({ projectId }),
+      });
+      expect(created.status).toBe(201);
+    } finally {
+      await controlPlane.close();
+    }
+  });
+
   it("streams durable replay over loopback, resumes without duplicate IDs, and stops on disconnect", async () => {
     const secret = "sse-secret-not-configured";
     const { credentialId, operatorId } = await bootstrapLocalOperator(setupPool, { secret });

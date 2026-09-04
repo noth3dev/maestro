@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CreateGoalInputSchema,
+  ProjectAccessProvisionInputSchema,
   GoalStateSchema,
   StableApiErrorSchema,
   TransitionGoalInputSchema,
@@ -26,5 +27,20 @@ describe("goal HTTP contracts", () => {
     expect(StableApiErrorSchema.parse({ error: { code: "version_conflict", message: "Version conflict" } })).toEqual({
       error: { code: "version_conflict", message: "Version conflict" },
     });
+  });
+});
+
+
+describe("project access provisioning contracts", () => {
+  it("requires a canonical operator/project pair and exact non-empty roles", () => {
+    const input = { operatorId: projectId, projectId, roles: ["concertmaster", "head-product"] };
+    expect(ProjectAccessProvisionInputSchema.parse(input)).toEqual(input);
+    expect(ProjectAccessProvisionInputSchema.safeParse({ ...input, roles: [] }).success).toBe(false);
+    expect(ProjectAccessProvisionInputSchema.safeParse({ ...input, roles: ["concertmaster", "concertmaster"] }).success).toBe(false);
+  });
+
+  it("rejects attempts to smuggle actor or capability fields into provisioning", () => {
+    expect(ProjectAccessProvisionInputSchema.safeParse({ operatorId: projectId, projectId, roles: ["concertmaster"], actorId: projectId }).success).toBe(false);
+    expect(ProjectAccessProvisionInputSchema.safeParse({ operatorId: projectId, projectId, roles: ["*"] }).success).toBe(false);
   });
 });

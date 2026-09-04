@@ -3,7 +3,7 @@ import { once } from "node:events";
 import { request as httpRequest, type IncomingMessage } from "node:http";
 import { buildServer, type EventService, type GoalService, type OperatorAuthenticator, type HeadParticipationService, type CouncilService, type EncoreService } from "./server.js";
 import type { ReadStateService } from "./read-state-service.js";
-import { ProjectMembershipRequiredError, StaleGoalLeaseError, HeadActivationRequesterInactiveError } from "@maestro/persistence";
+import { ProjectMembershipRequiredError, ProjectAccessAdminRequiredError, StaleGoalLeaseError, HeadActivationRequesterInactiveError } from "@maestro/persistence";
 
 const goal = { goalId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02", projectId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01", state: "draft" as const, version: 1 };
 
@@ -42,6 +42,52 @@ describe("health routes", () => {
   it("fails readiness when the configured dependency check fails", async () => {
     const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readinessCheck: async () => { throw new Error("database unavailable"); } });
     expect((await app.inject({ method: "GET", url: "/readyz" })).statusCode).toBe(503);
+    await app.close();
+  });
+});
+
+describe("project access provisioning route", () => {
+  it("requires authentication, bypasses project membership only for this admin path, and forwards the authenticated actor", async () => {
+    const provision = vi.fn(async (_requesterId: string, input: { operatorId: string; projectId: string; roles: string[] }) => input);
+    const projectAccess: ProjectAccessProvisioner = { provisionProjectAccess: provision };
+    const membership = { assertProjectMembership: vi.fn(async () => { throw new Error("admin is not a project member"); }) };
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), projectMembership: membership, projectAccess });
+    const input = { operatorId: goal.goalId, projectId: goal.projectId, roles: ["concertmaster", "head-product"] };
+    const response = await app.inject({ method: "POST", url: "/v1/admin/project-access", headers: { authorization: "Bearer test-secret", "content-type": "application/json" }, payload: input });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(input);
+    expect(provision).toHaveBeenCalledWith(operator.operatorId, input);
+    expect(membership.assertProjectMembership).not.toHaveBeenCalled();
+
+    const unauthenticated = await app.inject({ method: "POST", url: "/v1/admin/project-access", payload: input });
+    expect(unauthenticated.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("rejects malformed role identities before calling the provisioning policy", async () => {
+    const provision = vi.fn(async () => ({ operatorId: goal.goalId, projectId: goal.projectId, roles: ["concertmaster"] }));
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), projectAccess: { provisionProjectAccess: provision } });
+    const response = await app.inject({ method: "POST", url: "/v1/admin/project-access", headers: { authorization: "Bearer test-secret" }, payload: { operatorId: goal.goalId, projectId: goal.projectId, roles: ["*"] } });
+    expect(response.statusCode).toBe(400);
+    expect(provision).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("fails closed when the admin policy denies the authenticated actor", async () => {
+    const projectAccess: ProjectAccessProvisioner = {
+      provisionProjectAccess: async () => { throw new ProjectAccessAdminRequiredError(); },
+    };
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), projectAccess });
+    const response = await app.inject({ method: "POST", url: "/v1/admin/project-access", headers: { authorization: "Bearer test-secret" }, payload: { operatorId: goal.goalId, projectId: goal.projectId, roles: ["concertmaster"] } });
+    expect(response.statusCode).toBe(403);
+    expect(response.json().error.code).toBe("authority_denied");
+    await app.close();
+  });
+
+  it("is unavailable when no provisioning policy is composed", async () => {
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated() });
+    const response = await app.inject({ method: "POST", url: "/v1/admin/project-access", headers: { authorization: "Bearer test-secret" }, payload: { operatorId: goal.goalId, projectId: goal.projectId, roles: ["concertmaster"] } });
+    expect(response.statusCode).toBe(503);
     await app.close();
   });
 });

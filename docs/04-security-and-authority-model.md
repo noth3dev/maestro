@@ -62,3 +62,10 @@ flowchart LR
 * **Canonical JSON Standardization**: Keys are sorted and whitespace is normalized to guarantee consistent SHA-256 hashes across different language runtimes.
 * **Immutable Snapshot Binding**: Deliberation briefs, Task Contracts, and Quality certifications bind to `snapshot_hash`. Any modification invalidates downstream execution.
 * **Prototype Pollution Guard**: Input parsing strictly rejects dangerous key strings (`__proto__`, `constructor`, `prototype`) with an `InvalidSealedSubmissionSnapshotError`.
+
+
+## 4. Project access provisioning
+
+Project access changes use `POST /v1/admin/project-access`. The route always authenticates a bearer credential, then checks the requester against the explicit `MAESTRO_OPERATOR_PROVISIONING_ADMIN_ID` configuration. Without that configuration, the route is unavailable. Ordinary project membership checks do not authorize this global operation.
+
+The target must be an active local operator. Requested role IDs are validated against standing immutable `permanent_roles`; arbitrary capabilities and wildcard values are rejected. Membership and every requested role are inserted in one transaction, so a failed role validation cannot leave partial access.
