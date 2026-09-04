@@ -21,14 +21,14 @@ import { recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrat
 import { acceptDepartmentWorkerOutput, certifyQuality, CertificationError } from "./certification.js";
 import { raiseSentinelChallenge, SentinelChallengeError } from "./sentinel-challenge.js";
 import { requestSemanticReview } from "./semantic-review.js";
-import { runOverwatchCouncilReview } from "./overwatch-council.js";
+import { runEncoreCouncilReview } from "./encore-council.js";
 import { generateSaneFinalReport } from "./sane-report.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
 const tables = [
   "sane_final_reports", "evidence_bundles", "certification_conflict_resolutions", "certification_waivers", "conditional_certifications",
-  "quality_certifications", "certification_conflict_resolution_members", "department_acceptances", "goal_integration_revision_commits", "goal_integration_revisions", "overwatch_council_syntheses", "overwatch_council_judgments", "overwatch_council_rounds",
+  "quality_certifications", "certification_conflict_resolution_members", "department_acceptances", "goal_integration_revision_commits", "goal_integration_revisions", "encore_council_syntheses", "encore_council_judgments", "encore_council_rounds",
   "semantic_reviews", "sentinel_challenge_findings", "sentinel_challenges", "sentinel_findings", "budget_forecasts", "budget_reservations",
   "integration_commits", "worker_worktrees", "goal_integration_branches", "team_lead_grants", "workers", "mission_bundles",
   "department_plan_revisions", "department_plans", "council_protocol_events", "council_round_contributions", "council_rounds", "independent_briefs",
@@ -40,7 +40,7 @@ const tables = [
 
 const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `session:${label}`, commandId: randomUUID() });
 const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`, sessionRef: `opaque:${departmentId}`, commandId: randomUUID() });
-const sentinelContext = () => ({ actorId: "overwatch-sentinel", sessionRef: `sentinel-session:${randomUUID()}`, commandId: randomUUID() });
+const sentinelContext = () => ({ actorId: "encore-sentinel", sessionRef: `sentinel-session:${randomUUID()}`, commandId: randomUUID() });
 const brief: IndependentBrief = {
   interpretation: "safe outcome", contribution: "review", nonGoals: [], assumptions: [], evidenceGaps: [], risks: [], dependencies: [],
   proposedValidation: [], expectedWorkers: [], expectedCost: "1", expectedTime: "1", objectionsToLikelyAlternatives: [],
@@ -206,18 +206,18 @@ describeDatabase("Phase 3 adversarial fixtures with PostgreSQL", () => {
   it("labels same-model agreement honestly and escalates disagreement while preserving dissent", async () => {
     const { goalId, evidenceIds } = await insertGoalWithEvidence(pool);
     const sameModelAnswer = JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: evidenceIds });
-    const sameModel = await runOverwatchCouncilReview(pool, kernelWithAnswers([
+    const sameModel = await runEncoreCouncilReview(pool, kernelWithAnswers([
       { provider: "same-provider", id: "same-model", text: sameModelAnswer },
       { provider: "same-provider", id: "same-model", text: sameModelAnswer },
     ]), { goalId, question: "should we proceed?", criteria, evidenceIds, reviewerCount: 2 });
     expect(sameModel.synthesis.sameModelOnly).toBe(true);
     expect(sameModel.synthesis.finalVerdict).toBe("proceed");
     expect(sameModel.synthesis.escalated).toBe(false);
-    const sameModelRow = await pool.query<{ same_model_only: boolean; escalated: boolean }>("SELECT same_model_only, escalated FROM overwatch_council_syntheses WHERE round_id = $1", [sameModel.roundId]);
+    const sameModelRow = await pool.query<{ same_model_only: boolean; escalated: boolean }>("SELECT same_model_only, escalated FROM encore_council_syntheses WHERE round_id = $1", [sameModel.roundId]);
     expect(sameModelRow.rows[0]).toEqual({ same_model_only: true, escalated: false });
 
     const dissent = "The evidence does not establish safety.";
-    const disagreement = await runOverwatchCouncilReview(pool, kernelWithAnswers([
+    const disagreement = await runEncoreCouncilReview(pool, kernelWithAnswers([
       { provider: "same-provider", id: "same-model", text: sameModelAnswer },
       { provider: "same-provider", id: "same-model", text: JSON.stringify({ verdict: "do_not_proceed", confidence: "high", reasoning: "unsafe", conditions: [], dissentNote: dissent, citedEvidenceIds: evidenceIds }) },
     ]), { goalId, question: "should we proceed despite the concern?", criteria, evidenceIds, reviewerCount: 2 });
@@ -225,7 +225,7 @@ describeDatabase("Phase 3 adversarial fixtures with PostgreSQL", () => {
     expect(disagreement.synthesis.escalated).toBe(true);
     expect(disagreement.synthesis.finalVerdict).toBe("escalate");
     expect(disagreement.synthesis.dissentNotes).toContain(dissent);
-    const disagreementRow = await pool.query<{ final_verdict: string; escalated: boolean; dissent_notes: string[] }>("SELECT final_verdict, escalated, dissent_notes FROM overwatch_council_syntheses WHERE round_id = $1", [disagreement.roundId]);
+    const disagreementRow = await pool.query<{ final_verdict: string; escalated: boolean; dissent_notes: string[] }>("SELECT final_verdict, escalated, dissent_notes FROM encore_council_syntheses WHERE round_id = $1", [disagreement.roundId]);
     expect(disagreementRow.rows[0]).toEqual({ final_verdict: "escalate", escalated: true, dissent_notes: [dissent] });
   });
 

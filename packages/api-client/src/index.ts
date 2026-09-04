@@ -4,8 +4,8 @@ import {
   GoalEventPageSchema,
   GoalQuerySchema,
   GoalResultSchema,
-  SentinelChallengeListSchema, OverwatchCouncilRoundListSchema, CertificationListSchema, SaneFinalReportSchema,
-  type SentinelChallengeList, type OverwatchCouncilRoundList, type CertificationList, type SaneFinalReport,
+  SentinelChallengeListSchema, EncoreCouncilRoundListSchema, CertificationListSchema, SaneFinalReportSchema,
+  type SentinelChallengeList, type EncoreCouncilRoundList, type CertificationList, type SaneFinalReport,
   StableApiErrorSchema,
   TransitionGoalInputSchema,
   UuidSchema,
@@ -37,7 +37,7 @@ export interface ApiClient {
   transitionGoal(goalId: string, input: TransitionGoalInput, commandId: string): Promise<GoalResult>;
   listEvents(query: EventQuery): Promise<GoalEventPage>;
   listSentinelChallenges(goalId: string): Promise<SentinelChallengeList>;
-  listOverwatchCouncilRounds(goalId: string): Promise<OverwatchCouncilRoundList>;
+  listEncoreCouncilRounds(goalId: string): Promise<EncoreCouncilRoundList>;
   listCertifications(goalId: string): Promise<CertificationList>;
   getSaneReport(goalId: string): Promise<SaneFinalReport>;
 }
@@ -84,7 +84,7 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch }: { 
       }, GoalResultSchema);
     },
     listSentinelChallenges(goalId) { return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/sentinel-challenges`, { headers }, SentinelChallengeListSchema); },
-    listOverwatchCouncilRounds(goalId) { return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/overwatch-council-rounds`, { headers }, OverwatchCouncilRoundListSchema); },
+    listEncoreCouncilRounds(goalId) { return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/encore-council-rounds`, { headers }, EncoreCouncilRoundListSchema); },
     listCertifications(goalId) { return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/certifications`, { headers }, CertificationListSchema); },
     getSaneReport(goalId) { return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/sane-report`, { headers }, SaneFinalReportSchema); },
     listEvents(query) {
@@ -94,4 +94,4 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch }: { 
   };
 }
 
-export type { CreateGoalInput, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalResult, TransitionGoalInput, SentinelChallengeList, OverwatchCouncilRoundList, CertificationList, SaneFinalReport };
+export type { CreateGoalInput, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalResult, TransitionGoalInput, SentinelChallengeList, EncoreCouncilRoundList, CertificationList, SaneFinalReport };

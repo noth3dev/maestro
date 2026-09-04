@@ -4,7 +4,7 @@ import { canonicalJson } from "./task-contract.js";
 
 const bundle: Omit<EvidenceBundle, "assembledAt"> = {
   goalId: "goal-1", taskContract: { contractId: "c1" }, council: { councilId: "co1" }, departmentPlans: [], departmentPlanRevisions: [], workers: [],
-  gitIntegration: {}, certifications: {}, sentinelFindings: [], sentinelChallenges: [], overwatchRounds: [], budgetReservations: [], evidenceRecords: [],
+  gitIntegration: {}, certifications: {}, sentinelFindings: [], sentinelChallenges: [], encoreRounds: [], budgetReservations: [], evidenceRecords: [],
 };
 
 describe("Evidence bundle integrity", () => {

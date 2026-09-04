@@ -28,7 +28,7 @@ const brief: IndependentBrief = { interpretation: "safe outcome", contribution: 
 const evidence = { references: [randomUUID(), randomUUID()] };
 const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `session:${label}`, commandId: randomUUID() });
 const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`, sessionRef: `opaque:${departmentId}`, commandId: randomUUID() });
-const sentinelContext = (label: string) => ({ actorId: "overwatch-sentinel", sessionRef: `sentinel-session:${label}`, commandId: randomUUID() });
+const sentinelContext = (label: string) => ({ actorId: "encore-sentinel", sessionRef: `sentinel-session:${label}`, commandId: randomUUID() });
 const intruderContext = (label: string) => ({ actorId: `intruder:${label}`, sessionRef: `intruder-session:${label}`, commandId: randomUUID() });
 
 const planSubstance = (itemId = "exec-1", contribution = "own the product slice"): DepartmentPlanSubstance => ({
@@ -108,7 +108,7 @@ describeDatabase("Sentinel deterministic findings with PostgreSQL", () => {
 
   it("stays silent on a valid Goal with no violations", async () => {
     const { goalId, proof } = await setupPlan();
-    const findings = await scanGoalForSentinelFindings(pool, goalId, proof, { actorId: "overwatch-sentinel", sessionRef: "sentinel-session:valid", commandId: randomUUID() });
+    const findings = await scanGoalForSentinelFindings(pool, goalId, proof, { actorId: "encore-sentinel", sessionRef: "sentinel-session:valid", commandId: randomUUID() });
     expect(findings).toHaveLength(0);
   });
 

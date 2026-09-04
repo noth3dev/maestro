@@ -16,7 +16,7 @@ import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, spawnWorker } from "./worker.js";
 import { recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
 import { acceptDepartmentWorkerOutput, adjudicateCertificationConflict, CertificationError, certifyConditional, certifyQuality, detectCertificationConflict, grantCertificationWaiver } from "./certification.js";
-import { runOverwatchCouncilReview } from "./overwatch-council.js";
+import { runEncoreCouncilReview } from "./encore-council.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -122,10 +122,10 @@ describeDatabase("Department acceptance and independent Quality certification wi
   }
 
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS certification_conflict_resolution_members, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, goal_integration_revision_commits, goal_integration_revisions, overwatch_council_syntheses, overwatch_council_judgments, overwatch_council_rounds, conditional_certifications, quality_certifications, department_acceptances, integration_commits, worker_worktrees, department_branches, goal_integration_branches, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
+    await pool.query("DROP TABLE IF EXISTS certification_conflict_resolution_members, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, goal_integration_revision_commits, goal_integration_revisions, encore_council_syntheses, encore_council_judgments, encore_council_rounds, conditional_certifications, quality_certifications, department_acceptances, integration_commits, worker_worktrees, department_branches, goal_integration_branches, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
     await applyAllMigrations(pool);
   });
-  beforeEach(async () => { await pool.query("TRUNCATE certification_conflict_resolutions, certification_waivers, overwatch_council_syntheses, overwatch_council_judgments, overwatch_council_rounds, conditional_certifications, quality_certifications, department_acceptances, integration_commits, worker_worktrees, department_branches, goal_integration_branches, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
+  beforeEach(async () => { await pool.query("TRUNCATE certification_conflict_resolutions, certification_waivers, encore_council_syntheses, encore_council_judgments, encore_council_rounds, conditional_certifications, quality_certifications, department_acceptances, integration_commits, worker_worktrees, department_branches, goal_integration_branches, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
   afterAll(async () => { await pool.end(); });
 
   it("grants a waiver for a noncritical finding, recording authority/reason/consequence/expiry/follow-up, and is idempotent", async () => {
@@ -181,7 +181,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
     await expect(pool.query("UPDATE certification_waivers SET reason = 'tampered' WHERE waiver_id = $1", [waiver.waiverId])).rejects.toThrow();
   });
 
-  it("detects no conflict when certifications agree, detects a conflict when they disagree, and routes the conflict to Overwatch Council", async () => {
+  it("detects no conflict when certifications agree, detects a conflict when they disagree, and routes the conflict to Encore Council", async () => {
     const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
     await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     expect(await detectCertificationConflict(pool, goalId)).toBe(false);
@@ -200,7 +200,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
       async resume() { throw new Error("not supported"); },
       async reconnect() { throw new Error("not supported"); },
     };
-    const round = await runOverwatchCouncilReview(pool, kernel, { goalId, question: "Quality and Security certifications disagree; how should we proceed?", criteria: [{ criterionId: "safety", description: "does this preserve safety" }], evidenceIds: [evidenceIds[0]!], reviewerCount: 1 });
+    const round = await runEncoreCouncilReview(pool, kernel, { goalId, question: "Quality and Security certifications disagree; how should we proceed?", criteria: [{ criterionId: "safety", description: "does this preserve safety" }], evidenceIds: [evidenceIds[0]!], reviewerCount: 1 });
     const resolution = await adjudicateCertificationConflict(pool, round, goalId, ["passed", "failed"], proof);
     expect(resolution.roundId).toBe(round.roundId);
     await expect(adjudicateCertificationConflict(pool, round, goalId, ["passed", "passed"], proof)).rejects.toBeInstanceOf(CertificationError);

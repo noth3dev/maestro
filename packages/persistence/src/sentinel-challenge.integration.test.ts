@@ -29,7 +29,7 @@ const brief: IndependentBrief = { interpretation: "safe outcome", contribution: 
 const evidence = { references: [randomUUID(), randomUUID()] };
 const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `session:${label}`, commandId: randomUUID() });
 const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`, sessionRef: `opaque:${departmentId}`, commandId: randomUUID() });
-const sentinelContext = (label: string) => ({ actorId: "  overwatch-sentinel  ", sessionRef: `sentinel-session:${label}`, commandId: randomUUID() });
+const sentinelContext = (label: string) => ({ actorId: "  encore-sentinel  ", sessionRef: `sentinel-session:${label}`, commandId: randomUUID() });
 const planSubstance = (contribution = "own the product slice"): DepartmentPlanSubstance => ({
   contribution, nonGoals: [],
   items: [{ itemId: "exec-1", kind: "execution", objective: "implement", dependsOn: [], scoutQuestion: "", workerAssignment: "implement", evidenceReferences: [] }],
@@ -104,7 +104,7 @@ describeDatabase("Sentinel challenges with PostgreSQL", () => {
     const substance = { reason: "stale worker detected", evidenceReferences: [...evidence.references] };
     const challenge = await raiseSentinelChallenge(pool, goalId, [finding!.findingId], substance, proof, sentinelContext("raise"));
     expect(challenge.status).toBe("open");
-    expect(challenge.raisedBy).toBe("overwatch-sentinel");
+    expect(challenge.raisedBy).toBe("encore-sentinel");
     const retry = await raiseSentinelChallenge(pool, goalId, [finding!.findingId], substance, proof, sentinelContext("retry"));
     expect(retry).toEqual(challenge);
     await expect(pool.query("SELECT challenge_id FROM sentinel_challenges WHERE goal_id = $1", [goalId])).resolves.toMatchObject({ rowCount: 1 });
@@ -118,7 +118,7 @@ describeDatabase("Sentinel challenges with PostgreSQL", () => {
   it("rejects Sentinel resolving its own challenge and rejects a challenge citing a nonexistent finding or fabricated evidence", async () => {
     const { goalId, proof } = await setupGoalWithFinding();
     const challenge = await raiseSentinelChallenge(pool, goalId, [], { reason: "generic concern", evidenceReferences: [] }, proof, sentinelContext("raise"));
-    await expect(resolveSentinelChallenge(pool, challenge.challengeId, " overwatch-sentinel ", "self-resolved", proof, sentinelContext("self-resolution"))).rejects.toThrow();
+    await expect(resolveSentinelChallenge(pool, challenge.challengeId, " encore-sentinel ", "self-resolved", proof, sentinelContext("self-resolution"))).rejects.toThrow();
     await expect(raiseSentinelChallenge(pool, goalId, [randomUUID()], { reason: "x", evidenceReferences: [] }, proof, sentinelContext("bad-finding"))).rejects.toBeInstanceOf(SentinelChallengeError);
     await expect(raiseSentinelChallenge(pool, goalId, [], { reason: "x", evidenceReferences: ["fabricated"] }, proof, sentinelContext("bad-evidence"))).rejects.toBeInstanceOf(SentinelChallengeError);
   });
