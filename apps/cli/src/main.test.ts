@@ -12,6 +12,18 @@ function output() {
 }
 
 describe("executeCli", () => {
+  it("shows help and version before requiring API credentials", async () => {
+    const stdout = output();
+    const stderr = output();
+    expect(await executeCli(["--help"], {}, { stdout: stdout.write, stderr: stderr.write })).toBe(0);
+    expect(stdout.lines[0]).toContain("MAESTRO_API_URL");
+    expect(stdout.lines[0]).toContain("goal create");
+    expect(stderr.lines).toEqual([]);
+    stdout.lines.length = 0;
+    expect(await executeCli(["--version"], {}, { stdout: stdout.write, stderr: stderr.write })).toBe(0);
+    expect(stdout.lines[0]).toMatch(/^maestro /);
+  });
+
   it("creates a goal from environment-only connection settings and prints JSON", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ goalId, projectId, state: "draft", version: 0 }), { status: 201 }));
     const stdout = output();
@@ -117,4 +129,27 @@ it("approves and runs a critical action through the CLI", async () => {
   expect(exitCode).toBe(0);
   expect(JSON.parse(stdout.lines[0]!)).toMatchObject({ effect: "allow", recordId: commandId });
   expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/critical-actions/approve-and-run`, expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "idempotency-key": commandId }) }));
+});
+
+
+it("activates a Head through the CLI", async () => {
+  const input = { projectId, departmentId: "product", requestedContribution: "implement", urgency: "normal", contextScope: ["contract"], budgetEffect: "none", reason: "launch" };
+  const result = { goalId, departmentId: "product", headRoleId: "head:product", contractId: null, contextId: null, status: "active", activeSessionRef: "execution-1" };
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(result), { status: 200 }));
+  const stdout = output();
+  const commandId = "33333333-3333-4333-8333-333333333333";
+  expect(await executeCli(["head", "activate", "--goal-id", goalId, "--activation-json", JSON.stringify(input), "--command-id", commandId, "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).toBe(0);
+  expect(JSON.parse(stdout.lines[0]!)).toEqual(result);
+  expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/head-participations`, expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "idempotency-key": commandId }) }));
+});
+
+
+it("creates a Head Council through the CLI", async () => {
+  const contractId = "55555555-5555-4555-8555-555555555555";
+  const council = { councilId: "44444444-4444-4444-8444-444444444444", goalId, contractId, briefDeadline: "2030-01-01T00:00:00.000Z", state: "collecting", noNewEvidenceStreak: 0, decisionPacket: null, snapshotHash: "a".repeat(64), snapshot: {} };
+  const input = { projectId, contractId, briefDeadline: council.briefDeadline, evidence: {} };
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(council), { status: 201 }));
+  const stdout = output();
+  expect(await executeCli(["council", "create", "--goal-id", goalId, "--council-json", JSON.stringify(input), "--command-id", commandId, "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).toBe(0);
+  expect(JSON.parse(stdout.lines[0]!)).toEqual(council);
 });
