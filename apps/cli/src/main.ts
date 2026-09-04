@@ -25,6 +25,10 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
         "contract-id": { type: "string" },
         "substance-json": { type: "string" },
         "content-hash": { type: "string" },
+        "expires-at": { type: "string" },
+        action: { type: "string" },
+        target: { type: "string" },
+        "budget-effect-cents": { type: "string" },
         version: { type: "string" },
         "expected-version": { type: "string" },
         "outside-evidence": { type: "boolean", default: false },
@@ -82,6 +86,19 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       printState(io.stdout, result, json);
       return 0;
     }
+    if (resource === "critical-action" && action === "approve-and-run") {
+      const expiresAt = string("expires-at");
+      const result = await client.approveAndRunCriticalAction(string("goal-id"), {
+        projectId: string("project-id"),
+        action: string("action"),
+        target: string("target"),
+        policyVersion: nonNegativeInteger(string("version"), "--version"),
+        budgetEffectCents: safeInteger(string("budget-effect-cents"), "--budget-effect-cents"),
+        expiresAt,
+      }, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
     if (resource === "goal" && action === "create") {
       const contractId = value("contract-id");
       const result = await client.createGoal({ projectId: string("project-id"), ...(contractId === undefined ? {} : { contractId: string("contract-id") }) }, string("command-id"));
@@ -109,7 +126,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       else printEvents(io.stdout, page.events, page.nextCursor);
       return 0;
     }
-    throw new Error("Usage: maestro goals list|goal create|get|transition|budget ... | maestro events list ...");
+    throw new Error("Usage: maestro goals list|goal create|get|transition|critical-action approve-and-run|budget ... | maestro events list ...");
   } catch (error) {
     const message = error instanceof ApiError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : "Command failed";
     io.stderr(`${message}\n`);
@@ -120,6 +137,12 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
 function nonNegativeInteger(value: string, option: string): number {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error(`${option} must be a non-negative integer`);
+  return parsed;
+}
+
+function safeInteger(value: string, option: string): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) throw new Error(`${option} must be a safe integer`);
   return parsed;
 }
 

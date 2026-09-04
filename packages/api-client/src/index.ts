@@ -13,6 +13,8 @@ import {
   GoalListSchema,
   GoalBudgetSummarySchema,
   GoalResultSchema,
+  CriticalActionApprovalInputSchema,
+  CriticalActionResultSchema,
   MetronomeChallengeListSchema, EncoreCouncilRoundListSchema, CertificationListSchema, ConcertmasterFinalReportSchema,
   type MetronomeChallengeList, type EncoreCouncilRoundList, type CertificationList, type ConcertmasterFinalReport,
   StableApiErrorSchema,
@@ -33,6 +35,8 @@ import {
   type GoalList,
   type GoalBudgetSummary,
   type GoalResult,
+  type CriticalActionApprovalInput,
+  type CriticalActionResult,
   type StableApiError,
   type TransitionGoalInput,
 } from "@maestro/contracts";
@@ -60,6 +64,7 @@ export interface ApiClient {
   listGoals(projectId: string): Promise<GoalList>;
   getGoal(goalId: string, query: GoalQuery): Promise<GoalResult>;
   transitionGoal(goalId: string, input: TransitionGoalInput, commandId: string): Promise<GoalResult>;
+  approveAndRunCriticalAction(goalId: string, input: CriticalActionApprovalInput, commandId: string): Promise<CriticalActionResult>;
   getBudgetSummary(goalId: string, query: GoalQuery): Promise<GoalBudgetSummary>;
   listEvents(query: EventQuery): Promise<GoalEventPage>;
   listMetronomeChallenges(goalId: string, query: GoalQuery): Promise<MetronomeChallengeList>;
@@ -150,6 +155,13 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch }: { 
         headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
         body: JSON.stringify(TransitionGoalInputSchema.parse(input)),
       }, GoalResultSchema);
+    },
+    approveAndRunCriticalAction(goalId, input, commandId) {
+      return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/critical-actions/approve-and-run`, {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
+        body: JSON.stringify(CriticalActionApprovalInputSchema.parse(input)),
+      }, CriticalActionResultSchema);
     },
     listMetronomeChallenges(goalId, query) {
       const parsed = GoalQuerySchema.parse(query);

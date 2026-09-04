@@ -20,6 +20,10 @@ describe("parseConfig", () => {
     });
   });
 
+  it("accepts an explicit CEO operator identity for critical-action approvals", () => {
+    expect(parseConfig({ ...required, MAESTRO_CEO_OPERATOR_ID: "ceo-operator" }).ceoOperatorId).toBe("ceo-operator");
+  });
+
   it("accepts an explicit startup reconciler leader-lease duration override", () => {
     expect(parseConfig({ ...required, MAESTRO_RECONCILER_LEASE_MS: "1000" }).reconcilerLeaseDurationMs).toBe(1_000);
   });

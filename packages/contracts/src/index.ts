@@ -127,7 +127,7 @@ export const StableApiErrorCodeSchema = z.enum([
   "validation_error", "version_conflict", "invalid_transition", "goal_not_found",
   "stale_lease", "lease_unavailable", "command_id_reused", "durable_store_unavailable",
   "authentication_required", "authentication_unavailable", "credential_forbidden",
-  "critical_action_denied", "critical_action_requires_approval", "project_access_forbidden",
+  "critical_action_denied", "critical_action_requires_approval", "critical_action_approval_forbidden", "project_access_forbidden",
   "task_contract_not_found", "task_contract_conflict", "task_contract_version_conflict",
   "exact_confirmation_required", "task_contract_integrity_error",
 ]);
@@ -186,6 +186,11 @@ export const CriticalActionInputSchema = z.object({
   budgetEffectCents: z.number().int(),
 }).strict();
 export type CriticalActionInput = z.infer<typeof CriticalActionInputSchema>;
+/** CEO approval is explicit, time-bounded, and carries the exact action scope. */
+export const CriticalActionApprovalInputSchema = CriticalActionInputSchema.extend({
+  expiresAt: z.string().datetime(),
+}).strict();
+export type CriticalActionApprovalInput = z.infer<typeof CriticalActionApprovalInputSchema>;
 
 /** Only an "allow" decision reaches a 200 response; deny/require_approval map to stable API errors. */
 export const CriticalActionResultSchema = z.object({

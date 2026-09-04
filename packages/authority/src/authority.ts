@@ -157,6 +157,12 @@ export interface AuthorityRepository {
   appendDecision(audit: AuthorityDecisionAudit): Promise<void>;
   /** Last durable control check immediately before an effect callback. */
   recheckControl(request: ActionRequest): Promise<ControlRecheck>;
+  /**
+   * Atomically claims a command before invoking its external effect. Durable
+   * repositories use this to make retries at-most-once; in-memory/test
+   * repositories may omit it and retain the original gateway semantics.
+   */
+  claimEffect?(request: ActionRequest): Promise<boolean>;
 }
 
 /**
@@ -204,6 +210,21 @@ export class AuthorizedEffectExecutor {
     }
 
     if (final.effect !== "allow") return final;
+
+    // A provider effect cannot be rolled back with the surrounding audit
+    // write. Claim the command durably first so a lost HTTP response or
+    // client retry can never invoke the same external effect twice. A
+    // repository that does not implement the optional claim keeps the pure
+    // gateway behavior used by lightweight unit tests.
+    if (this.repository.claimEffect !== undefined) {
+      let claimed: boolean;
+      try {
+        claimed = await this.repository.claimEffect(request);
+      } catch {
+        return unavailableDecision(request);
+      }
+      if (!claimed) return { ...final, reason: "already_executed" };
+    }
 
     await effect();
     return final;

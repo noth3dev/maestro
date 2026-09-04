@@ -4,6 +4,7 @@ import { ProjectMembershipRequiredError } from "@maestro/persistence";
 import {
   CreateGoalInputSchema,
   CriticalActionInputSchema,
+  CriticalActionApprovalInputSchema,
   CriticalActionResultSchema,
   GoalQuerySchema,
   GoalListSchema,
@@ -40,7 +41,13 @@ import {
   TaskContractIntegrityError as GoalTaskContractIntegrityError,
   type GoalService,
 } from "./goal-service.js";
-import { CriticalActionUnavailableError, type CriticalActionService } from "./critical-action-service.js";
+import {
+  CriticalActionApprovalConflictError,
+  CriticalActionApprovalExpiredError,
+  CriticalActionApprovalForbiddenError,
+  CriticalActionUnavailableError,
+  type CriticalActionService,
+} from "./critical-action-service.js";
 import { ReadStateGoalNotFoundError, type ReadStateService } from "./read-state-service.js";
 import {
   ExactConfirmationRequiredError,
@@ -120,6 +127,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
   };
   const criticalActions = criticalActionService ?? {
     performCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
+    approveAndPerformCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
   };
   const taskContracts = taskContractService ?? {
     createTaskContract: async () => { throw new DurableStoreUnavailableError(); },
@@ -197,6 +205,27 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const input = parse(CriticalActionInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
     const decision = await criticalActions.performCriticalAction(
+      goalId,
+      input,
+      commandId,
+      requestOperator(request as { operator?: OperatorContext }),
+    );
+    if (decision.effect === "deny") throw new CriticalActionDeniedError(decision.reason);
+    if (decision.effect === "require_approval") throw new CriticalActionRequiresApprovalError(decision.reason);
+    return reply.status(200).send(CriticalActionResultSchema.parse({
+      goalId,
+      effect: decision.effect,
+      reason: decision.reason,
+      classification: decision.classification,
+      ...(decision.recordId === undefined ? {} : { recordId: decision.recordId }),
+    }));
+  });
+
+  app.post("/v1/goals/:goalId/critical-actions/approve-and-run", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const input = parse(CriticalActionApprovalInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const decision = await criticalActions.approveAndPerformCriticalAction(
       goalId,
       input,
       commandId,
@@ -449,6 +478,9 @@ function mapError(error: unknown): { status: number; body: StableApiError } {
   if (error instanceof CommandIdReuseError) return apiError(409, "command_id_reused", error.message);
   if (error instanceof CriticalActionDeniedError) return apiError(403, "critical_action_denied", error.message);
   if (error instanceof CriticalActionRequiresApprovalError) return apiError(409, "critical_action_requires_approval", error.message);
+  if (error instanceof CriticalActionApprovalForbiddenError) return apiError(403, "critical_action_approval_forbidden", error.message);
+  if (error instanceof CriticalActionApprovalExpiredError) return apiError(400, "validation_error", error.message);
+  if (error instanceof CriticalActionApprovalConflictError) return apiError(409, "command_id_reused", error.message);
   if (error instanceof CriticalActionUnavailableError) return apiError(503, "durable_store_unavailable", error.message);
   if (error instanceof DurableStoreUnavailableError) return apiError(503, "durable_store_unavailable", error.message);
   if (error instanceof ProjectMembershipRequiredError) return apiError(403, "project_access_forbidden", error.message);
