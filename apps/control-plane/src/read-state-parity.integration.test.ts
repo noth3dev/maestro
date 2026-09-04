@@ -175,7 +175,7 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
       criteria: [{ criterionId: "safety", description: "preserves safety invariants" }],
       evidenceIds: [evidenceIds[0]!], reviewerCount: 1,
     });
-    await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", headContext("quality"));
+    await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     const report = await generateSaneFinalReport(pool, goalId);
 
     const secret = "read-state-parity-test-secret";
