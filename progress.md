@@ -1098,3 +1098,16 @@ HEAD
   required; no unauthenticated adapter constructor is available. Full production orchestration of
   runtime/browser commands remains part of the write-API work, while Git deny-before-spawn coverage
   is complete.
+
+
+## 2026-09-04 (continued) — Task Contract intake made user-facing
+- Added typed Task Contract HTTP routes for create/read/amend, Overture role selection, exact
+  confirmation, and launch. The control-plane service enforces project binding and does not disclose
+  contracts from another project.
+- Added matching contracts, API-client methods, and CLI commands. Create retries are idempotent by
+  contract identity/content; Overture selection retries are idempotent by command identity; amended
+  content retries return the already-current contract; project boundaries cannot change.
+- Added route, client, CLI, persistence, and real loopback control-plane integration regressions.
+  Build and focused suites pass; full disposable-PostgreSQL `npm run check` remains the checkpoint.
+- Remaining usability gap: the launched contract is not yet linked to Goal creation, and dependent
+  Head/Council/Plan/worker/Git/report write commands are not yet exposed through HTTP/CLI.

@@ -19,10 +19,10 @@ export function createReadStateService(pool: Pool): ReadStateService {
   }
   return {
     async listGoals(projectId) {
-      const result = await pool.query<{ goal_id: string; project_id: string; state: GoalResult["state"]; version: string }>(
-        "SELECT goal_id, project_id, state, version FROM goals WHERE project_id = $1 ORDER BY created_at, goal_id", [projectId],
+      const result = await pool.query<{ goal_id: string; project_id: string; task_contract_id: string | null; state: GoalResult["state"]; version: string }>(
+        "SELECT goal_id, project_id, task_contract_id, state, version FROM goals WHERE project_id = $1 ORDER BY created_at, goal_id", [projectId],
       );
-      return result.rows.map((row) => ({ goalId: row.goal_id, projectId: row.project_id, state: row.state, version: Number(row.version) }));
+      return result.rows.map((row) => ({ goalId: row.goal_id, projectId: row.project_id, state: row.state, version: Number(row.version), ...(row.task_contract_id === null ? {} : { contractId: row.task_contract_id }) }));
     },
     async getBudgetSummary(goalId, projectId) {
       await assertGoalProject(goalId, projectId);

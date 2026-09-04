@@ -1,5 +1,12 @@
 import {
   CreateGoalInputSchema,
+  CreateTaskContractInputSchema,
+  TaskContractConfirmationInputSchema,
+  TaskContractQuerySchema,
+  TaskContractSchema,
+  UpdateTaskContractInputSchema,
+  OvertureSelectionInputSchema,
+  OvertureRoleSelectionResultSchema,
   EventQuerySchema,
   GoalEventPageSchema,
   GoalQuerySchema,
@@ -12,6 +19,13 @@ import {
   TransitionGoalInputSchema,
   UuidSchema,
   type CreateGoalInput,
+  type CreateTaskContractInput,
+  type TaskContract,
+  type TaskContractConfirmationInput,
+  type TaskContractQuery,
+  type UpdateTaskContractInput,
+  type OvertureSelectionInput,
+  type OvertureRoleSelectionResult,
   type EventQuery,
   type GoalEventPage,
   type GoalEvent,
@@ -37,6 +51,12 @@ export class ApiError extends Error {
 
 export interface ApiClient {
   createGoal(input: CreateGoalInput, commandId: string): Promise<GoalResult>;
+  createTaskContract(input: CreateTaskContractInput, contractId: string): Promise<TaskContract>;
+  getTaskContract(contractId: string, query: TaskContractQuery): Promise<TaskContract>;
+  updateTaskContract(contractId: string, input: UpdateTaskContractInput): Promise<TaskContract>;
+  selectOvertureRoles(contractId: string, input: OvertureSelectionInput, commandId?: string): Promise<OvertureRoleSelectionResult>;
+  confirmTaskContract(contractId: string, input: TaskContractConfirmationInput, commandId?: string): Promise<void>;
+  launchTaskContract(contractId: string, projectId: string): Promise<TaskContract>;
   listGoals(projectId: string): Promise<GoalList>;
   getGoal(goalId: string, query: GoalQuery): Promise<GoalResult>;
   transitionGoal(goalId: string, input: TransitionGoalInput, commandId: string): Promise<GoalResult>;
@@ -76,6 +96,40 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch }: { 
         headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
         body: JSON.stringify(CreateGoalInputSchema.parse(input)),
       }, GoalResultSchema);
+    },
+    createTaskContract(input, contractId) {
+      return request("v1/task-contracts", {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(contractId) },
+        body: JSON.stringify(CreateTaskContractInputSchema.parse(input)),
+      }, TaskContractSchema);
+    },
+    getTaskContract(contractId, query) {
+      const parsedQuery = TaskContractQuerySchema.parse(query);
+      return request(`v1/task-contracts/${encodeURIComponent(UuidSchema.parse(contractId))}?${new URLSearchParams({ projectId: parsedQuery.projectId })}`, { headers }, TaskContractSchema);
+    },
+    updateTaskContract(contractId, input) {
+      return request(`v1/task-contracts/${encodeURIComponent(UuidSchema.parse(contractId))}`, {
+        method: "PUT",
+        headers: { ...headers, "content-type": "application/json" },
+        body: JSON.stringify(UpdateTaskContractInputSchema.parse(input)),
+      }, TaskContractSchema);
+    },
+    selectOvertureRoles(contractId, input, commandId = contractId) {
+      return request(`v1/task-contracts/${encodeURIComponent(UuidSchema.parse(contractId))}/overture-selection`, {
+        method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) }, body: JSON.stringify(OvertureSelectionInputSchema.parse(input)),
+      }, OvertureRoleSelectionResultSchema);
+    },
+    confirmTaskContract(contractId, input, commandId = contractId) {
+      return request(`v1/task-contracts/${encodeURIComponent(UuidSchema.parse(contractId))}/confirmation`, {
+        method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) }, body: JSON.stringify(TaskContractConfirmationInputSchema.parse(input)),
+      }, { parse: () => undefined });
+    },
+    launchTaskContract(contractId, projectId) {
+      const parsedProjectId = UuidSchema.parse(projectId);
+      return request(`v1/task-contracts/${encodeURIComponent(UuidSchema.parse(contractId))}/launch`, {
+        method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify({ projectId: parsedProjectId }),
+      }, TaskContractSchema);
     },
     listGoals(projectId) {
       const parsedProjectId = UuidSchema.parse(projectId);
@@ -120,4 +174,4 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch }: { 
   };
 }
 
-export type { CreateGoalInput, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, GoalBudgetSummary, GoalResult, TransitionGoalInput, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport };
+export type { CreateGoalInput, CreateTaskContractInput, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, GoalBudgetSummary, GoalResult, TransitionGoalInput, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport };

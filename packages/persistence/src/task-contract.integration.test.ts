@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { TaskContractSubstance } from "@maestro/domain";
-import { ExactConfirmationRequiredError, TaskContractIntegrityError, createDurableTaskContract, launchConfirmedTaskContract, readTaskContract, recordExactTaskContractConfirmation, updateDurableTaskContract } from "./task-contract.js";
+import { ExactConfirmationRequiredError, TaskContractConflictError, TaskContractIntegrityError, TaskContractProjectBoundaryError, createDurableTaskContract, launchConfirmedTaskContract, readTaskContract, recordExactTaskContractConfirmation, selectAndRecordOvertureRoles, updateDurableTaskContract } from "./task-contract.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -21,6 +21,30 @@ describeDatabase("Task Contract exact confirmation with PostgreSQL", () => {
   beforeAll(async () => { await applyAllMigrations(pool); });
   beforeEach(async () => { await pool.query("TRUNCATE task_contract_confirmations, task_contract_decisions, task_contracts CASCADE"); });
   afterAll(async () => { await pool.end(); });
+
+  it("makes create retries idempotent and rejects a reused contract identity with different content", async () => {
+    const contractId = randomUUID();
+    const first = await createDurableTaskContract(pool, contractId, substance());
+    const retry = await createDurableTaskContract(pool, contractId, substance());
+    expect(retry).toEqual(first);
+    await expect(createDurableTaskContract(pool, contractId, { ...substance(), desiredOutcome: "Different" })).rejects.toBeInstanceOf(TaskContractConflictError);
+  });
+
+  it("makes Overture role selection retries idempotent by command identity", async () => {
+    const contract = await createDurableTaskContract(pool, randomUUID(), substance());
+    const commandId = randomUUID();
+    const input = { outsideEvidenceRequested: true, previewNeeded: false };
+    const roles = await selectAndRecordOvertureRoles(pool, contract.contractId, input, commandId);
+    await expect(selectAndRecordOvertureRoles(pool, contract.contractId, input, commandId)).resolves.toEqual(roles);
+    await expect(selectAndRecordOvertureRoles(pool, contract.contractId, { ...input, previewNeeded: true }, commandId)).rejects.toThrow("reused with different content");
+  });
+
+  it("keeps the Task Contract project boundary immutable across amendments", async () => {
+    const contract = await createDurableTaskContract(pool, randomUUID(), substance());
+    await expect(updateDurableTaskContract(pool, contract.contractId, contract.version, {
+      ...substance(), project: { ...substance().project, projectId: "other-project" },
+    })).rejects.toBeInstanceOf(TaskContractProjectBoundaryError);
+  });
 
   it("rejects launch without an exact confirmation and allows it after one", async () => {
     const contract = await createDurableTaskContract(pool, randomUUID(), substance());
@@ -52,6 +76,7 @@ describeDatabase("Task Contract exact confirmation with PostgreSQL", () => {
     const original = await createDurableTaskContract(pool, randomUUID(), substance());
     await recordExactTaskContractConfirmation(pool, original.contractId, original.version, original.contentHash, "ceo");
     const amended = await updateDurableTaskContract(pool, original.contractId, original.version, { ...substance(), desiredOutcome: "Amended outcome" }, { reason: "CEO edit" });
+    await expect(updateDurableTaskContract(pool, original.contractId, original.version, { ...substance(), desiredOutcome: "Amended outcome" })).resolves.toEqual(amended);
     await expect(launchConfirmedTaskContract(pool, original.contractId)).rejects.toBeInstanceOf(ExactConfirmationRequiredError);
     await recordExactTaskContractConfirmation(pool, amended.contractId, amended.version, amended.contentHash, "ceo");
     await expect(launchConfirmedTaskContract(pool, amended.contractId)).resolves.toMatchObject({ launchState: "launched" });

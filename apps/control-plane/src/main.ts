@@ -9,6 +9,7 @@ import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService } from "./critical-action-service.js";
 import { createDurableGoalService } from "./goal-service.js";
 import { createReadStateService } from "./read-state-service.js";
+import { createDurableTaskContractService } from "./task-contract-service.js";
 import { buildServer, type OperatorAuthenticator } from "./server.js";
 
 export interface ControlPlane {
@@ -62,6 +63,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     eventService: { listEvents: (projectId, after) => listGoalEvents(pool, { projectId, after }) },
     criticalActionService,
     readStateService: createReadStateService(pool),
+    taskContractService: createDurableTaskContractService(pool),
     projectMembership: { assertProjectMembership: (operatorId, projectId) => assertProjectMembership(pool, operatorId, projectId) },
     ...(https ? { https } : {}),
   });

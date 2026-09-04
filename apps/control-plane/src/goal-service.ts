@@ -28,6 +28,10 @@ export class StaleLeaseError extends GoalServiceError { constructor() { super("G
 export class LeaseUnavailableError extends GoalServiceError { constructor() { super("Goal lease is unavailable"); } }
 export class CommandIdReuseError extends GoalServiceError { constructor() { super("Command ID was reused with a different request"); } }
 export class DurableStoreUnavailableError extends GoalServiceError { constructor() { super("Durable store is unavailable"); } }
+export class TaskContractNotFoundError extends GoalServiceError { constructor() { super("Task Contract was not found"); } }
+export class TaskContractNotLaunchableError extends GoalServiceError { constructor() { super("Task Contract must be launched before Goal creation"); } }
+export class TaskContractProjectMismatchError extends GoalServiceError { constructor() { super("Task Contract project does not match the Goal project"); } }
+export class TaskContractIntegrityError extends GoalServiceError { constructor() { super("Task Contract integrity check failed"); } }
 
 export interface DurableGoalServiceOptions {
   pool: Pool;
@@ -85,19 +89,19 @@ export function createDurableGoalService(options: DurableGoalServiceOptions): Go
 
   return {
     async createGoal(input, commandId, operator) {
-      return execute(commandId, { commandId, projectId: input.projectId, goalId: commandId, actorId: operator.operatorId, type: "CreateGoal", expectedVersion: 0 });
+      return execute(commandId, { commandId, projectId: input.projectId, goalId: commandId, actorId: operator.operatorId, type: "CreateGoal", expectedVersion: 0, ...(input.contractId === undefined ? {} : { contractId: input.contractId }) });
     },
     async transitionGoal(goalId, input, commandId, operator) {
       return execute(goalId, { commandId, projectId: input.projectId, goalId, actorId: operator.operatorId, type: "TransitionGoal", expectedVersion: input.expectedVersion, to: input.to });
     },
     async getGoal(goalId, projectId) {
       try {
-        const result = await options.pool.query<{ goal_id: string; project_id: string; state: GoalResult["state"]; version: string }>(
-          "SELECT goal_id, project_id, state, version FROM goals WHERE goal_id = $1 AND project_id = $2", [goalId, projectId],
+        const result = await options.pool.query<{ goal_id: string; project_id: string; task_contract_id: string | null; state: GoalResult["state"]; version: string }>(
+          "SELECT goal_id, project_id, task_contract_id, state, version FROM goals WHERE goal_id = $1 AND project_id = $2", [goalId, projectId],
         );
         if (result.rowCount !== 1) throw new GoalNotFoundError();
         const row = result.rows[0]!;
-        return { goalId: row.goal_id, projectId: row.project_id, state: row.state, version: Number(row.version) };
+        return { goalId: row.goal_id, projectId: row.project_id, state: row.state, version: Number(row.version), ...(row.task_contract_id === null ? {} : { contractId: row.task_contract_id }) };
       } catch (error) {
         if (error instanceof GoalNotFoundError) throw error;
         throw new DurableStoreUnavailableError();
@@ -110,8 +114,15 @@ function commandResult(result: CommandResult, projectId: string): GoalResult {
   if (result.outcome === "version_conflict") throw new VersionConflictError();
   if (result.code === "invalid_transition") throw new InvalidTransitionError();
   if (result.code === "goal_not_found") throw new GoalNotFoundError();
+  if (result.code === "task_contract_not_found") throw new TaskContractNotFoundError();
+  if (result.code === "task_contract_not_launched") throw new TaskContractNotLaunchableError();
+  if (result.code === "task_contract_project_mismatch") throw new TaskContractProjectMismatchError();
+  if (result.code === "task_contract_integrity_error") throw new TaskContractIntegrityError();
   if (result.outcome !== "succeeded" || result.version === undefined || result.state === undefined) {
     throw new DurableStoreUnavailableError();
   }
-  return { goalId: result.goalId, projectId, state: result.state, version: result.version };
+  return {
+    goalId: result.goalId, projectId, state: result.state, version: result.version,
+    ...(result.contractId === undefined ? {} : { contractId: result.contractId }),
+  };
 }

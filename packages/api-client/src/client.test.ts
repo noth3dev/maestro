@@ -44,3 +44,33 @@ it("reads goal listing, budget, and derived state with typed methods", async () 
  expect(fetch).toHaveBeenNthCalledWith(1, `https://maestro.test/v1/goals?projectId=${projectId}`, expect.anything());
  expect(fetch).toHaveBeenNthCalledWith(2, `https://maestro.test/v1/goals/${goalId}/budget?projectId=${projectId}`, expect.anything());
 });
+
+
+it("runs the Task Contract lifecycle through typed authenticated requests", async () => {
+  const contractId = "22222222-2222-4222-8222-222222222222";
+  const substance = {
+    desiredOutcome: "Ship", userVisibleBehavior: ["Works"], successCriteria: ["Passes"], liveEvidence: ["Live"],
+    scope: ["Feature"], nonGoals: ["Other"], priorities: ["Safety"], acceptableTradeoffs: ["Time"], constraints: ["Local"], knownEdgeCases: ["Retry"],
+    project: { projectId, repository: "/repo", immutableBaseRevision: "abc", dataBoundary: "repo" }, evidenceReferences: ["spec"], approvedPreviewReferences: [],
+    expectedGroups: ["Product"], expectedDepartments: ["Product"], criticalActionExpectations: ["Approval"], forbiddenEffects: ["Deploy"],
+    environmentAssumptions: ["DB"], externalServiceAssumptions: ["None"], budget: { ceiling: "10", reportingExpectations: ["Report"], stoppingConditions: ["Stop"] },
+  };
+  const contract = { contractId, schemaVersion: 1, version: 1, ...substance, decisionHistory: [], contentHash: "a".repeat(64), launchState: "awaiting_confirmation" };
+  const fetch = vi.fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(contract), { status: 201 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify(contract), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ ...contract, version: 2 }), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ roles: ["conversation-lead"] }), { status: 200 }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ ...contract, launchState: "launched" }), { status: 200 }));
+  const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+  await expect(client.createTaskContract({ projectId, substance }, contractId)).resolves.toEqual(contract);
+  await expect(client.getTaskContract(contractId, { projectId })).resolves.toEqual(contract);
+  await expect(client.updateTaskContract(contractId, { projectId, expectedVersion: 1, substance })).resolves.toMatchObject({ version: 2 });
+  await expect(client.selectOvertureRoles(contractId, { projectId, outsideEvidenceRequested: true, previewNeeded: false })).resolves.toEqual({ roles: ["conversation-lead"] });
+  await expect(client.confirmTaskContract(contractId, { projectId, version: 1, contentHash: contract.contentHash }, contractId)).resolves.toBeUndefined();
+  await expect(client.launchTaskContract(contractId, projectId)).resolves.toMatchObject({ launchState: "launched" });
+  expect(fetch).toHaveBeenNthCalledWith(1, `https://maestro.test/v1/task-contracts`, expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "idempotency-key": contractId }) }));
+  expect(fetch).toHaveBeenNthCalledWith(2, `https://maestro.test/v1/task-contracts/${contractId}?projectId=${projectId}`, expect.anything());
+  expect(fetch).toHaveBeenNthCalledWith(3, `https://maestro.test/v1/task-contracts/${contractId}`, expect.objectContaining({ method: "PUT" }));
+});
