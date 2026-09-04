@@ -1,85 +1,182 @@
-# Post-Phase 8 Ideas — Luthiery & Architecture Extensions
+# Post-Phase 8 Ideas — Architecture Extensions
 
 This document records approved post-certification architectural ideas and extensions deferred beyond Phase 8.
 
 ---
 
-## 1. Luthiery — Dynamic MCP & Tool Workshop Extension
+## Act 1 — Foundation Extensions (Phase 9–10)
 
-### Overview
+Act 1 completes the core safety and capability substrate.  
+All ideas in this Act remain strictly bounded by the Phase 1–8 control-plane invariants (Separation of Powers, Durable Evidence, Independent Certification, Fencing Leases, Audit-Before-Effect).
+
+### 1. Luthiery — Dynamic MCP & Tool Workshop (Phase 9)
+
+#### Overview
 - **Codename**: **Luthiery (루티어리 / Luthier)**
-- **Position**: Post-Phase 8 Extension (Phase 9 candidate).
+- **Position**: Phase 9
 - **Purpose**: Enable agents to safely generate, audit, run, and reuse specialized **Model Context Protocol (MCP) Servers** and tools on demand during task execution without compromising the Phase 1–8 core control plane safety boundaries.
 
----
+#### Core Specifications
 
-### Core Specifications
+**Governance & Separation of Powers**
+- Production Ownership: Infrastructure / Operations Group (tool-manufacturing engine). MUST NOT be owned by Encore.
+- Encore Auditing: Metronome monitors live executions; Phase 6 Replay Lab analyzes token inflation and queues inefficient tools for refactoring.
 
-#### 1. Governance & Separation of Powers
-- **Production Ownership**: Positioned under the **Infrastructure / Operations Group** as a tool-manufacturing engine. It MUST NOT be directly owned by Encore to prevent self-auditing conflicts of interest (Separation of Powers).
-- **Encore Auditing**: **Metronome** monitors live tool executions for safety breaches, while the **Phase 6 Replay Lab** analyzes offline token inflation and queues inefficient tools for Luthiery refactoring.
+**Isolation & Process Lifecycle**
+- Dynamic MCP daemons run exclusively inside Phase 4 Task-scoped containers.
+- Process PID is bound to the Goal/Task Fencing Token Lease.
+- Automatic `SIGTERM` cleanup on lease expiry or task completion.
 
-#### 2. Isolation & Process Lifecycle
-- **Task Sandbox Execution**: Dynamic MCP daemons execute exclusively within Phase 4 Task-scoped containers/sandboxes.
-- **Lease PID Binding**: The MCP daemon process PID is bound to the **Goal/Task Fencing Token Lease**.
-- **Automatic Clean-up**: Upon lease expiry or task completion, the control plane terminates the process via `SIGTERM` to eliminate ghost processes and resource leaks.
+**Security & Authority Control**
+- Mandatory AST static analysis: every tool handler MUST call `AuthorizedEffectExecutor.execute()`.
+- Missing authority wrappers → `SecurityBypassAttemptError`.
 
-#### 3. Security & Authority Control
-- **AST Validation Rule**: Dynamic MCP code generation enforces a mandatory AST static analysis rule. Every tool call handler MUST explicitly invoke `AuthorizedEffectExecutor.execute()`.
-- **Security Evaluator Gate**: Any generated MCP server lacking verified authority execution wrappers is rejected with a `SecurityBypassAttemptError`.
+**Reusability & Evidence**
+- Certified MCP servers stored under SHA-256 Content-Addressed Hashes in `packages/evidence` + tool registry.
+- Future similar tasks reuse certified servers without regeneration.
 
-#### 4. Reusability & Evidence Persistence
-- Verified and accepted MCP server code is stored in `packages/evidence` and the tool registry using **SHA-256 Content-Addressed Hashes**.
-- Future tasks with identical or similar requirements reuse existing certified MCP servers directly without re-generation.
+**Performance**
+- Compact token-optimized payloads.
+- Idempotent call caching within lease context.
+- Token-inflation tools automatically queued for compression/refactoring.
 
-#### 5. Token & Execution Performance Optimization
-- **Compact Payload Serialization**: MCP Tool responses must format outputs using token-optimized minimal schemas (removing verbose boilerplates, redundant metadata, and truncating huge payloads into evidence links).
-- **Execution Caching**: Idempotent MCP Tool calls (e.g., read-only queries, AST parsing, linting) cache results within the lease context to eliminate redundant execution latency and LLM token waste.
-- **Token/Performance Profiling**: Luthiery tracks total token consumption and execution latency per tool call; tools causing "Token Inflation" are automatically queued for AST-level response compression and refactoring.
-
----
-
-### Relationship & Synergy with Phase 6 Replay Lab
-
-| Module | Phase 6 Replay / Synthetic Lab | Post-Phase 8 Dynamic MCP Workshop |
-| :--- | :--- | :--- |
-| **Primary Goal** | Research & analyze historical milestone evidence | Manufacture executable runtime MCP tools |
-| **Output Artifacts** | Prompt hints, 10-axis persona updates, offline hypotheses | Executable MCP server code, Zod schemas, tool handlers |
-| **Timing** | Offline / post-milestone analysis | On-demand during live task execution |
-| **Synergy** | Analyzes failed/inefficient MCP tools from the Workshop to refine generator prompts |
+#### Synergy with Phase 6 Replay Lab
+| Module | Phase 6 Replay / Synthetic Lab | Luthiery (Phase 9) |
+|--------|--------------------------------|--------------------|
+| Primary Goal | Analyze historical evidence | Manufacture runtime MCP tools |
+| Output | Prompt hints, persona updates | Executable MCP code, Zod schemas |
+| Timing | Offline / post-milestone | On-demand during live execution |
 
 ---
 
-## 2. Autonomous Treasury & Real Capital Wallet Extension
+### 2. Autonomous Treasury & Real Capital Wallet (Phase 10)
 
-### Overview
+#### Overview
 - **Codename**: **Autonomous Treasury (자율 재무부 및 자금 지갑)**
-- **Position**: Post-Phase 8 Extension (Phase 9/10 candidate).
-- **Purpose**: Provide Maestro orchestration with native financial autonomy by embedding a durable **System Treasury Wallet**. Enables the system to autonomously pay for external APIs, cloud compute resources, third-party services, or Web3 smart contract interactions using pre-funded capital.
+- **Position**: Phase 10
+- **Purpose**: Embed a durable System Treasury Wallet so Maestro can autonomously pay for external APIs, cloud compute, third-party services, and Web3 interactions using pre-funded capital.
+
+#### Core Specifications
+
+**Pre-funded Capital Model**
+- Funds are deposited by the Conductor/Operator.
+- Multi-rail adapters: Web3 (USDC, ETH, Solana) + fiat (Stripe, Plaid).
+
+**Governance**
+- Owned by Operations / Finance Group (Treasury Department).
+- Treasury Head allocates `Goal Spend Ceiling` during Head Council planning.
+
+**Authority & Spending Policy**
+- In-budget spend executes autonomously via `payment.spend`.
+- Optional 2-step Conductor confirmation for high-value thresholds.
+- Audit-Before-Spend: intent + amount recorded in PostgreSQL before any network transaction.
+
+**Audit & Ledger**
+- Signed `PaymentReceipt` (tx hash, invoice hash, fencing-token proof) emitted via durable outbox.
+- Metronome continuously monitors spend velocity, unauthorized transfers, and budget leaks.
 
 ---
 
-### Core Specifications
+## Act 2 — Personalized Recursive Self-Modification
 
-#### 1. Pre-funded Capital Model (사용자 충전식 펀딩 모델)
-- **Orchestration-Owned Funds**: The wallet stores funds pre-charged/deposited by the Conductor/Operator (User).
-- **Multi-Rail Payment Adapters**: Supports both Web3 crypto assets (USDC, ETH, Solana smart contracts) and traditional fiat APIs (Stripe, Plaid API adapters).
+Act 2 begins only after Act 1 (Phase 9–10) is certified.  
+Its goal is to turn Maestro from a general orchestration system into a **user-specific, self-modifying system** that continuously adapts to the individual Conductor’s work patterns, preferences, and explicit instructions — including the ability to rewrite its own UI and codebase under strict safety boundaries.
 
-#### 2. Governance & Treasury Department (재무부 소속)
-- **Treasury Ownership**: Managed under the **Operations / Finance Group (Treasury Department)**.
-- **Budget Allocation**: The Treasury Head allocates task-specific spending caps (`Goal Spend Ceiling`) during the Head Council planning phase.
-
-#### 3. Authority & Multi-Tier Spending Policy (지출 권한 제어)
-- **Default Autonomous Execution**: Spending within the Task Contract's approved budget executes autonomously via `payment.spend` actions.
-- **Optional 2-Step Confirmation**: Operator can toggle a mandatory 2-step approval rule for high-value transactions, requiring explicit Conductor authorization via `AuthorizedEffectExecutor` when thresholds are exceeded.
-- **Audit-Before-Spend**: Transaction intent, recipient, and amount must be immutably recorded in PostgreSQL prior to dispatching any network payment transaction.
-
-#### 4. Audit & Double-Entry Ledger Persistence (이중 기입 장부 영속성)
-- **Durable Outbox Receipts**: Every spending transaction emits a signed `PaymentReceipt` containing transaction hashes, invoice hashes, and fencing token proofs.
-- **Metronome Financial Auditing**: **Metronome** continuously monitors for unusual spend velocity, unauthorized address transfers, or budget leaks.
+### Core Vision
+- Gradually adapt to the user’s actual work style and optimize for that user.
+- Accept explicit user instructions to modify its own UI.
+- Accept explicit user instructions to modify its own code (e.g., plug in a new provider).
+- Treat self-modification itself as a first-class, auditable, reversible Goal.
+- Never allow self-modification to touch the Phase 1–8 safety invariants.
 
 ---
 
-## 3. Future Extensions Placeholder
+### 1. Self-Modification as First-Class Goal (SMFG)
 
-*(Additional post-Phase 8 architectural ideas will be appended here.)*
+- Any user request that changes Maestro’s own code, UI, configuration, or provider set is elevated to a **Self-Modification Goal**.
+- Self-Modification Goals receive a dedicated fencing lease and a restricted authority scope.
+- They may never acquire permissions that would allow modification of:
+  - AuthorizedEffectExecutor
+  - Fencing-token / lease machinery
+  - Audit-before-effect path
+  - Separation-of-powers boundaries
+  - Certification / Metronome logic
+- All side effects occur only inside an isolated Git worktree and only through `AuthorizedEffectExecutor`.
+- Final promotion to the running system requires Independent Certification + optional Conductor confirmation.
+- Every accepted self-modification is recorded as an immutable Evidence Bundle and remains fully reversible.
+
+---
+
+### 2. Personalization Genome & Continuous Adaptation
+
+- Every interaction and certified outcome produces **User Adaptation Evidence**.
+- From this evidence a **Personalization Genome** evolves:
+  - Preferred UI layouts and interaction density
+  - Frequent workflows and default department weighting
+  - Preferred model/provider combinations and latency/quality trade-offs
+  - Autonomy level and confirmation thresholds
+- The Genome is content-addressed (SHA-256) and automatically applied at the start of new Goals.
+- Explicit user feedback (“keep this”, “never do that again”) is stored as Positive / Negative Evidence and immediately influences future Genome updates.
+- Negative Evidence carries veto power over conflicting adaptation proposals.
+
+---
+
+### 3. Bounded Self-Editing Pipeline
+
+Pipeline for code or UI self-modification:
+
+1. User issues a self-modification instruction.
+2. Overture Crew produces an immutable **Modification Contract**.
+3. Required Department Heads (especially Tech, Security, Quality) deliberate via sealed submissions.
+4. Scout / Execution Workers perform the change inside an isolated Git worktree.
+5. Automated tests + Shadow Replay are executed.
+6. Metronome issues (or withholds) Certification.
+7. Conductor may be required to give final approval for high-impact changes.
+8. On acceptance the change is merged, the Genome is updated, and the Causal Improvement Graph records the node.
+
+Hard constraints:
+- Only one Self-Modification Goal may be active at a time.
+- All changes must be reversible by a single certified rollback Goal.
+- Security-critical modules remain immutable even to Self-Modification Goals.
+
+---
+
+### 4. Meta-Improvement Layer
+
+- Ordinary Goals improve task performance.
+- Self-Modification Goals improve the system itself.
+- **Meta-Improvement Goals** improve the *process* of self-modification (e.g., “make provider addition faster and safer”, “reduce UI-edit regression rate”).
+- Meta-Improvement Goals are subject to the same Evidence → Certification → Council path and cannot relax Act-1 safety invariants.
+
+---
+
+### 5. Causal Improvement Graph (shared across Act 2)
+
+All accepted improvements (personalization, UI, code, meta) become nodes in a durable Causal Improvement Graph:
+- Source Evidence
+- Dependencies on prior improvements
+- Measured ΔQuality / ΔSafety / ΔCost / ΔUser Preference Fit
+- Applicability scope (user, goal class, component)
+
+New proposals are checked against the graph for regression risk and conflict before certification.
+
+---
+
+## Relationship between Act 1 and Act 2
+
+| Aspect                    | Act 1 (Phase 9–10)              | Act 2                                      |
+|---------------------------|---------------------------------|--------------------------------------------|
+| Primary focus             | Safe capability expansion       | User-specific self-modification            |
+| What can be changed       | Tools (MCP), spending rails     | UI, code, providers, workflows, Genome     |
+| Safety posture            | Hard safety substrate           | Uses the substrate; never modifies it      |
+| Personalization           | None                            | Core objective                             |
+| Self-modification depth   | Tool generation only            | Full system surface (bounded)              |
+
+Act 2 is unreachable until Act 1 is certified.  
+Act 2 never receives authority to weaken Act 1 invariants.
+
+---
+
+## Future Extensions Placeholder
+
+*(Additional Act 2 or later ideas will be appended here.)*
