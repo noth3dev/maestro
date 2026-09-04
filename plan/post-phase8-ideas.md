@@ -77,100 +77,169 @@ All ideas in this Act remain strictly bounded by the Phase 1–8 control-plane i
 
 ---
 
-## Act 2 — Personalized Recursive Self-Modification
+## Act 2 — Orchestration Genome & Personalized Self-Modification
 
-Act 2 begins only after Act 1 (Phase 9–10) is certified.  
-Its goal is to turn Maestro from a general orchestration system into a **user-specific, self-modifying system** that continuously adapts to the individual Conductor’s work patterns, preferences, and explicit instructions — including the ability to rewrite its own UI and codebase under strict safety boundaries.
+Act 2 begins only after Act 1 (Phase 9–10) is certified.
 
-### Core Vision
-- Gradually adapt to the user’s actual work style and optimize for that user.
-- Accept explicit user instructions to modify its own UI.
-- Accept explicit user instructions to modify its own code (e.g., plug in a new provider).
-- Treat self-modification itself as a first-class, auditable, reversible Goal.
-- Never allow self-modification to touch the Phase 1–8 safety invariants.
+Its purpose is to turn Maestro into a system that continuously adapts to a specific Conductor while remaining able to reconfigure its own UI, code, and providers — but only through a new evolutionary unit called the **Orchestration Genome**.
 
----
+Self-modification is no longer an ad-hoc code edit.  
+Every accepted change is a certified, content-addressed, causally tracked Genome.
 
-### 1. Self-Modification as First-Class Goal (SMFG)
+### Core Thesis
 
-- Any user request that changes Maestro’s own code, UI, configuration, or provider set is elevated to a **Self-Modification Goal**.
-- Self-Modification Goals receive a dedicated fencing lease and a restricted authority scope.
-- They may never acquire permissions that would allow modification of:
-  - AuthorizedEffectExecutor
-  - Fencing-token / lease machinery
-  - Audit-before-effect path
-  - Separation-of-powers boundaries
-  - Certification / Metronome logic
-- All side effects occur only inside an isolated Git worktree and only through `AuthorizedEffectExecutor`.
-- Final promotion to the running system requires Independent Certification + optional Conductor confirmation.
-- Every accepted self-modification is recorded as an immutable Evidence Bundle and remains fully reversible.
+> Maestro mutates only by creating, certifying, applying, crossing, or retiring **Orchestration Genomes**.  
+> A Genome is the sole legal unit of system change and of user-specific adaptation.
+
+This is the research-facing claim of Act 2:  
+improvement is reified as a cryptographically fixed, lineage-aware, dual-axis evolutionary object under Separation of Powers.
 
 ---
 
-### 2. Personalization Genome & Continuous Adaptation
+### 1. Orchestration Genome — Definition
 
-- Every interaction and certified outcome produces **User Adaptation Evidence**.
-- From this evidence a **Personalization Genome** evolves:
-  - Preferred UI layouts and interaction density
-  - Frequent workflows and default department weighting
-  - Preferred model/provider combinations and latency/quality trade-offs
-  - Autonomy level and confirmation thresholds
-- The Genome is content-addressed (SHA-256) and automatically applied at the start of new Goals.
-- Explicit user feedback (“keep this”, “never do that again”) is stored as Positive / Negative Evidence and immediately influences future Genome updates.
-- Negative Evidence carries veto power over conflicting adaptation proposals.
+An **Orchestration Genome** is an immutable package that represents one verified change to the system or to its personalization state.
 
----
+#### Minimum contents
 
-### 3. Bounded Self-Editing Pipeline
+| Field | Description |
+|-------|-------------|
+| `genomeId` | Content-addressed identifier (SHA-256 of canonical payload) |
+| `parentGenomeIds` | Lineage (one or more parents; empty for root) |
+| `sourceEvidenceIds` | Certified Evidence Bundles that justified this Genome |
+| `capabilityDelta` | What the system can now do better (code, UI, provider, workflow, tool) |
+| `personalizationDelta` | For whom / how the system should behave differently |
+| `artifactRefs` | Content-addressed snapshots of changed artifacts |
+| `metrics` | Measured ΔQuality, ΔSafety, ΔCost, ΔUserFit |
+| `scope` | Applicability (userId, goalClass, component set) |
+| `rollbackPlan` | Minimal reversible instructions to restore prior state |
+| `certificationId` | Independent Certification that accepted this Genome |
+| `status` | `candidate` → `certified` → `applied` → `retired` |
 
-Pipeline for code or UI self-modification:
-
-1. User issues a self-modification instruction.
-2. Overture Crew produces an immutable **Modification Contract**.
-3. Required Department Heads (especially Tech, Security, Quality) deliberate via sealed submissions.
-4. Scout / Execution Workers perform the change inside an isolated Git worktree.
-5. Automated tests + Shadow Replay are executed.
-6. Metronome issues (or withholds) Certification.
-7. Conductor may be required to give final approval for high-impact changes.
-8. On acceptance the change is merged, the Genome is updated, and the Causal Improvement Graph records the node.
-
-Hard constraints:
-- Only one Self-Modification Goal may be active at a time.
-- All changes must be reversible by a single certified rollback Goal.
-- Security-critical modules remain immutable even to Self-Modification Goals.
+Once `certified`, the Genome payload is immutable.  
+Any further change requires a **new** Genome.
 
 ---
 
-### 4. Meta-Improvement Layer
+### 2. Dual-Axis Design (Capability × Personalization)
 
-- Ordinary Goals improve task performance.
-- Self-Modification Goals improve the system itself.
-- **Meta-Improvement Goals** improve the *process* of self-modification (e.g., “make provider addition faster and safer”, “reduce UI-edit regression rate”).
-- Meta-Improvement Goals are subject to the same Evidence → Certification → Council path and cannot relax Act-1 safety invariants.
+Every Genome carries two explicit axes:
 
----
+- **Capability axis**  
+  Changes to tools, providers, workflows, code paths, UI components, performance characteristics.
 
-### 5. Causal Improvement Graph (shared across Act 2)
+- **Personalization axis**  
+  Changes to layout preference, autonomy level, confirmation thresholds, default routing, communication style, etc.
 
-All accepted improvements (personalization, UI, code, meta) become nodes in a durable Causal Improvement Graph:
-- Source Evidence
-- Dependencies on prior improvements
-- Measured ΔQuality / ΔSafety / ΔCost / ΔUser Preference Fit
-- Applicability scope (user, goal class, component)
+Evaluation and Certification MUST score both axes separately.  
+A Genome that improves capability but harms UserFit (or vice versa) can be rejected or scoped narrowly.
 
-New proposals are checked against the graph for regression risk and conflict before certification.
+Most existing self-improving agents optimize only capability.  
+Act 2 treats personalization as a first-class evolutionary axis.
 
 ---
 
-## Relationship between Act 1 and Act 2
+### 3. Genome Lifecycle
+Evidence / User Instruction
+↓
+Genome Proposal (candidate)
+↓
+Shadow Replay + Metric Collection
+↓
+Negative-Evidence Veto Check
+↓
+Causal Lineage Conflict Check
+↓
+Independent Certification (Metronome + Encore Council)
+↓
+Optional Conductor Approval (high-impact scope)
+↓
+Apply (single active mutation at a time)
+↓
+Live Observation → possible Retirement or Successor Genome
 
-| Aspect                    | Act 1 (Phase 9–10)              | Act 2                                      |
-|---------------------------|---------------------------------|--------------------------------------------|
-| Primary focus             | Safe capability expansion       | User-specific self-modification            |
-| What can be changed       | Tools (MCP), spending rails     | UI, code, providers, workflows, Genome     |
-| Safety posture            | Hard safety substrate           | Uses the substrate; never modifies it      |
-| Personalization           | None                            | Core objective                             |
-| Self-modification depth   | Tool generation only            | Full system surface (bounded)              |
+**Rules**
+- Only one Genome application may be in progress at a time (system-wide or per user).
+- Application occurs inside an isolated worktree / sandbox; promotion is atomic.
+- Every applied Genome remains fully reversible via its `rollbackPlan`.
+- Retirement does not delete history; it only removes the Genome from the active set.
+
+---
+
+### 4. Causal Improvement Graph
+
+All Genomes form a durable directed graph:
+
+- Nodes = Genomes
+- Edges = parent → child lineage
+- Annotations = measured deltas, veto reasons, scope
+
+Before certification the system checks:
+1. Regression risk against ancestor performance envelopes
+2. Conflict with currently applied Genomes in overlapping scope
+3. Similarity to Negative Evidence (past certified failures / user rejections)
+
+If any check fails, Certification is denied and the reason is stored as Evidence.
+
+---
+
+### 5. Negative Evidence Sovereignty
+
+- Rejected certifications, explicit user “never again” signals, and safety failures become **Negative Evidence Bundles**.
+- Negative Evidence is append-only and permanent.
+- Any new Genome that is semantically close to a Negative Evidence pattern MUST explain how it overcomes that failure.
+- Failure to provide a satisfactory explanation results in automatic veto.
+
+Failure is not merely a training signal; it holds structural veto power over future evolution.
+
+---
+
+### 6. Bounded Self-Modification Surface
+
+Genomes may modify:
+- UI modules and interaction patterns
+- Provider adapters and model routing
+- Workflow templates and department weighting
+- Personalization parameters
+
+Genomes may **never** modify:
+- AuthorizedEffectExecutor
+- Fencing-token / lease machinery
+- Audit-Before-Effect path
+- Separation-of-Powers boundaries
+- Certification / Metronome core logic
+- Negative Evidence store
+
+These invariants remain hard-coded and outside the mutable surface even for Act 2.
+
+---
+
+### 7. Transplant, Crossover, and Meta-Genomes
+
+**Transplant**  
+A certified Genome may be proposed for another user or instance.  
+It must still pass Shadow Replay, Negative Evidence checks, and Certification under the target scope.
+
+**Crossover**  
+Two certified Genomes may be combined into a candidate child Genome.  
+The child is a new content-addressed object and requires full certification; lineage records both parents.
+
+**Meta-Genome**  
+A Genome whose capabilityDelta improves the Genome lifecycle itself  
+(e.g., faster provider integration, lower UI-edit regression rate, better veto precision).  
+Meta-Genomes follow the identical certification path and cannot relax Act 1 invariants.
+
+---
+
+### 8. Relationship between Act 1 and Act 2
+
+| Aspect | Act 1 (Phase 9–10) | Act 2 |
+|--------|---------------------|-------|
+| Primary focus | Safe capability expansion | User-specific evolutionary self-modification |
+| Unit of change | Tools (MCP), payment rails | Orchestration Genome |
+| Personalization | None | First-class axis |
+| Self-modification depth | Tool generation only | UI, code, providers, workflows (bounded) |
+| Safety posture | Builds the substrate | Uses the substrate; never weakens it |
 
 Act 2 is unreachable until Act 1 is certified.  
 Act 2 never receives authority to weaken Act 1 invariants.
