@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExecutionKernelPort } from "@maestro/domain";
 import { evaluateEncoreCouncilTrigger, EncoreCouncilError, runEncoreCouncilReview } from "./encore-council.js";
 import { requestSemanticReview } from "./semantic-review.js";
@@ -80,12 +80,12 @@ describeDatabase("Encore Council with PostgreSQL", () => {
   });
 
   it("runs a genuinely multi-model review, records real model identities, and reaches proceed with no dissent", async () => {
-    const { goalId, evidenceId } = await setupGoalWithEvidence();
+    const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
     const kernel = fakeKernelWithVerdicts([
       { provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
       { provider: "openai", id: "gpt", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
     ]);
-    const result = await runEncoreCouncilReview(pool, kernel, { goalId, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
+    const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
     expect(result.synthesis.finalVerdict).toBe("proceed");
     expect(result.synthesis.sameModelOnly).toBe(false);
     expect(result.synthesis.escalated).toBe(false);
@@ -94,12 +94,12 @@ describeDatabase("Encore Council with PostgreSQL", () => {
   });
 
   it("escalates and preserves the dissent note when reviewers materially disagree", async () => {
-    const { goalId, evidenceId } = await setupGoalWithEvidence();
+    const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
     const kernel = fakeKernelWithVerdicts([
       { provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
       { provider: "openai", id: "gpt", text: JSON.stringify({ verdict: "do_not_proceed", confidence: "high", reasoning: "unsafe", conditions: [], dissentNote: "I believe this is unsafe", citedEvidenceIds: [evidenceId] }) },
     ]);
-    const result = await runEncoreCouncilReview(pool, kernel, { goalId, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
+    const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
     expect(result.synthesis.escalated).toBe(true);
     expect(result.synthesis.finalVerdict).toBe("escalate");
     expect(result.synthesis.dissentNotes).toEqual(["I believe this is unsafe"]);
@@ -109,18 +109,18 @@ describeDatabase("Encore Council with PostgreSQL", () => {
   });
 
   it("labels a same-model-only round honestly and rejects an evidence reference that is not durable", async () => {
-    const { goalId, evidenceId } = await setupGoalWithEvidence();
+    const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
     const kernel = fakeKernelWithVerdicts([
       { provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
       { provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
     ]);
-    const result = await runEncoreCouncilReview(pool, kernel, { goalId, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
+    const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
     expect(result.synthesis.sameModelOnly).toBe(true);
-    await expect(runEncoreCouncilReview(pool, kernel, { goalId, question: "q", criteria, evidenceIds: ["fabricated"], reviewerCount: 1 })).rejects.toBeInstanceOf(EncoreCouncilError);
+    await expect(runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "q", criteria, evidenceIds: ["fabricated"], reviewerCount: 1 })).rejects.toBeInstanceOf(EncoreCouncilError);
   });
 
   it("composes unsupported semantic uncertainty into a sealed same-model Council round", async () => {
-    const { goalId, evidenceId } = await setupGoalWithEvidence();
+    const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
     const councilAnswer = (verdict: string, dissentNote: string | null) => JSON.stringify({
       verdict, confidence: "high", reasoning: verdict === "proceed" ? "claim lacks support" : "uncertainty requires adjudication",
       conditions: [], dissentNote, citedEvidenceIds: [evidenceId],
@@ -163,7 +163,7 @@ describeDatabase("Encore Council with PostgreSQL", () => {
     expect(await evaluateEncoreCouncilTrigger(pool, goalId)).toContain("high_uncertainty_semantic_review");
 
     const result = await runEncoreCouncilReview(pool, kernel, {
-      goalId, question: "Should this unsupported claim be allowed to influence release?", criteria, evidenceIds: [evidenceId], reviewerCount: 3,
+      goalId, proof, question: "Should this unsupported claim be allowed to influence release?", criteria, evidenceIds: [evidenceId], reviewerCount: 3,
     });
     expect(result.judgments).toHaveLength(3);
     expect(result.judgments.every((judgment) => judgment.modelProvider === "prime" && judgment.modelId === "kimi")).toBe(true);
@@ -179,10 +179,24 @@ describeDatabase("Encore Council with PostgreSQL", () => {
     expect(Number(stored.rows[0]!.count)).toBe(3);
   });
 
+  it("rejects stale and paused Goal reviews before spawning any reviewer", async () => {
+    const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
+    const forged = { ...proof, fencingToken: "999999" };
+    const forgedKernel = fakeKernelWithVerdicts([]);
+    const forgedSpawn = vi.spyOn(forgedKernel, "spawn");
+    await expect(runEncoreCouncilReview(pool, forgedKernel, { goalId, proof: forged, question: "q", criteria, evidenceIds: [evidenceId], reviewerCount: 1 })).rejects.toThrow(/stale or invalid/);
+    expect(forgedSpawn).not.toHaveBeenCalled();
+    await pool.query("INSERT INTO goal_controls (project_id, goal_id, pause_requested_at, paused_at) SELECT project_id, goal_id, clock_timestamp(), clock_timestamp() FROM goals WHERE goal_id = $1", [goalId]);
+    const pausedKernel = fakeKernelWithVerdicts([]);
+    const pausedSpawn = vi.spyOn(pausedKernel, "spawn");
+    await expect(runEncoreCouncilReview(pool, pausedKernel, { goalId, proof, question: "q", criteria, evidenceIds: [evidenceId], reviewerCount: 1 })).rejects.toThrow(/paused/);
+    expect(pausedSpawn).not.toHaveBeenCalled();
+  });
+
   it("rejects direct tampering with immutable Encore Council records", async () => {
-    const { goalId, evidenceId } = await setupGoalWithEvidence();
+    const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
     const kernel = fakeKernelWithVerdicts([{ provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) }]);
-    const result = await runEncoreCouncilReview(pool, kernel, { goalId, question: "q", criteria, evidenceIds: [evidenceId], reviewerCount: 1 });
+    const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "q", criteria, evidenceIds: [evidenceId], reviewerCount: 1 });
     await expect(pool.query("UPDATE encore_council_syntheses SET final_verdict = 'proceed' WHERE round_id = $1", [result.roundId])).rejects.toThrow();
     await expect(pool.query("UPDATE encore_council_judgments SET verdict = 'escalate' WHERE round_id = $1", [result.roundId])).rejects.toThrow();
   });

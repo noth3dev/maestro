@@ -603,11 +603,11 @@ async function lockGoal(client: PoolClient, proof: GoalLeaseProof): Promise<void
 }
 
 /** A valid lease alone does not authorize Council writes once a Goal is paused, stopping, stopped, or emergency-stopped. */
-export async function assertGoalControlOpen(client: PoolClient, goalId: string): Promise<void> {
+export async function assertGoalControlOpen(client: PoolClient, goalId: string, allowedStates: readonly string[] = ["active"]): Promise<void> {
   const goalRow = await client.query<{ project_id: string; state: string }>("SELECT project_id, state FROM goals WHERE goal_id = $1 FOR KEY SHARE", [goalId]);
   if (goalRow.rowCount !== 1) throw new CouncilProtocolError("Goal not found for Council authority check");
   const { project_id: projectId, state } = goalRow.rows[0]!;
-  if (state !== "active") throw new CouncilProtocolError(`Goal is ${state}, not active; Council writes are denied`);
+  if (!allowedStates.includes(state)) throw new CouncilProtocolError(`Goal is ${state}, not an allowed active state; Council writes are denied`);
   // A Goal with no explicit control action yet is implicitly open, matching
   // authority.ts's recheckControl default. Ensure the row exists so the lock
   // below is against durable truth, not an absent row a concurrent writer

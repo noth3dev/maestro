@@ -22,6 +22,17 @@ export interface EvidenceBundle {
   readonly budgetReservations: readonly Readonly<Record<string, unknown>>[];
   /** Full durable evidence metadata referenced by certification and replay. */
   readonly evidenceRecords: readonly Readonly<Record<string, unknown>>[];
+  /** Durable authority decisions and grants/approvals used by the Goal. */
+  readonly actualCosts: readonly Readonly<Record<string, unknown>>[];
+  readonly authorityRecords: readonly Readonly<Record<string, unknown>>[];
+  readonly authorityDecisions: readonly Readonly<Record<string, unknown>>[];
+  /** Sealed Council brief material and the activation history that led to it. */
+  readonly councilBriefs: readonly Readonly<Record<string, unknown>>[];
+  readonly headParticipation: Readonly<{
+    participations: readonly Readonly<Record<string, unknown>>[];
+    activationAttempts: readonly Readonly<Record<string, unknown>>[];
+    activationEdges: readonly Readonly<Record<string, unknown>>[];
+  }>;
   readonly assembledAt: string;
 }
 

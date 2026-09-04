@@ -51,10 +51,10 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       printGoal(io.stdout, result, json);
       return 0;
     }
-    if (resource === "metronome-challenges" && action === "list") { const result=await client.listMetronomeChallenges(string("goal-id")); printState(io.stdout,result,json); return 0; }
-    if (resource === "encore-council" && action === "list") { const result=await client.listEncoreCouncilRounds(string("goal-id")); printState(io.stdout,result,json); return 0; }
-    if (resource === "certifications" && action === "list") { const result=await client.listCertifications(string("goal-id")); printState(io.stdout,result,json); return 0; }
-    if (resource === "concertmaster-report" && action === "get") { const result=await client.getConcertmasterReport(string("goal-id")); printState(io.stdout,result,json); return 0; }
+    if (resource === "metronome-challenges" && action === "list") { const result=await client.listMetronomeChallenges(string("goal-id"), { projectId: string("project-id") }); printState(io.stdout,result,json); return 0; }
+    if (resource === "encore-council" && action === "list") { const result=await client.listEncoreCouncilRounds(string("goal-id"), { projectId: string("project-id") }); printState(io.stdout,result,json); return 0; }
+    if (resource === "certifications" && action === "list") { const result=await client.listCertifications(string("goal-id"), { projectId: string("project-id") }); printState(io.stdout,result,json); return 0; }
+    if (resource === "concertmaster-report" && action === "get") { const result=await client.getConcertmasterReport(string("goal-id"), { projectId: string("project-id") }); printState(io.stdout,result,json); return 0; }
     if (resource === "events" && action === "list") {
       const page = await client.listEvents({ projectId: string("project-id"), after: value("after") === undefined ? "0" : string("after") });
       if (json) io.stdout(`${JSON.stringify(page)}\n`);

@@ -13,6 +13,7 @@ import { runEncoreCouncilReview } from "./encore-council.js";
 const criteria = [{ criterionId: "safety", description: "preserve safety invariants" }];
 const goalId = "goal-1";
 const evidenceId = "evidence-1";
+const proof = { goalId, ownerId: "owner-1", fencingToken: "1" };
 
 function fakePool(): Pool {
   const query = vi.fn(async (sql: string) => {
@@ -24,7 +25,18 @@ function fakePool(): Pool {
     if (sql.includes("FROM semantic_reviews")) return { rowCount: 1, rows: [{ count: "0" }] };
     throw new Error(`Unexpected pool query: ${sql}`);
   });
-  const clientQuery = vi.fn(async () => ({ rowCount: 1, rows: [] }));
+  const clientQuery = vi.fn(async (sql: string) => {
+    if (sql.startsWith("SELECT 1 FROM goal_leases")) return { rowCount: 1, rows: [{}] };
+    if (sql.startsWith("SELECT project_id, state FROM goals")) return { rowCount: 1, rows: [{ project_id: "project-1", state: "active" }] };
+    if (sql.startsWith("INSERT INTO goal_controls")) return { rowCount: 1, rows: [] };
+    if (sql.startsWith("SELECT pause_requested_at")) return { rowCount: 1, rows: [{ pause_requested_at: null, paused_at: null, stopping_at: null, stopped_at: null, emergency_stopped_at: null }] };
+    if (sql.startsWith("SELECT project_id FROM goals")) return { rowCount: 1, rows: [{ project_id: "project-1" }] };
+    if (sql.startsWith("SELECT evidence_id, sha256 FROM evidence_records")) return { rowCount: 1, rows: [{ evidence_id: evidenceId, sha256: "sha-1" }] };
+    if (sql.startsWith("SELECT decision_packet FROM head_councils")) return { rowCount: 0, rows: [] };
+    if (sql.includes("FROM metronome_challenges")) return { rowCount: 1, rows: [{ count: "0" }] };
+    if (sql.includes("FROM semantic_reviews")) return { rowCount: 1, rows: [{ count: "0" }] };
+    return { rowCount: 1, rows: [] };
+  });
   const client = { query: clientQuery, release: vi.fn() } as unknown as PoolClient;
   const connect = vi.fn(async () => client);
   return { query, connect } as unknown as Pool;
@@ -109,6 +121,7 @@ describe("Encore Council execution", () => {
 
     const result = await runEncoreCouncilReview(fakePool(), kernel, {
       goalId,
+      proof,
       question: "should we proceed?",
       criteria,
       evidenceIds: [evidenceId],
@@ -140,6 +153,7 @@ describe("Encore Council execution", () => {
 
     const result = await runEncoreCouncilReview(fakePool(), kernel, {
       goalId,
+      proof,
       question: "should we proceed?",
       criteria,
       evidenceIds: [evidenceId],
@@ -164,6 +178,7 @@ describe("Encore Council execution", () => {
 
     const result = await runEncoreCouncilReview(fakePool(), kernel, {
       goalId,
+      proof,
       question: "should we proceed?",
       criteria,
       evidenceIds: [evidenceId],

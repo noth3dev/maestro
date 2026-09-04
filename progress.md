@@ -1048,3 +1048,37 @@ HEAD
 - Added real ephemeral-repository regressions for expired, forged-actor, and out-of-scope grants;
   each is rejected before a branch appears. Focused Git tests passed 11/11 and `npm run build`
   passed. Full disposable-PostgreSQL verification remains the next gate before commit.
+
+
+## 2026-09-04 (continued) — Phase 3 items 1-2 guarded aggregation effects resolved
+- Added `withGoalAuthority`, a shared transaction helper that validates the exact Goal lease proof,
+  locks the lease and control rows, and checks pause/stop/emergency-stop state before work begins.
+- `assembleEvidenceBundle`/`recordEvidenceBundle`, `generateConcertmasterFinalReport`, and
+  `runEncoreCouncilReview` now require a `GoalLeaseProof`. Evidence and report assembly use the
+  locked client for all reads and writes; the report's evidence bundle and report row commit together.
+  Encore reviewer provider work and sealed-round writes stay inside the same authorized transaction.
+- Added real-PostgreSQL stale-token and paused-Goal regressions for each module. Focused verification
+  passed **19/19** (evidence bundle 4, Concertmaster report 7, Encore Council 8); build passed.
+- The guard permits `active` and `certifying` Goals for aggregation/report effects, while all pause,
+  stop, and emergency-stop latches remain fail-closed. Next: Phase 3 item 3 report idempotency.
+
+
+## 2026-09-04 (continued) — Phase 3 items 3-4 report integrity and replay completeness resolved
+- Added migration `0037_concertmaster_report_goal_uniqueness.sql` with a unique final-report-per-Goal
+  index. Report generation now returns the immutable existing report on retries while holding the
+  Goal authority transaction, preventing duplicate reports and duplicate evidence snapshots.
+- Extended the evidence bundle with durable authority records/decisions, sealed Council brief
+  payloads, and Head participation/activation history. The report documents and atomically commits
+  its explicit link to the immutable bundle rather than creating a circular self-reference.
+- Added repeat-generation and replay-source assertions to the real-PostgreSQL report/evidence tests.
+  Build and focused report/evidence verification passed; full disposable-PostgreSQL verification is
+  the next gate for this combined slice. Phase 3 budget correctness is now covered by immutable actual-cost accumulation and a report blocker; next open Phase 3 item is read-route project authorization.
+
+
+## 2026-09-04 (continued) — Phase 3 item 6 derived-read IDOR closed
+- Added mandatory `projectId` to Metronome, Encore Council, certification, and Concertmaster report
+  read contracts. The HTTP membership hook rejects a cross-project binding before the read handler,
+  while `createReadStateService` independently verifies the Goal/project pair against PostgreSQL.
+- Updated the typed API client and CLI so every derived Goal read supplies the project binding.
+- Added real app/API/CLI parity coverage for all four cross-project attempts; build and focused
+  server/CLI/API tests pass.

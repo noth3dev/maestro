@@ -14,12 +14,20 @@ export * from "./worker.js";
 export * from "./team-lead-grant.js";
 export * from "./git-integration.js";
 export * from "./budget-reservation.js";
+export * from "./actual-cost.js";
 export * from "./metronome.js";
 export * from "./metronome-challenge.js";
 export * from "./semantic-review.js";
 export * from "./encore-council.js";
 export * from "./certification.js";
-export * from "./evidence-bundle.js";
+export {
+  EvidenceBundleError,
+  EvidenceBundleNotFoundError,
+  assembleEvidenceBundle,
+  recordEvidenceBundle,
+  readEvidenceBundle,
+  verifyStoredEvidenceBundle,
+} from "./evidence-bundle.js";
 export * from "./concertmaster-report.js";
 export * from "./environment.js";
 export * from "./device.js";

@@ -186,7 +186,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     const quality = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: evidenceIds }, "quality", proof, headContext("quality"));
     expect(quality.verdict).toBe("passed");
 
-    const bundle = await recordEvidenceBundle(pool, goalId);
+    const bundle = await recordEvidenceBundle(pool, goalId, proof);
     await verifyStoredEvidenceBundle(pool, bundle.bundleId);
     expect(bundle.hash).toMatch(/^[0-9a-f]{64}$/);
 
@@ -201,7 +201,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     const finalGoal = await pool.query<{ state: string }>("SELECT state FROM goals WHERE goal_id = $1", [goalId]);
     expect(finalGoal.rows[0]!.state).toBe("certifying");
 
-    const report = await generateConcertmasterFinalReport(pool, goalId);
+    const report = await generateConcertmasterFinalReport(pool, goalId, proof);
     expect(report.success).toBe(true);
     expect(report.evidenceBundleId).not.toBe(bundle.bundleId);
     await verifyStoredEvidenceBundle(pool, report.evidenceBundleId);

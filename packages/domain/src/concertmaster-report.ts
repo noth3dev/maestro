@@ -8,7 +8,8 @@ export type CertificationCompletenessBlockerReason =
   | "missing_integrated_revision"
   | "unverifiable_integrated_revision"
   | "unresolved_certification_conflict"
-  | "unresolved_challenge";
+  | "unresolved_challenge"
+  | "budget_exceeded";
 
 export interface CertificationCompletenessBlocker {
   readonly reason: CertificationCompletenessBlockerReason;
@@ -51,6 +52,9 @@ export interface CertificationCompletenessFacts {
   /** These facts are intentionally separate from certification records. */
   readonly workers?: readonly WorkerExecutionFact[];
   readonly unresolvedCertificationConflict?: boolean;
+  /** Actual incurred spend is distinct from planning reservations. */
+  readonly actualCostCents?: number;
+  readonly budgetCents?: number;
 }
 
 /**
@@ -106,6 +110,9 @@ export function evaluateCertificationCompleteness(facts: CertificationCompletene
   }
   if (facts.openChallengeCount > 0) {
     blockers.push({ reason: "unresolved_challenge", detail: `${facts.openChallengeCount} unresolved Metronome challenge(s)` });
+  }
+  if (facts.actualCostCents !== undefined && facts.budgetCents !== undefined && facts.actualCostCents > facts.budgetCents) {
+    blockers.push({ reason: "budget_exceeded", detail: `Actual cost ${facts.actualCostCents} cents exceeds the Goal budget ${facts.budgetCents} cents` });
   }
   return blockers;
 }

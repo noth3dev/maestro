@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { certificationsConflict, evaluateCertificationCompleteness, requiredConditionalCertifications, taskContractContentHash, type CertificationRecordFact } from "@maestro/domain";
 import type { EvidenceContentReader } from "@maestro/evidence";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
+import type { GoalLeaseProof } from "./commands.js";
+import { withGoalAuthority } from "./goal-authority.js";
 import { isCertificationConflictResolved } from "./certification.js";
-import { recordEvidenceBundle } from "./evidence-bundle.js";
+import { recordEvidenceBundleInTransaction } from "./evidence-bundle.js";
 
 export class ConcertmasterReportError extends Error {}
 
@@ -27,13 +29,32 @@ export interface ConcertmasterFinalReport {
   readonly evidenceBundleId: string;
 }
 
+interface StoredConcertmasterFinalReport {
+  report_id: string; goal_id: string; success: boolean; blockers: { reason: string; detail: string }[]; ceo_request: string; what_changed: string;
+  user_visible_behavior_passed: boolean; participating_departments: string[]; key_decisions: string[]; dissent: string[]; independent_validation: string[];
+  cost_cents: string; budget_cents: string; incidents: string[]; known_limitations: string[]; critical_action_awaiting_approval: boolean; evidence_bundle_id: string;
+}
+
+function mapConcertmasterFinalReport(row: StoredConcertmasterFinalReport): ConcertmasterFinalReport {
+  return {
+    reportId: row.report_id, goalId: row.goal_id, success: row.success, blockers: row.blockers, ceoRequest: row.ceo_request, whatChanged: row.what_changed,
+    userVisibleBehaviorPassed: row.user_visible_behavior_passed, participatingDepartments: row.participating_departments, keyDecisions: row.key_decisions,
+    dissent: row.dissent, independentValidation: row.independent_validation, costCents: Number(row.cost_cents), budgetCents: Number(row.budget_cents),
+    incidents: row.incidents, knownLimitations: row.known_limitations, criticalActionAwaitingApproval: row.critical_action_awaiting_approval, evidenceBundleId: row.evidence_bundle_id,
+  };
+}
+
 /**
  * Generates Concertmaster's final report. Success is determined only by durable worker
  * outcomes/acceptances, a frozen Goal integration revision, and current
  * certification rows. Plan completion percentage and worker self-report are
  * never used as substitutes for those facts.
  */
-export async function generateConcertmasterFinalReport(pool: Pool, goalId: string, content?: EvidenceContentReader): Promise<ConcertmasterFinalReport> {
+async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goalId: string, content?: EvidenceContentReader): Promise<ConcertmasterFinalReport> {
+  // Final reports are immutable and unique per Goal. Return the committed
+  // artifact on retries instead of creating another evidence snapshot.
+  const existing = await pool.query<StoredConcertmasterFinalReport>("SELECT * FROM concertmaster_final_reports WHERE goal_id = $1", [goalId]);
+  if (existing.rowCount === 1) return mapConcertmasterFinalReport(existing.rows[0]!);
   const councilRow = await pool.query<{
     council_id: string; contract_id: string; decision_packet: Record<string, unknown> | null;
     snapshot_payload: Record<string, unknown>; snapshot_hash: string;
@@ -170,6 +191,10 @@ export async function generateConcertmasterFinalReport(pool: Pool, goalId: strin
   if (snapshotContract.contractId !== council.contract_id || Number(snapshotContract.version) !== Number(contract.version) || snapshotContract.contentHash !== expectedHash || !contractHashValid || contract.launch_state !== "launched") {
     lineageBlockers.push({ reason: "certification_identity_mismatch", detail: "Resolved Council is not bound to the current launched Task Contract identity" });
   }
+  const goalReservation = await pool.query<{ amount_cents: string }>("SELECT amount_cents FROM budget_reservations WHERE goal_id = $1 AND scope = 'goal' ORDER BY created_at DESC LIMIT 1", [goalId]);
+  const actualCost = await pool.query<{ total: string }>("SELECT COALESCE(sum(amount_cents), 0)::bigint AS total FROM goal_actual_costs WHERE goal_id = $1", [goalId]);
+  const budgetCents = Number(goalReservation.rows[0]?.amount_cents ?? 0);
+  const actualCostCents = Number(actualCost.rows[0]!.total);
   const evaluated = evaluateCertificationCompleteness({
     requiredKinds, records, openChallengeCount: Number(openChallenges.rows[0]!.count),
     expectedContractId: council.contract_id, expectedContractVersion: Number(contract.version), expectedContractContentHash: expectedHash,
@@ -177,6 +202,8 @@ export async function generateConcertmasterFinalReport(pool: Pool, goalId: strin
     hasFrozenIntegratedRevision: frozenRevision,
     workers: workers.rows.map((worker) => ({ workerId: worker.worker_id, status: worker.status, hasDepartmentAcceptance: worker.acceptance_id !== null, acceptanceBoundToIntegratedRevision: worker.included })),
     unresolvedCertificationConflict: conflict && !conflictResolved,
+    actualCostCents,
+    budgetCents,
   });
   const blockers = [...lineageBlockers, ...evaluated];
   const success = blockers.length === 0;
@@ -191,8 +218,6 @@ export async function generateConcertmasterFinalReport(pool: Pool, goalId: strin
     ? (commits.rows.length === 0 ? "No frozen integrated revision recorded" : `No frozen integrated revision recorded; worker commits: ${commits.rows.map((row) => `${row.commit_sha.trim().slice(0, 12)}: ${row.message}`).join("; ")}`)
     : `${currentRevision.commit_sha.trim().slice(0, 12)}: ${commits.rows.map((row) => row.message).join("; ") || "integrated revision frozen"}`;
 
-  const goalReservation = await pool.query<{ amount_cents: string }>("SELECT amount_cents FROM budget_reservations WHERE goal_id = $1 AND scope = 'goal' ORDER BY created_at DESC LIMIT 1", [goalId]);
-  const departmentSpend = await pool.query<{ total: string }>("SELECT COALESCE(sum(amount_cents), 0)::bigint AS total FROM budget_reservations WHERE goal_id = $1 AND scope = 'department'", [goalId]);
 
   const findings = await pool.query<{ rule_id: string; evidence_identity: string; resolved_at: Date | null }>("SELECT rule_id, evidence_identity, resolved_at FROM metronome_findings WHERE goal_id = $1", [goalId]);
   const incidents = findings.rows.map((row) => `${row.rule_id}: ${row.evidence_identity}`);
@@ -206,7 +231,12 @@ export async function generateConcertmasterFinalReport(pool: Pool, goalId: strin
     .concat(conflict && !conflictResolved ? ["unresolved: conflicting certifications"] : []);
   const criticalActionAwaitingApproval = records.some((record) => record.hasUnwaivedCriticalFinding);
 
-  const { bundleId } = await recordEvidenceBundle(pool, goalId, content);
+  // The evidence bundle is the immutable input snapshot and the final report
+  // is the top-level artifact that points to it. Including the report inside
+  // that same bundle would create a self-reference through evidenceBundleId;
+  // both rows commit atomically below, so replay has an explicit link without
+  // a circular hash.
+  const { bundleId } = await recordEvidenceBundleInTransaction(pool, goalId, content);
   const reportId = randomUUID();
   await pool.query(
     `INSERT INTO concertmaster_final_reports (report_id, goal_id, success, blockers, ceo_request, what_changed, user_visible_behavior_passed, participating_departments, key_decisions, dissent, independent_validation, cost_cents, budget_cents, incidents, known_limitations, critical_action_awaiting_approval, evidence_bundle_id)
@@ -216,7 +246,7 @@ export async function generateConcertmasterFinalReport(pool: Pool, goalId: strin
       latestByKind.get("quality")?.verdict === "passed", JSON.stringify(participatingDepartments),
       JSON.stringify(packet?.selectedDirection !== undefined ? [packet.selectedDirection] : []), JSON.stringify(packet?.dissent ?? []),
       JSON.stringify(records.map((record) => `${record.kind}: ${record.verdict}`)),
-      Number(departmentSpend.rows[0]!.total), Number(goalReservation.rows[0]?.amount_cents ?? 0),
+      actualCostCents, budgetCents,
       JSON.stringify(incidents), JSON.stringify(knownLimitations), criticalActionAwaitingApproval, bundleId,
     ],
   );
@@ -226,23 +256,19 @@ export async function generateConcertmasterFinalReport(pool: Pool, goalId: strin
     userVisibleBehaviorPassed: latestByKind.get("quality")?.verdict === "passed", participatingDepartments,
     keyDecisions: packet?.selectedDirection !== undefined ? [packet.selectedDirection] : [], dissent: packet?.dissent ?? [],
     independentValidation: records.map((record) => `${record.kind}: ${record.verdict}`),
-    costCents: Number(departmentSpend.rows[0]!.total), budgetCents: Number(goalReservation.rows[0]?.amount_cents ?? 0),
+    costCents: actualCostCents, budgetCents,
     incidents, knownLimitations, criticalActionAwaitingApproval, evidenceBundleId: bundleId,
   };
 }
 
+/** Generates and stores the report while holding the Goal lease/control locks. */
+export async function generateConcertmasterFinalReport(pool: Pool, goalId: string, proof: GoalLeaseProof, content?: EvidenceContentReader): Promise<ConcertmasterFinalReport> {
+  if (proof.goalId !== goalId) throw new ConcertmasterReportError("Concertmaster report Goal identity mismatch");
+  return withGoalAuthority(pool, proof, 42, (client) => generateConcertmasterFinalReportWithClient(client, goalId, content));
+}
+
 export async function readConcertmasterFinalReport(pool: Pool, reportId: string): Promise<ConcertmasterFinalReport> {
-  const result = await pool.query<{
-    report_id: string; goal_id: string; success: boolean; blockers: { reason: string; detail: string }[]; ceo_request: string; what_changed: string;
-    user_visible_behavior_passed: boolean; participating_departments: string[]; key_decisions: string[]; dissent: string[]; independent_validation: string[];
-    cost_cents: string; budget_cents: string; incidents: string[]; known_limitations: string[]; critical_action_awaiting_approval: boolean; evidence_bundle_id: string;
-  }>("SELECT * FROM concertmaster_final_reports WHERE report_id = $1", [reportId]);
+  const result = await pool.query<StoredConcertmasterFinalReport>("SELECT * FROM concertmaster_final_reports WHERE report_id = $1", [reportId]);
   if (result.rowCount !== 1) throw new ConcertmasterReportError(`Concertmaster final report not found: ${reportId}`);
-  const row = result.rows[0]!;
-  return {
-    reportId: row.report_id, goalId: row.goal_id, success: row.success, blockers: row.blockers, ceoRequest: row.ceo_request, whatChanged: row.what_changed,
-    userVisibleBehaviorPassed: row.user_visible_behavior_passed, participatingDepartments: row.participating_departments, keyDecisions: row.key_decisions,
-    dissent: row.dissent, independentValidation: row.independent_validation, costCents: Number(row.cost_cents), budgetCents: Number(row.budget_cents),
-    incidents: row.incidents, knownLimitations: row.known_limitations, criticalActionAwaitingApproval: row.critical_action_awaiting_approval, evidenceBundleId: row.evidence_bundle_id,
-  };
+  return mapConcertmasterFinalReport(result.rows[0]!);
 }
