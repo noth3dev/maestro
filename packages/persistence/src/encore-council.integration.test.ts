@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { ExecutionKernelPort } from "@maestro/domain";
-import { evaluateOverwatchCouncilTrigger, OverwatchCouncilError, runOverwatchCouncilReview } from "./overwatch-council.js";
+import { evaluateEncoreCouncilTrigger, EncoreCouncilError, runEncoreCouncilReview } from "./encore-council.js";
 import { requestSemanticReview } from "./semantic-review.js";
 import { acquireGoalLease } from "./commands.js";
 import { bootstrapPermanentOrganization } from "./organization.js";
@@ -13,7 +13,7 @@ const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
 
 const criteria = [{ criterionId: "safety", description: "does this preserve safety invariants" }];
-const sentinelContext = (label: string) => ({ actorId: "  overwatch-sentinel  ", sessionRef: `sentinel-session:${label}`, commandId: randomUUID() });
+const sentinelContext = (label: string) => ({ actorId: "  encore-sentinel  ", sessionRef: `sentinel-session:${label}`, commandId: randomUUID() });
 
 function fakeKernelWithVerdicts(verdicts: readonly { provider: string; id: string; text: string }[]): ExecutionKernelPort {
   let counter = 0;
@@ -41,7 +41,7 @@ function fakeKernelWithVerdicts(verdicts: readonly { provider: string; id: strin
   };
 }
 
-describeDatabase("Overwatch Council with PostgreSQL", () => {
+describeDatabase("Encore Council with PostgreSQL", () => {
   const pool = new Pool({ connectionString: databaseUrl });
 
   async function setupGoalWithEvidence() {
@@ -57,25 +57,25 @@ describeDatabase("Overwatch Council with PostgreSQL", () => {
   }
 
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS overwatch_council_syntheses, overwatch_council_judgments, overwatch_council_rounds, semantic_reviews, sentinel_challenge_findings, sentinel_challenges, sentinel_findings, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, departments, organization_groups, permanent_roles, permanent_head_roles, role_persona_axes, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
+    await pool.query("DROP TABLE IF EXISTS encore_council_syntheses, encore_council_judgments, encore_council_rounds, semantic_reviews, sentinel_challenge_findings, sentinel_challenges, sentinel_findings, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, departments, organization_groups, permanent_roles, permanent_head_roles, role_persona_axes, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
     await applyAllMigrations(pool);
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE overwatch_council_syntheses, overwatch_council_judgments, overwatch_council_rounds, semantic_reviews, sentinel_challenge_findings, sentinel_challenges, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals RESTART IDENTITY CASCADE");
+    await pool.query("TRUNCATE encore_council_syntheses, encore_council_judgments, encore_council_rounds, semantic_reviews, sentinel_challenge_findings, sentinel_challenges, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals RESTART IDENTITY CASCADE");
     await bootstrapPermanentOrganization(pool);
   });
   afterAll(async () => { await pool.end(); });
 
   it("does not report a trigger for a routine Goal with no signals", async () => {
     const { goalId } = await setupGoalWithEvidence();
-    const triggers = await evaluateOverwatchCouncilTrigger(pool, goalId);
+    const triggers = await evaluateEncoreCouncilTrigger(pool, goalId);
     expect(triggers).toHaveLength(0);
   });
 
   it("reports the unresolved-challenge trigger once a Sentinel challenge is open", async () => {
     const { goalId, proof } = await setupGoalWithEvidence();
     await raiseSentinelChallenge(pool, goalId, [], { reason: "concern", evidenceReferences: [] }, proof, sentinelContext("trigger"));
-    const triggers = await evaluateOverwatchCouncilTrigger(pool, goalId);
+    const triggers = await evaluateEncoreCouncilTrigger(pool, goalId);
     expect(triggers).toContain("unresolved_sentinel_challenge");
   });
 
@@ -85,11 +85,11 @@ describeDatabase("Overwatch Council with PostgreSQL", () => {
       { provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
       { provider: "openai", id: "gpt", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
     ]);
-    const result = await runOverwatchCouncilReview(pool, kernel, { goalId, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
+    const result = await runEncoreCouncilReview(pool, kernel, { goalId, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
     expect(result.synthesis.finalVerdict).toBe("proceed");
     expect(result.synthesis.sameModelOnly).toBe(false);
     expect(result.synthesis.escalated).toBe(false);
-    const models = await pool.query("SELECT model_provider, model_id FROM overwatch_council_judgments WHERE round_id = $1 ORDER BY reviewer_index", [result.roundId]);
+    const models = await pool.query("SELECT model_provider, model_id FROM encore_council_judgments WHERE round_id = $1 ORDER BY reviewer_index", [result.roundId]);
     expect(models.rows).toEqual([{ model_provider: "prime", model_id: "kimi" }, { model_provider: "openai", model_id: "gpt" }]);
   });
 
@@ -99,11 +99,11 @@ describeDatabase("Overwatch Council with PostgreSQL", () => {
       { provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
       { provider: "openai", id: "gpt", text: JSON.stringify({ verdict: "do_not_proceed", confidence: "high", reasoning: "unsafe", conditions: [], dissentNote: "I believe this is unsafe", citedEvidenceIds: [evidenceId] }) },
     ]);
-    const result = await runOverwatchCouncilReview(pool, kernel, { goalId, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
+    const result = await runEncoreCouncilReview(pool, kernel, { goalId, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
     expect(result.synthesis.escalated).toBe(true);
     expect(result.synthesis.finalVerdict).toBe("escalate");
     expect(result.synthesis.dissentNotes).toEqual(["I believe this is unsafe"]);
-    const synthesisRow = await pool.query("SELECT escalated, dissent_notes FROM overwatch_council_syntheses WHERE round_id = $1", [result.roundId]);
+    const synthesisRow = await pool.query("SELECT escalated, dissent_notes FROM encore_council_syntheses WHERE round_id = $1", [result.roundId]);
     expect(synthesisRow.rows[0]!.escalated).toBe(true);
     expect(synthesisRow.rows[0]!.dissent_notes).toEqual(["I believe this is unsafe"]);
   });
@@ -114,9 +114,9 @@ describeDatabase("Overwatch Council with PostgreSQL", () => {
       { provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
       { provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
     ]);
-    const result = await runOverwatchCouncilReview(pool, kernel, { goalId, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
+    const result = await runEncoreCouncilReview(pool, kernel, { goalId, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
     expect(result.synthesis.sameModelOnly).toBe(true);
-    await expect(runOverwatchCouncilReview(pool, kernel, { goalId, question: "q", criteria, evidenceIds: ["fabricated"], reviewerCount: 1 })).rejects.toBeInstanceOf(OverwatchCouncilError);
+    await expect(runEncoreCouncilReview(pool, kernel, { goalId, question: "q", criteria, evidenceIds: ["fabricated"], reviewerCount: 1 })).rejects.toBeInstanceOf(EncoreCouncilError);
   });
 
   it("composes unsupported semantic uncertainty into a sealed same-model Council round", async () => {
@@ -137,8 +137,8 @@ describeDatabase("Overwatch Council with PostgreSQL", () => {
     const kernel: ExecutionKernelPort = {
       async spawn() { const execution = `council-round-exec-${next}`; executions.set(execution, `council-round-inv-${next}`); next += 1; return { execution: execution as never, invocation: executions.get(execution) as never }; },
       async prompt(execution, prompt) {
-        if (prompt.includes("Overwatch Council reviewers")) {
-          const count = await pool.query("SELECT count(*)::int AS count FROM overwatch_council_judgments");
+        if (prompt.includes("Encore Council reviewers")) {
+          const count = await pool.query("SELECT count(*)::int AS count FROM encore_council_judgments");
           sealedCounts.push(Number(count.rows[0]!.count));
         }
       },
@@ -160,9 +160,9 @@ describeDatabase("Overwatch Council with PostgreSQL", () => {
     const semantic = await requestSemanticReview(pool, kernel, goalId, "the release is safe", criteria);
     expect(semantic.verdict).toBe("unsupported");
     expect(semantic.citedEvidenceIds).toEqual([]);
-    expect(await evaluateOverwatchCouncilTrigger(pool, goalId)).toContain("high_uncertainty_semantic_review");
+    expect(await evaluateEncoreCouncilTrigger(pool, goalId)).toContain("high_uncertainty_semantic_review");
 
-    const result = await runOverwatchCouncilReview(pool, kernel, {
+    const result = await runEncoreCouncilReview(pool, kernel, {
       goalId, question: "Should this unsupported claim be allowed to influence release?", criteria, evidenceIds: [evidenceId], reviewerCount: 3,
     });
     expect(result.judgments).toHaveLength(3);
@@ -175,15 +175,15 @@ describeDatabase("Overwatch Council with PostgreSQL", () => {
     expect(result.synthesis.sameModelOnly ? "same-model-independent-review" : "multi-model-independent-review").toBe("same-model-independent-review");
     // No judgment is persisted until every isolated reviewer has answered.
     expect(sealedCounts).toEqual([0, 0, 0]);
-    const stored = await pool.query("SELECT count(*)::int AS count FROM overwatch_council_judgments");
+    const stored = await pool.query("SELECT count(*)::int AS count FROM encore_council_judgments");
     expect(Number(stored.rows[0]!.count)).toBe(3);
   });
 
-  it("rejects direct tampering with immutable Overwatch Council records", async () => {
+  it("rejects direct tampering with immutable Encore Council records", async () => {
     const { goalId, evidenceId } = await setupGoalWithEvidence();
     const kernel = fakeKernelWithVerdicts([{ provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) }]);
-    const result = await runOverwatchCouncilReview(pool, kernel, { goalId, question: "q", criteria, evidenceIds: [evidenceId], reviewerCount: 1 });
-    await expect(pool.query("UPDATE overwatch_council_syntheses SET final_verdict = 'proceed' WHERE round_id = $1", [result.roundId])).rejects.toThrow();
-    await expect(pool.query("UPDATE overwatch_council_judgments SET verdict = 'escalate' WHERE round_id = $1", [result.roundId])).rejects.toThrow();
+    const result = await runEncoreCouncilReview(pool, kernel, { goalId, question: "q", criteria, evidenceIds: [evidenceId], reviewerCount: 1 });
+    await expect(pool.query("UPDATE encore_council_syntheses SET final_verdict = 'proceed' WHERE round_id = $1", [result.roundId])).rejects.toThrow();
+    await expect(pool.query("UPDATE encore_council_judgments SET verdict = 'escalate' WHERE round_id = $1", [result.roundId])).rejects.toThrow();
   });
 });

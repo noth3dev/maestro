@@ -52,7 +52,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       return 0;
     }
     if (resource === "sentinel-challenges" && action === "list") { const result=await client.listSentinelChallenges(string("goal-id")); printState(io.stdout,result,json); return 0; }
-    if (resource === "overwatch-council" && action === "list") { const result=await client.listOverwatchCouncilRounds(string("goal-id")); printState(io.stdout,result,json); return 0; }
+    if (resource === "encore-council" && action === "list") { const result=await client.listEncoreCouncilRounds(string("goal-id")); printState(io.stdout,result,json); return 0; }
     if (resource === "certifications" && action === "list") { const result=await client.listCertifications(string("goal-id")); printState(io.stdout,result,json); return 0; }
     if (resource === "sane-report" && action === "get") { const result=await client.getSaneReport(string("goal-id")); printState(io.stdout,result,json); return 0; }
     if (resource === "events" && action === "list") {

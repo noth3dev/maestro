@@ -167,12 +167,12 @@ export async function assertSentinelMutationAuthorized(
   );
   if (activeHead.rowCount === 1) return;
 
-  // Sane and Overwatch Council are permanent organization identities rather
+  // Sane and Encore Council are permanent organization identities rather
   // than Department participations. They remain valid non-Sentinel resolvers,
   // but still require the Goal lease and a nonblank session proof.
   const systemRole = await client.query(
     `SELECT 1 FROM permanent_roles
-      WHERE btrim(role_id) = $1 AND role_kind IN ('sane', 'overwatch_council')
+      WHERE btrim(role_id) = $1 AND role_kind IN ('sane', 'encore_council')
       FOR KEY SHARE`,
     [actorId],
   );

@@ -20,7 +20,7 @@ function buildAuthenticatedServer(goalService: GoalService, authenticator: Opera
 const event = { cursor: "9007199254740993", eventId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02", projectId: goal.projectId, goalId: goal.goalId, aggregateVersion: "1", eventType: "GoalCreated", schemaVersion: 1, payload: { state: "draft" }, occurredAt: "2025-01-01T00:00:00.000Z" };
 function fakeEvents(overrides: Partial<EventService> = {}): EventService { return { listEvents: async () => [event], ...overrides }; }
 
-const state: ReadStateService = { listSentinelChallenges: async () => [{ challengeId: goal.goalId, goalId: goal.goalId, reason: "r", evidenceReferences: [], status: "open", correctionRequest: null, raisedBy: "sentinel", resolvedBy: null, resolutionReason: null }], listOverwatchCouncilRounds: async () => [], listCertifications: async () => [], getSaneReport: async () => undefined };
+const state: ReadStateService = { listSentinelChallenges: async () => [{ challengeId: goal.goalId, goalId: goal.goalId, reason: "r", evidenceReferences: [], status: "open", correctionRequest: null, raisedBy: "sentinel", resolvedBy: null, resolutionReason: null }], listEncoreCouncilRounds: async () => [], listCertifications: async () => [], getSaneReport: async () => undefined };
 
 function fakeService(overrides: Partial<GoalService> = {}): GoalService {
   return {
@@ -36,7 +36,7 @@ describe("read state routes", () => {
     const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readStateService: state });
     const headers = { authorization: "Bearer test-secret" };
     expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/sentinel-challenges`, headers })).json().challenges).toHaveLength(1);
-    expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/overwatch-council-rounds`, headers })).json()).toEqual({ rounds: [] });
+    expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/encore-council-rounds`, headers })).json()).toEqual({ rounds: [] });
     expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/certifications`, headers })).json()).toEqual({ certifications: [] });
     expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/sane-report`, headers })).statusCode).toBe(404);
     await app.close();

@@ -18,7 +18,7 @@ export interface EvidenceBundle {
   readonly certifications: Readonly<Record<string, unknown>>;
   readonly sentinelFindings: readonly Readonly<Record<string, unknown>>[];
   readonly sentinelChallenges: readonly Readonly<Record<string, unknown>>[];
-  readonly overwatchRounds: readonly Readonly<Record<string, unknown>>[];
+  readonly encoreRounds: readonly Readonly<Record<string, unknown>>[];
   readonly budgetReservations: readonly Readonly<Record<string, unknown>>[];
   /** Full durable evidence metadata referenced by certification and replay. */
   readonly evidenceRecords: readonly Readonly<Record<string, unknown>>[];
