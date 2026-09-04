@@ -994,3 +994,10 @@ HEAD
 - Next: Phase 2 item 6 (`acceptDepartmentWorkerOutput` unguarded check-then-insert race), reviewing
   the ready `p2-worker-output-race` candidate worktree. Item 3 stays blocked pending the user's
   cost-accounting decision.
+
+
+## 2026-09-04 (continued) — SQL migration terminology cleanup and Phase 2 item 3
+- Closed all child workers after the interrupted review session and continued directly in the root checkout.
+- Reviewed and merged the SQL migration cleanup (`ad0c888`): historical migration filenames and SQL identifiers now use Concertmaster, Discord, Metronome, and Encore terminology; redundant rename migrations were removed. The migration reset integration test received a 30-second timeout because the real PostgreSQL Docker run exceeded the old 5-second test default; its focused verification passed 2/2.
+- Reviewed and merged `bef23a1` as `7c22714`: team-lead helper spawning now enforces duration and exact Department Plan version ceilings. Monetary cost enforcement remains explicitly deferred because no real per-helper cost source or accounting unit exists. Focused real-PostgreSQL verification passed 7/7.
+- Full merged-tree verification passed with a fresh disposable PostgreSQL database: `npm run check` reported 97/98 files passed, 680 tests passed, 2 intentional live-Prime skips, and 0 failures. Next is Phase 2 item 6, followed by items 7 and 9, then Phase 3-5.

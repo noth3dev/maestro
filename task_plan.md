@@ -312,16 +312,15 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    Path/authority-boundary scoping (`allowedPaths`/`authorityBoundary`) also remains unthreaded --
    out of this item's literal scope (spawn-call capability scoping), left open if a future item
    needs it.
-3. **[BLOCKED 2026-09-04, independent review]** Team-lead grant cost/duration/scope ceilings
-   (packages/persistence/src/team-lead-grant.ts:37-39,63-64,120-123) are stored but never enforced
-   at `spawnHelperWorker` time — only `max_helpers` is checked (Phase 2 Tests #10 is ~25% covered).
-   A candidate branch (`patch/p2-team-lead-ceilings`, `9135765`) adds duration and plan-version scope
-   checks, but its cost check treats each helper as an invented “one unit” against a free-text monetary
-   ceiling (for example, `1 USD` permits exactly one helper). The repository has no actual or estimated
-   per-helper cost model, so that is not valid cost enforcement and must not be merged. **Decision
-   needed:** define the cost accounting unit/source for helper spawns (or explicitly define a
-   non-monetary helper-count interpretation). Then implement the smallest matching enforcement and
-   three ceiling-exceeded regressions.
+3. **[RESOLVED 2026-09-04, commit `bef23a1` / merge `7c22714`]** Team-lead grants now enforce
+   duration and task-scope ceilings at `spawnHelperWorker` time. Duration accepts the documented
+   numeric unit form and rejects an expired grant; task scope binds spawning to the exact current
+   Department Plan version and rejects a later revision. Two real-PostgreSQL regressions cover each
+   rejection path. Monetary cost-ceiling enforcement is explicitly deferred until the system defines
+   a real per-helper cost source and accounting unit; no invented cost rule is applied. Direct review
+   and full real-PostgreSQL verification passed on the merged tree: 97/98 files, 680 passed, 2
+   intentional live-Prime skips, 0 failed.
+
 4. **[RESOLVED 2026-09-04, commit `b294a95` (merge of `06fab8d`)]** Mission persona overlay
    (plan/phase2.md "Ten-axis persona baseline") previously had zero implementation. Fixed:
    `packages/domain/src/mission-bundle.ts` adds `deriveMissionPersonaOverlay` (Department style +
@@ -473,12 +472,12 @@ concrete illustration each, plus two smaller cross-cutting gaps not previously c
 ### Status
 - [complete_pending_independent_review] Phase 1 remaining items 1-8 above: all 8 items resolved and accepted (see each item's own status line above for commit hashes). Self-plus-parent-reviewed only this session; a formal independent (no-edit) review of the full Phase 1 re-patch diff is the recommended next step before treating Phase 1 as re-accepted, per this project's own acceptance policy.
 - [in_progress] Phase 2 remaining items 1-9 above: items 1 (budget double-counting), 2 (Mission
-  Bundle capability scoping to real spawn call), 4 (Mission persona overlay derivation/expiry),
-  5 (Head activation/sleep/resume control-latch), and 8 (fencing-token regression coverage)
-  resolved and merged to `main`. Item 3 (team-lead grant ceilings) is blocked pending a user
-  decision on cost-accounting source/unit (see item 3's own status line). Items 6, 7, 9 not
-  started (feature-completeness item 1 above illustrates item 9's write-API gap concretely; fix
-  together).
+  Bundle capability scoping to real spawn call), 3 (team-lead duration/task-scope ceilings), 4
+  (Mission persona overlay derivation/expiry), 5 (Head activation/sleep/resume control-latch),
+  and 8 (fencing-token regression coverage) resolved and merged to `main`. Item 3's monetary
+  cost-ceiling sub-scope is explicitly deferred pending a real cost source/accounting unit.
+  Items 6, 7, 9 not started (feature-completeness item 1 above illustrates item 9's write-API gap
+  concretely; fix together).
 - [not_started] Phase 3 remaining items 1-7 above.
 - [not_started] Phase 4 remaining items (= Track B items 1-8, unchanged; feature-completeness item 2
   above is a Discord-specific instance to fix alongside Track B).
