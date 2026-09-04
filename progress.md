@@ -1025,3 +1025,13 @@ HEAD
   failures**. Focused path tests passed 10/10. Commit: `cc751ff`.
 - Next: Phase 2 item 8 remaining fencing coverage, then Phase 2 item 9's authorized effect
   executor boundary, before proceeding to the remaining Phase 3–5 work.
+
+
+## 2026-09-04 (continued) — Phase 2 item 8 fencing coverage resolved
+- Added real-PostgreSQL stale/forged fencing regressions for the remaining Phase 2 write modules:
+  all three budget reservation scopes, Mission Bundle creation, team-lead grant/helper
+  spawn/revocation, and Goal/Department/worker Git integration writes. Each test checks zero
+  durable mutation under a forged token and successful recovery with the current proof.
+- Focused verification passed: budget reservations 9/9, Mission Bundles 18/18, team-lead grants
+  8/8, and Git integration 6/6. Build and diff checks were clean. Commits: `b397305`, `a378b06`.
+- Next: Phase 2 item 9, the missing AuthorizedEffectExecutor enforcement around effect adapters.
