@@ -32,6 +32,17 @@ export const GoalResultSchema = z.object({
   version: CommandVersionSchema,
 }).strict();
 export type GoalResult = z.infer<typeof GoalResultSchema>;
+export const GoalListSchema = z.object({ goals: z.array(GoalResultSchema) }).strict();
+export type GoalList = z.infer<typeof GoalListSchema>;
+
+/** Human/operator budget view: envelope, planned allocations, and incurred spend are separate. */
+export const GoalBudgetSummarySchema = z.object({
+  goalId: UuidSchema, projectId: UuidSchema,
+  budgetCents: z.number().int().nonnegative(),
+  reservedCents: z.number().int().nonnegative(),
+  costCents: z.number().int().nonnegative(),
+}).strict();
+export type GoalBudgetSummary = z.infer<typeof GoalBudgetSummarySchema>;
 
 export const StableApiErrorCodeSchema = z.enum([
   "validation_error", "version_conflict", "invalid_transition", "goal_not_found",

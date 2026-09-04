@@ -1082,3 +1082,11 @@ HEAD
 - Updated the typed API client and CLI so every derived Goal read supplies the project binding.
 - Added real app/API/CLI parity coverage for all four cross-project attempts; build and focused
   server/CLI/API tests pass.
+
+
+## 2026-09-04 (continued) — operational Goal discovery and budget reads
+- Added project-scoped `GET /v1/goals` and `GET /v1/goals/:goalId/budget` routes. The budget summary
+  keeps latest envelope, planned allocations, and immutable actual spend distinct. Both routes reuse
+  the membership hook and durable Goal/project verification.
+- Added typed API-client methods and CLI commands: `goals list` and `budget get`. The real parity
+  fixture now checks both surfaces and confirms cross-project rejection for all derived reads.

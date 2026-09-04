@@ -20,7 +20,7 @@ function buildAuthenticatedServer(goalService: GoalService, authenticator: Opera
 const event = { cursor: "9007199254740993", eventId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02", projectId: goal.projectId, goalId: goal.goalId, aggregateVersion: "1", eventType: "GoalCreated", schemaVersion: 1, payload: { state: "draft" }, occurredAt: "2025-01-01T00:00:00.000Z" };
 function fakeEvents(overrides: Partial<EventService> = {}): EventService { return { listEvents: async () => [event], ...overrides }; }
 
-const state: ReadStateService = { listMetronomeChallenges: async () => [{ challengeId: goal.goalId, goalId: goal.goalId, reason: "r", evidenceReferences: [], status: "open", correctionRequest: null, raisedBy: "metronome", resolvedBy: null, resolutionReason: null }], listEncoreCouncilRounds: async () => [], listCertifications: async () => [], getConcertmasterReport: async () => undefined };
+const state: ReadStateService = { listGoals: async () => [goal], getBudgetSummary: async () => ({ goalId: goal.goalId, projectId: goal.projectId, budgetCents: 10, reservedCents: 4, costCents: 3 }), listMetronomeChallenges: async () => [{ challengeId: goal.goalId, goalId: goal.goalId, reason: "r", evidenceReferences: [], status: "open", correctionRequest: null, raisedBy: "metronome", resolvedBy: null, resolutionReason: null }], listEncoreCouncilRounds: async () => [], listCertifications: async () => [], getConcertmasterReport: async () => undefined };
 
 function fakeService(overrides: Partial<GoalService> = {}): GoalService {
   return {
@@ -32,6 +32,14 @@ function fakeService(overrides: Partial<GoalService> = {}): GoalService {
 }
 
 describe("read state routes", () => {
+  it("lists Goals and returns a project-bound budget summary", async () => {
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readStateService: state });
+    const headers = { authorization: "Bearer test-secret" };
+    expect((await app.inject({ method: "GET", url: `/v1/goals?projectId=${goal.projectId}`, headers })).json()).toEqual({ goals: [goal] });
+    expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/budget?projectId=${goal.projectId}`, headers })).json()).toEqual({ goalId: goal.goalId, projectId: goal.projectId, budgetCents: 10, reservedCents: 4, costCents: 3 });
+    await app.close();
+  });
+
   it("returns all four goal-scoped state shapes", async () => {
     const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readStateService: state });
     const headers = { authorization: "Bearer test-secret" };

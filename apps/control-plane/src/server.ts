@@ -6,6 +6,8 @@ import {
   CriticalActionInputSchema,
   CriticalActionResultSchema,
   GoalQuerySchema,
+  GoalListSchema,
+  GoalBudgetSummarySchema,
   GoalResultSchema,
   MetronomeChallengeListSchema,
   EncoreCouncilRoundListSchema,
@@ -88,7 +90,14 @@ export function buildServer({ goalService, authenticator, eventService, critical
     : Fastify();
   const activeStreams = new Set<() => void>();
   const events = eventService ?? { listEvents: async () => { throw new DurableStoreUnavailableError(); } };
-  const readState = readStateService ?? { listMetronomeChallenges: async () => { throw new DurableStoreUnavailableError(); }, listEncoreCouncilRounds: async () => { throw new DurableStoreUnavailableError(); }, listCertifications: async () => { throw new DurableStoreUnavailableError(); }, getConcertmasterReport: async () => { throw new DurableStoreUnavailableError(); } };
+  const readState = readStateService ?? {
+    listGoals: async () => { throw new DurableStoreUnavailableError(); },
+    getBudgetSummary: async () => { throw new DurableStoreUnavailableError(); },
+    listMetronomeChallenges: async () => { throw new DurableStoreUnavailableError(); },
+    listEncoreCouncilRounds: async () => { throw new DurableStoreUnavailableError(); },
+    listCertifications: async () => { throw new DurableStoreUnavailableError(); },
+    getConcertmasterReport: async () => { throw new DurableStoreUnavailableError(); },
+  };
   const criticalActions = criticalActionService ?? {
     performCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
   };
@@ -174,6 +183,17 @@ export function buildServer({ goalService, authenticator, eventService, critical
       classification: decision.classification,
       ...(decision.recordId === undefined ? {} : { recordId: decision.recordId }),
     }));
+  });
+
+  app.get("/v1/goals", async (request, reply) => {
+    const query = parse(GoalQuerySchema, request.query);
+    return reply.send(GoalListSchema.parse({ goals: await readState.listGoals(query.projectId) }));
+  });
+
+  app.get("/v1/goals/:goalId/budget", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const query = parse(GoalQuerySchema, request.query);
+    return reply.send(GoalBudgetSummarySchema.parse(await readState.getBudgetSummary(goalId, query.projectId)));
   });
 
   app.get("/v1/goals/:goalId", async (request, reply) => {

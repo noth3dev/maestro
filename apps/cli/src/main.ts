@@ -34,6 +34,16 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     const string = (name: keyof typeof parsed.values) => requiredOption(value(name), `--${name}`);
     const json = parsed.values.json === true;
 
+    if (resource === "goals" && action === "list") {
+      const result = await client.listGoals(string("project-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "budget" && action === "get") {
+      const result = await client.getBudgetSummary(string("goal-id"), { projectId: string("project-id") });
+      printState(io.stdout, result, json);
+      return 0;
+    }
     if (resource === "goal" && action === "create") {
       const result = await client.createGoal({ projectId: string("project-id") }, string("command-id"));
       printGoal(io.stdout, result, json);
@@ -61,7 +71,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       else printEvents(io.stdout, page.events, page.nextCursor);
       return 0;
     }
-    throw new Error("Usage: maestro goal create|get|transition ... | maestro events list ...");
+    throw new Error("Usage: maestro goals list|goal create|get|transition|budget ... | maestro events list ...");
   } catch (error) {
     const message = error instanceof ApiError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : "Command failed";
     io.stderr(`${message}\n`);

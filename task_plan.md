@@ -479,9 +479,8 @@ concrete illustration each, plus two smaller cross-cutting gaps not previously c
   guarded-aggregation slice. Item 7 (write API/continuous loop/UI follow-through) remains open.
 - [not_started] Phase 4 remaining items (= Track B items 1-8, unchanged; feature-completeness item 2
   above is a Discord-specific instance to fix alongside Track B).
-- [not_started] Feature-completeness items 3-4 above (Goal listing, budget-at-a-glance) — new,
-  cross-cutting, not yet assigned to a specific phase item; fold into the write-API-surface work
-  whichever phase implements it first (most naturally Phase 3's read/write API extension).
+- [resolved 2026-09-04] Feature-completeness items 3-4 above (project-scoped Goal listing and
+  budget-at-a-glance) are now available through control-plane, typed API client, and CLI reads.
 
 ## Phase 5 remediation plan — operational usability (added 2026-09-04, supersedes prior "complete/complete_pending_independent_review" claims for P1-P4 runtime lanes)
 

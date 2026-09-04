@@ -40,6 +40,17 @@ describe("executeCli", () => {
     expect(stdout.lines).toEqual([`Goal ${goalId}: draft (version 0)\n`, `Goal ${goalId}: ready_for_confirmation (version 1)\n`]);
   });
 
+  it("lists Goals and shows the budget summary with project binding", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ goals: [{ goalId, projectId, state: "draft", version: 0 }] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ goalId, projectId, budgetCents: 10, reservedCents: 4, costCents: 3 }), { status: 200 }));
+    const stdout = output();
+    expect(await executeCli(["goals", "list", "--project-id", projectId, "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).toBe(0);
+    expect(await executeCli(["budget", "get", "--goal-id", goalId, "--project-id", projectId, "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).toBe(0);
+    expect(JSON.parse(stdout.lines[0]!)).toEqual({ goals: [{ goalId, projectId, state: "draft", version: 0 }] });
+    expect(JSON.parse(stdout.lines[1]!)).toEqual({ goalId, projectId, budgetCents: 10, reservedCents: 4, costCents: 3 });
+  });
+
   it("lists events in readable form", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ events: [], nextCursor: "0" }), { status: 200 }));
     const stdout = output();

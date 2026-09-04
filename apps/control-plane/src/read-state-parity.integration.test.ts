@@ -197,6 +197,13 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
     const io = { stdout: (line: string) => { stdout.push(line); }, stderr: (line: string) => { stderr.push(line); } };
 
     try {
+      expect(await executeCli(["goals", "list", "--project-id", projectId, "--json"], env, io)).toBe(0);
+      const cliGoals = JSON.parse(stdout.at(-1)!) as { goals: { goalId: string; projectId: string }[] };
+      expect(cliGoals.goals).toEqual([{ goalId, projectId, state: "active", version: 1 }]);
+      expect(await executeCli(["budget", "get", "--goal-id", goalId, "--project-id", projectId, "--json"], env, io)).toBe(0);
+      const cliBudget = JSON.parse(stdout.at(-1)!) as { goalId: string; projectId: string; budgetCents: number; reservedCents: number; costCents: number };
+      expect(cliBudget).toEqual({ goalId, projectId, budgetCents: 0, reservedCents: 0, costCents: 0 });
+
       expect(await executeCli(["metronome-challenges", "list", "--goal-id", goalId, "--project-id", projectId, "--json"], env, io)).toBe(0);
       const cliChallenges = JSON.parse(stdout.at(-1)!) as { challenges: { challengeId: string; status: string }[] };
       expect(cliChallenges.challenges).toHaveLength(1);
@@ -225,11 +232,15 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
       // CLI's own formatting happens to match.
       const { createApiClient } = await import("@maestro/api-client");
       const client = createApiClient({ baseUrl: apiUrl, token: bearerToken });
+      const apiGoals = await client.listGoals(projectId);
+      const apiBudget = await client.getBudgetSummary(goalId, { projectId });
       const apiChallenges = await client.listMetronomeChallenges(goalId, { projectId });
       const apiRounds = await client.listEncoreCouncilRounds(goalId, { projectId });
       const apiCertifications = await client.listCertifications(goalId, { projectId });
       const apiReport = await client.getConcertmasterReport(goalId, { projectId });
 
+      expect(apiGoals).toEqual(cliGoals);
+      expect(apiBudget).toEqual(cliBudget);
       expect(apiChallenges).toEqual(cliChallenges);
       expect(apiRounds).toEqual(cliRounds);
       expect(apiCertifications).toEqual(cliCertifications);
