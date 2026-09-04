@@ -28,9 +28,9 @@ import {
   recordWorkerWorktree,
   acceptDepartmentWorkerOutput,
   certifyQuality,
-  raiseSentinelChallenge,
+  raiseMetronomeChallenge,
   runEncoreCouncilReview,
-  generateSaneFinalReport,
+  generateConcertmasterFinalReport,
 } from "@maestro/persistence";
 import { executeCli } from "../../cli/src/main.js";
 import { createControlPlane } from "./main.js";
@@ -41,7 +41,7 @@ const describeDatabase = databaseUrl ? describe : describe.skip;
 
 const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `session:${label}`, commandId: randomUUID() });
 const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`, sessionRef: `opaque:${departmentId}`, commandId: randomUUID() });
-const sentinelContext = (label: string) => ({ actorId: "  encore-sentinel  ", sessionRef: `sentinel-session:${label}`, commandId: randomUUID() });
+const metronomeContext = (label: string) => ({ actorId: "  encore-metronome  ", sessionRef: `metronome-session:${label}`, commandId: randomUUID() });
 const brief: IndependentBrief = { interpretation: "safe outcome", contribution: "review", nonGoals: [], assumptions: [], evidenceGaps: [], risks: [], dependencies: [], proposedValidation: [], expectedWorkers: [], expectedCost: "1", expectedTime: "1", objectionsToLikelyAlternatives: [] };
 
 function fakeWorkerKernel(): ExecutionKernelPort {
@@ -97,16 +97,16 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
   });
 
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS sane_final_reports, evidence_bundles, certification_conflict_resolution_members, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, encore_council_syntheses, encore_council_judgments, encore_council_rounds, semantic_reviews, sentinel_challenge_findings, sentinel_challenges, sentinel_findings, goal_integration_revision_commits, goal_integration_revisions, department_acceptances, integration_commits, worker_worktrees, department_branches, goal_integration_branches, budget_forecasts, budget_reservations, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, local_operator_credentials, local_operators, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
+    await pool.query("DROP TABLE IF EXISTS concertmaster_final_reports, evidence_bundles, certification_conflict_resolution_members, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, encore_council_syntheses, encore_council_judgments, encore_council_rounds, semantic_reviews, metronome_challenge_findings, metronome_challenges, metronome_findings, goal_integration_revision_commits, goal_integration_revisions, department_acceptances, integration_commits, worker_worktrees, department_branches, goal_integration_branches, budget_forecasts, budget_reservations, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, local_operator_credentials, local_operators, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
     await applyAllMigrations(pool);
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE reconciler_leader_lease, sane_final_reports, evidence_bundles, quality_certifications, department_acceptances, integration_commits, worker_worktrees, department_branches, goal_integration_branches, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, sentinel_challenges, encore_council_rounds, local_operator_credentials, local_operators, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE");
+    await pool.query("TRUNCATE reconciler_leader_lease, concertmaster_final_reports, evidence_bundles, quality_certifications, department_acceptances, integration_commits, worker_worktrees, department_branches, goal_integration_branches, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, metronome_challenges, encore_council_rounds, local_operator_credentials, local_operators, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE");
     await bootstrapPermanentOrganization(pool);
   });
   afterAll(async () => { await pool.end(); });
 
-  it("shows the same Sentinel challenge, Encore Council round, certification, and Sane report state through the HTTP API and the CLI for the same real Goal", async () => {
+  it("shows the same Metronome challenge, Encore Council round, certification, and Concertmaster report state through the HTTP API and the CLI for the same real Goal", async () => {
     const goalId = randomUUID(), contractId = randomUUID(), projectId = randomUUID();
     const contractContent: TaskContractSubstance = {
       desiredOutcome: "deliver safely", userVisibleBehavior: [], successCriteria: [], liveEvidence: [], scope: [], nonGoals: [], priorities: [], acceptableTradeoffs: [], constraints: [], knownEdgeCases: [],
@@ -166,17 +166,17 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
     await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product"));
     await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
 
-    // Real durable state for all four kinds Tests item 18 requires: a Sentinel
+    // Real durable state for all four kinds Tests item 18 requires: a Metronome
     // challenge, an Encore Council round, a Quality certification, and a
-    // Sane final report -- all against this one real Goal.
-    const challenge = await raiseSentinelChallenge(pool, goalId, [], { reason: "verify independence before certifying", evidenceReferences: [] }, proof, sentinelContext("raise"));
+    // Concertmaster final report -- all against this one real Goal.
+    const challenge = await raiseMetronomeChallenge(pool, goalId, [], { reason: "verify independence before certifying", evidenceReferences: [] }, proof, metronomeContext("raise"));
     const round = await runEncoreCouncilReview(pool, fakeReviewKernel(), {
       goalId, question: "should we proceed to certification?",
       criteria: [{ criterionId: "safety", description: "preserves safety invariants" }],
       evidenceIds: [evidenceIds[0]!], reviewerCount: 1,
     });
     await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
-    const report = await generateSaneFinalReport(pool, goalId);
+    const report = await generateConcertmasterFinalReport(pool, goalId);
 
     const secret = "read-state-parity-test-secret";
     const { credentialId, operatorId } = await bootstrapLocalOperator(pool, { secret });
@@ -197,7 +197,7 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
     const io = { stdout: (line: string) => { stdout.push(line); }, stderr: (line: string) => { stderr.push(line); } };
 
     try {
-      expect(await executeCli(["sentinel-challenges", "list", "--goal-id", goalId, "--json"], env, io)).toBe(0);
+      expect(await executeCli(["metronome-challenges", "list", "--goal-id", goalId, "--json"], env, io)).toBe(0);
       const cliChallenges = JSON.parse(stdout.at(-1)!) as { challenges: { challengeId: string; status: string }[] };
       expect(cliChallenges.challenges).toHaveLength(1);
       expect(cliChallenges.challenges[0]!.challengeId).toBe(challenge.challengeId);
@@ -215,7 +215,7 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
       expect(cliCertifications.certifications[0]!.kind).toBe("quality");
       expect(cliCertifications.certifications[0]!.verdict).toBe("passed");
 
-      expect(await executeCli(["sane-report", "get", "--goal-id", goalId, "--json"], env, io)).toBe(0);
+      expect(await executeCli(["concertmaster-report", "get", "--goal-id", goalId, "--json"], env, io)).toBe(0);
       const cliReport = JSON.parse(stdout.at(-1)!) as { reportId: string; success: boolean };
       expect(cliReport.reportId).toBe(report.reportId);
       expect(cliReport.success).toBe(report.success);
@@ -225,10 +225,10 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
       // CLI's own formatting happens to match.
       const { createApiClient } = await import("@maestro/api-client");
       const client = createApiClient({ baseUrl: apiUrl, token: bearerToken });
-      const apiChallenges = await client.listSentinelChallenges(goalId);
+      const apiChallenges = await client.listMetronomeChallenges(goalId);
       const apiRounds = await client.listEncoreCouncilRounds(goalId);
       const apiCertifications = await client.listCertifications(goalId);
-      const apiReport = await client.getSaneReport(goalId);
+      const apiReport = await client.getConcertmasterReport(goalId);
 
       expect(apiChallenges).toEqual(cliChallenges);
       expect(apiRounds).toEqual(cliRounds);

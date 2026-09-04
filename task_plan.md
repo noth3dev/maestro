@@ -27,15 +27,15 @@ Read `docs/OPERATING_PROTOCOL.md` first, every session, before doing anything el
 - [complete] 5. Head Council sealed-submission slice (P2S5) accepted after independent review and real-PostgreSQL verification on `phase2/p2s5-integration` (7a627a2): 254 passed, 1 intentional skip, 0 failed. See "Phase 2 detailed status" below for accepted boundary. Department Plans (P2S6) and beyond not started; in_progress.
 - [complete_pending_independent_review] 6. Full Phase 2 work-sequence (steps 6-12) implemented and self-audited on `phase2/p2s5-integration` (fc79c6c): 331 passed, 0 failed. A cross-cutting Council departmentOwnership authorization gap (Department Plan/budget/Git-branch creation) was found and fixed in this final self-audit. P2S5/P2S6 independently reviewed; P2S7-P2S12 self-reviewed only (subagent independent review unavailable throughout this session's back half). Proceeding to Phase 3 per user direction.
 - [complete] 7. Phase 3 (plan/phase3.md) work-sequence steps 1-10 on `phase3/integration` (`699dee1`), real-PostgreSQL verified: 453 passed, 1 intentional live-Prime skip, 0 failed.
-- [complete] 8. Phase 3 step 11 (complete live release scenario) fully closed: live Prime worker execution proven (`MAESTRO_LIVE_PRIME=1`), full unsupported-assertion Overwatch Council round proven, forced mid-flight restart/reconciliation proven, and Tests item 18 (CLI/app parity) proven with a real-PostgreSQL end-to-end fixture (`apps/control-plane/src/read-state-parity.integration.test.ts`) asserting the CLI and `@maestro/api-client` return identical Sentinel challenge, Overwatch Council round, certification, and Sane report state for the same real Goal through a live HTTP server. Final real-PostgreSQL `npm run check`: 459 passed, 2 skipped (live-Prime cases skipped by default, separately proven passing with `MAESTRO_LIVE_PRIME=1`), 0 failed. **Phase 3 exit gate: all 13 live-gate steps and all 18 Tests items evidenced.** Secretary UI has no dedicated panel for these four record kinds yet (Goal/event loaders only) -- a UI-layer follow-up, not a gap in the API/CLI parity claim itself.
+- [complete] 8. Phase 3 step 11 (complete live release scenario) fully closed: live Prime worker execution proven (`MAESTRO_LIVE_PRIME=1`), full unsupported-assertion Encore Council round proven, forced mid-flight restart/reconciliation proven, and Tests item 18 (CLI/app parity) proven with a real-PostgreSQL end-to-end fixture (`apps/control-plane/src/read-state-parity.integration.test.ts`) asserting the CLI and `@maestro/api-client` return identical Metronome challenge, Encore Council round, certification, and Concertmaster report state for the same real Goal through a live HTTP server. Final real-PostgreSQL `npm run check`: 459 passed, 2 skipped (live-Prime cases skipped by default, separately proven passing with `MAESTRO_LIVE_PRIME=1`), 0 failed. **Phase 3 exit gate: all 13 live-gate steps and all 18 Tests items evidenced.** Secretary UI has no dedicated panel for these four record kinds yet (Goal/event loaders only) -- a UI-layer follow-up, not a gap in the API/CLI parity claim itself.
 - [pending] 7. Run Phase 1–2 acceptance scenarios, document gaps, and report.
-- [in_progress] 9. Phase 4 (plan/phase4.md) preparation: baseline branch `phase4/integration` created from accepted Phase 3 exit gate (`1effc49`), worktree `.worktrees/p4` added, build verified clean. Recommended two-track work-sequence split recorded in progress.md (Track A: environments+devices, steps 1-5; Track B: Firefly, steps 6-9; step 10 integrates both). Playwright dependency not yet added (needed for step 3). Implementation not yet started.
+- [in_progress] 9. Phase 4 (plan/phase4.md) preparation: baseline branch `phase4/integration` created from accepted Phase 3 exit gate (`1effc49`), worktree `.worktrees/p4` added, build verified clean. Recommended two-track work-sequence split recorded in progress.md (Track A: environments+devices, steps 1-5; Track B: Discord, steps 6-9; step 10 integrates both). Playwright dependency not yet added (needed for step 3). Implementation not yet started.
 
 ## Next step
 See "Phase 5 remediation plan — operational usability" below. Prior P1-P4 completion phase markers describe code/test status only and are not operational-acceptance claims; do not treat them as ready for normal use until Phase 5 tracks land.
 
 ## Next step (superseded — kept for history)
-Phase 3 is fully exit-gate accepted (all 13 live-gate steps, all 18 Tests items). Main now carries the real Phase 2+3 source code (this merge). Next: decide whether to start Phase 4 Track A (environments/devices) and Track B (Firefly) implementation, e.g. via parallel subagents in `.worktrees/p4`-derived worktrees, matching the pattern used throughout Phase 3.
+Phase 3 is fully exit-gate accepted (all 13 live-gate steps, all 18 Tests items). Main now carries the real Phase 2+3 source code (this merge). Next: decide whether to start Phase 4 Track A (environments/devices) and Track B (Discord) implementation, e.g. via parallel subagents in `.worktrees/p4`-derived worktrees, matching the pattern used throughout Phase 3.
 
 ## Errors encountered
 | Error | Resolution |
@@ -79,7 +79,7 @@ Phase 3 is fully exit-gate accepted (all 13 live-gate steps, all 18 Tests items)
 - `phase2/overture-task-contract` (`c653760`) -> merged into `phase2/head-activation`'s ancestor `c89042d`: Task Contract editor, content identity, amendment, confirmation. Work-sequence step 3.
 - `phase2/head-activation` (`b835564`) -> `phase2/head-activation-hardening` etc. all converge at `ac65c8d`: goal-scoped Head activation, duplicate/cycle prevention. Work-sequence step 4.
 - `phase2/overture-organization`, `phase2/persona-baseline`: also at `ac65c8d`, no further unmerged commits found this session.
-- `phase2/overture-role-refresh`: at `ac65c8d` with an uncommitted, uncomitted-but-inspected WIP diff (`packages/domain/src/task-contract.ts`/`.test.ts`, 2 files, +62/-9). It renames the placeholder Overture role IDs (`project-context-scout`, `requirements-analyst`) to the plan's actual canonical six-role pool (`conversation-lead`, `architecture-analyst`, `external-research-scout`, `security-evaluator`, `design-mock-specialist`, `task-editor` — see plan/phase2.md "Sane and Task Contract flow") and adds `canonicalizeOvertureRoles` for legacy-value migration. This is a real, in-scope fix, not stale/junk. Not yet committed or test-run this session.
+- `phase2/overture-role-refresh`: at `ac65c8d` with an uncommitted, uncomitted-but-inspected WIP diff (`packages/domain/src/task-contract.ts`/`.test.ts`, 2 files, +62/-9). It renames the placeholder Overture role IDs (`project-context-scout`, `requirements-analyst`) to the plan's actual canonical six-role pool (`conversation-lead`, `architecture-analyst`, `external-research-scout`, `security-evaluator`, `design-mock-specialist`, `task-editor` — see plan/phase2.md "Concertmaster and Task Contract flow") and adds `canonicalizeOvertureRoles` for legacy-value migration. This is a real, in-scope fix, not stale/junk. Not yet committed or test-run this session.
 - `phase2/sealed-submissions`: `ac65c8d` -> `59bc408` (**new, this session**) — sealed-submission snapshot primitive (`packages/domain/src/sealed-submission.ts`), 4/4 unit tests pass.
 - `phase2/council-briefs`: `ac65c8d` -> merged `59bc408` -> `d86ba7f` (**new, this session**) — Head Council domain/persistence (independent briefs seal/reveal, deliberation rounds, stop-after-two-empty-rounds, decision packet with escalation-on-unresolved-conflict), now bound to a real frozen sealed-submission snapshot (`snapshot_hash` column, migration `0013_council_briefs.sql`) -> `f861c5b` (docs). This is work-sequence step 5.
 
@@ -110,27 +110,27 @@ Phase 3 is fully exit-gate accepted (all 13 live-gate steps, all 18 Tests items)
 ## User sequencing decision — 2026-09-01
 - After Phase 2 reaches its actual exit gate (not merely self-verified code), proceed directly into Phase 3.
 - Phase 3 start gate: all required Phase 2 slices independently reviewed and real-PostgreSQL verified; one bounded local Goal has durable Contract/Council/Plan/worker/Git/budget/evidence lineage and stops at the Phase 2 boundary (`awaiting certification` rather than a claimed success); no unresolved safety/authority/recovery blocker.
-- Phase 3 scope then begins with Overwatch/Sentinel, independent certification, durable evidence bundle, and Sane final report. Do not begin Phase 3 implementation while Phase 2’s current Council/Head/Contract acceptance blockers remain open.
+- Phase 3 scope then begins with Encore/Metronome, independent certification, durable evidence bundle, and Concertmaster final report. Do not begin Phase 3 implementation while Phase 2’s current Council/Head/Contract acceptance blockers remain open.
 
 ## Phase 3 closeout status — 2026-09-03
 - Step 10 (adversarial fixtures) is complete at the code/test level on `phase3/integration`: tests cover fabricated evidence/unsupported claims, same-model fake consensus and disagreement, seeded Quality defects, forged evidence references, and unauthorized remote push capability.
-- Closeout hardening is included: Sentinel challenge mutations require durable lease/role/session authorization; Prime production roots stay in the process repository context; certifications and reports bind to the exact launched Contract and immutable integrated revision; frozen revisions include accepted worker commits; and duplicate certification finding IDs are rejected at domain, waiver, and database boundaries.
+- Closeout hardening is included: Metronome challenge mutations require durable lease/role/session authorization; Prime production roots stay in the process repository context; certifications and reports bind to the exact launched Contract and immutable integrated revision; frozen revisions include accepted worker commits; and duplicate certification finding IDs are rejected at domain, waiver, and database boundaries.
 - Verification gate: fresh `npm run check` reported 261 passed, 188 skipped, 0 failed. The skipped suites require PostgreSQL/Docker (unavailable here), so no real-PostgreSQL claim is made.
 - Step 11, the full live release scenario, remains pending. Do not treat Phase 3 as fully exit-gate accepted until that scenario and the PostgreSQL environment gate pass.
 
 ## 2026-09-03 — P3S11 council unsupported-assertion round
-- Added a real-PostgreSQL composition test that requests a semantic review of an unsupported natural-language claim, verifies the claimed-supported/no-evidence result is downgraded to `unsupported`, confirms the uncertainty trigger, and runs a complete Overwatch Council round.
+- Added a real-PostgreSQL composition test that requests a semantic review of an unsupported natural-language claim, verifies the claimed-supported/no-evidence result is downgraded to `unsupported`, confirms the uncertainty trigger, and runs a complete Encore Council round.
 - The round records each reviewer identity from `getModelIdentity`, labels the one-family fallback as `same-model-independent-review`, preserves minority dissent in synthesis, and proves sealed collection by checking zero persisted judgments during every reviewer prompt before all three are written.
 - Focused verification passed: 7 passed, 0 skipped, 0 failed. Full `npm run check` is required before acceptance.
 
 
 ## Phase 3 step 11 split — CLI/app parity finding (2026-09-03)
 - **Tests item 18 status: blocked by missing read surfaces.** Control-plane currently serves only Goal and event reads (`GET /v1/goals/:goalId`, `GET /v1/events`, and event SSE). CLI currently provides `goal get` and `events list`; Secretary loads and renders only Goal/events.
-- No route, typed API-client method, CLI command, or Secretary loader exists for Sentinel challenges, Overwatch Council state, certification state, or Sane reports, although the durable domain/persistence modules exist. This branch records the evidence and does not invent a new aggregate endpoint.
+- No route, typed API-client method, CLI command, or Secretary loader exists for Metronome challenges, Encore Council state, certification state, or Concertmaster reports, although the durable domain/persistence modules exist. This branch records the evidence and does not invent a new aggregate endpoint.
 - The minimal read contract is now implemented across control-plane, API client, and CLI. A real PostgreSQL app/API/CLI parity composition fixture remains to be added before claiming the item fully proven.
 
 ## 2026-09-03 — P3S11 CLI/app parity read contract implemented
-- Added authenticated read-only control-plane routes for Sentinel challenges, Overwatch Council rounds (including judgments and synthesis), Quality/conditional certifications, and Sane final reports, backed by durable persistence reads. Added matching zod contracts, typed API-client methods, and CLI commands.
+- Added authenticated read-only control-plane routes for Metronome challenges, Encore Council rounds (including judgments and synthesis), Quality/conditional certifications, and Concertmaster final reports, backed by durable persistence reads. Added matching zod contracts, typed API-client methods, and CLI commands.
 - Control-plane route tests prove all four shapes and missing-report handling. Secretary UI was not changed: it consumes the same API client but has no existing state-panel architecture for these four records; the control-plane is the app backing API.
 - Verification: `MAESTRO_TEST_DATABASE_URL=...55440... npm run check` passed with **458 passed, 2 skipped, 0 failed** (74 test files passed, 1 skipped; skips are the intentional live-Prime cases).
 - Tests item 18 is now covered at the shared read-contract level (control-plane/API client/CLI); a full real-domain parity fixture remains limited to existing persistence integration coverage.
@@ -176,8 +176,8 @@ feature-completeness audit before treating Phase 4 as usable.
    Fixed: added an optional `ExecutionKernelPort.release(invocation)` acknowledgement, called only
    by a caller that has already durably recorded the terminal outcome (worker.ts's observeWorker
    after a terminal status commits and cancelWorker after cancellation commits; semantic-review.ts's
-   requestSemanticReview after its always-written row inserts; overwatch-council.ts's
-   runOverwatchCouncilReview after every reviewer's sealed judgment commits together); every release
+   requestSemanticReview after its always-written row inserts; encore-council.ts's
+   runEncoreCouncilReview after every reviewer's sealed judgment commits together); every release
    call is best-effort (never masks an already-succeeded durable write as a failure -- a real defect
    found and fixed during self-review). `goal-service.ts` evicts a Goal's lease proof once a command
    result reaches a terminal Goal state (`isTerminalGoalState`), never on a provider/DB/error path.
@@ -234,7 +234,7 @@ feature-completeness audit before treating Phase 4 as usable.
    `EvidenceContentReader` through `certifyQuality`/`certifyConditional` (verifies each cited
    evidence's real bytes before the pre-INSERT allow-list check), `assembleEvidenceBundle`/
    `recordEvidenceBundle` (verifies every evidence record for the Goal, since a bundle is a full
-   snapshot), and `generateSaneFinalReport` (threads through its existing `recordEvidenceBundle`
+   snapshot), and `generateConcertmasterFinalReport` (threads through its existing `recordEvidenceBundle`
    call). Optional and behavior-unchanged when omitted, since no production write-command API
    surface exists yet for these three actions (a separate, already-tracked P0) -- this seam is
    available for that surface once it lands. Added one real-artifact (not synthetic
@@ -247,7 +247,7 @@ feature-completeness audit before treating Phase 4 as usable.
    `parseConfig`'s accepted key set excludes provider-credential-shaped env vars. Fixed:
    test-only regression (no production change needed -- zod's `z.object` already only
    destructures its own known keys) proving `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`/
-   `OPENROUTER_API_KEY` sentinels never appear in `parseConfig`'s output. Full real-PostgreSQL
+   `OPENROUTER_API_KEY` metronomes never appear in `parseConfig`'s output. Full real-PostgreSQL
    `npm run check` on `main`: 96/97 files, 619 passed, 2 intentional live-Prime skips, 0 failed.
 8. **[PART 1/2 RESOLVED 2026-09-04, commit `fcd70b4`]** No project-scoped operator authorization
    existed (authentication only, no membership check in `server.ts`/`goal-service.ts`). Fixed:
@@ -255,7 +255,7 @@ feature-completeness audit before treating Phase 4 as usable.
    table/API (grant/revoke/assert/list; membership existence only for now, not per-action role/
    capability granularity, a documented future refinement), wired into `server.ts` via a new
    `preHandler` hook checking every request's stated projectId (body or query) before its route
-   handler runs. The four read-state routes (Sentinel/Council/certification/Sane-report) carry no
+   handler runs. The four read-state routes (Metronome/Council/certification/Concertmaster-report) carry no
    projectId at all and are not covered here -- that IDOR gap is Phase 3's already-tracked item 6,
    not silently claimed fixed by this change. Full real-PostgreSQL `npm run check` on `main`:
    97/98 files, 633 passed, 2 intentional live-Prime skips, 0 failed.
@@ -289,7 +289,7 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    reservation for the Goal (`WHERE goal_id = $1 AND scope = 'department'`), and
    `reserveMissionBudget` now sums every `'mission'`-scope reservation for the exact
    `(council, department)` pair -- both across every envelope revision, not only the newest one's
-   direct children. This now exactly matches `sane-report.ts`'s own `departmentSpend` query, which
+   direct children. This now exactly matches `concertmaster-report.ts`'s own `departmentSpend` query, which
    already (correctly) summed by `goal_id`; enforcement and reporting are now consistent. Verified
    with 3 new real-PostgreSQL regressions reproducing the exact audit scenario at both the
    Department and Mission level. Full real-PostgreSQL `npm run check` on `main`: 97/98 files, 638
@@ -357,7 +357,7 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    configured single workspace root (e.g. `MAESTRO_WORKTREE_ROOT`) at the persistence boundary.
 8. **[PARTIALLY RESOLVED 2026-09-04, commit `bcbd15b` / merge `e160af5`]** Stale/forged
    fencing-token regressions now cover `council.ts`, `department-plan.ts`, `device-grant.ts`,
-   `environment.ts`, `firefly-incident.ts`, and `sentinel-challenge.ts`. The remaining Phase 2
+   `environment.ts`, `discord-incident.ts`, and `metronome-challenge.ts`. The remaining Phase 2
    modules are `budget-reservation.ts`, `mission-bundle.ts`, `team-lead-grant.ts`, and
    `git-integration.ts`; cover each while its owning item lands. 
 9. Already-known Phase 2-rooted P0 from the first audit wave: effect adapters (Git) not enforced
@@ -365,26 +365,26 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    Contract/Council/Plan/worker/Git actions.
 
 ### Phase 3 — remaining open items
-1. **[P0, concurrency]** `certification.ts`, `evidence-bundle.ts`, `sane-report.ts`, and
-   `overwatch-council.ts` have **zero** goal_lease/fencing check and **zero** control-latch
+1. **[P0, concurrency]** `certification.ts`, `evidence-bundle.ts`, `concertmaster-report.ts`, and
+   `encore-council.ts` have **zero** goal_lease/fencing check and **zero** control-latch
    (pause/stop/emergency-stop) check — unlike every other Phase 2/3 write module. Unguarded entry
    points: `certifyQuality`/`certifyConditional`/`grantCertificationWaiver`/
    `adjudicateCertificationConflict` (certification.ts:280,295,330), `assembleEvidenceBundle`/
-   `recordEvidenceBundle` (evidence-bundle.ts:13,205), `generateSaneFinalReport`
-   (sane-report.ts:35), `runOverwatchCouncilReview` (overwatch-council.ts:106, which spawns real
+   `recordEvidenceBundle` (evidence-bundle.ts:13,205), `generateConcertmasterFinalReport`
+   (concertmaster-report.ts:35), `runEncoreCouncilReview` (encore-council.ts:106, which spawns real
    Prime Agent subagents and incurs real cost). A stale/fenced-out actor can therefore certify, run
-   a full Council round, assemble an evidence bundle, or produce a Sane final report on a
+   a full Council round, assemble an evidence bundle, or produce a Concertmaster final report on a
    paused/emergency-stopped Goal. Fix: thread a `GoalLeaseProof`/authorized-actor context through
    all five entry points; lock the lease row FOR UPDATE and call `assertGoalControlOpen` before any
    write; add a fencing/pause-bypass regression test per module.
-2. **[MEDIUM/HIGH, concurrency]** `assembleEvidenceBundle` and `generateSaneFinalReport` each issue
+2. **[MEDIUM/HIGH, concurrency]** `assembleEvidenceBundle` and `generateConcertmasterFinalReport` each issue
    10-15+ sequential, non-transactional reads across ~10 tables — unlike `certification.ts`'s own
    `readCertificationLineage` (line 141), which correctly opens one transaction with FOR SHARE/FOR
    UPDATE locks. A concurrent write during assembly can produce an internally inconsistent
    bundle/report that still hashes and commits successfully. Fix: wrap each assembly in one
    transaction with FOR SHARE locks (matching `readCertificationLineage`), or `REPEATABLE READ`.
-3. **[MEDIUM, concurrency]** `generateSaneFinalReport` has no idempotency or per-Goal uniqueness
-   constraint (`sane_final_reports`, migration 0036, has no unique constraint on `goal_id`).
+3. **[MEDIUM, concurrency]** `generateConcertmasterFinalReport` has no idempotency or per-Goal uniqueness
+   constraint (`concertmaster_final_reports`, migration 0036, has no unique constraint on `goal_id`).
    Concurrent/retried calls for the same Goal can produce two divergent "final" reports. Fix: add a
    unique constraint/idempotency key scoping one final report per Goal.
 4. **[P1, domain correctness]** Evidence bundle assembly never queries `authority_records`/
@@ -393,12 +393,12 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    `goal_head_participations`/`head_activation_attempts`/`head_activation_edges` ("activated
    organization and reasons"). This breaks Tests item 17 ("replay the bundle to reconstruct the
    final decision") since the brief content that produced the Council decision is absent.
-   Separately, `generateSaneFinalReport` calls `recordEvidenceBundle` *before* inserting the
-   `sane_final_reports` row, so the bundle can structurally never contain the report content
+   Separately, `generateConcertmasterFinalReport` calls `recordEvidenceBundle` *before* inserting the
+   `concertmaster_final_reports` row, so the bundle can structurally never contain the report content
    plan/phase3.md's bundle-contents list also names. Fix: extend `assembleEvidenceBundle`'s queries
    to include all three omitted sources; document or add a second post-report bundle snapshot.
 5. **[P1, domain correctness]** `evaluateCertificationCompleteness`
-   (packages/domain/src/sane-report.ts:62-111) never compares cost to budget and never checks
+   (packages/domain/src/concertmaster-report.ts:62-111) never compares cost to budget and never checks
    `budget_reservations` at all — there is no budget-related blocker reason in
    `CertificationCompletenessBlockerReason`. A Goal that has blown its budget (see Phase 2 item 1)
    can still report `success: true`. Separately, the reported `costCents` is a sum of *reservations*
@@ -406,15 +406,15 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    `actual_cost`/spend accumulation exists anywhere in the codebase. Fix: add a budget-exceeded
    blocker computed from corrected reservation accounting, plus a real actual-cost accumulation
    distinct from reservations.
-6. **[HIGH, security]** The four new read-state routes (`GET /v1/goals/:goalId/{sentinel-challenges,
-   overwatch-council-rounds,certifications,sane-report}`, apps/control-plane/src/server.ts:149-152)
+6. **[HIGH, security]** The four new read-state routes (`GET /v1/goals/:goalId/{metronome-challenges,
+   encore-council-rounds,certifications,concertmaster-report}`, apps/control-plane/src/server.ts:149-152)
    take only `goalId` — unlike `GET /v1/goals/:goalId`, which requires and checks `projectId`. The
    wire contract itself has no `projectId` field to enforce against, so any authenticated operator
-   can read another project's Sentinel challenges, Council deliberation, certifications, and Sane
+   can read another project's Metronome challenges, Council deliberation, certifications, and Concertmaster
    report by iterating/guessing goal UUIDs (a concrete IDOR). Fix: add `projectId` to all four
    routes/schemas and the matching `ReadStateService` methods, matching `getGoal`'s pattern.
 7. Already-known Phase 3-rooted P0s from the first audit wave: no production write-command API
-   surface for Sentinel/Council/certification/report actions; Sentinel is a one-shot callable, not
+   surface for Metronome/Council/certification/report actions; Metronome is a one-shot callable, not
    a continuous scheduled/event-driven loop, and its rule set omits several plan-required finding
    types; App/CLI/UI parity is read-contract-only, no forms/write surface, no dedicated Secretary
    panels for these four record kinds.
@@ -424,19 +424,19 @@ Unchanged from Track B above (enrolled-device audit, 2026-09-04): no real device
 or mutual authentication; local validation doesn't cover Goal/grant/expiry/fencing; no authenticated
 command dispatch or signed device receipts; device revocation doesn't cascade to issued grants;
 applications/data-scope/network-scope are declarative only, unenforced; no disconnect/dependent-work
-pause lifecycle; Sentinel has no device-access observation; grant expiry/closure has no durable
+pause lifecycle; Metronome has no device-access observation; grant expiry/closure has no durable
 automatic state transition. See Track B items 1-8 above for full detail — not re-numbered here to
 avoid duplicate item IDs.
 
 ### Feature-completeness (real-world usability) sweep — completed directly 2026-09-04
 The dispatched subagent aborted mid-run with no findings (see above); the parent session completed
 this sweep directly by reading `apps/cli/src/main.ts`, `apps/secretary/src/goal-page.tsx`,
-`apps/control-plane/src/server.ts`, `apps/firefly/src/main.ts`, and plan/phase2.md's Sane/Task
+`apps/control-plane/src/server.ts`, `apps/discord/src/main.ts`, and plan/phase2.md's Concertmaster/Task
 Contract flow. This is additional to (not a duplicate of) the known "no write-command API surface"
 P0 items already listed per-phase above; it grounds two of those gaps in their single sharpest
 concrete illustration each, plus two smaller cross-cutting gaps not previously called out.
 
-1. **[Phase 2, illustrates known P0]** "Sane" (the intake persona meant to turn a plain-language
+1. **[Phase 2, illustrates known P0]** "Concertmaster" (the intake persona meant to turn a plain-language
    CEO request into a draft Goal + Task Contract, per plan/phase2.md line 5/36) exists in code only
    as a display-name string (`packages/domain/src/organization.ts:166`). The actual Task Contract
    lifecycle functions (`createDurableTaskContract`, `selectAndRecordOvertureRoles`,
@@ -446,13 +446,13 @@ concrete illustration each, plus two smaller cross-cutting gaps not previously c
    substance field exists in `CreateGoalInputSchema` at all) and `apps/control-plane/src/server.ts`
    has no `/task-contracts` route. There is currently no way, through any user-facing surface, for
    a CEO to actually start a Goal with a plain-language outcome.
-2. **[Phase 4, illustrates known Firefly notification gap]** `apps/firefly/src/main.ts:89`'s
-   `main()` wires Firefly's own delivery transport to a stub that immediately throws `"No delivery
+2. **[Phase 4, illustrates known Discord notification gap]** `apps/discord/src/main.ts:89`'s
+   `main()` wires Discord's own delivery transport to a stub that immediately throws `"No delivery
    transport configured"` — there is no default delivery implementation at all, and no Discord/
    desktop emergency-notification channel exists anywhere in the codebase despite plan/phase4.md
    #46 explicitly promising "one pre-approved out-of-band emergency channel ... a dedicated Discord
    emergency channel or enrolled-device desktop notification" for exactly the case (main control
-   plane unavailable) Firefly exists to handle.
+   plane unavailable) Discord exists to handle.
 3. **[Medium, cross-cutting, new]** No "list/browse Goals" capability exists anywhere. Confirmed
    `apps/control-plane/src/server.ts` has only `GET /v1/goals/:goalId` (requires already knowing
    the UUID), never a bare `GET /v1/goals` listing route; the CLI and Secretary UI inherit the same
@@ -463,12 +463,12 @@ concrete illustration each, plus two smaller cross-cutting gaps not previously c
    problems worth seeing before they compound.
 5. Confirms with direct evidence (no new finding, closes the open question): Secretary
    (`apps/secretary/src/goal-page.tsx`) is a single, config-fixed-`goalId`, fully read-only page —
-   zero forms, zero navigation between Goals, zero Council/certification/Sane-report panels. The
+   zero forms, zero navigation between Goals, zero Council/certification/Concertmaster-report panels. The
    CLI (`apps/cli/src/main.ts`) totals 2 write commands (`goal create`, `goal transition`) and 5
-   read commands (`goal get`, 3x `*.list`, `sane-report get`, `events list`) — no command exists for
+   read commands (`goal get`, 3x `*.list`, `concertmaster-report get`, `events list`) — no command exists for
    Task Contract, Council brief submission, Department Plan, Mission Bundle, worker spawn, Git
    actions, critical-action approval, device enrollment/grants, environment creation, or any
-   Firefly incident action.
+   Discord incident action.
 
 ### Status
 - [complete_pending_independent_review] Phase 1 remaining items 1-8 above: all 8 items resolved and accepted (see each item's own status line above for commit hashes). Self-plus-parent-reviewed only this session; a formal independent (no-edit) review of the full Phase 1 re-patch diff is the recommended next step before treating Phase 1 as re-accepted, per this project's own acceptance policy.
@@ -481,7 +481,7 @@ concrete illustration each, plus two smaller cross-cutting gaps not previously c
   together).
 - [not_started] Phase 3 remaining items 1-7 above.
 - [not_started] Phase 4 remaining items (= Track B items 1-8, unchanged; feature-completeness item 2
-  above is a Firefly-specific instance to fix alongside Track B).
+  above is a Discord-specific instance to fix alongside Track B).
 - [not_started] Feature-completeness items 3-4 above (Goal listing, budget-at-a-glance) — new,
   cross-cutting, not yet assigned to a specific phase item; fold into the write-API-surface work
   whichever phase implements it first (most naturally Phase 3's read/write API extension).
@@ -494,10 +494,10 @@ Two independent read-only audits (P1-P3 usability audit, P4 enrolled-device audi
 ### Track A — P1-P3 control-plane runtime lanes (blocking, P0 unless noted)
 1. **Durable worker/session recovery.** `packages/prime-adapter/src/execution-kernel.ts` session/invocation state is process-local only; `resume()`/`reconnect()` always throw. `packages/persistence/src/reconciliation.ts` explicitly does no session reconciliation. Required: durable session/invocation binding table, a real `reconcileOnStartup` that loads worker/session bindings, fences or cancels stale provider work, and persists the recovery decision with evidence. Test: kill-and-restart a real running control-plane process with an active worker; prove no duplicate/stale execution.
 2. **Authority enforcement at real effect adapters.** `apps/control-plane/src/main.ts` wires `AuthorizedEffectExecutor` to a no-op; `packages/git-adapter/src/git-ops.ts` exports direct unauthenticated `spawn('git', ...)` calls with no grant/lease/audit path. Required: compose every effect adapter (Git first) through `AuthorizedEffectExecutor`; no direct adapter call site bypasses it. Test: forged/expired/out-of-scope authority attempt against the real Git adapter is rejected before any `git` process spawns.
-3. **Production orchestration path.** `apps/control-plane/src/main.ts`/`server.ts` only expose Goal create/transition/critical-action and reads; no route exists to confirm/amend a Task Contract, activate Heads, submit/reveal Council briefs, create Department Plans/Mission Bundles, spawn/observe/cancel workers, run Sentinel/Council/Quality, approve/revoke authority, or request a final report. Required: expose the minimal write-command surface for one full Goal lifecycle through the actual HTTP API (not direct persistence calls in a test). Test: drive one real Goal from Task Contract through Sane final report using only the HTTP API + CLI, no direct persistence-layer calls.
+3. **Production orchestration path.** `apps/control-plane/src/main.ts`/`server.ts` only expose Goal create/transition/critical-action and reads; no route exists to confirm/amend a Task Contract, activate Heads, submit/reveal Council briefs, create Department Plans/Mission Bundles, spawn/observe/cancel workers, run Metronome/Council/Quality, approve/revoke authority, or request a final report. Required: expose the minimal write-command surface for one full Goal lifecycle through the actual HTTP API (not direct persistence calls in a test). Test: drive one real Goal from Task Contract through Concertmaster final report using only the HTTP API + CLI, no direct persistence-layer calls.
 4. **Project-scoped operator authorization.** `server.ts` authenticates but never checks project membership/role/capability; `goal-service.ts` forwards any authenticated operator to any supplied project/Goal ID. Required: add project/role/capability authorization checks on every route, not just authentication. Test: an authenticated operator without project membership is rejected reading/writing another project's Goal.
 5. **User-facing CEO approval/critical-action completion.** No endpoint/CLI/UI records a required approval and reruns the concrete effect; `CreateGoalInputSchema` has no outcome/Task-Contract/confirmation fields. Required: add the minimal approve-and-rerun command path end-to-end (API + CLI at least). Test: a critical action that requires approval is approved through a real user-facing command and then actually executes the effect exactly once.
-6. **Continuous Sentinel observation (P1, not blocking exit but required before "usable").** `scanGoalForSentinelFindings` is a one-shot callable with no scheduler/consumer composed in `main.ts`, and its rule set omits unsupported-claims/circular-discussion/activation-cycle/scope-budget-authority-divergence/unreviewed-integration findings from the plan. Required: compose a real scheduled/event-driven Sentinel loop and complete its rule set. Test: a seeded violation is caught by the running loop without being manually invoked.
+6. **Continuous Metronome observation (P1, not blocking exit but required before "usable").** `scanGoalForMetronomeFindings` is a one-shot callable with no scheduler/consumer composed in `main.ts`, and its rule set omits unsupported-claims/circular-discussion/activation-cycle/scope-budget-authority-divergence/unreviewed-integration findings from the plan. Required: compose a real scheduled/event-driven Metronome loop and complete its rule set. Test: a seeded violation is caught by the running loop without being manually invoked.
 7. **App/CLI/UI operational parity (P1).** Secretary is read-only single-Goal view with no forms/SSE and no challenge/Council/certification/report display; CLI covers only Goal/event read+create+transition. Required: extend both to the write/read surface from item 3, matching this project's own "same state through app and CLI" requirement, not just a shared read contract.
 
 ### Track B — P4 enrolled-device runtime lanes (blocking, P0 unless noted)
@@ -507,13 +507,13 @@ Two independent read-only audits (P1-P3 usability audit, P4 enrolled-device audi
 4. **Device revocation must cascade to already-issued grants.** `revokeDevice` does not touch `device_grants`; `recordDeviceCommandResult` never checks `devices.state`. Required: atomically revoke/expire active grants on device revoke and/or check enrolled device state on every dispatch/receipt. Test: grant issued -> device revoked -> next in-scope command result rejected.
 5. **Enforce applications/data-scope/network-scope, not just action/path.** Declared in schema and domain type but never checked at execution/receipt time. Required: model typed command targets (application/browser target, data resource, network destination) and validate each against scope both locally and server-side. Test: escape attempts on each of the three unenforced scope dimensions are rejected.
 6. **Disconnect/dependent-work pause lifecycle.** No device session/heartbeat/disconnect state exists. Required: track authenticated device session/heartbeat and work-to-device dependency; pause only dependent work on disconnect. Test: independent work continues; dependent work pauses.
-7. **Sentinel device-access observation (P1).** Sentinel never reads device/grant/result state. Required: add deterministic device-grant/audit finding rules (expired grant use, unexpected target, unexpected side effect) with safe-pause coverage.
+7. **Metronome device-access observation (P1).** Metronome never reads device/grant/result state. Required: add deterministic device-grant/audit finding rules (expired grant use, unexpected target, unexpected side effect) with safe-pause coverage.
 8. **Durable automatic grant expiry/closure (P1).** Expiry/terminal-Goal currently only rejects at submit time; `device_grants.state` never transitions to `expired`/`closed`. Required: transition state atomically on the lifecycle event (Goal closure, revocation, expiry) and test the durable state change plus immediate local rejection.
 
 ### Sequencing decision
 - Do Track B item 1-2 first (device-agent transport + full local validation) because it is the immediate, currently mis-claimed P4S10 gap; do not widen the existing S10 test's claim without this work.
 - Track A items 1-3 are prerequisite-independent of Track B and may run in a parallel isolated worktree.
-- Do not attempt Track A item 6/7 (Sentinel loop, app/CLI parity) or Track B items 6-8 until each track's P0 items above land and are independently reviewed, since they build on the corrected authorization/session primitives.
+- Do not attempt Track A item 6/7 (Metronome loop, app/CLI parity) or Track B items 6-8 until each track's P0 items above land and are independently reviewed, since they build on the corrected authorization/session primitives.
 - No phase in this remediation plan may be marked `complete` on self-review alone; each requires independent (no-edit) review plus real-PostgreSQL (and, where applicable, real-process/real-device-agent) verification per this project's existing acceptance policy.
 
 ### Status
@@ -522,33 +522,33 @@ Two independent read-only audits (P1-P3 usability audit, P4 enrolled-device audi
 ## 2026-09-04 — Phase 4 P4S1 environment foundation
 - [self_verified_pending_postgres] Implemented typed environment recipe/manifest and durable PostgreSQL environment lifecycle records in migration 0039. Identity is content-addressed from canonical recipe and resolved inputs; durable writes require current Goal lease plus actor/session context.
 - Focused/domain tests and build pass. Full check: 267 passed, 194 skipped, 0 failed; integration tests require the assigned disposable PostgreSQL instance and were not run in this runtime.
-## Phase 4 step 6 — Firefly foundation
-- Implemented Firefly authenticated signal schema, freshness and replay rejection, independent append-only buffer, and PostgreSQL receiving primitive.
-- Self-verification currently: build passed; focused Firefly tests **2 passed, 0 failed**. Real-Postgres integration remains pending.
-- [in_progress] 9. Phase 4 Track B (plan/phase4.md work-sequence steps 6-9): P4S6 Firefly signal foundation is self-verified with real-PostgreSQL focused evidence pending independent review; steps 7-9 are next. Track A remains isolated in `.worktrees/p4-env`.
+## Phase 4 step 6 — Discord foundation
+- Implemented Discord authenticated signal schema, freshness and replay rejection, independent append-only buffer, and PostgreSQL receiving primitive.
+- Self-verification currently: build passed; focused Discord tests **2 passed, 0 failed**. Real-Postgres integration remains pending.
+- [in_progress] 9. Phase 4 Track B (plan/phase4.md work-sequence steps 6-9): P4S6 Discord signal foundation is self-verified with real-PostgreSQL focused evidence pending independent review; steps 7-9 are next. Track A remains isolated in `.worktrees/p4-env`.
 - [in_progress] 9. Phase 4 Track B (plan/phase4.md work-sequence steps 6-9): P4S6 hardening and P4S7 fingerprint/dedup/severity-confidence/silence slices are self-verified with real-PostgreSQL evidence, pending independent review; step 8 Incident Brief/triage/remediation composition is next. Track A remains isolated in `.worktrees/p4-env`.
 
 
 ## 2026-09-03 — Phase 4 integration merge landed
-- [in_progress] 9. `phase4/integration` now carries environments (P4S1+P4S2), devices (P4S4), Firefly (P4S6+P4S7), and the shared migration-runner fix, merged and fresh-verified together: 532 passed, 2 intentional live-Prime skips, 0 failed, stable over 2 consecutive real-PostgreSQL runs. Migration numbering collision between environments/devices (0039-0041) and Firefly (previously 0039-0042) resolved by renumbering Firefly to 0042-0045.
-- Next: P4S3 (browser environment adapter, Playwright), P4S5 (Goal-scoped device grants/command channel), P4S8-P4S9 (Firefly Incident Brief through closure and improvement evidence), P4S10 (live gates).
+- [in_progress] 9. `phase4/integration` now carries environments (P4S1+P4S2), devices (P4S4), Discord (P4S6+P4S7), and the shared migration-runner fix, merged and fresh-verified together: 532 passed, 2 intentional live-Prime skips, 0 failed, stable over 2 consecutive real-PostgreSQL runs. Migration numbering collision between environments/devices (0039-0041) and Discord (previously 0039-0042) resolved by renumbering Discord to 0042-0045.
+- Next: P4S3 (browser environment adapter, Playwright), P4S5 (Goal-scoped device grants/command channel), P4S8-P4S9 (Discord Incident Brief through closure and improvement evidence), P4S10 (live gates).
 
 
 ## 2026-09-03 (continued) — P4S3 and P4S5 integrated
 - [in_progress] 9. `phase4/integration` now also carries P4S3 (Playwright browser environment adapter) and P4S5 (Goal-scoped device grants + sequenced capability-authenticated command channel). Full real-PostgreSQL check: 568 passed, 2 intentional live-Prime skips, 0 failed.
-- Next: P4S8-P4S9 (Firefly Incident Brief through closure and improvement evidence), P4S10 (live gates).
+- Next: P4S8-P4S9 (Discord Incident Brief through closure and improvement evidence), P4S10 (live gates).
 
 
 ## 2026-09-03 (continued) — P4S8 integrated
-- [in_progress] 9. `phase4/integration` now also carries P4S8 (Firefly Incident Brief -> Goal linkage -> immediate safe pause -> remediation through the existing Phase 2/3 pipeline -> closure). Full real-PostgreSQL check: 577 passed, 2 intentional live-Prime skips, 0 failed, stable over 2 runs.
+- [in_progress] 9. `phase4/integration` now also carries P4S8 (Discord Incident Brief -> Goal linkage -> immediate safe pause -> remediation through the existing Phase 2/3 pipeline -> closure). Full real-PostgreSQL check: 577 passed, 2 intentional live-Prime skips, 0 failed, stable over 2 runs.
 - Next: P4S9 (incident outcome/false-positive improvement evidence, no automatic changes), P4S10 (device-scope and seeded-incident live gates -- the Phase 4 exit gate).
 
 
 ## 2026-09-03 (continued) — P4S9 integrated
-- [in_progress] 9. `phase4/integration` now also carries P4S9 (durable Firefly improvement evidence recorded on incident closure, no automatic changes). Full real-PostgreSQL check: 580 passed, 2 intentional live-Prime skips, 0 failed.
+- [in_progress] 9. `phase4/integration` now also carries P4S9 (durable Discord improvement evidence recorded on incident closure, no automatic changes). Full real-PostgreSQL check: 580 passed, 2 intentional live-Prime skips, 0 failed.
 - Next: P4S10, the device-scope and seeded-incident live gates -- the Phase 4 exit gate itself.
 
 
 ## 2026-09-03 (continued) — P4S10 integrated; Phase 4 work-sequence complete at code level
-- [complete_pending_independent_review] 9. Phase 4 (plan/phase4.md) work-sequence steps 1-10 are implemented and integrated on `phase4/integration`, with real-PostgreSQL verification stable over repeated runs (582 passed, 2 intentional live-Prime skips, 0 failed). The exit gate (device/local-policy narrow-grant task plus Firefly outage/recovery/dedupe/isolated-remediation) is evidenced by two composition tests. Self-reviewed only; independent (no-edit) review of the full Phase 4 surface is the recommended next step, and merge to `main` remains behind that review per this project's existing acceptance policy.
-- Branches merged into `phase4/integration`: `fix/shared-migration-runner`, `phase4/p4s1-environments` (S1+S2), `phase4/p4s4-devices` (S4), `phase4/p4s6-firefly` (S6+S7), `phase4/p4s5-device-grants` (S3+S5), `phase4/p4s8-incident-workflow` (S8), `phase4/p4s9-improvement-evidence` (S9), `phase4/p4s10-live-gate` (S10).
+- [complete_pending_independent_review] 9. Phase 4 (plan/phase4.md) work-sequence steps 1-10 are implemented and integrated on `phase4/integration`, with real-PostgreSQL verification stable over repeated runs (582 passed, 2 intentional live-Prime skips, 0 failed). The exit gate (device/local-policy narrow-grant task plus Discord outage/recovery/dedupe/isolated-remediation) is evidenced by two composition tests. Self-reviewed only; independent (no-edit) review of the full Phase 4 surface is the recommended next step, and merge to `main` remains behind that review per this project's existing acceptance policy.
+- Branches merged into `phase4/integration`: `fix/shared-migration-runner`, `phase4/p4s1-environments` (S1+S2), `phase4/p4s4-devices` (S4), `phase4/p4s6-discord` (S6+S7), `phase4/p4s5-device-grants` (S3+S5), `phase4/p4s8-incident-workflow` (S8), `phase4/p4s9-improvement-evidence` (S9), `phase4/p4s10-live-gate` (S10).

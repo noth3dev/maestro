@@ -13,7 +13,7 @@ Maestro는 **npm workspaces** 기반의 모노레포 구조로 관리됩니다:
 │   ├── control-plane/     # Fastify 5 REST & SSE 제어 평면 백엔드 서버
 │   ├── cli/               # Maestro 명령줄 인터페이스 (CLI)
 │   ├── secretary/         # Next.js Concertmaster Office 웹 대시보드
-│   └── firefly/           # 아웃오브밴드 Discord 인시던트 감지 데몬
+│   └── discord/           # 아웃오브밴드 Discord 인시던트 감지 데몬
 ├── packages/
 │   ├── contracts/         # Zod 스키마, API 계약 및 이벤트 정의
 │   ├── domain/            # 순수 비즈니스 도메인 모델 (Goal, TaskContract, HeadCouncil)
@@ -83,7 +83,7 @@ node apps/cli/dist/main.js goal get <goalId>
 node apps/cli/dist/main.js events list --goalId <goalId>
 
 # Metronome 챌린지 조회
-node apps/cli/dist/main.js sentinel challenge <challengeId>
+node apps/cli/dist/main.js metronome challenge <challengeId>
 
 # Encore Council 심의 라운드 조회
 node apps/cli/dist/main.js council round <roundId>

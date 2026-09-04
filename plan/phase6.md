@@ -1,12 +1,12 @@
-# Phase 6 — Overwatch Learning, Refinement, and Ten-Axis Adaptation
+# Phase 6 — Encore Learning, Refinement, and Ten-Axis Adaptation
 
 ## Outcome
 
-Enable bounded, evidence-driven improvement after the execution, incident, and concurrency systems have produced real outcomes. Overwatch may curate evidence, propose changes, evaluate them in replay/synthetic/shadow modes, and automatically apply only pre-authorized low-risk adaptive changes with versioning and rollback.
+Enable bounded, evidence-driven improvement after the execution, incident, and concurrency systems have produced real outcomes. Encore may curate evidence, propose changes, evaluate them in replay/synthetic/shadow modes, and automatically apply only pre-authorized low-risk adaptive changes with versioning and rollback.
 
 This phase includes continuous adjustment of the ten personality axes so roles become better matched to their real work. It does not permit agents to rewrite their mission, authority, truthfulness, safety boundaries, organizational purpose, provider access, budgets, or product goals.
 
-## Overwatch Improvement Organization
+## Encore Improvement Organization
 
 - **Digest Curator:** turns milestone evidence into compact, source-linked Improvement Digests.
 - **Failure Analyst:** finds recurring defects, delays, context waste, duplicated deliberation, and routing mistakes.
@@ -17,7 +17,7 @@ This phase includes continuous adjustment of the ten personality axes so roles b
 - **Rollout Controller:** applies only enabled change classes, observes, disables, and rolls back.
 - **Knowledge Steward:** handles project-private lessons, curated promotion, staleness, contradiction, and deletion.
 
-These are Overwatch functions, not permanent production Departments. They cannot spawn production workers or invent product work.
+These are Encore functions, not permanent production Departments. They cannot spawn production workers or invent product work.
 
 ## Improvement artifact chain
 
@@ -49,7 +49,7 @@ After an explicit class is enabled, low-risk project-scoped candidates may chang
 - worker mission templates;
 - context selection and compression policy;
 - model/skill routing among already approved capabilities;
-- deterministic Sentinel rules that do not weaken required checks;
+- deterministic Metronome rules that do not weaken required checks;
 - documentation wording generated from canonical behavior.
 
 Always excluded from autonomous application:
@@ -61,7 +61,7 @@ Always excluded from autonomous application:
 - network or device access;
 - external sending, deployment, remote push, deletion, or payment;
 - core identity, organizational purpose, CEO policy, or product intent;
-- removal of required Quality, Security, Safety, or Sentinel checks.
+- removal of required Quality, Security, Safety, or Metronome checks.
 
 ## Knowledge handling
 
@@ -247,8 +247,8 @@ Guardrail: collaboration remains bounded by context and reporting hierarchy.
 
 ## Initial profiles
 
-- Preserve the approved Sane seed exactly as recorded in the approved Sane seed in Phase 2.
-- Generate each persistent Head and Overwatch baseline from its professional duty using a reviewed role rubric.
+- Preserve the approved Concertmaster seed exactly as recorded in the approved Concertmaster seed in Phase 2.
+- Generate each persistent Head and Encore baseline from its professional duty using a reviewed role rubric.
 - Keep useful diversity. Do not optimize all Council members toward the same high-agreeableness or high-caution profile.
 - Record the reason for every initial value and the behavior expected at low, current, and high settings.
 - Validate initial profiles on representative scenarios before first live use.
@@ -278,7 +278,7 @@ Process:
 5. Expire the mission overlay when the worker terminates.
 6. Feed the outcome into task-class learning, not directly into the worker's expired identity.
 
-A Department Head owns the proposed worker profile. Sentinel can challenge a profile that conflicts with risk, duty, or diversity needs.
+A Department Head owns the proposed worker profile. Metronome can challenge a profile that conflicts with risk, duty, or diversity needs.
 
 ## Evidence captured after each Goal
 
@@ -358,7 +358,7 @@ Run the candidate without authority to affect live execution. Compare its propos
 
 ### Stage 5 — Independent judgment
 
-Overwatch Council reviews quantitative and qualitative evidence. The creator of a candidate cannot be its sole evaluator. Actual model diversity is recorded honestly.
+Encore Council reviews quantitative and qualitative evidence. The creator of a candidate cannot be its sole evaluator. Actual model diversity is recorded honestly.
 
 ### Stage 6 — Bounded rollout
 
@@ -387,7 +387,7 @@ Required dimensions:
 9. rework and retry burden;
 10. user clarity and correction rate.
 
-Correctness, safety, and authority are hard floors. Cost or speed cannot compensate for falling below them. Overwatch records Pareto tradeoffs and conditions rather than hiding them in one number.
+Correctness, safety, and authority are hard floors. Cost or speed cannot compensate for falling below them. Encore records Pareto tradeoffs and conditions rather than hiding them in one number.
 
 ## Continuous adaptation cadence
 
@@ -430,7 +430,7 @@ A CEO edit changes the desired candidate but does not erase the need to explain 
 ## Acceptance tests
 
 1. All ten axes reject out-of-range values.
-2. The Sane seed matches the approved Phase 2 values exactly.
+2. The Concertmaster seed matches the approved Phase 2 values exactly.
 3. A mission overlay expires with its worker and does not mutate the Head baseline.
 4. A candidate cannot change authority or suppress a critical-action challenge.
 5. A change without evidence, scenario suite, and rollback target is rejected.
@@ -440,7 +440,7 @@ A CEO edit changes the desired candidate but does not erase the need to explain 
 9. A seeded regression triggers restoration of the exact previous version.
 10. The UI explanation identifies changed axes, expected behavior, evidence, and rollback.
 11. Project-private evidence does not enter a global profile.
-12. A Department Head can select a bounded worker overlay and Sentinel can challenge an unsafe choice.
+12. A Department Head can select a bounded worker overlay and Metronome can challenge an unsafe choice.
 13. Replaying the same candidate and evidence produces the same deterministic guard outcome.
 14. A live representative task shows a measurable behavioral difference without changing permissions or factual evidence.
 
@@ -489,13 +489,13 @@ A real observed weakness must become a Digest, candidate, fixed evaluation, repl
 
 ## Requirements preserved in this phase
 
-### 13. Overwatch Improvement Organization — proposed structure
+### 13. Encore Improvement Organization — proposed structure
 
-Overwatch should include a selectively activated improvement organization that improves the orchestration system itself rather than executing normal CEO Goals.
+Encore should include a selectively activated improvement organization that improves the orchestration system itself rather than executing normal CEO Goals.
 
-- **Overwatch Sentinel** remains the lightweight continuous observer and trigger source.
-- **Overwatch Council** remains the selective multi-model adjudicator for important Goal decisions and improvement judgments.
-- **Overwatch Improvement Lab** wakes only when Sentinel detects sufficient evidence, a recurring failure, a material inefficiency, an incident, or a scheduled review threshold. It contains task-scoped specialist roles:
+- **Encore Metronome** remains the lightweight continuous observer and trigger source.
+- **Encore Council** remains the selective multi-model adjudicator for important Goal decisions and improvement judgments.
+- **Encore Improvement Lab** wakes only when Metronome detects sufficient evidence, a recurring failure, a material inefficiency, an incident, or a scheduled review threshold. It contains task-scoped specialist roles:
   - **Organization Architect** — evaluates whether Groups, Departments, Head responsibilities, activation rules, and handoffs should change.
   - **Efficiency Analyst** — evaluates token use, cost, latency, redundant deliberation, unnecessary department activation, and model choice.
   - **Process Engineer** — proposes changes to planning, delegation, context transfer, worker limits, review, recovery, and reporting.
@@ -503,12 +503,12 @@ Overwatch should include a selectively activated improvement organization that i
 - These are not continuously running permanent production departments. They are awakened only for a specific improvement hypothesis.
 - The Lab produces a bounded candidate with a hypothesis, expected benefit, affected behavior, evidence, evaluation plan, failure conditions, and rollback plan.
 - Candidate generation and evaluation occur outside live Goal routing. A candidate cannot silently redefine its own evaluator or success criteria.
-- The Overwatch Council reviews the Lab's evidence from multiple independent model perspectives and records the decision, dissent, confidence, and allowed next step.
+- The Encore Council reviews the Lab's evidence from multiple independent model perspectives and records the decision, dissent, confidence, and allowed next step.
 - Improvement outcomes are reported to the CEO with measured token, cost, latency, quality, and safety deltas rather than vague claims.
 
 ### 14. Staged application of validated improvements
 
-- The initial Overwatch improvement lifecycle remains replay/synthetic and shadow-only.
+- The initial Encore improvement lifecycle remains replay/synthetic and shadow-only.
 - The CEO may later enable a narrowly defined class of improvements for automatic live application after that class has accumulated sufficient successful shadow evidence.
 - Within an enabled class, only low-risk, reversible changes may be automatically applied. The CEO receives an evidence-backed report afterward.
 - Live application requires an intact rollback path, bounded exposure, independent monitoring, and automatic rollback when quality, safety, latency, cost, or reliability crosses its allowed threshold.
@@ -524,9 +524,9 @@ Overwatch should include a selectively activated improvement organization that i
 - Shared lessons preserve provenance to the originating evidence without exposing the evidence to unrelated projects.
 - Low-confidence, stale, contradicted, or highly context-dependent lessons are weakened, revalidated, or retired rather than treated as universal truth.
 
-### 18. Milestone-based Overwatch Improvement Digests
+### 18. Milestone-based Encore Improvement Digests
 
-Overwatch receives curated improvement evidence at natural completion boundaries rather than ingesting every raw log as memory.
+Encore receives curated improvement evidence at natural completion boundaries rather than ingesting every raw log as memory.
 
 Digest triggers include:
 
@@ -538,14 +538,14 @@ Digest triggers include:
 
 The digest pipeline:
 
-1. Sentinel links the bounded episode's Goal, Department, worker, decisions, actions, outcomes, and measurements.
+1. Metronome links the bounded episode's Goal, Department, worker, decisions, actions, outcomes, and measurements.
 2. A curation step removes routine noise, duplicated messages, secrets, unrelated content, and evidence with no improvement value.
 3. Valuable episodes are normalized into an **Improvement Digest** containing the situation, selected decision, rejected alternatives when relevant, observed result, quality/cost/token/latency/safety deltas, failure or success factors, confidence, and source references.
 4. Digests are ranked by impact, novelty, recurrence, confidence, and actionability.
-5. The Overwatch Improvement Lab consumes the selected digests to form and test improvement hypotheses.
+5. The Encore Improvement Lab consumes the selected digests to form and test improvement hypotheses.
 6. Cross-project promotion uses only the generalized lesson, never the raw project log.
 
-Successful patterns, failures, near misses, unnecessary work, and avoided work are all eligible. Overwatch must not optimize only for failure reduction or token reduction at the expense of outcome quality.
+Successful patterns, failures, near misses, unnecessary work, and avoided work are all eligible. Encore must not optimize only for failure reduction or token reduction at the expense of outcome quality.
 
 Raw logs remain evidence and are not rewritten into conclusions. A digest may be corrected or superseded, but its evidence link and prior version remain auditable.
 
@@ -553,16 +553,16 @@ Raw logs remain evidence and are not rewritten into conclusions. A digest may be
 
 - A worker may propose a lesson with evidence but cannot directly write or overwrite durable organizational knowledge.
 - A Department Head may promote an evidence-backed lesson into project- and Department-scoped knowledge.
-- The Overwatch Improvement Lab may synthesize recurring patterns into a candidate generalized lesson.
-- The multi-model Overwatch Council approves lessons intended for reuse across projects.
+- The Encore Improvement Lab may synthesize recurring patterns into a candidate generalized lesson.
+- The multi-model Encore Council approves lessons intended for reuse across projects.
 - The CEO may pin, challenge, request correction of, or retire any organizational knowledge.
 - A single success or failure cannot become a global rule without corroboration.
 - Corrections preserve provenance: incorrect or stale knowledge is marked superseded or retired with a replacement reason rather than silently rewritten.
 - Confidence and freshness decay when evidence ages, conditions change, or new outcomes contradict the lesson.
 
-### 29. Overwatch improvement through Prime Agent refinement
+### 29. Encore improvement through Prime Agent refinement
 
-- Improvement Digests feed the Overwatch Improvement Lab.
+- Improvement Digests feed the Encore Improvement Lab.
 - The Lab may propose focused changes to Prime Agent continual-harness components: prompt guidance, scoped memories, reusable skills, Department Head specifications, worker templates, and narrow behavioral policies.
 - `refine` is the controlled persistence mechanism for these evidence-backed changes. Refinement is not a license to rewrite the whole harness or system prompt.
 - Every proposal names the observed problem, smallest relevant harness component, expected benefit, project/global scope, evaluation evidence, and rollback target.
@@ -574,16 +574,16 @@ Raw logs remain evidence and are not rewritten into conclusions. A digest may be
 
 This workspace contains the approved design artifacts but no Maestro application implementation. There is no legacy runtime, operational state, compatibility contract, or migration target to preserve. Implementation starts cleanly on Prime Agent's public programmatic SDK and native recursive-subagent surfaces. Existing project repositories may later be enrolled as independent source systems, but they are not Maestro legacy state.
 
-### 30. Overwatch authority for project and bounded global refinement — proposed boundary
+### 30. Encore authority for project and bounded global refinement — proposed boundary
 
-Overwatch should have meaningful authority to improve the Prime Agent continual harness without routing every refinement to the CEO.
+Encore should have meaningful authority to improve the Prime Agent continual harness without routing every refinement to the CEO.
 
 - Validated project-scoped refinements may auto-apply under an enabled improvement class, with evidence, versioning, monitoring, and rollback.
-- Overwatch may also auto-apply a bounded class of low-risk global refinements when all of the following hold:
+- Encore may also auto-apply a bounded class of low-risk global refinements when all of the following hold:
   - Evidence comes from multiple relevant episodes or projects rather than one isolated outcome.
   - The change is additive or easily reversible.
   - It does not expand authority, permissions, data access, external services, model/provider scope, budget, or critical-action boundaries.
-  - It has passed replay/synthetic evaluation and independent multi-model Overwatch Council review.
+  - It has passed replay/synthetic evaluation and independent multi-model Encore Council review.
   - It begins with staged exposure, retains the prior version, and has measurable rollback triggers.
 - Candidate bounded global changes include clearer reusable guidance, non-sensitive generalized lessons, reusable procedures or skills, capability-routing metadata, context-selection heuristics, and worker or Head templates that preserve existing authority.
 - The CEO receives a grouped evidence report after application rather than a pre-approval request for every eligible refinement.
@@ -591,14 +591,14 @@ Overwatch should have meaningful authority to improve the Prime Agent continual 
 
 ### 31. Modification and retirement of global harness entries
 
-- Overwatch may make narrow, reversible modifications to existing global skills, memories, prompt guidance, and agent specifications when the change satisfies the bounded global-refinement evidence and safety criteria.
+- Encore may make narrow, reversible modifications to existing global skills, memories, prompt guidance, and agent specifications when the change satisfies the bounded global-refinement evidence and safety criteria.
 - Deletion, semantic reversal, broad scope expansion, or removal of an existing capability requires CEO approval.
-- Apparently unused global entries are deprecated before removal. Overwatch observes actual dependency and behavior impact during the deprecation period.
+- Apparently unused global entries are deprecated before removal. Encore observes actual dependency and behavior impact during the deprecation period.
 - Every modification retains the prior version, reason, evidence, evaluation result, rollout scope, and rollback trigger.
 
-### 44. Sane as documentation steward — direction under design
+### 44. Concertmaster as documentation steward — direction under design
 
-Sane is the Secretary Office's documentation authority and editorial steward.
+Concertmaster is the Secretary Office's documentation authority and editorial steward.
 
 Responsibilities:
 
@@ -612,40 +612,40 @@ Responsibilities:
 - Consolidate or supersede duplicate and stale documentation rather than continuously creating new competing files.
 - Archive completed Goal material according to retention policy and promote useful lessons through the agreed knowledge process.
 
-Sane may delegate research, drafting, or specialist sections, but remains responsible for consistency, completeness, plain language, provenance, and accurate reflection of approved decisions.
+Concertmaster may delegate research, drafting, or specialist sections, but remains responsible for consistency, completeness, plain language, provenance, and accurate reflection of approved decisions.
 
-Sane must not turn a summary into a new decision. Product scope, architecture, authority, policy, or acceptance changes require the responsible decision process and are then documented by Sane.
+Concertmaster must not turn a summary into a new decision. Product scope, architecture, authority, policy, or acceptance changes require the responsible decision process and are then documented by Concertmaster.
 
-### 45. Sane documentation authority
+### 45. Concertmaster documentation authority
 
-- Sane automatically maintains routine canonical project documentation after meaningful milestones, including current status, Task Contract amendments already decided through the proper process, Council records, handoffs, milestone reports, incident summaries, certification state, and final reports.
-- Product scope, architecture, policy, authority, budget ceiling, and acceptance changes require a recorded decision by the responsible Head Council, Overwatch Council, or CEO before Sane documents them as current truth.
-- Sane preserves the meaning, rationale, dissent, provenance, and effective version of the source decision and cannot create a substantive decision through summarization.
+- Concertmaster automatically maintains routine canonical project documentation after meaningful milestones, including current status, Task Contract amendments already decided through the proper process, Council records, handoffs, milestone reports, incident summaries, certification state, and final reports.
+- Product scope, architecture, policy, authority, budget ceiling, and acceptance changes require a recorded decision by the responsible Head Council, Encore Council, or CEO before Concertmaster documents them as current truth.
+- Concertmaster preserves the meaning, rationale, dissent, provenance, and effective version of the source decision and cannot create a substantive decision through summarization.
 - Documentation changes use the same Git-first isolation, diff, review, and evidence model as other project changes.
 
 ### 56. Bounded autonomous work during idle capacity
 
-When no CEO Goal needs the capacity, Overwatch may autonomously:
+When no CEO Goal needs the capacity, Encore may autonomously:
 
 - Curate and analyze accumulated Improvement Digests.
 - Detect recurring failure, waste, excessive context, redundant deliberation, or poor model and skill routing.
 - Run replay/synthetic shadow evaluations.
 - Validate candidate refinements to skills, Head specifications, worker templates, context selection, and routing.
 - Revalidate stale or contradictory knowledge and observe deprecated harness entries.
-- Check Firefly, control-plane, worktree, environment, lease, and durable-state health using safe bounded operations.
+- Check Discord, control-plane, worktree, environment, lease, and durable-state health using safe bounded operations.
 - Refresh project Context indexes from already authorized project data.
 - Apply and report validated low-risk refinements within an enabled improvement class.
 
-Overwatch does not invent or implement new product objectives, contact external parties, deploy, push, expand authority or budgets, add providers, or alter project intent merely because capacity is idle. Idle work has its own small budget and time bounds, yields at safe points to CEO Goals, and remains visible and auditable.
+Encore does not invent or implement new product objectives, contact external parties, deploy, push, expand authority or budgets, add providers, or alter project intent merely because capacity is idle. Idle work has its own small budget and time bounds, yields at safe points to CEO Goals, and remains visible and auditable.
 
 ### 61. Evidence-driven persona evolution
 
-- Sane, Department Heads, Sentinel, Council roles, and reusable worker profiles have a versioned persona with two layers:
+- Concertmaster, Department Heads, Metronome, Council roles, and reusable worker profiles have a versioned persona with two layers:
   - **Core identity:** mission, organizational role, authority limits, truthfulness, safety boundaries, and prohibited behavior. This layer is stable and cannot be autonomously weakened or rewritten.
   - **Adaptive traits:** communication habits, delegation style, challenge intensity, review emphasis, collaboration patterns, and other bounded working preferences. This layer may improve over time.
-- Persona evolution is based on Goal outcomes, Quality findings, Sentinel observations, Council dissent, user corrections, cost, delay, rework, and measured collaboration results rather than an agent's self-description alone.
+- Persona evolution is based on Goal outcomes, Quality findings, Metronome observations, Council dissent, user corrections, cost, delay, rework, and measured collaboration results rather than an agent's self-description alone.
 - During Phase 1, Maestro records persona observations and proposes versioned changes, but does not autonomously apply them.
-- Phase 4 may apply low-risk adaptive-trait changes only after replay, synthetic, and shadow evaluation shows improvement against a fixed baseline and the Overwatch Council accepts the evidence within an enabled improvement class.
+- Phase 4 may apply low-risk adaptive-trait changes only after replay, synthetic, and shadow evaluation shows improvement against a fixed baseline and the Encore Council accepts the evidence within an enabled improvement class.
 - Every applied persona change records its source evidence, expected benefit, affected roles, measured result, version, and rollback trigger. A later regression automatically disables or rolls back the adaptive change within the approved improvement boundary.
 - Changes to core identity, authority, safety boundaries, organization purpose, or CEO-facing policy always require explicit CEO approval. Such changes cannot be disguised as tone, efficiency, or persona optimization.
 - Persona may influence how an agent communicates and works, but never what evidence exists, which authority it has, or whether a required challenge, escalation, or safety action occurs.

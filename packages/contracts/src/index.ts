@@ -102,13 +102,13 @@ export const CriticalActionResultSchema = z.object({
 }).strict();
 export type CriticalActionResult = z.infer<typeof CriticalActionResultSchema>;
 
-const SentinelChallengeSchema = z.object({
+const MetronomeChallengeSchema = z.object({
   challengeId: UuidSchema, goalId: UuidSchema, reason: z.string().min(1), evidenceReferences: z.array(z.string()),
   status: z.enum(["open", "correction_requested", "safe_paused", "resolved"]), correctionRequest: z.string().nullable(),
   raisedBy: z.string().min(1), resolvedBy: z.string().nullable(), resolutionReason: z.string().nullable(),
 }).strict();
-export const SentinelChallengeListSchema = z.object({ challenges: z.array(SentinelChallengeSchema) }).strict();
-export type SentinelChallengeList = z.infer<typeof SentinelChallengeListSchema>;
+export const MetronomeChallengeListSchema = z.object({ challenges: z.array(MetronomeChallengeSchema) }).strict();
+export type MetronomeChallengeList = z.infer<typeof MetronomeChallengeListSchema>;
 
 const CouncilJudgmentSchema = z.object({ modelProvider: z.string().min(1), modelId: z.string().min(1), verdict: z.enum(["proceed", "do_not_proceed", "escalate"]), confidence: z.enum(["low", "medium", "high"]), reasoning: z.string().min(1), conditions: z.array(z.string()), dissentNote: z.string().nullable(), citedEvidenceIds: z.array(z.string()) }).strict();
 const CouncilSynthesisSchema = z.object({ finalVerdict: z.enum(["proceed", "do_not_proceed", "escalate"]), sameModelOnly: z.boolean(), escalated: z.boolean(), dissentNotes: z.array(z.string()) }).strict();
@@ -119,6 +119,6 @@ const CertificationSchema = z.object({ certificationId: UuidSchema, kind: z.enum
 export const CertificationListSchema = z.object({ certifications: z.array(CertificationSchema) }).strict();
 export type CertificationList = z.infer<typeof CertificationListSchema>;
 
-const SaneFinalReportSchema = z.object({ reportId: UuidSchema, goalId: UuidSchema, success: z.boolean(), blockers: z.array(z.object({ reason: z.string(), detail: z.string() }).strict()), ceoRequest: z.string(), whatChanged: z.string(), userVisibleBehaviorPassed: z.boolean(), participatingDepartments: z.array(z.string()), keyDecisions: z.array(z.string()), dissent: z.array(z.string()), independentValidation: z.array(z.string()), costCents: z.number().int(), budgetCents: z.number().int(), incidents: z.array(z.string()), knownLimitations: z.array(z.string()), criticalActionAwaitingApproval: z.boolean(), evidenceBundleId: UuidSchema }).strict();
-export { SaneFinalReportSchema };
-export type SaneFinalReport = z.infer<typeof SaneFinalReportSchema>;
+const ConcertmasterFinalReportSchema = z.object({ reportId: UuidSchema, goalId: UuidSchema, success: z.boolean(), blockers: z.array(z.object({ reason: z.string(), detail: z.string() }).strict()), ceoRequest: z.string(), whatChanged: z.string(), userVisibleBehaviorPassed: z.boolean(), participatingDepartments: z.array(z.string()), keyDecisions: z.array(z.string()), dissent: z.array(z.string()), independentValidation: z.array(z.string()), costCents: z.number().int(), budgetCents: z.number().int(), incidents: z.array(z.string()), knownLimitations: z.array(z.string()), criticalActionAwaitingApproval: z.boolean(), evidenceBundleId: UuidSchema }).strict();
+export { ConcertmasterFinalReportSchema };
+export type ConcertmasterFinalReport = z.infer<typeof ConcertmasterFinalReportSchema>;

@@ -7,10 +7,10 @@ const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
 
 const expectedTables = [
-  "sane_final_reports", "evidence_bundles", "certification_conflict_resolutions", "certification_waivers", "conditional_certifications",
+  "concertmaster_final_reports", "evidence_bundles", "certification_conflict_resolutions", "certification_waivers", "conditional_certifications",
   "quality_certifications", "certification_conflict_resolution_members", "department_acceptances", "goal_integration_revision_commits", "goal_integration_revisions",
-  "encore_council_syntheses", "encore_council_judgments", "encore_council_rounds", "semantic_reviews", "sentinel_challenge_findings",
-  "sentinel_challenges", "sentinel_findings", "budget_forecasts", "budget_reservations", "integration_commits", "worker_worktrees", "goal_integration_branches",
+  "encore_council_syntheses", "encore_council_judgments", "encore_council_rounds", "semantic_reviews", "metronome_challenge_findings",
+  "metronome_challenges", "metronome_findings", "budget_forecasts", "budget_reservations", "integration_commits", "worker_worktrees", "goal_integration_branches",
   "team_lead_grants", "workers", "mission_bundles", "department_branches", "department_plan_revisions", "department_plans", "council_protocol_events", "council_round_contributions",
   "council_rounds", "independent_briefs", "council_participants", "head_councils", "goal_head_participations", "task_contract_confirmations",
   "task_contract_decisions", "task_contracts", "permanent_head_roles", "role_persona_axes", "permanent_roles", "departments", "organization_groups",

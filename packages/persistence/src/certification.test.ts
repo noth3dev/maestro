@@ -43,7 +43,7 @@ describe("Certification waiver guard", () => {
         followUp: "fix later",
         expiresAt: new Date(Date.now() + 86_400_000),
       },
-      "sane",
+      "concertmaster",
       proof,
     )).rejects.toBeInstanceOf(CertificationError);
   });

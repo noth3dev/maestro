@@ -6,7 +6,7 @@
 ## Purpose
 
 Define Maestro as a selective, hierarchical organization rather than a flat roster of peer agents.
-Department Heads act like functional directors: they discuss cross-domain work, spawn bounded workers, review their departments' results, and return to standby when the goal is complete. Overwatch remains outside the command chain and improves the orchestration system by observing it end to end.
+Department Heads act like functional directors: they discuss cross-domain work, spawn bounded workers, review their departments' results, and return to standby when the goal is complete. Encore remains outside the command chain and improves the orchestration system by observing it end to end.
 
 ## Agreed Decisions
 
@@ -18,42 +18,42 @@ Department Heads act like functional directors: they discuss cross-domain work, 
 - Workers are temporary, task-scoped agents spawned by a Department Head.
 - Workers report to their spawning Head rather than joining a flat global agent pool.
 - Departments that are not needed remain asleep or on standby.
-- Overwatch observes the whole orchestration system from outside the execution hierarchy.
+- Encore observes the whole orchestration system from outside the execution hierarchy.
 
 ### 2. Selective department activation
 
 Use a two-stage activation model:
 
-1. Sane initially wakes the smallest set of Departments likely to be required.
+1. Concertmaster initially wakes the smallest set of Departments likely to be required.
 2. During discussion or execution, an awakened Department Head may directly wake another existing Department Head when missing expertise, a new dependency, or an independent challenge is discovered.
 3. The calling Head supplies a bounded activation brief with the Goal, reason, evidence, requested contribution, urgency, context scope, and expected budget impact.
-4. Sane records the activation, prevents duplicates, updates Council membership and context routing, and coordinates budget or schedule effects, but does not act as a routine approval gate.
-5. Sentinel detects cyclic, duplicative, unjustified, or runaway activation. Creating a new Department still requires Overwatch Council approval.
+4. Concertmaster records the activation, prevents duplicates, updates Council membership and context routing, and coordinates budget or schedule effects, but does not act as a routine approval gate.
+5. Metronome detects cyclic, duplicative, unjustified, or runaway activation. Creating a new Department still requires Encore Council approval.
 
-**Reason:** This avoids waking every Department for every Goal, does not require Sane to predict every dependency at intake time, and lets domain experts bring in the expertise they discover they need without administrative delay.
+**Reason:** This avoids waking every Department for every Goal, does not require Concertmaster to predict every dependency at intake time, and lets domain experts bring in the expertise they discover they need without administrative delay.
 
-### 3. Department Head Council and Overwatch separation
+### 3. Department Head Council and Encore separation
 
 - Awakened Department Heads form a Goal-scoped Head Council.
 - The Head Council discusses scope, dependencies, risks, options, ownership, and validation criteria before workers are spawned.
 - Its output is a decision packet containing the proposed option, alternatives, supporting evidence, known risks, dissent, and unresolved questions.
 - Cross-department disagreements are not settled by a simple majority vote.
-- Overwatch is split into two distinct parts:
-  - **Overwatch Sentinel:** continuously observes the Head Council and execution. It detects missing expertise, policy or budget boundary risks, unsupported claims, circular discussion, stalled handoffs, duplicated work, and divergence between the approved decision and actual execution. It supplies evidence and may request a safe pause, but it does not choose creative or product direction.
-  - **Overwatch Council:** a multi-model, third-party adjudication group. Its members independently review the Head Council's discussion and the Sentinel's evidence from diverse perspectives, then compare judgments and produce a decision with confidence, dissent, conditions, and an escalation reason when judgment is insufficient.
-- The Secretary coordinates the chosen decision but does not override an Overwatch Council judgment within its approved authority boundary.
-- Overwatch may recommend that the Secretary wake an additional department, but it does not directly spawn production workers.
-- After execution, Overwatch compares the decision with the observed outcome and uses replay/synthetic shadow evaluation to propose improvements to the orchestration system.
+- Encore is split into two distinct parts:
+  - **Encore Metronome:** continuously observes the Head Council and execution. It detects missing expertise, policy or budget boundary risks, unsupported claims, circular discussion, stalled handoffs, duplicated work, and divergence between the approved decision and actual execution. It supplies evidence and may request a safe pause, but it does not choose creative or product direction.
+  - **Encore Council:** a multi-model, third-party adjudication group. Its members independently review the Head Council's discussion and the Metronome's evidence from diverse perspectives, then compare judgments and produce a decision with confidence, dissent, conditions, and an escalation reason when judgment is insufficient.
+- The Secretary coordinates the chosen decision but does not override an Encore Council judgment within its approved authority boundary.
+- Encore may recommend that the Secretary wake an additional department, but it does not directly spawn production workers.
+- After execution, Encore compares the decision with the observed outcome and uses replay/synthetic shadow evaluation to propose improvements to the orchestration system.
 
 ### 4. Selective adjudication and execute-then-report
 
-- The multi-model Overwatch Council is selective rather than mandatory for every Goal.
-- A single Department Head may decide routine, reversible work within that department while Sentinel observes.
-- Invoke the Overwatch Council for cross-department goals, material disagreement, high uncertainty, an explicit challenge from Sentinel or a Department Head, or a proposal to create a new department.
-- Creating a new department requires an Overwatch Council decision before the department is created or activated. The proposal must explain the missing capability, why an existing department cannot own it, expected duration, cost, and retirement or retention criteria.
+- The multi-model Encore Council is selective rather than mandatory for every Goal.
+- A single Department Head may decide routine, reversible work within that department while Metronome observes.
+- Invoke the Encore Council for cross-department goals, material disagreement, high uncertainty, an explicit challenge from Metronome or a Department Head, or a proposal to create a new department.
+- Creating a new department requires an Encore Council decision before the department is created or activated. The proposal must explain the missing capability, why an existing department cannot own it, expected duration, cost, and retirement or retention criteria.
 - The default operating mode is **execute, then report**: work that is not classified as critical proceeds to completion within existing authority and budget, and the CEO receives an evidence-backed outcome report afterward rather than an approval request beforehand.
-- A low-confidence or non-convergent Overwatch Council result is not forced into a decision. It escalates to the CEO with options, evidence, dissent, and the reason for uncertainty.
-- Overwatch cannot directly spawn production workers. An approved decision is executed through the Secretary and responsible Department Heads.
+- A low-confidence or non-convergent Encore Council result is not forced into a decision. It escalates to the CEO with options, evidence, dissent, and the reason for uncertainty.
+- Encore cannot directly spawn production workers. An approved decision is executed through the Secretary and responsible Department Heads.
 
 ### 5. Critical-action boundary
 
@@ -68,7 +68,7 @@ Only critical actions stop for CEO approval before execution. Critical actions a
 - Connecting a new external service.
 - Taking an action with material security, privacy, legal, or compliance consequences.
 - Changing an operating policy in a way that is difficult for the CEO to reverse.
-- Any action for which Sentinel detects a credible risk of unrecoverable harm.
+- Any action for which Metronome detects a credible risk of unrecoverable harm.
 
 All other work uses execute-then-report within existing permissions and budget. This includes code changes in isolated worktrees, local commits, tests, documentation, refactoring, bounded worker creation, analysis, and replay/synthetic shadow experiments.
 
@@ -84,7 +84,7 @@ Start with five permanent departments:
 4. **Quality & Safety** — independent testing, review, security, safety, and acceptance validation. This department remains organizationally separate from implementation.
 5. **Operations** — Goal operations, incidents, state, cost, Git/worktree coordination, and operational readiness.
 
-The Secretary is the CEO's Chief of Staff, not a department. Overwatch is an independent oversight layer, not a department. A recurring capability may become a new permanent department only after Overwatch Council approval.
+The Secretary is the CEO's Chief of Staff, not a department. Encore is an independent oversight layer, not a department. A recurring capability may become a new permanent department only after Encore Council approval.
 
 ### 7. Permanent Groups and Departments — corrected interpretation
 
@@ -107,7 +107,7 @@ This clarification reopens the earlier five-department list for regrouping: the 
 - Groups do not have persistent Group Head agents in the initial organization.
 - The Secretary directly convenes the relevant Department Heads across Groups for each Goal.
 - This avoids an extra reporting layer, unnecessary deliberation, and token cost.
-- A Group Head may be proposed later only when the Group has grown enough that repeated coordination failures demonstrate a real need. Creating that role requires Overwatch Council approval under the same capability-expansion rule used for new departments.
+- A Group Head may be proposed later only when the Group has grown enough that repeated coordination failures demonstrate a real need. Creating that role requires Encore Council approval under the same capability-expansion rule used for new departments.
 
 ### 9. Initial Group and Department taxonomy
 
@@ -139,7 +139,7 @@ All departments remain asleep unless selected for a Goal. The number of permanen
 - Access to the user's computer or CLI should use an explicitly enrolled device and a bounded, auditable Goal-scoped authority grant.
 - The preferred operating model is one-time device enrollment, least-privilege access for each Goal, full command and result audit, and automatic expiry when the Goal ends.
 - Noncritical actions within the granted scope may follow execute-then-report. Critical actions remain behind the agreed CEO approval boundary.
-- Sentinel observes device access, command scope, unexpected side effects, and authority expiry. It may pause execution when the observed behavior escapes the approved Goal scope.
+- Metronome observes device access, command scope, unexpected side effects, and authority expiry. It may pause execution when the observed behavior escapes the approved Goal scope.
 
 ### 11. Enrolled-device automation level
 
@@ -149,7 +149,7 @@ All departments remain asleep unless selected for a Goal. The number of permanen
 - These ordinary actions follow execute-then-report and remain fully audited.
 - Access to unrelated personal folders, system-wide changes, external sending, permanent deletion, payment, login or authority changes, or any other critical action stops for CEO approval.
 - Device enrollment never implies unrestricted access. A Goal must still establish a bounded scope.
-- Sentinel may pause access when behavior escapes the Goal, reaches an unexpected resource, or produces side effects outside the granted scope.
+- Metronome may pause access when behavior escapes the Goal, reaches an unexpected resource, or produces side effects outside the granted scope.
 
 ### 12. Department Head worker authority
 
@@ -160,15 +160,15 @@ All departments remain asleep unless selected for a Goal. The number of permanen
 - Duplicate workers, overlapping ownership, and workers without a concrete deliverable are prohibited.
 - A worker terminates when its mission completes, becomes unnecessary, exceeds its bounds, or cannot make useful progress.
 - Material expansion beyond the Goal's expected scope or budget returns to the Head Council for review.
-- Sentinel monitors worker multiplication, duplicated effort, idle time, cost, and scope drift and may request a safe pause.
+- Metronome monitors worker multiplication, duplicated effort, idle time, cost, and scope drift and may request a safe pause.
 
-### 13. Overwatch Improvement Organization — proposed structure
+### 13. Encore Improvement Organization — proposed structure
 
-Overwatch should include a selectively activated improvement organization that improves the orchestration system itself rather than executing normal CEO Goals.
+Encore should include a selectively activated improvement organization that improves the orchestration system itself rather than executing normal CEO Goals.
 
-- **Overwatch Sentinel** remains the lightweight continuous observer and trigger source.
-- **Overwatch Council** remains the selective multi-model adjudicator for important Goal decisions and improvement judgments.
-- **Overwatch Improvement Lab** wakes only when Sentinel detects sufficient evidence, a recurring failure, a material inefficiency, an incident, or a scheduled review threshold. It contains task-scoped specialist roles:
+- **Encore Metronome** remains the lightweight continuous observer and trigger source.
+- **Encore Council** remains the selective multi-model adjudicator for important Goal decisions and improvement judgments.
+- **Encore Improvement Lab** wakes only when Metronome detects sufficient evidence, a recurring failure, a material inefficiency, an incident, or a scheduled review threshold. It contains task-scoped specialist roles:
   - **Organization Architect** — evaluates whether Groups, Departments, Head responsibilities, activation rules, and handoffs should change.
   - **Efficiency Analyst** — evaluates token use, cost, latency, redundant deliberation, unnecessary department activation, and model choice.
   - **Process Engineer** — proposes changes to planning, delegation, context transfer, worker limits, review, recovery, and reporting.
@@ -176,12 +176,12 @@ Overwatch should include a selectively activated improvement organization that i
 - These are not continuously running permanent production departments. They are awakened only for a specific improvement hypothesis.
 - The Lab produces a bounded candidate with a hypothesis, expected benefit, affected behavior, evidence, evaluation plan, failure conditions, and rollback plan.
 - Candidate generation and evaluation occur outside live Goal routing. A candidate cannot silently redefine its own evaluator or success criteria.
-- The Overwatch Council reviews the Lab's evidence from multiple independent model perspectives and records the decision, dissent, confidence, and allowed next step.
+- The Encore Council reviews the Lab's evidence from multiple independent model perspectives and records the decision, dissent, confidence, and allowed next step.
 - Improvement outcomes are reported to the CEO with measured token, cost, latency, quality, and safety deltas rather than vague claims.
 
 ### 14. Staged application of validated improvements
 
-- The initial Overwatch improvement lifecycle remains replay/synthetic and shadow-only.
+- The initial Encore improvement lifecycle remains replay/synthetic and shadow-only.
 - The CEO may later enable a narrowly defined class of improvements for automatic live application after that class has accumulated sufficient successful shadow evidence.
 - Within an enabled class, only low-risk, reversible changes may be automatically applied. The CEO receives an evidence-backed report afterward.
 - Live application requires an intact rollback path, bounded exposure, independent monitoring, and automatic rollback when quality, safety, latency, cost, or reliability crosses its allowed threshold.
@@ -206,7 +206,7 @@ Maestro should not treat all data as one shared memory. Data is separated by pur
 1. **Project source and artifacts** — repositories, files, local commits, reports, screenshots, generated assets, and deliverables. Git or the project's native artifact system remains the source of truth where applicable.
 2. **Operational state** — Goals, active Groups and Departments, Head Council membership, worker missions, leases, decisions, approvals, device grants, and current execution status.
 3. **Organizational knowledge** — project-specific facts, Department playbooks, reusable procedures, CEO preferences, learned constraints, and prior decision rationales. Every item carries source, scope, owner, confidence, and freshness information.
-4. **Evidence and telemetry** — Council transcripts, Sentinel findings, command and tool records, evaluation results, cost, token use, latency, failures, rollback evidence, and Overwatch improvement comparisons. This evidence is append-oriented and cannot be silently rewritten by the candidate it evaluates.
+4. **Evidence and telemetry** — Council transcripts, Metronome findings, command and tool records, evaluation results, cost, token use, latency, failures, rollback evidence, and Encore improvement comparisons. This evidence is append-oriented and cannot be silently rewritten by the candidate it evaluates.
 5. **Secrets and authority** — credentials, tokens, device enrollment material, and access grants. These remain in a separate protected store and are referenced by capability, never copied into ordinary prompts, memory, reports, or logs.
 
 Additional principles:
@@ -215,7 +215,7 @@ Additional principles:
 - Temporary worker environments are disposable. A worker's scratch data does not automatically become organizational memory.
 - Before a worker terminates, its Department Head promotes only the required deliverables, evidence, decisions, and useful lessons into the appropriate durable layer.
 - Current state may be updated, but material transitions also produce durable events so recovery and audit do not depend on mutable snapshots alone.
-- Data shown to Overwatch should be sufficient for evaluation while minimizing unrelated content and secret exposure.
+- Data shown to Encore should be sufficient for evaluation while minimizing unrelated content and secret exposure.
 - Deletion and retention follow the critical-action boundary and must not be hidden inside routine cleanup.
 
 ### 17. Project-private knowledge with curated cross-project lessons
@@ -226,9 +226,9 @@ Additional principles:
 - Shared lessons preserve provenance to the originating evidence without exposing the evidence to unrelated projects.
 - Low-confidence, stale, contradicted, or highly context-dependent lessons are weakened, revalidated, or retired rather than treated as universal truth.
 
-### 18. Milestone-based Overwatch Improvement Digests
+### 18. Milestone-based Encore Improvement Digests
 
-Overwatch receives curated improvement evidence at natural completion boundaries rather than ingesting every raw log as memory.
+Encore receives curated improvement evidence at natural completion boundaries rather than ingesting every raw log as memory.
 
 Digest triggers include:
 
@@ -240,14 +240,14 @@ Digest triggers include:
 
 The digest pipeline:
 
-1. Sentinel links the bounded episode's Goal, Department, worker, decisions, actions, outcomes, and measurements.
+1. Metronome links the bounded episode's Goal, Department, worker, decisions, actions, outcomes, and measurements.
 2. A curation step removes routine noise, duplicated messages, secrets, unrelated content, and evidence with no improvement value.
 3. Valuable episodes are normalized into an **Improvement Digest** containing the situation, selected decision, rejected alternatives when relevant, observed result, quality/cost/token/latency/safety deltas, failure or success factors, confidence, and source references.
 4. Digests are ranked by impact, novelty, recurrence, confidence, and actionability.
-5. The Overwatch Improvement Lab consumes the selected digests to form and test improvement hypotheses.
+5. The Encore Improvement Lab consumes the selected digests to form and test improvement hypotheses.
 6. Cross-project promotion uses only the generalized lesson, never the raw project log.
 
-Successful patterns, failures, near misses, unnecessary work, and avoided work are all eligible. Overwatch must not optimize only for failure reduction or token reduction at the expense of outcome quality.
+Successful patterns, failures, near misses, unnecessary work, and avoided work are all eligible. Encore must not optimize only for failure reduction or token reduction at the expense of outcome quality.
 
 Raw logs remain evidence and are not rewritten into conclusions. A digest may be corrected or superseded, but its evidence link and prior version remain auditable.
 
@@ -269,8 +269,8 @@ A CEO request to delete a project's records must also trace cross-project lesson
 
 - A worker may propose a lesson with evidence but cannot directly write or overwrite durable organizational knowledge.
 - A Department Head may promote an evidence-backed lesson into project- and Department-scoped knowledge.
-- The Overwatch Improvement Lab may synthesize recurring patterns into a candidate generalized lesson.
-- The multi-model Overwatch Council approves lessons intended for reuse across projects.
+- The Encore Improvement Lab may synthesize recurring patterns into a candidate generalized lesson.
+- The multi-model Encore Council approves lessons intended for reuse across projects.
 - The CEO may pin, challenge, request correction of, or retire any organizational knowledge.
 - A single success or failure cannot become a global rule without corroboration.
 - Corrections preserve provenance: incorrect or stale knowledge is marked superseded or retired with a replacement reason rather than silently rewritten.
@@ -283,7 +283,7 @@ A CEO request to delete a project's records must also trace cross-project lesson
 - Scout findings return to the spawning Department Head with source references, uncertainty, and observed limitations, then become available to the Head Council.
 - Scout Workers terminate after returning their evidence.
 - **Execution Workers** are spawned only after the Head Council has established the execution decision, ownership, boundaries, and validation criteria.
-- Sentinel detects Scouts that drift into implementation or are used to bypass the Council decision boundary.
+- Metronome detects Scouts that drift into implementation or are used to bypass the Council decision boundary.
 
 ### 22. Head Council deliberation protocol
 
@@ -291,7 +291,7 @@ A CEO request to delete a project's records must also trace cross-project lesson
 2. **Evidence gathering:** A Head may request a bounded Scout Worker when a material factual question cannot be resolved from available evidence.
 3. **Open deliberation:** Heads challenge assumptions, surface cross-department conflicts, identify missing expertise, and add only new evidence or a distinct argument rather than repeating positions.
 4. **Decision packet:** The Council records the selected direction, rejected alternatives and reasons, Department ownership, worker plan, completion and failure criteria, dissent, uncertainty, and any critical action.
-5. **Stopping rule:** The discussion ends when material issues are resolved. It stops if two rounds add no new evidence or argument. Unresolved material conflict, high uncertainty, or a valid challenge routes to the selective Overwatch Council. Critical actions route to the CEO under the agreed boundary.
+5. **Stopping rule:** The discussion ends when material issues are resolved. It stops if two rounds add no new evidence or argument. Unresolved material conflict, high uncertainty, or a valid challenge routes to the selective Encore Council. Critical actions route to the CEO under the agreed boundary.
 
 The Secretary chairs, keeps scope and records, and coordinates the result. The Secretary does not dominate domain judgments or erase dissent.
 
@@ -316,7 +316,7 @@ Context assembly principles:
 - A worker receives a smaller Mission Context derived by its Head: mission, bounded inputs, required interfaces, completion criteria, relevant evidence, and authority. It does not inherit the entire Head or Council context.
 - Context entries retain provenance and freshness. Contradicted or stale entries are marked rather than silently trusted.
 - Department data remains scoped. Cross-department sharing should expose the minimum evidence required for collaboration and decision-making.
-- After milestones, useful outcomes flow through the agreed knowledge-promotion and Overwatch Digest processes rather than being appended indiscriminately to every future prompt.
+- After milestones, useful outcomes flow through the agreed knowledge-promotion and Encore Digest processes rather than being appended indiscriminately to every future prompt.
 
 ### 24. Minimum necessary cross-department data sharing
 
@@ -344,11 +344,11 @@ Every agent identity uses the existing ten normalized personality axes:
 
 Application rules:
 
-- Every persistent Department Head, the Secretary, Overwatch Sentinel, and each Overwatch Council persona has a stable identity, role charter, capabilities, limitations, current state, and ten-axis baseline.
+- Every persistent Department Head, the Secretary, Encore Metronome, and each Encore Council persona has a stable identity, role charter, capabilities, limitations, current state, and ten-axis baseline.
 - Every temporary worker also has a ten-axis profile for the life of its mission. The profile is derived from the Department's working style, the Head's delegation choice, and the mission's needs rather than cloning the Head or choosing random traits without purpose.
 - Traits influence communication style, exploration versus restraint, initiative, collaboration, challenge behavior, escalation tendency, and adaptation. They do not grant permissions, change budgets, override evidence, weaken safety policy, or determine whether a claim is true.
 - Department charter and professional duty take precedence over personality when they conflict.
-- The Head Council should contain useful personality diversity. The multi-model Overwatch Council should also preserve independent perspectives rather than converging all personas toward the same agreeable profile.
+- The Head Council should contain useful personality diversity. The multi-model Encore Council should also preserve independent perspectives rather than converging all personas toward the same agreeable profile.
 - Trait changes are evidence-backed improvement candidates. Initial changes are evaluated in replay/synthetic shadow mode and cannot silently alter live authority or policy.
 - The app shows identity and the three most distinctive axes by default, with the complete ten-axis profile available on expansion. The CEO can inspect and later edit an agent's persona and avatar.
 
@@ -360,11 +360,11 @@ The approved Secretary seed remains:
 
 ### 26. Persona initialization and editing
 
-- Initial Department Head, Overwatch, and worker trait profiles are generated from each role's duty, perspective, and expected behavior.
+- Initial Department Head, Encore, and worker trait profiles are generated from each role's duty, perspective, and expected behavior.
 - The CEO may inspect and edit all ten axes and the visible persona in the app.
 - The app explains the expected behavioral effect of a proposed trait change before application.
 - Trait changes are evaluated against representative replay/synthetic scenarios before live use and retain a rollback target.
-- Worker profiles are mission-derived and expire with the worker. Persistent Head and Overwatch profiles are durable and versioned.
+- Worker profiles are mission-derived and expire with the worker. Persistent Head and Encore profiles are durable and versioned.
 
 ### 27. Prime Agent is the execution kernel
 
@@ -372,7 +372,7 @@ Maestro is designed to run **on top of Prime Agent**, not to replace Prime Agent
 
 Responsibility boundary:
 
-- **Maestro owns:** CEO Goals, Secretary workflow, Groups and Departments, Head Council policy, selective activation, Department Context Packs, data and authority policy, budget and critical-action gates, organizational UI, outcome reporting, and Overwatch improvement objectives.
+- **Maestro owns:** CEO Goals, Secretary workflow, Groups and Departments, Head Council policy, selective activation, Department Context Packs, data and authority policy, budget and critical-action gates, organizational UI, outcome reporting, and Encore improvement objectives.
 - **Prime Agent owns:** model execution, recursive subagent spawning, parent/child messaging, observation, task environments, tool execution, skill and plugin availability, model selection surfaces, and the continual harness used by refinement.
 
 Runtime mapping:
@@ -381,8 +381,8 @@ Runtime mapping:
 - A Head spawns Scout or Execution Workers as its direct Prime Agent children. This preserves the intended reporting hierarchy in the runtime itself.
 - Sleeping a Department Head terminates active execution while preserving the Head's approved identity, Department Context Pack, traits, and durable organizational knowledge.
 - The Secretary is the root organizational coordinator. Head Council communication uses bounded agent messaging and produces a shared decision packet.
-- Sentinel observes the Prime Agent family, event stream, costs, tool use, authority grants, and Maestro Goal state without becoming a worker's execution parent.
-- The multi-model Overwatch Council uses separate Prime Agent subagents and, when available and approved, distinct model selectors to create genuinely independent judgments.
+- Metronome observes the Prime Agent family, event stream, costs, tool use, authority grants, and Maestro Goal state without becoming a worker's execution parent.
+- The multi-model Encore Council uses separate Prime Agent subagents and, when available and approved, distinct model selectors to create genuinely independent judgments.
 
 ### 28. Skill, plugin, model, and capability assignment at spawn
 
@@ -398,9 +398,9 @@ Every spawned Head or worker receives a mission-specific assignment bundle:
 
 Assignment follows least privilege. A skill being installed globally does not mean every agent receives or may use it. Missing capability may trigger a request to the Department Head, a Scout, or a new capability proposal; it cannot be silently added by a worker.
 
-### 29. Overwatch improvement through Prime Agent refinement
+### 29. Encore improvement through Prime Agent refinement
 
-- Improvement Digests feed the Overwatch Improvement Lab.
+- Improvement Digests feed the Encore Improvement Lab.
 - The Lab may propose focused changes to Prime Agent continual-harness components: prompt guidance, scoped memories, reusable skills, Department Head specifications, worker templates, and narrow behavioral policies.
 - `refine` is the controlled persistence mechanism for these evidence-backed changes. Refinement is not a license to rewrite the whole harness or system prompt.
 - Every proposal names the observed problem, smallest relevant harness component, expected benefit, project/global scope, evaluation evidence, and rollback target.
@@ -412,16 +412,16 @@ Assignment follows least privilege. A skill being installed globally does not me
 
 This workspace contains the approved design artifacts but no Maestro application implementation. There is no legacy runtime, operational state, compatibility contract, or migration target to preserve. Implementation starts cleanly on Prime Agent's public programmatic SDK and native recursive-subagent surfaces. Existing project repositories may later be enrolled as independent source systems, but they are not Maestro legacy state.
 
-### 30. Overwatch authority for project and bounded global refinement — proposed boundary
+### 30. Encore authority for project and bounded global refinement — proposed boundary
 
-Overwatch should have meaningful authority to improve the Prime Agent continual harness without routing every refinement to the CEO.
+Encore should have meaningful authority to improve the Prime Agent continual harness without routing every refinement to the CEO.
 
 - Validated project-scoped refinements may auto-apply under an enabled improvement class, with evidence, versioning, monitoring, and rollback.
-- Overwatch may also auto-apply a bounded class of low-risk global refinements when all of the following hold:
+- Encore may also auto-apply a bounded class of low-risk global refinements when all of the following hold:
   - Evidence comes from multiple relevant episodes or projects rather than one isolated outcome.
   - The change is additive or easily reversible.
   - It does not expand authority, permissions, data access, external services, model/provider scope, budget, or critical-action boundaries.
-  - It has passed replay/synthetic evaluation and independent multi-model Overwatch Council review.
+  - It has passed replay/synthetic evaluation and independent multi-model Encore Council review.
   - It begins with staged exposure, retains the prior version, and has measurable rollback triggers.
 - Candidate bounded global changes include clearer reusable guidance, non-sensitive generalized lessons, reusable procedures or skills, capability-routing metadata, context-selection heuristics, and worker or Head templates that preserve existing authority.
 - The CEO receives a grouped evidence report after application rather than a pre-approval request for every eligible refinement.
@@ -429,9 +429,9 @@ Overwatch should have meaningful authority to improve the Prime Agent continual 
 
 ### 31. Modification and retirement of global harness entries
 
-- Overwatch may make narrow, reversible modifications to existing global skills, memories, prompt guidance, and agent specifications when the change satisfies the bounded global-refinement evidence and safety criteria.
+- Encore may make narrow, reversible modifications to existing global skills, memories, prompt guidance, and agent specifications when the change satisfies the bounded global-refinement evidence and safety criteria.
 - Deletion, semantic reversal, broad scope expansion, or removal of an existing capability requires CEO approval.
-- Apparently unused global entries are deprecated before removal. Overwatch observes actual dependency and behavior impact during the deprecation period.
+- Apparently unused global entries are deprecated before removal. Encore observes actual dependency and behavior impact during the deprecation period.
 - Every modification retains the prior version, reason, evidence, evaluation result, rollout scope, and rollback trigger.
 
 ### 32. Git-first execution model — proposed structure
@@ -483,7 +483,7 @@ Accepted worker commits flow to the responsible Department branch, then accepted
 - A retry requires new information, a changed hypothesis, a changed method, or a justified model, skill, environment, or worker change. Blind repetition of the same failed attempt is prohibited.
 - Failed worker branch state, evidence, commands, and partial deliverables are preserved until reviewed. Useful partial commits may be retained and integrated through normal review.
 - Other independent Department work continues when safe; a single worker or Department failure does not automatically cancel the Goal.
-- Missing expertise may wake another existing Department under the agreed rule. Creating a new Department still requires Overwatch Council approval.
+- Missing expertise may wake another existing Department under the agreed rule. Creating a new Department still requires Encore Council approval.
 - Process or environment recovery resumes from durable Goal state and recorded Git revisions, verifies leases and enrolled-device authority, and prevents duplicate active workers before writing resumes.
 - Noncritical unrecoverable failure does not interrupt the CEO mid-run. The system exhausts useful bounded alternatives, then reports the failure, attempts, evidence, preserved results, and next options.
 - Critical risk follows the existing immediate CEO approval or safe-stop boundary.
@@ -493,9 +493,9 @@ Accepted worker commits flow to the responsible Department branch, then accepted
 
 The CEO-facing coordination layer is a permanent **Secretary Office**.
 
-- **Sane** is the current primary Secretary identity and the CEO's continuous conversational interface. Sane receives requests, maintains continuity, coordinates the Overture Crew, presents the final Task Contract, launches approved Goals, reports outcomes, and surfaces only critical interruptions.
+- **Concertmaster** is the current primary Secretary identity and the CEO's continuous conversational interface. Concertmaster receives requests, maintains continuity, coordinates the Overture Crew, presents the final Task Contract, launches approved Goals, reports outcomes, and surfaces only critical interruptions.
 - **Overture Crew** (or **Overture**) is a selectively activated intake and task-definition team. It works with the CEO in a `grill-me`-style conversation and produces one canonical `task.md` before orchestration begins.
-- The Overture Crew is not a flat always-on chat room. Sane wakes only the roles needed for the request.
+- The Overture Crew is not a flat always-on chat room. Concertmaster wakes only the roles needed for the request.
 
 Initial Overture Crew roles:
 
@@ -506,7 +506,7 @@ Initial Overture Crew roles:
 - **Design & Mock Specialist** — creates disposable design explorations, visual options, or other previews when seeing a candidate is necessary to clarify intent. A preview is not production implementation.
 - **Task Editor** — maintains the canonical Task Contract, resolves contradictions, cites evidence and approved previews, and ensures the document is ready to launch.
 
-The Crew may later gain another role through the same evidence and Overwatch Council process used for organizational capability expansion.
+The Crew may later gain another role through the same evidence and Encore Council process used for organizational capability expansion.
 
 ### 36. `task.md` as the Goal launch contract
 
@@ -522,12 +522,12 @@ The Overture Crew produces one versioned `task.md` containing:
 - Acceptance evidence required before success may be reported.
 - Document version, decision history, CEO launch state, and a content identity binding the launched Goal to the agreed contract.
 
-Once launched, the Task Contract becomes the stable source of intent for Sane, the Head Council, Department Context assembly, workers, Quality, Overwatch, and final reporting. Material scope changes create a visible amendment and revised contract identity rather than silently changing the active Goal.
+Once launched, the Task Contract becomes the stable source of intent for Concertmaster, the Head Council, Department Context assembly, workers, Quality, Encore, and final reporting. Material scope changes create a visible amendment and revised contract identity rather than silently changing the active Goal.
 
 ### 37. Single Goal launch confirmation
 
 - Completing `task.md` does not silently start execution.
-- Sane presents a concise plain-language summary of the final Task Contract and asks for one explicit launch confirmation from the CEO.
+- Concertmaster presents a concise plain-language summary of the final Task Contract and asks for one explicit launch confirmation from the CEO.
 - The confirmation binds the launched Goal to that Task Contract version and content identity.
 - After launch, the organization proceeds end to end without intermediate approval requests unless a critical action, material contract amendment, or genuinely unrecoverable ambiguity crosses an agreed boundary.
 - Ordinary retries, replanning, Department activation, worker spawning, local Git work, testing, and bounded environment or enrolled-device actions continue automatically and are reported afterward.
@@ -535,31 +535,31 @@ Once launched, the Task Contract becomes the stable source of intent for Sane, t
 ### 38. Role-aware model, skill, and plugin selection
 
 - Selection is quality-gated and then cost-optimized: among models demonstrated capable of meeting the mission's quality and safety requirements, choose the lowest-cost suitable option.
-- Sane uses a stable high-quality model appropriate for persistent CEO interaction and judgment continuity.
+- Concertmaster uses a stable high-quality model appropriate for persistent CEO interaction and judgment continuity.
 - The Overture Conversation Lead and Task Editor use models capable of accurately preserving intent and resolving contradictions.
 - Project and External Scouts prefer lower-cost retrieval and synthesis models and escalate only when evidence conflict or complexity requires it.
 - Department Heads use strong reasoning models appropriate for planning, delegation, negotiation, and evidence synthesis.
 - Workers receive the smallest model demonstrated capable of their specific mission. Model size is not inherited automatically from the Head.
-- Sentinel uses deterministic checks before model judgment and invokes a low-cost model only for ambiguity that rules cannot resolve.
-- The Overwatch Council uses genuinely distinct approved models when available. If only one provider or model family is available, it uses independently isolated contexts and diverse personas and reports the limitation honestly.
+- Metronome uses deterministic checks before model judgment and invokes a low-cost model only for ambiguity that rules cannot resolve.
+- The Encore Council uses genuinely distinct approved models when available. If only one provider or model family is available, it uses independently isolated contexts and diverse personas and reports the limitation honestly.
 - A creator does not evaluate its own candidate when an independent approved evaluator is available. At minimum, evaluation uses isolated context and criteria fixed before candidate execution.
 - Skills and plugins are selected per mission from the approved Prime Agent catalog. Installed availability does not imply assignment.
 - The assignment bundle includes only capabilities that contribute to the mission, reducing context, authority, and attack surface.
-- Outcome telemetry continuously measures role/model/skill combinations. Overwatch may refine routing under the staged-improvement authority without lowering the required quality floor.
+- Outcome telemetry continuously measures role/model/skill combinations. Encore may refine routing under the staged-improvement authority without lowering the required quality floor.
 
 ### 39. Evidence-driven flexible Goal budgeting
 
 Budget allocation is adaptive rather than a fixed percentage template.
 
-- Overwatch analyzes the final Task Contract, relevant project state, similar historical Goals, Improvement Digests, Department and role success rates, model and skill cost, token use, latency, retry patterns, uncertainty, and expected validation burden.
-- It produces an initial allocation range for initiation, deliberation, each active Department, independent validation, recovery reserve, and Overwatch evidence processing.
-- Sane and the Head Council may reallocate unused budget inside the approved Goal ceiling as evidence and progress change.
+- Encore analyzes the final Task Contract, relevant project state, similar historical Goals, Improvement Digests, Department and role success rates, model and skill cost, token use, latency, retry patterns, uncertainty, and expected validation burden.
+- It produces an initial allocation range for initiation, deliberation, each active Department, independent validation, recovery reserve, and Encore evidence processing.
+- Concertmaster and the Head Council may reallocate unused budget inside the approved Goal ceiling as evidence and progress change.
 - Department Heads allocate their current Department budget among Scouts and Execution Workers.
 - Forecasts update after meaningful milestones. The system may reduce unnecessary workers, discussion, context, or model cost before consuming recovery reserve.
 - Quality, required Security or Safety review, and minimum recovery capacity retain protected floors appropriate to the Goal. They cannot be reduced to zero to make execution appear affordable.
 - Historical data guides but does not dictate allocation. New Departments, novel work, and sparse data receive explicit uncertainty and an exploration allowance rather than being starved because they lack a track record.
 - Recent relevant evidence is weighted more strongly than stale or superficially similar history. Outcomes are evaluated for quality and safety, not only low spend.
-- Overwatch may optimize allocation within the approved ceiling. Increasing the total ceiling remains a critical budget action requiring CEO approval.
+- Encore may optimize allocation within the approved ceiling. Increasing the total ceiling remains a critical budget action requiring CEO approval.
 - The CEO can inspect current spend, forecast, allocation changes, evidence behind the changes, and remaining probability of completion in the app.
 
 ### 40. Multi-party final certification
@@ -569,38 +569,38 @@ A Goal is reported as successful only when the required evidence authorities hav
 1. Each executing Department Head accepts its Department's worker outputs and integrated Department commits.
 2. Quality validates the integrated Goal revision and deliverables against the launched `task.md` acceptance criteria.
 3. Security and Safety & Compliance certify the relevant risk and authority criteria when the Goal requires their participation.
-4. Sentinel verifies process integrity, Git lineage, required evidence, budget and authority bounds, and absence of unresolved blocking findings.
-5. Sane reports success to the CEO only when all required certifications are present and bound to the same Task Contract and integrated result.
+4. Metronome verifies process integrity, Git lineage, required evidence, budget and authority bounds, and absence of unresolved blocking findings.
+5. Concertmaster reports success to the CEO only when all required certifications are present and bound to the same Task Contract and integrated result.
 
-The Overwatch Council adjudicates conflicting certifications or material unresolved uncertainty; it is not a mandatory routine evaluator for every Goal. The CEO need not approve ordinary certified success. Critical push, merge, deployment, release, external publication, or other critical effects retain their separate approval gate.
+The Encore Council adjudicates conflicting certifications or material unresolved uncertainty; it is not a mandatory routine evaluator for every Goal. The CEO need not approve ordinary certified success. Critical push, merge, deployment, release, external publication, or other critical effects retain their separate approval gate.
 
-### 41. Firefly external watchdog — direction under design
+### 41. Discord external watchdog — direction under design
 
-**Firefly** is an independent external watchdog that runs outside the main Maestro orchestration failure domain.
+**Discord** is an independent external watchdog that runs outside the main Maestro orchestration failure domain.
 
 Purpose:
 
 - Detect when Maestro, Prime Agent integration, an enrolled runtime, or an observed project experiences a crash, persistent health failure, functional regression, bug signal, security vulnerability, dependency exposure, or other actionable anomaly.
-- Continue observing and reporting even when Maestro's primary control plane or Overwatch is unhealthy.
+- Continue observing and reporting even when Maestro's primary control plane or Encore is unhealthy.
 - Convert a detected anomaly into a bounded, evidence-backed incident signal and wake the relevant organizational expertise.
 
-Firefly principles:
+Discord principles:
 
 - It uses least-privilege, primarily read-only monitoring: health endpoints, bounded logs and crash summaries, approved synthetic probes, dependency or vulnerability feeds, and explicit monitored resources.
 - It does not directly patch code, change production, expand authority, or spawn execution workers.
 - It fingerprints and deduplicates signals, records first and last observation, confidence, severity, affected component and version, reproduction evidence when safe, and source freshness.
 - Signals are signed or otherwise authenticated, freshness-checked, replay-resistant, and auditable before Maestro trusts them.
 - Crash or reliability evidence maps initially to Operations and Engineering; vulnerability evidence maps to Security and Engineering; user-visible regression evidence may map to Quality, Product, Design, or Engineering as appropriate.
-- Firefly creates an Incident Brief or a draft Incident Task Contract rather than injecting unbounded raw logs into Department context.
-- Sane, Sentinel, and the awakened Heads receive the same incident identity so duplicate Goals and duplicate remediation are avoided.
-- Firefly itself has health, credential expiry, rate, false-positive, and silence monitoring. Absence of Firefly data is not treated automatically as absence of incidents.
-- Firefly findings, triage outcomes, false positives, time to detection, and remediation results feed Overwatch Improvement Digests.
+- Discord creates an Incident Brief or a draft Incident Task Contract rather than injecting unbounded raw logs into Department context.
+- Concertmaster, Metronome, and the awakened Heads receive the same incident identity so duplicate Goals and duplicate remediation are avoided.
+- Discord itself has health, credential expiry, rate, false-positive, and silence monitoring. Absence of Discord data is not treated automatically as absence of incidents.
+- Discord findings, triage outcomes, false positives, time to detection, and remediation results feed Encore Improvement Digests.
 
-### 42. Firefly triage activation and Head-to-Head calling
+### 42. Discord triage activation and Head-to-Head calling
 
-- For a high-confidence crash, outage, vulnerability, or comparable incident, Firefly may directly wake the relevant existing Department Heads into read-only triage mode.
-- Firefly notifies Sane and Sentinel with the same authenticated incident identity at activation time.
-- Lower-confidence or minor signals route first to Sane and Sentinel for correlation before waking Departments.
+- For a high-confidence crash, outage, vulnerability, or comparable incident, Discord may directly wake the relevant existing Department Heads into read-only triage mode.
+- Discord notifies Concertmaster and Metronome with the same authenticated incident identity at activation time.
+- Lower-confidence or minor signals route first to Concertmaster and Metronome for correlation before waking Departments.
 - Triage authority permits evidence collection, reproduction when safe, impact assessment, and an Incident Task Contract draft. It does not permit remediation writes or critical operational effects.
 - Actual remediation follows the normal Task Contract, Git, worker, certification, and critical-action rules.
 
@@ -608,21 +608,21 @@ Department Heads may directly call other existing Department Heads:
 
 - The calling Head provides a bounded activation brief: Goal, reason, evidence, requested contribution, urgency, relevant context, and expected budget impact.
 - The called Head first joins in assessment or advisory mode and may accept ownership, provide a bounded consultation, request a Scout, or state with evidence that its Department is not relevant.
-- Sane updates Council membership, context, scheduling, and budget records but is not a pre-approval gate.
+- Concertmaster updates Council membership, context, scheduling, and budget records but is not a pre-approval gate.
 - Direct calling cannot create a new Department, expand permissions, exceed the Goal ceiling, or bypass a critical-action boundary.
-- Sentinel detects activation loops, duplicate Heads, unjustified expansion, and Departments that remain awake without useful contribution.
+- Metronome detects activation loops, duplicate Heads, unjustified expansion, and Departments that remain awake without useful contribution.
 
 ### 43. Live dashboard with milestone-based CEO reporting
 
-- The app exposes live organizational, Council, worker, Git, budget, evaluation, Firefly, Sentinel, and Overwatch state.
-- Sane keeps conversational reporting concise and milestone-based rather than narrating every worker action.
-- Sane reports when the Task Contract is ready for launch, the Head Council fixes the execution direction, a material scope or forecast change occurs, a major milestone completes, or final certification succeeds or bounded recovery is exhausted.
-- Critical-action approval and a severe high-confidence Firefly incident interrupt immediately.
+- The app exposes live organizational, Council, worker, Git, budget, evaluation, Discord, Metronome, and Encore state.
+- Concertmaster keeps conversational reporting concise and milestone-based rather than narrating every worker action.
+- Concertmaster reports when the Task Contract is ready for launch, the Head Council fixes the execution direction, a material scope or forecast change occurs, a major milestone completes, or final certification succeeds or bounded recovery is exhausted.
+- Critical-action approval and a severe high-confidence Discord incident interrupt immediately.
 - Routine worker spawn, completion, retry, model fallback, Scout activity, and minor replanning remain visible in the app and are grouped into the next useful milestone update.
 
-### 44. Sane as documentation steward — direction under design
+### 44. Concertmaster as documentation steward — direction under design
 
-Sane is the Secretary Office's documentation authority and editorial steward.
+Concertmaster is the Secretary Office's documentation authority and editorial steward.
 
 Responsibilities:
 
@@ -636,20 +636,20 @@ Responsibilities:
 - Consolidate or supersede duplicate and stale documentation rather than continuously creating new competing files.
 - Archive completed Goal material according to retention policy and promote useful lessons through the agreed knowledge process.
 
-Sane may delegate research, drafting, or specialist sections, but remains responsible for consistency, completeness, plain language, provenance, and accurate reflection of approved decisions.
+Concertmaster may delegate research, drafting, or specialist sections, but remains responsible for consistency, completeness, plain language, provenance, and accurate reflection of approved decisions.
 
-Sane must not turn a summary into a new decision. Product scope, architecture, authority, policy, or acceptance changes require the responsible decision process and are then documented by Sane.
+Concertmaster must not turn a summary into a new decision. Product scope, architecture, authority, policy, or acceptance changes require the responsible decision process and are then documented by Concertmaster.
 
-### 45. Sane documentation authority
+### 45. Concertmaster documentation authority
 
-- Sane automatically maintains routine canonical project documentation after meaningful milestones, including current status, Task Contract amendments already decided through the proper process, Council records, handoffs, milestone reports, incident summaries, certification state, and final reports.
-- Product scope, architecture, policy, authority, budget ceiling, and acceptance changes require a recorded decision by the responsible Head Council, Overwatch Council, or CEO before Sane documents them as current truth.
-- Sane preserves the meaning, rationale, dissent, provenance, and effective version of the source decision and cannot create a substantive decision through summarization.
+- Concertmaster automatically maintains routine canonical project documentation after meaningful milestones, including current status, Task Contract amendments already decided through the proper process, Council records, handoffs, milestone reports, incident summaries, certification state, and final reports.
+- Product scope, architecture, policy, authority, budget ceiling, and acceptance changes require a recorded decision by the responsible Head Council, Encore Council, or CEO before Concertmaster documents them as current truth.
+- Concertmaster preserves the meaning, rationale, dissent, provenance, and effective version of the source decision and cannot create a substantive decision through summarization.
 - Documentation changes use the same Git-first isolation, diff, review, and evidence model as other project changes.
 
-### 46. Firefly monitoring and notification scope
+### 46. Discord monitoring and notification scope
 
-Initial Firefly monitoring is limited to explicitly registered surfaces:
+Initial Discord monitoring is limited to explicitly registered surfaces:
 
 - Maestro control-plane and app health.
 - Prime Agent runtime availability and heartbeat.
@@ -658,22 +658,22 @@ Initial Firefly monitoring is limited to explicitly registered surfaces:
 - Approved CI results.
 - Approved dependency and vulnerability advisory sources.
 - Repeated crash and error fingerprints.
-- Firefly's own heartbeat, credential freshness, data freshness, and observation gaps.
+- Discord's own heartbeat, credential freshness, data freshness, and observation gaps.
 
 Notification paths:
 
-- During normal operation, Firefly reports to the app's Incidents channel, Sane, Sentinel, and the relevant Department Heads.
-- If Maestro or Prime Agent is unavailable, Firefly may use one pre-approved out-of-band emergency channel, such as a dedicated Discord emergency channel or enrolled-device desktop notification.
+- During normal operation, Discord reports to the app's Incidents channel, Concertmaster, Metronome, and the relevant Department Heads.
+- If Maestro or Prime Agent is unavailable, Discord may use one pre-approved out-of-band emergency channel, such as a dedicated Discord emergency channel or enrolled-device desktop notification.
 - The emergency message contains only the incident identity, affected system, severity and confidence, first observation, concise evidence, and safe next action.
-- This pre-approval permits bounded emergency notification only. It does not grant Firefly remediation, shell execution, broader external messaging, or new-service authority.
+- This pre-approval permits bounded emergency notification only. It does not grant Discord remediation, shell execution, broader external messaging, or new-service authority.
 
 ### 47. Secretary Office is the app home
 
-- The default app home is the Secretary Office with Sane as the primary conversational surface.
+- The default app home is the Secretary Office with Concertmaster as the primary conversational surface.
 - The CEO can state an objective, continue an Overture Crew interview, review the current `task.md`, give the single launch confirmation, and receive milestone or final reports without navigating into an operations dashboard.
 - Current Goal status remains visible from the home surface without overwhelming the conversation.
-- Primary navigation provides Secretary Office, Task Contracts, Goals, permanent Groups and Departments, Overwatch, Firefly and Incidents, Repository and Git, environments and enrolled devices, and data or evidence views.
-- The center workspace renders the selected Sane conversation, Overture activity, Head Council, Goal timeline, Department room, Git state, incident, or Overwatch improvement.
+- Primary navigation provides Secretary Office, Task Contracts, Goals, permanent Groups and Departments, Encore, Discord and Incidents, Repository and Git, environments and enrolled devices, and data or evidence views.
+- The center workspace renders the selected Concertmaster conversation, Overture activity, Head Council, Goal timeline, Department room, Git state, incident, or Encore improvement.
 - The contextual side panel shows the selected Goal hierarchy, active Heads and workers, branches and worktrees, budget, certification, relevant context, and authority state.
 - The visual direction remains spacious, legible, restrained, shadcn-based, avatar-first, and free of decorative bold weight or wide letter spacing.
 
@@ -690,25 +690,25 @@ Notification paths:
 
 - **Pause:** stops new workers and new work, brings active commands to a safe pause point, suspends enrolled-device write authority, and preserves branches, worktrees, environments, context, and resumable state.
 - **Resume:** revalidates the Task Contract, base and active Git revisions, leases, environment health, device authority, budgets, and worker identity before work continues. It does not blindly restart stale processes.
-- **Stop:** cancels workers, revokes active external and device grants, closes Council execution, preserves incomplete branches, commits, evidence, and useful results, and produces a Sane stop report with completed work, unfinished work, spend, side effects, and resume options. Stop does not delete results automatically.
-- **Emergency stop:** blocks execution immediately where possible, revokes all write authority, prevents automatic resume, and asks Firefly and Sentinel to verify remaining processes and observed side effects. Any already completed external effect becomes an incident record.
+- **Stop:** cancels workers, revokes active external and device grants, closes Council execution, preserves incomplete branches, commits, evidence, and useful results, and produces a Concertmaster stop report with completed work, unfinished work, spend, side effects, and resume options. Stop does not delete results automatically.
+- **Emergency stop:** blocks execution immediately where possible, revokes all write authority, prevents automatic resume, and asks Discord and Metronome to verify remaining processes and observed side effects. Any already completed external effect becomes an incident record.
 - Deleting preserved results or evidence remains a separate critical action.
 
-### 50. Universal Tree View with Sane at the center — direction under design
+### 50. Universal Tree View with Concertmaster at the center — direction under design
 
 The app provides tree representations in addition to conversational and tabular views.
 
-Primary organization and Goal tree uses a **radial layout** that grows outward from Sane:
+Primary organization and Goal tree uses a **radial layout** that grows outward from Concertmaster:
 
-- Sane is the fixed center node and operational hub of the canvas.
-- The selected Task Contract and Goal appear as an inner halo or first radial layer around Sane rather than displacing Sane from the center.
+- Concertmaster is the fixed center node and operational hub of the canvas.
+- The selected Task Contract and Goal appear as an inner halo or first radial layer around Concertmaster rather than displacing Concertmaster from the center.
 - The next ring contains participating permanent Groups, arranged into readable angular sectors.
 - Each Group sector expands outward into its selected Department Heads.
 - Each Department Head expands into Scout and Execution Workers, then key deliverables, branches, evidence, or certifications on later rings as the selected mode requires.
-- Multiple active Goals occupy separate sectors around Sane. The focused Goal expands while other Goals compress to status summaries.
+- Multiple active Goals occupy separate sectors around Concertmaster. The focused Goal expands while other Goals compress to status summaries.
 - Sleeping Groups and Departments remain collapsed and visually quiet; active paths are emphasized without saturated decoration.
-- The CEO appears as an authority anchor outside or above the operational rings with a direct relationship to Sane, while Sane remains geometrically central.
-- Sentinel is represented as an observing perimeter around the active graph. Overwatch Council and Improvement Lab remain outside the execution rings with decision and refinement edges directed inward. Firefly remains outside the primary failure boundary and sends incident or wake edges toward relevant Heads.
+- The CEO appears as an authority anchor outside or above the operational rings with a direct relationship to Concertmaster, while Concertmaster remains geometrically central.
+- Metronome is represented as an observing perimeter around the active graph. Encore Council and Improvement Lab remain outside the execution rings with decision and refinement edges directed inward. Discord remains outside the primary failure boundary and sends incident or wake edges toward relevant Heads.
 - Cross-department Head calls and bounded worker collaboration remain hidden by default and appear as curved secondary edges only when a related node is selected.
 - Labels remain upright rather than rotating around the circle. Collision handling, spacing, zoom, focus, and sector expansion prioritize legibility over fitting every node at once.
 
@@ -718,8 +718,8 @@ Tree modes or overlays include:
 - **Goal execution:** Task Contract, Council decision, Department ownership, worker missions, dependencies, milestones, and certification.
 - **Git:** base revision, Goal branch, Department branches, worker branches, commits, integration, validation, and rollback lineage.
 - **Context and data:** shared Goal Brief, Department Context Packs, Mission Contexts, evidence, decisions, and promoted Improvement Digests, subject to access scope.
-- **Overwatch improvement:** observed signal, digest, hypothesis, candidate, evaluation, Council judgment, `refine` change, rollout, and rollback.
-- **Incident:** Firefly signal, triage Heads, Incident Task Contract, remediation branches, certification, and resolution.
+- **Encore improvement:** observed signal, digest, hypothesis, candidate, evaluation, Council judgment, `refine` change, rollout, and rollback.
+- **Incident:** Discord signal, triage Heads, Incident Task Contract, remediation branches, certification, and resolution.
 
 All tree views support collapse, zoom, filtering, search, focus on current Goal or Department, and a synchronized detail panel. They preserve the restrained shadcn-based visual direction, readable spacing, avatars, normal letter spacing, and minimal weight.
 
@@ -727,13 +727,13 @@ All tree views support collapse, zoom, filtering, search, focus on current Goal 
 
 - The radial tree is an operational surface, not only a visualization.
 - Selecting a node opens a synchronized detail panel with identity, persona, state, mission, context summary, authority, budget, evidence, Git, environment, and related decisions appropriate to that node.
-- Permitted actions include messaging Sane or a Head, opening the Task Contract or Council record, inspecting branch, commit, diff, context, evidence, cost, or certification, and using pause, stop, incident triage, avatar, or persona actions within the actor's authority.
+- Permitted actions include messaging Concertmaster or a Head, opening the Task Contract or Council record, inspecting branch, commit, diff, context, evidence, cost, or certification, and using pause, stop, incident triage, avatar, or persona actions within the actor's authority.
 - Controls outside the current authority are shown with a clear reason and required decision path rather than disappearing silently.
 - The radial canvas, conversation, timeline, Git, and detail views remain synchronized to the same selected Goal and node identity.
 
 ### 52. Durable restart and safe resume
 
-- A restart restores Sane, launched Task Contracts, active Goals, Council decisions, participating Groups and Departments, budgets, authority grants, certification state, and the radial-tree view from durable records.
+- A restart restores Concertmaster, launched Task Contracts, active Goals, Council decisions, participating Groups and Departments, budgets, authority grants, certification state, and the radial-tree view from durable records.
 - Recovery reconciles durable state with actual Prime Agent children, Git branches and worktrees, commits, environments, commands or processes, leases, device grants, and evidence before any write resumes.
 - Work with valid completion evidence is not repeated.
 - Ambiguous or stale workers enter a no-write recovery state. The system checks whether their mission is still required and prevents duplicate execution before resuming or creating a successor identity.
@@ -749,52 +749,52 @@ All tree views support collapse, zoom, filtering, search, focus on current Goal 
 - A persistent Department Head may participate in more than one Goal, but each participation uses a separate Goal context and does not merge transcripts or project-private data.
 - Durable Department knowledge may inform multiple Goals only under the agreed project and cross-project knowledge boundaries.
 - When safe concurrency capacity is exhausted, new Goals queue rather than degrading all active Goals.
-- A high-confidence severe Firefly incident may preempt ordinary work under an explicit priority and safe-pause process.
-- Sane coordinates portfolio priority, forecast, and CEO reporting. Overwatch observes whether concurrency harms quality, cost, latency, recovery, or context isolation and may refine bounded concurrency policy.
+- A high-confidence severe Discord incident may preempt ordinary work under an explicit priority and safe-pause process.
+- Concertmaster coordinates portfolio priority, forecast, and CEO reporting. Encore observes whether concurrency harms quality, cost, latency, recovery, or context isolation and may refine bounded concurrency policy.
 
-### 54. Overwatch and Department Heads decide portfolio priority
+### 54. Encore and Department Heads decide portfolio priority
 
-Goal priority, resource contention, and preemption are decided by a selective **Portfolio Council** composed of Overwatch and only the Department Heads materially affected by the competing Goals.
+Goal priority, resource contention, and preemption are decided by a selective **Portfolio Council** composed of Encore and only the Department Heads materially affected by the competing Goals.
 
-- Sane supplies current Goal commitments, CEO intent, deadlines, blockers, Task Contracts, forecasts, and consequences of delay, and chairs the process without unilaterally setting priority.
+- Concertmaster supplies current Goal commitments, CEO intent, deadlines, blockers, Task Contracts, forecasts, and consequences of delay, and chairs the process without unilaterally setting priority.
 - Affected Department Heads independently state operational cost, dependency, interruption risk, safe pause points, and expected value from their Department perspective.
-- Overwatch supplies cross-Goal evidence: severity, confidence, historical outcomes, cost, token use, quality, risk, opportunity cost, resource contention, and likely system-wide consequences.
+- Encore supplies cross-Goal evidence: severity, confidence, historical outcomes, cost, token use, quality, risk, opportunity cost, resource contention, and likely system-wide consequences.
 - The Council decides ordering, concurrency, resource reallocation, pause points, and review time. The decision records evidence, dissent, confidence, and reconsideration triggers.
 - A CEO-pinned Goal remains an explicit authority constraint and cannot be silently deprioritized.
 - A credible immediate safety, security, or data-loss signal may trigger an automatic safe pause before deliberation. The Portfolio Council then decides the sustained response and resource plan.
-- Only affected Heads are awakened. Routine Overwatch improvement work yields to active CEO Goals unless the improvement is itself required to restore safe operation.
-- Sane executes the portfolio decision and reports material schedule effects to the CEO.
+- Only affected Heads are awakened. Routine Encore improvement work yields to active CEO Goals unless the improvement is itself required to restore safe operation.
+- Concertmaster executes the portfolio decision and reports material schedule effects to the CEO.
 
 ### 55. Continuous control plane with an optional app client
 
 - Maestro's control plane operates continuously and is not tied to the app window or an interactive chat session.
-- Closing the app does not stop launched Goals, Sane state, Overwatch observation, Firefly monitoring, durable leases, or safe remote and virtual-environment work.
+- Closing the app does not stop launched Goals, Concertmaster state, Encore observation, Discord monitoring, durable leases, or safe remote and virtual-environment work.
 - Department Heads and workers remain selectively activated and do not run merely because the control plane is online.
 - Work requiring a disconnected or powered-off enrolled device pauses at the affected boundary; independent work in available environments may continue.
-- Reopening the app restores current Sane conversation, Goal portfolio, radial tree, incidents, Git, budget, evidence, and certification state from reconciled durable truth.
-- Severe incidents use the approved out-of-band Firefly channel. Noncritical notifications may be grouped during CEO-configured quiet hours.
+- Reopening the app restores current Concertmaster conversation, Goal portfolio, radial tree, incidents, Git, budget, evidence, and certification state from reconciled durable truth.
+- Severe incidents use the approved out-of-band Discord channel. Noncritical notifications may be grouped during CEO-configured quiet hours.
 
 ### 56. Bounded autonomous work during idle capacity
 
-When no CEO Goal needs the capacity, Overwatch may autonomously:
+When no CEO Goal needs the capacity, Encore may autonomously:
 
 - Curate and analyze accumulated Improvement Digests.
 - Detect recurring failure, waste, excessive context, redundant deliberation, or poor model and skill routing.
 - Run replay/synthetic shadow evaluations.
 - Validate candidate refinements to skills, Head specifications, worker templates, context selection, and routing.
 - Revalidate stale or contradictory knowledge and observe deprecated harness entries.
-- Check Firefly, control-plane, worktree, environment, lease, and durable-state health using safe bounded operations.
+- Check Discord, control-plane, worktree, environment, lease, and durable-state health using safe bounded operations.
 - Refresh project Context indexes from already authorized project data.
 - Apply and report validated low-risk refinements within an enabled improvement class.
 
-Overwatch does not invent or implement new product objectives, contact external parties, deploy, push, expand authority or budgets, add providers, or alter project intent merely because capacity is idle. Idle work has its own small budget and time bounds, yields at safe points to CEO Goals, and remains visible and auditable.
+Encore does not invent or implement new product objectives, contact external parties, deploy, push, expand authority or budgets, add providers, or alter project intent merely because capacity is idle. Idle work has its own small budget and time bounds, yields at safe points to CEO Goals, and remains visible and auditable.
 
 ### 57. Direct replacement with a Prime Agent-native Maestro
 
 The target architecture may replace the current standalone Maestro execution model and existing Web UI rather than preserving backward compatibility with their internal design.
 
 - Prime Agent becomes the native execution kernel from the beginning of the replacement.
-- The new Secretary Office, Group and Department hierarchy, recursive Head and worker spawning, skill and plugin assignment, continual-harness refinement, Overwatch organization, Firefly integration, Git hierarchy, data model, and radial app are designed as one coherent system.
+- The new Secretary Office, Group and Department hierarchy, recursive Head and worker spawning, skill and plugin assignment, continual-harness refinement, Encore organization, Discord integration, Git hierarchy, data model, and radial app are designed as one coherent system.
 - Existing `runner`, `spawner`, provider-routing, flat agent assumptions, and legacy Web UI interfaces are not compatibility constraints and may be retired when the replacement clears its acceptance gates.
 - Verified safety properties remain requirements even when their old implementation is discarded: default-deny authority, bounded budgets, critical-action approval, immutable execution identity, lease and fencing protection, Git isolation, external receipt or evidence integrity, crash recovery, auditability, and shadow-first self-improvement.
 - Replacement development still occurs in isolated Git branches and worktrees with a reversible cutover. “Direct replacement” means no obligation to preserve the old architecture, not destructive editing without evidence or rollback.
@@ -804,7 +804,7 @@ The target architecture may replace the current standalone Maestro execution mod
 
 - The replacement imports no legacy Maestro operational state, active Goals, workers, leases, authority grants, UI state, routing state, telemetry, Council transcripts, or unverified memory.
 - The new system starts with an empty operational database and no implied active execution.
-- The approved hierarchical design, Sane identity and trait seed, organizational taxonomy, safety boundaries, and app direction are new-system requirements, not migrated runtime records.
+- The approved hierarchical design, Concertmaster identity and trait seed, organizational taxonomy, safety boundaries, and app direction are new-system requirements, not migrated runtime records.
 - Existing project Git repositories remain independent source systems and may be enrolled into the new Maestro as fresh projects. They are not deleted as part of clearing Maestro state.
 - Historical legacy data is not required for new-system behavior or evaluation. Removal at cutover follows the agreed critical deletion and reversible Git or backup process, but no compatibility or import path is required.
 
@@ -812,16 +812,16 @@ The target architecture may replace the current standalone Maestro execution mod
 
 The Prime Agent-native replacement is ready for cutover only when all ten representative live scenarios pass end to end:
 
-1. **Overture:** Sane activates only the needed Overture Crew roles, incorporates project context, external evidence or a design mock when required, produces one coherent `task.md`, and obtains the single CEO launch confirmation.
-2. **Hierarchical execution:** only relevant Heads wake; independent briefs, Head Council, Scout evidence, worker spawning, hierarchical Git integration, independent Quality validation, and Sane reporting all complete.
+1. **Overture:** Concertmaster activates only the needed Overture Crew roles, incorporates project context, external evidence or a design mock when required, produces one coherent `task.md`, and obtains the single CEO launch confirmation.
+2. **Hierarchical execution:** only relevant Heads wake; independent briefs, Head Council, Scout evidence, worker spawning, hierarchical Git integration, independent Quality validation, and Concertmaster reporting all complete.
 3. **Head-to-Head activation:** a Head directly calls another existing Head during a Goal; context, Council membership and budget update without duplicate activation.
 4. **Environment and enrolled device:** a worker safely uses a virtual environment, project CLI and browser or device access inside scope while a critical out-of-scope effect is blocked.
 5. **Restart recovery:** Maestro or Prime Agent restarts mid-Goal and reconciles durable state without duplicate workers, stale authority, lost accepted work, or false success.
-6. **Firefly incident:** external detection wakes the correct Heads in triage mode, produces an Incident Task Contract, drives bounded remediation, and reaches independent certification.
-7. **Overwatch improvement:** milestone evidence becomes a curated Digest, an improvement candidate is shadow-evaluated, the multi-model Council judges it, and an allowed `refine` change applies or rolls back from measured evidence.
-8. **Portfolio Council:** competing Goals are prioritized by Overwatch and affected Heads, with safe pause, resource reallocation, and resume.
+6. **Discord incident:** external detection wakes the correct Heads in triage mode, produces an Incident Task Contract, drives bounded remediation, and reaches independent certification.
+7. **Encore improvement:** milestone evidence becomes a curated Digest, an improvement candidate is shadow-evaluated, the multi-model Council judges it, and an allowed `refine` change applies or rolls back from measured evidence.
+8. **Portfolio Council:** competing Goals are prioritized by Encore and affected Heads, with safe pause, resource reallocation, and resume.
 9. **Critical gate:** remote push or external sending remains blocked until the exact CEO approval and cannot expand beyond the approved action.
-10. **Radial app:** Sane is central; Goal, Group, Head, worker, Git, context, Overwatch and incident lineage expand radially; interactive node actions, avatars, persona, diff, pause and evidence remain legible in the approved restrained shadcn direction.
+10. **Radial app:** Concertmaster is central; Goal, Group, Head, worker, Git, context, Encore and incident lineage expand radially; interactive node actions, avatars, persona, diff, pause and evidence remain legible in the approved restrained shadcn direction.
 
 Passing requires exercising real behavior, not only parsing, unit tests, static screenshots, or mocked success. Failure of any required scenario blocks cutover.
 
@@ -829,22 +829,22 @@ Passing requires exercising real behavior, not only parsing, unit tests, static 
 
 - Every activated Department Head writes and owns a versioned **Department Plan** after the Head Council establishes the Goal decision and before that Head spawns execution workers.
 - A Department Plan states the Department's contribution, non-goals, dependencies, worker assignments, order and safe parallelism, budget and time expectations, Git integration path, risks, evidence requirements, and validation criteria.
-- Department Plans are first-class Goal artifacts visible to Sane, the other activated Heads, Sentinel, Quality, and the CEO.
-- The Head Council reconciles overlaps, gaps, conflicting assumptions, and cross-department dependencies before execution begins. Sane records the agreed plan set but does not silently rewrite a Head's domain judgment.
+- Department Plans are first-class Goal artifacts visible to Concertmaster, the other activated Heads, Metronome, Quality, and the CEO.
+- The Head Council reconciles overlaps, gaps, conflicting assumptions, and cross-department dependencies before execution begins. Concertmaster records the agreed plan set but does not silently rewrite a Head's domain judgment.
 - Workers receive the active Department Plan version and a bounded worker brief. Their results link back to the plan items they satisfy.
 - A Head may update its Department Plan as evidence changes. Every revision records the reason, affected work, cost or schedule effect, and whether another Department is affected.
 - Routine revisions inside the approved Goal, authority, and budget proceed without renewed CEO approval. A material cross-department change returns to the Head Council. A Goal change or critical authority, budget, external-effect, or irreversible change follows the CEO approval boundary.
-- Sentinel detects work that has no active plan item, stale workers running against superseded plans, hidden scope growth, contradictory Department Plans, and execution that diverges from the Council decision.
+- Metronome detects work that has no active plan item, stale workers running against superseded plans, hidden scope growth, contradictory Department Plans, and execution that diverges from the Council decision.
 - Final certification checks both the Goal contract and the fulfilled Department Plans. A completed task list alone cannot override a failed Goal outcome.
 
 ### 61. Evidence-driven persona evolution
 
-- Sane, Department Heads, Sentinel, Council roles, and reusable worker profiles have a versioned persona with two layers:
+- Concertmaster, Department Heads, Metronome, Council roles, and reusable worker profiles have a versioned persona with two layers:
   - **Core identity:** mission, organizational role, authority limits, truthfulness, safety boundaries, and prohibited behavior. This layer is stable and cannot be autonomously weakened or rewritten.
   - **Adaptive traits:** communication habits, delegation style, challenge intensity, review emphasis, collaboration patterns, and other bounded working preferences. This layer may improve over time.
-- Persona evolution is based on Goal outcomes, Quality findings, Sentinel observations, Council dissent, user corrections, cost, delay, rework, and measured collaboration results rather than an agent's self-description alone.
+- Persona evolution is based on Goal outcomes, Quality findings, Metronome observations, Council dissent, user corrections, cost, delay, rework, and measured collaboration results rather than an agent's self-description alone.
 - During Phase 1, Maestro records persona observations and proposes versioned changes, but does not autonomously apply them.
-- Phase 4 may apply low-risk adaptive-trait changes only after replay, synthetic, and shadow evaluation shows improvement against a fixed baseline and the Overwatch Council accepts the evidence within an enabled improvement class.
+- Phase 4 may apply low-risk adaptive-trait changes only after replay, synthetic, and shadow evaluation shows improvement against a fixed baseline and the Encore Council accepts the evidence within an enabled improvement class.
 - Every applied persona change records its source evidence, expected benefit, affected roles, measured result, version, and rollback trigger. A later regression automatically disables or rolls back the adaptive change within the approved improvement boundary.
 - Changes to core identity, authority, safety boundaries, organization purpose, or CEO-facing policy always require explicit CEO approval. Such changes cannot be disguised as tone, efficiency, or persona optimization.
 - Persona may influence how an agent communicates and works, but never what evidence exists, which authority it has, or whether a required challenge, escalation, or safety action occurs.

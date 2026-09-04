@@ -5,9 +5,9 @@ import type { Pool } from "pg";
 import { isCertificationConflictResolved } from "./certification.js";
 import { recordEvidenceBundle } from "./evidence-bundle.js";
 
-export class SaneReportError extends Error {}
+export class ConcertmasterReportError extends Error {}
 
-export interface SaneFinalReport {
+export interface ConcertmasterFinalReport {
   readonly reportId: string;
   readonly goalId: string;
   readonly success: boolean;
@@ -28,12 +28,12 @@ export interface SaneFinalReport {
 }
 
 /**
- * Generates Sane's final report. Success is determined only by durable worker
+ * Generates Concertmaster's final report. Success is determined only by durable worker
  * outcomes/acceptances, a frozen Goal integration revision, and current
  * certification rows. Plan completion percentage and worker self-report are
  * never used as substitutes for those facts.
  */
-export async function generateSaneFinalReport(pool: Pool, goalId: string, content?: EvidenceContentReader): Promise<SaneFinalReport> {
+export async function generateConcertmasterFinalReport(pool: Pool, goalId: string, content?: EvidenceContentReader): Promise<ConcertmasterFinalReport> {
   const councilRow = await pool.query<{
     council_id: string; contract_id: string; decision_packet: Record<string, unknown> | null;
     snapshot_payload: Record<string, unknown>; snapshot_hash: string;
@@ -42,14 +42,14 @@ export async function generateSaneFinalReport(pool: Pool, goalId: string, conten
        FROM head_councils WHERE goal_id = $1 AND state = 'resolved'
        ORDER BY created_at DESC, council_id DESC LIMIT 1`, [goalId],
   );
-  if (councilRow.rowCount !== 1) throw new SaneReportError("No resolved Council decision found for this Goal");
+  if (councilRow.rowCount !== 1) throw new ConcertmasterReportError("No resolved Council decision found for this Goal");
   const council = councilRow.rows[0]!;
   const contractRow = await pool.query<{
     content: Record<string, unknown>; version: string; contract_id: string; content_hash: string; launch_state: string;
   }>(
     "SELECT contract_id, content, version, content_hash, launch_state FROM task_contracts WHERE contract_id = $1", [council.contract_id],
   );
-  if (contractRow.rowCount !== 1) throw new SaneReportError("Task Contract not found for this Goal");
+  if (contractRow.rowCount !== 1) throw new ConcertmasterReportError("Task Contract not found for this Goal");
   const contract = contractRow.rows[0]!;
   const contractContent = contract.content as {
     desiredOutcome: string; criticalActionExpectations: readonly string[]; externalServiceAssumptions: readonly string[]; project: { dataBoundary: string };
@@ -149,7 +149,7 @@ export async function generateSaneFinalReport(pool: Pool, goalId: string, conten
     });
   }
 
-  const openChallenges = await pool.query<{ count: string }>("SELECT count(*)::int AS count FROM sentinel_challenges WHERE goal_id = $1 AND status <> 'resolved'", [goalId]);
+  const openChallenges = await pool.query<{ count: string }>("SELECT count(*)::int AS count FROM metronome_challenges WHERE goal_id = $1 AND status <> 'resolved'", [goalId]);
   const conflictVerdicts = currentCertifications.map((row) => row.verdict);
   const conflict = certificationsConflict(conflictVerdicts);
   const conflictResolved = conflict
@@ -194,7 +194,7 @@ export async function generateSaneFinalReport(pool: Pool, goalId: string, conten
   const goalReservation = await pool.query<{ amount_cents: string }>("SELECT amount_cents FROM budget_reservations WHERE goal_id = $1 AND scope = 'goal' ORDER BY created_at DESC LIMIT 1", [goalId]);
   const departmentSpend = await pool.query<{ total: string }>("SELECT COALESCE(sum(amount_cents), 0)::bigint AS total FROM budget_reservations WHERE goal_id = $1 AND scope = 'department'", [goalId]);
 
-  const findings = await pool.query<{ rule_id: string; evidence_identity: string; resolved_at: Date | null }>("SELECT rule_id, evidence_identity, resolved_at FROM sentinel_findings WHERE goal_id = $1", [goalId]);
+  const findings = await pool.query<{ rule_id: string; evidence_identity: string; resolved_at: Date | null }>("SELECT rule_id, evidence_identity, resolved_at FROM metronome_findings WHERE goal_id = $1", [goalId]);
   const incidents = findings.rows.map((row) => `${row.rule_id}: ${row.evidence_identity}`);
   const unresolvedLimitations = findings.rows.filter((row) => row.resolved_at === null).map((row) => `unresolved: ${row.rule_id} (${row.evidence_identity})`);
   const waiverRows = await pool.query<{ reason: string; follow_up: string }>(
@@ -209,7 +209,7 @@ export async function generateSaneFinalReport(pool: Pool, goalId: string, conten
   const { bundleId } = await recordEvidenceBundle(pool, goalId, content);
   const reportId = randomUUID();
   await pool.query(
-    `INSERT INTO sane_final_reports (report_id, goal_id, success, blockers, ceo_request, what_changed, user_visible_behavior_passed, participating_departments, key_decisions, dissent, independent_validation, cost_cents, budget_cents, incidents, known_limitations, critical_action_awaiting_approval, evidence_bundle_id)
+    `INSERT INTO concertmaster_final_reports (report_id, goal_id, success, blockers, ceo_request, what_changed, user_visible_behavior_passed, participating_departments, key_decisions, dissent, independent_validation, cost_cents, budget_cents, incidents, known_limitations, critical_action_awaiting_approval, evidence_bundle_id)
      VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12, $13, $14::jsonb, $15::jsonb, $16, $17)`,
     [
       reportId, goalId, success, JSON.stringify(blockers), contractContent.desiredOutcome, whatChanged,
@@ -231,13 +231,13 @@ export async function generateSaneFinalReport(pool: Pool, goalId: string, conten
   };
 }
 
-export async function readSaneFinalReport(pool: Pool, reportId: string): Promise<SaneFinalReport> {
+export async function readConcertmasterFinalReport(pool: Pool, reportId: string): Promise<ConcertmasterFinalReport> {
   const result = await pool.query<{
     report_id: string; goal_id: string; success: boolean; blockers: { reason: string; detail: string }[]; ceo_request: string; what_changed: string;
     user_visible_behavior_passed: boolean; participating_departments: string[]; key_decisions: string[]; dissent: string[]; independent_validation: string[];
     cost_cents: string; budget_cents: string; incidents: string[]; known_limitations: string[]; critical_action_awaiting_approval: boolean; evidence_bundle_id: string;
-  }>("SELECT * FROM sane_final_reports WHERE report_id = $1", [reportId]);
-  if (result.rowCount !== 1) throw new SaneReportError(`Sane final report not found: ${reportId}`);
+  }>("SELECT * FROM concertmaster_final_reports WHERE report_id = $1", [reportId]);
+  if (result.rowCount !== 1) throw new ConcertmasterReportError(`Concertmaster final report not found: ${reportId}`);
   const row = result.rows[0]!;
   return {
     reportId: row.report_id, goalId: row.goal_id, success: row.success, blockers: row.blockers, ceoRequest: row.ceo_request, whatChanged: row.what_changed,

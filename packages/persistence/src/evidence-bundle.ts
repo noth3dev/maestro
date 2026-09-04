@@ -147,18 +147,18 @@ export async function assembleEvidenceBundle(pool: Pool, goalId: string, content
        ORDER BY resolution.created_at, resolution.resolution_id`, [goalId],
   )).rows;
 
-  const sentinelFindings = (await pool.query<Record<string, unknown>>(
-    "SELECT finding_id, goal_id, rule_id, evidence_identity, plan_version, details, detected_at, resolved_at, resolution_reason, retention FROM sentinel_findings WHERE goal_id = $1 ORDER BY detected_at, finding_id", [goalId],
+  const metronomeFindings = (await pool.query<Record<string, unknown>>(
+    "SELECT finding_id, goal_id, rule_id, evidence_identity, plan_version, details, detected_at, resolved_at, resolution_reason, retention FROM metronome_findings WHERE goal_id = $1 ORDER BY detected_at, finding_id", [goalId],
   )).rows;
-  const sentinelChallenges = (await pool.query<Record<string, unknown>>(
+  const metronomeChallenges = (await pool.query<Record<string, unknown>>(
     `SELECT challenge.challenge_id, challenge.goal_id, challenge.reason, challenge.evidence_references,
             challenge.status, challenge.correction_request, challenge.raised_by,
             challenge.resolved_by, challenge.resolution_reason, challenge.created_at,
             challenge.resolved_at, challenge.retention,
             COALESCE((SELECT jsonb_agg(link.finding_id ORDER BY link.finding_id)
-                        FROM sentinel_challenge_findings link
+                        FROM metronome_challenge_findings link
                        WHERE link.challenge_id = challenge.challenge_id), '[]'::jsonb) AS finding_ids
-       FROM sentinel_challenges challenge WHERE challenge.goal_id = $1
+       FROM metronome_challenges challenge WHERE challenge.goal_id = $1
        ORDER BY challenge.created_at, challenge.challenge_id`, [goalId],
   )).rows;
   const encoreRounds = (await pool.query<Record<string, unknown>>(
@@ -202,8 +202,8 @@ export async function assembleEvidenceBundle(pool: Pool, goalId: string, content
     workers,
     gitIntegration: { goalBranch, departmentBranches, workerWorktrees, commits, revisions: integrationRevisions, revisionCommits: integrationRevisionCommits },
     certifications: { quality: qualityCertifications, conditional: conditionalCertifications, acceptances, waivers, conflictResolutions },
-    sentinelFindings,
-    sentinelChallenges,
+    metronomeFindings,
+    metronomeChallenges,
     encoreRounds,
     budgetReservations,
     evidenceRecords,

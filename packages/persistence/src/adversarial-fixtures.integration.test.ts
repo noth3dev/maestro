@@ -19,17 +19,17 @@ import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, spawnWorker } from "./worker.js";
 import { recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
 import { acceptDepartmentWorkerOutput, certifyQuality, CertificationError } from "./certification.js";
-import { raiseSentinelChallenge, SentinelChallengeError } from "./sentinel-challenge.js";
+import { raiseMetronomeChallenge, MetronomeChallengeError } from "./metronome-challenge.js";
 import { requestSemanticReview } from "./semantic-review.js";
 import { runEncoreCouncilReview } from "./encore-council.js";
-import { generateSaneFinalReport } from "./sane-report.js";
+import { generateConcertmasterFinalReport } from "./concertmaster-report.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
 const tables = [
-  "sane_final_reports", "evidence_bundles", "certification_conflict_resolutions", "certification_waivers", "conditional_certifications",
+  "concertmaster_final_reports", "evidence_bundles", "certification_conflict_resolutions", "certification_waivers", "conditional_certifications",
   "quality_certifications", "certification_conflict_resolution_members", "department_acceptances", "goal_integration_revision_commits", "goal_integration_revisions", "encore_council_syntheses", "encore_council_judgments", "encore_council_rounds",
-  "semantic_reviews", "sentinel_challenge_findings", "sentinel_challenges", "sentinel_findings", "budget_forecasts", "budget_reservations",
+  "semantic_reviews", "metronome_challenge_findings", "metronome_challenges", "metronome_findings", "budget_forecasts", "budget_reservations",
   "integration_commits", "worker_worktrees", "goal_integration_branches", "team_lead_grants", "workers", "mission_bundles",
   "department_plan_revisions", "department_plans", "council_protocol_events", "council_round_contributions", "council_rounds", "independent_briefs",
   "council_participants", "head_councils", "goal_head_participations", "task_contract_confirmations", "task_contract_decisions", "task_contracts",
@@ -40,7 +40,7 @@ const tables = [
 
 const context = (label: string) => ({ actorId: `actor:${label}`, sessionRef: `session:${label}`, commandId: randomUUID() });
 const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`, sessionRef: `opaque:${departmentId}`, commandId: randomUUID() });
-const sentinelContext = () => ({ actorId: "encore-sentinel", sessionRef: `sentinel-session:${randomUUID()}`, commandId: randomUUID() });
+const metronomeContext = () => ({ actorId: "encore-metronome", sessionRef: `metronome-session:${randomUUID()}`, commandId: randomUUID() });
 const brief: IndependentBrief = {
   interpretation: "safe outcome", contribution: "review", nonGoals: [], assumptions: [], evidenceGaps: [], risks: [], dependencies: [],
   proposedValidation: [], expectedWorkers: [], expectedCost: "1", expectedTime: "1", objectionsToLikelyAlternatives: [],
@@ -243,7 +243,7 @@ describeDatabase("Phase 3 adversarial fixtures with PostgreSQL", () => {
     );
     expect(certification.certifiedByDepartment).toBe("quality");
     expect(certification.producingDepartment).toBe("product");
-    const report = await generateSaneFinalReport(pool, goalId);
+    const report = await generateConcertmasterFinalReport(pool, goalId);
     expect(report.success).toBe(false);
     expect(report.blockers.length).toBeGreaterThan(0);
     expect(report.blockers).toEqual(expect.arrayContaining([
@@ -255,10 +255,10 @@ describeDatabase("Phase 3 adversarial fixtures with PostgreSQL", () => {
     expect(report.whatChanged).toContain("mission: seed implementation defect");
   });
 
-  it("rejects forged evidence references in both Sentinel challenges and Quality certification", async () => {
+  it("rejects forged evidence references in both Metronome challenges and Quality certification", async () => {
     const { goalId, worker, proof } = await setupWorkerWithRealCommit(pool, repositoryPath, baseRevision, worktreePaths);
     const fabricatedEvidenceId = randomUUID();
-    await expect(raiseSentinelChallenge(pool, goalId, [], { reason: "forged challenge", evidenceReferences: [fabricatedEvidenceId] }, proof, sentinelContext())).rejects.toBeInstanceOf(SentinelChallengeError);
+    await expect(raiseMetronomeChallenge(pool, goalId, [], { reason: "forged challenge", evidenceReferences: [fabricatedEvidenceId] }, proof, metronomeContext())).rejects.toBeInstanceOf(MetronomeChallengeError);
     await expect(certifyQuality(
       pool,
       worker.workerId,
@@ -267,7 +267,7 @@ describeDatabase("Phase 3 adversarial fixtures with PostgreSQL", () => {
       proof,
       headContext("quality"),
     )).rejects.toBeInstanceOf(CertificationError);
-    const challengeRows = await pool.query("SELECT 1 FROM sentinel_challenges WHERE goal_id = $1", [goalId]);
+    const challengeRows = await pool.query("SELECT 1 FROM metronome_challenges WHERE goal_id = $1", [goalId]);
     const certificationRows = await pool.query("SELECT 1 FROM quality_certifications WHERE goal_id = $1", [goalId]);
     expect(challengeRows.rowCount).toBe(0);
     expect(certificationRows.rowCount).toBe(0);

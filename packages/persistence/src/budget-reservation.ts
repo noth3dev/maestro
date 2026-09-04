@@ -102,7 +102,7 @@ export async function reserveDepartmentBudget(pool: Pool, councilId: string, dep
     // parented to a now-superseded Goal row invisible to this check,
     // letting the same allocatable ceiling be spent again for each new
     // envelope revision -- exactly matching this codebase's own
-    // sane-report.ts departmentSpend query, which already (correctly) sums
+    // concertmaster-report.ts departmentSpend query, which already (correctly) sums
     // by goal_id, not by a single parent reservation id.
     const allocated = await client.query<{ total: string }>(
       "SELECT COALESCE(sum(amount_cents), 0)::bigint AS total FROM budget_reservations WHERE goal_id = $1 AND scope = 'department'",

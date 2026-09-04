@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { detectMissingEvidenceFindings, detectMissingPlanItemFindings, detectStaleWorkerFindings } from "./sentinel.js";
+import { detectMissingEvidenceFindings, detectMissingPlanItemFindings, detectStaleWorkerFindings } from "./metronome.js";
 
-describe("Sentinel deterministic rule catalog", () => {
+describe("Metronome deterministic rule catalog", () => {
   it("flags a worker spawned against a superseded plan version and stays silent on the current version", () => {
     const currentVersions = new Map([["product", 2]]);
     const workers = [

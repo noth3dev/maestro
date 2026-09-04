@@ -7,13 +7,13 @@ import { evaluateEncoreCouncilTrigger, EncoreCouncilError, runEncoreCouncilRevie
 import { requestSemanticReview } from "./semantic-review.js";
 import { acquireGoalLease } from "./commands.js";
 import { bootstrapPermanentOrganization } from "./organization.js";
-import { raiseSentinelChallenge } from "./sentinel-challenge.js";
+import { raiseMetronomeChallenge } from "./metronome-challenge.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
 
 const criteria = [{ criterionId: "safety", description: "does this preserve safety invariants" }];
-const sentinelContext = (label: string) => ({ actorId: "  encore-sentinel  ", sessionRef: `sentinel-session:${label}`, commandId: randomUUID() });
+const metronomeContext = (label: string) => ({ actorId: "  encore-metronome  ", sessionRef: `metronome-session:${label}`, commandId: randomUUID() });
 
 function fakeKernelWithVerdicts(verdicts: readonly { provider: string; id: string; text: string }[]): ExecutionKernelPort {
   let counter = 0;
@@ -52,16 +52,16 @@ describeDatabase("Encore Council with PostgreSQL", () => {
       "INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 'test-result', 'text/plain', 'project_lifetime')",
       [evidenceId, randomUUID(), randomUUID(), projectId, goalId, "test", "0".repeat(64)],
     );
-    const proof = await acquireGoalLease(pool, { goalId, ownerId: "sentinel-test", leaseDurationMs: 60_000 });
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "metronome-test", leaseDurationMs: 60_000 });
     return { goalId, projectId, evidenceId, proof };
   }
 
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS encore_council_syntheses, encore_council_judgments, encore_council_rounds, semantic_reviews, sentinel_challenge_findings, sentinel_challenges, sentinel_findings, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, departments, organization_groups, permanent_roles, permanent_head_roles, role_persona_axes, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
+    await pool.query("DROP TABLE IF EXISTS encore_council_syntheses, encore_council_judgments, encore_council_rounds, semantic_reviews, metronome_challenge_findings, metronome_challenges, metronome_findings, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, departments, organization_groups, permanent_roles, permanent_head_roles, role_persona_axes, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
     await applyAllMigrations(pool);
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE encore_council_syntheses, encore_council_judgments, encore_council_rounds, semantic_reviews, sentinel_challenge_findings, sentinel_challenges, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals RESTART IDENTITY CASCADE");
+    await pool.query("TRUNCATE encore_council_syntheses, encore_council_judgments, encore_council_rounds, semantic_reviews, metronome_challenge_findings, metronome_challenges, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals RESTART IDENTITY CASCADE");
     await bootstrapPermanentOrganization(pool);
   });
   afterAll(async () => { await pool.end(); });
@@ -72,11 +72,11 @@ describeDatabase("Encore Council with PostgreSQL", () => {
     expect(triggers).toHaveLength(0);
   });
 
-  it("reports the unresolved-challenge trigger once a Sentinel challenge is open", async () => {
+  it("reports the unresolved-challenge trigger once a Metronome challenge is open", async () => {
     const { goalId, proof } = await setupGoalWithEvidence();
-    await raiseSentinelChallenge(pool, goalId, [], { reason: "concern", evidenceReferences: [] }, proof, sentinelContext("trigger"));
+    await raiseMetronomeChallenge(pool, goalId, [], { reason: "concern", evidenceReferences: [] }, proof, metronomeContext("trigger"));
     const triggers = await evaluateEncoreCouncilTrigger(pool, goalId);
-    expect(triggers).toContain("unresolved_sentinel_challenge");
+    expect(triggers).toContain("unresolved_metronome_challenge");
   });
 
   it("runs a genuinely multi-model review, records real model identities, and reaches proceed with no dissent", async () => {

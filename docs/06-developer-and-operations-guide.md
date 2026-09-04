@@ -13,7 +13,7 @@ Maestro uses **npm workspaces** to manage packages and applications:
 │   ├── control-plane/     # Fastify 5 REST & SSE Backend Server
 │   ├── cli/               # Maestro Command Line Interface (CLI)
 │   ├── secretary/         # Next.js Secretary Office Dashboard
-│   └── firefly/           # Out-of-band Discord Incident Daemon
+│   └── discord/           # Out-of-band Discord Incident Daemon
 ├── packages/
 │   ├── contracts/         # Zod schemas, API contracts & event definitions
 │   ├── domain/            # Core business models (Goal, TaskContract, HeadCouncil)
@@ -83,7 +83,7 @@ node apps/cli/dist/main.js goal get <goalId>
 node apps/cli/dist/main.js events list --goalId <goalId>
 
 # Query a Metronome challenge
-node apps/cli/dist/main.js sentinel challenge <challengeId>
+node apps/cli/dist/main.js metronome challenge <challengeId>
 
 # Query an Encore Council deliberation round
 node apps/cli/dist/main.js council round <roundId>

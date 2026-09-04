@@ -143,8 +143,8 @@ node apps/cli/dist/main.js goal get <goalId>
 # Stream append-only domain events
 node apps/cli/dist/main.js events list --goalId <goalId>
 
-# Query Sentinel challenges & Encore Council rounds
-node apps/cli/dist/main.js sentinel challenge <challengeId>
+# Query Metronome challenges & Encore Council rounds
+node apps/cli/dist/main.js metronome challenge <challengeId>
 node apps/cli/dist/main.js council round <roundId>
 
 # Retrieve Quality Certification & Certified Reports
