@@ -4,7 +4,7 @@ import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PERSONA_AXES, CONCERTMASTER_PERSONA_BASELINE, taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type IndependentBrief, type MissionBundleSubstance, type MissionPersonaOverlayInputs, type TaskContractSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
-import { acquireGoalLease } from "./commands.js";
+import { acquireGoalLease, StaleGoalLeaseError } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
 import { createDepartmentPlan } from "./department-plan.js";
 import {
@@ -139,6 +139,18 @@ describeDatabase("Mission Bundles with PostgreSQL", () => {
     const { council, proof, projectId, goalId } = await setupPlan(pool);
     await pool.query("INSERT INTO goal_controls (project_id, goal_id, pause_requested_at, paused_at) VALUES ($1, $2, clock_timestamp(), clock_timestamp()) ON CONFLICT (project_id, goal_id) DO UPDATE SET pause_requested_at = clock_timestamp(), paused_at = clock_timestamp()", [projectId, goalId]);
     await expect(createMissionBundle(pool, { councilId: council.councilId, departmentId: "product", itemId: "scout-1", substance: bundleSubstance() }, proof, headContext("product"))).rejects.toThrow();
+  });
+
+  it("rejects Mission Bundle creation with a stale fencing token and leaves the bundle absent", async () => {
+    const { council, plan, proof } = await setupPlan(pool);
+    const forgedProof = { goalId: proof.goalId, ownerId: proof.ownerId, fencingToken: String(BigInt(proof.fencingToken) + 1n) };
+    const request = { councilId: council.councilId, departmentId: "product", itemId: "scout-1", substance: bundleSubstance() };
+
+    await expect(createMissionBundle(pool, request, forgedProof, headContext("product")))
+      .rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect((await listMissionBundlesForPlan(pool, council.councilId, "product", plan.version))).toHaveLength(0);
+    const created = await createMissionBundle(pool, request, proof, headContext("product"));
+    expect(created.itemId).toBe("scout-1");
   });
 
   it("throws MissionBundleNotFoundError for a missing bundle", async () => {

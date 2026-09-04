@@ -4,7 +4,7 @@ import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance, type TeamLeadGrantSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
-import { acquireGoalLease } from "./commands.js";
+import { acquireGoalLease, StaleGoalLeaseError } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
 import { createDepartmentPlan, reviseDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
@@ -157,6 +157,28 @@ describeDatabase("Team-lead grants and helper workers with PostgreSQL", () => {
       [grantId, worker.workerId, council.councilId, "product", plan.version, worker.itemId, "large mission needs parallel helpers", 5, "100 USD", "1 day", "parallel subsystem work", "daily status"],
     );
     await expect(spawnHelperWorker(pool, kernel, grantId, proof, headContext("product"))).rejects.toThrow(/duration ceiling exceeded/);
+  });
+
+  it("rejects every team-lead write with a stale fencing token and leaves durable state unchanged", async () => {
+    const { proof, worker, kernel } = await setupWorker();
+    const forgedProof = { goalId: proof.goalId, ownerId: proof.ownerId, fencingToken: String(BigInt(proof.fencingToken) + 1n) };
+
+    await expect(grantTeamLead(pool, worker.workerId, grantSubstance(), forgedProof, headContext("product")))
+      .rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect((await pool.query("SELECT count(*)::int AS count FROM team_lead_grants WHERE worker_id = $1", [worker.workerId])).rows[0]!.count).toBe(0);
+    const grant = await grantTeamLead(pool, worker.workerId, grantSubstance(), proof, headContext("product"));
+
+    await expect(spawnHelperWorker(pool, kernel, grant.grantId, forgedProof, headContext("product")))
+      .rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect((await pool.query("SELECT count(*)::int AS count FROM workers WHERE grant_id = $1", [grant.grantId])).rows[0]!.count).toBe(0);
+    const helper = await spawnHelperWorker(pool, kernel, grant.grantId, proof, headContext("product"));
+    expect((await pool.query("SELECT parent_worker_id FROM workers WHERE worker_id = $1", [helper.workerId])).rows[0]!.parent_worker_id).toBe(worker.workerId);
+
+    await expect(revokeTeamLeadGrant(pool, grant.grantId, forgedProof, headContext("product")))
+      .rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect((await readTeamLeadGrant(pool, grant.grantId)).revoked).toBe(false);
+    const revoked = await revokeTeamLeadGrant(pool, grant.grantId, proof, headContext("product"));
+    expect(revoked.revoked).toBe(true);
   });
 
   it("rejects a helper spawn that would exceed the grant's task scope ceiling once the Department Plan is revised", async () => {
