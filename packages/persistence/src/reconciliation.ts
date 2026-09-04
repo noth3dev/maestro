@@ -3,6 +3,7 @@ import { isTerminalGoalState, type ExecutionKernelPort, type GoalState } from "@
 import type { Pool } from "pg";
 import {
   LeaseUnavailableError,
+  StaleGoalLeaseError,
   acquireGoalLease,
   executeGoalCommand,
   isValidFencingToken,
@@ -10,6 +11,12 @@ import {
   renewGoalLease,
 } from "./commands.js";
 import { observeWorker } from "./worker.js";
+import {
+  listHeadActivationCommandsForRecovery,
+  markHeadActivationOrphaned,
+  resetHeadActivationAfterCancellation,
+  type HeadActivationCommandRecoveryRow,
+} from "./head-participation.js";
 
 /**
  * Proof of holding the singleton reconciliation-leader lease. Mirrors
@@ -143,6 +150,9 @@ export interface GoalReconciliationResult {
    * existed under this Goal.
    */
   reconciledWorkerIds: readonly string[];
+  /** Head activation command IDs whose stale provider binding was durably
+   * reset or fenced as orphaned during this pass. */
+  reconciledHeadActivationCommandIds: readonly string[];
 }
 
 export interface ReconciliationReport {
@@ -199,9 +209,10 @@ function classifyGoalConsistency(input: {
  * Acquire the singleton reconciliation-leader lease and, for every
  * nonterminal Goal, verify goal_leases/goal_controls consistency. Any
  * ambiguous or unrecognized shape is durably transitioned to the domain's
- * own "recovering" Goal state (never silently resumed). This function does
- * NOT perform any actual Prime session reconciliation: no durable session
- * bindings exist yet in this phase.
+ * own "recovering" Goal state (never silently resumed). Expired Head
+ * activation commands are also reconciled when a kernel is supplied: the
+ * provider root is never resumed, and unknown or un-cancellable bindings are
+ * fenced as orphaned while retaining opaque references.
  */
 export async function reconcileOnStartup(
   pool: Pool,
@@ -256,19 +267,26 @@ export async function reconcileOnStartup(
     const reconciledWorkerIds = !leaseIsLive
       ? await reconcileOrphanedWorkers(pool, options.kernel, row.goal_id, `reconciler:${options.ownerId}`, goalLeaseDurationMs, renewLeader)
       : [];
-    const recoveryReasons = reconciledWorkerIds.length === 0 ? reasons : [...reasons, "orphaned_workers_reconciled"];
+    const reconciledHeadActivationCommandIds = !leaseIsLive
+      ? await reconcileHeadActivationCommands(pool, options.kernel, row.goal_id, `reconciler:${options.ownerId}`, goalLeaseDurationMs, renewLeader)
+      : [];
+    const recoveryReasons = [
+      ...reasons,
+      ...(reconciledWorkerIds.length === 0 ? [] : ["orphaned_workers_reconciled"]),
+      ...(reconciledHeadActivationCommandIds.length === 0 ? [] : ["orphaned_head_activation_reconciled"]),
+    ];
 
-    // Unknown workers are an execution-state inconsistency even when the
-    // Goal/control rows themselves look structurally valid. Do not report an
-    // active Goal as consistent after startup has downgraded its workers.
-    if (consistent && reconciledWorkerIds.length === 0) {
-      results.push({ goalId: row.goal_id, projectId: row.project_id, priorState: row.state, outcome: "consistent", reasons: [], reconciledWorkerIds });
+    // Unknown workers or Head activations are execution-state inconsistencies
+    // even when the Goal/control rows themselves look structurally valid.
+    const executionRecoveryRequired = reconciledWorkerIds.length > 0 || reconciledHeadActivationCommandIds.length > 0;
+    if (consistent && !executionRecoveryRequired) {
+      results.push({ goalId: row.goal_id, projectId: row.project_id, priorState: row.state, outcome: "consistent", reasons: [], reconciledWorkerIds, reconciledHeadActivationCommandIds });
       continue;
     }
     if (row.state === "recovering") {
       // Already durably marked recovering by a prior run or actor; nothing
       // further to record this pass.
-      results.push({ goalId: row.goal_id, projectId: row.project_id, priorState: row.state, outcome: "recovering", reasons: recoveryReasons, reconciledWorkerIds });
+      results.push({ goalId: row.goal_id, projectId: row.project_id, priorState: row.state, outcome: "recovering", reasons: recoveryReasons, reconciledWorkerIds, reconciledHeadActivationCommandIds });
       continue;
     }
 
@@ -298,13 +316,14 @@ export async function reconcileOnStartup(
         outcome: commandResult.outcome === "succeeded" ? "recovering" : "lease_contended",
         reasons: recoveryReasons,
         reconciledWorkerIds,
+        reconciledHeadActivationCommandIds,
       });
     } catch (error) {
       if (error instanceof LeaseUnavailableError) {
         // Some other actor legitimately holds the Goal lease right now;
         // reconciliation must never steal it. Report the ambiguity instead
         // of forcing a transition.
-        results.push({ goalId: row.goal_id, projectId: row.project_id, priorState: row.state, outcome: "lease_contended", reasons, reconciledWorkerIds: [] });
+        results.push({ goalId: row.goal_id, projectId: row.project_id, priorState: row.state, outcome: "lease_contended", reasons, reconciledWorkerIds: [], reconciledHeadActivationCommandIds: [] });
         continue;
       }
       throw error;
@@ -312,6 +331,128 @@ export async function reconcileOnStartup(
   }
 
   return { leaderProof, checkedGoalCount: nonterminalGoals.length, results };
+}
+
+/**
+ * Reconciles Head provider bindings only after the Goal lease has expired. A
+ * fresh process cannot honestly resume an old provider root, so a missing or
+ * non-terminally unverified invocation is fenced as orphaned. A reset is
+ * allowed only when the provider explicitly confirms cancellation.
+ */
+async function reconcileHeadActivationCommands(
+  pool: Pool,
+  kernel: ExecutionKernelPort | undefined,
+  goalId: string,
+  ownerId: string,
+  leaseDurationMs: number,
+  renewLeader: () => Promise<void>,
+): Promise<readonly string[]> {
+  if (!kernel) return [];
+  const commands = await listHeadActivationCommandsForRecovery(pool, goalId);
+  if (commands.length === 0) return [];
+  let proof: Awaited<ReturnType<typeof acquireGoalLease>>;
+  try {
+    proof = await acquireGoalLease(pool, { goalId, ownerId, leaseDurationMs });
+  } catch (error) {
+    if (error instanceof LeaseUnavailableError) return [];
+    throw error;
+  }
+  const reconciled: string[] = [];
+  const heartbeatIntervalMs = Math.max(100, Math.floor(leaseDurationMs / 3));
+  const updateProof = (nextProof: Awaited<ReturnType<typeof acquireGoalLease>>): void => { proof = nextProof; };
+  const renew = async (): Promise<void> => {
+    await renewLeader();
+    updateProof(await renewGoalLease(pool, proof, leaseDurationMs));
+  };
+  const markOrphaned = async (command: HeadActivationCommandRecoveryRow): Promise<void> => {
+    await renew();
+    if (await markHeadActivationOrphaned(pool, command.goalId, command.departmentId, command.commandId, proof)) reconciled.push(command.commandId);
+  };
+  try {
+    for (const command of commands) {
+      await renew();
+      const refsBound = command.providerExecutionRef !== null && command.providerInvocationRef !== null;
+      if (!refsBound) {
+        // A one-sided or missing provider binding has no trustworthy cleanup
+        // target. Keep it fenced and retain the command for audit/review.
+        await markOrphaned(command);
+        continue;
+      }
+      let observations: Awaited<ReturnType<ExecutionKernelPort["observe"]>>;
+      try {
+        observations = await withReconciliationLeaseHeartbeat(
+          () => kernel.observe(command.providerExecutionRef as never),
+          renew,
+          updateProof,
+          heartbeatIntervalMs,
+        );
+      } catch (error) {
+        // Provider failure is not proof of cancellation. Marking orphaned
+        // revokes durable Head authority while retaining opaque refs.
+        try { await markOrphaned(command); } catch (cleanupError) {
+          if (cleanupError instanceof StaleGoalLeaseError) continue;
+          throw cleanupError;
+        }
+        continue;
+      }
+      const observation = observations.find((candidate) => candidate.invocation === command.providerInvocationRef);
+      if (observation === undefined || !["queued", "running"].includes(observation.status)) {
+        await markOrphaned(command);
+        continue;
+      }
+      let cancellation: { cancelled: boolean };
+      try {
+        cancellation = await withReconciliationLeaseHeartbeat(
+          () => kernel.cancel(command.providerInvocationRef as never),
+          renew,
+          updateProof,
+          heartbeatIntervalMs,
+        );
+      } catch (error) {
+        try { await markOrphaned(command); } catch (cleanupError) {
+          if (cleanupError instanceof StaleGoalLeaseError) continue;
+          throw cleanupError;
+        }
+        continue;
+      }
+      await renew();
+      if (cancellation.cancelled) {
+        if (await resetHeadActivationAfterCancellation(pool, command.goalId, command.departmentId, command.commandId, proof)) reconciled.push(command.commandId);
+      } else {
+        await markOrphaned(command);
+      }
+    }
+  } finally {
+    try { await releaseGoalLease(pool, proof); } catch { /* stale proof is already fenced */ }
+  }
+  return reconciled;
+}
+
+/** Keep both reconciliation fences live while inspecting or cancelling a provider. */
+async function withReconciliationLeaseHeartbeat<T>(
+  call: () => Promise<T>,
+  renew: () => Promise<void>,
+  updateProof: (proof: Awaited<ReturnType<typeof acquireGoalLease>>) => void,
+  intervalMs: number,
+): Promise<T> {
+  let inFlight: Promise<void> | undefined;
+  let renewalError: unknown;
+  const heartbeat = async (): Promise<void> => {
+    if (inFlight !== undefined) return inFlight;
+    inFlight = renew().catch((error) => { renewalError ??= error; }).finally(() => { inFlight = undefined; });
+    await inFlight;
+  };
+  const timer = setInterval(() => { void heartbeat(); }, intervalMs);
+  try {
+    await heartbeat();
+    if (renewalError !== undefined) throw renewalError;
+    const value = await call();
+    await heartbeat();
+    if (renewalError !== undefined) throw renewalError;
+    return value;
+  } finally {
+    clearInterval(timer);
+  }
 }
 
 /**

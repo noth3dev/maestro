@@ -24,7 +24,13 @@ export interface GoalService {
   emergencyStopGoal(goalId: string, input: GoalControlInput, commandId: string, operator: OperatorContext): Promise<GoalResult>;
   getGoal(goalId: string, projectId: string): Promise<GoalResult>;
   /** Internal composition seam for other authenticated lifecycle commands. */
-  withGoalLease?<T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>): Promise<T>;
+  withGoalLease?<T>(
+    goalId: string,
+    operation: (
+      proof: import("@maestro/persistence").GoalLeaseProof,
+      renew?: () => Promise<import("@maestro/persistence").GoalLeaseProof>,
+    ) => Promise<T>,
+  ): Promise<T>;
 }
 
 class GoalServiceError extends Error {
@@ -139,7 +145,13 @@ export function createDurableGoalService(options: DurableGoalServiceOptions): Go
       });
     },
     async withGoalLease(goalId, operation) {
-      return operation(await leaseFor(goalId));
+      let proof = await leaseFor(goalId);
+      const renew = async () => {
+        proof = await renewGoalLease(options.pool, proof, leaseDurationMs);
+        leaseProofs.set(goalId, proof);
+        return proof;
+      };
+      return operation(proof, renew);
     },
     async getGoal(goalId, projectId) {
       try {

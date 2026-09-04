@@ -4,7 +4,8 @@ import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";
-import { HeadActivationCycleError, activateHeadParticipation, markHeadParticipationActive, sleepHeadParticipation, type ActivateHeadRequest } from "./head-participation.js";
+import { reconcileOnStartup } from "./reconciliation.js";
+import { HeadActivationCycleError, activateHeadParticipation, bindHeadActivationInvocation, markHeadActivationOrphaned, markHeadActivationSpawnStarted, markHeadParticipationActive, resetHeadActivationAfterCancellation, resetHeadActivationAfterSpawnFailure, sleepHeadParticipation, type ActivateHeadRequest } from "./head-participation.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -38,7 +39,7 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
     await applyAllMigrations(pool);
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE head_activation_edges, head_activation_attempts, goal_head_participations, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE");
+    await pool.query("TRUNCATE reconciler_leader_lease, head_activation_edges, head_activation_attempts, goal_head_participations, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE");
     await bootstrapPermanentOrganization(pool);
   });
   afterAll(async () => { await pool.end(); });
@@ -224,6 +225,101 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
     await expect(sleepHeadParticipation(pool, goalId, "product", lease)).resolves.toMatchObject({ status: "sleeping", activeSessionRef: null });
     await expect(activateHeadParticipation(pool, concertmaster(goalId, "product"), lease)).resolves.toMatchObject({ status: "starting", activeSessionRef: null });
     expect((await pool.query("SELECT count(*)::int AS count FROM goal_head_participations WHERE goal_id = $1 AND department_id = 'product'", [goalId])).rows[0].count).toBe(1);
+  });
+
+  it("fences cleanup with the exact Goal lease proof", async () => {
+    const goalId = await goal(); const stale = await proof(goalId); const commandId = randomUUID();
+    await activateHeadParticipation(pool, { ...concertmaster(goalId, "product"), commandId }, stale);
+    await expect(markHeadActivationSpawnStarted(pool, goalId, "product", commandId, stale)).resolves.toBe(true);
+    await pool.query("UPDATE goal_leases SET expires_at = transaction_timestamp() - interval '1 second' WHERE goal_id = $1", [goalId]);
+    await proof(goalId);
+    await expect(resetHeadActivationAfterSpawnFailure(pool, goalId, "product", commandId, stale)).rejects.toMatchObject({ code: "stale_lease" });
+    await expect(resetHeadActivationAfterCancellation(pool, goalId, "product", commandId, stale)).rejects.toMatchObject({ code: "stale_lease" });
+    await expect(markHeadActivationOrphaned(pool, goalId, "product", commandId, stale)).rejects.toMatchObject({ code: "stale_lease" });
+    expect((await pool.query("SELECT status FROM head_activation_commands WHERE command_id = $1", [commandId])).rows).toEqual([{ status: "spawn_started" }]);
+  });
+
+  it("does not allow one provider execution or invocation to belong to two commands", async () => {
+    const firstGoalId = await goal(); const firstLease = await proof(firstGoalId); const firstCommandId = randomUUID();
+    await activateHeadParticipation(pool, { ...concertmaster(firstGoalId, "product"), commandId: firstCommandId }, firstLease);
+    await expect(markHeadActivationSpawnStarted(pool, firstGoalId, "product", firstCommandId, firstLease)).resolves.toBe(true);
+    await expect(bindHeadActivationInvocation(pool, firstGoalId, "product", firstCommandId, "execution:owned", "invocation:owned")).resolves.toBe(true);
+
+    const secondGoalId = await goal(); const secondLease = await proof(secondGoalId); const secondCommandId = randomUUID();
+    await activateHeadParticipation(pool, { ...concertmaster(secondGoalId, "product"), commandId: secondCommandId }, secondLease);
+    await expect(markHeadActivationSpawnStarted(pool, secondGoalId, "product", secondCommandId, secondLease)).resolves.toBe(true);
+    await expect(bindHeadActivationInvocation(pool, secondGoalId, "product", secondCommandId, "execution:owned", "invocation:other")).rejects.toThrow();
+    expect((await pool.query("SELECT provider_execution_ref, provider_invocation_ref FROM head_activation_commands WHERE command_id = $1", [secondCommandId])).rows).toEqual([
+      { provider_execution_ref: null, provider_invocation_ref: null },
+    ]);
+  });
+
+  it("cleans an active command and participation only after confirmed cancellation", async () => {
+    const goalId = await goal(); const lease = await proof(goalId); const commandId = randomUUID();
+    await activateHeadParticipation(pool, { ...concertmaster(goalId, "product"), commandId }, lease);
+    await expect(markHeadActivationSpawnStarted(pool, goalId, "product", commandId, lease)).resolves.toBe(true);
+    await expect(bindHeadActivationInvocation(pool, goalId, "product", commandId, "execution:product", "invocation:product")).resolves.toBe(true);
+    await expect(markHeadParticipationActive(pool, goalId, "product", "execution:product", lease, "head:product", commandId)).resolves.toMatchObject({ status: "active" });
+    await expect(resetHeadActivationAfterCancellation(pool, goalId, "product", commandId, lease)).resolves.toBe(true);
+    expect((await pool.query("SELECT status, provider_execution_ref, provider_invocation_ref, active_session_ref FROM head_activation_commands WHERE command_id = $1", [commandId])).rows).toEqual([
+      { status: "reserved", provider_execution_ref: null, provider_invocation_ref: null, active_session_ref: null },
+    ]);
+    expect((await pool.query("SELECT status, active_session_ref FROM goal_head_participations WHERE goal_id = $1 AND department_id = 'product'", [goalId])).rows).toEqual([
+      { status: "sleeping", active_session_ref: null },
+    ]);
+  });
+
+  it("fences an unbound spawn as orphaned during startup recovery", async () => {
+    const goalId = await goal(); const lease = await proof(goalId); const commandId = randomUUID();
+    await activateHeadParticipation(pool, { ...concertmaster(goalId, "product"), commandId }, lease);
+    await expect(markHeadActivationSpawnStarted(pool, goalId, "product", commandId, lease)).resolves.toBe(true);
+    await pool.query("UPDATE goal_leases SET expires_at = transaction_timestamp() - interval '1 second' WHERE goal_id = $1", [goalId]);
+    const recovery = await reconcileOnStartup(pool, {
+      ownerId: `head-reconciler-${randomUUID()}`,
+      leaderLeaseDurationMs: 60_000,
+      goalLeaseDurationMs: 60_000,
+      kernel: { observe: async () => [] } as never,
+    });
+    const result = recovery.results.find((entry) => entry.goalId === goalId);
+    expect(result?.reconciledHeadActivationCommandIds).toEqual([commandId]);
+    expect((await pool.query("SELECT status FROM head_activation_commands WHERE command_id = $1", [commandId])).rows).toEqual([{ status: "orphaned" }]);
+    expect((await pool.query("SELECT status, active_session_ref FROM goal_head_participations WHERE goal_id = $1 AND department_id = 'product'", [goalId])).rows).toEqual([
+      { status: "sleeping", active_session_ref: null },
+    ]);
+  });
+
+  it("does not retry while an orphaned provider session remains unresolved", async () => {
+    const goalId = await goal(); const lease = await proof(goalId); const commandId = randomUUID();
+    await activateHeadParticipation(pool, { ...concertmaster(goalId, "product"), commandId }, lease);
+    await expect(markHeadActivationSpawnStarted(pool, goalId, "product", commandId, lease)).resolves.toBe(true);
+    await expect(bindHeadActivationInvocation(pool, goalId, "product", commandId, "execution:unresolved", "invocation:unresolved")).resolves.toBe(true);
+    await expect(markHeadActivationOrphaned(pool, goalId, "product", commandId, lease)).resolves.toBe(true);
+    await expect(activateHeadParticipation(pool, { ...concertmaster(goalId, "product"), commandId: randomUUID() }, lease)).rejects.toMatchObject({ code: "head_activation_binding_conflict" });
+  });
+
+  it("retains opaque provider refs when startup cancellation is not confirmed", async () => {
+    const goalId = await goal(); const lease = await proof(goalId); const commandId = randomUUID();
+    await activateHeadParticipation(pool, { ...concertmaster(goalId, "product"), commandId }, lease);
+    await expect(markHeadActivationSpawnStarted(pool, goalId, "product", commandId, lease)).resolves.toBe(true);
+    await expect(bindHeadActivationInvocation(pool, goalId, "product", commandId, "execution:orphan", "invocation:orphan")).resolves.toBe(true);
+    await pool.query("UPDATE goal_leases SET expires_at = transaction_timestamp() - interval '1 second' WHERE goal_id = $1", [goalId]);
+    const kernel = {
+      observe: async () => [{ invocation: "invocation:orphan", name: "head", status: "running", toolEvents: { state: "empty", events: [] }, usage: { state: "unknown" }, answer: { state: "unavailable", reason: "snapshot-unavailable" } }],
+      cancel: async () => ({ cancelled: false }),
+    } as never;
+    const recovery = await reconcileOnStartup(pool, {
+      ownerId: `head-reconciler-${randomUUID()}`,
+      leaderLeaseDurationMs: 60_000,
+      goalLeaseDurationMs: 60_000,
+      kernel,
+    });
+    expect(recovery.results.find((entry) => entry.goalId === goalId)?.reconciledHeadActivationCommandIds).toEqual([commandId]);
+    expect((await pool.query("SELECT status, provider_execution_ref, provider_invocation_ref FROM head_activation_commands WHERE command_id = $1", [commandId])).rows).toEqual([
+      { status: "orphaned", provider_execution_ref: "execution:orphan", provider_invocation_ref: "invocation:orphan" },
+    ]);
+    expect((await pool.query("SELECT status, active_session_ref FROM goal_head_participations WHERE goal_id = $1 AND department_id = 'product'", [goalId])).rows).toEqual([
+      { status: "sleeping", active_session_ref: null },
+    ]);
   });
 
   it("rejects a stale proof without creating participation, attempt, or edge state", async () => {

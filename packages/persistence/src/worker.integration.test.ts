@@ -256,6 +256,7 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
         outcome: "lease_contended",
         reasons: ["goal_lease_held_across_reconciliation"],
         reconciledWorkerIds: [],
+        reconciledHeadActivationCommandIds: [],
       }]);
       expect(await readWorker(restartedPool, worker.workerId)).toMatchObject({ workerId: worker.workerId, status: "running" });
       expect((await restartedPool.query("SELECT count(*)::int AS count FROM workers WHERE council_id = $1", [council.councilId])).rows[0].count).toBe(1);
