@@ -1,4 +1,4 @@
-# Maestro: Durable Hierarchical AI Orchestration System
+# Maestro: Self-Improving & Durable Agent Orchestration
 
 <p align="center">
   <a href="docs/README.md">
