@@ -92,6 +92,17 @@ async function lockGoalLease(client: PoolClient, proof: GoalLeaseProof): Promise
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 14))", [proof.goalId]);
   await assertGoalControlOpen(client, proof.goalId);
 }
+async function assertFrozenContract(connection: Pool | PoolClient, council: HeadCouncil): Promise<void> {
+  const result = await connection.query<{ version: string; content_hash: string; launch_state: string }>(
+    "SELECT version, content_hash, launch_state FROM task_contracts WHERE contract_id = $1",
+    [council.snapshot.contract.contractId],
+  );
+  const row = result.rows[0];
+  if (row === undefined || row.launch_state !== "launched" || Number(row.version) !== council.snapshot.contract.version ||
+      row.content_hash.trim() !== council.snapshot.contract.contentHash.trim()) {
+    throw new DepartmentPlanError("Frozen Task Contract changed or is no longer launched");
+  }
+}
 
 /**
  * Create the first version of one Department's Plan. Every identity/binding
@@ -133,6 +144,7 @@ export async function createDepartmentPlan(pool: Pool, request: CreateDepartment
       if (prior.content_hash.trim() === contentHash && prior.current_version === 1) { await client.query("COMMIT"); open = false; return mapPlan(prior); }
       throw new DepartmentPlanError("A Department Plan already exists for this Council and Department");
     }
+    await assertFrozenContract(client, council);
     const contractRow = await client.query<{ version: string; content_hash: string }>("SELECT version, content_hash FROM task_contracts WHERE contract_id = $1", [council.contractId]);
     if (contractRow.rowCount !== 1) throw new DepartmentPlanError("Frozen Task Contract not found for Department Plan");
     const contract = contractRow.rows[0]!;
@@ -167,6 +179,7 @@ export async function readDepartmentPlan(pool: Pool, councilId: string, departme
   const expectedHash = departmentPlanSubstanceContentHash(substance);
   if (row.content_hash.trim() !== expectedHash) throw new DepartmentPlanError("Stored Department Plan content hash is invalid");
   const council = await readHeadCouncil(pool, councilId);
+  await assertFrozenContract(pool, council);
   if (council.goalId !== row.goal_id || council.snapshot.projectId !== row.project_id || council.snapshotHash !== row.council_snapshot_hash.trim()) {
     throw new DepartmentPlanError("Stored Department Plan Council binding is invalid");
   }
@@ -203,6 +216,7 @@ export async function reviseDepartmentPlan(
     const council = await readHeadCouncil(pool, councilId);
     assertGoalProofOrThrow(council.goalId, proof);
     await lockGoalLease(client, proof);
+    await assertFrozenContract(client, council);
     await assertAuthorizedPlanOwner(client, council, departmentId, context);
     const contentHash = departmentPlanSubstanceContentHash(newSubstance);
     if (plan.current_version === expectedVersion && plan.content_hash.trim() === contentHash) { await client.query("COMMIT"); open = false; return mapPlan(plan); }
