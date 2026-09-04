@@ -116,4 +116,6 @@ export interface ExecutionKernelPort {
    * may omit it; callers must tolerate its absence.
    */
   release?(invocation: InvocationRef): Promise<void>;
+  /** Stop admission and dispose provider resources during process shutdown. */
+  close?(): Promise<void>;
 }
