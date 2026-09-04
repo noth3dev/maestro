@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -7,17 +7,26 @@ import { GitOperationError } from "@maestro/domain";
 import { advanceBranch, commit, createBranch, createWorktree, headRevision, removeWorktree } from "./git-ops.js";
 
 describe("local Git operations", () => {
+  let workspaceRoot: string;
   let repositoryPath: string;
   let baseRevision: string;
+  const priorWorkspaceRoot = process.env.MAESTRO_WORKTREE_ROOT;
 
   beforeEach(() => {
-    repositoryPath = mkdtempSync(join(tmpdir(), "maestro-git-test-"));
+    workspaceRoot = mkdtempSync(join(tmpdir(), "maestro-git-workspace-"));
+    process.env.MAESTRO_WORKTREE_ROOT = workspaceRoot;
+    repositoryPath = join(workspaceRoot, "repository");
+    mkdirSync(repositoryPath);
     execFileSync("git", ["init", "--quiet", "--initial-branch=main"], { cwd: repositoryPath });
     execFileSync("git", ["-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-m", "initial"], { cwd: repositoryPath });
     baseRevision = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repositoryPath }).toString().trim();
   });
 
-  afterEach(() => { rmSync(repositoryPath, { recursive: true, force: true }); });
+  afterEach(() => {
+    if (priorWorkspaceRoot === undefined) delete process.env.MAESTRO_WORKTREE_ROOT;
+    else process.env.MAESTRO_WORKTREE_ROOT = priorWorkspaceRoot;
+    rmSync(workspaceRoot, { recursive: true, force: true });
+  });
 
   it("creates a branch at the exact base revision", async () => {
     await createBranch(repositoryPath, "goal/integration", baseRevision);
@@ -27,7 +36,7 @@ describe("local Git operations", () => {
 
   it("creates a uniquely owned worktree, commits mission changes, and reports the real commit sha", async () => {
     await createBranch(repositoryPath, "worker/exec-1", baseRevision);
-    const worktreePath = join(repositoryPath, "..", "maestro-worker-worktree");
+    const worktreePath = join(workspaceRoot, "maestro-worker-worktree");
     try {
       await createWorktree(repositoryPath, worktreePath, "worker/exec-1");
       const fs = await import("node:fs/promises");
@@ -44,7 +53,7 @@ describe("local Git operations", () => {
   it("advances a branch only to a descendant commit", async () => {
     await createBranch(repositoryPath, "goal/integration", baseRevision);
     await createBranch(repositoryPath, "worker/advance", baseRevision);
-    const worktreePath = join(repositoryPath, "..", "maestro-advance-worktree");
+    const worktreePath = join(workspaceRoot, "maestro-advance-worktree");
     try {
       await createWorktree(repositoryPath, worktreePath, "worker/advance");
       const fs = await import("node:fs/promises");
@@ -60,7 +69,7 @@ describe("local Git operations", () => {
 
   it("reads the exact head of a named repository branch", async () => {
     await createBranch(repositoryPath, "goal/integration", baseRevision);
-    const worktreePath = join(repositoryPath, "..", "maestro-goal-head-worktree");
+    const worktreePath = join(workspaceRoot, "maestro-goal-head-worktree");
     try {
       await createWorktree(repositoryPath, worktreePath, "goal/integration");
       const fs = await import("node:fs/promises");
@@ -69,6 +78,39 @@ describe("local Git operations", () => {
       expect(await headRevision(repositoryPath, "goal/integration")).toBe(result.commitSha);
     } finally {
       await removeWorktree(repositoryPath, worktreePath).catch(() => undefined);
+    }
+  });
+
+  it("rejects repository and worktree paths outside the configured workspace root", async () => {
+    const outsideRepositoryPath = mkdtempSync(join(tmpdir(), "maestro-git-outside-repository-"));
+    const outsideWorktreePath = mkdtempSync(join(tmpdir(), "maestro-git-outside-worktree-"));
+    try {
+      await expect(createBranch(outsideRepositoryPath, "goal/integration", baseRevision))
+        .rejects.toThrow("outside configured workspace root");
+      await expect(createWorktree(repositoryPath, outsideWorktreePath, "goal/integration"))
+        .rejects.toThrow("outside configured workspace root");
+    } finally {
+      rmSync(outsideRepositoryPath, { recursive: true, force: true });
+      rmSync(outsideWorktreePath, { recursive: true, force: true });
+    }
+  });
+
+  it("fails closed when the workspace root is not configured", async () => {
+    delete process.env.MAESTRO_WORKTREE_ROOT;
+    await expect(createBranch(repositoryPath, "goal/integration", baseRevision))
+      .rejects.toThrow("MAESTRO_WORKTREE_ROOT must be configured");
+  });
+
+  it("rejects a symlink that resolves outside the configured workspace root", async () => {
+    const outsideRepositoryPath = mkdtempSync(join(tmpdir(), "maestro-git-symlink-target-"));
+    const symlinkPath = join(workspaceRoot, "repository-link");
+    try {
+      symlinkSync(outsideRepositoryPath, symlinkPath, "dir");
+      await expect(createBranch(symlinkPath, "goal/integration", baseRevision))
+        .rejects.toThrow("outside configured workspace root");
+    } finally {
+      rmSync(symlinkPath, { force: true });
+      rmSync(outsideRepositoryPath, { recursive: true, force: true });
     }
   });
 
