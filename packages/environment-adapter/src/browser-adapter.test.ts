@@ -134,6 +134,17 @@ describe("browser environment adapter", () => {
     expect(driver.newPage).not.toHaveBeenCalled();
   });
 
+  it("denies a browser provider that is absent from the capability manifest before authority or driver", async () => {
+    const driver: BrowserDriver = { newPage: vi.fn() };
+    const { authority } = permissiveAuthority();
+    const environment = makeEnvironment({ capabilities: [] });
+    const adapter = createBrowserEnvironmentAdapter(environment, authority, { driver });
+
+    await expect(adapter.start(command())).rejects.toBeInstanceOf(EnvironmentBoundaryError);
+    expect(authority.execute).not.toHaveBeenCalled();
+    expect(driver.newPage).not.toHaveBeenCalled();
+  });
+
   it("captures bounded text for get_text without exposing raw page HTML", async () => {
     const page = fakePage({ textContent: vi.fn(async () => "x".repeat(20_000)) });
     const driver: BrowserDriver = { newPage: vi.fn(async () => page) };

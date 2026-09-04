@@ -37,6 +37,7 @@ interface PrimeSession {
   }>;
   cancelRlmChildRun(childId: string, reason?: string): boolean;
   abort(): Promise<void>;
+  disposeAsync?(): Promise<void>;
   isStreaming: boolean;
   getRlmChildSnapshots(): readonly PrimeChildSnapshot[];
   handleAgentMessageHostRequest(type: string, payload?: Record<string, unknown>): unknown | Promise<unknown>;
@@ -84,6 +85,12 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
   const children = new Map<InvocationRef, ChildRecord>();
   let nextRoot = 0;
   let nextInvocation = 0;
+  let closing = false;
+
+  async function disposeSession(execution: ExecutionRef, session: PrimeSession): Promise<void> {
+    sessions.delete(execution);
+    try { await session.disposeAsync?.(); } catch { /* shutdown/release is best effort */ }
+  }
 
   const nextPublicInvocation = (): InvocationRef => asInvocationRef(`invocation-${++nextInvocation}`);
   const toolEventsFor = (invocation: InvocationRef, snapshot: PrimeChildSnapshot): ToolEvents => {
@@ -117,9 +124,11 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
   const unavailable = (operation: "resume" | "reconnect" | "prompt" | "sendMessage" | "getModelIdentity"): never => {
     throw new ExecutionKernelUnavailableError(operation);
   };
+  const rootsHasExecution = (execution: ExecutionRef): boolean => [...roots.values()].some((root) => root.execution === execution);
 
   return {
     async spawn(request: SpawnRequest): Promise<SpawnedInvocation> {
+      if (closing) throw new Error("Execution kernel is shutting down");
       if (!request.parent) {
         // A root is always bound to an existing process/repository context. The
         // public kernel supplies process.cwd() when callers omit cwd; the
@@ -318,21 +327,45 @@ export function createPrimeExecutionKernelFromFactory(factory: PrimeSessionFacto
       if (root) {
         roots.delete(invocation);
         const stillReferenced = [...children.values()].some((child) => child.parent === root.execution);
-        if (!stillReferenced) sessions.delete(root.execution);
+        if (!stillReferenced) {
+          const session = sessions.get(root.execution);
+          if (session) await disposeSession(root.execution, session);
+        }
         return;
       }
       const child = children.get(invocation);
-      if (child) children.delete(invocation);
+      if (child) {
+        children.delete(invocation);
+        if (!rootsHasExecution(child.parent) && ![...children.values()].some((item) => item.parent === child.parent)) {
+          const session = sessions.get(child.parent);
+          if (session) await disposeSession(child.parent, session);
+        }
+      }
+    },
+
+    async close(): Promise<void> {
+      if (closing) return;
+      closing = true;
+      const activeRoots = [...roots.values()];
+      await Promise.all(activeRoots.map(async (root) => {
+        if (!root.cancelled) {
+          try { await sessions.get(root.execution)?.abort(); } catch { /* continue draining */ }
+          root.cancelled = true;
+          root.status = "cancelled";
+        }
+      }));
+      const activeSessions = [...sessions.entries()];
+      await Promise.all(activeSessions.map(([execution, session]) => disposeSession(execution, session)));
+      roots.clear();
+      children.clear();
     },
   };
 }
 
 export function createPrimeExecutionKernel(): ExecutionKernelPort {
-  // Pin the real SDK session to the process' existing repository context. A
-  // caller cannot redirect the production root session through SpawnRequest.cwd.
-  const cwd = process.cwd();
   return createPrimeExecutionKernelFromFactory({
     async create(options) {
+      const cwd = options.cwd;
       return createAgentSession({
         cwd,
         sessionManager: SessionManager.inMemory(cwd),

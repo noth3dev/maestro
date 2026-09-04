@@ -33,8 +33,8 @@ function canonicalizePath(inputPath: string, label: string): string {
   }
 }
 
-function configuredWorkspaceRoot(): string {
-  const configuredRoot = process.env[WORKTREE_ROOT_ENV]?.trim();
+function configuredWorkspaceRoot(workspaceRoot?: string): string {
+  const configuredRoot = (workspaceRoot ?? process.env[WORKTREE_ROOT_ENV])?.trim();
   if (configuredRoot === undefined || configuredRoot === "") {
     throw new GitOperationError(`${WORKTREE_ROOT_ENV} must be configured before Git operations`);
   }
@@ -54,8 +54,8 @@ function isWithinRoot(root: string, candidate: string): boolean {
 }
 
 /** Returns the canonical path only when it is contained by MAESTRO_WORKTREE_ROOT. */
-export function assertWorkspacePath(inputPath: string, label = "Git path"): string {
-  const root = configuredWorkspaceRoot();
+export function assertWorkspacePath(inputPath: string, label = "Git path", workspaceRoot?: string): string {
+  const root = configuredWorkspaceRoot(workspaceRoot);
   const candidate = canonicalizePath(inputPath, label);
   if (!isWithinRoot(root, candidate)) {
     throw new GitOperationError(`${label} is outside configured workspace root`);

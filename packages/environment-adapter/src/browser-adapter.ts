@@ -157,6 +157,10 @@ function validateBrowserEnvironment(
   if (record.state !== "ready" || record.health.status !== "healthy") {
     throw new EnvironmentExecutionError(`Environment is not ready and healthy (${record.state})`);
   }
+  const browserRuntime = record.recipe.runtime;
+  if (!nonblank(browserRuntime) || !record.capabilities.some((capability) => capability.name === browserRuntime)) {
+    throw new EnvironmentBoundaryError("Browser provider capability is not installed in the environment");
+  }
   const expiresAt = Date.parse(record.expiresAt);
   if (!Number.isFinite(expiresAt) || expiresAt <= now.getTime()) throw new EnvironmentExecutionError("Environment has expired");
   if (!record.boundaries.browsers.includes(request.action)) {
