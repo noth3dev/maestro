@@ -1,5 +1,4 @@
-import type { GoalResult, CreateGoalInput, TransitionGoalInput } from "@maestro/contracts";
-import { isTerminalGoalState } from "@maestro/domain";
+import type { GoalResult, CreateGoalInput, TransitionGoalInput, GoalControlInput } from "@maestro/contracts";
 import {
   acquireGoalLease,
   renewGoalLease,
@@ -8,13 +7,21 @@ import {
   LeaseUnavailableError as PersistenceLeaseUnavailableError,
   StaleGoalLeaseError as PersistenceStaleGoalLeaseError,
   type CommandResult,
+  type GoalCommand,
 } from "@maestro/persistence";
 import type { Pool } from "pg";
 import type { OperatorContext } from "@maestro/persistence";
 
+export type { GoalControlInput };
+
 export interface GoalService {
   createGoal(input: CreateGoalInput, commandId: string, operator: OperatorContext): Promise<GoalResult>;
   transitionGoal(goalId: string, input: TransitionGoalInput, commandId: string, operator: OperatorContext): Promise<GoalResult>;
+  /** Narrow lifecycle commands. Each command is independently idempotent by commandId. */
+  pauseGoal(goalId: string, input: GoalControlInput, commandId: string, operator: OperatorContext): Promise<GoalResult>;
+  stopGoal(goalId: string, input: GoalControlInput, commandId: string, operator: OperatorContext): Promise<GoalResult>;
+  resumeGoal(goalId: string, input: GoalControlInput, commandId: string, operator: OperatorContext): Promise<GoalResult>;
+  emergencyStopGoal(goalId: string, input: GoalControlInput, commandId: string, operator: OperatorContext): Promise<GoalResult>;
   getGoal(goalId: string, projectId: string): Promise<GoalResult>;
   /** Internal composition seam for other authenticated lifecycle commands. */
   withGoalLease?<T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>): Promise<T>;
@@ -65,19 +72,15 @@ export function createDurableGoalService(options: DurableGoalServiceOptions): Go
     return acquiredProof;
   }
 
-  async function execute(goalId: string, command: Parameters<typeof executeGoalCommand>[1]): Promise<GoalResult> {
+  async function execute(goalId: string, command: GoalCommand): Promise<GoalResult> {
     try {
       const proof = await leaseFor(goalId);
       const result = await executeGoalCommand(options.pool, command, proof);
       const goalResult = commandResult(result, command.projectId);
-      // Once a Goal reaches a terminal state, no further command against it
-      // can ever succeed (see the domain transition table), so the lease
-      // proof for this goalId would otherwise stay in the in-process Map
-      // forever. Evict only after the terminal write is durably committed
-      // (commandResult already threw for any non-success/non-terminal-write
-      // outcome above); never evict on a provider/DB/error path, since a
-      // retry after a transient failure still needs the same proof.
-      if (isTerminalGoalState(goalResult.state)) leaseProofs.delete(goalId);
+      // Keep the proof after terminal writes. A client may lose the response
+      // after commit and retry the same idempotency key; receipt replay still
+      // requires the current lease proof. The proof is replaced on expiry or
+      // fencing, and terminal Goals cannot accept a different command.
       return goalResult;
     } catch (error) {
       if (error instanceof PersistenceStaleGoalLeaseError) leaseProofs.delete(goalId);
@@ -89,12 +92,51 @@ export function createDurableGoalService(options: DurableGoalServiceOptions): Go
     }
   }
 
+  async function transitionControl(
+    goalId: string,
+    input: GoalControlInput,
+    commandId: string,
+    operator: OperatorContext,
+    to: TransitionGoalInput["to"],
+  ): Promise<GoalResult> {
+    return execute(goalId, {
+      commandId,
+      projectId: input.projectId,
+      goalId,
+      actorId: operator.operatorId,
+      type: "TransitionGoal",
+      expectedVersion: input.expectedVersion,
+      requiredRole: "concertmaster",
+      to,
+    });
+  }
+
   return {
     async createGoal(input, commandId, operator) {
       return execute(commandId, { commandId, projectId: input.projectId, goalId: commandId, actorId: operator.operatorId, type: "CreateGoal", expectedVersion: 0, requiredRole: "concertmaster", ...(input.contractId === undefined ? {} : { contractId: input.contractId }) });
     },
     async transitionGoal(goalId, input, commandId, operator) {
       return execute(goalId, { commandId, projectId: input.projectId, goalId, actorId: operator.operatorId, type: "TransitionGoal", expectedVersion: input.expectedVersion, requiredRole: "concertmaster", to: input.to });
+    },
+    async pauseGoal(goalId, input, commandId, operator) {
+      return transitionControl(goalId, input, commandId, operator, "pausing");
+    },
+    async stopGoal(goalId, input, commandId, operator) {
+      return transitionControl(goalId, input, commandId, operator, "stopping");
+    },
+    async resumeGoal(goalId, input, commandId, operator) {
+      return transitionControl(goalId, input, commandId, operator, "resuming");
+    },
+    async emergencyStopGoal(goalId, input, commandId, operator) {
+      return execute(goalId, {
+        commandId,
+        projectId: input.projectId,
+        goalId,
+        actorId: operator.operatorId,
+        type: "EmergencyStopGoal",
+        expectedVersion: input.expectedVersion,
+        requiredRole: "concertmaster",
+      });
     },
     async withGoalLease(goalId, operation) {
       return operation(await leaseFor(goalId));
