@@ -6,7 +6,7 @@ import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubsta
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
-import { createDepartmentPlan } from "./department-plan.js";
+import { createDepartmentPlan, reviseDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { spawnWorker } from "./worker.js";
 import { grantTeamLead, readTeamLeadGrant, revokeTeamLeadGrant, spawnHelperWorker, TeamLeadGrantError, TeamLeadGrantNotFoundError } from "./team-lead-grant.js";
@@ -146,5 +146,24 @@ describeDatabase("Team-lead grants and helper workers with PostgreSQL", () => {
 
   it("throws TeamLeadGrantNotFoundError for a missing grant", async () => {
     await expect(readTeamLeadGrant(pool, randomUUID())).rejects.toBeInstanceOf(TeamLeadGrantNotFoundError);
+  });
+
+  it("rejects a helper spawn that would exceed the grant's duration ceiling", async () => {
+    const { proof, worker, kernel, council, plan } = await setupWorker();
+    const grantId = randomUUID();
+    await pool.query(
+      `INSERT INTO team_lead_grants (grant_id, worker_id, council_id, department_id, plan_version, item_id, reason, max_helpers, cost_ceiling, duration_ceiling, task_scope, reporting_requirement, granted_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, transaction_timestamp() - interval '10 days')`,
+      [grantId, worker.workerId, council.councilId, "product", plan.version, worker.itemId, "large mission needs parallel helpers", 5, "100 USD", "1 day", "parallel subsystem work", "daily status"],
+    );
+    await expect(spawnHelperWorker(pool, kernel, grantId, proof, headContext("product"))).rejects.toThrow(/duration ceiling exceeded/);
+  });
+
+  it("rejects a helper spawn that would exceed the grant's task scope ceiling once the Department Plan is revised", async () => {
+    const { proof, worker, kernel, council, plan } = await setupWorker();
+    const grant = await grantTeamLead(pool, worker.workerId, grantSubstance({ maxHelpers: 5, costCeiling: "100 USD" }), proof, headContext("product"));
+    const revisedSubstance = { ...planSubstance(), contribution: "own the product slice, expanded" };
+    await reviseDepartmentPlan(pool, council.councilId, "product", plan.version, revisedSubstance, "scope expanded", proof, headContext("product"));
+    await expect(spawnHelperWorker(pool, kernel, grant.grantId, proof, headContext("product"))).rejects.toThrow(/task scope ceiling exceeded/);
   });
 });
