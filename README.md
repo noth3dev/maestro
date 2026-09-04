@@ -8,6 +8,7 @@
 Maestro: Self-Improving &amp; Durable Agent Orchestration for Versatile Tasks
 </h3>
 <p align="center">
+  <a href="docs/ko/README.md"><b>문서 (한국어)</b></a> &bull;
   <a href="docs/en/README.md"><b>Documentation (EN)</b></a> &bull;
   <a href="docs/en/01-system-overview.md"><b>Architecture</b></a> &bull;
   <a href="docs/en/02-hierarchical-orchestration.md"><b>Hierarchy</b></a> &bull;
@@ -23,6 +24,8 @@ Maestro: Self-Improving &amp; Durable Agent Orchestration for Versatile Tasks
 </p>
 
 ---
+
+> **Languages:** English | [**한국어 (Korean)**](docs/ko/README.md)
 
 Maestro is an open-source enterprise AI orchestration framework designed for reliable, long-running, multi-agent goal execution. Built on top of the **Prime Agent SDK**, Maestro models real human organization structures—incorporating separation of powers, permanent domain departments, monotonic fencing leases, and cryptographic auditability to ensure zero unapproved side effects.
 
