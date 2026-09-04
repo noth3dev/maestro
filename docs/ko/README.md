@@ -145,7 +145,7 @@ node apps/cli/dist/main.js goal get <goalId>
 # Append-Only 도메인 이벤트 스트리밍
 node apps/cli/dist/main.js events list --goalId <goalId>
 
-# Sentinel 챌린지 및 Overwatch Council 라운드 조회
+# Sentinel 챌린지 및 Encore Council 라운드 조회
 node apps/cli/dist/main.js sentinel challenge <challengeId>
 node apps/cli/dist/main.js council round <roundId>
 
