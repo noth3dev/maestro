@@ -103,3 +103,18 @@ it("drives the Task Contract intake lifecycle through CLI commands", async () =>
   expect(JSON.parse(stdout.lines[0]!)).toEqual(contract);
   expect(fetch).toHaveBeenNthCalledWith(1, "https://maestro.test/v1/task-contracts", expect.anything());
 });
+
+
+it("approves and runs a critical action through the CLI", async () => {
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ goalId, effect: "allow", reason: "exact_approval", classification: "critical", recordId: commandId }), { status: 200 }));
+  const stdout = output();
+  const exitCode = await executeCli([
+    "critical-action", "approve-and-run", "--goal-id", goalId, "--project-id", projectId,
+    "--action", "git.remote.push", "--target", "origin/main", "--version", "1",
+    "--budget-effect-cents", "0", "--expires-at", "2030-01-01T00:00:00.000Z",
+    "--command-id", commandId, "--json",
+  ], env, { fetch, stdout: stdout.write, stderr: output().write });
+  expect(exitCode).toBe(0);
+  expect(JSON.parse(stdout.lines[0]!)).toMatchObject({ effect: "allow", recordId: commandId });
+  expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/critical-actions/approve-and-run`, expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "idempotency-key": commandId }) }));
+});

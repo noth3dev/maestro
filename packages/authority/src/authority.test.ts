@@ -92,6 +92,27 @@ describe("evaluateAction", () => {
   });
 
 
+describe("AuthorizedEffectExecutor effect claims", () => {
+  it("does not invoke a claimed durable command twice", async () => {
+    let claimed = false;
+    let calls = 0;
+    const repository: AuthorityRepository = {
+      load: async () => [exactApproval],
+      appendDecision: async () => {},
+      recheckControl: async () => ({ effect: "allow" }),
+      claimEffect: async () => {
+        if (claimed) return false;
+        claimed = true;
+        return true;
+      },
+    };
+    const executor = new AuthorizedEffectExecutor(repository, () => now);
+    await expect(executor.execute(request, async () => { calls += 1; })).resolves.toMatchObject({ effect: "allow" });
+    await expect(executor.execute(request, async () => { calls += 1; })).resolves.toMatchObject({ effect: "allow", reason: "already_executed" });
+    expect(calls).toBe(1);
+  });
+});
+
 describe("AuthorizedEffectExecutor control recheck", () => {
   it("does not call the effect when emergency stop latches after the audit", async () => {
     const ordinary: ActionRequest = {

@@ -52,6 +52,8 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   const authorityRepository = new PostgresAuthorityRepository(pool);
   const authorityExecutor = new AuthorizedEffectExecutor(authorityRepository);
   const criticalActionService = createCriticalActionService({
+    pool,
+    ...(config.ceoOperatorId === undefined ? {} : { ceoOperatorId: config.ceoOperatorId }),
     repository: authorityRepository,
     getControlEpoch: async (projectId, goalId) => (await getGoalControl(pool, projectId, goalId)).controlEpoch,
     // The gateway is the point of this endpoint; no real external effect is wired in Phase 1.

@@ -74,3 +74,14 @@ it("runs the Task Contract lifecycle through typed authenticated requests", asyn
   expect(fetch).toHaveBeenNthCalledWith(2, `https://maestro.test/v1/task-contracts/${contractId}?projectId=${projectId}`, expect.anything());
   expect(fetch).toHaveBeenNthCalledWith(3, `https://maestro.test/v1/task-contracts/${contractId}`, expect.objectContaining({ method: "PUT" }));
 });
+
+
+it("approves and runs a critical action with the exact command identity", async () => {
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    goalId, effect: "allow", reason: "exact_approval", classification: "critical", recordId: commandId,
+  }), { status: 200 }));
+  const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+  const input = { projectId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0, expiresAt: "2030-01-01T00:00:00.000Z" };
+  await expect(client.approveAndRunCriticalAction(goalId, input, commandId)).resolves.toMatchObject({ effect: "allow", recordId: commandId });
+  expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/critical-actions/approve-and-run`, expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "idempotency-key": commandId }), body: JSON.stringify(input) }));
+});

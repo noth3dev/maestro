@@ -2,10 +2,26 @@ import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import type { ActionRequest, AuthorityDecisionAudit, AuthorityRecord, AuthorityRepository, ControlRecheck } from "@maestro/authority";
 
-export interface BootstrapAuthorityRecordInput extends ActionRequest {
+export interface BootstrapAuthorityRecordInput extends Omit<ActionRequest, "controlEpoch" | "commandId"> {
+  /** Optional for controlled setup callers; API command identity uses it as the durable record key. */
   recordId?: string;
   kind: "grant" | "approval";
+  commandId: string | null;
   expiresAt: Date;
+  /** Retained for backwards compatibility with setup fixtures; authority records do not scope epochs. */
+  controlEpoch?: string;
+}
+
+export type AuthorityApprovalInput = Omit<BootstrapAuthorityRecordInput, "kind" | "recordId" | "controlEpoch" | "commandId"> & {
+  recordId: string;
+  commandId: string;
+};
+
+export class AuthorityApprovalConflictError extends Error {
+  constructor() {
+    super("Authority approval identity was reused with different content");
+    this.name = "AuthorityApprovalConflictError";
+  }
 }
 
 /** Controlled setup helper. It only creates new immutable authority records. */
@@ -22,6 +38,34 @@ export async function bootstrapAuthorityRecord(pool: Pool, input: BootstrapAutho
       input.policyVersion, String(input.budgetEffectCents), input.expiresAt],
   );
   return toAuthorityRecord(result.rows[0]!);
+}
+
+/**
+ * Issues one command-bound approval for a user-facing approval flow. The
+ * record ID is the approval command identity, so retries are idempotent and
+ * a changed retry cannot silently broaden the approved action.
+ */
+export async function issueAuthorityApproval(pool: Pool, input: AuthorityApprovalInput): Promise<AuthorityRecord> {
+  const commandId = input.commandId;
+  if (commandId === "") throw new AuthorityApprovalConflictError();
+  await pool.query(
+    `INSERT INTO authority_records
+     (record_id, kind, command_id, project_id, goal_id, actor_id, action, target, policy_version, budget_effect_cents, expires_at)
+     VALUES ($1, 'approval', $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     ON CONFLICT (record_id) DO NOTHING`,
+    [input.recordId, commandId, input.projectId, input.goalId, input.actorId, input.action, input.target,
+      input.policyVersion, String(input.budgetEffectCents), input.expiresAt],
+  );
+  const result = await pool.query<StoredAuthorityRecord>("SELECT * FROM authority_records WHERE record_id = $1", [input.recordId]);
+  if (result.rowCount !== 1) throw new AuthorityApprovalConflictError();
+  const record = toAuthorityRecord(result.rows[0]!);
+  if (record.kind !== "approval" || record.commandId !== commandId || record.projectId !== input.projectId ||
+      record.goalId !== input.goalId || record.actorId !== input.actorId || record.action !== input.action ||
+      record.target !== input.target || record.policyVersion !== input.policyVersion ||
+      record.budgetEffectCents !== input.budgetEffectCents || record.expiresAt.getTime() !== input.expiresAt.getTime()) {
+    throw new AuthorityApprovalConflictError();
+  }
+  return record;
 }
 
 /** Revocation can occur once; migration-level guards make it final. */
@@ -59,6 +103,18 @@ export class PostgresAuthorityRepository implements AuthorityRepository {
         request.policyVersion, String(request.budgetEffectCents), decision.effect, decision.reason, decision.classification,
         decision.recordId ?? null, decidedAt],
     );
+  }
+
+  async claimEffect(request: ActionRequest): Promise<boolean> {
+    const result = await this.pool.query(
+      `INSERT INTO authority_effect_claims
+       (command_id, project_id, goal_id, actor_id, action, target, policy_version, budget_effect_cents)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (command_id) DO NOTHING`,
+      [request.commandId, request.projectId, request.goalId, request.actorId, request.action, request.target,
+        request.policyVersion, String(request.budgetEffectCents)],
+    );
+    return result.rowCount === 1;
   }
 
   async recheckControl(request: ActionRequest): Promise<ControlRecheck> {

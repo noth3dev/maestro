@@ -6,6 +6,7 @@ import { AuthorizedEffectExecutor, type ActionRequest, type AuthorityRepository 
 import {
   PostgresAuthorityRepository,
   bootstrapAuthorityRecord,
+  issueAuthorityApproval,
   confirmPausedGoal,
   confirmStoppedGoal,
   emergencyStopGoal,
@@ -28,8 +29,35 @@ describeDatabase("durable authorized effects with PostgreSQL", () => {
   });
 
   beforeAll(async () => { await applyAllMigrations(pool); });
-  beforeEach(async () => { await pool.query("TRUNCATE authority_decisions, authority_records, goal_controls CASCADE"); });
+  beforeEach(async () => { await pool.query("TRUNCATE authority_effect_claims, authority_decisions, authority_records, goal_controls CASCADE"); });
   afterAll(async () => { await pool.end(); });
+
+  it("claims an allowed command only once and makes approval issuance idempotent", async () => {
+    const current = { ...request(), action: "git.remote.push", target: "origin/main" };
+    const approvalInput = {
+      recordId: current.commandId,
+      commandId: current.commandId,
+      projectId: current.projectId,
+      goalId: current.goalId,
+      actorId: current.actorId,
+      action: current.action,
+      target: current.target,
+      policyVersion: current.policyVersion,
+      budgetEffectCents: current.budgetEffectCents,
+      expiresAt: new Date("2030-01-01T00:00:00Z"),
+    };
+    const first = await issueAuthorityApproval(pool, approvalInput);
+    const replay = await issueAuthorityApproval(pool, approvalInput);
+    expect(replay.recordId).toBe(first.recordId);
+    await expect(issueAuthorityApproval(pool, { ...approvalInput, target: "origin/release" })).rejects.toThrow("reused with different content");
+
+    const executor = new AuthorizedEffectExecutor(repository, () => new Date("2029-01-01T00:00:00Z"));
+    let calls = 0;
+    await executor.execute(current, async () => { calls += 1; });
+    await executor.execute(current, async () => { calls += 1; });
+    expect(calls).toBe(1);
+    expect((await pool.query("SELECT count(*)::int AS count FROM authority_effect_claims WHERE command_id = $1", [current.commandId])).rows[0]!.count).toBe(1);
+  });
 
   it("records an allowed exact ordinary grant before one callback, then denies after final revocation", async () => {
     const current = request();

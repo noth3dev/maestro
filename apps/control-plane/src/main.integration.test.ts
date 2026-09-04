@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { bootstrapAuthorityRecord, bootstrapLocalOperator, grantProjectMembership, revokeAuthorityRecord } from "@maestro/persistence";
+import { bootstrapLocalOperator, grantProjectMembership, revokeAuthorityRecord } from "@maestro/persistence";
 import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
 import { createControlPlane } from "./main.js";
 
@@ -30,7 +30,7 @@ if (!databaseUrl) {
 
   beforeEach(async () => {
     await setupPool.query(
-      "TRUNCATE reconciler_leader_lease, authority_decisions, authority_records, goal_controls, goal_leases, outbox, goal_events, command_receipts, goals, local_operator_credentials, local_operators CASCADE",
+      "TRUNCATE reconciler_leader_lease, authority_effect_claims, authority_decisions, authority_records, goal_controls, goal_leases, outbox, goal_events, command_receipts, goals, local_operator_credentials, local_operators CASCADE",
     );
   });
 
@@ -260,7 +260,7 @@ if (!databaseUrl) {
     const { credentialId, operatorId } = localOperator;
     const effect = vi.fn(async () => {});
     const controlPlane = createControlPlane(
-      { databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `critical-${randomUUID()}` },
+      { databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `critical-${randomUUID()}`, ceoOperatorId: operatorId },
       { criticalActionEffect: effect },
     );
     await controlPlane.listen();
@@ -290,36 +290,36 @@ if (!databaseUrl) {
       );
       expect(auditedPending.rows).toEqual([{ outcome: "require_approval" }]);
 
-      // (b) Bootstrap the exact approval for a new commandId: the gateway allows it and invokes the effect exactly once.
+      // (b) A configured CEO can approve and run through the user-facing route.
+      // The route creates the exact command-bound approval and then invokes the
+      // same gateway as the ordinary critical-action route.
       const approvedCommandId = randomUUID();
-      const approval = await bootstrapAuthorityRecord(setupPool, {
-        kind: "approval",
-        commandId: approvedCommandId,
-        projectId,
-        goalId,
-        actorId: localOperator.operatorId,
-        action: body.action,
-        target: body.target,
-        policyVersion: body.policyVersion,
-        budgetEffectCents: body.budgetEffectCents,
-        expiresAt: new Date(Date.now() + 3_600_000),
-      });
-      const allowed = await fetch(`${baseUrl}/v1/goals/${goalId}/critical-actions`, {
+      const approvalBody = { ...body, expiresAt: new Date(Date.now() + 3_600_000).toISOString() };
+      const allowed = await fetch(`${baseUrl}/v1/goals/${goalId}/critical-actions/approve-and-run`, {
         method: "POST",
         headers: { ...headers, "idempotency-key": approvedCommandId },
-        body: JSON.stringify(body),
+        body: JSON.stringify(approvalBody),
       });
       expect(allowed.status).toBe(200);
-      expect(await allowed.json()).toMatchObject({ goalId, effect: "allow", recordId: approval.recordId });
+      expect(await allowed.json()).toMatchObject({ goalId, effect: "allow", recordId: approvedCommandId });
       expect(effect).toHaveBeenCalledTimes(1);
       const auditedAllowed = await setupPool.query(
         "SELECT outcome, matched_record_id FROM authority_decisions WHERE project_id = $1 AND goal_id = $2 AND command_id = $3",
         [projectId, goalId, approvedCommandId],
       );
-      expect(auditedAllowed.rows).toEqual([{ outcome: "allow", matched_record_id: approval.recordId }]);
+      expect(auditedAllowed.rows).toEqual([{ outcome: "allow", matched_record_id: approvedCommandId }]);
+      expect((await setupPool.query("SELECT command_id FROM authority_effect_claims WHERE command_id = $1", [approvedCommandId])).rowCount).toBe(1);
+      const replay = await fetch(`${baseUrl}/v1/goals/${goalId}/critical-actions/approve-and-run`, {
+        method: "POST",
+        headers: { ...headers, "idempotency-key": approvedCommandId },
+        body: JSON.stringify(approvalBody),
+      });
+      expect(replay.status).toBe(200);
+      expect(await replay.json()).toMatchObject({ goalId, effect: "allow", reason: "already_executed" });
+      expect(effect).toHaveBeenCalledTimes(1);
 
-      // (c) Revoke the approval, then retry the same exact command: the gateway denies it and the effect is not called again.
-      await revokeAuthorityRecord(setupPool, approval.recordId);
+      // (c) Revocation still dominates a retry, and the effect remains singular.
+      await revokeAuthorityRecord(setupPool, approvedCommandId);
       const revoked = await fetch(`${baseUrl}/v1/goals/${goalId}/critical-actions`, {
         method: "POST",
         headers: { ...headers, "idempotency-key": approvedCommandId },
@@ -332,7 +332,7 @@ if (!databaseUrl) {
         "SELECT outcome FROM authority_decisions WHERE project_id = $1 AND goal_id = $2 AND command_id = $3 ORDER BY decided_at",
         [projectId, goalId, approvedCommandId],
       );
-      expect(auditedRevoked.rows).toEqual([{ outcome: "allow" }, { outcome: "require_approval" }]);
+      expect(auditedRevoked.rows).toEqual([{ outcome: "allow" }, { outcome: "allow" }, { outcome: "require_approval" }]);
 
     } finally {
       await controlPlane.close();
