@@ -373,54 +373,40 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    worker write-command API remains Phase 5 Track A item 3.
 
 ### Phase 3 — remaining open items
-1. **[PARTIALLY RESOLVED 2026-09-04, certification.ts fixed in commit `c50d142`]**
-   `evidence-bundle.ts`, `concertmaster-report.ts`, and `encore-council.ts` still have **zero**
-   goal_lease/fencing check and **zero** control-latch (pause/stop/emergency-stop) check. The
-   remaining unguarded entry points are `assembleEvidenceBundle`/`recordEvidenceBundle`,
-   `generateConcertmasterFinalReport`, and `runEncoreCouncilReview` (which spawns real Prime Agent
-   subagents and incurs real cost). A stale/fenced-out actor can therefore assemble an evidence
-   bundle, produce a Concertmaster final report, or run a full Encore Council round on a paused or
-   emergency-stopped Goal. Thread a `GoalLeaseProof` through these three modules, lock the lease row
-   `FOR UPDATE`, call `assertGoalControlOpen` before any write or provider spawn, and add a
-   fencing/pause-bypass regression per module. The certification.ts entry points already enforce
-   this invariant and have real-PostgreSQL regressions.
+1. **[RESOLVED 2026-09-04, current work]** Evidence-bundle assembly/recording, Concertmaster
+   report generation, and Encore Council review now require a `GoalLeaseProof`. They hold the lease
+   and control rows with `FOR UPDATE` while checking the pause/stop/emergency latches, before any
+   evidence/report write or Encore reviewer spawn. Real-PostgreSQL regressions cover forged fencing
+   proofs and paused Goals in all three modules; the full report/evidence path permits the intentional
+   `certifying` state while still failing closed on control latches.
 
-2. **[MEDIUM/HIGH, concurrency]** `assembleEvidenceBundle` and `generateConcertmasterFinalReport` each issue
-   10-15+ sequential, non-transactional reads across ~10 tables — unlike `certification.ts`'s own
-   `readCertificationLineage` (line 141), which correctly opens one transaction with FOR SHARE/FOR
-   UPDATE locks. A concurrent write during assembly can produce an internally inconsistent
-   bundle/report that still hashes and commits successfully. Fix: wrap each assembly in one
-   transaction with FOR SHARE locks (matching `readCertificationLineage`), or `REPEATABLE READ`.
-3. **[MEDIUM, concurrency]** `generateConcertmasterFinalReport` has no idempotency or per-Goal uniqueness
-   constraint (`concertmaster_final_reports`, migration 0036, has no unique constraint on `goal_id`).
-   Concurrent/retried calls for the same Goal can produce two divergent "final" reports. Fix: add a
-   unique constraint/idempotency key scoping one final report per Goal.
-4. **[P1, domain correctness]** Evidence bundle assembly never queries `authority_records`/
-   `authority_decisions` (the durable grant/approval/deny audit trail), `independent_briefs` (the
-   actual sealed Council brief content — only aggregate `head_councils` fields are read), or
-   `goal_head_participations`/`head_activation_attempts`/`head_activation_edges` ("activated
-   organization and reasons"). This breaks Tests item 17 ("replay the bundle to reconstruct the
-   final decision") since the brief content that produced the Council decision is absent.
-   Separately, `generateConcertmasterFinalReport` calls `recordEvidenceBundle` *before* inserting the
-   `concertmaster_final_reports` row, so the bundle can structurally never contain the report content
-   plan/phase3.md's bundle-contents list also names. Fix: extend `assembleEvidenceBundle`'s queries
-   to include all three omitted sources; document or add a second post-report bundle snapshot.
-5. **[P1, domain correctness]** `evaluateCertificationCompleteness`
-   (packages/domain/src/concertmaster-report.ts:62-111) never compares cost to budget and never checks
-   `budget_reservations` at all — there is no budget-related blocker reason in
-   `CertificationCompletenessBlockerReason`. A Goal that has blown its budget (see Phase 2 item 1)
-   can still report `success: true`. Separately, the reported `costCents` is a sum of *reservations*
-   (a planning artifact, itself double-counted per Phase 2 item 1), not actual incurred spend — no
-   `actual_cost`/spend accumulation exists anywhere in the codebase. Fix: add a budget-exceeded
-   blocker computed from corrected reservation accounting, plus a real actual-cost accumulation
-   distinct from reservations.
-6. **[HIGH, security]** The four new read-state routes (`GET /v1/goals/:goalId/{metronome-challenges,
-   encore-council-rounds,certifications,concertmaster-report}`, apps/control-plane/src/server.ts:149-152)
-   take only `goalId` — unlike `GET /v1/goals/:goalId`, which requires and checks `projectId`. The
-   wire contract itself has no `projectId` field to enforce against, so any authenticated operator
-   can read another project's Metronome challenges, Council deliberation, certifications, and Concertmaster
-   report by iterating/guessing goal UUIDs (a concrete IDOR). Fix: add `projectId` to all four
-   routes/schemas and the matching `ReadStateService` methods, matching `getGoal`'s pattern.
+2. **[RESOLVED 2026-09-04, current work]** Evidence-bundle and Concertmaster-report assembly now
+   run through one transaction on the locked client. The report records its evidence bundle and final
+   report in that same transaction, eliminating the prior non-transactional read/write gap. Encore
+   review likewise keeps its durable round writes on the same locked transaction that gates reviewer
+   provider work.
+
+3. **[RESOLVED 2026-09-04, current work]** `concertmaster_final_reports` now has an additive
+   unique Goal index (`0037_concertmaster_report_goal_uniqueness.sql`). Generation checks for an
+   existing immutable report while holding the Goal authority transaction and returns it on retry,
+   so concurrent/repeated calls cannot create a second final report or evidence snapshot.
+4. **[RESOLVED 2026-09-04, current work]** Evidence bundles now include durable authority records and
+   decisions, sealed independent Council briefs, and Goal Head participation/activation history.
+   The final report and its immutable evidence bundle commit together, with the report linking to the
+   bundle explicitly; the report is intentionally not nested in the bundle to avoid a circular hash.
+
+5. **[RESOLVED 2026-09-04, current work]** Added immutable, idempotent `goal_actual_costs`
+   accumulation (`0038_goal_actual_costs.sql`) distinct from reservations and forecasts. Authorized
+   `recordActualCost` writes hold the Goal lease/control locks and reject command replay with changed
+   content. Report generation sums actual costs, reads the latest Goal envelope, emits a durable
+   `budget_exceeded` blocker before success, and reports actual spend rather than reservation totals.
+   Evidence bundles include the underlying actual-cost entries. Domain and real-PostgreSQL regressions
+   cover over-budget reporting and idempotent cost recording.
+6. **[RESOLVED 2026-09-04, current work]** All four derived Goal read routes now require the
+   strict `projectId` query binding. The control-plane membership hook checks it before the route
+   handler, the `ReadStateService` validates the `(goalId, projectId)` pair again at the durable
+   read boundary, and API-client/CLI contracts pass the project explicitly. Real parity regression
+   covers all four cross-project requests and proves each is rejected before state is returned.
 7. Already-known Phase 3-rooted P0s from the first audit wave: no production write-command API
    surface for Metronome/Council/certification/report actions; Metronome is a one-shot callable, not
    a continuous scheduled/event-driven loop, and its rule set omits several plan-required finding
@@ -487,7 +473,10 @@ concrete illustration each, plus two smaller cross-cutting gaps not previously c
   Item 3's monetary cost-ceiling sub-scope is explicitly deferred pending a real cost source/
   accounting unit. Items 7 and 9 are resolved in commits `cc751ff` and the current Git authority
   adapter slice; feature-completeness item 1 remains the separate Phase 5 write-API gap.
-- [not_started] Phase 3 remaining items 1-7 above.
+- [in_progress] Phase 3 remaining items 1-7 above: items 1-4 (Goal lease/control guards and
+  consistent aggregation transactions, report idempotency, complete evidence replay sources,
+  actual-cost budget enforcement, and project-scoped derived reads) are resolved in the current
+  guarded-aggregation slice. Item 7 (write API/continuous loop/UI follow-through) remains open.
 - [not_started] Phase 4 remaining items (= Track B items 1-8, unchanged; feature-completeness item 2
   above is a Discord-specific instance to fix alongside Track B).
 - [not_started] Feature-completeness items 3-4 above (Goal listing, budget-at-a-glance) — new,

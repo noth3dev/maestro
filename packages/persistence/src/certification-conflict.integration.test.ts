@@ -200,7 +200,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
       async resume() { throw new Error("not supported"); },
       async reconnect() { throw new Error("not supported"); },
     };
-    const round = await runEncoreCouncilReview(pool, kernel, { goalId, question: "Quality and Security certifications disagree; how should we proceed?", criteria: [{ criterionId: "safety", description: "does this preserve safety" }], evidenceIds: [evidenceIds[0]!], reviewerCount: 1 });
+    const round = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "Quality and Security certifications disagree; how should we proceed?", criteria: [{ criterionId: "safety", description: "does this preserve safety" }], evidenceIds: [evidenceIds[0]!], reviewerCount: 1 });
     const resolution = await adjudicateCertificationConflict(pool, round, goalId, ["passed", "failed"], proof);
     expect(resolution.roundId).toBe(round.roundId);
     await expect(adjudicateCertificationConflict(pool, round, goalId, ["passed", "passed"], proof)).rejects.toBeInstanceOf(CertificationError);

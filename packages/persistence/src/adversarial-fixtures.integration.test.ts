@@ -205,11 +205,12 @@ describeDatabase("Phase 3 adversarial fixtures with PostgreSQL", () => {
 
   it("labels same-model agreement honestly and escalates disagreement while preserving dissent", async () => {
     const { goalId, evidenceIds } = await insertGoalWithEvidence(pool);
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "encore-test", leaseDurationMs: 60_000 });
     const sameModelAnswer = JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: evidenceIds });
     const sameModel = await runEncoreCouncilReview(pool, kernelWithAnswers([
       { provider: "same-provider", id: "same-model", text: sameModelAnswer },
       { provider: "same-provider", id: "same-model", text: sameModelAnswer },
-    ]), { goalId, question: "should we proceed?", criteria, evidenceIds, reviewerCount: 2 });
+    ]), { goalId, question: "should we proceed?", criteria, evidenceIds, reviewerCount: 2, proof });
     expect(sameModel.synthesis.sameModelOnly).toBe(true);
     expect(sameModel.synthesis.finalVerdict).toBe("proceed");
     expect(sameModel.synthesis.escalated).toBe(false);
@@ -220,7 +221,7 @@ describeDatabase("Phase 3 adversarial fixtures with PostgreSQL", () => {
     const disagreement = await runEncoreCouncilReview(pool, kernelWithAnswers([
       { provider: "same-provider", id: "same-model", text: sameModelAnswer },
       { provider: "same-provider", id: "same-model", text: JSON.stringify({ verdict: "do_not_proceed", confidence: "high", reasoning: "unsafe", conditions: [], dissentNote: dissent, citedEvidenceIds: evidenceIds }) },
-    ]), { goalId, question: "should we proceed despite the concern?", criteria, evidenceIds, reviewerCount: 2 });
+    ]), { goalId, question: "should we proceed despite the concern?", criteria, evidenceIds, reviewerCount: 2, proof });
     expect(disagreement.synthesis.sameModelOnly).toBe(true);
     expect(disagreement.synthesis.escalated).toBe(true);
     expect(disagreement.synthesis.finalVerdict).toBe("escalate");
@@ -243,7 +244,7 @@ describeDatabase("Phase 3 adversarial fixtures with PostgreSQL", () => {
     );
     expect(certification.certifiedByDepartment).toBe("quality");
     expect(certification.producingDepartment).toBe("product");
-    const report = await generateConcertmasterFinalReport(pool, goalId);
+    const report = await generateConcertmasterFinalReport(pool, goalId, proof);
     expect(report.success).toBe(false);
     expect(report.blockers.length).toBeGreaterThan(0);
     expect(report.blockers).toEqual(expect.arrayContaining([

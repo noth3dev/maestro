@@ -31,7 +31,7 @@ import {
   type GoalService,
 } from "./goal-service.js";
 import { CriticalActionUnavailableError, type CriticalActionService } from "./critical-action-service.js";
-import type { ReadStateService } from "./read-state-service.js";
+import { ReadStateGoalNotFoundError, type ReadStateService } from "./read-state-service.js";
 
 export type { GoalService } from "./goal-service.js";
 export type { CriticalActionService } from "./critical-action-service.js";
@@ -78,8 +78,8 @@ export function buildServer({ goalService, authenticator, eventService, critical
    * runs. Optional only so existing tests/composition that do not yet
    * exercise membership can omit it without inventing a fake always-allow
    * checker; production composition (main.ts) always supplies a real one.
-   * Routes with no projectId field at all (the four read-state routes) are
-   * not covered here -- a separate, already-tracked gap (Phase 3 item 6).
+   * All Goal-scoped routes carry projectId and are checked here before their
+   * route handler runs.
    */
   projectMembership?: ProjectMembershipChecker;
 }): FastifyInstance {
@@ -183,10 +183,28 @@ export function buildServer({ goalService, authenticator, eventService, critical
     return reply.status(200).send(GoalResultSchema.parse(result));
   });
 
-  app.get("/v1/goals/:goalId/metronome-challenges", async (request, reply) => { const goalId=parse(UuidSchema,(request.params as {goalId?:unknown}).goalId); return reply.send(MetronomeChallengeListSchema.parse({challenges: await readState.listMetronomeChallenges(goalId)})); });
-  app.get("/v1/goals/:goalId/encore-council-rounds", async (request, reply) => { const goalId=parse(UuidSchema,(request.params as {goalId?:unknown}).goalId); return reply.send(EncoreCouncilRoundListSchema.parse({rounds: await readState.listEncoreCouncilRounds(goalId)})); });
-  app.get("/v1/goals/:goalId/certifications", async (request, reply) => { const goalId=parse(UuidSchema,(request.params as {goalId?:unknown}).goalId); return reply.send(CertificationListSchema.parse({certifications: await readState.listCertifications(goalId)})); });
-  app.get("/v1/goals/:goalId/concertmaster-report", async (request, reply) => { const goalId=parse(UuidSchema,(request.params as {goalId?:unknown}).goalId); const report=await readState.getConcertmasterReport(goalId); if (!report) throw new GoalNotFoundError(); return reply.send(ConcertmasterFinalReportSchema.parse(report)); });
+  app.get("/v1/goals/:goalId/metronome-challenges", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const query = parse(GoalQuerySchema, request.query);
+    return reply.send(MetronomeChallengeListSchema.parse({ challenges: await readState.listMetronomeChallenges(goalId, query.projectId) }));
+  });
+  app.get("/v1/goals/:goalId/encore-council-rounds", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const query = parse(GoalQuerySchema, request.query);
+    return reply.send(EncoreCouncilRoundListSchema.parse({ rounds: await readState.listEncoreCouncilRounds(goalId, query.projectId) }));
+  });
+  app.get("/v1/goals/:goalId/certifications", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const query = parse(GoalQuerySchema, request.query);
+    return reply.send(CertificationListSchema.parse({ certifications: await readState.listCertifications(goalId, query.projectId) }));
+  });
+  app.get("/v1/goals/:goalId/concertmaster-report", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const query = parse(GoalQuerySchema, request.query);
+    const report = await readState.getConcertmasterReport(goalId, query.projectId);
+    if (!report) throw new GoalNotFoundError();
+    return reply.send(ConcertmasterFinalReportSchema.parse(report));
+  });
 
   app.get("/v1/events", async (request, reply) => {
     const query = parse(EventQuerySchema, request.query);
@@ -327,7 +345,7 @@ function mapError(error: unknown): { status: number; body: StableApiError } {
   if (error instanceof AuthenticationUnavailableError) return apiError(429, "authentication_unavailable", "Authentication is temporarily unavailable");
   if (error instanceof VersionConflictError) return apiError(409, "version_conflict", error.message);
   if (error instanceof InvalidTransitionError) return apiError(422, "invalid_transition", error.message);
-  if (error instanceof GoalNotFoundError) return apiError(404, "goal_not_found", error.message);
+  if (error instanceof GoalNotFoundError || error instanceof ReadStateGoalNotFoundError) return apiError(404, "goal_not_found", "Goal was not found");
   if (error instanceof StaleLeaseError) return apiError(409, "stale_lease", error.message);
   if (error instanceof LeaseUnavailableError) return apiError(423, "lease_unavailable", error.message);
   if (error instanceof CommandIdReuseError) return apiError(409, "command_id_reused", error.message);

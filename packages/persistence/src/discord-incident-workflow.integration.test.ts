@@ -219,11 +219,11 @@ describeDatabase("Phase 4 work-sequence step 8: Discord incident through Task Co
     const quality = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: evidenceIds }, "quality", proof, headContext("quality"));
     expect(quality.verdict).toBe("passed");
 
-    const bundle = await recordEvidenceBundle(pool, goalId);
+    const bundle = await recordEvidenceBundle(pool, goalId, proof);
     await verifyStoredEvidenceBundle(pool, bundle.bundleId);
 
     await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "TransitionGoal", expectedVersion: 4, to: "certifying" }, proof);
-    const report = await generateConcertmasterFinalReport(pool, goalId);
+    const report = await generateConcertmasterFinalReport(pool, goalId, proof);
     expect(report.success).toBe(true);
 
     const closed = await closeDiscordIncident(pool, incident.incidentId, "resolved", "Fixed the health endpoint and certified independently.", "none", context("concertmaster"), proof);

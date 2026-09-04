@@ -180,7 +180,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     expect(finalGoal.rows[0]!.state).toBe("certifying");
 
     // Assemble and durably record the evidence bundle spanning everything above.
-    const { bundleId, hash } = await recordEvidenceBundle(pool, goalId);
+    const { bundleId, hash } = await recordEvidenceBundle(pool, goalId, proof);
     await verifyStoredEvidenceBundle(pool, bundleId);
     const read = await readEvidenceBundle(pool, bundleId);
     expect(read.hash).toBe(hash);
@@ -190,13 +190,30 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     expect(read.content.workers.length).toBeGreaterThan(0);
     expect((read.content.gitIntegration as { commits: unknown[] }).commits.length).toBeGreaterThan(0);
     expect(read.content.budgetReservations.length).toBeGreaterThan(0);
+    expect(read.content.councilBriefs.length).toBeGreaterThan(0);
+    expect(read.content.headParticipation.participations.length).toBeGreaterThan(0);
+    expect(read.content.councilBriefs[0]).toHaveProperty("payload");
 
     // A live re-assembly right now reflects the same durable state and hashes identically.
-    const reassembled = await assembleEvidenceBundle(pool, goalId);
+    const reassembled = await assembleEvidenceBundle(pool, goalId, proof);
     expect(reassembled.hash).toBe(hash);
 
     // The bundle is immutable at the database level: direct tampering is rejected outright, not merely detected after the fact.
     await expect(pool.query("UPDATE evidence_bundles SET content = jsonb_set(content, '{workers}', '[]'::jsonb) WHERE bundle_id = $1", [bundleId])).rejects.toThrow();
+  });
+
+  it("rejects stale and paused Goal evidence effects before assembly or durable write", async () => {
+    const goalId = randomUUID();
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, randomUUID()]);
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "evidence-guard", leaseDurationMs: 120_000 });
+    const forged = { ...proof, fencingToken: "999999" };
+    await expect(assembleEvidenceBundle(pool, goalId, forged)).rejects.toThrow(/stale or invalid/);
+    await expect(recordEvidenceBundle(pool, goalId, forged)).rejects.toThrow(/stale or invalid/);
+    await pool.query("INSERT INTO goal_controls (project_id, goal_id, pause_requested_at, paused_at) SELECT project_id, goal_id, clock_timestamp(), clock_timestamp() FROM goals WHERE goal_id = $1", [goalId]);
+    await expect(assembleEvidenceBundle(pool, goalId, proof)).rejects.toThrow(/paused/);
+    await expect(recordEvidenceBundle(pool, goalId, proof)).rejects.toThrow(/paused/);
+    const bundles = await pool.query("SELECT count(*)::int AS count FROM evidence_bundles WHERE goal_id = $1", [goalId]);
+    expect(bundles.rows[0]!.count).toBe(0);
   });
 
   it("throws EvidenceBundleNotFoundError for a missing bundle", async () => {
@@ -210,6 +227,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
       "INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())",
       [goalId, projectId],
     );
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "content-reader", leaseDurationMs: 120_000 });
     const store = new FileEvidenceStore(await mkdtemp(join(tmpdir(), "maestro-bundle-evidence-")));
     const captured = await store.capture({
       context: { correlationId: randomUUID(), commandId: randomUUID(), projectId, goalId, actorId: "test" },
@@ -222,8 +240,8 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     );
 
     // Genuinely matching content assembles cleanly when a real reader is supplied.
-    await expect(assembleEvidenceBundle(pool, goalId, store)).resolves.toBeDefined();
-    await expect(recordEvidenceBundle(pool, goalId, store)).resolves.toBeDefined();
+    await expect(assembleEvidenceBundle(pool, goalId, proof, store)).resolves.toBeDefined();
+    await expect(recordEvidenceBundle(pool, goalId, proof, store)).resolves.toBeDefined();
     const beforeCorruptionCount = (await pool.query<{ count: string }>("SELECT count(*)::text AS count FROM evidence_bundles WHERE goal_id = $1", [goalId])).rows[0]!.count;
 
     // Corrupt the durable metadata's sha256 so it no longer matches the actual stored artifact.
@@ -234,12 +252,12 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
       await pool.query("ALTER TABLE evidence_records ENABLE TRIGGER evidence_records_immutable");
     }
 
-    await expect(assembleEvidenceBundle(pool, goalId, store)).rejects.toThrow();
-    await expect(recordEvidenceBundle(pool, goalId, store)).rejects.toThrow();
+    await expect(assembleEvidenceBundle(pool, goalId, proof, store)).rejects.toThrow();
+    await expect(recordEvidenceBundle(pool, goalId, proof, store)).rejects.toThrow();
     const afterCorruptionCount = (await pool.query<{ count: string }>("SELECT count(*)::text AS count FROM evidence_bundles WHERE goal_id = $1", [goalId])).rows[0]!.count;
     expect(afterCorruptionCount).toBe(beforeCorruptionCount);
 
     // Without a content reader, existing metadata-only-trust behavior is unchanged.
-    await expect(assembleEvidenceBundle(pool, goalId)).resolves.toBeDefined();
+    await expect(assembleEvidenceBundle(pool, goalId, proof)).resolves.toBeDefined();
   });
 });

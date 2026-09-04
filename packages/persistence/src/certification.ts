@@ -486,7 +486,7 @@ async function readConflictCertificationRows(pool: Pool, goalId: string): Promis
  * resolution, and a newest row cannot hide an unresolved disagreement.
  */
 export async function isCertificationConflictResolved(
-  pool: Pool,
+  pool: Pick<Pool | PoolClient, "query">,
   goalId: string,
   certificationIds: readonly string[],
   identity: { contractId: string; contractVersion: number; contractContentHash: string; revisionId: string; commitSha: string },

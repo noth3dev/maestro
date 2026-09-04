@@ -35,10 +35,10 @@ describe("read state routes", () => {
   it("returns all four goal-scoped state shapes", async () => {
     const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readStateService: state });
     const headers = { authorization: "Bearer test-secret" };
-    expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/metronome-challenges`, headers })).json().challenges).toHaveLength(1);
-    expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/encore-council-rounds`, headers })).json()).toEqual({ rounds: [] });
-    expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/certifications`, headers })).json()).toEqual({ certifications: [] });
-    expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/concertmaster-report`, headers })).statusCode).toBe(404);
+    expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/metronome-challenges?projectId=${goal.projectId}`, headers })).json().challenges).toHaveLength(1);
+    expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/encore-council-rounds?projectId=${goal.projectId}`, headers })).json()).toEqual({ rounds: [] });
+    expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/certifications?projectId=${goal.projectId}`, headers })).json()).toEqual({ certifications: [] });
+    expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/concertmaster-report?projectId=${goal.projectId}`, headers })).statusCode).toBe(404);
     await app.close();
   });
 });
@@ -348,12 +348,15 @@ describe("project-scoped authorization (Phase 1 re-patch item 8)", () => {
     await app.close();
   });
 
-  it("does not check membership for a route that carries no projectId at all (the four read-state routes), matching the documented Phase 3 IDOR gap", async () => {
+  it("requires project binding on every derived Goal read and checks membership before the read service", async () => {
     const projectMembership = checker([]);
     const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readStateService: state, projectMembership });
-    const response = await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/metronome-challenges`, headers: { authorization: "Bearer test-secret" } });
-    expect(response.statusCode).toBe(200);
+    const missing = await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/metronome-challenges`, headers: { authorization: "Bearer test-secret" } });
+    expect(missing.statusCode).toBe(400);
     expect(projectMembership.assertProjectMembership).not.toHaveBeenCalled();
+    const forbidden = await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/metronome-challenges?projectId=${goal.projectId}`, headers: { authorization: "Bearer test-secret" } });
+    expect(forbidden.statusCode).toBe(403);
+    expect(projectMembership.assertProjectMembership).toHaveBeenCalledWith(operator.operatorId, goal.projectId);
     await app.close();
   });
 

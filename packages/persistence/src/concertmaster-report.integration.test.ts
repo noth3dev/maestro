@@ -19,6 +19,8 @@ import { observeWorker, spawnWorker } from "./worker.js";
 import { recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
 import { acceptDepartmentWorkerOutput, certifyQuality } from "./certification.js";
 import { generateConcertmasterFinalReport, readConcertmasterFinalReport, ConcertmasterReportError } from "./concertmaster-report.js";
+import { recordActualCost } from "./actual-cost.js";
+import { reserveGoalBudget } from "./budget-reservation.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -133,19 +135,37 @@ describeDatabase("Concertmaster final report with PostgreSQL", () => {
   it("reports success with independent validation when the required certification passes cleanly, and blocks it once a challenge opens", async () => {
     const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
     await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
-    const report = await generateConcertmasterFinalReport(pool, goalId);
+    const report = await generateConcertmasterFinalReport(pool, goalId, proof);
     expect(report.success).toBe(true);
     expect(report.blockers).toHaveLength(0);
     expect(report.userVisibleBehaviorPassed).toBe(true);
     expect(report.independentValidation).toContain("quality: passed");
     expect(report.criticalActionAwaitingApproval).toBe(false);
+    await expect(generateConcertmasterFinalReport(pool, goalId, proof)).resolves.toEqual(report);
+    const reportCount = await pool.query("SELECT count(*)::int AS count FROM concertmaster_final_reports WHERE goal_id = $1", [goalId]);
+    expect(reportCount.rows[0]!.count).toBe(1);
     const read = await readConcertmasterFinalReport(pool, report.reportId);
     expect(read).toEqual(report);
   });
 
+  it("blocks a report when immutable actual spend exceeds the Goal envelope", async () => {
+    const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
+    await reserveGoalBudget(pool, goalId, 100, "bounded test envelope", proof, context("secretary"));
+    const costContext = context("cost-meter");
+    const first = await recordActualCost(pool, goalId, 101, "provider:test", proof, costContext);
+    await expect(recordActualCost(pool, goalId, 101, "provider:test", proof, costContext)).resolves.toEqual(first);
+    await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
+
+    const report = await generateConcertmasterFinalReport(pool, goalId, proof);
+    expect(report.success).toBe(false);
+    expect(report.costCents).toBe(101);
+    expect(report.budgetCents).toBe(100);
+    expect(report.blockers).toContainEqual({ reason: "budget_exceeded", detail: "Actual cost 101 cents exceeds the Goal budget 100 cents" });
+  });
+
   it("reports failure with a missing_required_certification blocker when Quality never certified", async () => {
-    const { goalId } = await setupWorkerWithCommit();
-    const report = await generateConcertmasterFinalReport(pool, goalId);
+    const { goalId, proof } = await setupWorkerWithCommit();
+    const report = await generateConcertmasterFinalReport(pool, goalId, proof);
     expect(report.success).toBe(false);
     expect(report.blockers.some((blocker) => blocker.reason === "missing_required_certification")).toBe(true);
   });
@@ -153,7 +173,7 @@ describeDatabase("Concertmaster final report with PostgreSQL", () => {
   it("reports failure and flags an awaiting critical action when a critical finding is unwaived", async () => {
     const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
     await certifyQuality(pool, worker.workerId, { verdict: "failed", findings: [{ findingId: "f1", severity: "critical", description: "security hole" }], testEvidenceIds: [] }, "quality", proof, headContext("quality"));
-    const report = await generateConcertmasterFinalReport(pool, goalId);
+    const report = await generateConcertmasterFinalReport(pool, goalId, proof);
     expect(report.success).toBe(false);
     expect(report.criticalActionAwaitingApproval).toBe(true);
     expect(report.blockers.some((blocker) => blocker.reason === "unwaived_critical_finding")).toBe(true);
@@ -162,13 +182,28 @@ describeDatabase("Concertmaster final report with PostgreSQL", () => {
   it("includes real Git integration evidence in whatChanged and durably links a real evidence bundle", async () => {
     const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
     await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
-    const report = await generateConcertmasterFinalReport(pool, goalId);
+    const report = await generateConcertmasterFinalReport(pool, goalId, proof);
     expect(report.whatChanged).toContain("mission: implement");
     expect(report.evidenceBundleId).toBeTruthy();
   });
 
+  it("rejects stale and paused Goal report effects before creating a bundle or report", async () => {
+    const { goalId, proof } = await setupWorkerWithCommit();
+    const forged = { ...proof, fencingToken: "999999" };
+    await expect(generateConcertmasterFinalReport(pool, goalId, forged)).rejects.toThrow(/stale or invalid/);
+    await pool.query("INSERT INTO goal_controls (project_id, goal_id, pause_requested_at, paused_at) SELECT project_id, goal_id, clock_timestamp(), clock_timestamp() FROM goals WHERE goal_id = $1 ON CONFLICT (project_id, goal_id) DO UPDATE SET pause_requested_at = clock_timestamp(), paused_at = clock_timestamp()", [goalId]);
+    await expect(generateConcertmasterFinalReport(pool, goalId, proof)).rejects.toThrow(/paused/);
+    const reports = await pool.query("SELECT count(*)::int AS count FROM concertmaster_final_reports WHERE goal_id = $1", [goalId]);
+    const bundles = await pool.query("SELECT count(*)::int AS count FROM evidence_bundles WHERE goal_id = $1", [goalId]);
+    expect(reports.rows[0]!.count).toBe(0);
+    expect(bundles.rows[0]!.count).toBe(0);
+  });
+
   it("throws ConcertmasterReportError when no resolved Council decision exists for the Goal", async () => {
-    await expect(generateConcertmasterFinalReport(pool, randomUUID())).rejects.toBeInstanceOf(ConcertmasterReportError);
+    const missingGoalId = randomUUID();
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [missingGoalId, randomUUID()]);
+    const missingProof = await acquireGoalLease(pool, { goalId: missingGoalId, ownerId: "test", leaseDurationMs: 60_000 });
+    await expect(generateConcertmasterFinalReport(pool, missingGoalId, missingProof)).rejects.toBeInstanceOf(ConcertmasterReportError);
   });
 
   it("rejects the final report when a supplied content reader detects a corrupted evidence artifact hash (Phase 1 re-patch item 6)", async () => {
@@ -193,7 +228,7 @@ describeDatabase("Concertmaster final report with PostgreSQL", () => {
     await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
 
     // Genuinely matching content produces a report cleanly when a real reader is supplied.
-    const report = await generateConcertmasterFinalReport(pool, goalId, store);
+    const report = await generateConcertmasterFinalReport(pool, goalId, proof, store);
     expect(report.success).toBe(true);
 
     // Corrupt one evidence row's durable sha256 so it no longer matches its actual stored bytes.
@@ -204,11 +239,10 @@ describeDatabase("Concertmaster final report with PostgreSQL", () => {
       await pool.query("ALTER TABLE evidence_records ENABLE TRIGGER evidence_records_immutable");
     }
 
-    await expect(generateConcertmasterFinalReport(pool, goalId, store)).rejects.toThrow();
-
-    // Without a content reader, existing metadata-only-trust behavior is unchanged (documented,
-    // not silently strengthened for callers that do not yet supply one): the same corrupted row
-    // no longer blocks report generation once no reader is supplied.
-    await expect(generateConcertmasterFinalReport(pool, goalId)).resolves.toBeDefined();
+    // The final report is immutable and idempotent per Goal. A retry returns
+    // its already-committed artifact rather than creating a second snapshot or
+    // reinterpreting live state after the original report was issued.
+    await expect(generateConcertmasterFinalReport(pool, goalId, proof, store)).resolves.toEqual(report);
+    await expect(generateConcertmasterFinalReport(pool, goalId, proof)).resolves.toEqual(report);
   });
 });

@@ -36,10 +36,10 @@ export interface ApiClient {
   getGoal(goalId: string, query: GoalQuery): Promise<GoalResult>;
   transitionGoal(goalId: string, input: TransitionGoalInput, commandId: string): Promise<GoalResult>;
   listEvents(query: EventQuery): Promise<GoalEventPage>;
-  listMetronomeChallenges(goalId: string): Promise<MetronomeChallengeList>;
-  listEncoreCouncilRounds(goalId: string): Promise<EncoreCouncilRoundList>;
-  listCertifications(goalId: string): Promise<CertificationList>;
-  getConcertmasterReport(goalId: string): Promise<ConcertmasterFinalReport>;
+  listMetronomeChallenges(goalId: string, query: GoalQuery): Promise<MetronomeChallengeList>;
+  listEncoreCouncilRounds(goalId: string, query: GoalQuery): Promise<EncoreCouncilRoundList>;
+  listCertifications(goalId: string, query: GoalQuery): Promise<CertificationList>;
+  getConcertmasterReport(goalId: string, query: GoalQuery): Promise<ConcertmasterFinalReport>;
 }
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -83,10 +83,22 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch }: { 
         body: JSON.stringify(TransitionGoalInputSchema.parse(input)),
       }, GoalResultSchema);
     },
-    listMetronomeChallenges(goalId) { return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/metronome-challenges`, { headers }, MetronomeChallengeListSchema); },
-    listEncoreCouncilRounds(goalId) { return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/encore-council-rounds`, { headers }, EncoreCouncilRoundListSchema); },
-    listCertifications(goalId) { return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/certifications`, { headers }, CertificationListSchema); },
-    getConcertmasterReport(goalId) { return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/concertmaster-report`, { headers }, ConcertmasterFinalReportSchema); },
+    listMetronomeChallenges(goalId, query) {
+      const parsed = GoalQuerySchema.parse(query);
+      return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/metronome-challenges?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, MetronomeChallengeListSchema);
+    },
+    listEncoreCouncilRounds(goalId, query) {
+      const parsed = GoalQuerySchema.parse(query);
+      return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/encore-council-rounds?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, EncoreCouncilRoundListSchema);
+    },
+    listCertifications(goalId, query) {
+      const parsed = GoalQuerySchema.parse(query);
+      return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/certifications?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, CertificationListSchema);
+    },
+    getConcertmasterReport(goalId, query) {
+      const parsed = GoalQuerySchema.parse(query);
+      return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/concertmaster-report?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, ConcertmasterFinalReportSchema);
+    },
     listEvents(query) {
       const parsed = EventQuerySchema.parse(query);
       return request(`v1/events?${new URLSearchParams({ projectId: parsed.projectId, after: parsed.after })}`, { headers }, GoalEventPageSchema);

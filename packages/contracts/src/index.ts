@@ -21,6 +21,9 @@ export type TransitionGoalInput = z.infer<typeof TransitionGoalInputSchema>;
 
 export const GoalQuerySchema = z.object({ projectId: UuidSchema }).strict();
 export type GoalQuery = z.infer<typeof GoalQuerySchema>;
+/** Project binding required for every Goal-scoped read, including derived state. */
+export const GoalScopedReadQuerySchema = GoalQuerySchema;
+export type GoalScopedReadQuery = GoalQuery;
 
 export const GoalResultSchema = z.object({
   goalId: UuidSchema,

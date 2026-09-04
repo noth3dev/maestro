@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { assertEvidenceBundleIntegrity, evidenceBundleContentHash, type EvidenceBundle } from "@maestro/domain";
 import { verifyEvidenceRecord, type EvidenceContentReader } from "@maestro/evidence";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
+import type { GoalLeaseProof } from "./commands.js";
+import { withGoalAuthority } from "./goal-authority.js";
 
 export class EvidenceBundleError extends Error {}
 export class EvidenceBundleNotFoundError extends EvidenceBundleError {}
@@ -11,7 +13,7 @@ export class EvidenceBundleNotFoundError extends EvidenceBundleError {}
  * durable records across every subsystem built so far. This is a read-only
  * aggregation: it invents nothing and computes no new judgment.
  */
-export async function assembleEvidenceBundle(pool: Pool, goalId: string, content?: EvidenceContentReader): Promise<{ bundle: Omit<EvidenceBundle, "assembledAt">; hash: string }> {
+async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string, content?: EvidenceContentReader): Promise<{ bundle: Omit<EvidenceBundle, "assembledAt">; hash: string }> {
   const goal = await pool.query<Record<string, unknown>>("SELECT goal_id, project_id, state, version, created_at, updated_at FROM goals WHERE goal_id = $1", [goalId]);
   if (goal.rowCount !== 1) throw new EvidenceBundleError("Goal not found for evidence bundle assembly");
   const projectId = goal.rows[0]!.project_id;
@@ -182,6 +184,40 @@ export async function assembleEvidenceBundle(pool: Pool, goalId: string, content
        FROM evidence_records WHERE goal_id = $1 AND project_id = $2
        ORDER BY created_at, evidence_id`, [goalId, projectId],
   )).rows;
+  const actualCosts = (await pool.query<Record<string, unknown>>(
+    `SELECT cost_id, goal_id, command_id, amount_cents, source, actor_id, session_ref, recorded_at, retention
+       FROM goal_actual_costs WHERE goal_id = $1 ORDER BY recorded_at, cost_id`, [goalId],
+  )).rows;
+  const authorityRecords = (await pool.query<Record<string, unknown>>(
+    `SELECT record_id, kind, command_id, project_id, goal_id, actor_id, action, target,
+            policy_version, budget_effect_cents, expires_at, issued_at, revoked_at
+       FROM authority_records WHERE goal_id = $1 ORDER BY issued_at, record_id`, [goalId],
+  )).rows;
+  const authorityDecisions = (await pool.query<Record<string, unknown>>(
+    `SELECT decision_id, command_id, project_id, goal_id, actor_id, action, target,
+            policy_version, budget_effect_cents, outcome, reason, classification,
+            matched_record_id, decided_at
+       FROM authority_decisions WHERE goal_id = $1 ORDER BY decided_at, decision_id`, [goalId],
+  )).rows;
+  const councilBriefs = (await pool.query<Record<string, unknown>>(
+    `SELECT council_id, department_id, payload, submitted_at
+       FROM independent_briefs
+      WHERE council_id IN (SELECT council_id FROM head_councils WHERE goal_id = $1)
+      ORDER BY council_id, department_id`, [goalId],
+  )).rows;
+  const headParticipations = (await pool.query<Record<string, unknown>>(
+    `SELECT goal_id, department_id, contract_id, status, active_session_ref, created_at, updated_at
+       FROM goal_head_participations WHERE goal_id = $1 ORDER BY department_id`, [goalId],
+  )).rows;
+  const activationAttempts = (await pool.query<Record<string, unknown>>(
+    `SELECT attempt_id, goal_id, department_id, requester_department_id, requester_role,
+            outcome, reason, evidence, recorded_at
+       FROM head_activation_attempts WHERE goal_id = $1 ORDER BY recorded_at, attempt_id`, [goalId],
+  )).rows;
+  const activationEdges = (await pool.query<Record<string, unknown>>(
+    `SELECT goal_id, requester_department_id, department_id, accepted_at
+       FROM head_activation_edges WHERE goal_id = $1 ORDER BY accepted_at, requester_department_id, department_id`, [goalId],
+  )).rows;
   // Only ever a real defense-in-depth check when a caller supplies a real
   // content reader (e.g. the production evidence store); it verifies every
   // evidence artifact this bundle is about to durably reference still
@@ -207,21 +243,38 @@ export async function assembleEvidenceBundle(pool: Pool, goalId: string, content
     encoreRounds,
     budgetReservations,
     evidenceRecords,
+    actualCosts,
+    authorityRecords,
+    authorityDecisions,
+    councilBriefs,
+    headParticipation: { participations: headParticipations, activationAttempts, activationEdges },
   };
   const hash = evidenceBundleContentHash(bundle);
   return { bundle, hash };
 }
 
-/** Assembles and durably records one evidence bundle snapshot. Immutable once written; a later re-assembly is a new row. */
-export async function recordEvidenceBundle(pool: Pool, goalId: string, content?: EvidenceContentReader): Promise<{ bundleId: string; hash: string }> {
-  const { bundle, hash } = await assembleEvidenceBundle(pool, goalId, content);
+/** Assemble a consistent snapshot while holding the Goal lease/control locks. */
+export async function assembleEvidenceBundle(pool: Pool, goalId: string, proof: GoalLeaseProof, content?: EvidenceContentReader): Promise<{ bundle: Omit<EvidenceBundle, "assembledAt">; hash: string }> {
+  if (proof.goalId !== goalId) throw new EvidenceBundleError("Evidence bundle Goal identity mismatch");
+  return withGoalAuthority(pool, proof, 41, (client) => assembleEvidenceBundleWithClient(client, goalId, content));
+}
+
+/** Internal transaction helper. The caller must already hold withGoalAuthority's locks. */
+export async function recordEvidenceBundleInTransaction(client: PoolClient, goalId: string, content?: EvidenceContentReader): Promise<{ bundleId: string; hash: string }> {
+  const { bundle, hash } = await assembleEvidenceBundleWithClient(client, goalId, content);
   if (bundle.goalId !== goalId) throw new EvidenceBundleError("Evidence bundle Goal identity mismatch");
   const bundleId = randomUUID();
-  await pool.query(
+  await client.query(
     "INSERT INTO evidence_bundles (bundle_id, goal_id, content, content_hash) VALUES ($1, $2, $3::jsonb, $4)",
     [bundleId, goalId, JSON.stringify(bundle), hash],
   );
   return { bundleId, hash };
+}
+
+/** Records one immutable evidence bundle snapshot in the same authorized transaction as assembly. */
+export async function recordEvidenceBundle(pool: Pool, goalId: string, proof: GoalLeaseProof, content?: EvidenceContentReader): Promise<{ bundleId: string; hash: string }> {
+  if (proof.goalId !== goalId) throw new EvidenceBundleError("Evidence bundle Goal identity mismatch");
+  return withGoalAuthority(pool, proof, 41, (client) => recordEvidenceBundleInTransaction(client, goalId, content));
 }
 
 /** Re-reads a recorded bundle and verifies its stored hash still matches the content actually stored (not a re-assembly from current live state -- a durable artifact must not silently drift). */

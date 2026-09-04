@@ -71,6 +71,14 @@ describe("Certification completeness gate", () => {
     expect(blockers.some((blocker) => blocker.reason === "certification_identity_mismatch")).toBe(true);
   });
 
+  it("blocks success when actual spend exceeds the Goal budget", () => {
+    const blockers = evaluateCertificationCompleteness({
+      requiredKinds: [], records: [], openChallengeCount: 0,
+      actualCostCents: 101, budgetCents: 100,
+    });
+    expect(blockers).toEqual([{ reason: "budget_exceeded", detail: "Actual cost 101 cents exceeds the Goal budget 100 cents" }]);
+  });
+
   it("does not let a newest certification hide an unresolved conflict", () => {
     const blockers = evaluateCertificationCompleteness({
       requiredKinds: ["quality"],

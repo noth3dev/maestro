@@ -171,12 +171,12 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
     // Concertmaster final report -- all against this one real Goal.
     const challenge = await raiseMetronomeChallenge(pool, goalId, [], { reason: "verify independence before certifying", evidenceReferences: [] }, proof, metronomeContext("raise"));
     const round = await runEncoreCouncilReview(pool, fakeReviewKernel(), {
-      goalId, question: "should we proceed to certification?",
+      goalId, proof, question: "should we proceed to certification?",
       criteria: [{ criterionId: "safety", description: "preserves safety invariants" }],
       evidenceIds: [evidenceIds[0]!], reviewerCount: 1,
     });
     await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
-    const report = await generateConcertmasterFinalReport(pool, goalId);
+    const report = await generateConcertmasterFinalReport(pool, goalId, proof);
 
     const secret = "read-state-parity-test-secret";
     const { credentialId, operatorId } = await bootstrapLocalOperator(pool, { secret });
@@ -197,25 +197,25 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
     const io = { stdout: (line: string) => { stdout.push(line); }, stderr: (line: string) => { stderr.push(line); } };
 
     try {
-      expect(await executeCli(["metronome-challenges", "list", "--goal-id", goalId, "--json"], env, io)).toBe(0);
+      expect(await executeCli(["metronome-challenges", "list", "--goal-id", goalId, "--project-id", projectId, "--json"], env, io)).toBe(0);
       const cliChallenges = JSON.parse(stdout.at(-1)!) as { challenges: { challengeId: string; status: string }[] };
       expect(cliChallenges.challenges).toHaveLength(1);
       expect(cliChallenges.challenges[0]!.challengeId).toBe(challenge.challengeId);
       expect(cliChallenges.challenges[0]!.status).toBe(challenge.status);
 
-      expect(await executeCli(["encore-council", "list", "--goal-id", goalId, "--json"], env, io)).toBe(0);
+      expect(await executeCli(["encore-council", "list", "--goal-id", goalId, "--project-id", projectId, "--json"], env, io)).toBe(0);
       const cliRounds = JSON.parse(stdout.at(-1)!) as { rounds: { roundId: string; synthesis: { finalVerdict: string } }[] };
       expect(cliRounds.rounds).toHaveLength(1);
       expect(cliRounds.rounds[0]!.roundId).toBe(round.roundId);
       expect(cliRounds.rounds[0]!.synthesis.finalVerdict).toBe(round.synthesis.finalVerdict);
 
-      expect(await executeCli(["certifications", "list", "--goal-id", goalId, "--json"], env, io)).toBe(0);
+      expect(await executeCli(["certifications", "list", "--goal-id", goalId, "--project-id", projectId, "--json"], env, io)).toBe(0);
       const cliCertifications = JSON.parse(stdout.at(-1)!) as { certifications: { kind: string; verdict: string }[] };
       expect(cliCertifications.certifications).toHaveLength(1);
       expect(cliCertifications.certifications[0]!.kind).toBe("quality");
       expect(cliCertifications.certifications[0]!.verdict).toBe("passed");
 
-      expect(await executeCli(["concertmaster-report", "get", "--goal-id", goalId, "--json"], env, io)).toBe(0);
+      expect(await executeCli(["concertmaster-report", "get", "--goal-id", goalId, "--project-id", projectId, "--json"], env, io)).toBe(0);
       const cliReport = JSON.parse(stdout.at(-1)!) as { reportId: string; success: boolean };
       expect(cliReport.reportId).toBe(report.reportId);
       expect(cliReport.success).toBe(report.success);
@@ -225,15 +225,25 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
       // CLI's own formatting happens to match.
       const { createApiClient } = await import("@maestro/api-client");
       const client = createApiClient({ baseUrl: apiUrl, token: bearerToken });
-      const apiChallenges = await client.listMetronomeChallenges(goalId);
-      const apiRounds = await client.listEncoreCouncilRounds(goalId);
-      const apiCertifications = await client.listCertifications(goalId);
-      const apiReport = await client.getConcertmasterReport(goalId);
+      const apiChallenges = await client.listMetronomeChallenges(goalId, { projectId });
+      const apiRounds = await client.listEncoreCouncilRounds(goalId, { projectId });
+      const apiCertifications = await client.listCertifications(goalId, { projectId });
+      const apiReport = await client.getConcertmasterReport(goalId, { projectId });
 
       expect(apiChallenges).toEqual(cliChallenges);
       expect(apiRounds).toEqual(cliRounds);
       expect(apiCertifications).toEqual(cliCertifications);
       expect(apiReport).toEqual(cliReport);
+
+      // The project binding is required on every derived read, not only on
+      // the Goal summary route. The authenticated operator belongs only to
+      // the real project, so all four cross-project attempts fail before the
+      // read service can return another project's state.
+      const otherProjectId = randomUUID();
+      await expect(client.listMetronomeChallenges(goalId, { projectId: otherProjectId })).rejects.toMatchObject({ status: 403 });
+      await expect(client.listEncoreCouncilRounds(goalId, { projectId: otherProjectId })).rejects.toMatchObject({ status: 403 });
+      await expect(client.listCertifications(goalId, { projectId: otherProjectId })).rejects.toMatchObject({ status: 403 });
+      await expect(client.getConcertmasterReport(goalId, { projectId: otherProjectId })).rejects.toMatchObject({ status: 403 });
 
       expect(stderr).toEqual([]);
     } finally {
