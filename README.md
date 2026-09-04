@@ -176,6 +176,12 @@ Full documentation is available in both **English (en)** and **한국어 (ko)**:
 
 ---
 
+## Contributing
+
+We welcome community contributions! Please read our [Contributing Guide](CONTRIBUTING.md) for details on our development workflow, architectural guidelines, and submission protocol.
+
+---
+
 ## Security Policy
 
 Please review our [Security Policy](SECURITY.md) for details on vulnerability disclosures, containment boundaries, and dependency advisories.

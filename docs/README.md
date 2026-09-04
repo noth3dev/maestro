@@ -165,13 +165,19 @@ node apps/cli/dist/main.js report get <goalId>
 
 ---
 
+## Contributing
+
+We welcome community contributions! Please read our [Contributing Guide](../CONTRIBUTING.md) for details on our development workflow, architectural guidelines, and submission protocol.
+
+---
+
 ## Security Policy
 
 Please review our [Security Policy](../SECURITY.md) for details on vulnerability disclosures, containment boundaries, and dependency advisories.
 
 ---
 
-Original License
+## License
 
 Maestro is fully open source and released under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.  
 See the [LICENSE](../LICENSE) file for details.
