@@ -201,3 +201,30 @@ Against plan/phase1.md's exit gate and Tests section, still missing:
 - Incident identity is `(authenticated incident fingerprint, affected version)`. The derived fingerprint intentionally excludes version so a repeated anomaly on a new version is a separate incident without changing the anomaly identity; normalized evidence order/case/whitespace produces stable hashes.
 - Incident aggregation is monotonic: severity keeps the highest observed level and confidence keeps the strongest bounded value. Every accepted signal has one immutable incident link, making duplicate attachment idempotent and preserving source signal history.
 - Silence is represented only as watchdog uncertainty (`discord_observation_missing` or `discord_observation_silent`). No empty incident or "no incidents" conclusion is written from absent data.
+
+
+## 2026-09-05 — Phase 5 Runtime Slice 1 takeover
+- The current runtime worktree is an uncommitted implementation, not an accepted recovery path. It durably fences a worker to the successor Goal lease and records one `worker_recovery_decisions` row, but the current acceptance requirement still needs a separately-running provider harness and a real control-plane kill/restart through the HTTP worker path.
+- The existing `workers.execution_ref`/`invocation_ref` remains the provider identity; `0061_worker_runtime_ownership.sql` adds owner/fence/heartbeat and two-phase cancellation facts without introducing a competing invocation identity table.
+- Helper workers created by `spawnHelperWorker` currently return the expanded domain `Worker` shape with null ownership fields and do not bind provider ownership before their provider spawn. This is a concrete Slice 1 gap to resolve or explicitly bound before acceptance; runtime recovery must cover every provider-backed worker, not only root mission workers.
+
+
+## 2026-09-05 — Phase 5 Track A1 focused runtime findings
+
+- Helper-worker creation had the same reserve-before-effect invariant as ordinary workers but did not implement it. The provider call happened before the `workers` insert, so provider success followed by process loss could not be reconciled to a durable worker.
+- Runtime ownership fields are persistence/domain internals today. Returning them directly through the existing strict public `WorkerSchema` would fail at runtime; the control-plane worker service must project the old wire shape until a versioned recovery read contract is added.
+- Observation is a durable write. It must not be callable without the current Goal lease/fencing proof; terminal reads may still return without provider access.
+- A hanging provider close can block SIGTERM cleanup indefinitely. The composition root needs a bounded drain while SIGKILL remains handled conservatively by lease expiry and recovery fencing.
+- Remaining risk: the production Prime adapter is process-local and intentionally cannot resume/reconnect old sessions. Slice acceptance still needs the real process-backed provider/control-plane kill-and-restart harness required by `plan/phase5-execution-slices.md`.
+
+
+## 2026-09-05 — Phase 5 Track A1 focused-suite failure diagnosis
+
+- `head-participation-api.integration.test.ts` failed only because its fake kernel deliberately returned `cancelled:false` after an empty observation, while the test then attempted a new worker. Under conservative restart/provider semantics that outcome is `unknown`, and retry must be blocked. The fixture's intended downstream certification path needs a provider-confirmed cancellation response; changing production code to allow the retry would violate the retry-blocking invariant.
+
+
+## 2026-09-05 — Phase 5 Track A1 implementation checkpoint
+
+- The runtime worktree now covers ordinary and helper workers with reserve-before-spawn ownership, bind/fence proofs, heartbeat/lease expiry, conservative unknown outcomes, proof-bound observation/cancellation, and bounded control-plane shutdown. The API keeps ownership internals out of the existing strict `WorkerSchema` projection.
+- A test-only JSON-lines provider process and real loopback HTTP control-plane test provide the required kill/restart evidence. The test proves one successor fencing decision, preserved opaque refs, no duplicate provider spawn, and retry blocking.
+- The remaining acceptance gates are the broad full-test result, independent review, clean worktree/branch state, and commit/push.

@@ -1113,3 +1113,59 @@ HEAD
   Head/Council/Plan/worker/Git/report write commands are not yet exposed through HTTP/CLI.
 
 - 2026-09-05: Read the current non-archive `plan/` set and held a three-agent Luna council. Consensus: (1) Runtime durable worker/provider ownership and recovery; (2) Device real mTLS/signed Goal grant/local validation, parallel-safe but accepted after Runtime contract; (3) Secretary safety console/live durable stream. Boundaries and real-process/PostgreSQL acceptance gates are recorded in `plan/phase5-execution-slices.md`.
+- 2026-09-05: Agent observation request rejected because `agent_observe` max_chars is capped at 2000; retried with the supported bound.
+
+## Active execution plan — Phase 5 through Phase 6
+
+**Started:** 2026-09-05. **Rule:** one slice at a time; no self-acceptance; every claim needs fresh evidence.
+
+### Phase 5 operational completion
+1. **Runtime recovery (Track A1):** durable worker/provider ownership, heartbeat/lease/fencing, two-phase cancellation, conservative restart recovery, real process-backed provider scenario.
+2. **Device authority (Track B1–B2):** separately running authenticated device agent, signed short-lived Goal/project/device/path/fence grant, local validation, server recheck, zero-effect negative cases.
+3. **Production orchestration (Track A3):** authenticated HTTP/CLI lifecycle from Task Contract through Goal, Head/Council/Plan/Mission/worker/Git/Metronome/certification/report, with no second authority path.
+4. **Approval path (Track A5):** user-facing critical-action request, CEO approve-and-run, exactly-once durable effect.
+5. **Metronome loop (Track A6):** scheduled/event-driven observation with complete rule coverage and durable findings.
+6. **Secretary parity (Track A7):** project/Goal discovery, durable read/write console, SSE/poll fallback, abort-safe transport, CLI/API/UI parity.
+7. **Remaining device hardening (Track B3–B8):** signed command/receipt, revocation cascade, typed scopes, disconnect lifecycle, device Metronome rules, automatic grant closure.
+8. **Phase 5 exit:** real PostgreSQL, real control-plane/device/provider processes, no duplicate execution, no unauthorized side effect, independent review, clean worktrees/branches.
+
+### Phase 6 bounded improvement
+1. Durable evidence/improvement artifact chain and provenance.
+2. Encore curation, replay/shadow evaluation, candidate policy and ten-axis adaptation.
+3. Approval, rollback, versioning, cross-Goal knowledge boundaries, cost/safety gates.
+4. Real replay/shadow/live separation tests and Phase 6 exit evidence.
+
+### After Phase 6
+Re-read all findings, then re-patch Phases 1→4 in order against real operational scenarios. Remove this active plan only after the Phase 6 work and its evidence are complete; append the final implementation/results/remaining-risk record instead.
+
+**Current slice:** Phase 5 Track A1 — runtime provider ownership and restart recovery. Existing in-flight edits are in `.worktrees/phase5-runtime-recovery`; they are uncommitted and not accepted.
+
+- 2026-09-05: Took over the in-flight Phase 5 Runtime worktree directly; no further subagent implementation is being used. The dirty slice adds durable worker owner/fencing/heartbeat/recovery/cancellation fields, migration `0061_worker_runtime_ownership.sql`, conservative restart fencing, and worker integration regressions. `npm run build` passed; with disposable PostgreSQL, worker integration passed 22/22 and reconciliation integration passed 11/11. The slice is not accepted yet: real separately-running provider/control-plane recovery, full process kill/restart evidence, independent review, and helper-worker ownership coverage remain open.
+
+
+## 2026-09-05 — Phase 5 Track A1 runtime recovery: focused completion plan
+
+- **Plan before next patch:** (1) finish helper-worker reserve→provider-spawn→bind with durable owner/fence fields and retry blocking after an unknown helper; (2) require worker observations to carry the current Goal lease proof; (3) keep provider/process ownership fields out of the current public Worker wire contract until the Secretary read model is deliberately extended; (4) bound control-plane provider/application/database shutdown drains; (5) add stale-owner and provider-failure regression evidence; (6) run focused PostgreSQL suites, control-plane HTTP/process checks, build, and full check before commit/push.
+- **Concrete findings:** helper workers previously called the provider before inserting a durable row, so a crash could leave an unowned child execution; strict `WorkerSchema` parsing would reject the new internal ownership fields when the service returned raw persistence workers; `observeWorker` could write without a Goal proof; shutdown awaited provider close without a bound.
+- **Scope fence:** this pass changes only the Phase 5 runtime worktree and runtime-related tests/config; Electron/Secretary root changes remain untouched.
+- **Acceptance state:** not accepted yet. Independent review and the required separately-running provider/control-plane kill-and-restart evidence remain open after the focused fixes.
+
+
+## 2026-09-05 — Phase 5 Track A1 process-gate plan
+
+- **Plan before harness patch:** add a test-only JSON-lines provider process (no production provider behavior) implementing the same `ExecutionKernelPort` boundary; drive worker creation through a real loopback HTTP control-plane listener; kill the provider and abandon the first control-plane owner; expire the Goal lease; start a fresh provider/control-plane pair; prove startup reconciliation fences the worker once, preserves opaque refs, blocks retry, and performs zero duplicate provider spawns.
+- **Evidence to collect:** provider OS child exit signal, HTTP worker response, PostgreSQL owner/status/recovery-decision rows, successor HTTP read, retry status, successor provider spawn count, build, focused suites, and full PostgreSQL check.
+- **Scope fence:** test harness plus runtime tests only; no Electron/Secretary source changes and no changes to the production Prime adapter's honest no-resume boundary.
+
+
+## 2026-09-05 — Phase 5 Track A1 focused-suite finding
+
+- The runtime-focused suites passed **70/71** tests. The only failure was the pre-existing HTTP lifecycle fixture expecting a second spawn after a fake provider returned `cancelled:false` and an empty observation. The new conservative contract correctly persisted `unknown` and blocks retry; the fixture must model explicit provider cancellation before continuing to certification/acceptance.
+- This is a test-fixture contract correction, not a relaxation of unknown-state safety. The dedicated worker and helper regressions already prove unknown retry blocking.
+
+
+## 2026-09-05 — Phase 5 Track A1 process-gate evidence checkpoint
+
+- The real process-backed provider/control-plane test now passes: a provider OS process and HTTP control-plane owner are killed, the Goal lease is expired, and a successor pair fences the orphaned worker exactly once. PostgreSQL preserves opaque execution/invocation refs, records `unknown`/`fenced`, and the successor provider performs zero duplicate spawns.
+- Focused runtime suites pass **48/48** after correcting one fixture to use provider-confirmed cancellation rather than retrying an `unknown` worker. `npm run build` passes. Full `npm test` is running as the final broad regression checkpoint; no acceptance claim is made until it finishes and the independent no-edit review is received.
+- Reconciliation now releases its short-lived Goal lease after a durable `recovering` transition. This ensures the durable Goal state, not a stale reconciliation lease, explains subsequent write blocking.
