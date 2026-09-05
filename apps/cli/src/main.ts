@@ -51,6 +51,8 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
         "review-json": { type: "string" },
         "finding-ids": { type: "string" },
         "evidence-references": { type: "string" },
+        "challenge-id": { type: "string" },
+        "correction-request": { type: "string" },
         reason: { type: "string" },
         "plan-version": { type: "string" },
         "department-id": { type: "string" },
@@ -182,6 +184,21 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     }
     if (resource === "metronome" && action === "challenge") {
       const result = await client.raiseMetronomeChallenge(string("goal-id"), { projectId: string("project-id"), findingIds: parseJsonOption(string("finding-ids"), "--finding-ids"), reason: string("reason"), evidenceReferences: parseJsonOption(string("evidence-references"), "--evidence-references") }, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "metronome" && action === "correct") {
+      const result = await client.requestMetronomeCorrection(string("challenge-id"), { projectId: string("project-id"), correctionRequest: string("correction-request") }, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "metronome" && action === "safe-pause") {
+      const result = await client.requestMetronomeSafePause(string("goal-id"), string("challenge-id"), { projectId: string("project-id") }, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "metronome" && action === "resolve") {
+      const result = await client.resolveMetronomeChallenge(string("challenge-id"), { projectId: string("project-id"), reason: string("reason") }, string("command-id"));
       printState(io.stdout, result, json);
       return 0;
     }
