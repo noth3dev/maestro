@@ -119,6 +119,39 @@ describeDatabase("Team-lead grants and helper workers with PostgreSQL", () => {
     await expect(spawnHelperWorker(pool, kernel, grant.grantId, proof, headContext("product"))).rejects.toBeInstanceOf(TeamLeadGrantError);
   });
 
+  it("records helper ownership before provider spawn and returns the durable owner binding", async () => {
+    const { proof, worker, kernel } = await setupWorker();
+    const grant = await grantTeamLead(pool, worker.workerId, grantSubstance({ maxHelpers: 1 }), proof, headContext("product"));
+    const providerSpawn = kernel.spawn.bind(kernel);
+    let pendingRows = 0;
+    kernel.spawn = async (request) => {
+      const pending = await pool.query<{ count: string }>(
+        "SELECT count(*)::int AS count FROM workers WHERE grant_id = $1 AND status = 'spawned' AND execution_ref LIKE 'pending:%' AND invocation_ref LIKE 'pending:%'",
+        [grant.grantId],
+      );
+      pendingRows = Number(pending.rows[0]!.count);
+      return providerSpawn(request);
+    };
+    const helper = await spawnHelperWorker(pool, kernel, grant.grantId, proof, headContext("product"));
+    expect(pendingRows).toBe(1);
+    expect(helper.ownerId).toBe(proof.ownerId);
+    expect(helper.ownerFencingToken).toBe(proof.fencingToken);
+    expect(helper.executionRef).not.toMatch(/^pending:/);
+    expect(helper.invocationRef).not.toMatch(/^pending:/);
+  });
+
+  it("fences an unknown helper provider outcome and blocks another helper spawn", async () => {
+    const { proof, worker, kernel } = await setupWorker();
+    const grant = await grantTeamLead(pool, worker.workerId, grantSubstance({ maxHelpers: 2 }), proof, headContext("product"));
+    kernel.spawn = async () => { throw new Error("provider transport terminated"); };
+
+    const unknown = await spawnHelperWorker(pool, kernel, grant.grantId, proof, headContext("product"));
+    expect(unknown.status).toBe("unknown");
+    expect(unknown.ownerId).toBe(proof.ownerId);
+    expect(unknown.executionRef).toMatch(/^pending:/);
+    await expect(spawnHelperWorker(pool, kernel, grant.grantId, proof, headContext("product"))).rejects.toThrow(/unknown/);
+  });
+
   it("rejects granting team lead to a helper worker (no recursive spawning)", async () => {
     const { proof, worker, kernel } = await setupWorker();
     const grant = await grantTeamLead(pool, worker.workerId, grantSubstance({ maxHelpers: 1 }), proof, headContext("product"));

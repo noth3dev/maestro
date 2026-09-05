@@ -33,6 +33,20 @@ export interface ControlPlane {
   createGitPort(context: Omit<ActionRequest, "action" | "target">): GitPort;
 }
 
+/** Resolve shutdown even when a provider adapter hangs during abort/disposal. */
+async function drainWithTimeout(operation: Promise<void> | undefined, timeoutMs: number): Promise<void> {
+  if (operation === undefined) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      operation.catch(() => undefined),
+      new Promise<void>((resolve) => { timer = setTimeout(resolve, timeoutMs); }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 export interface ControlPlaneOverrides {
   /** Test-only injection point for the critical-action effect callback. Production fails closed until a real adapter is configured. */
   criticalActionEffect?: (request: ActionRequest) => Promise<void>;
@@ -171,13 +185,20 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     async close() {
       if (closed) return;
       closed = true;
+      const timeoutMs = config.shutdownDrainTimeoutMs ?? 5_000;
       try {
         // Stop provider work before releasing the HTTP and database resources.
-        // This prevents shutdown from orphaning active Head/worker sessions.
-        await executionKernel.close?.();
-        await app.close();
+        // This prevents graceful shutdown from orphaning active Head/worker
+        // sessions, while the bound keeps SIGTERM from hanging forever on a
+        // provider that is already unavailable. SIGKILL remains covered by
+        // the durable lease/fence reconciliation path.
+        await drainWithTimeout(Promise.resolve(executionKernel.close?.()), timeoutMs);
       } finally {
-        await pool.end();
+        try {
+          await drainWithTimeout(app.close(), timeoutMs);
+        } finally {
+          await drainWithTimeout(pool.end(), timeoutMs);
+        }
       }
     },
   };

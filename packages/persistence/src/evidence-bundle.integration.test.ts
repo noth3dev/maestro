@@ -152,7 +152,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     // 7. Worker: spawn through the execution kernel, observe to a terminal success.
     const kernel = fakeKernel();
     const worker = await spawnWorker(pool, kernel, { councilId: resolved.councilId, departmentId: "product", planVersion: plan.version, itemId: "exec-1" }, proof, headContext("product"));
-    const observedWorker = await observeWorker(pool, kernel, worker.workerId);
+    const observedWorker = await observeWorker(pool, kernel, worker.workerId, proof, headContext("product"));
     expect(observedWorker.status).toBe("succeeded");
 
     // 8. Git integration: real Goal branch, Department branch, worker worktree, and a real commit.

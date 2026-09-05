@@ -105,7 +105,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
     await createMissionBundle(pool, { councilId: resolved.councilId, departmentId: "product", itemId: "exec-1", substance: bundleSubstance }, proof, headContext("product"));
     const kernel = fakeKernel();
     const worker = await spawnWorker(pool, kernel, { councilId: resolved.councilId, departmentId: "product", planVersion: plan.version, itemId: "exec-1" }, proof, headContext("product"));
-    await observeWorker(pool, kernel, worker.workerId);
+    await observeWorker(pool, kernel, worker.workerId, proof, headContext("product"));
     await recordGoalIntegrationBranch(pool, localGitPort, goalId, repositoryPath, "goal/integration", baseRevision, proof);
     await recordDepartmentBranch(pool, localGitPort, resolved.councilId, "product", proof, headContext("product"));
     const worktreePath = join(repositoryPath, "..", `maestro-cert-worker-${randomUUID()}`);

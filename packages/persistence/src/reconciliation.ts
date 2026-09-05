@@ -10,7 +10,7 @@ import {
   releaseGoalLease,
   renewGoalLease,
 } from "./commands.js";
-import { observeWorker } from "./worker.js";
+import { recoverWorkerAfterRestart } from "./worker.js";
 import {
   listHeadActivationCommandsForRecovery,
   markHeadActivationOrphaned,
@@ -296,28 +296,36 @@ export async function reconcileOnStartup(
         ownerId: `reconciler:${options.ownerId}`,
         leaseDurationMs: goalLeaseDurationMs,
       });
-      const commandResult = await executeGoalCommand(
-        pool,
-        {
-          commandId: randomUUID(),
-          projectId: row.project_id,
+      try {
+        const commandResult = await executeGoalCommand(
+          pool,
+          {
+            commandId: randomUUID(),
+            projectId: row.project_id,
+            goalId: row.goal_id,
+            actorId: `reconciler:${options.ownerId}`,
+            type: "TransitionGoal",
+            expectedVersion: Number(row.version),
+            to: "recovering",
+          },
+          goalLeaseProof,
+        );
+        results.push({
           goalId: row.goal_id,
-          actorId: `reconciler:${options.ownerId}`,
-          type: "TransitionGoal",
-          expectedVersion: Number(row.version),
-          to: "recovering",
-        },
-        goalLeaseProof,
-      );
-      results.push({
-        goalId: row.goal_id,
-        projectId: row.project_id,
-        priorState: row.state,
-        outcome: commandResult.outcome === "succeeded" ? "recovering" : "lease_contended",
-        reasons: recoveryReasons,
-        reconciledWorkerIds,
-        reconciledHeadActivationCommandIds,
-      });
+          projectId: row.project_id,
+          priorState: row.state,
+          outcome: commandResult.outcome === "succeeded" ? "recovering" : "lease_contended",
+          reasons: recoveryReasons,
+          reconciledWorkerIds,
+          reconciledHeadActivationCommandIds,
+        });
+      } finally {
+        // Startup reconciliation does not own a long-lived Goal operation.
+        // Release the short-lived recovery lease after the durable transition
+        // so the recovering state, rather than a stale lease row, is the
+        // reason subsequent work is blocked.
+        await releaseGoalLease(pool, goalLeaseProof).catch(() => {});
+      }
     } catch (error) {
       if (error instanceof LeaseUnavailableError) {
         // Some other actor legitimately holds the Goal lease right now;
@@ -456,16 +464,12 @@ async function withReconciliationLeaseHeartbeat<T>(
 }
 
 /**
- * Forces a fresh observeWorker call for every nonterminal worker under a
- * Goal whose durable lease is not currently live, using this restarted
- * process's own fresh kernel. A worker whose execution genuinely no longer
- * exists in this fresh kernel's session state is durably transitioned to
- * "unknown" by observeWorker's own existing empty-observation fallback
- * (never a fabricated "failed", per Phase 1 re-patch item 2); a worker
- * whose observation happens to resolve some other way is recorded exactly
- * as observeWorker reports it. One worker's reconciliation failure is
- * logged into the returned list as skipped, never allowed to abort startup
- * for every other Goal/worker.
+ * Fences every nonterminal worker under a Goal whose durable lease is not
+ * currently live. A restarted process cannot prove ownership of the old
+ * provider session, so it transfers the durable owner fence and records one
+ * append-only `fenced` decision with status `unknown`; retries remain blocked
+ * until an operator resolves the ambiguity. No resume/reconnect/spawn is
+ * attempted, so a stale provider effect is never duplicated.
  */
 async function reconcileOrphanedWorkers(
   pool: Pool,
@@ -480,7 +484,7 @@ async function reconcileOrphanedWorkers(
     `SELECT w.worker_id
        FROM workers w
        JOIN head_councils hc ON hc.council_id = w.council_id
-      WHERE hc.goal_id = $1 AND w.status IN ('spawned', 'running')`,
+      WHERE hc.goal_id = $1 AND w.status IN ('spawned', 'running', 'unknown')`,
     [goalId],
   );
   if (workersResult.rowCount === 0) return [];
@@ -499,8 +503,8 @@ async function reconcileOrphanedWorkers(
     for (const { worker_id: workerId } of workersResult.rows) {
       await renewLeader();
       proof = await renewGoalLease(pool, proof, leaseDurationMs);
-      await observeWorker(pool, kernel, workerId, proof);
-      reconciled.push(workerId);
+      const recovered = await recoverWorkerAfterRestart(pool, workerId, proof, "Provider session is unavailable after control-plane restart");
+      if (recovered.recoveryState === "fenced") reconciled.push(workerId);
     }
   } finally {
     try { await releaseGoalLease(pool, proof); } catch { /* stale proof is already fenced */ }

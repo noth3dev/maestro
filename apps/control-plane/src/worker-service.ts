@@ -18,6 +18,15 @@ export class WorkerProjectMismatchError extends Error {
   constructor() { super("Worker project does not match the Council project"); this.name = "WorkerProjectMismatchError"; }
 }
 
+/** Keep provider/process ownership internals out of the current public Worker wire contract. */
+function toApiWorker(worker: Awaited<ReturnType<typeof readWorker>>): Worker {
+  return {
+    workerId: worker.workerId, councilId: worker.councilId, departmentId: worker.departmentId, planVersion: worker.planVersion, itemId: worker.itemId,
+    bundleContentHash: worker.bundleContentHash, attempt: worker.attempt, executionRef: worker.executionRef, invocationRef: worker.invocationRef,
+    status: worker.status, answerText: worker.answerText, usageTotalTokens: worker.usageTotalTokens,
+  };
+}
+
 /** Worker creation derives the actor/session from the immutable Council snapshot and scopes the spawn with the Goal lease. */
 export function createWorkerService(deps: WorkerServiceDependencies): WorkerService {
   return {
@@ -30,13 +39,13 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
       const participant = council.snapshot.participants.find((entry) => (entry.departmentId ?? entry.participantId) === departmentId);
       if (participant === undefined || participant.headRoleId === undefined || participant.departmentId === undefined) throw new Error("Department is not a captured Head Council participant");
       const context: CouncilActorContext = { actorId: participant.headRoleId, sessionRef: participant.sessionRef, commandId };
-      return deps.withGoalLease(council.goalId, (proof) => spawnWorker(deps.pool, deps.kernel, { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, commandId }, proof, context));
+      return deps.withGoalLease(council.goalId, (proof) => spawnWorker(deps.pool, deps.kernel, { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, commandId }, proof, context).then(toApiWorker));
     },
     async get(workerId, projectId) {
       const worker = await readWorker(deps.pool, workerId);
       const council = await readHeadCouncil(deps.pool, worker.councilId);
       if (council.snapshot.projectId !== projectId) throw new WorkerProjectMismatchError();
-      return worker;
+      return toApiWorker(worker);
     },
     async observe(workerId, projectId, commandId, operator) {
       const worker = await readWorker(deps.pool, workerId);
@@ -46,7 +55,7 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
       const participant = council.snapshot.participants.find((entry) => (entry.departmentId ?? entry.participantId) === worker.departmentId);
       if (participant === undefined || participant.headRoleId === undefined || participant.departmentId === undefined) throw new Error("Worker department is not a captured Head participant");
       const context: CouncilActorContext = { actorId: participant.headRoleId, sessionRef: participant.sessionRef, commandId };
-      return deps.withGoalLease(council.goalId, (proof) => observeWorker(deps.pool, deps.kernel, workerId, proof, context));
+      return deps.withGoalLease(council.goalId, (proof) => observeWorker(deps.pool, deps.kernel, workerId, proof, context).then(toApiWorker));
     },
     async cancel(workerId, projectId, commandId, operator) {
       const worker = await readWorker(deps.pool, workerId);
@@ -56,7 +65,7 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
       const participant = council.snapshot.participants.find((entry) => (entry.departmentId ?? entry.participantId) === worker.departmentId);
       if (participant === undefined || participant.headRoleId === undefined || participant.departmentId === undefined) throw new Error("Worker department is not a captured Head participant");
       const context: CouncilActorContext = { actorId: participant.headRoleId, sessionRef: participant.sessionRef, commandId };
-      return deps.withGoalLease(council.goalId, (proof) => cancelWorker(deps.pool, deps.kernel, workerId, proof, context));
+      return deps.withGoalLease(council.goalId, (proof) => cancelWorker(deps.pool, deps.kernel, workerId, proof, context).then(toApiWorker));
     },
   };
 }

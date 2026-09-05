@@ -20,6 +20,8 @@ export interface MaestroConfig {
   operatorProvisioningAdminId?: string;
   /** Duration of the startup-only reconciliation-leader lease; never renewed after startup. */
   reconcilerLeaseDurationMs: number;
+  /** Maximum time allowed for provider/application shutdown drains. */
+  shutdownDrainTimeoutMs?: number;
   /**
    * Only ever set for a non-loopback bind; a remote bind without it is
    * rejected below before this config is ever returned. File paths only --
@@ -40,6 +42,7 @@ const schema = z.object({
   MAESTRO_OPERATOR_PROVISIONING_ADMIN_ID: z.string().uuid().optional(),
   MAESTRO_INSTANCE_ID: z.string().min(1).default("local-control-plane"),
   MAESTRO_RECONCILER_LEASE_MS: z.coerce.number().int().positive().default(30_000),
+  MAESTRO_SHUTDOWN_DRAIN_MS: z.coerce.number().int().positive().default(5_000),
   MAESTRO_TLS_CERT_FILE: z.string().min(1).optional(),
   MAESTRO_TLS_KEY_FILE: z.string().min(1).optional(),
 });
@@ -64,6 +67,7 @@ export function parseConfig(
     MAESTRO_OPERATOR_PROVISIONING_ADMIN_ID: operatorProvisioningAdminId,
     MAESTRO_INSTANCE_ID: leaseOwnerId,
     MAESTRO_RECONCILER_LEASE_MS: reconcilerLeaseDurationMs,
+    MAESTRO_SHUTDOWN_DRAIN_MS: shutdownDrainTimeoutMs,
     MAESTRO_TLS_CERT_FILE: certFile,
     MAESTRO_TLS_KEY_FILE: keyFile,
   } = parsed.data;
@@ -79,7 +83,7 @@ export function parseConfig(
   }
 
   return {
-    databaseUrl, evidenceDir, worktreeRoot, host, port, primeAgentVersion: "0.8.0", actorId, leaseOwnerId, reconcilerLeaseDurationMs,
+    databaseUrl, evidenceDir, worktreeRoot, host, port, primeAgentVersion: "0.8.0", actorId, leaseOwnerId, reconcilerLeaseDurationMs, shutdownDrainTimeoutMs,
     ...(ceoOperatorId === undefined ? {} : { ceoOperatorId }),
     ...(operatorProvisioningAdminId === undefined ? {} : { operatorProvisioningAdminId }),
     ...(isRemoteBind ? { tls: { certFile: certFile!, keyFile: keyFile! } } : {}),

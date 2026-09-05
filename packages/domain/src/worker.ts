@@ -11,6 +11,14 @@ export interface Worker {
   readonly attempt: number;
   readonly executionRef: string;
   readonly invocationRef: string;
+  /** Durable process ownership proof for the bound provider invocation. */
+  readonly ownerId: string | null;
+  readonly ownerFencingToken: string | null;
+  readonly ownerLeaseExpiresAt: Date | null;
+  readonly heartbeatAt: Date | null;
+  readonly recoveryState: "none" | "fenced" | "provider_cancelled";
+  /** Two-phase cancellation intent, retained as audit state until terminal. */
+  readonly cancellationRequestedAt: Date | null;
   readonly status: WorkerStatus;
   readonly answerText: string | null;
   readonly usageTotalTokens: number | null;

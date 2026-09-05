@@ -53,3 +53,8 @@ Acceptance requires a real control-plane process, real PostgreSQL, real `next st
 - Every ambiguous provider or transport outcome is durable unknown/recovery, never false success.
 - Each slice gets focused tests, `npm run build`, PostgreSQL-backed `npm run check`, independent no-edit review, a Conventional Commit, and a pushed branch before integration.
 - `main` is updated only from a freshly verified integration result. A branch push without a green full check is not a release claim.
+
+
+### Explicit provider crash-window boundary (Track A1)
+
+The provider-neutral `ExecutionKernelPort` cannot atomically commit an external `spawn()` response with PostgreSQL. If a control-plane process is SIGKILLed after the provider returns opaque refs but before `bindWorkerInvocation` commits, the durable reservation remains `pending:*` and the provider identity is unavailable to the successor. Track A1 acceptance for this window is therefore: successor startup marks the reservation `unknown`/`fenced`, preserves the pending placeholders without fabricating refs, records one recovery decision, and blocks retry. It does **not** claim provider ref recovery or suppression of side effects already admitted by an unavailable provider. A later adapter-specific idempotency/reconnect/cancel contract is required before making that stronger claim.
