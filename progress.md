@@ -1169,3 +1169,10 @@ Re-read all findings, then re-patch Phases 1→4 in order against real operation
 - The real process-backed provider/control-plane test now passes: a provider OS process and HTTP control-plane owner are killed, the Goal lease is expired, and a successor pair fences the orphaned worker exactly once. PostgreSQL preserves opaque execution/invocation refs, records `unknown`/`fenced`, and the successor provider performs zero duplicate spawns.
 - Focused runtime suites pass **48/48** after correcting one fixture to use provider-confirmed cancellation rather than retrying an `unknown` worker. `npm run build` passes. Full `npm test` is running as the final broad regression checkpoint; no acceptance claim is made until it finishes and the independent no-edit review is received.
 - Reconciliation now releases its short-lived Goal lease after a durable `recovering` transition. This ensures the durable Goal state, not a stale reconciliation lease, explains subsequent write blocking.
+
+
+## 2026-09-05 — Phase 5 Track A1 independent review gate
+
+- Independent no-edit review blocked acceptance on four concrete points: stale-owner helper mutations were not lease-guarded; recovery/spawn lock order could deadlock; cancellation could issue a provider effect after lease turnover; and the process test used in-process control-plane objects rather than two killed/restarted control-plane processes.
+- **Next patch plan:** (1) guard every worker mutation with the current Goal lease and require the owner proof for pending rows; (2) standardize Goal-lease-before-worker locking and add a concurrent recovery/spawn test; (3) serialize provider cancellation under the Goal/worker owner claim; (4) harden the DB owner/recovery triggers; (5) replace the process-gate fixture with separately spawned control-plane processes sharing a surviving provider; then rerun focused and broad checks.
+- The first three corrections and trigger hardening are implemented in the runtime worktree and focused tests pass **39/39** plus build. The true two-control-plane process gate remains open.
