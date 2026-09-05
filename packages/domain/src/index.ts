@@ -28,3 +28,4 @@ export * from "./device-command.js";
 export * from "./discord.js";
 export * from "./discord-identity.js";
 export * from "./discord-incident.js";
+export * from "./device-agent.js";

@@ -26,6 +26,9 @@
       "path": "packages/environment-adapter"
     },
     {
+      "path": "packages/device-agent"
+    },
+    {
       "path": "apps/cli"
     },
     {
@@ -33,6 +36,9 @@
     },
     {
       "path": "apps/control-plane"
+    },
+    {
+      "path": "apps/device-agent"
     },
     {
       "path": "packages/persistence"

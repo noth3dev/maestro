@@ -12,7 +12,7 @@ const expectedTables = [
   "encore_council_syntheses", "encore_council_judgments", "encore_council_rounds", "semantic_reviews", "metronome_challenge_findings",
   "metronome_challenges", "metronome_findings", "budget_forecasts", "budget_reservations", "integration_commits", "worker_worktrees", "goal_integration_branches",
   "team_lead_grants", "workers", "mission_bundles", "department_branches", "department_plan_revisions", "department_plans", "council_protocol_events", "council_round_contributions",
-  "council_rounds", "independent_briefs", "council_participants", "head_councils", "goal_head_participations", "task_contract_confirmations",
+  "council_rounds", "independent_briefs", "council_participants", "head_councils", "goal_head_participations", "device_agent_sessions", "device_command_claims", "task_contract_confirmations",
   "task_contract_decisions", "task_contracts", "permanent_head_roles", "role_persona_axes", "permanent_roles", "departments", "organization_groups",
   "reconciler_leader_lease", "goal_controls", "authority_decisions", "authority_records", "local_operator_credentials", "local_operators", "goal_leases",
   "outbox", "goal_events", "command_receipts", "goals", "head_activation_edges", "head_activation_attempts", "evidence_records",
