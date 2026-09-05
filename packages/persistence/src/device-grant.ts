@@ -234,6 +234,7 @@ function timingSafeEqualHex(a: string, b: string): boolean {
  * strictly greater than every sequence already accepted for this grant, so
  * a result that arrives after a successor is rejected, not silently kept.
  */
+/** @deprecated Legacy Phase 4 direct recorder. Device-agent processes must use claimDeviceAgentCommand + completeDeviceAgentCommand. */
 export async function recordDeviceCommandResult(
   pool: Pool,
   grantId: string,
