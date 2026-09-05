@@ -235,3 +235,10 @@ Against plan/phase1.md's exit gate and Tests section, still missing:
 - Review confirmed the existing worker kill/restart test did not kill a control-plane process; it only closed in-process objects. It also identified stale helper/worker state writes and provider cancellation after lease turnover as unsafe without a current durable claim.
 - Corrective runtime patch now uses current Goal lease proofs for worker mutations, Goal-before-worker lock ordering, a serialized cancellation claim, and successor-lease-bound DB owner transfer. Focused PostgreSQL evidence is **39/39** after these changes.
 - Acceptance remains blocked until the real control-plane child-process kill/restart test and a fresh full suite pass.
+
+
+## 2026-09-05 — Phase 5 Track A1 review resolution checkpoint
+
+- The initial independent review was a valid blocker, not a paperwork issue. The runtime slice now closes the stale-write, lock-order, provider-cancel race, forged DB-transfer, and true-process-boundary gaps identified in review.
+- New focused evidence: worker **28/28**, helper/team-lead **10/10**, reconciliation **11/11**, real killed-control-plane/surviving-provider **1/1**; total **50/50**.
+- Broad test evidence is still pending; no acceptance or Phase 5 completion claim yet.

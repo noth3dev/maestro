@@ -1176,3 +1176,10 @@ Re-read all findings, then re-patch Phases 1→4 in order against real operation
 - Independent no-edit review blocked acceptance on four concrete points: stale-owner helper mutations were not lease-guarded; recovery/spawn lock order could deadlock; cancellation could issue a provider effect after lease turnover; and the process test used in-process control-plane objects rather than two killed/restarted control-plane processes.
 - **Next patch plan:** (1) guard every worker mutation with the current Goal lease and require the owner proof for pending rows; (2) standardize Goal-lease-before-worker locking and add a concurrent recovery/spawn test; (3) serialize provider cancellation under the Goal/worker owner claim; (4) harden the DB owner/recovery triggers; (5) replace the process-gate fixture with separately spawned control-plane processes sharing a surviving provider; then rerun focused and broad checks.
 - The first three corrections and trigger hardening are implemented in the runtime worktree and focused tests pass **39/39** plus build. The true two-control-plane process gate remains open.
+
+
+## 2026-09-05 — Phase 5 Track A1 review blockers resolved
+
+- Implemented the independent-review corrections: every worker state mutation now requires the live Goal lease and owner proof; `Goal lease → worker` lock order is consistent across spawn, helper, observation, cancellation, and restart recovery; provider cancellation runs under a serialized Goal/worker owner claim; owner-transfer and append-only recovery triggers are bound and deletion-safe.
+- Replaced the in-process recovery fixture with two separately spawned control-plane child processes and a surviving TCP provider child. The test kills control-plane A with `SIGKILL`, expires both durable leases, starts control-plane B, proves one `unknown`/`fenced` recovery decision, preserves opaque refs, observes provider spawn count 1 with the original invocation still running, and proves retry is blocked without a duplicate spawn.
+- Fresh focused PostgreSQL suites pass **50/50** and `npm run build` passes. Broad project test is the remaining checkpoint before runtime commit acceptance.
