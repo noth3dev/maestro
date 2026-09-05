@@ -1,1 +1,0 @@
-body { font-family: system-ui, sans-serif; max-width: 56rem; margin: 2rem auto; padding: 0 1rem; color: #182230; } section { border: 1px solid #cbd5e1; border-radius: .5rem; padding: 1rem; margin-top: 1rem; } dt { font-weight: 700; } dd { margin: .25rem 0 1rem; overflow-wrap: anywhere; } pre { overflow: auto; background: #f8fafc; padding: .75rem; } li + li { margin-top: 1rem; }
