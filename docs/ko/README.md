@@ -5,7 +5,7 @@
 </p>
 
 <h3 align="center">
-Maestro: 다채로운 작업을 위한 자가 개선 및 내구성 있는 에이전트 오케스트레이션
+Maestro: 범용 작업을 위한 자가 개선 및 내구성 있는 에이전트 오케스트레이션
 </h3>
 <p align="center">
   <a href="README.md"><b>한국어 (ko)</b></a> &bull;
