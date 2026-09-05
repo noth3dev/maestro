@@ -228,3 +228,10 @@ Against plan/phase1.md's exit gate and Tests section, still missing:
 - The runtime worktree now covers ordinary and helper workers with reserve-before-spawn ownership, bind/fence proofs, heartbeat/lease expiry, conservative unknown outcomes, proof-bound observation/cancellation, and bounded control-plane shutdown. The API keeps ownership internals out of the existing strict `WorkerSchema` projection.
 - A test-only JSON-lines provider process and real loopback HTTP control-plane test provide the required kill/restart evidence. The test proves one successor fencing decision, preserved opaque refs, no duplicate provider spawn, and retry blocking.
 - The remaining acceptance gates are the broad full-test result, independent review, clean worktree/branch state, and commit/push.
+
+
+## 2026-09-05 — Phase 5 Track A1 independent review blockers
+
+- Review confirmed the existing worker kill/restart test did not kill a control-plane process; it only closed in-process objects. It also identified stale helper/worker state writes and provider cancellation after lease turnover as unsafe without a current durable claim.
+- Corrective runtime patch now uses current Goal lease proofs for worker mutations, Goal-before-worker lock ordering, a serialized cancellation claim, and successor-lease-bound DB owner transfer. Focused PostgreSQL evidence is **39/39** after these changes.
+- Acceptance remains blocked until the real control-plane child-process kill/restart test and a fresh full suite pass.
