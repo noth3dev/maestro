@@ -1,11 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   CreateGoalInputSchema,
-<<<<<<< HEAD
   CriticalActionInputSchema,
-=======
   ProjectAccessProvisionInputSchema,
->>>>>>> 81eaeb7 (feat(auth): add admin project access provisioning)
   GoalStateSchema,
   StableApiErrorSchema,
   TransitionGoalInputSchema,
