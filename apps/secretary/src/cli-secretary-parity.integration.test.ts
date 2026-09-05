@@ -2,10 +2,11 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { bootstrapLocalOperator, grantProjectMembership, grantProjectRole } from "@maestro/persistence";
+import { createApiClient } from "@maestro/api-client";
 import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
 import { executeCli } from "../../cli/src/main.js";
 import { createControlPlane } from "../../control-plane/src/main.js";
-import { loadGoalPageData } from "./goal-page.js";
+import { loadGoalPageData } from "./lib/goal-data.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 
@@ -58,6 +59,7 @@ if (!databaseUrl) {
         primeAgentVersion: "0.8.0",
         actorId: "maestro-control-plane",
         leaseOwnerId: `cli-secretary-parity-${randomUUID()}`,
+        reconcilerLeaseDurationMs: 30_000,
       });
       await controlPlane.listen();
       const address = controlPlane.app.server.address();
@@ -83,7 +85,8 @@ if (!databaseUrl) {
 
         expect(await executeCli(["events", "list", "--project-id", projectId, "--json"], env, io)).toBe(0);
         const cliEvents = JSON.parse(stdout.at(-1)!) as { events: unknown[]; nextCursor: string };
-        const secretary = await loadGoalPageData({ apiUrl, token: bearerToken, projectId, goalId });
+        const api = createApiClient({ baseUrl: apiUrl, token: bearerToken });
+        const secretary = await loadGoalPageData(api, { projectId, goalId });
 
         expect(stderr).toEqual([]);
         expect(secretary.goal).toEqual(transitioned);

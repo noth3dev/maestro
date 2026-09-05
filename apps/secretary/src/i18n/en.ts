@@ -1,0 +1,45 @@
+export const en = {
+  nav: {
+    search: "search",
+    inbox: "inbox",
+    dashboard: "dashboard",
+    flashmob: "flashmob",
+    floor: "floor view",
+    evidenceLog: "evidence log",
+    billing: "billing",
+    luthiery: "luthiery",
+    arrangements: "arrangements",
+    settings: "settings",
+    newGoal: "new goal",
+  },
+  common: {
+    send: "send",
+    approve: "approve",
+    deny: "deny",
+    save: "save",
+    cancel: "cancel",
+    back: "back",
+    loading: "loading…",
+    notConnectedTitle: "Not connected yet",
+    notConnectedHint: "This part of Maestro doesn't have a real backend to talk to yet — the screen is here so the shape is right, and it will light up as the control plane grows into it.",
+  },
+  setup: {
+    title: "Connect to your control plane",
+    hint: "Enter the local control-plane server you already have running.",
+    apiUrl: "Control plane URL",
+    token: "Operator token",
+    projectId: "Project ID",
+    connect: "Connect",
+    connecting: "Connecting…",
+  },
+  settings: {
+    profile: "profile",
+    appearance: "appearance",
+    connection: "connection",
+    dangerZone: "danger zone",
+    darkMode: "dark mode",
+    disconnect: "disconnect",
+  },
+} as const;
+
+export type Translations = typeof en;

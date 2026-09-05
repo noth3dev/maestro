@@ -201,3 +201,77 @@ Against plan/phase1.md's exit gate and Tests section, still missing:
 - Incident identity is `(authenticated incident fingerprint, affected version)`. The derived fingerprint intentionally excludes version so a repeated anomaly on a new version is a separate incident without changing the anomaly identity; normalized evidence order/case/whitespace produces stable hashes.
 - Incident aggregation is monotonic: severity keeps the highest observed level and confidence keeps the strongest bounded value. Every accepted signal has one immutable incident link, making duplicate attachment idempotent and preserving source signal history.
 - Silence is represented only as watchdog uncertainty (`discord_observation_missing` or `discord_observation_silent`). No empty incident or "no incidents" conclusion is written from absent data.
+
+
+## 2026-09-05 — Phase 5 Runtime Slice 1 takeover
+- The current runtime worktree is an uncommitted implementation, not an accepted recovery path. It durably fences a worker to the successor Goal lease and records one `worker_recovery_decisions` row, but the current acceptance requirement still needs a separately-running provider harness and a real control-plane kill/restart through the HTTP worker path.
+- The existing `workers.execution_ref`/`invocation_ref` remains the provider identity; `0061_worker_runtime_ownership.sql` adds owner/fence/heartbeat and two-phase cancellation facts without introducing a competing invocation identity table.
+- Helper workers created by `spawnHelperWorker` currently return the expanded domain `Worker` shape with null ownership fields and do not bind provider ownership before their provider spawn. This is a concrete Slice 1 gap to resolve or explicitly bound before acceptance; runtime recovery must cover every provider-backed worker, not only root mission workers.
+
+
+## 2026-09-05 — Phase 5 Track A1 focused runtime findings
+
+- Helper-worker creation had the same reserve-before-effect invariant as ordinary workers but did not implement it. The provider call happened before the `workers` insert, so provider success followed by process loss could not be reconciled to a durable worker.
+- Runtime ownership fields are persistence/domain internals today. Returning them directly through the existing strict public `WorkerSchema` would fail at runtime; the control-plane worker service must project the old wire shape until a versioned recovery read contract is added.
+- Observation is a durable write. It must not be callable without the current Goal lease/fencing proof; terminal reads may still return without provider access.
+- A hanging provider close can block SIGTERM cleanup indefinitely. The composition root needs a bounded drain while SIGKILL remains handled conservatively by lease expiry and recovery fencing.
+- Remaining risk: the production Prime adapter is process-local and intentionally cannot resume/reconnect old sessions. Slice acceptance still needs the real process-backed provider/control-plane kill-and-restart harness required by `plan/phase5-execution-slices.md`.
+
+
+## 2026-09-05 — Phase 5 Track A1 focused-suite failure diagnosis
+
+- `head-participation-api.integration.test.ts` failed only because its fake kernel deliberately returned `cancelled:false` after an empty observation, while the test then attempted a new worker. Under conservative restart/provider semantics that outcome is `unknown`, and retry must be blocked. The fixture's intended downstream certification path needs a provider-confirmed cancellation response; changing production code to allow the retry would violate the retry-blocking invariant.
+
+
+## 2026-09-05 — Phase 5 Track A1 implementation checkpoint
+
+- The runtime worktree now covers ordinary and helper workers with reserve-before-spawn ownership, bind/fence proofs, heartbeat/lease expiry, conservative unknown outcomes, proof-bound observation/cancellation, and bounded control-plane shutdown. The API keeps ownership internals out of the existing strict `WorkerSchema` projection.
+- A test-only JSON-lines provider process and real loopback HTTP control-plane test provide the required kill/restart evidence. The test proves one successor fencing decision, preserved opaque refs, no duplicate provider spawn, and retry blocking.
+- The remaining acceptance gates are the broad full-test result, independent review, clean worktree/branch state, and commit/push.
+
+
+## 2026-09-05 — Phase 5 Track A1 independent review blockers
+
+- Review confirmed the existing worker kill/restart test did not kill a control-plane process; it only closed in-process objects. It also identified stale helper/worker state writes and provider cancellation after lease turnover as unsafe without a current durable claim.
+- Corrective runtime patch now uses current Goal lease proofs for worker mutations, Goal-before-worker lock ordering, a serialized cancellation claim, and successor-lease-bound DB owner transfer. Focused PostgreSQL evidence is **39/39** after these changes.
+- Acceptance remains blocked until the real control-plane child-process kill/restart test and a fresh full suite pass.
+
+
+## 2026-09-05 — Phase 5 Track A1 review resolution checkpoint
+
+- The initial independent review was a valid blocker, not a paperwork issue. The runtime slice now closes the stale-write, lock-order, provider-cancel race, forged DB-transfer, and true-process-boundary gaps identified in review.
+- New focused evidence: worker **28/28**, helper/team-lead **10/10**, reconciliation **11/11**, real killed-control-plane/surviving-provider **1/1**; total **50/50**.
+- Broad test evidence is still pending; no acceptance or Phase 5 completion claim yet.
+
+
+## 2026-09-05 — Phase 5 Track A1 provider-boundary residual risk
+
+- The real child-process test intentionally leaves the surviving provider invocation `running` after successor fencing and asserts spawn count remains one. This proves no duplicate admission and durable ref preservation. It does not claim to stop external side effects because the provider-neutral kernel exposes no owner epoch/fence operation.
+- This boundary is explicit, not hidden: provider adapter cancellation/fencing must be added before any future slice claims stale external execution suppression.
+### Explicit provider crash-window boundary (Track A1)
+
+The provider-neutral `ExecutionKernelPort` cannot atomically commit an external `spawn()` response with PostgreSQL. If a control-plane process is SIGKILLed after the provider returns opaque refs but before `bindWorkerInvocation` commits, the durable reservation remains `pending:*` and the provider identity is unavailable to the successor. Track A1 acceptance for this window is therefore: successor startup marks the reservation `unknown`/`fenced`, preserves the pending placeholders without fabricating refs, records one recovery decision, and blocks retry. It does **not** claim provider ref recovery or suppression of side effects already admitted by an unavailable provider. A later adapter-specific idempotency/reconnect/cancel contract is required before making that stronger claim.
+
+
+## 2026-09-05 — broad verification hygiene
+
+- The first latest-tree `npm run check` attempt was aborted because the temporary `node_modules.root-symlink` diagnostic symlink was still present and Vitest discovered dependency tests through it. No application test failure was observed. The process group was terminated, the symlink was removed, and the rerun is required.
+
+
+## 2026-09-05 — Track A1 final verification
+
+- Latest-tree `npm run build`: passed.
+- Latest-tree DB-backed focused suites: 5 files / 55 tests passed, including worker 31, helper 10, reconciliation 11, real child-process worker recovery 2, and Goal transition restart coverage.
+- Latest-tree `npm run check`: passed with 102 test files passed, 1 intentionally skipped file, 790 tests passed, and 2 intentionally skipped tests; duration 354.38s.
+- Latest-tree `git diff --check`: passed.
+- The explicit crash-window process test passed: provider spawn count was one, the SIGKILLed reservation became `unknown`/`fenced` with `pending:*` placeholders, one recovery decision was recorded, and retry returned the durable conflict.
+- Track A1 is ready for integration with the provider-neutral crash-window and provider-side stale-effect limits documented above.
+
+
+## 2026-09-05 — Phase 5 Track B1-B2 device authority plan
+
+- Scope is limited to a separately running `apps/device-agent` and its `packages/device-agent` support package, signed Goal/project/device/path/fence/policy envelopes, mTLS certificate-to-enrollment binding, durable device-agent sessions, and a pre-effect server-side grant sequence claim. Worker runtime and Secretary files remain out of scope.
+- The first ordinary operation is a bounded project-file read rooted at an explicitly configured temporary project directory. The injected executor receives only a validated relative target and a byte ceiling; it cannot shell out or escape the root.
+- The control plane (or test issuer) signs the grant envelope with an ephemeral Ed25519 issuer key. The device agent verifies that signature, its own enrolled identity, Goal/project/grant/device binding, expiry, policy version, Goal fence, command sequence, and application/data/network scope before the OS read. The client certificate proves possession through standard mutual TLS.
+- Private device/issuer keys, capability tokens, TLS challenge material, and file contents never enter PostgreSQL, evidence, logs, or prompts. PostgreSQL stores only hashes, scope, session identity metadata, sequence claims, and bounded result summaries.
+- Acceptance requires a real PostgreSQL schema, real control-plane/device-agent processes, ephemeral CA/certificates and Ed25519 keys, one actual temp-project read, restart replay rejection, and negative cases for bad certificate, wrong signature, stale Goal/fence/sequence, expiry, scope escape, revoked device/grant, and missing key with zero executor calls.

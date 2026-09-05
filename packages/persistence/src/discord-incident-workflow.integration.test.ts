@@ -200,7 +200,7 @@ describeDatabase("Phase 4 work-sequence step 8: Discord incident through Task Co
 
     const kernel = fakeKernel();
     const worker = await spawnWorker(pool, kernel, { councilId: resolved.councilId, departmentId: "engineering", planVersion: plan.version, itemId: "exec-1" }, proof, headContext("engineering"));
-    const observedWorker = await observeWorker(pool, kernel, worker.workerId);
+    const observedWorker = await observeWorker(pool, kernel, worker.workerId, proof, headContext("engineering"));
     expect(observedWorker.status).toBe("succeeded");
 
     await recordGoalIntegrationBranch(pool, localGitPort, goalId, repositoryPath, "goal/integration", baseRevision, proof);

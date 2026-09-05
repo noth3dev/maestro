@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ExecutionKernelPort } from "@maestro/domain";
 import { bootstrapLocalOperator, grantProjectMembership, grantProjectRole, revokeAuthorityRecord } from "@maestro/persistence";
 import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
 import { createControlPlane } from "./main.js";
@@ -269,6 +270,25 @@ if (!databaseUrl) {
     } finally {
       await controlPlane.close();
     }
+  });
+
+  it("bounds shutdown when the provider drain hangs", async () => {
+    const hangingKernel: ExecutionKernelPort = {
+      spawn: async () => ({ execution: "unused" as never, invocation: "unused" as never }),
+      prompt: async () => {}, observe: async () => [], sendMessage: async () => {}, cancel: async () => ({ cancelled: false }),
+      getModelIdentity: async () => ({ provider: "test", id: "test" }), getToolEvents: async () => ({ state: "empty", events: [] }),
+      getUsage: async () => ({ state: "unknown" }), getInvocationStatus: async () => "unknown",
+      resume: async () => { throw new Error("not supported"); }, reconnect: async () => { throw new Error("not supported"); },
+      close: async () => new Promise<void>(() => {}),
+    };
+    const controlPlane = createControlPlane({
+      databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0,
+      primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `shutdown-${randomUUID()}`, shutdownDrainTimeoutMs: 50,
+    }, { executionKernel: hangingKernel });
+    await controlPlane.listen();
+    const started = Date.now();
+    await controlPlane.close();
+    expect(Date.now() - started).toBeLessThan(500);
   });
 
   it("fails closed and never binds a listener when the reconciliation leader lease is already held", async () => {

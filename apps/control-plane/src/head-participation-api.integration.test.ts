@@ -178,9 +178,12 @@ describeDatabase("authenticated Head activation API", () => {
       const observed = await send(`/v1/workers/${worker.workerId}/observe`, "POST", { projectId });
       expect(observed.status).toBe(200);
       expect((await observed.json()).status).toBe("unknown");
+      // An empty provider observation is conservatively unknown. Make the
+      // fixture's next transition explicit so the subsequent retry is legal.
+      executionKernel.cancel = async () => ({ cancelled: true });
       const cancelled = await send(`/v1/workers/${worker.workerId}/cancel`, "POST", { projectId });
       expect(cancelled.status).toBe(200);
-      expect((await cancelled.json()).status).toBe("unknown");
+      expect((await cancelled.json()).status).toBe("cancelled");
       const secondWorkerResponse = await send(`/v1/councils/${council.councilId}/departments/product/workers`, "POST", { projectId, planVersion: 1, itemId: "exec-1" });
       expect(secondWorkerResponse.status).toBe(201);
       const secondWorker = await secondWorkerResponse.json();
