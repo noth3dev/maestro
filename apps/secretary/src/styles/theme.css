@@ -1,0 +1,81 @@
+@import "pretendard/dist/web/variable/pretendardvariable.css";
+
+:root {
+  --bg-page: #f5f4f1;
+  --surface-1: #eeece6;
+  --surface-2: #ffffff;
+  --surface-3: #f9f8f5;
+  --text-primary: #1a1a18;
+  --text-secondary: #6b6a64;
+  --text-muted: #8a8880;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.14);
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.1);
+
+  --font-sans: "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  --duration-fast: 0.15s;
+  --duration: 0.2s;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --terracotta: #b5603f; --terracotta-bg: #f2e3da; --terracotta-text: #7a3c26;
+  --rust: #a34b3a;       --rust-bg: #f3ddd6;       --rust-text: #732f22;
+  --ochre: #c08a3e;      --ochre-bg: #f4e6cd;      --ochre-text: #7d5620;
+  --clay: #c17b6e;       --clay-bg: #f5e2dd;       --clay-text: #85473a;
+  --olive: #8a8355;      --olive-bg: #ecead9;      --olive-text: #5c5636;
+
+  --p-blue: #5a7a9a;   --p-blue-bg: #d9e2eb;   --p-blue-text: #2e4a6a;
+  --p-teal: #5a9a8a;   --p-teal-bg: #d9ebe6;   --p-teal-text: #2e6a5a;
+  --p-violet: #7a6a9a; --p-violet-bg: #e4e0eb; --p-violet-text: #4a3e6a;
+  --p-orange: #c47a3e; --p-orange-bg: #f5e6d4; --p-orange-text: #8a5520;
+  --p-slate: #6a6a64;  --p-slate-bg: #e8e8e4;  --p-slate-text: #3e3e3a;
+
+  --accent: var(--terracotta); --accent-bg: var(--terracotta-bg); --accent-text: var(--terracotta-text);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg-page: #171614; --surface-1: #232220; --surface-2: #1d1c1a; --surface-3: #22211f;
+    --text-primary: #ede9e2; --text-secondary: #a8a59c; --text-muted: #75726a;
+    --border: rgba(255, 255, 255, 0.08); --border-strong: rgba(255, 255, 255, 0.14);
+    --terracotta: #c97855; --terracotta-bg: #3a2a20; --terracotta-text: #e8a67f;
+    --rust: #c86a58;       --rust-bg: #3a2620;       --rust-text: #e8a08f;
+    --ochre: #d4a85a;      --ochre-bg: #3a3220;      --ochre-text: #e8c987;
+    --clay: #d48a7a;       --clay-bg: #3a2622;       --clay-text: #e8ab9c;
+    --olive: #a8a06a;      --olive-bg: #303221;      --olive-text: #c9c48f;
+    --p-blue: #6a9aba;   --p-blue-bg: #242e34;   --p-blue-text: #a4bcd4;
+    --p-teal: #6abaaa;   --p-teal-bg: #243430;   --p-teal-text: #a4d4c8;
+    --p-violet: #8a7aba; --p-violet-bg: #2c2834; --p-violet-text: #bcb0d4;
+    --p-orange: #d49a6a; --p-orange-bg: #3a3024; --p-orange-text: #e8c4a4;
+    --p-slate: #8a8a84;  --p-slate-bg: #2c2c2a;  --p-slate-text: #c0c0ba;
+    --accent: var(--terracotta); --accent-bg: var(--terracotta-bg); --accent-text: var(--terracotta-text);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg-page: #171614; --surface-1: #232220; --surface-2: #1d1c1a; --surface-3: #22211f;
+  --text-primary: #ede9e2; --text-secondary: #a8a59c; --text-muted: #75726a;
+  --border: rgba(255, 255, 255, 0.08); --border-strong: rgba(255, 255, 255, 0.14);
+  --terracotta: #c97855; --terracotta-bg: #3a2a20; --terracotta-text: #e8a67f;
+  --rust: #c86a58;       --rust-bg: #3a2620;       --rust-text: #e8a08f;
+  --ochre: #d4a85a;      --ochre-bg: #3a3220;      --ochre-text: #e8c987;
+  --clay: #d48a7a;       --clay-bg: #3a2622;       --clay-text: #e8ab9c;
+  --olive: #a8a06a;      --olive-bg: #303221;      --olive-text: #c9c48f;
+  --p-blue: #6a9aba;   --p-blue-bg: #242e34;   --p-blue-text: #a4bcd4;
+  --p-teal: #6abaaa;   --p-teal-bg: #243430;   --p-teal-text: #a4d4c8;
+  --p-violet: #8a7aba; --p-violet-bg: #2c2834; --p-violet-text: #bcb0d4;
+  --p-orange: #d49a6a; --p-orange-bg: #3a3024; --p-orange-text: #e8c4a4;
+  --p-slate: #8a8a84;  --p-slate-bg: #2c2c2a;  --p-slate-text: #c0c0ba;
+  --accent: var(--terracotta); --accent-bg: var(--terracotta-bg); --accent-text: var(--terracotta-text);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; }
+body { background: var(--bg-page); font-family: var(--font-sans); color: var(--text-primary); line-height: 1.5; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button, input, textarea { font-family: inherit; }

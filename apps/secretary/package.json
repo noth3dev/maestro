@@ -2,19 +2,25 @@
   "name": "@maestro/secretary",
   "private": true,
   "type": "module",
+  "main": "dist/electron/main.js",
   "scripts": {
-    "dev": "next dev -H 127.0.0.1",
-    "build": "next build",
-    "start": "next start -H 127.0.0.1"
+    "dev": "node scripts/dev.mjs",
+    "build": "tsc -b && tsc -p tsconfig.renderer.json --noEmit && vite build",
+    "start": "electron ."
   },
   "dependencies": {
     "@maestro/api-client": "*",
-    "next": "16.1.6",
+    "@maestro/contracts": "*",
+    "lucide-react": "^0.545.0",
+    "pretendard": "^1.3.9",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
   "devDependencies": {
     "@types/react": "19.2.13",
-    "@types/react-dom": "19.2.3"
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.0.0",
+    "vite": "^6.0.0"
   }
 }
