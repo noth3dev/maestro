@@ -120,7 +120,7 @@ describeDatabase("Concertmaster final report with PostgreSQL", () => {
     const commitResult = await localGitPort.commit(worktreePath, "mission: implement", "worker", "worker@example.com");
     await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: implement", evidenceIds);
     await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
-    await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product"));
+    await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, proof, headContext("product"));
     await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
     return { goalId, council: resolved, worker, evidenceIds, proof };
   }

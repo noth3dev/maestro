@@ -214,7 +214,7 @@ describeDatabase("Phase 4 work-sequence step 8: Discord incident through Task Co
     await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: fix the health endpoint", evidenceIds);
 
     await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
-    await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "Head reviewed the integrated fix" }, headContext("engineering"));
+    await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "Head reviewed the integrated fix" }, proof, headContext("engineering"));
     await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
     const quality = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: evidenceIds }, "quality", proof, headContext("quality"));
     expect(quality.verdict).toBe("passed");
