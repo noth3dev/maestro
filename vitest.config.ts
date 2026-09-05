@@ -16,6 +16,8 @@ export default defineConfig({
     // the same underlying tables at that moment. Serializing file execution
     // keeps every real-PostgreSQL run deterministic.
     fileParallelism: false,
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
     setupFiles: ["./test/setup.ts"],
     // `.worktrees/*` holds separate git worktrees (other phase branches)
     // nested inside this checkout on disk. Vitest's own default excludes
