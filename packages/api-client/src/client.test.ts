@@ -18,6 +18,19 @@ describe("createApiClient", () => {
     }));
   });
 
+  it("honors caller cancellation without disabling the request timeout", async () => {
+    const controller = new AbortController();
+    const fetch = vi.fn().mockImplementation((_input: RequestInfo | URL, init?: RequestInit) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+    }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch, timeoutMs: 30_000, signal: controller.signal });
+    const pending = client.listGoals(projectId);
+    controller.abort();
+    await expect(pending).rejects.toThrow("Control plane request failed");
+    expect(fetch).toHaveBeenCalledOnce();
+    expect((fetch.mock.calls[0]![1] as RequestInit).signal?.aborted).toBe(true);
+  });
+
   it("preserves stable API errors without exposing the bearer token", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: "version_conflict", message: "Version changed" } }), { status: 409 }));
     const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });

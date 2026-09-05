@@ -167,17 +167,18 @@ export interface ApiClient {
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
-export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, timeoutMs = 30_000 }: { baseUrl: string; token: string; fetch?: Fetch; timeoutMs?: number }): ApiClient {
+export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, timeoutMs = 30_000, signal }: { baseUrl: string; token: string; fetch?: Fetch; timeoutMs?: number; signal?: AbortSignal }): ApiClient {
   const base = new URL(baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
   const loopback = base.hostname === "localhost" || base.hostname === "127.0.0.1" || base.hostname === "::1";
   if (base.protocol !== "https:" && !(base.protocol === "http:" && loopback)) throw new Error("Control plane URL must use HTTPS unless it is loopback");
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new RangeError("timeoutMs must be a positive safe integer");
   const request = async <T>(path: string, init: RequestInit, parse: { parse(value: unknown): T }): Promise<T> => {
     const controller = new AbortController();
+    const requestSignal = signal === undefined ? controller.signal : AbortSignal.any([controller.signal, signal]);
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     let response: Response;
     try {
-      response = await fetch(new URL(path, base).href, { ...init, signal: controller.signal, redirect: "error" });
+      response = await fetch(new URL(path, base).href, { ...init, signal: requestSignal, redirect: "error" });
     } catch {
       clearTimeout(timer);
       throw new Error("Control plane request failed");
