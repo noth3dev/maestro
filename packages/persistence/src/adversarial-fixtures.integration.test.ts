@@ -162,7 +162,7 @@ async function setupWorkerWithRealCommit(pool: Pool, repositoryPath: string, bas
   const commitResult = await localGitPort.commit(worktreePath, "mission: seed implementation defect", "worker", "worker@example.com");
   await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: seed implementation defect", evidenceIds);
   await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
-  await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, headContext("product"));
+  await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, proof, headContext("product"));
   await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
   return { goalId, projectId, contractId, council: resolvedCouncil, worker, evidenceIds, commitSha: commitResult.commitSha, worktreePath, proof };
 }

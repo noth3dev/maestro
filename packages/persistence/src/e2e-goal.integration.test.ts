@@ -181,7 +181,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     // integrated revision, certify it from Quality, and persist a replayable
     // evidence bundle. These are real PostgreSQL rows and a real Git commit.
     await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
-    await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "Head reviewed the integrated worker output" }, headContext("product"));
+    await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "Head reviewed the integrated worker output" }, proof, headContext("product"));
     const revision = await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
     const quality = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: evidenceIds }, "quality", proof, headContext("quality"));
     expect(quality.verdict).toBe("passed");
