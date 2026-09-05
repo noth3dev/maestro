@@ -1111,3 +1111,5 @@ HEAD
   Build and focused suites pass; full disposable-PostgreSQL `npm run check` remains the checkpoint.
 - Remaining usability gap: the launched contract is not yet linked to Goal creation, and dependent
   Head/Council/Plan/worker/Git/report write commands are not yet exposed through HTTP/CLI.
+
+- 2026-09-05: Read the current non-archive `plan/` set and held a three-agent Luna council. Consensus: (1) Runtime durable worker/provider ownership and recovery; (2) Device real mTLS/signed Goal grant/local validation, parallel-safe but accepted after Runtime contract; (3) Secretary safety console/live durable stream. Boundaries and real-process/PostgreSQL acceptance gates are recorded in `plan/phase5-execution-slices.md`.
