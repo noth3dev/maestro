@@ -74,6 +74,9 @@ import {
   MetronomeScanInputSchema,
   MetronomeFindingListSchema,
   RaiseMetronomeChallengeInputSchema,
+  MetronomeCorrectionInputSchema,
+  MetronomeSafePauseInputSchema,
+  MetronomeResolutionInputSchema,
   MetronomeChallengeSchema,
   EncoreReviewInputSchema,
   EncoreCouncilResultSchema,
@@ -274,6 +277,9 @@ export function buildServer({ goalService, authenticator, eventService, critical
   const metronome = metronomeService ?? {
     scan: async () => { throw new DurableStoreUnavailableError(); },
     raise: async () => { throw new DurableStoreUnavailableError(); },
+    requestCorrection: async () => { throw new DurableStoreUnavailableError(); },
+    requestSafePause: async () => { throw new DurableStoreUnavailableError(); },
+    resolve: async () => { throw new DurableStoreUnavailableError(); },
   } satisfies MetronomeService;
   const encore = encoreService ?? { review: async () => { throw new DurableStoreUnavailableError(); } } satisfies EncoreService;
   // preClose runs while Fastify can still release open HTTP responses. onClose is too late:
@@ -531,6 +537,32 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
     const result = await metronome.raise(goalId, input, commandId);
     return reply.status(201).send(MetronomeChallengeSchema.parse(result));
+  });
+
+  app.post("/v1/metronome/challenges/:challengeId/correction", async (request, reply) => {
+    const challengeId = parse(UuidSchema, (request.params as { challengeId?: unknown }).challengeId);
+    const input = parse(MetronomeCorrectionInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const result = await metronome.requestCorrection(challengeId, input, commandId);
+    return reply.status(200).send(MetronomeChallengeSchema.parse(result));
+  });
+
+  app.post("/v1/goals/:goalId/metronome/challenges/:challengeId/safe-pause", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const challengeId = parse(UuidSchema, (request.params as { challengeId?: unknown }).challengeId);
+    const input = parse(MetronomeSafePauseInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const result = await metronome.requestSafePause(goalId, challengeId, input, commandId);
+    return reply.status(200).send(MetronomeChallengeSchema.parse(result));
+  });
+
+  app.post("/v1/metronome/challenges/:challengeId/resolve", async (request, reply) => {
+    const challengeId = parse(UuidSchema, (request.params as { challengeId?: unknown }).challengeId);
+    const input = parse(MetronomeResolutionInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
+    const result = await metronome.resolve(challengeId, input, commandId, operatorId);
+    return reply.status(200).send(MetronomeChallengeSchema.parse(result));
   });
 
   app.post("/v1/goals/:goalId/git/integration-branch", async (request, reply) => {

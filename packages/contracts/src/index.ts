@@ -371,6 +371,12 @@ export const MetronomeScanInputSchema = z.object({ projectId: UuidSchema }).stri
 export type MetronomeScanInput = z.infer<typeof MetronomeScanInputSchema>;
 export const RaiseMetronomeChallengeInputSchema = z.object({ projectId: UuidSchema, findingIds: z.array(UuidSchema), reason: z.string().min(1), evidenceReferences: z.array(z.string().min(1)) }).strict();
 export type RaiseMetronomeChallengeInput = z.infer<typeof RaiseMetronomeChallengeInputSchema>;
+export const MetronomeCorrectionInputSchema = z.object({ projectId: UuidSchema, correctionRequest: z.string().min(1) }).strict();
+export type MetronomeCorrectionInput = z.infer<typeof MetronomeCorrectionInputSchema>;
+export const MetronomeSafePauseInputSchema = z.object({ projectId: UuidSchema }).strict();
+export type MetronomeSafePauseInput = z.infer<typeof MetronomeSafePauseInputSchema>;
+export const MetronomeResolutionInputSchema = z.object({ projectId: UuidSchema, reason: z.string().min(1) }).strict();
+export type MetronomeResolutionInput = z.infer<typeof MetronomeResolutionInputSchema>;
 
 const CouncilJudgmentSchema = z.object({ modelProvider: z.string().min(1), modelId: z.string().min(1), verdict: z.enum(["proceed", "do_not_proceed", "escalate"]), confidence: z.enum(["low", "medium", "high"]), reasoning: z.string().min(1), conditions: z.array(z.string()), dissentNote: z.string().nullable(), citedEvidenceIds: z.array(z.string()) }).strict();
 const CouncilSynthesisSchema = z.object({ finalVerdict: z.enum(["proceed", "do_not_proceed", "escalate"]), sameModelOnly: z.boolean(), escalated: z.boolean(), dissentNotes: z.array(z.string()).readonly() }).strict();
