@@ -316,19 +316,19 @@ export async function cancelWorker(pool: Pool, kernel: ExecutionKernelPort, work
   // Authorization is checked before the external effect, then checked again
   // in the write transaction. Neither check holds a database lock while the
   // provider cancellation/observation is in flight.
-  const authorize = async (worker: WorkerRow): Promise<void> => {
+  const authorize = async (workerIdToAuthorize: string): Promise<void> => {
     const client = await pool.connect(); let open = false;
     try {
       await client.query("BEGIN"); open = true;
       await client.query("SET LOCAL lock_timeout = '5s'");
       await client.query("SET LOCAL statement_timeout = '15s'");
-      const current = await client.query<WorkerRow>(workerSelectSql() + " WHERE worker_id = $1 FOR UPDATE", [worker.worker_id]);
-      if (current.rowCount !== 1) throw new WorkerNotFoundError(`Worker not found: ${worker.worker_id}`);
+      const current = await client.query<WorkerRow>(workerSelectSql() + " WHERE worker_id = $1 FOR UPDATE", [workerIdToAuthorize]);
+      if (current.rowCount !== 1) throw new WorkerNotFoundError(`Worker not found: ${workerIdToAuthorize}`);
       await assertWorkerAuthorization(pool, client, current.rows[0]!, proof, context);
       await client.query("COMMIT"); open = false;
     } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
   };
-  await authorize(initial as unknown as WorkerRow);
+  await authorize(workerId);
 
   const cancellation = await kernel.cancel(initial.invocationRef as unknown as InvocationRef);
   let nextStatus: WorkerStatus = "cancelled";
