@@ -1113,3 +1113,23 @@ HEAD
   Head/Council/Plan/worker/Git/report write commands are not yet exposed through HTTP/CLI.
 
 - 2026-09-05: Read the current non-archive `plan/` set and held a three-agent Luna council. Consensus: (1) Runtime durable worker/provider ownership and recovery; (2) Device real mTLS/signed Goal grant/local validation, parallel-safe but accepted after Runtime contract; (3) Secretary safety console/live durable stream. Boundaries and real-process/PostgreSQL acceptance gates are recorded in `plan/phase5-execution-slices.md`.
+
+
+### Explicit provider crash-window boundary (Track A1)
+
+The provider-neutral `ExecutionKernelPort` cannot atomically commit an external `spawn()` response with PostgreSQL. If a control-plane process is SIGKILLed after the provider returns opaque refs but before `bindWorkerInvocation` commits, the durable reservation remains `pending:*` and the provider identity is unavailable to the successor. Track A1 acceptance for this window is therefore: successor startup marks the reservation `unknown`/`fenced`, preserves the pending placeholders without fabricating refs, records one recovery decision, and blocks retry. It does **not** claim provider ref recovery or suppression of side effects already admitted by an unavailable provider. A later adapter-specific idempotency/reconnect/cancel contract is required before making that stronger claim.
+
+
+## 2026-09-05 — broad verification hygiene
+
+- The first latest-tree `npm run check` attempt was aborted because the temporary `node_modules.root-symlink` diagnostic symlink was still present and Vitest discovered dependency tests through it. No application test failure was observed. The process group was terminated, the symlink was removed, and the rerun is required.
+
+
+## 2026-09-05 — Track A1 final verification
+
+- Latest-tree `npm run build`: passed.
+- Latest-tree DB-backed focused suites: 5 files / 55 tests passed, including worker 31, helper 10, reconciliation 11, real child-process worker recovery 2, and Goal transition restart coverage.
+- Latest-tree `npm run check`: passed with 102 test files passed, 1 intentionally skipped file, 790 tests passed, and 2 intentionally skipped tests; duration 354.38s.
+- Latest-tree `git diff --check`: passed.
+- The explicit crash-window process test passed: provider spawn count was one, the SIGKILLed reservation became `unknown`/`fenced` with `pending:*` placeholders, one recovery decision was recorded, and retry returned the durable conflict.
+- Track A1 is ready for integration with the provider-neutral crash-window and provider-side stale-effect limits documented above.

@@ -201,3 +201,23 @@ Against plan/phase1.md's exit gate and Tests section, still missing:
 - Incident identity is `(authenticated incident fingerprint, affected version)`. The derived fingerprint intentionally excludes version so a repeated anomaly on a new version is a separate incident without changing the anomaly identity; normalized evidence order/case/whitespace produces stable hashes.
 - Incident aggregation is monotonic: severity keeps the highest observed level and confidence keeps the strongest bounded value. Every accepted signal has one immutable incident link, making duplicate attachment idempotent and preserving source signal history.
 - Silence is represented only as watchdog uncertainty (`discord_observation_missing` or `discord_observation_silent`). No empty incident or "no incidents" conclusion is written from absent data.
+
+
+### Explicit provider crash-window boundary (Track A1)
+
+The provider-neutral `ExecutionKernelPort` cannot atomically commit an external `spawn()` response with PostgreSQL. If a control-plane process is SIGKILLed after the provider returns opaque refs but before `bindWorkerInvocation` commits, the durable reservation remains `pending:*` and the provider identity is unavailable to the successor. Track A1 acceptance for this window is therefore: successor startup marks the reservation `unknown`/`fenced`, preserves the pending placeholders without fabricating refs, records one recovery decision, and blocks retry. It does **not** claim provider ref recovery or suppression of side effects already admitted by an unavailable provider. A later adapter-specific idempotency/reconnect/cancel contract is required before making that stronger claim.
+
+
+## 2026-09-05 — broad verification hygiene
+
+- The first latest-tree `npm run check` attempt was aborted because the temporary `node_modules.root-symlink` diagnostic symlink was still present and Vitest discovered dependency tests through it. No application test failure was observed. The process group was terminated, the symlink was removed, and the rerun is required.
+
+
+## 2026-09-05 — Track A1 final verification
+
+- Latest-tree `npm run build`: passed.
+- Latest-tree DB-backed focused suites: 5 files / 55 tests passed, including worker 31, helper 10, reconciliation 11, real child-process worker recovery 2, and Goal transition restart coverage.
+- Latest-tree `npm run check`: passed with 102 test files passed, 1 intentionally skipped file, 790 tests passed, and 2 intentionally skipped tests; duration 354.38s.
+- Latest-tree `git diff --check`: passed.
+- The explicit crash-window process test passed: provider spawn count was one, the SIGKILLed reservation became `unknown`/`fenced` with `pending:*` placeholders, one recovery decision was recorded, and retry returned the durable conflict.
+- Track A1 is ready for integration with the provider-neutral crash-window and provider-side stale-effect limits documented above.

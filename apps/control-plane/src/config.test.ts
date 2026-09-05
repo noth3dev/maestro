@@ -19,6 +19,7 @@ describe("parseConfig", () => {
       actorId: "maestro-control-plane",
       leaseOwnerId: "local-control-plane",
       reconcilerLeaseDurationMs: 30_000,
+      shutdownDrainTimeoutMs: 5_000,
     });
   });
 
@@ -111,7 +112,7 @@ describe("parseConfig", () => {
     // never leak into the returned config, regardless of its value.
     expect(withCredentials).toEqual(withoutCredentials);
     expect(Object.keys(withCredentials).sort()).toEqual([
-      "actorId", "databaseUrl", "evidenceDir", "host", "leaseOwnerId", "port", "primeAgentVersion", "reconcilerLeaseDurationMs", "worktreeRoot",
+      "actorId", "databaseUrl", "evidenceDir", "host", "leaseOwnerId", "port", "primeAgentVersion", "reconcilerLeaseDurationMs", "shutdownDrainTimeoutMs", "worktreeRoot",
     ]);
     const serialized = JSON.stringify(withCredentials);
     for (const secret of Object.values(providerCredentialMetronomes)) {
