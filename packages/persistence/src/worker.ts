@@ -120,6 +120,8 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
     );
     const activeAttempt = priorAttempts.rows.find((row) => row.status === "spawned" || row.status === "running");
     if (activeAttempt !== undefined) throw new WorkerError(`A worker is already active for this mission (attempt ${activeAttempt.attempt})`);
+    const unknownAttempt = priorAttempts.rows.find((row) => row.status === "unknown");
+    if (unknownAttempt !== undefined) throw new WorkerError(`Worker provider state is unknown for this mission (attempt ${unknownAttempt.attempt}); reconcile before retrying`);
     const nextAttempt = (priorAttempts.rows[0]?.attempt ?? 0) + 1;
     if (nextAttempt > bundle.substance.retryCeiling + 1) throw new WorkerError(`Mission retry ceiling exceeded: ${bundle.substance.retryCeiling}`);
     // Reserve the worker identity before contacting the provider. A crash or
@@ -145,8 +147,11 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
         capabilities: { allowedTools: bundle.substance.allowedTools, allowedSkills: bundle.substance.allowedSkills },
       });
     } catch {
-      const failed = await markUnboundWorkerFailed(pool, workerId).catch(() => undefined);
-      return failed ?? mapWorker(inserted.rows[0]!);
+      // A transport timeout does not prove that the provider created nothing.
+      // Keep the durable reservation ambiguous and block automatic retries
+      // until reconciliation can establish the provider outcome.
+      const unknown = await markUnboundWorkerUnknown(pool, workerId).catch(() => undefined);
+      return unknown ?? mapWorker(inserted.rows[0]!);
     }
     let boundWorker: Worker;
     try {
@@ -166,12 +171,12 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 
-async function markUnboundWorkerFailed(pool: Pool, workerId: string): Promise<Worker | undefined> {
+async function markUnboundWorkerUnknown(pool: Pool, workerId: string): Promise<Worker | undefined> {
   const result = await pool.query<WorkerRow>(
-    `UPDATE workers SET status = 'failed', observed_at = transaction_timestamp(), answer_text = $2
+    `UPDATE workers SET status = 'unknown', observed_at = transaction_timestamp(), answer_text = $2
       WHERE worker_id = $1 AND status = 'spawned' AND execution_ref LIKE 'pending:%' AND invocation_ref LIKE 'pending:%'
       RETURNING worker_id, council_id, department_id, plan_version, item_id, bundle_content_hash, attempt, execution_ref, invocation_ref, status, answer_text, usage_total_tokens`,
-    [workerId, "Provider spawn failed before an invocation was created"],
+    [workerId, "Provider spawn outcome is unknown; reconciliation is required"],
   );
   return result.rowCount === 1 ? mapWorker(result.rows[0]!) : undefined;
 }
