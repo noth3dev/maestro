@@ -242,3 +242,9 @@ Against plan/phase1.md's exit gate and Tests section, still missing:
 - The initial independent review was a valid blocker, not a paperwork issue. The runtime slice now closes the stale-write, lock-order, provider-cancel race, forged DB-transfer, and true-process-boundary gaps identified in review.
 - New focused evidence: worker **28/28**, helper/team-lead **10/10**, reconciliation **11/11**, real killed-control-plane/surviving-provider **1/1**; total **50/50**.
 - Broad test evidence is still pending; no acceptance or Phase 5 completion claim yet.
+
+
+## 2026-09-05 — Phase 5 Track A1 provider-boundary residual risk
+
+- The real child-process test intentionally leaves the surviving provider invocation `running` after successor fencing and asserts spawn count remains one. This proves no duplicate admission and durable ref preservation. It does not claim to stop external side effects because the provider-neutral kernel exposes no owner epoch/fence operation.
+- This boundary is explicit, not hidden: provider adapter cancellation/fencing must be added before any future slice claims stale external execution suppression.
