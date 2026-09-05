@@ -256,15 +256,19 @@ export async function reconcileOnStartup(
     const reconciledWorkerIds = !leaseIsLive
       ? await reconcileOrphanedWorkers(pool, options.kernel, row.goal_id, `reconciler:${options.ownerId}`, goalLeaseDurationMs, renewLeader)
       : [];
+    const recoveryReasons = reconciledWorkerIds.length === 0 ? reasons : [...reasons, "orphaned_workers_reconciled"];
 
-    if (consistent) {
+    // Unknown workers are an execution-state inconsistency even when the
+    // Goal/control rows themselves look structurally valid. Do not report an
+    // active Goal as consistent after startup has downgraded its workers.
+    if (consistent && reconciledWorkerIds.length === 0) {
       results.push({ goalId: row.goal_id, projectId: row.project_id, priorState: row.state, outcome: "consistent", reasons: [], reconciledWorkerIds });
       continue;
     }
     if (row.state === "recovering") {
       // Already durably marked recovering by a prior run or actor; nothing
       // further to record this pass.
-      results.push({ goalId: row.goal_id, projectId: row.project_id, priorState: row.state, outcome: "recovering", reasons, reconciledWorkerIds });
+      results.push({ goalId: row.goal_id, projectId: row.project_id, priorState: row.state, outcome: "recovering", reasons: recoveryReasons, reconciledWorkerIds });
       continue;
     }
 
@@ -292,7 +296,7 @@ export async function reconcileOnStartup(
         projectId: row.project_id,
         priorState: row.state,
         outcome: commandResult.outcome === "succeeded" ? "recovering" : "lease_contended",
-        reasons,
+        reasons: recoveryReasons,
         reconciledWorkerIds,
       });
     } catch (error) {
