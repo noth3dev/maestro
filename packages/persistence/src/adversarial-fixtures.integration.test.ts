@@ -152,7 +152,7 @@ async function setupWorkerWithRealCommit(pool: Pool, repositoryPath: string, bas
   await createMissionBundle(pool, { councilId: resolvedCouncil.councilId, departmentId: "product", itemId: "exec-1", substance: bundleSubstance }, proof, headContext("product"));
   const workerKernel = kernelWithAnswers([{ provider: "worker-provider", id: "worker-model", text: "worker output" }]);
   const spawnedWorker = await spawnWorker(pool, workerKernel, { councilId: resolvedCouncil.councilId, departmentId: "product", planVersion: plan.version, itemId: "exec-1" }, proof, headContext("product"));
-  const worker = await observeWorker(pool, workerKernel, spawnedWorker.workerId);
+  const worker = await observeWorker(pool, workerKernel, spawnedWorker.workerId, proof, headContext("product"));
   await recordGoalIntegrationBranch(pool, localGitPort, goalId, repositoryPath, "goal/integration", baseRevision, proof);
   await recordDepartmentBranch(pool, localGitPort, resolvedCouncil.councilId, "product", proof, headContext("product"));
   const worktreePath = join(repositoryPath, "..", `maestro-adversarial-worker-${randomUUID()}`);
