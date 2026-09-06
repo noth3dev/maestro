@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Icon } from "../icons.js";
 import { useTheme } from "../theme.js";
+import { useConnection } from "../connection.js";
 import { ToggleSwitch } from "../components/ToggleSwitch.js";
 
-type Panel = "profile" | "appearance" | "notifications" | "providers" | "models" | "authority" | "danger";
+type Panel = "profile" | "appearance" | "connection" | "notifications" | "providers" | "models" | "authority" | "danger";
 
 const inUseModels = [
   { name: "claude-opus-5", score: 9.5, role: "department heads, encore council" },
@@ -22,6 +23,8 @@ const availableModels = [
 
 export function Settings() {
   const { theme, setTheme } = useTheme();
+  const { config, disconnect } = useConnection();
+  const [disconnecting, setDisconnecting] = useState(false);
   const [panel, setPanel] = useState<Panel>("profile");
   const [compactSidebar, setCompactSidebar] = useState(false);
   const [desktopPush, setDesktopPush] = useState(true);
@@ -50,7 +53,9 @@ export function Settings() {
         {navItem("appearance", "palette", "appearance")}
         {navItem("notifications", "bell", "notifications")}
 
-        <div className="settings-nav-group-label">workspace</div>
+        {navItem("connection", "server", "connection")}
+
+        <div className="settings-nav-group-label">workspace (preview -- not wired to a real backend yet)</div>
         {navItem("providers", "plug", "providers")}
         {navItem("models", "cpu", "model pool")}
         {navItem("authority", "shield", "approvals & authority")}
@@ -94,6 +99,38 @@ export function Settings() {
         </div>
       )}
 
+      {panel === "connection" && (
+        <div className="settings-panel">
+          <div className="settings-section-title">connection</div>
+          <div className="settings-section-sub">the real control plane this Secretary instance is connected to</div>
+          {config === undefined ? (
+            <p>Not connected.</p>
+          ) : (
+            <>
+              <div className="form-field" style={{ marginBottom: 14 }}>
+                <label className="form-label">control plane URL</label>
+                <input className="input" type="text" value={config.apiUrl} readOnly />
+              </div>
+              <div className="form-field" style={{ marginBottom: 20 }}>
+                <label className="form-label">project ID</label>
+                <input className="input" type="text" value={config.projectId} readOnly />
+              </div>
+              <button
+                className="btn btn-sm"
+                style={{ borderColor: "var(--rust)", color: "var(--rust-text)" }}
+                disabled={disconnecting}
+                onClick={() => {
+                  setDisconnecting(true);
+                  void disconnect().finally(() => setDisconnecting(false));
+                }}
+              >
+                {disconnecting ? "disconnecting…" : "disconnect"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {panel === "notifications" && (
         <div className="settings-panel">
           <div className="settings-section-title">notifications</div>
@@ -116,18 +153,18 @@ export function Settings() {
       {panel === "providers" && (
         <div className="settings-panel">
           <div className="settings-section-title">providers</div>
-          <div className="settings-section-sub">agent CLIs and model keys, bring-your-own</div>
-          <div className="provider-row"><Icon name="terminal" /><span className="provider-row-name">claude code</span><span className="badge badge-olive">connected</span></div>
-          <div className="provider-row"><Icon name="terminal" /><span className="provider-row-name">codex</span><span className="badge badge-olive">connected</span></div>
-          <div className="provider-row"><Icon name="terminal" /><span className="provider-row-name">gemini cli</span><button className="btn btn-sm">connect</button></div>
-          <div className="provider-row"><Icon name="server" /><span className="provider-row-name">local model (ollama)</span><button className="btn btn-sm">connect</button></div>
+          <div className="settings-section-sub">preview only -- provider connection management isn't wired to a real backend yet; nothing here reflects or changes actual state</div>
+          <div className="provider-row"><Icon name="terminal" /><span className="provider-row-name">claude code</span><span className="badge">not wired</span></div>
+          <div className="provider-row"><Icon name="terminal" /><span className="provider-row-name">codex</span><span className="badge">not wired</span></div>
+          <div className="provider-row"><Icon name="terminal" /><span className="provider-row-name">gemini cli</span><button className="btn btn-sm" disabled title="Not wired to a real backend yet">connect</button></div>
+          <div className="provider-row"><Icon name="server" /><span className="provider-row-name">local model (ollama)</span><button className="btn btn-sm" disabled title="Not wired to a real backend yet">connect</button></div>
         </div>
       )}
 
       {panel === "authority" && (
         <div className="settings-panel">
           <div className="settings-section-title">approvals &amp; authority</div>
-          <div className="settings-section-sub">default thresholds for new goals — sets the starting policy, still overridable per goal</div>
+          <div className="settings-section-sub">preview only -- these defaults aren't wired to a real backend yet; per-Goal critical-action approval already works today through the Dashboard's lifecycle controls</div>
           <div className="form-field" style={{ marginBottom: 14 }}>
             <label className="form-label">default spend ceiling per goal</label>
             <input className="input" type="text" defaultValue="$50" />
@@ -146,7 +183,7 @@ export function Settings() {
       {panel === "models" && (
         <div className="settings-panel">
           <div className="settings-section-title">model pool</div>
-          <div className="settings-section-sub">score reflects weight/capability — heavier models cost more</div>
+          <div className="settings-section-sub">preview only -- model routing isn't wired to a real backend yet; scores and roles below are illustrative, not live</div>
 
           <div className="settings-row" style={{ marginBottom: 6 }}>
             <div><div className="settings-row-label">auto-select models</div><div className="settings-row-hint">orchestrator swaps models on the fly to fit each task. off · strictly uses the assignments below</div></div>
@@ -181,7 +218,7 @@ export function Settings() {
                   <span className="model-name">{model.name}</span>
                   <div className="model-score-track"><div className="model-score-fill" style={{ width: `${model.score * 10}%` }} /></div>
                   <span className="model-score-label">{model.score.toFixed(1)}</span>
-                  <button className="btn btn-sm" style={{ marginLeft: "auto" }}>add to pool</button>
+                  <button className="btn btn-sm" style={{ marginLeft: "auto" }} disabled title="Not wired to a real backend yet">add to pool</button>
                 </div>
               ))}
             </div>
@@ -195,8 +232,8 @@ export function Settings() {
           <div className="settings-section-sub">irreversible actions</div>
           <div className="danger-box">
             <div className="danger-box-title">reset workspace</div>
-            <div className="danger-box-hint">clears goals, evidence log, and roster history. cannot be undone.</div>
-            <button className="btn btn-sm" style={{ borderColor: "var(--rust)", color: "var(--rust-text)" }}>reset workspace</button>
+            <div className="danger-box-hint">preview only -- not wired to a real backend yet. clearing durable Goals/evidence must go through the control plane's own authority checks, not this button.</div>
+            <button className="btn btn-sm" style={{ borderColor: "var(--rust)", color: "var(--rust-text)" }} disabled title="Not wired to a real backend yet">reset workspace</button>
           </div>
         </div>
       )}
