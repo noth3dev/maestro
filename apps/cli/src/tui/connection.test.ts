@@ -10,6 +10,11 @@ describe("resolveConnection", () => {
     await expect(resolveConnection({})).resolves.toEqual({ kind: "setup-required", reason: "Control Plane connection is not configured" });
   });
 
+
+  it("uses the local default when only a token is configured", async () => {
+    await expect(resolveConnection({ MAESTRO_API_TOKEN: "secret" })).resolves.toEqual({ kind: "configured", apiUrl: "http://127.0.0.1:4310", token: "secret" });
+  });
+
   it("rejects malformed URLs without exposing the token", async () => {
     await expect(resolveConnection({ MAESTRO_API_URL: "not-a-url", MAESTRO_API_TOKEN: "secret" })).resolves.toEqual({ kind: "setup-required", reason: "MAESTRO_API_URL is not a valid HTTP(S) URL" });
   });

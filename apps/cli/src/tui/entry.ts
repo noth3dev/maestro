@@ -1,6 +1,7 @@
 import { createTuiRuntime, type TuiTerminal } from "./runtime.js";
 import { resolveWorkspace } from "./workspace.js";
 import { resolveConnection } from "./connection.js";
+import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { renderShell, type TuiShellState } from "./components/shell.js";
 import type { CliIo } from "../main.js";
 
@@ -33,9 +34,16 @@ function createProcessTerminal(options: InteractiveTuiOptions, state: TuiShellSt
 export async function startInteractiveTui(options: InteractiveTuiOptions): Promise<number> {
   const workspace = await resolveWorkspace(options.cwd);
   const connection = await resolveConnection(options.env);
+  const controlPlane = connection.kind === "configured"
+    ? await ensureLocalControlPlane({ apiUrl: connection.apiUrl, ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }) })
+    : undefined;
   const state: TuiShellState = {
     workspace,
-    connection: connection.kind === "configured" ? { kind: "connecting" } : { kind: "error", message: connection.reason },
+    connection: connection.kind !== "configured"
+      ? { kind: "error", message: connection.reason }
+      : controlPlane?.kind === "ready"
+        ? { kind: "connected" }
+        : { kind: "error", message: controlPlane?.reason ?? "Control Plane is not reachable" },
     goal: { kind: "empty" },
     workers: { kind: "empty" },
     approvals: { kind: "empty" },
