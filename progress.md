@@ -1782,3 +1782,34 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   already-real backend capability; Luthiery/Arrangements/Flashmob look like Phase 6+ speculative
   concepts (persona tuning, scheduling, ad-hoc rapid-response tasking) with no current backing
   capability at all.
+
+
+## 2026-09-06 (continued) — Inbox and Home hardened: removed a fabricated fake conversation
+
+- `Inbox.tsx` previously simulated three entirely fabricated "approval" scenarios, each with a
+  scripted fake back-and-forth chat with a bot "concertmaster" that replied with canned text
+  regardless of what the user typed (`DiscussThread`) -- this was not just unwired, it was actively
+  misleading (a real-looking conversation with nothing behind it). Investigated whether it could be
+  wired for real first: confirmed the authority model (`packages/authority`,
+  `packages/persistence/src/authority.ts`) has no durable "pending approval request" record at all
+  -- a `require_approval` decision is evaluated fresh on every call and never persisted, so there is
+  currently nothing to list. Removed the fabricated scenarios and the fake chat entirely rather than
+  leave a misleading feature in place; the panel now states this exact architectural gap via
+  `EmptyState` and points at what already works instead (approve-and-run once the caller already
+  knows the action). The one part that was already easy to make real -- recent certifications -- is
+  now wired to `useGoalDetail()`'s real `certifications`, same pattern as Evidence Log.
+- `Home.tsx`'s "3 pending approvals" card had a hardcoded, now-doubly-wrong count (Inbox cannot list
+  pending approvals at all); changed it to a plain "inbox" label with an honest sub-caption. Its
+  "send" button for briefing the concertmaster from free text was a silent no-op (no handler at
+  all); disabled it with an explanation that turning free text into a real Task Contract needs a
+  substance-authoring flow that doesn't exist yet, while noting Task Contract creation itself
+  already works today through the CLI.
+- Verified: root `tsc -b` clean, `apps/secretary`'s `tsc -p tsconfig.renderer.json --noEmit` clean,
+  `apps/secretary`'s `vite build` succeeds (1702 modules), root `npm test` unchanged: **109 files
+  (59 passed, 50 skipped), 806 tests (455 passed, 351 skipped), 0 failed**.
+- Remaining triage: `Floor`, `Luthiery`, `Arrangements`, `Flashmob`, `FlashmobSession`. Floor
+  (org-wide view) is the next plausible real-wiring candidate (`listGoals` + per-Goal worker
+  counts); the other four look like Phase 6+ speculative concepts (persona tuning, scheduling,
+  ad-hoc rapid-response tasking a.k.a. the already-deferred "Vanguard" idea from plan/extra.md)
+  with no current backing capability, and are candidates for the same disable-and-explain
+  treatment rather than real wiring.

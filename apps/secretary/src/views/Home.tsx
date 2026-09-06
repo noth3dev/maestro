@@ -27,7 +27,12 @@ export function Home({ onNavigate, mode, onModeChange }: { onNavigate: (view: Vi
             <div className={mode === "maestro" ? "on" : ""} onClick={() => onModeChange("maestro")}>maestro</div>
             <div className={isFlashmob ? "on flashmob" : ""} onClick={() => onModeChange("flashmob")}>flashmob</div>
           </div>
-          <button className={`btn btn-primary btn-sm home-send-btn${isFlashmob ? " mode-flashmob" : ""}`} style={{ marginLeft: "auto" }}>
+          <button
+            className={`btn btn-primary btn-sm home-send-btn${isFlashmob ? " mode-flashmob" : ""}`}
+            style={{ marginLeft: "auto" }}
+            disabled
+            title="Not wired yet -- turning a free-text brief into a real Task Contract needs a substance-authoring flow that doesn't exist here yet. Task Contract creation itself already works through the CLI (task-contract create)."
+          >
             send <Icon name="send" style={{ width: 12, height: 12 }} />
           </button>
         </div>
@@ -48,8 +53,8 @@ export function Home({ onNavigate, mode, onModeChange }: { onNavigate: (view: Vi
           </div>
           <div className="home-card" onClick={() => onNavigate("inbox")}>
             <Icon name="inbox" />
-            <div className="home-card-title">3 pending approvals</div>
-            <div className="home-card-sub">waiting on you</div>
+            <div className="home-card-title">inbox</div>
+            <div className="home-card-sub">certifications for the selected Goal</div>
           </div>
         </div>
       )}
