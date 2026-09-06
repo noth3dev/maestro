@@ -49,11 +49,11 @@ export async function* subscribeToEvents<T extends CursorEvent>(options: EventSu
     try {
       for await (const event of options.client.streamEvents({ projectId: options.projectId, after: cursor }, { signal: options.signal })) {
         if (options.signal.aborted) return;
-        reconnectAttempts = 0;
         cursor = event.cursor;
         const identity = eventIdentity(event);
         if (seen.has(identity)) continue;
         seen.add(identity);
+        reconnectAttempts = 0;
         yield event;
       }
     } catch {
