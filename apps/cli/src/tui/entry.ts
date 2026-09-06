@@ -137,7 +137,15 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const submit = async (text: string) => {
       try {
         const parsed = parseInput(text);
-        if (parsed.kind === "command" && client !== undefined && project.kind === "attached") {
+        if (parsed.kind === "command" && parsed.name === "session") {
+          if (parsed.action === "new") {
+            await saveWorkspaceSession({ workspacePath: workspace.cwd });
+            append("Session reset for this workspace. Restart Maestro to attach a new project.");
+          } else {
+            const current = await loadWorkspaceSession(workspace.cwd);
+            append(current === undefined ? "Session: no saved workspace session" : renderRecoveryBanner(reconcileTuiSession(workspace.cwd, current), terminal.columns).join(" · "));
+          }
+        } else if (parsed.kind === "command" && client !== undefined && project.kind === "attached") {
           const action = registry.find(parsed.name)?.actions.find((item) => item.name === parsed.action);
           if (action?.kind === "read") {
             const readResult = await executeReadCommand({ client, projectId: project.projectId, ...(session?.goalId === undefined ? {} : { goalId: session.goalId }) }, parsed);

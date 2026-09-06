@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { parseInput, tokenize } from "./parser.js";
+import { parseInput, parseSlashCommand, tokenize } from "./parser.js";
 
 describe("TUI command parser", () => {
   it("parses slash commands and quoted values without executing them", () => {
     expect(parseInput('/goal get --goal-id "goal 1" --json')).toEqual({ kind: "command", name: "goal", action: "get", options: { "goal-id": "goal 1", json: true } });
+  });
+
+  it("treats /new as the workspace session reset command", () => {
+    expect(parseSlashCommand("/new")).toEqual({ kind: "command", name: "session", action: "new", options: {} });
+  });
+
+  it("exposes slash parsing without executing the command", () => {
+    expect(parseSlashCommand("/goals list")).toEqual({ kind: "command", name: "goals", action: "list", options: {} });
   });
 
   it("keeps natural language as text", () => {
