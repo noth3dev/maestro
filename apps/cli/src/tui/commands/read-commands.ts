@@ -95,6 +95,40 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     const goals = (await context.client.listGoals(context.projectId)).goals;
     return valueLines("Goals", goals, (goal) => `• ${goal.state} · v${goal.version} · ${goal.goalId}`);
   }
+  if (key === "task-contract:get") {
+    const contractId = required(command, "contract-id");
+    if (typeof contractId !== "string") return contractId;
+    const contract = await context.client.getTaskContract(contractId, { projectId: context.projectId });
+    return { title: "Task Contract", lines: [`• ${contract.contractId} · ${contract.launchState} · v${contract.version}`] };
+  }
+  if (key === "council:get") {
+    const councilId = required(command, "council-id");
+    if (typeof councilId !== "string") return councilId;
+    const council = await context.client.getCouncil(councilId, context.projectId);
+    return { title: "Council", lines: [`• ${council.councilId} · ${council.state}`] };
+  }
+  if (key === "department-plan:get") {
+    const councilId = required(command, "council-id");
+    const departmentId = required(command, "department-id");
+    if (typeof councilId !== "string") return councilId;
+    if (typeof departmentId !== "string") return departmentId;
+    const plan = await context.client.getDepartmentPlan(councilId, departmentId, context.projectId);
+    return { title: "Department Plan", lines: [`• ${councilId}/${departmentId} · v${plan.version}`] };
+  }
+  if (key === "mission-bundle:get") {
+    const councilId = required(command, "council-id");
+    const departmentId = required(command, "department-id");
+    const planVersion = required(command, "plan-version");
+    const itemId = required(command, "item-id");
+    if (typeof councilId !== "string") return councilId;
+    if (typeof departmentId !== "string") return departmentId;
+    if (typeof planVersion !== "string") return planVersion;
+    if (typeof itemId !== "string") return itemId;
+    const parsedPlanVersion = Number(planVersion);
+    if (!Number.isSafeInteger(parsedPlanVersion) || parsedPlanVersion < 1) return unavailable("--plan-version must be a positive integer");
+    const bundle = await context.client.getMissionBundle(councilId, departmentId, parsedPlanVersion, itemId, context.projectId);
+    return { title: "Mission Bundle", lines: [`• ${councilId}/${departmentId}/${itemId} · v${bundle.planVersion} · ${bundle.contentHash}`] };
+  }
   if (key === "goal:get") {
     const goalId = required(command, "goal-id");
     if (typeof goalId !== "string") return goalId;

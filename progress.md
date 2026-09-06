@@ -2170,3 +2170,14 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   single-project auto-attach, empty/ambiguous results, and attachment preservation.
 - Verification: focused tests pass (65 tests), `npm run build` passes, and `git diff --check`
   passes.
+
+
+## 2026-09-06 — Maestro TUI typed read parity
+
+- Wired the existing typed Control Plane reads for Task Contract, Council, Department Plan,
+  and Mission Bundle into the TUI read-command path. Each validates required identifiers and
+  returns a concise durable record summary instead of a false "not wired" state.
+- Mission Bundle `--plan-version` is validated as a positive integer before any client call.
+- Added regression coverage for all four routes and invalid version input.
+- Verification: `npm run check` passes (84 files passed, 51 skipped; 548 tests passed,
+  360 skipped), `npm run build`, and `git diff --check` pass.
