@@ -13,14 +13,13 @@ import {
   createDepartmentPlan,
   createHeadCouncil,
   createMissionBundle,
-  grantProjectMembership,
-  grantProjectRole,
   readWorker,
   recordCouncilDecisionPacket,
   releaseGoalLease,
   revealCouncilBriefs,
   submitIndependentBrief,
 } from "@maestro/persistence";
+import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 import { createControlPlane } from "./main.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;

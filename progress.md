@@ -1238,3 +1238,269 @@ The provider-neutral `ExecutionKernelPort` cannot atomically commit an external 
 - Added real PostgreSQL and process acceptance with ephemeral CA/certificates and Ed25519 keys. It starts a real provider, control-plane, and device-agent process, reads an actual temporary project file, verifies migration double-apply, performs a real claim-crash/SIGKILL and restart replay, and proves bad certificate/signature, stale/future fence, stale policy, expiry, scope escape, and revoked-device requests produce no additional claim/result.
 - Focused verification: 4 files / 8 tests passed. Broad verification: `npm run check` passed with 104 files / 793 tests passed, 2 intentional live-Prime skips, 0 failures. `npm run build` and `git diff --check` passed. Independent no-edit review was completed; its high/important findings were fixed or explicitly bounded.
 - Remaining scope is explicit: the acceptance control-plane child is a real booted process while the issuer/authority path is direct durable PostgreSQL for this slice; application/data/network labels are enforced as grant/policy dimensions but the implemented executor is file-read-only; provider-specific receipt/outbox, grant-revocation cascade, dependent-work pause, Metronome integration, rollout, and UI remain later slices.
+
+
+## 2026-09-05 — Phase 6 Slice 1 Improvement Digest implementation and focused result
+
+- Implemented the first narrow lifecycle slice: domain validation and canonical hashing in `packages/domain/src/improvement-digest.ts`, append-only migration `0063_improvement_digests.sql`, and source/project/Goal-bound persistence in `packages/persistence/src/improvement-digest.ts`.
+- Supported sources are durable Goal, evidence record, evidence bundle, Metronome finding, Encore round, and closed Discord improvement evidence references. A digest must resolve inside the same project and Goal; arbitrary or cross-project model claims are rejected.
+- The writer requires an active Goal lease/control boundary, records author/session metadata, makes same-episode same-content retries idempotent, and rejects changed-content conflicts. Read paths recompute the canonical hash. Database triggers make snapshots immutable.
+- Focused verification: 3 files / 7 tests passed, including migration double-apply and expected-table coverage. `npm run build` passed. Broad verification is pending for this Phase 6 tree.
+- Deliberate non-goals remain unchanged: no candidate application, replay/synthetic/shadow evaluation, rollout controller, adaptive persona mutation, cross-project promotion, `refine` integration, or UI changes.
+
+
+## 2026-09-05 — Phase 6 Slice 1 review remediation plan
+
+Before the next patch, address the independent review findings in one bounded hardening pass:
+
+1. Add schema versioning to the digest contract and persisted row, with the version included in the canonical hash.
+2. Extend validation and SQL constraints for text/author/session bounds and stronger credential-like material rejection.
+3. Add PostgreSQL defense-in-depth for Goal/project/source binding, including closed-only Discord evidence, malformed source rejection, and append-only TRUNCATE protection.
+4. Require an active project membership context for digest reads and add isolation tests.
+5. Recheck Goal lease validity immediately before commit so a long digest transaction cannot commit after TTL expiry.
+6. Expand focused tests for TRUNCATE, direct SQL binding, open Discord evidence, no-DB skip safety, read authorization, and lease expiry.
+
+No candidate mutation, replay, rollout, persona adaptation, cross-project promotion, or provider execution will be added in this remediation.
+
+
+## 2026-09-05 — Phase 6 Slice 1 second review remediation plan
+
+The second independent review found one remaining high-risk SQL bypass and two verification gaps. Before committing, add database validation for every bounded JSON element (alternative strings, metric object shape/name/unit/value, exact source-ref keys), reject duplicate source identities in the binding trigger, add real PostgreSQL tests for these paths plus direct open-Discord insertion and authorized cross-project read isolation, and add known AWS/GitHub/Google token patterns to the heuristic detector. The detector remains explicitly heuristic; arbitrary opaque text is not promoted to a candidate or executed.
+
+
+## 2026-09-05 — Phase 6 Slice 1 second-review remediation result
+
+- Added `schemaVersion: 1` to the digest contract and canonical hash input. Added bounded author/session metadata checks, known AWS/GitHub/Google/Slack/Hugging Face/Stripe-style credential detectors, and sensitive metric-label rejection.
+- Added PostgreSQL element validation for alternatives and metrics, exact source-ref object shape, duplicate source identity rejection, project/Goal/source binding, closed-only Discord evidence, scalar/JSON bounds, and UPDATE/DELETE/TRUNCATE append-only triggers.
+- Digest reads now require active project membership and scope the digest ID by project. `withGoalAuthority` rechecks the lease immediately before commit; an expiry during a transaction rolls back.
+- Focused remediation verification passed: build; domain + digest integration 6/6; migration + domain + digest 8/8; no-DB domain + skipped DB suites 3 passed / 5 skipped; `git diff --check` passed. The first broad run before remediation passed 106 files / 798 tests / 2 intentional skips, and a clean post-remediation broad run is pending.
+
+
+## 2026-09-05 — Phase 6 Slice 1 truncate-trigger compatibility correction
+
+The clean broad run exposed an interaction: existing integration fixtures truncate parent `goals ... CASCADE`, and a Goal FK caused PostgreSQL to invoke the new digest TRUNCATE trigger on the cascaded child table. To preserve append-only digests without breaking unrelated test/database lifecycle resets, remove the digest table's parent FK and rely on the already-added BEFORE INSERT binding trigger for Goal existence/project binding. Goal rows are not deleted by application lifecycle; direct digest truncation remains rejected. Re-run the digest/migration focus and clean broad check after this correction.
+
+
+## 2026-09-05 — Phase 6 Slice 1 canonical hash defense-in-depth plan
+
+The final review conditionally identified that a direct SQL writer could insert a source-valid row with a false 64-hex content hash and poison reads. Since the migration now intentionally defends against direct SQL shape/binding bypasses, add a small PostgreSQL canonical JSON serializer plus `pgcrypto` SHA-256 check in the insert trigger, and cover a valid-source/false-hash direct INSERT. Preserve the application hash as the canonical contract; the database check is a second fence.
+
+
+## 2026-09-05 — Phase 6 Slice 1 canonical hash defense-in-depth result
+
+- Added idempotent `pgcrypto` setup and a PostgreSQL canonical JSON serializer matching the domain field ordering/encoding. The insert binding trigger now recomputes SHA-256 and rejects a source-valid row with a false hash before it can poison reads.
+- Added focused coverage for a valid-source false hash, nested sensitive metric field, malformed/duplicate refs, open Discord evidence, authorized cross-project read isolation, TRUNCATE, author metadata, and lease expiry.
+- Focused migration/domain/digest verification passed 8/8 after the hash fence. The clean broad gate remains pending after this final migration change.
+
+
+## 2026-09-05 — Phase 6 Step 1 final-review remediation plan
+
+The final review reproduced two concrete blockers before the Step 1 checkpoint: scoped connections cannot resolve an unqualified `digest()` function when pgcrypto is installed in `public`, and PostgreSQL JSONB number rendering diverges from JavaScript canonical JSON for exponent-form values. It also found two smaller contract gaps. Before any commit, schema-qualify the crypto function, constrain metric values to a JSONB/JavaScript-stable decimal range, require UUIDs for all durable digest IDs, trim-check SQL alternatives, and add tests for fresh scoped migration execution, exponent rejection, and malformed IDs.
+
+
+## 2026-09-05 — Phase 6 Step 1 final-review fix result
+
+- Schema-qualified the PostgreSQL crypto call as `public.digest` and install pgcrypto in the known `public` schema, removing the scoped-search-path failure.
+- Restricted metric values to the JSONB/JavaScript-stable decimal range `[1e-6, 1e21)` except zero, required UUIDs for project/Goal/source durable IDs, kept episode IDs bounded text, and enforced trimmed SQL alternatives.
+- Red test first caught the missing UUID/stable-number behavior; the focused domain suite then passed 4/4, and focused persistence/migration suites passed 5/5. A final no-edit review is running before the broad gate.
+- Phase 6 Step 2 remains explicitly deferred. The next planned work after this checkpoint is Phase 1 operational usability, not more Phase 6 automation.
+
+
+## 2026-09-05 — Phase 6 Step 1 checkpoint and forward execution policy
+
+### Current checkpoint
+
+- Phase 6 Step 1 is the only active implementation scope: project-private, versioned, append-only Improvement Digests with source/project/Goal binding, project-authorized reads, bounded summaries, durable JSON validation, canonical hashing, and lease-at-commit recheck.
+- Latest focused verification is green: domain `4/4`, persistence/migration `5/5`; build passes. The final broad check is still running in `/tmp/maestro-phase6-step1-final-check.log` (PID 703452), and the final no-edit review agent `phase6-step1-final-review-2` is active. Do not mark Step 1 complete until both return.
+- No Phase 6 Step 2 work has started. Candidate mutation, replay/shadow execution, rollout, persona adaptation, `refine` authority, and cross-project promotion remain prohibited.
+
+### Required closeout order
+
+1. Read the final broad-check result and final independent review.
+2. Fix only concrete blockers found there; record a new plan before each fix and rerun focused validation.
+3. Record final counts and residual boundaries in this file and `findings.md`.
+4. Run `npm run build`, focused DB/domain tests, no-DB skip-safe tests, `git diff --check`, and final status inspection.
+5. Commit the completed Step 1 with a Conventional Commit on `phase6/improvement-digest`, push it, then cherry-pick/synchronize the validated commit to `hardening/lifecycle` and push.
+6. Stop. Do not begin Phase 6 Step 2 in the same checkpoint.
+
+### Next phase sequence after Step 1 is pushed
+
+The next work is not another Phase 6 feature. It is a new, separately recorded operationalization track that returns to Phase 1 and closes one blocker at a time:
+
+- **Phase 1 Step A — authenticated runtime entry path:** define the smallest user-runnable control-plane startup/health/Goal path and its acceptance evidence.
+- **Phase 1 Step B — project authorization closure:** enforce membership/role/capability checks on every exposed Goal/lifecycle route, with cross-project negative tests.
+- **Phase 1 Step C — dependent orchestration path:** add the next authenticated write route only as a complete vertical slice through durable authority, recovery, CLI/API parity, and real-process tests.
+- **Phase 1 Step D — approval and critical-action path:** implement one user-facing CEO approval/re-run flow, exactly-once and audit-bound.
+- **Phase 1 Step E — operational observation/parity:** add the required running Metronome observation and matching operator surfaces only after the prior P0 steps pass.
+
+Each Phase 1 step must follow: plan in `task_plan.md` → failing test → minimal patch → focused PostgreSQL/real-process verification → independent no-edit review → progress/findings record → Conventional Commit and push → stop for the next step.
+
+### Readiness rule
+
+A green component test is not an operational acceptance claim. Phase 1 will be called usable only after a normal operator can start the documented runtime, authenticate, act within one project, complete the bounded Goal path, observe durable state through the supported surface, and recover a killed process without duplicate or stale effects. Provider-side fencing limitations and any unresolved external-effect uncertainty must remain explicitly documented.
+
+
+## 2026-09-05 — Two-tier subagent execution policy
+
+가능한 작업부터 2단으로 운영한다.
+
+- **1단 — Step lead / implementation lane:** one isolated worktree owns one narrowly bounded Step. It first writes acceptance criteria and the plan, then implements the smallest vertical slice and its tests. It does not declare the Step complete and does not push unreviewed work.
+- **2단 — independent verification lanes:** at least two separate no-edit agents review the same diff independently: one correctness/security reviewer and one runtime/acceptance reviewer. When useful, add a third focused PostgreSQL/process test lane. These agents must not share an implementation worktree or edit the target files.
+- **Parent control plane:** the parent agent owns fan-in, conflict resolution, final commands, progress/findings records, Conventional Commit, push, and the stop gate. No child may silently widen scope or start the next Phase.
+- **Parallelism rule:** independent research, review, and verification start in parallel; implementation remains serialized per Step. No concurrent edits to one worktree.
+- **Gate rule:** a Step advances only when the implementation lane is green, both independent reviewers pass, and the required real-PostgreSQL/real-process evidence exists. A blocker causes a new recorded remediation plan before another patch.
+
+For the next Phase 1 operationalization track, the planned fan-out is: one Step lead, one security/authorization reviewer, one runtime/process reviewer, and one test-evidence reviewer when the Step involves PostgreSQL or external effects. All subagents use the approved `openai-codex/gpt-5.6-luna` model with high reasoning.
+
+
+## 2026-09-05 — Phase 6 Step 1 UUID/hash parity remediation plan
+
+The second final review found one remaining blocker: UUID validation accepts uppercase UUIDs, PostgreSQL normalizes UUID columns to lowercase, and the app currently hashes the pre-normalized payload. This can reject valid uppercase inputs at the database hash trigger. Before the next patch, normalize project, Goal, and source UUIDs to lowercase in a domain helper; hash the normalized payload; and use that same normalized payload for persistence writes and source checks. Add regression coverage proving uppercase/lowercase inputs have identical canonical content and that an uppercase retry remains idempotent. Keep episode IDs as bounded opaque text.
+
+
+## 2026-09-05 — Phase 6 Step 1 UUID/hash remediation result
+
+- Added domain normalization of project, Goal, and source UUIDs to lowercase before canonical hashing. Persistence now writes and source-checks the same normalized payload, so PostgreSQL UUID normalization cannot change the trigger hash. Episode IDs remain bounded opaque text.
+- Added regression coverage for uppercase/lowercase hash equality and an uppercase persistence retry; the intentional red run preceded the build refresh, then build plus focused domain/persistence verification passed `5/5` and `3/3` respectively.
+- The prior final review's only blocker is addressed. A fresh no-edit review and a clean broad run are required before commit/push; the broad run that was started before this patch was stopped and is not acceptance evidence.
+
+
+## 2026-09-05 — Phase 6 Step 1 clean acceptance run v3
+
+- The pre-patch broad run was stopped after the UUID parity finding; it is not acceptance evidence.
+- A new clean `npm run check` is running as PID 713226 with log `/tmp/maestro-phase6-step1-final-check-v3.log`.
+- Two post-patch no-edit review lanes are running in parallel: `phase6-step1-final-review-3` for complete correctness/acceptance and `phase6-step1-security-review-2` for privacy, binding, authorization, SQL, and lease boundaries.
+- Commit/push remains blocked until the clean broad result and both independent reviews pass.
+
+
+## 2026-09-05 — Phase 6 Step 1 confidence/hash parity remediation plan
+
+The independent review found the same JSONB/JavaScript canonicalization mismatch for `confidence`: the domain accepts values such as `1e-7`, while PostgreSQL JSONB serializes them as decimal text before the hash trigger. The clean broad run was stopped because it predates this remediation. Before the next patch, apply the existing stable-number bound to confidence (zero or `[1e-6, 1]`) in the domain and migration trigger/constraint, add a red regression test for tiny confidence, then rerun focused and clean broad verification. Do not loosen the DB hash fence.
+
+
+## 2026-09-05 — Phase 6 Step 1 SQL UUID canonicalization remediation plan
+
+The independent review found a defense-in-depth parity gap that application tests do not cover: direct SQL can insert an uppercase `sourceId`; the trigger hashes uppercase JSONB, but the domain mapper normalizes it and rejects the stored row. Before commit, normalize string `sourceId` UUIDs in the `BEFORE INSERT` binding trigger before duplicate/source validation and hashing, while preserving malformed values for the existing typed rejection path. Add a direct-SQL uppercase source test that uses the domain hash and confirms the stored/read digest is canonical lowercase. This keeps domain, persistence, and database writers on one canonical representation rather than weakening the hash fence.
+
+
+## 2026-09-05 — Phase 6 Step 1 SQL UUID parity result
+
+- Added `BEFORE INSERT` normalization of valid string `sourceId` UUIDs in `NEW.source_refs` before duplicate checks, source binding, and canonical hash verification. Malformed source objects are left intact for the existing rejection path.
+- Added a direct-SQL uppercase source test using the domain hash and verified the stored/read digest is canonical lowercase.
+- After the intentional red test, build passed and focused domain/persistence/migration verification passed `10/10`.
+- The prior review's direct-SQL parity blocker is addressed. A new clean broad run and fresh two-lane no-edit review remain required.
+
+
+## 2026-09-05 — Phase 6 Step 1 numeric precision parity remediation plan
+
+The independent review found one remaining direct-SQL hash parity gap: PostgreSQL JSONB preserves arbitrary numeric precision, while the TypeScript contract and `JSON.stringify` use IEEE-754 JavaScript numbers. A direct SQL metric such as `1.234567890123456789` can therefore pass the trigger but fail the application mapper. Before the next patch, make the SQL canonicalizer convert JSONB numbers through `double precision` before rendering, matching JavaScript Number round-trip semantics, while retaining the existing stable magnitude bounds. Add a direct-SQL high-precision metric test using the domain hash. Do not weaken the hash trigger or allow exponent-form values rejected by the domain.
+
+
+## 2026-09-05 — Phase 6 Step 1 numeric precision parity result
+
+- PostgreSQL canonical JSON now renders JSONB numbers after a `double precision` round-trip, matching JavaScript Number semantics; the existing magnitude bounds still reject exponent-form values that cannot render identically.
+- Added direct-SQL high-precision metric coverage (`1.234567890123456789`) and verified both insertion and application read/hash mapping.
+- After the intentional red test, build passed and focused domain/persistence/migration verification passed `10/10`.
+- The clean broad run was restarted only after this patch; previous interrupted runs remain non-acceptance evidence.
+
+
+## 2026-09-05 — Phase 6 Step 1 binding/read-boundary remediation plan
+
+The two independent security reviews identified three database-boundary gaps beyond the numeric hash fixes: migration 0063 trigger relation lookups can be shadowed by temporary tables, Goal `project_id` can be mutated after a digest is written, and digest reads perform membership and data queries on separate pool statements. Before the next patch, pin trigger relation resolution to the digest table's actual schema with safe dynamic SQL, add an immutable Goal project-identity trigger, and hold an active membership row lock across an authorized digest read transaction. Add regression tests for fabricated temporary-table binding, Goal project mutation, and the existing membership denial path. The lease helper's unavoidable expiry-at-COMMIT race remains explicitly database-only: its callback must not perform external effects; provider-side fencing stays a documented boundary and is not claimed by this Step.
+
+
+## 2026-09-05 — Phase 6 Step 1 normalized-source uniqueness addendum
+
+The final review also found that domain duplicate detection occurs before UUID normalization: source refs that differ only by UUID case pass domain validation but collapse to one identity in the normalized persistence payload and are then rejected by SQL. Treat case-insensitive UUID identity consistently by lowercasing the source ID for the domain uniqueness key and add a regression test.
+
+
+## 2026-09-05 — Phase 6 Step 1 binding/read-boundary remediation result
+
+- The binding trigger now resolves all Goal/evidence/source relations through `TG_TABLE_SCHEMA` with identifier-safe dynamic SQL, preventing `pg_temp` relation shadowing; hash canonicalization is schema-qualified as well.
+- Added the Goal project-identity immutability trigger. Added a regression that attempts to move a Goal after digest insertion and requires rejection.
+- Digest reads now hold an active membership row lock in one transaction across authorization and data selection, eliminating the prior pool-query check/read gap.
+- The intentional red boundary run caught the missing Goal immutability trigger; after the patch, build passed and focused domain/persistence/migration verification passed `8/8` executable tests (migration cases may skip when the harness detects a shared-DB race).
+- The provider-side lease expiry/COMMIT TOCTOU remains outside this digest Step: `withGoalAuthority` is DB-only and must not wrap external effects; provider fencing remains an explicit residual limitation.
+
+
+## 2026-09-05 — Post-Step-1 main hygiene and Phase 1 restart plan
+
+After the Step 1 acceptance gate passes, do not start Phase 1 in the feature worktree. First commit and push the validated `phase6/improvement-digest` branch, synchronize that commit into `main`, and verify the main checkout is clean. Then inspect whether ESLint/Prettier are configured; run the repository-supported one-time lint/format check on `main`, using only pinned/temporary tooling if the repository has no configuration and never formatting unrelated files blindly. Record exact tool availability, commands, and outcomes.
+
+Update the roadmap/status docs so they no longer call Phases 1–4 operationally complete while their remediation gates are open. Preserve the explicit provider-fencing and external-effect boundaries. Commit and push the documentation/tooling hygiene separately. Only then create a fresh Phase 1 operationalization worktree.
+
+Phase 1 execution will use the two-tier model: one Step lead in the implementation worktree; two independent no-edit reviewers (authorization/security and runtime/process); a separate evidence lane for real PostgreSQL/process tests. Each Step ends with its own commit/push and stop gate.
+
+
+## 2026-09-05 — Phase 6 Step 1 refresh-token SQL parity remediation plan
+
+The independent security lane found that the PostgreSQL secret detector omitted `refresh_token`/`refresh-token`, while the domain detector rejects those labels. A direct SQL writer could therefore bypass the database privacy fence on digest text, episode, author, or session fields. Before the next patch, mirror the refresh-token pattern in the SQL detector and add a direct SQL helper regression for both separator forms. This is a narrow validation-only fix; no broader secret storage is introduced.
+
+
+## 2026-09-05 — Phase 6 Step 1 rejected-alternatives size parity plan
+
+The independent review found a domain/DB contract mismatch: the domain permits 16 alternatives at 4096 characters each, but PostgreSQL's `pg_column_size(rejected_alternatives) <= 65536` also counts JSONB storage overhead and rejects valid boundary inputs. Before the next patch, remove this redundant byte cap; the domain/trigger still enforce item count, per-item length, shape, and secret checks, so the field remains bounded without rejecting valid contract inputs. Add a boundary domain regression with 16 maximum-size alternatives.
+
+
+## 2026-09-06 — Phase 6 Step 1 final privacy/size parity remediation
+
+- Mirrored `refresh[_-]?token` detection in the PostgreSQL secret regex and added direct SQL checks for underscore and hyphen forms.
+- Removed the redundant `pg_column_size` cap from `rejected_alternatives`; count/per-item length/shape/secret guards remain, matching the domain's documented maximum. Added a 16 × 4096-character domain boundary test.
+- The intentional red checks preceded these changes; afterward build plus domain/digest focused verification passed `9/9`. No broad run is valid until the final review and a new clean broad run cover this latest patch.
+
+
+## 2026-09-06 — Phase 6 Step 1 grant-helper surface remediation plan
+
+The security review identified that `grantProjectMembership` and `grantProjectRole` are exported from the production persistence package without an admin argument. Source inspection shows they are used only by integration-test setup; no production route or service calls them. Before the next patch, remove these bootstrap helpers from the public `@maestro/persistence` root export, expose them only through an explicitly named `@maestro/persistence/testing` subpath, and update test imports. Keep the real `provisionProjectAccess` admin/active-operator path as the only production provisioning API. Add a source-level guard test or verification that production application files do not import the testing subpath.
+
+
+## 2026-09-06 — Phase 6 Step 1 provisioning surface result
+
+- Removed `grantProjectMembership` and `grantProjectRole` from the public `@maestro/persistence` root export. They are now available only through the explicit `@maestro/persistence/testing` subpath for integration setup.
+- Production code has no imports of the testing subpath; production provisioning remains `provisionProjectAccess`, which enforces the configured admin and active-operator boundary. Updated application integration-test imports accordingly.
+- `npm run build` passes after the surface split.
+
+
+## 2026-09-06 — Phase 6 Step 1 search_path blocker plan
+
+- **Blocker:** final runtime review found that migration 0063 helper and trigger functions inherit the caller's `search_path`; unqualified helper/builtin resolution can therefore be shadowed.
+- **Minimal fix:** add a migration-local `ALTER FUNCTION` block that pins all five digest/Goal helper and trigger functions to `pg_catalog, public, <active migration schema>`. The active schema remains included because test and scoped deployments intentionally install the migration in a non-public schema; `pg_catalog` is first and no caller-supplied schemas are retained.
+- **Regression:** add a direct SQL assertion that caller search-path shadowing does not change the digest secret detector result.
+- **Gates:** run focused migration/persistence tests serially, then build, diff check, and clean broad check; obtain fresh no-edit reviews after the patch.
+
+
+## 2026-09-06 — search_path hardening refinement
+
+- The first hardening configuration included `public` before the active migration schema. That still permits a writable public schema to shadow helper names when scoped tables live elsewhere.
+- Refine the pinned configuration to `pg_catalog, <active migration schema>` only. `public.digest` is already explicitly qualified, so public need not be in the function search path. This removes the remaining caller-writable schema from resolution while preserving custom-schema migrations.
+
+
+## 2026-09-06 — Phase 6 Step 1 search_path acceptance evidence
+
+- Independent no-edit implementation gate: **PASS** (`phase6-step1-gate-v4`).
+- Independent no-edit security gate: **PASS** (`phase6-step1-security-gate-v4`).
+- The migration now pins all five helper/trigger functions to `pg_catalog` plus the active migration schema, excluding caller-provided schemas and writable `public` shadowing.
+- Focused sequential verification after the strict refinement: `npm test -- packages/domain/src/improvement-digest.test.ts packages/persistence/src/improvement-digest.integration.test.ts packages/persistence/src/test-migrations.integration.test.ts` — **3 files, 11 tests passed**.
+- `npm run build` — **passed**.
+- The broad `npm run check` started before the final import-format cleanup was stopped and is not acceptance evidence; a fresh clean run is required.
+
+
+## 2026-09-06 — Clean broad check contamination handling
+
+- **Observed:** fresh `npm run check` reached 105 passed files / 801 passed tests / 2 skipped, but failed one pre-existing `packages/persistence/src/device.integration.test.ts` assertion because `information_schema.tables` returned duplicate `device_policies`/`devices` rows from stale custom schemas.
+- **Cause:** earlier intentionally stopped broad processes did not execute their `afterAll` schema cleanup. This is dedicated test-database contamination, not a Phase 6 source regression.
+- **Plan:** do not patch application code. Verify all worktree Vitest processes are gone, remove only known stale non-public test schemas from the dedicated `MAESTRO_TEST_DATABASE_URL`, record the cleanup, then rerun one clean `npm run check` with no concurrent DB runner.
+- **Acceptance:** the rerun must finish cleanly; otherwise patch the actual failing contract only after a new plan entry.
+
+
+- Verified no worktree Vitest process remained before cleanup.
+- Dedicated test database cleanup removed only these known stale schemas: `cli_secretary_parity_51002b8ed514466989ee9fff539d8364`, `digest_e02834ab9d54438d8460ac2afdddb456`, `migrate_test_1788641915911_4652aazdyxa`, `probe_1788660982049`, `probe_1788661005197`, `worker_process_f464c85fcc5f4959bf912bcd16edadca`, and `xcanon`.
+- `public` and PostgreSQL system/temp schemas were left untouched.
+
+
+## 2026-09-06 — Phase 6 Step 1 clean broad acceptance
+
+- After removing only stale test schemas left by intentionally stopped prior runs, the isolated single-process `npm run check` completed successfully.
+- Result: **106 test files passed, 1 skipped; 802 tests passed, 2 skipped; 0 failed**. The two skips are the known live-Prime cases.
+- This is the first clean broad result after the final search_path hardening and import-format cleanup; the earlier overlapping/stopped run is discarded.
+- `git diff --check` passes.

@@ -11,7 +11,6 @@ import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubsta
 import {
   bootstrapPermanentOrganization,
   bootstrapLocalOperator,
-  grantProjectMembership, grantProjectRole,
   acquireGoalLease,
   createHeadCouncil,
   recordCouncilDecisionPacket,
@@ -32,6 +31,7 @@ import {
   runEncoreCouncilReview,
   generateConcertmasterFinalReport,
 } from "@maestro/persistence";
+import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 import { executeCli } from "../../cli/src/main.js";
 import { createControlPlane } from "./main.js";
 import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";

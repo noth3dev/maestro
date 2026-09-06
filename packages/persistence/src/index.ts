@@ -40,6 +40,11 @@ export * from "./discord.js";
 export * from "./discord-incident.js";
 export * from "./test-migrations.js";
 export * from "./migrate.js";
-export * from "./project-membership.js";
+export {
+  ProjectMembershipError, ProjectMembershipRequiredError, ProjectRoleRequiredError, ProjectAccessAdminRequiredError,
+  ProjectAccessTargetNotFoundError, ProjectAccessRoleNotFoundError, assertProjectMembership, assertProjectRole, listProjectMemberships,
+  revokeProjectMembership, revokeProjectRole, provisionProjectAccess,
+} from "./project-membership.js";
 export * from "./device-session.js";
 export * from "./device-agent-runtime.js";
+export * from "./improvement-digest.js";

@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExecutionKernelPort } from "@maestro/domain";
-import { bootstrapLocalOperator, grantProjectMembership, grantProjectRole, revokeAuthorityRecord } from "@maestro/persistence";
+import { bootstrapLocalOperator, revokeAuthorityRecord } from "@maestro/persistence";
+import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
 import { createControlPlane } from "./main.js";
 

@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { applyAllMigrations, bootstrapLocalOperator, grantProjectMembership, grantProjectRole } from "@maestro/persistence";
+import { applyAllMigrations, bootstrapLocalOperator } from "@maestro/persistence";
+import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 import { createControlPlane } from "./main.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;

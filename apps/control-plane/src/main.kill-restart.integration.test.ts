@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { bootstrapLocalOperator, grantProjectMembership, grantProjectRole } from "@maestro/persistence";
+import { bootstrapLocalOperator } from "@maestro/persistence";
+import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
 
 // A real integration test that spawns the compiled control-plane
