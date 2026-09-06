@@ -10,6 +10,8 @@ import { parseInput } from "./commands/parser.js";
 import { executeReadCommand, discoverWorkspaceProject, readDashboard } from "./commands/read-commands.js";
 import { executeWriteCommand } from "./commands/write-commands.js";
 import { renderApprovalDialog } from "./components/approval-dialog.js";
+import { reconcileTuiSession, type RecoverySummary } from "./recovery.js";
+import { renderRecoveryBanner } from "./components/recovery-banner.js";
 import type { CriticalActionSummary, ConfirmationResult } from "./confirmation.js";
 import { loadWorkspaceSession, saveWorkspaceSession, type WorkspaceSession } from "./session.js";
 import { mergeEvents, subscribeToEvents } from "./activity-stream.js";
@@ -78,10 +80,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     editor.setAutocompleteProvider(new CombinedAutocompleteProvider(registry.all().map((command) => ({ name: command.name, description: command.description })), workspace.cwd));
     let transcript: string[] = [];
     let activity: GoalEvent[] = [];
+    let recovery: RecoverySummary = reconcileTuiSession(workspace.cwd, session);
     let pendingConfirmation: { summary: CriticalActionSummary; resolve: (decision: ConfirmationResult) => void } | undefined;
     const abortController = new AbortController();
     const render = () => {
-      const lines = [...renderShell(state, terminal.columns)];
+      const lines = [...renderShell(state, terminal.columns), "", ...renderRecoveryBanner(recovery, terminal.columns)];
       if (pendingConfirmation !== undefined) lines.push("", ...renderApprovalDialog(pendingConfirmation.summary, terminal.columns));
       if (activity.length > 0) lines.push("", "Activity", ...renderActivityTimeline(activity, terminal.columns));
       if (transcript.length > 0) lines.push("", ...transcript);
@@ -104,6 +107,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         state.goal = dashboard.selectedGoal === undefined ? { kind: "empty" } : { kind: "value", value: { name: dashboard.selectedGoal.goalId, state: dashboard.selectedGoal.state } };
         state.workers = dashboard.workerCount === undefined ? { kind: "empty" } : { kind: "value", value: dashboard.workerCount };
         state.budget = dashboard.budget === undefined ? { kind: "empty" } : { kind: "value", value: { spentCents: dashboard.budget.costCents, ceilingCents: dashboard.budget.budgetCents } };
+        recovery = reconcileTuiSession(workspace.cwd, session, { ...(dashboard.selectedGoal === undefined ? {} : { goalState: dashboard.selectedGoal.state }), ...(dashboard.workerCount === undefined ? {} : { activeWorkers: dashboard.workerCount }) });
         render();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Control Plane read failed";
