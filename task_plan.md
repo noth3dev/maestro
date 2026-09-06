@@ -964,3 +964,12 @@ remaining open item, explicitly scoped and blocked on a design decision, not sil
 **Revisit trigger:** When there is an actual dependent-work scenario to design against (e.g. a
 real worker whose Mission Bundle explicitly requires device access mid-task), scope the minimal
 worker-device link and pause state against that concrete case rather than a hypothetical one.
+
+## 2026-09-06 — Documentation reconciliation after Phase 5 capacity slice
+
+- Actual repository state is `main` at `95bef8e`, synchronized with `origin/main`, with a clean working tree.
+- Phase 5 Track A1 and Track B1-B2 are complete in code and verification history; older status wording that calls them in-progress/not-started is historical and must not be used as the current pointer.
+- The authenticated control-plane/API-client write surface is broader than the older Phase 5 status wording: Task Contract, Goal lifecycle, approvals, Head/Council/Plan/Mission/worker/Git, Metronome, certification, reporting, and project-scoped reads are present. The remaining operational gap is primarily Secretary renderer wiring and missing CLI/renderer exposure for parts of the write surface.
+- Current Phase 5 slice: project-wide active-worker admission control via `MAESTRO_MAX_CONCURRENT_WORKERS_PER_PROJECT`; this is a deliberate first slice, not completion of the full resource-capacity model or queue behavior.
+- Local verification on this environment: `npm run build` passed; `npm test` passed with 61 files/469 tests passed and 51 files/360 tests skipped because no PostgreSQL URL is available. Full PostgreSQL verification remains blocked by the environment.
+- Next actionable work: extend the capacity model with resource inventory, demand reservations, protected floors, and admission behavior, while preserving the explicit flat-worker-cap boundary until each additional resource has a defined contract.
