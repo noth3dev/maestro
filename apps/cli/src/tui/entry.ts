@@ -1,5 +1,6 @@
 import { createTuiRuntime, type TuiTerminal } from "./runtime.js";
 import { resolveWorkspace } from "./workspace.js";
+import { resolveConnection } from "./connection.js";
 import { renderShell, type TuiShellState } from "./components/shell.js";
 import type { CliIo } from "../main.js";
 
@@ -31,9 +32,10 @@ function createProcessTerminal(options: InteractiveTuiOptions, state: TuiShellSt
 
 export async function startInteractiveTui(options: InteractiveTuiOptions): Promise<number> {
   const workspace = await resolveWorkspace(options.cwd);
+  const connection = await resolveConnection(options.env);
   const state: TuiShellState = {
     workspace,
-    connection: { kind: "connecting" },
+    connection: connection.kind === "configured" ? { kind: "connecting" } : { kind: "error", message: connection.reason },
     goal: { kind: "empty" },
     workers: { kind: "empty" },
     approvals: { kind: "empty" },
