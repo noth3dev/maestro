@@ -1,101 +1,69 @@
 import { Icon } from "../icons.js";
+import { EmptyState } from "../components/EmptyState.js";
+import { useT } from "../i18n/index.js";
+import { useConnection } from "../connection.js";
+import { useGoals } from "../goals.js";
+import { useGoalDetail } from "../useGoalDetail.js";
+import { summarizeDashboard } from "../lib/dashboard-data.js";
 import type { ViewName } from "../views.js";
 
-const departments = [
-  { name: "product", icon: "package", awake: true, state: "2 active" },
-  { name: "tech", icon: "code", awake: true, state: "3 active" },
-  { name: "intelligence", icon: "flask-conical", awake: false, state: "asleep" },
-  { name: "assurance", icon: "clipboard-check", awake: false, state: "asleep" },
-  { name: "operations", icon: "settings", awake: false, state: "asleep" },
-];
+function formatCents(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
 
-export function Dashboard({ onNavigate }: { onNavigate: (view: ViewName) => void }) {
+export function Dashboard({ onNavigate: _onNavigate }: { onNavigate: (view: ViewName) => void }) {
+  const t = useT();
+  const { config } = useConnection();
+  const { goals, selectedGoalId, selectGoal } = useGoals();
+  const { detail, loading, error } = useGoalDetail();
+  const summary = summarizeDashboard(goals, detail);
+
+  if (config === undefined) return <EmptyState />;
+
   return (
     <div className="dash-main">
       <div className="dash-head">
-        <div className="dash-title">launch page</div>
-        <span className="dash-status">active</span>
+        <div className="dash-title">{summary.selectedGoal === undefined ? "no Goal selected" : summary.selectedGoal.goalId}</div>
+        {summary.selectedGoal !== undefined && <span className="dash-status">{summary.selectedGoal.state}</span>}
       </div>
-      <div className="dash-sub">movement 2 of 4 · started 3 days ago</div>
+      <div className="dash-sub">
+        {loading && t.common.loading}
+        {error !== undefined && `Could not load Goal state: ${error}`}
+        {!loading && error === undefined && summary.selectedGoal !== undefined && `durable version ${summary.selectedGoal.version}`}
+      </div>
 
       <div className="dash-stats">
-        <div className="stat-card stat-terracotta"><p className="stat-label">missions in flight</p><p className="stat-value">4</p></div>
-        <div className="stat-card stat-ochre"><p className="stat-label">pending approvals</p><p className="stat-value">3</p></div>
-        <div className="stat-card stat-olive"><p className="stat-label">certified</p><p className="stat-value">7</p></div>
-        <div className="stat-card stat-rust"><p className="stat-label">departments awake</p><p className="stat-value">2 / 5</p></div>
+        <div className="stat-card stat-terracotta"><p className="stat-label">Goals in this project</p><p className="stat-value">{summary.totalGoals}</p></div>
+        <div className="stat-card stat-olive"><p className="stat-label">certified (selected Goal)</p><p className="stat-value">{summary.selectedGoal?.certifiedCount ?? "—"}</p></div>
+        <div className="stat-card stat-ochre"><p className="stat-label">reserved / budget</p><p className="stat-value">{summary.selectedGoal === undefined ? "—" : `${formatCents(summary.selectedGoal.reservedCents)} / ${formatCents(summary.selectedGoal.budgetCents)}`}</p></div>
+        <div className="stat-card stat-rust"><p className="stat-label">actual spend</p><p className="stat-value">{summary.selectedGoal === undefined ? "—" : formatCents(summary.selectedGoal.costCents)}</p></div>
       </div>
 
-      <div className="dash-section-title">groups</div>
+      <div className="dash-section-title">goals</div>
       <div className="dept-grid">
-        {departments.map((department) => (
-          <div key={department.name} className={`dept-card ${department.awake ? "awake" : "asleep"}`}>
-            <div className="dept-card-head"><Icon name={department.icon} /><span className="dept-card-name">{department.name}</span></div>
-            <div className={`dept-card-state${department.awake ? " on" : ""}`}>{department.state}</div>
-          </div>
-        ))}
+        {(goals ?? []).length === 0 ? (
+          <p>No durable Goals exist for this project yet.</p>
+        ) : (
+          (goals ?? []).map((goal) => (
+            <div
+              key={goal.goalId}
+              className={`dept-card ${goal.goalId === selectedGoalId ? "awake" : "asleep"}`}
+              onClick={() => selectGoal(goal.goalId)}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="dept-card-head"><Icon name="target" /><span className="dept-card-name">{goal.goalId}</span></div>
+              <div className={`dept-card-state${goal.goalId === selectedGoalId ? " on" : ""}`}>{goal.state} · v{goal.version}</div>
+            </div>
+          ))
+        )}
       </div>
 
       <div className="dash-section-title">pipeline</div>
-      <div className="kanban">
-        <div>
-          <div className="kanban-col-head"><Icon name="file-text" style={{ width: 13, height: 13 }} /> task contract <span className="n">1</span></div>
-          <div className="kanban-col">
-            <div className="kcard" onClick={() => onNavigate("channel")}>
-              <div className="kcard-title">launch page — overall scope</div>
-              <div className="kcard-meta">
-                <div className="kcard-dept"><Icon name="compass" /> overture</div>
-                <span className="badge badge-olive kcard-badge">sealed</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <div className="kanban-col-head"><Icon name="clipboard-list" style={{ width: 13, height: 13 }} /> department plan <span className="n">2</span></div>
-          <div className="kanban-col">
-            <div className="kcard" onClick={() => onNavigate("channel")}>
-              <div className="kcard-title">hero section rebuild</div>
-              <div className="kcard-meta">
-                <div className="kcard-dept"><Icon name="code" /> engineering</div>
-                <span className="badge badge-ochre kcard-badge">planning</span>
-              </div>
-            </div>
-            <div className="kcard">
-              <div className="kcard-title">pricing table copy</div>
-              <div className="kcard-meta">
-                <div className="kcard-dept"><Icon name="package" /> product</div>
-                <span className="badge badge-ochre kcard-badge">planning</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <div className="kanban-col-head"><Icon name="loader" style={{ width: 13, height: 13 }} /> mission bundle <span className="n">1</span></div>
-          <div className="kanban-col">
-            <div className="kcard" onClick={() => onNavigate("channel")}>
-              <div className="kcard-title">hero section — write scope</div>
-              <div className="kcard-meta">
-                <div className="kcard-dept"><Icon name="code" /> engineering</div>
-                <span className="badge badge-rust kcard-badge">in progress</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <div className="kanban-col-head"><Icon name="shield-check" style={{ width: 13, height: 13 }} /> certified <span className="n">1</span></div>
-          <div className="kanban-col">
-            <div className="kcard" onClick={() => onNavigate("git")}>
-              <div className="kcard-title">hero section</div>
-              <div className="kcard-meta">
-                <div className="kcard-dept"><Icon name="code" /> engineering</div>
-              </div>
-              <div className="kcard-cert"><Icon name="check" /> sha256 4f2a…</div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <EmptyState
+        title="Council, Plan, and Mission Bundle state aren't wired here yet"
+        hint="The durable data exists in the control plane, but this screen doesn't read it yet. Only real Goal, budget, and certification counts above are live."
+      />
     </div>
   );
 }

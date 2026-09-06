@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { ConnectionProvider } from "./connection.js";
+import { ConnectionProvider, useConnection } from "./connection.js";
 import { GoalsProvider } from "./goals.js";
 import { ThemeProvider } from "./theme.js";
 import { I18nProvider } from "./i18n/index.js";
 import { Sidebar } from "./components/Sidebar.js";
+import { Setup } from "./views/Setup.js";
 import { Home } from "./views/Home.js";
 import { Dashboard } from "./views/Dashboard.js";
 import { Channel } from "./views/Channel.js";
@@ -53,10 +54,9 @@ function Shell() {
 }
 
 function Connected() {
-  // ponytail: the real Setup gate (`config === undefined` -> <Setup />) is wired and working, just
-  // not enforced yet — nothing needs a live control plane to look at the UI shell right now. Remove
-  // this bypass once the write flows (Task Contract intake, approvals) are ready to go through a
-  // real connection again.
+  const { config, loading } = useConnection();
+  if (loading) return <div className="app" aria-busy="true" />;
+  if (config === undefined) return <Setup />;
   return (
     <GoalsProvider>
       <Shell />
