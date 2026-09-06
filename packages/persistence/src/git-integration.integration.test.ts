@@ -14,7 +14,7 @@ import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, su
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { spawnWorker } from "./worker.js";
-import { GitIntegrationError, recordDepartmentBranch, recordGoalIntegrationBranch, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
+import { GitIntegrationError, getGoalGitIntegrationState, recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -193,5 +193,36 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     const { goalId, proof } = await setupPlan();
     await recordGoalIntegrationBranch(pool, localGitPort, goalId, repositoryPath, "goal/integration", baseRevision, proof);
     await expect(pool.query("UPDATE goal_integration_branches SET branch_name = 'tampered' WHERE goal_id = $1", [goalId])).rejects.toThrow();
+  });
+
+  it("reads the real durable Goal integration branch and latest frozen revision for the Secretary/CLI Git status view", async () => {
+    const { goalId, council, worker, proof } = await setupPlan();
+    const empty = await getGoalGitIntegrationState(pool, goalId);
+    expect(empty.branch).toBeUndefined();
+    expect(empty.latestRevision).toBeUndefined();
+
+    const goalBranch = await recordGoalIntegrationBranch(pool, localGitPort, goalId, repositoryPath, "goal/integration", baseRevision, proof);
+    const afterBranch = await getGoalGitIntegrationState(pool, goalId);
+    expect(afterBranch.branch).toEqual(goalBranch);
+    expect(afterBranch.latestRevision).toBeUndefined();
+
+    const worktreePath = join(repositoryPath, "..", `maestro-worker-${randomUUID()}`);
+    worktreePaths.push(worktreePath);
+    await recordWorkerWorktree(pool, localGitPort, worker.workerId, worktreePath, proof, headContext("product"));
+    const fs = await import("node:fs/promises");
+    await fs.writeFile(join(worktreePath, "change.txt"), "mission-only change");
+    const commitResult = await localGitPort.commit(worktreePath, "mission: add change", "worker", "worker@example.com");
+    await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
+    await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: add change", [...evidence.references]);
+    const acceptanceId = randomUUID();
+    await pool.query(
+      "INSERT INTO department_acceptances (acceptance_id, worker_id, commit_sha, reason, accepted_by, session_ref, created_at) VALUES ($1, $2, $3, 'looks good', 'head:product', 'opaque:product', transaction_timestamp())",
+      [acceptanceId, worker.workerId, commitResult.commitSha],
+    );
+    const revision = await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
+    const afterRevision = await getGoalGitIntegrationState(pool, goalId);
+    expect(afterRevision.branch).toEqual(goalBranch);
+    expect(afterRevision.latestRevision).toEqual(revision);
+    expect(council.councilId).toBeDefined();
   });
 });

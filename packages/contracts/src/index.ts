@@ -338,6 +338,8 @@ export const GoalIntegrationBranchSchema = z.object({ goalId: UuidSchema, reposi
 export type GoalIntegrationBranch = z.infer<typeof GoalIntegrationBranchSchema>;
 export const DepartmentBranchSchema = z.object({ goalId: UuidSchema, departmentId: z.string().min(1), repositoryPath: z.string().min(1), branchName: z.string().min(1), baseBranchName: z.string().min(1) }).strict();
 export type DepartmentBranch = z.infer<typeof DepartmentBranchSchema>;
+export const GoalGitIntegrationStateSchema = z.object({ goalId: UuidSchema, branch: GoalIntegrationBranchSchema.nullable(), latestRevision: GoalIntegrationRevisionSchema.nullable() }).strict();
+export type GoalGitIntegrationState = z.infer<typeof GoalGitIntegrationStateSchema>;
 export const WorkerWorktreeSchema = z.object({ workerId: UuidSchema, repositoryPath: z.string().min(1), worktreePath: z.string().min(1), branchName: z.string().min(1), baseBranchName: z.string().min(1) }).strict();
 export type WorkerWorktree = z.infer<typeof WorkerWorktreeSchema>;
 /** CEO approval is explicit, time-bounded, and carries the exact action scope. */
