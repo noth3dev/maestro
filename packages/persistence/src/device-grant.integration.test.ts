@@ -180,4 +180,27 @@ describeDatabase("Device grants and command results with PostgreSQL", () => {
     const revoked = await revokeDeviceGrant(pool, grant.grantId, proof, ceo(goalId));
     expect(revoked.state).toBe("revoked");
   });
+
+  it("cascades device revocation to every currently active grant across every Goal (Phase 5 Track B4)", async () => {
+    const { goalId: goalOneId, proof: proofOne, deviceId } = await setupGoalAndDevice();
+    const goalTwoId = randomUUID();
+    await pool.query(
+      "INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())",
+      [goalTwoId, randomUUID()],
+    );
+    const proofTwo = await acquireGoalLease(pool, { goalId: goalTwoId, ownerId: "test", leaseDurationMs: 60_000 });
+
+    const { grant: grantOne } = await createDeviceGrant(pool, goalOneId, deviceId, scope(), new Date(Date.now() + 60_000).toISOString(), proofOne, ceo(goalOneId));
+    const { grant: grantTwo } = await createDeviceGrant(pool, goalTwoId, deviceId, scope(), new Date(Date.now() + 60_000).toISOString(), proofTwo, ceo(goalTwoId));
+    const alreadyRevoked = await revokeDeviceGrant(pool, grantTwo.grantId, proofTwo, ceo(goalTwoId));
+    expect(alreadyRevoked.state).toBe("revoked");
+
+    await revokeDevice(pool, deviceId, { actorId: "ceo", sessionRef: "session:ceo:revoke", role: "ceo" as const });
+
+    expect((await readDeviceGrant(pool, grantOne.grantId))?.state).toBe("revoked");
+    // Already-revoked grant stays revoked, not overwritten with a new revoked_at timestamp.
+    const stillRevoked = await readDeviceGrant(pool, grantTwo.grantId);
+    expect(stillRevoked?.state).toBe("revoked");
+    expect(stillRevoked?.revokedAt).toBe(alreadyRevoked.revokedAt);
+  });
 });

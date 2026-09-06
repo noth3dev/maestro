@@ -224,13 +224,21 @@ export async function setLocalDevicePolicy(pool: Pool, deviceId: string, input: 
   });
 }
 
-/** Revocation is immediate and one-way; retrying the same revoke returns the durable revoked record. */
+/**
+ * Revocation is immediate and one-way; retrying the same revoke returns the durable revoked
+ * record. Cascades to every currently active grant this device holds across every Goal in the
+ * same transaction, so a revoked device's grants durably read as revoked too, not merely
+ * unusable-in-practice via the live `devices.state` check every command claim already makes.
+ * This is a CEO-authorized, cross-Goal admin action; it deliberately does not require a
+ * per-Goal lease proof for each affected grant, the same way `revokeAuthorityRecord` needs none.
+ */
 export async function revokeDevice(pool: Pool, deviceId: string, context: DeviceActorContext): Promise<DeviceRecord> {
   return withMutation(pool, async (client) => {
     await authorizeMutation(client, context, ["ceo"], deviceId);
     const current = await readDeviceInTransaction(client, deviceId, true);
     if (current.state === "revoked") return current;
     await client.query("UPDATE devices SET state = 'revoked', revoked_at = transaction_timestamp() WHERE device_id = $1 AND state = 'enrolled'", [deviceId]);
+    await client.query("UPDATE device_grants SET state = 'revoked', revoked_at = transaction_timestamp() WHERE device_id = $1 AND state = 'active'", [deviceId]);
     return readDeviceInTransaction(client, deviceId);
   });
 }
