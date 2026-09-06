@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { ApiError, createApiClient, type GoalEvent, type GoalResult } from "@maestro/api-client";
+import { startInteractiveTui } from "./tui/entry.js";
 
 export interface CliIo {
   fetch?: typeof globalThis.fetch;
   stdout: (text: string) => void;
   stderr: (text: string) => void;
+  startTui?: (cwd: string, env: Env, io: CliIo) => Promise<number>;
 }
 
 type Env = Record<string, string | undefined>;
@@ -18,6 +20,9 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
   if (args[0] === "--version" || args[0] === "-V") {
     io.stdout("maestro development\n");
     return 0;
+  }
+  if (args.length === 0) {
+    return (io.startTui ?? ((cwd, environment, tuiIo) => startInteractiveTui({ cwd, env: environment, io: tuiIo })))(process.cwd(), env, io);
   }
   try {
     const baseUrl = requireEnvironment(env, "MAESTRO_API_URL");
