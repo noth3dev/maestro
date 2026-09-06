@@ -36,6 +36,7 @@ export function parseInput(input: string): ParsedInput {
   if (!text.startsWith("/")) return { kind: "natural-language", text: input };
   const tokens = tokenize(text.slice(1));
   const [name = "", action, ...rest] = tokens;
+  if (name === "new" && action === undefined && rest.length === 0) return { kind: "command", name: "session", action: "new", options: {} };
   const options: Record<string, string | boolean> = {};
   for (let index = 0; index < rest.length; index += 1) {
     const token = rest[index]!;
@@ -48,3 +49,6 @@ export function parseInput(input: string): ParsedInput {
   }
   return { kind: "command", name, ...(action === undefined ? {} : { action }), options };
 }
+
+
+export function parseSlashCommand(input: string): ParsedInput { return parseInput(input); }
