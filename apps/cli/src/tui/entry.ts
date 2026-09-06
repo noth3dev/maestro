@@ -13,7 +13,7 @@ import { renderApprovalDialog } from "./components/approval-dialog.js";
 import { reconcileTuiSession, type RecoverySummary } from "./recovery.js";
 import { renderRecoveryBanner } from "./components/recovery-banner.js";
 import type { CriticalActionSummary, ConfirmationResult } from "./confirmation.js";
-import { loadWorkspaceSession, saveWorkspaceSession, type WorkspaceSession } from "./session.js";
+import { advanceWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession, startNewConversationSession, type WorkspaceSession } from "./session.js";
 import { mergeEvents, subscribeToEvents } from "./activity-stream.js";
 import { renderActivityTimeline } from "./components/activity-timeline.js";
 import { renderShell, type TuiShellState } from "./components/shell.js";
@@ -42,9 +42,9 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
   const controlPlane = connection.kind === "configured"
     ? await ensureLocalControlPlane({ apiUrl: connection.apiUrl, ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }) })
     : undefined;
-  const session = await loadWorkspaceSession(workspace.cwd);
+  let session = await loadWorkspaceSession(workspace.cwd);
   const connectionReady = connection.kind === "configured" && controlPlane?.kind === "ready";
-  const project = discoverWorkspaceProject(workspace.cwd, session);
+  let project = discoverWorkspaceProject(workspace.cwd, session);
   let client: ApiClient | undefined;
   if (connectionReady && connection.kind === "configured") {
     try {
@@ -82,6 +82,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let activity: GoalEvent[] = [];
     let recovery: RecoverySummary = reconcileTuiSession(workspace.cwd, session);
     let pendingConfirmation: { summary: CriticalActionSummary; resolve: (decision: ConfirmationResult) => void } | undefined;
+    let activityStarted = false;
     const abortController = new AbortController();
     const render = () => {
       const lines = [...renderShell(state, terminal.columns), "", ...renderRecoveryBanner(recovery, terminal.columns)];
@@ -122,7 +123,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       try {
         for await (const event of subscribeToEvents({ client, projectId: project.projectId, cursor: session?.lastEventCursor ?? "0", signal: abortController.signal })) {
           activity = mergeEvents(activity, [event]);
-          const nextSession: WorkspaceSession = { workspacePath: workspace.cwd, projectId: project.projectId, ...(session?.goalId === undefined ? {} : { goalId: session.goalId }), lastEventCursor: event.cursor };
+          const nextSession = advanceWorkspaceSession(workspace.cwd, session, event);
+          session = nextSession;
           await saveWorkspaceSession(nextSession);
           render();
         }
@@ -134,16 +136,32 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       pendingConfirmation = { summary, resolve: resolveConfirmation };
       render();
     });
+    const startActivity = () => {
+      if (activityStarted) return;
+      activityStarted = true;
+      void streamActivity();
+    };
     const submit = async (text: string) => {
       try {
         const parsed = parseInput(text);
         if (parsed.kind === "command" && parsed.name === "session") {
           if (parsed.action === "new") {
-            await saveWorkspaceSession({ workspacePath: workspace.cwd });
-            append("Session reset for this workspace. Restart Maestro to attach a new project.");
+            session = startNewConversationSession(workspace.cwd, session);
+            await saveWorkspaceSession(session);
+            recovery = reconcileTuiSession(workspace.cwd, session);
+            append("New Concertmaster conversation started. Durable Goal state was preserved.");
           } else {
             const current = await loadWorkspaceSession(workspace.cwd);
-            append(current === undefined ? "Session: no saved workspace session" : renderRecoveryBanner(reconcileTuiSession(workspace.cwd, current), terminal.columns).join(" · "));
+            if (current === undefined) {
+              append("Session: no saved workspace session");
+            } else {
+              session = current;
+              project = discoverWorkspaceProject(workspace.cwd, session);
+              recovery = reconcileTuiSession(workspace.cwd, session);
+              append(renderRecoveryBanner(recovery, terminal.columns).join(" · "));
+              void refreshDashboard();
+              startActivity();
+            }
           }
         } else if (parsed.kind === "command" && client !== undefined && project.kind === "attached") {
           const action = registry.find(parsed.name)?.actions.find((item) => item.name === parsed.action);
@@ -215,6 +233,6 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const runtime = createTuiRuntime({ start: () => tui.start(), stop });
     runtime.start();
     void refreshDashboard();
-    void streamActivity();
+    startActivity();
   });
 }
