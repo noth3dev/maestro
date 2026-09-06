@@ -29,11 +29,19 @@ describe("TUI write commands", () => {
     expect(client.pauseGoal).toHaveBeenCalledWith(goalId, { projectId, expectedVersion: 1 }, commandId);
   });
 
-  it("routes the fail-safe emergency stop directly without weakening its server-side authorization", async () => {
+  it("requires explicit confirmation before the server-authorized fail-safe emergency stop", async () => {
     const client = api();
-    const confirm = vi.fn();
+    const confirm = vi.fn().mockResolvedValue("cancelled" as const);
+    await expect(executeWriteCommand({ client, projectId, confirm }, { name: "goal", action: "emergency-stop", options: { "goal-id": goalId, "expected-version": "1", "command-id": commandId } })).resolves.toEqual({ title: "Cancelled", lines: ["No mutation was sent."] });
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(client.emergencyStopGoal).not.toHaveBeenCalled();
+  });
+
+  it("runs the fail-safe emergency stop only after explicit confirmation", async () => {
+    const client = api();
+    const confirm = vi.fn().mockResolvedValue("approved" as const);
     await expect(executeWriteCommand({ client, projectId, confirm }, { name: "goal", action: "emergency-stop", options: { "goal-id": goalId, "expected-version": "1", "command-id": commandId } })).resolves.toEqual({ title: "Goal", lines: [`Goal ${goal.goalId} · stopped · v${goal.version}`] });
-    expect(confirm).not.toHaveBeenCalled();
+    expect(confirm).toHaveBeenCalledOnce();
     expect(client.emergencyStopGoal).toHaveBeenCalledWith(goalId, { projectId, expectedVersion: 1 }, commandId);
   });
 

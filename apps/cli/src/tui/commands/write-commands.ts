@@ -93,7 +93,8 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
   // A local keypress is not a durable CEO approval. Until a critical operation
   // has a server-side approve-and-run binding, fail closed before prompting or
   // invoking any mutation-capable client method.
-  if (action.kind === "critical" && key !== "approval:approve-and-run" && key !== "critical-action:approve-and-run") {
+  const serverAuthorizedSafetyKeys = new Set(["goal:emergency-stop", "metronome:safe-pause"]);
+  if (action.kind === "critical" && key !== "approval:approve-and-run" && key !== "critical-action:approve-and-run" && !serverAuthorizedSafetyKeys.has(key)) {
     return unavailable("Critical action requires the durable Control Plane approval path; no mutation was sent.");
   }
 

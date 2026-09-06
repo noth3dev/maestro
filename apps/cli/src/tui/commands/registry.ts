@@ -7,9 +7,10 @@ const definitions: CommandDefinition[] = ([
   ["critical-action", "durable critical action approval", [["approve-and-run", "critical"]]],
   ["task-contract", "Overture task contract lifecycle", [["create", "write"], ["get", "read"], ["amend", "write"], ["select-roles", "write"], ["confirm", "write"], ["launch", "write"]]],
   ["goals", "Goal discovery", [["list", "read"]]],
-  // Emergency stop is the server-authorized fail-safe lifecycle command: the
-  // Control Plane enforces the concertmaster role and durable Goal command.
-  ["goal", "Goal lifecycle and control", [["create", "write"], ["get", "read"], ["transition", "write"], ["pause", "write"], ["resume", "write"], ["stop", "write"], ["emergency-stop", "write"]]],
+  // Emergency stop is the server-authorized fail-safe lifecycle command. It
+  // still requires explicit local confirmation; the Control Plane enforces the
+  // concertmaster role and records the durable Goal command.
+  ["goal", "Goal lifecycle and control", [["create", "write"], ["get", "read"], ["transition", "write"], ["pause", "write"], ["resume", "write"], ["stop", "write"], ["emergency-stop", "critical"]]],
   ["budget", "budget and cost state", [["get", "read"], ["forecast", "read"]]],
   ["head", "Head activation and participation", [["activate", "write"], ["sleep", "write"], ["resume", "write"]]],
   ["council", "Head Council deliberation", [["create", "write"], ["get", "read"], ["submit-brief", "write"], ["reveal", "write"], ["decide", "write"]]],
@@ -25,7 +26,7 @@ const definitions: CommandDefinition[] = ([
   ["encore-council", "Encore Council records", [["list", "read"]]],
   ["certifications", "Worker certification records", [["list", "read"]]],
   ["concertmaster-report", "Concertmaster report", [["get", "read"]]],
-  ["metronome", "process integrity oversight", [["scan", "read"], ["challenge", "write"], ["correct", "write"], ["safe-pause", "write"], ["resolve", "write"]]],
+  ["metronome", "process integrity oversight", [["scan", "read"], ["challenge", "write"], ["correct", "write"], ["safe-pause", "critical"], ["resolve", "write"]]],
   ["encore", "independent improvement review", [["review", "write"]]],
   ["certification", "quality and conditional certification", [["list", "read"], ["certify", "write"]]],
   ["evidence", "evidence bundles and reports", [["list", "read"], ["bundle", "read"], ["report", "read"]]],
