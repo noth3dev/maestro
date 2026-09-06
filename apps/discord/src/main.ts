@@ -86,5 +86,33 @@ export function createDiscord(config: DiscordConfig, delivery: DiscordDelivery):
     },
   };
 }
-export async function main(env=process.env): Promise<void> { const discord=createDiscord(parseConfig(env),{deliver:async()=>{throw new Error("No delivery transport configured");}}); await discord.listen(); }
+/**
+ * Real HTTP delivery to the control plane's `POST /v1/discord/signals` route. This app buffers
+ * signals durably (`createDiscord`'s own append-only file log) regardless of transport
+ * availability, so a control plane outage never drops a signal -- it retries on the next flush.
+ */
+export function createHttpDelivery(apiUrl: string, apiToken: string, fetchImpl: typeof fetch = fetch): DiscordDelivery {
+  const base = apiUrl.endsWith("/") ? apiUrl : `${apiUrl}/`;
+  return {
+    async deliver(signal) {
+      const response = await fetchImpl(new URL("v1/discord/signals", base), {
+        method: "POST",
+        headers: { authorization: `Bearer ${apiToken}`, "content-type": "application/json" },
+        body: JSON.stringify(signal),
+      });
+      if (!response.ok) throw new Error(`Discord signal delivery failed with HTTP ${response.status}`);
+    },
+  };
+}
+
+export function resolveDelivery(config: DiscordConfig): DiscordDelivery {
+  if (config.targetApiUrl === undefined || config.targetApiToken === undefined) {
+    // Fail closed rather than silently drop or fabricate delivery: signals still buffer durably
+    // and retry once DISCORD_TARGET_API_URL/DISCORD_TARGET_API_TOKEN are configured.
+    return { deliver: async () => { throw new Error("No delivery transport configured -- set DISCORD_TARGET_API_URL and DISCORD_TARGET_API_TOKEN"); } };
+  }
+  return createHttpDelivery(config.targetApiUrl, config.targetApiToken);
+}
+
+export async function main(env=process.env): Promise<void> { const config = parseConfig(env); const discord=createDiscord(config, resolveDelivery(config)); await discord.listen(); }
 if (import.meta.url===new URL(process.argv[1]!,"file:").href) void main().catch(()=>{process.exitCode=1;});

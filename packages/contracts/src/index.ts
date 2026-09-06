@@ -155,7 +155,7 @@ export const StableApiErrorCodeSchema = z.enum([
   "authentication_required", "authentication_unavailable", "credential_forbidden",
   "critical_action_denied", "authority_denied", "critical_action_requires_approval", "critical_action_approval_forbidden", "head_activation_cycle", "head_activation_conflict", "council_not_found", "council_conflict", "council_briefs_sealed", "department_plan_not_found", "department_plan_conflict", "mission_bundle_not_found", "mission_bundle_conflict", "worker_not_found", "worker_conflict", "git_integration_not_found", "git_integration_conflict", "certification_not_found", "certification_conflict", "metronome_not_found", "metronome_conflict", "encore_not_found", "encore_conflict", "project_access_forbidden",
   "task_contract_not_found", "task_contract_conflict", "task_contract_version_conflict",
-  "exact_confirmation_required", "task_contract_integrity_error",
+  "exact_confirmation_required", "task_contract_integrity_error", "discord_signal_rejected",
 ]);
 export const StableApiErrorSchema = z.object({
   error: z.object({ code: StableApiErrorCodeSchema, message: z.string().min(1) }).strict(),
@@ -425,3 +425,38 @@ export const ImprovementDigestSchema = z.object({
 export type ImprovementDigest = z.infer<typeof ImprovementDigestSchema>;
 export const ImprovementDigestListSchema = z.object({ digests: z.array(ImprovementDigestSchema) }).strict();
 export type ImprovementDigestList = z.infer<typeof ImprovementDigestListSchema>;
+
+export const DiscordSignalSchema = z.object({
+  incidentFingerprint: z.string().regex(/^[0-9a-f]{64}$/),
+  firstObservedAt: z.string().min(1),
+  lastObservedAt: z.string().min(1),
+  severity: z.enum(["info", "warning", "critical"]),
+  confidence: z.number(),
+  affectedComponent: z.string().min(1),
+  affectedVersion: z.string().min(1),
+  minimalReproductionEvidence: z.array(z.string()),
+  source: z.string().min(1),
+  sourceFreshness: z.string().min(1),
+  deduplicationRelationship: z.enum(["new", "same", "related"]),
+  discordHealthState: z.enum(["healthy", "degraded", "unhealthy"]),
+}).strict();
+export const AuthenticatedDiscordSignalSchema = z.object({
+  signal: DiscordSignalSchema, nonce: z.string().min(1), sequence: z.number().int(), issuedAt: z.string().min(1), signature: z.string().min(1),
+}).strict();
+export type AuthenticatedDiscordSignal = z.infer<typeof AuthenticatedDiscordSignalSchema>;
+export const StoredDiscordSignalSchema = z.object({
+  incidentFingerprint: z.string().regex(/^[0-9a-f]{64}$/),
+  firstObservedAt: z.string().min(1),
+  lastObservedAt: z.string().min(1),
+  severity: z.enum(["info", "warning", "critical"]),
+  confidence: z.number(),
+  affectedComponent: z.string().min(1),
+  affectedVersion: z.string().min(1),
+  minimalReproductionEvidence: z.array(z.string()),
+  source: z.string().min(1),
+  sourceFreshness: z.string().min(1),
+  deduplicationRelationship: z.enum(["new", "same", "related"]),
+  discordHealthState: z.enum(["healthy", "degraded", "unhealthy"]),
+  signalId: UuidSchema, nonce: z.string().min(1), sequence: z.number().int(), issuedAt: z.string().min(1), signature: z.string().min(1), receivedAt: z.string().min(1),
+}).strict();
+export type StoredDiscordSignal = z.infer<typeof StoredDiscordSignalSchema>;

@@ -1855,3 +1855,45 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   each explicitly, honestly labeled as preview/deferred with every non-functional control disabled
   -- none silently pretend to work. This closes the "Secretary is a fully mocked prototype" finding
   from earlier in this session; it is now a real, if partial, operator console.
+
+
+## 2026-09-06 (continued) — real Discord signal delivery transport; closed the "no delivery transport configured" gap
+
+- Investigated the known gap from earlier in this session (`apps/discord/src/main.ts:89`'s `main()`
+  always throwing "No delivery transport configured"). Found the receiving side was also entirely
+  missing: `packages/persistence/src/discord.ts`'s `recordDiscordSignal` (HMAC-verified,
+  replay-protected, already real-PostgreSQL tested from earlier Phase 4 work) had zero HTTP
+  exposure -- no control-plane route existed to receive a signal at all. This was the fourth such
+  "real backend capability, zero wiring" gap found this session.
+- Added the receiving side: `AuthenticatedDiscordSignalSchema`/`StoredDiscordSignalSchema` contracts,
+  a new optional `discordSignalService` dependency on `buildServer` (fails closed with 503 via the
+  existing `DurableStoreUnavailableError` pattern when unconfigured, exactly like every other
+  optional service), a new authenticated `POST /v1/discord/signals` route, a new
+  `MAESTRO_DISCORD_SIGNAL_CREDENTIAL` control-plane config value (optional; the route stays
+  unavailable until explicitly set, matching this project's fail-closed convention), and a new
+  `discord_signal_rejected` stable API error code. Bearer auth (same as every other route) proves
+  the caller holds a real operator credential; the signal's own HMAC signature is a second,
+  independent layer proving it came from the configured Discord watchdog source specifically.
+- Added the sending side: `apps/discord/src/main.ts`'s `createHttpDelivery` (real `fetch` POST with
+  the exact signed envelope and a bearer token) and `resolveDelivery`, which still fails closed
+  with the original clear error message when `DISCORD_TARGET_API_URL`/`DISCORD_TARGET_API_TOKEN`
+  aren't configured -- the durable local buffer already retries automatically once they are, no
+  signal is ever silently dropped either way.
+- Cleaned up an unrelated stray artifact found while investigating: `apps/firefly/dist` was leftover
+  untracked (gitignored) build output from an earlier "Firefly" rename attempt with no committed
+  source anywhere in the repo's history; removed it as noise, not a functional change.
+- Added focused tests: `apps/discord/src/discord.test.ts` (+4 cases: real POST with exact
+  envelope/bearer header, non-2xx rejection, fail-closed-with-no-target, builds-when-configured) and
+  a new `apps/control-plane/src/discord-signal-route.test.ts` (+4 cases: 401 without auth, 503
+  without a configured service, 201 with the exact stored record on success, 400 on a rejected
+  signal) -- all 8 run and pass without a real database, using the same `buildServer({...fakes})` +
+  `app.inject()` pattern as the existing `critical-action-route.test.ts`.
+- Verified: root `tsc -b` clean, `apps/secretary`'s full build (`tsc -b` + renderer typecheck +
+  `vite build`, 1703 modules) unaffected, root `npm test` (no DB in this runtime): **110 test files
+  (60 passed, 50 skipped), 814 tests (463 passed, 351 skipped), 0 failed** (463 = prior 455 + 8 new).
+- Not yet done: an actual running Discord watchdog source that produces real `DiscordSignal`
+  observations (the current codebase only has the buffering/delivery/receiving plumbing and test
+  fixtures -- no real health-probe/anomaly-detection producer exists anywhere), and the separate
+  "Maestro -> Discord/desktop" *outbound* emergency-notification channel plan/phase4.md #46
+  describes is still not implemented (this slice closed the inbound signal-ingestion direction
+  only).
