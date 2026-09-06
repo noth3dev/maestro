@@ -12,7 +12,7 @@ const definitions: CommandDefinition[] = ([
   ["council", "Head Council deliberation", [["create", "write"], ["get", "read"], ["submit-brief", "write"], ["reveal", "write"], ["decide", "write"]]],
   ["department-plan", "Department Plans", [["create", "write"], ["get", "read"], ["revise", "write"]]],
   ["mission-bundle", "Mission Bundles", [["create", "write"], ["get", "read"]]],
-  ["worker", "Scout and Execution Workers", [["spawn", "write"], ["get", "read"], ["observe", "write"], ["cancel", "write"], ["accept", "write"], ["certify", "write"], ["request-help", "write"]]],
+  ["worker", "Scout and Execution Workers", [["spawn", "write"], ["get", "read"], ["list", "read"], ["observe", "write"], ["cancel", "write"], ["accept", "write"], ["certify", "write"], ["request-help", "write"]]],
   ["git", "Git integration and lineage", [["status", "read"], ["goal-branch", "critical"], ["department-branch", "write"], ["worker-worktree", "write"], ["goal-revision", "write"], ["commit", "critical"], ["integrate", "critical"], ["cleanup", "critical"]]],
   ["environment", "task environments and browsers", [["list", "read"], ["get", "read"], ["create", "write"], ["cleanup", "critical"]]],
   ["device", "enrolled devices and grants", [["list", "read"], ["enroll", "critical"], ["grant", "write"], ["revoke", "critical"], ["dispatch", "write"]]],

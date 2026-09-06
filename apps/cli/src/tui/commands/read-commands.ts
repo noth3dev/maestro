@@ -64,7 +64,7 @@ function valueLines<T extends Record<string, unknown>>(title: string, items: rea
 
 export async function executeReadCommand(context: ReadCommandContext, command: ParsedCommand): Promise<ReadCommandResult> {
   const key = `${command.name}:${command.action ?? ""}`;
-  if (!["task-contract:get", "goals:list", "goal:get", "budget:get", "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "workers:list", "git:status", "metronome-challenges:list", "encore-council:list", "certifications:list", "concertmaster-report:get", "events:list", "improvement-digests:list"].includes(key)) {
+  if (!["task-contract:get", "goals:list", "goal:get", "budget:get", "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "worker:list", "workers:list", "git:status", "metronome-challenges:list", "encore-council:list", "certifications:list", "concertmaster-report:get", "events:list", "improvement-digests:list"].includes(key)) {
     const definition = createCommandRegistry().find(command.name);
     const action = definition?.actions.find((item) => item.name === command.action);
     if (action?.kind !== "read") return unavailable(`${command.name} ${command.action ?? ""} is a mutation; use the write command path`.trim());
@@ -91,7 +91,7 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     const page = await context.client.listEvents({ projectId: context.projectId, after: option(command, "after") ?? "0" });
     return { title: "Events", lines: page.events.length === 0 ? [`No events. Next cursor: ${page.nextCursor}`] : page.events.map((event) => `• ${event.cursor} · ${event.eventType} · ${event.goalId}`) };
   }
-  if (key === "workers:list") {
+  if (key === "worker:list" || key === "workers:list") {
     const goalId = required(command, "goal-id");
     if (typeof goalId !== "string") return goalId;
     const workers = await context.client.listWorkersForGoal(goalId, { projectId: context.projectId });

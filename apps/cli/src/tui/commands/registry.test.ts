@@ -14,6 +14,7 @@ describe("TUI command registry", () => {
     expect(registry.find("goal")?.actions.find((action) => action.name === "get")?.kind).toBe("read");
     expect(registry.find("goal")?.actions.find((action) => action.name === "pause")?.kind).toBe("write");
     expect(registry.find("approval")?.actions.find((action) => action.name === "approve-and-run")?.kind).toBe("critical");
+    expect(registry.find("worker")?.actions.find((action) => action.name === "list")?.kind).toBe("read");
   });
 
   it("autocomplete filters command names", () => {
