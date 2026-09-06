@@ -1897,3 +1897,41 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   "Maestro -> Discord/desktop" *outbound* emergency-notification channel plan/phase4.md #46
   describes is still not implemented (this slice closed the inbound signal-ingestion direction
   only).
+
+
+## 2026-09-06 (continued) — continuous Metronome loop composed (Track A6)
+
+- Added `apps/control-plane/src/metronome-loop.ts`'s `createMetronomeLoop`: a scheduled poller
+  that, on a fixed interval, queries every currently non-terminal Goal (reusing
+  `TERMINAL_GOAL_STATES`/`isTerminalGoalState`'s own definition of terminal, not a new one) and
+  runs the exact same `scanGoalForMetronomeFindings` write path an operator-triggered `metronome
+  scan` command already uses -- this closes the "Metronome is a one-shot callable, not a
+  continuous scheduled/event-driven loop" gap from the Phase 5 remediation plan (Track A item 6),
+  without inventing a second rule engine or duplicating the existing scan logic.
+- A Goal whose lease is contended or whose control latch blocks scanning is reported as an
+  `"error"` outcome via an optional `onTick` observability callback and skipped for that tick --
+  it never stops the rest of the pass or a future tick, and the loop only ever runs one pass at a
+  time (an overlapping tick while a prior pass is still in flight is a safe no-op, not a queued or
+  duplicate pass).
+- Wired into `apps/control-plane/src/main.ts`'s composition: `metronomeLoop.start()` on `listen()`
+  (after migrations/reconciliation/`app.listen`, matching this project's existing "durable state
+  first, traffic second" startup order), `metronomeLoop.stop()` on `close()`. Gated behind a new
+  optional `MAESTRO_METRONOME_INTERVAL_MS` config value; the loop simply does not exist when unset,
+  matching this session's other new-capability fail-closed-until-configured convention (Discord
+  signal credential, TLS for remote binds) and deliberately not changing behavior for the many
+  existing integration tests that construct `createControlPlane(...)` without expecting a
+  background scanner touching their `goals` table.
+- Added 4 focused unit tests (`metronome-loop.test.ts`) covering: scans every non-terminal Goal
+  and reports each outcome; isolates one Goal's error from the rest of the pass; schedules/clears
+  the interval correctly; never runs two overlapping passes concurrently. All use an injected
+  `scanGoal` (a new test-only override point, mirroring this project's existing kernel/effect
+  override pattern) rather than letting the loop reach the real durable scan against a fake pool.
+- Verified: root `tsc -b` clean, `apps/secretary` build unaffected, root `npm test` (no DB in this
+  runtime): **111 test files (61 passed, 50 skipped), 818 tests (467 passed, 351 skipped), 0
+  failed** (467 = prior 463 + 4 new).
+- Explicitly deferred, not done in this slice: expanding the rule set itself (the already-known
+  gap that it omits unsupported-claims/circular-discussion/activation-cycle/scope-budget-authority-
+  divergence/unreviewed-integration findings from plan/phase3.md) -- this slice is the scheduler
+  only, reusing the existing rule set unchanged; and a decision on whether the loop should default
+  to on with a sane interval in production rather than opt-in, which is a product/ops policy
+  choice, not a technical one, left for the next explicit decision point.
