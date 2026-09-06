@@ -13,8 +13,8 @@ export function FlashmobSession({ onBack, onPromote }: { onBack: () => void; onP
     <div className="fm-thread">
       <div className="fm-thread-head">
         <div className="fm-thread-back" onClick={onBack}><Icon name="arrow-left" /> flashmob</div>
-        <div className="fm-thread-title">fix the pricing page copy</div>
-        <span className="badge badge-olive" style={{ marginLeft: 4 }}>active</span>
+        <div className="fm-thread-title">fix the pricing page copy (illustrative example)</div>
+        <span className="badge badge-olive" style={{ marginLeft: 4 }}>example</span>
         <button className="btn btn-sm" style={{ marginLeft: "auto" }} disabled={promoted} onClick={promote}>
           {promoted ? <><Icon name="check" style={{ width: 12, height: 12 }} /> promoted</> : <><Icon name="arrow-up-right" style={{ width: 12, height: 12 }} /> promote to goal</>}
         </button>
@@ -35,13 +35,12 @@ export function FlashmobSession({ onBack, onPromote }: { onBack: () => void; onP
       </div>
       <div className="channel-input">
         <div className="chan-composer">
-          <textarea className="chan-composer-input" placeholder="message this session" rows={1} />
-          <div className="chan-composer-toolbar">
-            <div className="chan-composer-actions">
-              <button className="btn-icon" title="attach file"><Icon name="paperclip" /></button>
-            </div>
-            <button className="chan-composer-send ready"><Icon name="send" /></button>
-          </div>
+          <textarea
+            className="chan-composer-input"
+            placeholder="Flashmob (Vanguard) is a deferred feature -- not wired to a real backend yet."
+            rows={1}
+            disabled
+          />
         </div>
       </div>
     </div>

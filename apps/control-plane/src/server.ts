@@ -35,6 +35,7 @@ import {
   ConcertmasterFinalReportSchema,
   GoalGitIntegrationStateSchema,
   WorkerListSchema,
+  ImprovementDigestListSchema,
   EventQuerySchema,
   EventCursorSchema,
   GoalEventPageSchema,
@@ -229,6 +230,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
     getConcertmasterReport: async () => { throw new DurableStoreUnavailableError(); },
     getGitIntegrationState: async () => { throw new DurableStoreUnavailableError(); },
     listWorkersForGoal: async () => { throw new DurableStoreUnavailableError(); },
+    listImprovementDigestsForGoal: async () => { throw new DurableStoreUnavailableError(); },
   };
   const criticalActions = criticalActionService ?? {
     performCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
@@ -782,6 +784,12 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
     const query = parse(GoalQuerySchema, request.query);
     return reply.send(WorkerListSchema.parse({ workers: await readState.listWorkersForGoal(goalId, query.projectId) }));
+  });
+  app.get("/v1/goals/:goalId/improvement-digests", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const query = parse(GoalQuerySchema, request.query);
+    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
+    return reply.send(ImprovementDigestListSchema.parse({ digests: await readState.listImprovementDigestsForGoal(goalId, query.projectId, operatorId) }));
   });
 
   app.get("/v1/events", async (request, reply) => {

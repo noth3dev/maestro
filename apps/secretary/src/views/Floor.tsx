@@ -6,7 +6,7 @@ export function Floor({ onBack }: { onBack: () => void }) {
       <div className="floor-head">
         <div className="gitbar-back" onClick={onBack} style={{ marginRight: 10 }}><Icon name="arrow-left" /> back</div>
         floor
-        <span className="sub">launch page · movement 2 of 4</span>
+        <span className="sub">illustrative diagram -- not wired to real Goal/Council/worker state yet</span>
       </div>
       <div className="floor-stage">
         <svg viewBox="0 0 480 420" width="100%" height="100%">
@@ -47,7 +47,7 @@ export function Floor({ onBack }: { onBack: () => void }) {
           <g transform="translate(60,40)">
             <path d="M -10 0 A 10 10 0 0 1 10 0" fill="none" stroke="var(--ochre)" strokeWidth={1.5} />
             <circle cx={0} cy={-4} r={1.6} fill="var(--ochre)" />
-            <text x={14} y={4} textAnchor="start" fontSize={7} fill="var(--ochre-text)">1 approval pending</text>
+            <text x={14} y={4} textAnchor="start" fontSize={7} fill="var(--ochre-text)">approvals pending (illustrative)</text>
           </g>
         </svg>
       </div>

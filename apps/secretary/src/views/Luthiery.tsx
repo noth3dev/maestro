@@ -66,7 +66,7 @@ export function Luthiery() {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div className="dash-head" style={{ padding: "14px 20px 0" }}><div className="dash-title">luthiery</div></div>
-      <div className="dash-sub" style={{ padding: "0 20px" }}>tool &amp; skill workshop · cross-goal registry, owned by infrastructure</div>
+      <div className="dash-sub" style={{ padding: "0 20px" }}>tool &amp; skill workshop · illustrative example entries, not wired to a real registry yet</div>
       <div className="page-tabs">
         <div className={`page-tab${tab === "skills" ? " on" : ""}`} onClick={() => setTab("skills")}>skills</div>
         <div className={`page-tab${tab === "tools" ? " on" : ""}`} onClick={() => setTab("tools")}>tools</div>
