@@ -227,6 +227,11 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       printState(io.stdout, result, json);
       return 0;
     }
+    if (resource === "workers" && action === "list") {
+      const result = await client.listWorkersForGoal(string("goal-id"), { projectId: string("project-id") });
+      printState(io.stdout, result, json);
+      return 0;
+    }
     if (resource === "worker" && action === "spawn") {
       const result = await client.spawnWorker(string("council-id"), string("department-id"), parseJsonOption(string("worker-json"), "--worker-json"), string("command-id"));
       printState(io.stdout, result, json);

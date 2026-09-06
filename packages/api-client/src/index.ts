@@ -52,6 +52,7 @@ import {
   MetronomeChallengeListSchema, EncoreCouncilRoundListSchema, CertificationListSchema, ConcertmasterFinalReportSchema,
   type MetronomeChallengeList, type EncoreCouncilRoundList, type CertificationList, type ConcertmasterFinalReport,
   GoalGitIntegrationStateSchema, type GoalGitIntegrationState,
+  WorkerListSchema, type WorkerList,
   StableApiErrorSchema,
   ProjectAccessProvisionInputSchema,
   ProjectAccessProvisionResultSchema,
@@ -180,6 +181,7 @@ export interface ApiClient {
   listCertifications(goalId: string, query: GoalQuery): Promise<CertificationList>;
   getConcertmasterReport(goalId: string, query: GoalQuery): Promise<ConcertmasterFinalReport>;
   getGitIntegrationState(goalId: string, query: GoalQuery): Promise<GoalGitIntegrationState>;
+  listWorkersForGoal(goalId: string, query: GoalQuery): Promise<WorkerList>;
 }
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -489,6 +491,10 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
       const parsed = GoalQuerySchema.parse(query);
       return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/git/integration-state?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, GoalGitIntegrationStateSchema);
     },
+    listWorkersForGoal(goalId, query) {
+      const parsed = GoalQuerySchema.parse(query);
+      return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/workers?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, WorkerListSchema);
+    },
     listEvents(query) {
       const parsed = EventQuerySchema.parse(query);
       return request(`v1/events?${new URLSearchParams({ projectId: parsed.projectId, after: parsed.after })}`, { headers }, GoalEventPageSchema);
@@ -496,4 +502,4 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
   };
 }
 
-export type { CreateGoalInput, CreateTaskContractInput, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, GoalGitIntegrationState };
+export type { CreateGoalInput, CreateTaskContractInput, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, GoalGitIntegrationState, WorkerList };

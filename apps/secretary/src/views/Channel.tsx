@@ -3,11 +3,13 @@ import { Icon } from "../icons.js";
 import { EmptyState } from "../components/EmptyState.js";
 import { useConnection } from "../connection.js";
 import { useGoalDetail } from "../useGoalDetail.js";
+import { useGoalWorkers } from "../useGoalWorkers.js";
 import type { ViewName } from "../views.js";
 
 export function Channel({ onNavigate: _onNavigate }: { onNavigate: (view: ViewName) => void }) {
   const { config } = useConnection();
   const { detail, loading, error } = useGoalDetail();
+  const { workers, loading: workersLoading, error: workersError } = useGoalWorkers();
   const [rosterHidden, setRosterHidden] = useState(false);
 
   if (config === undefined) return <EmptyState />;
@@ -53,11 +55,20 @@ export function Channel({ onNavigate: _onNavigate }: { onNavigate: (view: ViewNa
       </div>
 
       <div className={`roster${rosterHidden ? " hide" : ""}`}>
-        <div className="roster-head">roster</div>
-        <EmptyState
-          title="Not wired here yet"
-          hint="Listing active workers/Heads for a Goal needs a durable read route that doesn't exist yet — only single-worker-by-id lookups exist today."
-        />
+        <div className="roster-head">roster{workers === undefined ? "" : ` · ${workers.length}`}</div>
+        {workersLoading && <p style={{ padding: 12 }}>loading…</p>}
+        {workersError !== undefined && <div className="alert alert-warning" style={{ margin: 12 }}>{workersError}</div>}
+        {!workersLoading && workersError === undefined && workers !== undefined && workers.length === 0 && (
+          <EmptyState title="No workers yet" hint="No worker has been spawned for this Goal yet." />
+        )}
+        {workers?.map((worker) => (
+          <div key={worker.workerId} className="roster-item">
+            <div className="avatar avatar-sm av-terracotta">{worker.departmentId.slice(0, 2).toUpperCase()}</div>
+            <span>{worker.itemId}</span>
+            <span className="roster-role-badge">{worker.departmentId}</span>
+            <div className={`roster-dot ${worker.status === "running" || worker.status === "spawned" ? "dot-active" : "dot-idle"}`} />
+          </div>
+        ))}
       </div>
     </div>
   );
