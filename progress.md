@@ -1687,3 +1687,38 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   all** for Git integration branches/worktrees/revisions (only create/freeze write commands exist)
   -- wiring it for real would require a new control-plane route + domain/persistence read + typed
   client method + apiBridge entry first, a larger slice than the read-wiring done so far.
+
+
+## 2026-09-06 (continued) — real Git integration read surface added; Git view wired
+
+- Added a new durable read path end to end for Git integration state, the one real backend gap
+  found while wiring Secretary's `Git` view: `packages/persistence/src/git-integration.ts`'s
+  `getGoalGitIntegrationState(pool, goalId)` (plain SELECTs over `goal_integration_branches`/
+  `goal_integration_revisions`, no lease/authority proof required since it exposes nothing an
+  authenticated project member could not already infer from the existing write-command surface,
+  and it never spawns Git itself); a new `GoalGitIntegrationStateSchema` contract
+  (`packages/contracts`); `ReadStateService.getGitIntegrationState` (project-scoped, same
+  `assertGoalProject` pattern as every other derived read); a new authenticated
+  `GET /v1/goals/:goalId/git/integration-state` route; a matching typed `ApiClient` method; a new
+  `git status` CLI command; and a new `electron/apiBridge.ts` allowlist entry.
+- Added a focused real-PostgreSQL regression
+  (`packages/persistence/src/git-integration.integration.test.ts`, new case) proving the read
+  reports no branch/no revision before either exists, the exact branch identity once recorded, and
+  the exact frozen revision (revision number + commit SHA) once one exists, reusing the file's
+  existing Goal/Council/Plan/Worker fixture helper. Not run against real PostgreSQL in this runtime
+  (no Docker here, same documented environment gate as the rest of this project) -- self-verified
+  for type correctness and correct skip-registration only; a real-PostgreSQL run is the next
+  checkpoint before this slice can be called accepted.
+- `apps/secretary/src/views/Git.tsx` is now wired via a new `useGitIntegrationState()` hook to the
+  real integration branch (repository path, branch name, base revision) and latest frozen revision
+  (revision number, commit SHA) for the selected Goal -- previously 100% hardcoded (`.worktrees/
+  hero-section`, fake changed-files list, fake `sha256 4f2a...`).
+- Verified: root `tsc -b` clean, `apps/secretary`'s `tsc -p tsconfig.renderer.json --noEmit` clean,
+  `apps/secretary`'s `vite build` succeeds (1701 modules), root `npm test` (no DB in this runtime):
+  **109 test files (59 passed, 50 skipped), 805 tests (455 passed, 350 skipped), 0 failed** (the
+  new Git-integration-state case is the +1 skip).
+- Six real (non-mock) Secretary screens now exist: Dashboard, Evidence Log, Billing, Channel, Git.
+  Remaining fully-mock views: `Home`, `Floor`, `Inbox`, `Settings`, `Luthiery`, `Arrangements`,
+  `Flashmob`, `FlashmobSession`. Department/Mission Bundle/Council reads still have no durable
+  "list workers/Heads for a Goal" route -- the Channel roster and Git's changed-files list remain
+  the two honestly-unwired sections closest to needing that next.

@@ -33,6 +33,7 @@ import {
   EncoreCouncilRoundListSchema,
   CertificationListSchema,
   ConcertmasterFinalReportSchema,
+  GoalGitIntegrationStateSchema,
   EventQuerySchema,
   EventCursorSchema,
   GoalEventPageSchema,
@@ -225,6 +226,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
     listEncoreCouncilRounds: async () => { throw new DurableStoreUnavailableError(); },
     listCertifications: async () => { throw new DurableStoreUnavailableError(); },
     getConcertmasterReport: async () => { throw new DurableStoreUnavailableError(); },
+    getGitIntegrationState: async () => { throw new DurableStoreUnavailableError(); },
   };
   const criticalActions = criticalActionService ?? {
     performCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
@@ -768,6 +770,11 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const report = await readState.getConcertmasterReport(goalId, query.projectId);
     if (!report) throw new GoalNotFoundError();
     return reply.send(ConcertmasterFinalReportSchema.parse(report));
+  });
+  app.get("/v1/goals/:goalId/git/integration-state", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const query = parse(GoalQuerySchema, request.query);
+    return reply.send(GoalGitIntegrationStateSchema.parse(await readState.getGitIntegrationState(goalId, query.projectId)));
   });
 
   app.get("/v1/events", async (request, reply) => {

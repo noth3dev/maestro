@@ -250,3 +250,37 @@ export async function recordIntegrationCommit(pool: Pool, workerId: string, comm
   const row = inserted.rows[0]!;
   return { workerId, commitSha: row.commit_sha, message: row.message, evidenceReferences: row.evidence_references };
 }
+
+/**
+ * Reads the current Goal integration branch and latest frozen revision (if either exists), for
+ * a project-scoped Git-integration-status view. Read-only; requires no lease/authority proof
+ * since it exposes nothing an authenticated project member could not already infer from the
+ * write-command surface, and it never spawns Git itself (durable rows only).
+ */
+export async function getGoalGitIntegrationState(pool: Pool, goalId: string): Promise<{ branch?: GoalIntegrationBranch; latestRevision?: GoalIntegrationRevision }> {
+  const branchResult = await pool.query<{ repository_path: string; branch_name: string; base_revision: string }>(
+    "SELECT repository_path, branch_name, base_revision FROM goal_integration_branches WHERE goal_id = $1", [goalId],
+  );
+  const branch: GoalIntegrationBranch | undefined = branchResult.rowCount === 1
+    ? { goalId, repositoryPath: branchResult.rows[0]!.repository_path, branchName: branchResult.rows[0]!.branch_name, baseRevision: branchResult.rows[0]!.base_revision }
+    : undefined;
+  const revisionResult = await pool.query<{
+    revision_id: string; revision_number: string; repository_path: string; branch_name: string; base_revision: string; commit_sha: string;
+  }>(
+    `SELECT revision_id, revision_number, repository_path, branch_name, base_revision, commit_sha
+       FROM goal_integration_revisions WHERE goal_id = $1
+       ORDER BY revision_number DESC LIMIT 1`, [goalId],
+  );
+  const latestRevision: GoalIntegrationRevision | undefined = revisionResult.rowCount === 1
+    ? {
+      revisionId: revisionResult.rows[0]!.revision_id,
+      revisionNumber: Number(revisionResult.rows[0]!.revision_number),
+      goalId,
+      repositoryPath: revisionResult.rows[0]!.repository_path,
+      branchName: revisionResult.rows[0]!.branch_name,
+      baseRevision: revisionResult.rows[0]!.base_revision,
+      commitSha: revisionResult.rows[0]!.commit_sha.trim(),
+    }
+    : undefined;
+  return { ...(branch === undefined ? {} : { branch }), ...(latestRevision === undefined ? {} : { latestRevision }) };
+}

@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 import type { GoalBudgetSummary, GoalResult } from "@maestro/contracts";
-import { listMetronomeChallenges, listEncoreCouncilRounds, listQualityCertifications, listConditionalCertifications, readConcertmasterFinalReport, type MetronomeChallenge, type EncoreCouncilRound, type QualityCertification, type ConditionalCertification, type ConcertmasterFinalReport } from "@maestro/persistence";
+import { listMetronomeChallenges, listEncoreCouncilRounds, listQualityCertifications, listConditionalCertifications, readConcertmasterFinalReport, getGoalGitIntegrationState, type MetronomeChallenge, type EncoreCouncilRound, type QualityCertification, type ConditionalCertification, type ConcertmasterFinalReport } from "@maestro/persistence";
+import type { GoalGitIntegrationState } from "@maestro/contracts";
 
 export class ReadStateGoalNotFoundError extends Error {}
 export interface ReadStateService {
@@ -10,6 +11,7 @@ export interface ReadStateService {
   listEncoreCouncilRounds(goalId: string, projectId: string): Promise<readonly EncoreCouncilRound[]>;
   listCertifications(goalId: string, projectId: string): Promise<readonly (QualityCertification & { kind: "quality" } | ConditionalCertification)[]>;
   getConcertmasterReport(goalId: string, projectId: string): Promise<ConcertmasterFinalReport | undefined>;
+  getGitIntegrationState(goalId: string, projectId: string): Promise<GoalGitIntegrationState>;
 }
 
 export function createReadStateService(pool: Pool): ReadStateService {
@@ -43,6 +45,11 @@ export function createReadStateService(pool: Pool): ReadStateService {
       await assertGoalProject(goalId, projectId);
       const row = await pool.query<{ report_id: string }>("SELECT report_id FROM concertmaster_final_reports WHERE goal_id = $1 ORDER BY created_at DESC, report_id DESC LIMIT 1", [goalId]);
       return row.rowCount === 1 ? readConcertmasterFinalReport(pool, row.rows[0]!.report_id) : undefined;
+    },
+    async getGitIntegrationState(goalId, projectId) {
+      await assertGoalProject(goalId, projectId);
+      const state = await getGoalGitIntegrationState(pool, goalId);
+      return { goalId, branch: state.branch ?? null, latestRevision: state.latestRevision ?? null };
     },
   };
 }
