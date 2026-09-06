@@ -1,7 +1,8 @@
 export type MetronomeRuleId =
   | "stale_worker_superseded_plan"
   | "worker_missing_plan_item"
-  | "missing_evidence_reference";
+  | "missing_evidence_reference"
+  | "device_command_unknown_outcome";
 
 /** A finding is deduplicated by (goalId, ruleId, evidenceIdentity, planVersion) -- a durable, stable key, not a random id. */
 export interface MetronomeFinding {
@@ -47,6 +48,25 @@ export function detectMissingPlanItemFindings(goalId: string, currentPlanItemsBy
     }
   }
   return findings;
+}
+
+export interface UnknownDeviceCommandFact {
+  readonly commandId: string;
+  readonly deviceId: string;
+  readonly grantId: string;
+}
+
+/**
+ * A device command claim durably marked `unknown` (a process crash left the real OS-side outcome
+ * unresolvable -- see `markUnresolvedDeviceAgentCommandsUnknown`) is exactly the "unexpected side
+ * effect" case Metronome must surface: the system genuinely does not know whether the effect
+ * happened, so a human must see it rather than it sitting silently in a device-only table.
+ */
+export function detectDeviceCommandUnknownOutcomeFindings(goalId: string, planVersion: number, unresolvedCommands: readonly UnknownDeviceCommandFact[]): readonly MetronomeFinding[] {
+  return unresolvedCommands.map((command) => ({
+    goalId, ruleId: "device_command_unknown_outcome", evidenceIdentity: command.commandId, planVersion,
+    details: { commandId: command.commandId, deviceId: command.deviceId, grantId: command.grantId },
+  }));
 }
 
 /** An evidence reference recorded as durable evidence for this Goal that does not actually resolve to a durable evidence record is missing or corrupt. */

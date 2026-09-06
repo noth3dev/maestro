@@ -11,6 +11,10 @@ import { createMissionBundle } from "./mission-bundle.js";
 import { spawnWorker } from "./worker.js";
 import { listMetronomeFindings, resolveMetronomeFinding, scanGoalForMetronomeFindings, MetronomeFindingNotFoundError } from "./metronome.js";
 import { MetronomeAuthorizationError } from "./metronome-challenge.js";
+import { enrollDevice, setLocalDevicePolicy } from "./device.js";
+import { createDeviceGrant } from "./device-grant.js";
+import { openDeviceAgentSession } from "./device-session.js";
+import { markUnresolvedDeviceAgentCommandsUnknown } from "./device-agent-runtime.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -155,6 +159,34 @@ describeDatabase("Metronome deterministic findings with PostgreSQL", () => {
     await expect(resolveMetronomeFinding(pool, finding!.findingId, "intruder resolution", proof, intruderContext("finding"))).rejects.toThrow();
     const stillOpen = await listMetronomeFindings(pool, goalId);
     expect(stillOpen.some((item) => item.findingId === finding!.findingId)).toBe(true);
+  });
+
+  it("flags a device command claim left unknown by a crash, and stays silent once it resolves", async () => {
+    const { goalId, proof } = await setupPlan();
+    const device = await enrollDevice(pool, { displayName: "test device", deviceType: "computer", publicKey: "metronome-device-key" }, { actorId: "ceo", sessionRef: "session:ceo", role: "ceo" });
+    await setLocalDevicePolicy(pool, device.deviceId, { rules: [{ action: "project.file.read", targets: ["/tmp/project/file.txt"] }], expiresAt: null }, { actorId: "ceo", sessionRef: "session:ceo:policy", role: "ceo" });
+    const issued = await createDeviceGrant(
+      pool, goalId, device.deviceId,
+      { actionTypes: ["project.file.read"], projectPaths: ["/tmp/project"], applications: ["filesystem"], dataScope: ["/tmp/project/file.txt"], networkScope: ["none"] },
+      new Date(Date.now() + 60_000).toISOString(), proof, { actorId: "ceo", sessionRef: "session:ceo:grant", role: "ceo" },
+    );
+    const sessionId = randomUUID();
+    await openDeviceAgentSession(pool, sessionId, device.deviceId, device.identityFingerprint);
+    const commandId = randomUUID();
+    await pool.query(
+      `INSERT INTO device_command_claims (command_id, grant_id, session_id, goal_id, project_id, device_id, action, target, application, data_resource, network_target, policy_version, goal_fencing_token, sequence)
+       VALUES ($1, $2, $3, $4, $5, $6, 'project.file.read', '/tmp/project/file.txt', 'filesystem', '/tmp/project/file.txt', 'none', 2, $7::bigint, 1)`,
+      [commandId, issued.grant.grantId, sessionId, goalId, (await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId])).rows[0]!.project_id, device.deviceId, proof.fencingToken],
+    );
+    expect(await markUnresolvedDeviceAgentCommandsUnknown(pool, device.deviceId)).toBe(1);
+
+    const findings = await scanGoalForMetronomeFindings(pool, goalId, proof, metronomeContext("device-unknown"));
+    const deviceFindings = findings.filter((finding) => finding.ruleId === "device_command_unknown_outcome");
+    expect(deviceFindings).toHaveLength(1);
+    expect(deviceFindings[0]).toMatchObject({ evidenceIdentity: commandId, details: { commandId, deviceId: device.deviceId, grantId: issued.grant.grantId } });
+
+    const rescan = await scanGoalForMetronomeFindings(pool, goalId, proof, metronomeContext("device-unknown-rescan"));
+    expect(rescan.filter((finding) => finding.ruleId === "device_command_unknown_outcome")).toHaveLength(0);
   });
 
   it("throws MetronomeFindingNotFoundError for a missing finding", async () => {
