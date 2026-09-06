@@ -1,4 +1,6 @@
 import { createTuiRuntime, type TuiTerminal } from "./runtime.js";
+import { resolveWorkspace } from "./workspace.js";
+import { renderShell, type TuiShellState } from "./components/shell.js";
 import type { CliIo } from "../main.js";
 
 export interface InteractiveTuiOptions {
@@ -7,11 +9,11 @@ export interface InteractiveTuiOptions {
   io: CliIo;
 }
 
-function createProcessTerminal(options: InteractiveTuiOptions, onExit: () => void): TuiTerminal {
+function createProcessTerminal(options: InteractiveTuiOptions, state: TuiShellState, onExit: () => void): TuiTerminal {
   let onData: ((data: Buffer) => void) | undefined;
   return {
     start() {
-      options.io.stdout("\x1b[2J\x1b[HMAESTRO / CONCERTMASTER\n\nWorkspace: " + options.cwd + "\n\nPress Ctrl+C to exit.\n");
+      options.io.stdout("\x1b[2J\x1b[H" + renderShell(state, process.stdout.columns ?? 80).join("\n") + "\n");
       onData = (data) => {
         if (data[0] === 3) onExit();
       };
@@ -28,9 +30,18 @@ function createProcessTerminal(options: InteractiveTuiOptions, onExit: () => voi
 }
 
 export async function startInteractiveTui(options: InteractiveTuiOptions): Promise<number> {
+  const workspace = await resolveWorkspace(options.cwd);
+  const state: TuiShellState = {
+    workspace,
+    connection: { kind: "connecting" },
+    goal: { kind: "empty" },
+    workers: { kind: "empty" },
+    approvals: { kind: "empty" },
+    budget: { kind: "empty" },
+  };
   return await new Promise<number>((resolve) => {
     let runtime: ReturnType<typeof createTuiRuntime>;
-    const terminal = createProcessTerminal(options, () => {
+    const terminal = createProcessTerminal(options, state, () => {
       runtime.stop();
       resolve(0);
     });
