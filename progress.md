@@ -2048,3 +2048,36 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   it uses), not a wiring gap, and was deliberately not forced in this pass to avoid inventing an
   under-specified abstraction. Recorded here as the one explicit open decision blocking full Track
   B closure.
+
+
+## 2026-09-06 (continued) — canonical Phase 5 begins: cross-Goal isolation regression (readiness check)
+
+- Started canonical Phase 5 (`plan/phase5.md`, "Concurrent Goals and Portfolio Control") --
+  distinct from this session's earlier "Phase 5 remediation plan" (an internally-numbered bridge
+  effort, now substantially closed; see the earlier naming-collision note in this file).
+  Canonical Phase 5 has no capacity model, admission control, or Portfolio Council anywhere in the
+  codebase yet -- a genuinely new feature area, not a wiring gap.
+- Before adding any new scheduling/capacity machinery, verified the foundational assumption it
+  would be built on: that the existing per-Goal-identity architecture already isolates concurrent
+  Goals correctly. Added
+  `apps/control-plane/src/concurrent-goals-isolation.integration.test.ts` (4 real-PostgreSQL
+  regressions, directly mapped to plan/phase5.md's own Tests #2 and #6): two Goals in one project
+  keep distinct budget envelopes; two Goals can each hold their own device grant against the same
+  enrolled device without collision; two Goals keep distinct improvement digests and a reader
+  without project membership is rejected; and every derived read (`getBudgetSummary`,
+  `listWorkersForGoal`, `getGitIntegrationState`) rejects a Goal/project pair that does not match.
+  Deliberately scoped to the lightest fixtures (budget/device-grant/improvement-digest, all of
+  which need only a bare Goal row, not a full Council/Plan/Worker pipeline) rather than a slower,
+  heavier full-pipeline two-Goal test, since the isolation property being proven is the same either
+  way (goal_id-scoped WHERE clauses and project-membership checks), not something only a full
+  pipeline could reveal.
+- Not run against real PostgreSQL in this runtime (no Docker/local Postgres here); self-verified
+  for type correctness and skip-registration only.
+- Verified: root `tsc -b` clean, root `npm test` (no DB in this runtime): **112 test files (61
+  passed, 51 skipped), 828 tests (469 passed, 359 skipped), 0 failed** (359 = prior 355 + 4 new,
+  DB-gated skips).
+- Next real Phase 5 slice: `plan/phase5.md`'s work-sequence step 2, resource inventory/demand
+  reservations/protected floors/admission control -- genuinely new capacity-tracking machinery,
+  not an extension of an existing capability. This is a substantially larger design/implementation
+  effort than anything closed so far this session and is the recommended next checkpoint before
+  continuing further.
