@@ -164,3 +164,14 @@ describe("project access provisioning", () => {
     expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/admin/project-access", expect.objectContaining({ method: "POST", headers: { authorization: "Bearer secret", "content-type": "application/json" }, body: JSON.stringify({ operatorId, projectId, roles: ["concertmaster", "head-product"] }) }));
   });
 });
+
+
+it("streams authenticated durable events from the reconnect cursor", async () => {
+  const event = { cursor: "8", eventId: commandId, projectId, goalId, aggregateVersion: "1", eventType: "goal.running", schemaVersion: 1, payload: {}, occurredAt: "2030-01-01T00:00:00.000Z" };
+  const fetch = vi.fn().mockResolvedValue(new Response(`id: 8\nevent: goal-event\ndata: ${JSON.stringify(event)}\n\n: heartbeat\n\n`));
+  const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+  const received = [];
+  for await (const item of client.streamEvents({ projectId, after: "7" })) received.push(item);
+  expect(received).toEqual([event]);
+  expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/events/stream?projectId=${projectId}&after=7`, expect.objectContaining({ headers: { authorization: "Bearer secret" }, redirect: "error" }));
+});
