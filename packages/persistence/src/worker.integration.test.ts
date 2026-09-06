@@ -8,7 +8,7 @@ import { acquireGoalLease, executeGoalCommand } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
-import { bindWorkerInvocation, cancelUnboundWorkerAfterBindingFailure, cancelWorker, markWorkerTerminal, markWorkerUnknown, observeWorker, promptWorkerUnderOwnerClaim, readWorker, recoverWorkerAfterRestart, spawnWorker, WorkerError, WorkerNotFoundError } from "./worker.js";
+import { bindWorkerInvocation, cancelUnboundWorkerAfterBindingFailure, cancelWorker, listWorkersForGoal, markWorkerTerminal, markWorkerUnknown, observeWorker, promptWorkerUnderOwnerClaim, readWorker, recoverWorkerAfterRestart, spawnWorker, WorkerError, WorkerNotFoundError } from "./worker.js";
 import { reconcileOnStartup } from "./reconciliation.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -633,5 +633,20 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
 
   it("throws WorkerNotFoundError for a missing worker", async () => {
     await expect(readWorker(pool, randomUUID())).rejects.toBeInstanceOf(WorkerNotFoundError);
+  });
+
+  it("lists every worker whose Head Council is bound to the Goal, for the Secretary/CLI roster view", async () => {
+    const { goalId, council, plan, bundle, proof } = await setupBundle();
+    const kernel = fakeKernel();
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: bundle.itemId }, proof, headContext("product"));
+
+    const emptyGoal = await listWorkersForGoal(pool, randomUUID());
+    expect(emptyGoal).toEqual([]);
+
+    const workers = await listWorkersForGoal(pool, goalId);
+    expect(workers).toHaveLength(1);
+    expect(workers[0]?.workerId).toBe(worker.workerId);
+    expect(workers[0]?.councilId).toBe(council.councilId);
+    expect(workers[0]?.departmentId).toBe("product");
   });
 });

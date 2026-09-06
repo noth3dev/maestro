@@ -322,6 +322,8 @@ export const WorkerSchema = z.object({
   status: z.enum(["spawned", "running", "succeeded", "failed", "cancelled", "unknown"]), answerText: z.string().nullable(), usageTotalTokens: z.number().int().nonnegative().nullable(),
 }).strict();
 export type Worker = z.infer<typeof WorkerSchema>;
+export const WorkerListSchema = z.object({ workers: z.array(WorkerSchema) }).strict();
+export type WorkerList = z.infer<typeof WorkerListSchema>;
 export const SpawnWorkerInputSchema = z.object({ projectId: UuidSchema, planVersion: z.number().int().positive(), itemId: z.string().min(1) }).strict();
 export type SpawnWorkerInput = z.infer<typeof SpawnWorkerInputSchema>;
 export const WorkerActionInputSchema = z.object({ projectId: UuidSchema }).strict();

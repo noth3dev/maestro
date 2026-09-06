@@ -1,7 +1,8 @@
 import type { Pool } from "pg";
 import type { GoalBudgetSummary, GoalResult } from "@maestro/contracts";
-import { listMetronomeChallenges, listEncoreCouncilRounds, listQualityCertifications, listConditionalCertifications, readConcertmasterFinalReport, getGoalGitIntegrationState, type MetronomeChallenge, type EncoreCouncilRound, type QualityCertification, type ConditionalCertification, type ConcertmasterFinalReport } from "@maestro/persistence";
+import { listMetronomeChallenges, listEncoreCouncilRounds, listQualityCertifications, listConditionalCertifications, readConcertmasterFinalReport, getGoalGitIntegrationState, listWorkersForGoal, type MetronomeChallenge, type EncoreCouncilRound, type QualityCertification, type ConditionalCertification, type ConcertmasterFinalReport } from "@maestro/persistence";
 import type { GoalGitIntegrationState } from "@maestro/contracts";
+import type { Worker } from "@maestro/domain";
 
 export class ReadStateGoalNotFoundError extends Error {}
 export interface ReadStateService {
@@ -12,6 +13,7 @@ export interface ReadStateService {
   listCertifications(goalId: string, projectId: string): Promise<readonly (QualityCertification & { kind: "quality" } | ConditionalCertification)[]>;
   getConcertmasterReport(goalId: string, projectId: string): Promise<ConcertmasterFinalReport | undefined>;
   getGitIntegrationState(goalId: string, projectId: string): Promise<GoalGitIntegrationState>;
+  listWorkersForGoal(goalId: string, projectId: string): Promise<readonly Worker[]>;
 }
 
 export function createReadStateService(pool: Pool): ReadStateService {
@@ -50,6 +52,10 @@ export function createReadStateService(pool: Pool): ReadStateService {
       await assertGoalProject(goalId, projectId);
       const state = await getGoalGitIntegrationState(pool, goalId);
       return { goalId, branch: state.branch ?? null, latestRevision: state.latestRevision ?? null };
+    },
+    async listWorkersForGoal(goalId, projectId) {
+      await assertGoalProject(goalId, projectId);
+      return listWorkersForGoal(pool, goalId);
     },
   };
 }

@@ -1722,3 +1722,34 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   `Flashmob`, `FlashmobSession`. Department/Mission Bundle/Council reads still have no durable
   "list workers/Heads for a Goal" route -- the Channel roster and Git's changed-files list remain
   the two honestly-unwired sections closest to needing that next.
+
+
+## 2026-09-06 (continued) — real "workers for a Goal" read surface added; roster and pipeline wired
+
+- Added the second new durable read path this session, found while wiring Channel's roster and
+  Dashboard's pipeline: `packages/persistence/src/worker.ts`'s `listWorkersForGoal(pool, goalId)`
+  (reuses the existing `workerSelectWithGoalSql()` join against `head_councils` already used
+  internally for lease-guarded single-worker reads; no lease/authority proof required, same
+  reasoning as `getGoalGitIntegrationState`); a new `WorkerListSchema` contract; a new
+  `ReadStateService.listWorkersForGoal` (project-scoped); a new authenticated
+  `GET /v1/goals/:goalId/workers` route; a matching typed `ApiClient` method; a new
+  `workers list` CLI command; and a new `electron/apiBridge.ts` allowlist entry.
+- Added a focused real-PostgreSQL regression in `packages/persistence/src/worker.integration.test.ts`
+  proving an unrelated Goal returns an empty list and a Goal with one spawned worker returns exactly
+  that worker with the correct council/department binding. Not run against real PostgreSQL in this
+  runtime (no Docker here); self-verified for type correctness and skip-registration only.
+- `Channel.tsx`'s roster sidebar and `Dashboard.tsx`'s "pipeline" kanban now render the real worker
+  list for the selected Goal via a new `useGoalWorkers()` hook (status, department, item, attempt
+  count), replacing both remaining `EmptyState` placeholders that existed only because this read
+  route did not exist yet.
+- Verified: root `tsc -b` clean, `apps/secretary`'s `tsc -p tsconfig.renderer.json --noEmit` clean,
+  `apps/secretary`'s `vite build` succeeds (1702 modules), root `npm test` (no DB in this runtime):
+  **109 test files (59 passed, 50 skipped), 806 tests (455 passed, 351 skipped), 0 failed**.
+- All six wired Secretary screens (Dashboard, Evidence Log, Billing, Channel, Git) are now backed
+  entirely by real durable reads, with zero remaining fabricated numbers anywhere in them. Only
+  genuinely unimplemented sections (daily spend history, per-department usage, cross-Goal budget
+  rollup, Council/Plan detail beyond worker status) still show `EmptyState`, and each cites exactly
+  which durable read surface is missing. Remaining fully-mock views for the next slice: `Home`,
+  `Floor`, `Inbox`, `Settings`, `Luthiery`, `Arrangements`, `Flashmob`, `FlashmobSession` --
+  several of these (Settings especially) are pure app-preference screens with no backend
+  counterpart needed, and should be triaged individually rather than assumed all need real data.

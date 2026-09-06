@@ -5,6 +5,7 @@ import { useT } from "../i18n/index.js";
 import { useConnection } from "../connection.js";
 import { useGoals } from "../goals.js";
 import { useGoalDetail } from "../useGoalDetail.js";
+import { useGoalWorkers } from "../useGoalWorkers.js";
 import { summarizeDashboard } from "../lib/dashboard-data.js";
 import { runGoalControlAction, type GoalControlAction } from "../lib/goal-control.js";
 import type { ViewName } from "../views.js";
@@ -25,6 +26,7 @@ export function Dashboard({ onNavigate: _onNavigate }: { onNavigate: (view: View
   const { config } = useConnection();
   const { goals, selectedGoalId, selectGoal } = useGoals();
   const { detail, loading, error, refresh } = useGoalDetail();
+  const { workers, loading: workersLoading, error: workersError } = useGoalWorkers();
   const summary = summarizeDashboard(goals, detail);
   const [controlError, setControlError] = useState<string | undefined>(undefined);
   const [pendingAction, setPendingAction] = useState<GoalControlAction | undefined>(undefined);
@@ -105,10 +107,38 @@ export function Dashboard({ onNavigate: _onNavigate }: { onNavigate: (view: View
       </div>
 
       <div className="dash-section-title">pipeline</div>
-      <EmptyState
-        title="Council, Plan, and Mission Bundle state aren't wired here yet"
-        hint="The durable data exists in the control plane, but this screen doesn't read it yet. Only real Goal, budget, certification, and lifecycle-control state above is live."
-      />
+      {workersLoading && <p>loading…</p>}
+      {workersError !== undefined && <div className="alert alert-warning">{workersError}</div>}
+      {!workersLoading && workersError === undefined && workers !== undefined && workers.length === 0 && (
+        <EmptyState title="No workers yet" hint="No worker has been spawned for this Goal yet." />
+      )}
+      {workers !== undefined && workers.length > 0 && (
+        <div className="kanban">
+          {(["spawned", "running", "succeeded", "failed", "cancelled", "unknown"] as const).map((status) => {
+            const columnWorkers = workers.filter((worker) => worker.status === status);
+            if (columnWorkers.length === 0) return null;
+            return (
+              <div key={status}>
+                <div className="kanban-col-head">{status} <span className="n">{columnWorkers.length}</span></div>
+                <div className="kanban-col">
+                  {columnWorkers.map((worker) => (
+                    <div key={worker.workerId} className="kcard">
+                      <div className="kcard-title">{worker.itemId}</div>
+                      <div className="kcard-meta">
+                        <div className="kcard-dept"><Icon name="code" /> {worker.departmentId}</div>
+                        <span className="badge kcard-badge">attempt {worker.attempt}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+        Council/Department Plan/Mission Bundle detail beyond worker status isn't wired here yet -- only the durable worker list above is live.
+      </p>
     </div>
   );
 }

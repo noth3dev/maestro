@@ -583,3 +583,17 @@ export async function cancelWorker(pool: Pool, kernel: ExecutionKernelPort, work
     return result;
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
+
+/**
+ * Lists every worker whose Head Council is bound to the given Goal, for a project-scoped Goal
+ * "roster/pipeline" read view. Read-only; requires no lease/authority proof for the same reason
+ * as `getGoalGitIntegrationState` -- it exposes only already-durable per-worker state a project
+ * member could already read one worker at a time via `readWorker`.
+ */
+export async function listWorkersForGoal(pool: Pool, goalId: string): Promise<readonly Worker[]> {
+  const result = await pool.query<WorkerRow>(
+    workerSelectWithGoalSql() + " WHERE hc.goal_id = $1 ORDER BY w.council_id, w.department_id, w.plan_version, w.item_id, w.attempt",
+    [goalId],
+  );
+  return result.rows.map(mapWorker);
+}

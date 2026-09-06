@@ -34,6 +34,7 @@ import {
   CertificationListSchema,
   ConcertmasterFinalReportSchema,
   GoalGitIntegrationStateSchema,
+  WorkerListSchema,
   EventQuerySchema,
   EventCursorSchema,
   GoalEventPageSchema,
@@ -227,6 +228,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
     listCertifications: async () => { throw new DurableStoreUnavailableError(); },
     getConcertmasterReport: async () => { throw new DurableStoreUnavailableError(); },
     getGitIntegrationState: async () => { throw new DurableStoreUnavailableError(); },
+    listWorkersForGoal: async () => { throw new DurableStoreUnavailableError(); },
   };
   const criticalActions = criticalActionService ?? {
     performCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
@@ -775,6 +777,11 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
     const query = parse(GoalQuerySchema, request.query);
     return reply.send(GoalGitIntegrationStateSchema.parse(await readState.getGitIntegrationState(goalId, query.projectId)));
+  });
+  app.get("/v1/goals/:goalId/workers", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const query = parse(GoalQuerySchema, request.query);
+    return reply.send(WorkerListSchema.parse({ workers: await readState.listWorkersForGoal(goalId, query.projectId) }));
   });
 
   app.get("/v1/events", async (request, reply) => {
