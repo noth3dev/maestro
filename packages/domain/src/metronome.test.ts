@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectMissingEvidenceFindings, detectMissingPlanItemFindings, detectStaleWorkerFindings } from "./metronome.js";
+import { detectDeviceCommandUnknownOutcomeFindings, detectMissingEvidenceFindings, detectMissingPlanItemFindings, detectStaleWorkerFindings } from "./metronome.js";
 
 describe("Metronome deterministic rule catalog", () => {
   it("flags a worker spawned against a superseded plan version and stays silent on the current version", () => {
@@ -36,5 +36,18 @@ describe("Metronome deterministic rule catalog", () => {
     const findings = detectMissingEvidenceFindings("goal-1", 1, ["real-evidence", "fake-evidence", "fake-evidence", ""], durable);
     expect(findings).toHaveLength(1);
     expect(findings[0]!.evidenceIdentity).toBe("fake-evidence");
+  });
+
+  it("flags every device command left in an unresolved (unknown) outcome state, one finding per command", () => {
+    const findings = detectDeviceCommandUnknownOutcomeFindings("goal-1", 0, [
+      { commandId: "cmd-1", deviceId: "device-1", grantId: "grant-1" },
+      { commandId: "cmd-2", deviceId: "device-2", grantId: "grant-2" },
+    ]);
+    expect(findings).toHaveLength(2);
+    expect(findings[0]).toMatchObject({ ruleId: "device_command_unknown_outcome", evidenceIdentity: "cmd-1", details: { deviceId: "device-1", grantId: "grant-1" } });
+  });
+
+  it("stays silent when no device command is unresolved", () => {
+    expect(detectDeviceCommandUnknownOutcomeFindings("goal-1", 0, [])).toHaveLength(0);
   });
 });

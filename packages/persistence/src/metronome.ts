@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { detectMissingEvidenceFindings, detectMissingPlanItemFindings, detectStaleWorkerFindings, normalizeMetronomeIdentity, type DepartmentPlanItem, type MetronomeFinding } from "@maestro/domain";
+import { detectDeviceCommandUnknownOutcomeFindings, detectMissingEvidenceFindings, detectMissingPlanItemFindings, detectStaleWorkerFindings, normalizeMetronomeIdentity, type DepartmentPlanItem, type MetronomeFinding } from "@maestro/domain";
 import type { Pool } from "pg";
 import { assertMetronomeMutationAuthorized, requireMetronomeAuthorization, type MetronomeActorContext } from "./metronome-challenge.js";
 import type { GoalLeaseProof } from "./commands.js";
@@ -80,10 +80,16 @@ export async function scanGoalForMetronomeFindings(
     const allReferences = referencedEvidence.rows.flatMap((row) => row.evidence_references);
     const currentMaxPlanVersion = Math.max(0, ...[...currentPlanVersionByDepartment.values()]);
 
+    const unresolvedDeviceCommands = (await client.query<{ command_id: string; device_id: string; grant_id: string }>(
+      "SELECT command_id, device_id, grant_id FROM device_command_claims WHERE goal_id = $1 AND state = 'unknown'",
+      [normalizedGoalId],
+    )).rows.map((row) => ({ commandId: row.command_id, deviceId: row.device_id, grantId: row.grant_id }));
+
     const findings = [
       ...detectStaleWorkerFindings(normalizedGoalId, currentPlanVersionByDepartment, workerFacts),
       ...detectMissingPlanItemFindings(normalizedGoalId, currentPlanItemsByDepartment, workerFacts),
       ...detectMissingEvidenceFindings(normalizedGoalId, currentMaxPlanVersion, allReferences, durableEvidence),
+      ...detectDeviceCommandUnknownOutcomeFindings(normalizedGoalId, 0, unresolvedDeviceCommands),
     ];
 
     const recorded: MetronomeFindingRecord[] = [];

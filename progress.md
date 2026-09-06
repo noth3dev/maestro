@@ -2006,3 +2006,45 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   dependent-work pause lifecycle (no device session/heartbeat/disconnect tracking beyond the mTLS
   session table itself) and Metronome device-access observation rules (Metronome never reads
   device/grant/result state). Both remain open, moderate-sized, separate slices.
+
+
+## 2026-09-06 (continued) — Metronome device-access observation rule (Track B7, partial)
+
+- Closed part of Phase 5 Track B7 ("Metronome never reads device/grant/result state"). Added
+  `packages/domain/src/metronome.ts`'s `detectDeviceCommandUnknownOutcomeFindings` and a new
+  `"device_command_unknown_outcome"` rule id, wired into `scanGoalForMetronomeFindings`
+  (`packages/persistence/src/metronome.ts`) via a new query against `device_command_claims WHERE
+  goal_id = $1 AND state = 'unknown'`.
+- Scoped this pass to exactly one concrete, unambiguous case rather than guessing at the original
+  Track B7 wording's three vague sub-cases ("expired grant use, unexpected target, unexpected side
+  effect"): a device command claim durably marked `unknown` after
+  `markUnresolvedDeviceAgentCommandsUnknown` (a device-agent restart left a real OS-side effect's
+  outcome genuinely unresolvable) is exactly an "unexpected side effect" -- the system does not
+  know whether it happened, so it must not sit silently in a device-only table; a human needs to
+  see it as a durable, auditable Metronome finding. "Expired grant use" and "unexpected target" are
+  already actively *rejected* before any effect runs (`checkLive`/`checkScope` in
+  `device-agent-runtime.ts`) rather than occurring and needing after-the-fact detection, so they
+  are not additional findings to add here -- prevention, not detection, is the correct control for
+  those two.
+- Added 2 domain unit tests (`metronome.test.ts`, both pass) and 1 real-PostgreSQL integration
+  regression (`metronome.integration.test.ts`, enrolls a device, issues a grant, inserts a claimed
+  command, forces it `unknown` via the real crash-recovery path, scans, and asserts exactly one new
+  finding with the correct evidence identity/details, then a silent rescan). Not run against real
+  PostgreSQL in this runtime (no Docker/local Postgres here); self-verified for type correctness
+  and skip-registration only.
+- Verified: root `tsc -b` clean, `apps/secretary` build unaffected, root `npm test` (no DB in this
+  runtime): **111 test files (61 passed, 50 skipped), 824 tests (469 passed, 355 skipped), 0
+  failed** (469 = prior 467 + 2 new domain unit tests; 355 = prior 354 + 1 new DB-gated skip).
+- **Only Track B6 (disconnect/dependent-work pause lifecycle) remains open.** Investigated it
+  directly: `device_agent_sessions` already tracks connect/heartbeat/disconnect state fully
+  (`openDeviceAgentSession`/`touchDeviceAgentSession`/`closeDeviceAgentSession`), and
+  `claimDeviceAgentCommand` already refuses any new command once a session is disconnected -- so
+  the "does dependent work stop trying to use a disconnected device" half of B6 is already
+  correct. What is missing is a domain concept of "work that depends on a device" at all: neither
+  workers nor Department Plan items declare a device dependency anywhere, and Goal-level
+  pause/resume is the only existing pause granularity (no worker-level pause distinct from
+  cancel). Implementing "pause only dependent work" correctly needs that concept added first --
+  this is a real design decision (what unit of work becomes "dependent," and what pause primitive
+  it uses), not a wiring gap, and was deliberately not forced in this pass to avoid inventing an
+  under-specified abstraction. Recorded here as the one explicit open decision blocking full Track
+  B closure.
