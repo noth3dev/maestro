@@ -294,7 +294,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         return { consume: true };
       }
       if (matchesKey(data, "ctrl+r")) {
-        void submit("/retry");
+        void submit("/session retry");
         return { consume: true };
       }
       if (matchesKey(data, "ctrl+c")) {

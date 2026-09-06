@@ -25,6 +25,16 @@ describe("subscribeToEvents", () => {
     expect(retries).toEqual([1, 2]);
   });
 
+  it("does not reset the retry budget for a duplicate-only replay stream", async () => {
+    const calls: string[] = [];
+    const event = { eventId: "event-1", cursor: "1", eventType: "created" };
+    const client = { streamEvents: async function* (query: { projectId: string; after: string }) { calls.push(query.after); yield event; throw new Error("disconnected"); } };
+    const received: string[] = [];
+    for await (const item of subscribeToEvents({ client, projectId: "project-1", signal: new AbortController().signal, reconnectDelayMs: 0, maxReconnectAttempts: 2 })) received.push(item.eventId);
+    expect(calls).toEqual(["0", "1", "1"]);
+    expect(received).toEqual(["event-1"]);
+  });
+
   it("reconnects from the latest cursor and suppresses duplicate event identities", async () => {
     const calls: string[] = [];
     let attempt = 0;
