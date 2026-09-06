@@ -1,6 +1,6 @@
 import type { SpawnWorkerInput, Worker } from "@maestro/contracts";
 import type { ExecutionKernelPort } from "@maestro/domain";
-import { assertProjectRole, cancelWorker, observeWorker, readDepartmentPlan, readHeadCouncil, readWorker, spawnWorker, type CouncilActorContext, type OperatorContext } from "@maestro/persistence";
+import { assertProjectRole, cancelWorker, countActiveWorkersForProject, observeWorker, readDepartmentPlan, readHeadCouncil, readWorker, spawnWorker, type CouncilActorContext, type OperatorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
 
 export interface WorkerService {
@@ -13,9 +13,18 @@ export interface WorkerServiceDependencies {
   pool: Pool;
   kernel: ExecutionKernelPort;
   withGoalLease: <T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
+  /**
+   * Phase 5 capacity-model first slice: a project-wide worker-slot ceiling. Absent by default
+   * (unlimited, matching current behavior); set to enable admission control. A future revision
+   * may partition this by risk class per plan/phase5.md's capacity model instead of one flat cap.
+   */
+  maxConcurrentWorkersPerProject?: number;
 }
 export class WorkerProjectMismatchError extends Error {
   constructor() { super("Worker project does not match the Council project"); this.name = "WorkerProjectMismatchError"; }
+}
+export class WorkerCapacityExceededError extends Error {
+  constructor(limit: number) { super(`Project worker capacity is exhausted (limit ${limit}); queue and retry once a worker slot frees`); this.name = "WorkerCapacityExceededError"; }
 }
 
 /** Keep provider/process ownership internals out of the current public Worker wire contract. */
@@ -32,6 +41,10 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
   return {
     async spawn(councilId, departmentId, input, commandId, operator) {
       await assertProjectRole(deps.pool, operator.operatorId, input.projectId, `head-${departmentId}`);
+      if (deps.maxConcurrentWorkersPerProject !== undefined) {
+        const active = await countActiveWorkersForProject(deps.pool, input.projectId);
+        if (active >= deps.maxConcurrentWorkersPerProject) throw new WorkerCapacityExceededError(deps.maxConcurrentWorkersPerProject);
+      }
       const council = await readHeadCouncil(deps.pool, councilId);
       if (council.snapshot.projectId !== input.projectId) throw new WorkerProjectMismatchError();
       const plan = await readDepartmentPlan(deps.pool, councilId, departmentId);

@@ -142,7 +142,7 @@ export type { HeadParticipationService } from "./head-participation-service.js";
 export type { CouncilService } from "./council-service.js";
 import { DepartmentPlanProjectMismatchError, type DepartmentPlanService } from "./department-plan-service.js";
 import { MissionBundleProjectMismatchError, type MissionBundleService } from "./mission-bundle-service.js";
-import { WorkerProjectMismatchError, type WorkerService } from "./worker-service.js";
+import { WorkerProjectMismatchError, WorkerCapacityExceededError, type WorkerService } from "./worker-service.js";
 import { WorkerError, WorkerNotFoundError } from "@maestro/persistence";
 import { GitProjectMismatchError, type GitIntegrationService } from "./git-integration-service.js";
 import type { CertificationService } from "./certification-service.js";
@@ -1003,6 +1003,7 @@ function mapError(error: unknown): { status: number; body: StableApiError } {
   if (error instanceof MissionBundleNotFoundError) return apiError(404, "mission_bundle_not_found", error.message);
   if (error instanceof MissionBundleError) return apiError(409, "mission_bundle_conflict", error.message);
   if (error instanceof WorkerProjectMismatchError) return apiError(400, "validation_error", error.message);
+  if (error instanceof WorkerCapacityExceededError) return apiError(429, "worker_capacity_exceeded", error.message);
   if (error instanceof WorkerNotFoundError) return apiError(404, "worker_not_found", error.message);
   if (error instanceof WorkerError) return apiError(409, "worker_conflict", error.message);
   if (error instanceof GitProjectMismatchError) return apiError(400, "validation_error", error.message);
