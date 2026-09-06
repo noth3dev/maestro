@@ -1,8 +1,8 @@
 import type { Pool } from "pg";
 import type { GoalBudgetSummary, GoalResult } from "@maestro/contracts";
-import { listMetronomeChallenges, listEncoreCouncilRounds, listQualityCertifications, listConditionalCertifications, readConcertmasterFinalReport, getGoalGitIntegrationState, listWorkersForGoal, type MetronomeChallenge, type EncoreCouncilRound, type QualityCertification, type ConditionalCertification, type ConcertmasterFinalReport } from "@maestro/persistence";
+import { listMetronomeChallenges, listEncoreCouncilRounds, listQualityCertifications, listConditionalCertifications, readConcertmasterFinalReport, getGoalGitIntegrationState, listWorkersForGoal, listImprovementDigests, type MetronomeChallenge, type EncoreCouncilRound, type QualityCertification, type ConditionalCertification, type ConcertmasterFinalReport } from "@maestro/persistence";
 import type { GoalGitIntegrationState } from "@maestro/contracts";
-import type { Worker } from "@maestro/domain";
+import type { ImprovementDigest, Worker } from "@maestro/domain";
 
 export class ReadStateGoalNotFoundError extends Error {}
 export interface ReadStateService {
@@ -14,6 +14,7 @@ export interface ReadStateService {
   getConcertmasterReport(goalId: string, projectId: string): Promise<ConcertmasterFinalReport | undefined>;
   getGitIntegrationState(goalId: string, projectId: string): Promise<GoalGitIntegrationState>;
   listWorkersForGoal(goalId: string, projectId: string): Promise<readonly Worker[]>;
+  listImprovementDigestsForGoal(goalId: string, projectId: string, operatorId: string): Promise<readonly ImprovementDigest[]>;
 }
 
 export function createReadStateService(pool: Pool): ReadStateService {
@@ -56,6 +57,10 @@ export function createReadStateService(pool: Pool): ReadStateService {
     async listWorkersForGoal(goalId, projectId) {
       await assertGoalProject(goalId, projectId);
       return listWorkersForGoal(pool, goalId);
+    },
+    async listImprovementDigestsForGoal(goalId, projectId, operatorId) {
+      await assertGoalProject(goalId, projectId);
+      return listImprovementDigests(pool, { operatorId, projectId }, goalId);
     },
   };
 }

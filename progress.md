@@ -1813,3 +1813,45 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   ad-hoc rapid-response tasking a.k.a. the already-deferred "Vanguard" idea from plan/extra.md)
   with no current backing capability, and are candidates for the same disable-and-explain
   treatment rather than real wiring.
+
+
+## 2026-09-06 (continued) — remaining views triaged: Arrangements wired for real, four marked honest preview
+
+- Finished triaging every remaining mock view individually rather than assuming each needs real
+  wiring:
+  - **Arrangements** was wireable for real. Found `packages/persistence/src/improvement-digest.ts`'s
+    `listImprovementDigests` already existed (from the earlier Phase 6 Slice 1 merge) with its own
+    real-PostgreSQL test coverage, but had zero HTTP/CLI/UI exposure -- the third such gap found
+    this session (after Git integration state and per-Goal workers). Added `ImprovementDigestSchema`/
+    `ImprovementDigestListSchema` contracts, `ReadStateService.listImprovementDigestsForGoal`
+    (operator-scoped, matching the persistence function's own `assertProjectMembership` call, not
+    the generic `assertGoalProject` pattern used elsewhere since this function authorizes by
+    operator identity), a new `GET /v1/goals/:goalId/improvement-digests` route, a typed
+    `ApiClient` method, a new `improvement-digests list` CLI command, and a new `apiBridge.ts`
+    allowlist entry. `Arrangements.tsx` now renders real digests (decision, trigger, confidence,
+    situation, observed result, metrics) instead of four fabricated tabs (active/candidates/encore
+    council deliberation/negative evidence) simulating a shadow-replay/rollout lifecycle that does
+    not exist in the domain model yet (Phase 6 Slice 1 is deliberately append-only-digest scope
+    only, per its own plan note).
+  - **Floor** (org radial-tree SVG) and **Luthiery** (tool/skill registry) have no current backing
+    capability for their specific claims (no durable "list active workers positioned in a tree" or
+    "tool/skill registry" concept exists) and are legitimately expensive to make real (a dynamic
+    layout engine, a whole new registry subsystem). Added explicit "illustrative diagram, not
+    wired yet" / "illustrative example entries, not wired to a real registry yet" captions instead
+    of pretending, and removed Floor's one specific fabricated claim ("1 approval pending" ->
+    "approvals pending (illustrative)").
+  - **Flashmob**/**FlashmobSession** implement the "Vanguard" rapid-response concept, which
+    `plan/extra.md` and this project's own naming-decision note explicitly deferred beyond Phase 2.
+    Added the same honest "deferred feature, not wired to a real backend yet" captions and disabled
+    the composer (previously a silent no-op with no `onClick` at all).
+- Verified: root `tsc -b` clean, `apps/secretary`'s `tsc -p tsconfig.renderer.json --noEmit` clean,
+  `apps/secretary`'s `vite build` succeeds (1703 modules), root `npm test` unchanged: **109 files
+  (59 passed, 50 skipped), 806 tests (455 passed, 351 skipped), 0 failed** (no new persistence test
+  needed -- `listImprovementDigests` already had real-PostgreSQL coverage from the earlier Phase 6
+  merge; only the route/client/CLI/UI wiring is new this pass).
+- **All 13 Secretary views are now triaged.** Seven are real (Dashboard, Evidence Log, Billing,
+  Channel, Git, Settings' connection panel, Arrangements); the remaining six (Home, Inbox, Floor,
+  Luthiery, Flashmob, FlashmobSession, and Settings' providers/models/authority/danger panels) are
+  each explicitly, honestly labeled as preview/deferred with every non-functional control disabled
+  -- none silently pretend to work. This closes the "Secretary is a fully mocked prototype" finding
+  from earlier in this session; it is now a real, if partial, operator console.

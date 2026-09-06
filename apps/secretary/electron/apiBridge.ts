@@ -6,7 +6,7 @@ export const exposedApiMethods = [
   "listGoals", "getGoal", "getBudgetSummary", "listEvents",
   "createTaskContract", "getTaskContract", "updateTaskContract", "selectOvertureRoles", "confirmTaskContract", "launchTaskContract",
   "pauseGoal", "resumeGoal", "stopGoal", "emergencyStopGoal",
-  "listCertifications", "listMetronomeChallenges", "listEncoreCouncilRounds", "getConcertmasterReport", "getGitIntegrationState", "listWorkersForGoal",
+  "listCertifications", "listMetronomeChallenges", "listEncoreCouncilRounds", "getConcertmasterReport", "getGitIntegrationState", "listWorkersForGoal", "listImprovementDigestsForGoal",
 ] as const satisfies readonly (keyof ApiClient)[];
 export type ExposedApiMethod = (typeof exposedApiMethods)[number];
 
