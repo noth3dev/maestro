@@ -530,3 +530,63 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Final clean verification evidence remains: `npm run check` — 106 files passed, 1 skipped; 802 tests passed, 2 skipped; 0 failed. `npm run build` and `git diff --check` passed.
 - No repository ESLint, Prettier, Biome, or Oxlint configuration/local binary is available; this exact limitation is documented by inspection.
 - Phase 6 Step 1 is closed. Phase 6 Steps 2+ remain intentionally deferred; no mutation, replay, rollout, adaptation, or cross-project promotion work was started.
+## 2026-09-06 — Secretary Electron shell is a fully mocked prototype, not a wired console
+
+- `apps/secretary` is an Electron app (migrated from Next.js in `hardening/lifecycle`'s `e55146b`),
+  not the single-Goal Next.js page `task_plan.md`'s Phase 5 Track A7 section still describes.
+- Real, unit-tested data plumbing exists end to end: `connection.tsx` (IPC-backed connection
+  config get/save/clear), `goals.tsx` (`GoalsProvider`, lists/selects a Goal via
+  `window.maestro.api.listGoals`), `useGoalDetail.ts` (loads Goal + events + budget +
+  certifications for the selected Goal), `lib/goal-data.ts` (pure, tested read-model assembly),
+  and `electron/apiBridge.ts` (an explicit allowlist exposing `listGoals`, `getGoal`,
+  `getBudgetSummary`, `listEvents`, the full Task Contract lifecycle, `pauseGoal`/`resumeGoal`/
+  `stopGoal`/`emergencyStopGoal`, `listCertifications`, `listMetronomeChallenges`,
+  `listEncoreCouncilRounds`, `getConcertmasterReport` from the renderer).
+- Despite that, `grep -rl 'useGoalDetail|useGoals()|window.maestro' apps/secretary/src/views
+  apps/secretary/src/*.tsx` matches only the provider files themselves (`connection.tsx`,
+  `goals.tsx`, `theme.tsx`) — never a single one of the 13 views (`home`, `dashboard`, `channel`,
+  `git`, `floor`, `inbox`, `evlog`, `billing`, `settings`, `luthiery`, `arrangements`, `flashmob`,
+  `flashmobSession`). Every view renders hardcoded constants: `Dashboard.tsx`'s `departments`
+  array and "4 missions in flight / 3 pending approvals / 7 certified / 2 of 5 departments awake"
+  stat block; `Billing.tsx`'s `spendByDay`/`usageByGroup`/`recentGoals` constants and "$186 / $300
+  · 62%" progress bar; `Channel.tsx`'s scripted chat transcript; `Git.tsx`'s fixed file-diff list
+  and fixed branch/worktree path string; `EvidenceLog.tsx`'s three fixed entries with fabricated
+  sha256 prefixes. None of this is wired to the real control plane; it is example/reference visual
+  design, and must not be mistaken for operational read coverage in any future acceptance claim.
+- `App.tsx` documents this explicitly with a `ponytail:` comment: the real `Setup`/connection gate
+  exists and works, but is deliberately bypassed so the mock Shell renders unconditionally; the
+  comment itself says to remove the bypass once write flows are ready to go through a real
+  connection again. This is intentional, tracked debt, not an oversight to silently "fix" without
+  first wiring at least one real view — removing the bypass today would just show a blank/broken
+  shell with no wired data to prove works.
+- Real remaining gap, corrected from the (too pessimistic) "read-only single Goal page" framing:
+  wiring existing mock views to already-real plumbing/API-bridge methods, plus extending
+  `apiBridge.ts`'s allowlist for the write actions (critical-action approve-and-run, Metronome
+  correction/safe-pause/resolve, Council/Plan/Mission/worker/Git writes) that already exist as
+  real control-plane routes but are not yet exposed to the renderer.
+
+## 2026-09-06 — node_modules workspace-symlink defect (local environment, not a repo defect)
+
+- Main worktree's `node_modules/@maestro/` was missing `device-agent` and `device-agent-app`
+  symlinks that every other workspace package already had (`api-client`, `authority`, `cli`,
+  `contracts`, `control-plane`, `discord`, `domain`, `environment-adapter`, `evidence`,
+  `git-adapter`, `persistence`, `prime-adapter`, `secretary`). This caused `npm run build` to fail
+  with `Cannot find module '@maestro/device-agent'` purely from local disk state, unrelated to any
+  code change. `npm install` recreated exactly those two symlinks with zero `package-lock.json`
+  diff (confirmed via `git status`/`git diff --stat` before and after: no changes). `npm run build`
+  is clean afterward on `hardening/lifecycle` HEAD (`ce94c3d`).
+
+## 2026-09-06 — Three integration test files crash instead of skipping without a real database
+
+- Running `npm test` with no `MAESTRO_TEST_DATABASE_URL` set (no Docker in this runtime) correctly
+  skips almost every real-PostgreSQL integration suite, but three files throw `TypeError: Invalid
+  URL` at module-eval time instead of skipping cleanly:
+  `apps/control-plane/src/worker.kill-restart.integration.test.ts`,
+  `apps/device-agent/src/main.integration.test.ts`, and
+  `packages/persistence/src/device-agent-runtime.integration.test.ts`. Each builds a scoped
+  database URL with `new URL(databaseUrl!)` before any `describe.skipIf`/environment guard exists
+  to short-circuit that construction when the variable is undefined. Full evidence:
+  `npm test` (no DB): **441 passed, 342 skipped, 3 failed** (only these three files) on
+  `hardening/lifecycle` HEAD. Not fixed this session -- flagged as a small, isolated follow-up; the
+  fix pattern already exists in every other DB-gated suite in this repo (guard the URL
+  construction itself, not just the `describe` block, behind the same environment check).
