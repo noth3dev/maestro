@@ -11,7 +11,7 @@ import { executeWriteCommand } from "./commands/write-commands.js";
 import { renderApprovalDialog } from "./components/approval-dialog.js";
 import type { CriticalActionSummary, ConfirmationResult } from "./confirmation.js";
 import { loadWorkspaceSession, saveWorkspaceSession, type WorkspaceSession } from "./session.js";
-import { mergeEvents } from "./activity-stream.js";
+import { mergeEvents, subscribeToEvents } from "./activity-stream.js";
 import { renderActivityTimeline } from "./components/activity-timeline.js";
 import { renderShell, type TuiShellState } from "./components/shell.js";
 import type { CliIo } from "../main.js";
@@ -115,7 +115,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const streamActivity = async () => {
       if (client === undefined || project.kind !== "attached") return;
       try {
-        for await (const event of client.streamEvents({ projectId: project.projectId, after: session?.lastEventCursor ?? "0" }, { signal: abortController.signal })) {
+        for await (const event of subscribeToEvents({ client, projectId: project.projectId, cursor: session?.lastEventCursor ?? "0", signal: abortController.signal })) {
           activity = mergeEvents(activity, [event]);
           const nextSession: WorkspaceSession = { workspacePath: workspace.cwd, projectId: project.projectId, ...(session?.goalId === undefined ? {} : { goalId: session.goalId }), lastEventCursor: event.cursor };
           await saveWorkspaceSession(nextSession);
