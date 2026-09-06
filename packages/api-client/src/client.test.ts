@@ -6,6 +6,14 @@ const goalId = "22222222-2222-4222-8222-222222222222";
 const commandId = "33333333-3333-4333-8333-333333333333";
 
 describe("createApiClient", () => {
+  it("lists authenticated project memberships for first-run workspace discovery", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ projects: [projectId] }), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test/", token: "top-secret", fetch });
+
+    await expect(client.listProjects()).resolves.toEqual({ projects: [projectId] });
+    expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/projects", expect.objectContaining({ headers: { authorization: "Bearer top-secret" } }));
+  });
+
   it("sends authenticated idempotent create commands and parses the result", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ goalId, projectId, state: "draft", version: 0 }), { status: 201 }));
     const client = createApiClient({ baseUrl: "https://maestro.test/", token: "top-secret", fetch });

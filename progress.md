@@ -2155,3 +2155,18 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   command-palette/registry safety classifications.
 - Verified: targeted TUI command tests pass (15 tests), `npm run check` passes (84 files passed,
   51 skipped; 540 tests passed, 360 skipped), `npm run build`, and `git diff --check` pass.
+
+
+## 2026-09-06 — Maestro TUI first-run project discovery
+
+- Added an authenticated `GET /v1/projects` Control Plane route backed by active
+  `operator_project_memberships`; the route fails closed when discovery is not composed.
+- Added the typed `ApiClient.listProjects()` contract and schema.
+- A workspace with no saved project now auto-attaches when exactly one authorized project is
+  visible, persists the validated session metadata, and never guesses when there are zero or
+  multiple projects. Added `/projects list` and `/session attach --project-index=<n>` for the
+  multi-project case while retaining the explicit project-ID fallback.
+- Added API, server, and resolver tests for authenticated discovery, unavailable composition,
+  single-project auto-attach, empty/ambiguous results, and attachment preservation.
+- Verification: focused tests pass (65 tests), `npm run build` passes, and `git diff --check`
+  passes.

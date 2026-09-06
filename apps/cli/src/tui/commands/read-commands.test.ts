@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "@maestro/api-client";
-import { discoverWorkspaceProject, executeReadCommand, readDashboard } from "./read-commands.js";
+import { discoverWorkspaceProject, discoverWorkspaceProjectFromControlPlane, executeReadCommand, readDashboard } from "./read-commands.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
@@ -19,6 +19,25 @@ describe("workspace read commands", () => {
   it("uses the attached workspace session as the project identity without asking for an ID", () => {
     expect(discoverWorkspaceProject("/work/acme", { workspacePath: "/work/acme", projectId })).toEqual({ kind: "attached", projectId });
     expect(discoverWorkspaceProject("/work/acme", undefined)).toEqual({ kind: "unavailable", reason: "No project is attached to this workspace" });
+  });
+
+  it("auto-attaches the only project visible to the authenticated operator", async () => {
+    const listProjects = vi.fn().mockResolvedValue({ projects: [projectId] });
+    await expect(discoverWorkspaceProjectFromControlPlane({ workspacePath: "/work/acme", session: undefined, client: { listProjects } })).resolves.toEqual({ kind: "attached", projectId });
+    expect(listProjects).toHaveBeenCalledOnce();
+  });
+
+  it("does not guess when project discovery is empty or ambiguous", async () => {
+    const empty = await discoverWorkspaceProjectFromControlPlane({ workspacePath: "/work/acme", session: undefined, client: { listProjects: vi.fn().mockResolvedValue({ projects: [] }) } });
+    const many = await discoverWorkspaceProjectFromControlPlane({ workspacePath: "/work/acme", session: undefined, client: { listProjects: vi.fn().mockResolvedValue({ projects: [projectId, "44444444-4444-4444-8444-444444444444"] }) } });
+    expect(empty).toEqual({ kind: "unavailable", reason: "No projects are available for this operator" });
+    expect(many).toEqual({ kind: "unavailable", reason: "Multiple projects are available; choose one with /session attach --project-index=<1-2>" });
+  });
+
+  it("keeps an existing workspace attachment without making a discovery request", async () => {
+    const listProjects = vi.fn();
+    await expect(discoverWorkspaceProjectFromControlPlane({ workspacePath: "/work/acme", session: { workspacePath: "/work/acme", projectId }, client: { listProjects } })).resolves.toEqual({ kind: "attached", projectId });
+    expect(listProjects).not.toHaveBeenCalled();
   });
 
   it("reads goals and the selected goal dashboard through the typed client", async () => {

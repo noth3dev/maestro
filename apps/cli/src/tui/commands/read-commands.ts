@@ -14,6 +14,24 @@ export function discoverWorkspaceProject(workspacePath: string, session: Workspa
   return { kind: "attached", projectId: session.projectId };
 }
 
+/**
+ * Resolve a first-run workspace from the authenticated Control Plane identity.
+ * A single visible project is safe to attach automatically; ambiguous or empty
+ * results stay explicit so the TUI never guesses a project binding.
+ */
+export async function discoverWorkspaceProjectFromControlPlane(options: { workspacePath: string; session: WorkspaceSession | undefined; client: Pick<ApiClient, "listProjects"> }): Promise<WorkspaceProject> {
+  const existing = discoverWorkspaceProject(options.workspacePath, options.session);
+  if (existing.kind === "attached") return existing;
+  try {
+    const projects = (await options.client.listProjects()).projects;
+    if (projects.length === 1) return { kind: "attached", projectId: projects[0]! };
+    if (projects.length === 0) return { kind: "unavailable", reason: "No projects are available for this operator" };
+    return { kind: "unavailable", reason: `Multiple projects are available; choose one with /session attach --project-index=<1-${projects.length}>` };
+  } catch (error) {
+    return { kind: "unavailable", reason: `Project discovery unavailable: ${error instanceof Error ? error.message : "Control Plane request failed"}` };
+  }
+}
+
 export interface DashboardReadModel {
   projectId: string;
   goals: GoalResult[];

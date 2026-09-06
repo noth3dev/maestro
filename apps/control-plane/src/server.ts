@@ -27,6 +27,7 @@ import {
   CriticalActionResultSchema,
   GoalQuerySchema,
   GoalListSchema,
+  ProjectListSchema,
   GoalBudgetSummarySchema,
   GoalResultSchema,
   MetronomeChallengeListSchema,
@@ -162,6 +163,11 @@ export interface EventService {
   listEvents(projectId: string, after: EventCursor): Promise<import("@maestro/contracts").GoalEvent[]>;
 }
 
+export interface ProjectDiscoveryService {
+  /** Lists only active projects visible to this authenticated operator. */
+  listProjects(operatorId: string): Promise<readonly string[]>;
+}
+
 export interface OperatorAuthenticator {
   authenticateBearerSecret(secret: string): Promise<OperatorAuthentication>;
 }
@@ -188,7 +194,7 @@ const systemPollingScheduler: PollingScheduler = {
   clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
 };
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, readinessCheck }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, readinessCheck }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
@@ -218,6 +224,8 @@ export function buildServer({ goalService, authenticator, eventService, critical
    * route handler runs.
    */
   projectMembership?: ProjectMembershipChecker;
+  /** Authenticated project discovery used for first-run workspace attachment. */
+  projectDiscovery?: ProjectDiscoveryService;
   /** Explicitly configured admin-only project membership and role provisioning. */
   projectAccess?: ProjectAccessProvisioner;
   /** Dependency probe used by /readyz. Liveness never calls this check. */
@@ -362,6 +370,12 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const input = parse(ProjectAccessProvisionInputSchema, request.body);
     const result = await projectAccess.provisionProjectAccess(requestOperator(request as { operator?: OperatorContext }).operatorId, input);
     return reply.status(200).send(ProjectAccessProvisionResultSchema.parse(result));
+  });
+
+  app.get("/v1/projects", async (request, reply) => {
+    if (!projectDiscovery) throw new DurableStoreUnavailableError();
+    const projects = await projectDiscovery.listProjects(requestOperator(request as { operator?: OperatorContext }).operatorId);
+    return reply.status(200).send(ProjectListSchema.parse({ projects }));
   });
 
   app.post("/v1/goals", async (request, reply) => {
