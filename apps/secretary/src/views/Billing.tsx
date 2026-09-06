@@ -1,67 +1,56 @@
-import { Icon } from "../icons.js";
+import { EmptyState } from "../components/EmptyState.js";
+import { useConnection } from "../connection.js";
+import { useGoalDetail } from "../useGoalDetail.js";
 
-const spendByDay = [22, 38, 14, 55, 31, 8, 12, 64, 47, 29, 71, 40, 59, 83];
-
-const usageByGroup = [
-  { icon: "code", name: "tech", pct: 53, amount: "$98" },
-  { icon: "clipboard-check", name: "assurance", pct: 22, amount: "$41" },
-  { icon: "package", name: "product", pct: 17, amount: "$32" },
-  { icon: "settings", name: "operations", pct: 8, amount: "$15" },
-  { icon: "flask-conical", name: "intelligence", pct: 0, amount: "$0" },
-];
-
-const recentGoals = [
-  { name: "launch page", amount: "$61.40" },
-  { name: "billing refactor", amount: "$79.10" },
-  { name: "docs cleanup", amount: "$45.90" },
-];
+function formatCents(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
 
 export function Billing() {
+  const { config } = useConnection();
+  const { detail, loading, error } = useGoalDetail();
+
+  if (config === undefined) return <EmptyState />;
+
+  const budget = detail?.budget;
+  const remainingCents = budget === undefined ? undefined : budget.budgetCents - budget.reservedCents;
+  const usedPct = budget === undefined || budget.budgetCents <= 0 ? undefined : Math.min(100, Math.round((budget.reservedCents / budget.budgetCents) * 100));
+
   return (
     <div className="dash-main">
       <div className="dash-head"><div className="dash-title">billing</div></div>
-      <div className="dash-sub">token &amp; compute usage · treasury not yet wired (phase 10)</div>
+      <div className="dash-sub">budget for the selected Goal · cross-Goal treasury rollups not wired yet</div>
 
-      <div className="dash-stats">
-        <div className="stat-card stat-terracotta"><p className="stat-label">used this month</p><p className="stat-value">$186</p></div>
-        <div className="stat-card stat-ochre"><p className="stat-label">ceiling</p><p className="stat-value">$300</p></div>
-        <div className="stat-card stat-olive"><p className="stat-label">avg / goal</p><p className="stat-value">$14.20</p></div>
-        <div className="stat-card stat-rust"><p className="stat-label">days left in cycle</p><p className="stat-value">9</p></div>
-      </div>
+      {loading && <p>loading…</p>}
+      {error !== undefined && <div className="alert alert-warning">{error}</div>}
 
-      <div className="progress-wrap" style={{ marginBottom: 24 }}>
-        <div className="progress-label"><span>monthly ceiling</span><span>$186 / $300 · 62%</span></div>
-        <div className="progress"><div className="progress-bar ochre" style={{ width: "62%" }} /></div>
-      </div>
-
-      <div className="dash-section-title">daily spend · last 14 days</div>
-      <div className="spend-chart">
-        {spendByDay.map((height, index) => (
-          <div key={index} className="spend-bar-wrap">
-            <div className={`spend-bar${index === spendByDay.length - 1 ? " today" : ""}`} style={{ height: `${height}%` }} />
-            <span className="spend-bar-day">{index + 1}</span>
+      {budget !== undefined && (
+        <>
+          <div className="dash-stats">
+            <div className="stat-card stat-terracotta"><p className="stat-label">actual spend</p><p className="stat-value">{formatCents(budget.costCents)}</p></div>
+            <div className="stat-card stat-ochre"><p className="stat-label">ceiling</p><p className="stat-value">{formatCents(budget.budgetCents)}</p></div>
+            <div className="stat-card stat-olive"><p className="stat-label">reserved</p><p className="stat-value">{formatCents(budget.reservedCents)}</p></div>
+            <div className="stat-card stat-rust"><p className="stat-label">remaining</p><p className="stat-value">{remainingCents === undefined ? "—" : formatCents(remainingCents)}</p></div>
           </div>
-        ))}
-      </div>
 
-      <div className="dash-section-title" style={{ marginTop: 20 }}>usage by group</div>
-      {usageByGroup.map((group) => (
-        <div key={group.name} className="dept-bar-row">
-          <Icon name={group.icon} /><span className="dept-bar-name">{group.name}</span>
-          <div className="dept-bar-track"><div className="dept-bar-fill" style={{ width: `${group.pct}%` }} /></div>
-          <span className="dept-bar-amt">{group.amount}</span>
-        </div>
-      ))}
+          {usedPct !== undefined && (
+            <div className="progress-wrap" style={{ marginBottom: 24 }}>
+              <div className="progress-label"><span>reserved of ceiling</span><span>{formatCents(budget.reservedCents)} / {formatCents(budget.budgetCents)} · {usedPct}%</span></div>
+              <div className="progress"><div className="progress-bar ochre" style={{ width: `${usedPct}%` }} /></div>
+            </div>
+          )}
+        </>
+      )}
 
-      <div className="dash-section-title" style={{ marginTop: 20 }}>recent goals</div>
-      <div style={{ background: "var(--surface-1)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
-        {recentGoals.map((goal, index) => (
-          <div key={goal.name} style={{ padding: "11px 14px", borderBottom: index < recentGoals.length - 1 ? "1px solid var(--border)" : "none", display: "flex", alignItems: "center" }}>
-            <span style={{ fontSize: 12 }}>{goal.name}</span>
-            <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-secondary)" }}>{goal.amount}</span>
-          </div>
-        ))}
-      </div>
+      {detail === undefined && !loading && error === undefined && (
+        <EmptyState title="No Goal selected" hint="Select a Goal from the Dashboard to see its real budget here." />
+      )}
+
+      <div className="dash-section-title" style={{ marginTop: 20 }}>daily spend, usage by group, and cross-Goal totals</div>
+      <EmptyState
+        title="Not wired here yet"
+        hint="Only the selected Goal's real ceiling/reserved/spend numbers above are live. A daily spend history, per-department breakdown, and cross-Goal rollup would each need their own durable read surface, which doesn't exist yet."
+      />
     </div>
   );
 }

@@ -1644,3 +1644,23 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   hardcoded; still no cross-Goal certification/evidence aggregation; still no
   `electron/apiBridge.ts` allowlist entries for Council/Department Plan/Mission Bundle/critical-
   action reads or writes.
+
+
+## 2026-09-06 (continued) — Billing wired to real per-Goal budget
+
+- `Billing.tsx` now renders `useGoalDetail()`'s real `budget` (actual spend, ceiling, reserved,
+  computed remaining, reserved-of-ceiling progress bar) for the selected Goal instead of fabricated
+  "$186 used / $300 ceiling / 9 days left" constants.
+- Daily spend history, per-department usage breakdown, and cross-Goal "recent goals" totals are
+  replaced with an honest `EmptyState` -- none of those have a durable read surface yet (no
+  time-series spend record, no department-scoped budget read, no cross-Goal aggregator), so they
+  are not approximated or guessed.
+- Verified: root `tsc -b` clean, `apps/secretary`'s `tsc -p tsconfig.renderer.json --noEmit` clean,
+  `apps/secretary`'s `vite build` succeeds, root `npm test` unchanged: **109 files (59 passed, 50
+  skipped), 804 tests (455 passed, 349 skipped), 0 failed**.
+- Four real (non-mock) Secretary screens now exist: Dashboard (Goal state/budget/certifications +
+  lifecycle controls), Evidence Log (real certifications), Billing (real budget). Remaining mock
+  views for the next slice: `Channel`, `Git`, `Home`, `Floor`, `Inbox`, `Settings`, `Luthiery`,
+  `Arrangements`, `Flashmob`, `FlashmobSession`, `Sidebar` badge counts. None of them have a durable
+  read surface exposed through `electron/apiBridge.ts` yet for Council/Department Plan/Mission
+  Bundle/Git integration/Discord state.
