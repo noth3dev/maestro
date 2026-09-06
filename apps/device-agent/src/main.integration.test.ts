@@ -76,7 +76,7 @@ function requestDevice(port: number, tls: { ca: Buffer; key: Buffer; cert: Buffe
 describeDatabase("real device-agent mTLS and signed grant process", () => {
   const basePool = new Pool({ connectionString: databaseUrl });
   const schema = `device_agent_${randomUUID().replaceAll("-", "")}`;
-  const scopedUrl = (() => { const url = new URL(databaseUrl!); url.searchParams.set("options", `-c search_path=${schema}`); return url.toString(); })();
+  const scopedUrl = databaseUrl ? (() => { const url = new URL(databaseUrl); url.searchParams.set("options", `-c search_path=${schema}`); return url.toString(); })() : "";
   let pool: Pool;
   beforeAll(async () => { await basePool.query(`CREATE SCHEMA ${schema}`); pool = new Pool({ connectionString: scopedUrl }); await applyAllMigrations(pool); await applyAllMigrations(pool); });
   beforeEach(async () => { await pool.query("TRUNCATE device_command_claims, device_agent_sessions, device_command_results, device_grants, device_policies, devices, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls, local_operator_credentials, local_operators, operator_project_memberships CASCADE"); await bootstrapPermanentOrganization(pool); });

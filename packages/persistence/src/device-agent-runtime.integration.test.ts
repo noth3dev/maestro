@@ -19,7 +19,7 @@ const scope: DeviceGrantScope = { actionTypes: ["project.file.read"], projectPat
 describeDatabase("device agent durable command authority with PostgreSQL", () => {
   const basePool = new Pool({ connectionString: databaseUrl });
   const schema = `device_runtime_${randomUUID().replaceAll("-", "")}`;
-  const scopedUrl = (() => { const url = new URL(databaseUrl!); url.searchParams.set("options", `-c search_path=${schema}`); return url.toString(); })();
+  const scopedUrl = databaseUrl ? (() => { const url = new URL(databaseUrl); url.searchParams.set("options", `-c search_path=${schema}`); return url.toString(); })() : "";
   let pool: Pool;
   beforeAll(async () => { await basePool.query(`CREATE SCHEMA ${schema}`); pool = new Pool({ connectionString: scopedUrl }); await applyAllMigrations(pool); await applyAllMigrations(pool); });
   beforeEach(async () => { await pool.query("TRUNCATE device_command_claims, device_agent_sessions, device_command_results, device_grants, device_policies, devices, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE"); });
