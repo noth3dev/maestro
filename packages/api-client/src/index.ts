@@ -9,6 +9,7 @@ import {
   OvertureRoleSelectionResultSchema,
   EventQuerySchema,
   GoalEventPageSchema,
+  GoalEventSchema,
   GoalQuerySchema,
   GoalListSchema,
   GoalBudgetSummarySchema,
@@ -177,6 +178,7 @@ export interface ApiClient {
   runEncoreReview(goalId: string, input: EncoreReviewInput, commandId: string): Promise<EncoreCouncilResult>;
   getBudgetSummary(goalId: string, query: GoalQuery): Promise<GoalBudgetSummary>;
   listEvents(query: EventQuery): Promise<GoalEventPage>;
+  streamEvents(query: EventQuery, options?: { signal?: AbortSignal }): AsyncIterable<GoalEvent>;
   listMetronomeChallenges(goalId: string, query: GoalQuery): Promise<MetronomeChallengeList>;
   listEncoreCouncilRounds(goalId: string, query: GoalQuery): Promise<EncoreCouncilRoundList>;
   listCertifications(goalId: string, query: GoalQuery): Promise<CertificationList>;
@@ -187,6 +189,46 @@ export interface ApiClient {
 }
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+async function* readEventStream(fetch: Fetch, base: URL, headers: Record<string, string>, query: EventQuery, signal?: AbortSignal): AsyncGenerator<GoalEvent> {
+  const parsed = EventQuerySchema.parse(query);
+  const url = new URL("v1/events/stream", base);
+  url.search = new URLSearchParams({ projectId: parsed.projectId, after: parsed.after }).toString();
+  let response: Response;
+  try {
+    response = await fetch(url.href, { headers, redirect: "error", ...(signal === undefined ? {} : { signal }) });
+  } catch {
+    throw new Error("Control plane event stream failed");
+  }
+  if (!response.ok) throw new Error(`Control plane event stream returned HTTP ${response.status}`);
+  if (response.body === null) throw new Error("Control plane event stream returned no body");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      buffer += decoder.decode(chunk.value, { stream: !chunk.done });
+      const records = buffer.split(/\r?\n\r?\n/);
+      buffer = records.pop() ?? "";
+      for (const record of records) {
+        const eventName = record.match(/^event:\s*(.+)$/m)?.[1];
+        const data = record.match(/^data:\s*(.+)$/m)?.[1];
+        if (eventName !== "goal-event" || data === undefined) continue;
+        yield GoalEventSchema.parse(JSON.parse(data));
+      }
+      if (chunk.done) break;
+    }
+    if (buffer.trim() !== "") {
+      const eventName = buffer.match(/^event:\s*(.+)$/m)?.[1];
+      const data = buffer.match(/^data:\s*(.+)$/m)?.[1];
+      if (eventName === "goal-event" && data !== undefined) yield GoalEventSchema.parse(JSON.parse(data));
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+}
 
 export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, timeoutMs = 30_000, signal }: { baseUrl: string; token: string; fetch?: Fetch; timeoutMs?: number; signal?: AbortSignal }): ApiClient {
   const base = new URL(baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
@@ -504,6 +546,9 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
     listEvents(query) {
       const parsed = EventQuerySchema.parse(query);
       return request(`v1/events?${new URLSearchParams({ projectId: parsed.projectId, after: parsed.after })}`, { headers }, GoalEventPageSchema);
+    },
+    streamEvents(query, options) {
+      return readEventStream(fetch, base, headers, query, options?.signal);
     },
   };
 }
