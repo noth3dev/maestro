@@ -7,6 +7,7 @@ const definitions: CommandDefinition[] = ([
   ["critical-action", "durable critical action approval", [["approve-and-run", "critical"]]],
   ["task-contract", "Overture task contract lifecycle", [["create", "write"], ["get", "read"], ["amend", "write"], ["select-roles", "write"], ["confirm", "write"], ["launch", "write"]]],
   ["goals", "Goal discovery", [["list", "read"]]],
+  ["projects", "Authenticated project discovery", [["list", "read"]]],
   // Emergency stop is the server-authorized fail-safe lifecycle command. It
   // still requires explicit local confirmation; the Control Plane enforces the
   // concertmaster role and records the durable Goal command.

@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { AuthorizedEffectExecutor, type ActionRequest } from "@maestro/authority";
 import { createLocalGitPort } from "@maestro/git-adapter";
 import type { ExecutionKernelPort, GitPort } from "@maestro/domain";
-import { assertProjectMembership, authenticateLocalOperator, bootstrapPermanentOrganization, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, reconcileOnStartup, recordDiscordSignal, runMigrations } from "@maestro/persistence";
+import { assertProjectMembership, authenticateLocalOperator, bootstrapPermanentOrganization, listProjectMemberships, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, reconcileOnStartup, recordDiscordSignal, runMigrations } from "@maestro/persistence";
 import { createPrimeExecutionKernel } from "@maestro/prime-adapter";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
@@ -132,6 +132,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       discordSignalService: { record: (envelope) => recordDiscordSignal(pool, envelope, config.discordSignalCredential!) },
     }),
     projectMembership: { assertProjectMembership: (operatorId, projectId) => assertProjectMembership(pool, operatorId, projectId) },
+    projectDiscovery: { listProjects: (operatorId) => listProjectMemberships(pool, operatorId) },
     ...(config.operatorProvisioningAdminId === undefined ? {} : {
       projectAccess: {
         provisionProjectAccess: (requesterOperatorId, input) => provisionProjectAccess(

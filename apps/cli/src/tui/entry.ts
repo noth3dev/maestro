@@ -7,7 +7,7 @@ import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { createCommandRegistry } from "./commands/registry.js";
 import { createCommandPalette } from "./commands/palette.js";
 import { parseInput } from "./commands/parser.js";
-import { executeReadCommand, discoverWorkspaceProject, readDashboard } from "./commands/read-commands.js";
+import { executeReadCommand, discoverWorkspaceProject, discoverWorkspaceProjectFromControlPlane, readDashboard } from "./commands/read-commands.js";
 import { executeWriteCommand } from "./commands/write-commands.js";
 import { renderApprovalDialog } from "./components/approval-dialog.js";
 import { reconcileTuiSession, type RecoverySummary } from "./recovery.js";
@@ -52,10 +52,21 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
   let session = await loadWorkspaceSession(workspace.cwd);
   const connectionReady = connection.kind === "configured" && controlPlane?.kind === "ready";
   let project = discoverWorkspaceProject(workspace.cwd, session);
+  let projectDiscoveryNotice: string | undefined;
   let client: ApiClient | undefined;
   if (connectionReady && connection.kind === "configured") {
     try {
       client = createApiClient({ baseUrl: connection.apiUrl, token: connection.token, ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }) });
+      if (project.kind !== "attached") {
+        const discovered = await discoverWorkspaceProjectFromControlPlane({ workspacePath: workspace.cwd, session, client });
+        project = discovered;
+        if (discovered.kind === "attached") {
+          session = attachWorkspaceSession(workspace.cwd, session, discovered.projectId);
+          await saveWorkspaceSession(session);
+        } else {
+          projectDiscoveryNotice = discovered.reason;
+        }
+      }
     } catch {
       // The resolver already validates the endpoint. Keep the UI truthful if
       // a future client invariant rejects it at construction time.
@@ -195,9 +206,21 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       try {
         client = createApiClient({ baseUrl: connection.apiUrl, token: connection.token, ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }) });
         project = discoverWorkspaceProject(workspace.cwd, session);
+        projectDiscoveryNotice = undefined;
+        if (project.kind !== "attached") {
+          const discovered = await discoverWorkspaceProjectFromControlPlane({ workspacePath: workspace.cwd, session, client });
+          project = discovered;
+          if (discovered.kind === "attached") {
+            session = attachWorkspaceSession(workspace.cwd, session, discovered.projectId);
+            await saveWorkspaceSession(session);
+          } else {
+            projectDiscoveryNotice = discovered.reason;
+          }
+        }
         state.connection = { kind: "connected" };
         recovery = reconcileTuiSession(workspace.cwd, session);
         append("Control Plane connected.");
+        if (projectDiscoveryNotice !== undefined) append(projectDiscoveryNotice);
         void refreshDashboard();
         restartActivity();
       } catch {
@@ -219,17 +242,40 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             append("New Concertmaster conversation started. Durable Goal state was preserved.");
           } else if (parsed.action === "attach") {
             const requestedProjectId = parsed.options["project-id"];
+            const requestedProjectIndex = parsed.options["project-index"];
             const current = await loadWorkspaceSession(workspace.cwd);
             if (typeof requestedProjectId === "string" && requestedProjectId.trim() !== "") {
               session = attachWorkspaceSession(workspace.cwd, current, requestedProjectId);
               await saveWorkspaceSession(session);
-            } else if (current !== undefined) {
+            } else if (typeof requestedProjectIndex === "string" && requestedProjectIndex.trim() !== "") {
+              if (client === undefined) {
+                append("Project discovery is unavailable until the Control Plane is connected.");
+                return;
+              }
+              const index = Number(requestedProjectIndex);
+              const projects = (await client.listProjects()).projects;
+              if (!Number.isSafeInteger(index) || index < 1 || index > projects.length) {
+                append(`Project index must be a number from 1 to ${projects.length}.`);
+                return;
+              }
+              session = attachWorkspaceSession(workspace.cwd, current, projects[index - 1]!);
+              await saveWorkspaceSession(session);
+            } else if (current?.projectId !== undefined) {
               session = current;
+            } else if (client !== undefined) {
+              const discovered = await discoverWorkspaceProjectFromControlPlane({ workspacePath: workspace.cwd, session: current, client });
+              if (discovered.kind !== "attached") {
+                append(discovered.reason);
+                return;
+              }
+              session = attachWorkspaceSession(workspace.cwd, current, discovered.projectId);
+              await saveWorkspaceSession(session);
             } else {
-              append("Session attach requires --project-id when no workspace session is saved.");
+              append("Session attach requires a connected Control Plane or --project-id.");
               return;
             }
             project = discoverWorkspaceProject(workspace.cwd, session);
+            projectDiscoveryNotice = undefined;
             recovery = reconcileTuiSession(workspace.cwd, session);
             append(renderRecoveryBanner(recovery, terminal.columns).join(" · "));
             void refreshDashboard();
@@ -239,6 +285,13 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             append(current === undefined ? "Session: no saved workspace session" : renderRecoveryBanner(reconcileTuiSession(workspace.cwd, current), terminal.columns).join(" · "));
           } else {
             append(`Command: /session ${parsed.action ?? ""} (unknown session action)`.trim());
+          }
+        } else if (parsed.kind === "command" && parsed.name === "projects" && parsed.action === "list") {
+          if (client === undefined) {
+            append("Projects unavailable until the Control Plane is connected.");
+          } else {
+            const projects = (await client.listProjects()).projects;
+            append(projects.length === 0 ? "Projects: No projects are available for this operator" : `Projects: ${projects.map((id, index) => `${index + 1}. ${id}`).join(" · ")}`);
           }
         } else if (parsed.kind === "command" && client !== undefined && project.kind === "attached") {
           const action = registry.find(parsed.name)?.actions.find((item) => item.name === parsed.action);
@@ -313,6 +366,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     });
     const runtime = createTuiRuntime({ start: () => tui.start(), stop });
     runtime.start();
+    if (projectDiscoveryNotice !== undefined) append(projectDiscoveryNotice);
     void refreshDashboard();
     startActivity();
   });

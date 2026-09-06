@@ -43,6 +43,10 @@ export type GoalResult = z.infer<typeof GoalResultSchema>;
 export const GoalListSchema = z.object({ goals: z.array(GoalResultSchema) }).strict();
 export type GoalList = z.infer<typeof GoalListSchema>;
 
+/** Project identities visible to the authenticated operator for workspace attachment. */
+export const ProjectListSchema = z.object({ projects: z.array(UuidSchema) }).strict();
+export type ProjectList = z.infer<typeof ProjectListSchema>;
+
 const NonEmptyStringListSchema = z.array(z.string().min(1)).readonly();
 const TaskContractProjectSchema = z.object({
   projectId: UuidSchema,

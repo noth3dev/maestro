@@ -4,7 +4,7 @@ import { createCommandRegistry } from "./registry.js";
 describe("TUI command registry", () => {
   it("contains the complete supported command families", () => {
     const registry = createCommandRegistry();
-    for (const command of ["goal", "task-contract", "head", "council", "department-plan", "mission-bundle", "worker", "git", "environment", "device", "discord", "metronome", "encore", "certification", "evidence", "budget", "events", "approval", "session"]) {
+    for (const command of ["goal", "projects", "task-contract", "head", "council", "department-plan", "mission-bundle", "worker", "git", "environment", "device", "discord", "metronome", "encore", "certification", "evidence", "budget", "events", "approval", "session"]) {
       expect(registry.find(command)).toBeDefined();
     }
   });
