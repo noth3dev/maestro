@@ -36,6 +36,8 @@ import {
   GoalGitIntegrationStateSchema,
   WorkerListSchema,
   ImprovementDigestListSchema,
+  AuthenticatedDiscordSignalSchema,
+  StoredDiscordSignalSchema,
   EventQuerySchema,
   EventCursorSchema,
   GoalEventPageSchema,
@@ -146,8 +148,13 @@ import { GitProjectMismatchError, type GitIntegrationService } from "./git-integ
 import type { CertificationService } from "./certification-service.js";
 import type { MetronomeService } from "./metronome-service.js";
 import { EncoreProjectMismatchError, type EncoreService } from "./encore-service.js";
-import { GitIntegrationError, GitIntegrationNotFoundError, CertificationError, CertificationNotFoundError, MetronomeChallengeError, MetronomeChallengeNotFoundError, MetronomeAuthorizationError, EncoreCouncilError, StaleGoalLeaseError, HeadActivationRequesterInactiveError } from "@maestro/persistence";
+import { GitIntegrationError, GitIntegrationNotFoundError, CertificationError, CertificationNotFoundError, MetronomeChallengeError, MetronomeChallengeNotFoundError, MetronomeAuthorizationError, EncoreCouncilError, StaleGoalLeaseError, HeadActivationRequesterInactiveError, DiscordPersistenceError, type StoredDiscordSignal } from "@maestro/persistence";
 import { GitAuthorizationError } from "@maestro/git-adapter";
+import type { AuthenticatedDiscordSignal } from "@maestro/domain";
+
+export interface DiscordSignalService {
+  record(envelope: AuthenticatedDiscordSignal): Promise<StoredDiscordSignal>;
+}
 
 export interface ReadStateUnavailableService extends ReadStateService {}
 
@@ -181,7 +188,7 @@ const systemPollingScheduler: PollingScheduler = {
   clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
 };
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, https, projectMembership, projectAccess, readinessCheck }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, readinessCheck }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
@@ -198,6 +205,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
   certificationService?: CertificationService;
   metronomeService?: MetronomeService;
   encoreService?: EncoreService;
+  discordSignalService?: DiscordSignalService;
   /** When set, the listener is real HTTPS, not plain HTTP. */
   https?: { cert: Buffer; key: Buffer };
   /**
@@ -288,6 +296,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
     resolve: async () => { throw new DurableStoreUnavailableError(); },
   } satisfies MetronomeService;
   const encore = encoreService ?? { review: async () => { throw new DurableStoreUnavailableError(); } } satisfies EncoreService;
+  const discordSignal = discordSignalService ?? { record: async () => { throw new DurableStoreUnavailableError(); } } satisfies DiscordSignalService;
   // preClose runs while Fastify can still release open HTTP responses. onClose is too late:
   // Fastify waits for those connections before it invokes onClose.
   app.addHook("preClose", async () => {
@@ -791,6 +800,15 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
     return reply.send(ImprovementDigestListSchema.parse({ digests: await readState.listImprovementDigestsForGoal(goalId, query.projectId, operatorId) }));
   });
+  // Ingests one authenticated Discord watchdog signal. Bearer authentication (above) proves the
+  // caller holds a real operator credential; the signal's own HMAC signature (verified inside
+  // `discordSignal.record`) additionally proves it was genuinely produced by the configured
+  // Discord watchdog source, not merely by any authenticated operator.
+  app.post("/v1/discord/signals", async (request, reply) => {
+    const input = parse(AuthenticatedDiscordSignalSchema, request.body);
+    const stored = await discordSignal.record(input);
+    return reply.status(201).send(StoredDiscordSignalSchema.parse(stored));
+  });
 
   app.get("/v1/events", async (request, reply) => {
     const query = parse(EventQuerySchema, request.query);
@@ -999,6 +1017,7 @@ function mapError(error: unknown): { status: number; body: StableApiError } {
   if (error instanceof MetronomeChallengeError) return apiError(409, "metronome_conflict", error.message);
   if (error instanceof EncoreProjectMismatchError) return apiError(400, "validation_error", error.message);
   if (error instanceof EncoreCouncilError) return apiError(409, "encore_conflict", error.message);
+  if (error instanceof DiscordPersistenceError) return apiError(400, "discord_signal_rejected", error.message);
 
   if (error instanceof TaskContractIntegrityError || error instanceof GoalTaskContractIntegrityError) return apiError(503, "task_contract_integrity_error", error.message);
   if (error instanceof TaskContractNotFoundError) return apiError(404, "task_contract_not_found", "Task Contract was not found");

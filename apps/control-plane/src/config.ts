@@ -18,6 +18,8 @@ export interface MaestroConfig {
   ceoOperatorId?: string;
   /** Optional explicit operator allowed to provision project memberships and roles. */
   operatorProvisioningAdminId?: string;
+  /** Shared secret verifying an inbound Discord watchdog signal's own signature. Absent by default: fails closed (route unavailable) until explicitly configured. */
+  discordSignalCredential?: string;
   /** Duration of the startup-only reconciliation-leader lease; never renewed after startup. */
   reconcilerLeaseDurationMs: number;
   /** Maximum time allowed for provider/application shutdown drains. */
@@ -45,6 +47,7 @@ const schema = z.object({
   MAESTRO_SHUTDOWN_DRAIN_MS: z.coerce.number().int().positive().default(5_000),
   MAESTRO_TLS_CERT_FILE: z.string().min(1).optional(),
   MAESTRO_TLS_KEY_FILE: z.string().min(1).optional(),
+  MAESTRO_DISCORD_SIGNAL_CREDENTIAL: z.string().min(1).optional(),
 });
 
 export function parseConfig(
@@ -70,6 +73,7 @@ export function parseConfig(
     MAESTRO_SHUTDOWN_DRAIN_MS: shutdownDrainTimeoutMs,
     MAESTRO_TLS_CERT_FILE: certFile,
     MAESTRO_TLS_KEY_FILE: keyFile,
+    MAESTRO_DISCORD_SIGNAL_CREDENTIAL: discordSignalCredential,
   } = parsed.data;
 
   const isRemoteBind = host !== "127.0.0.1" && host !== "localhost";
@@ -86,6 +90,7 @@ export function parseConfig(
     databaseUrl, evidenceDir, worktreeRoot, host, port, primeAgentVersion: "0.8.0", actorId, leaseOwnerId, reconcilerLeaseDurationMs, shutdownDrainTimeoutMs,
     ...(ceoOperatorId === undefined ? {} : { ceoOperatorId }),
     ...(operatorProvisioningAdminId === undefined ? {} : { operatorProvisioningAdminId }),
+    ...(discordSignalCredential === undefined ? {} : { discordSignalCredential }),
     ...(isRemoteBind ? { tls: { certFile: certFile!, keyFile: keyFile! } } : {}),
   };
 }
