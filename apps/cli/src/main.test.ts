@@ -106,6 +106,17 @@ describe("executeCli", () => {
     expect(stderr.lines.join("")).toContain("MAESTRO_API_URL");
     expect(stderr.lines.join("")).not.toContain("top-secret");
   });
+
+
+  it("starts the interactive TUI for a bare invocation before requiring API credentials", async () => {
+    const stdout = output();
+    const stderr = output();
+    const startTui = vi.fn().mockResolvedValue(0);
+
+    await expect(executeCli([], {}, { stdout: stdout.write, stderr: stderr.write, startTui })).resolves.toBe(0);
+    expect(startTui).toHaveBeenCalledWith(expect.any(String), {}, expect.objectContaining({ stdout: stdout.write }));
+    expect(stderr.lines).toEqual([]);
+  });
 });
 
 it("reads Metronome challenges through the parity command", async () => { const fetch=vi.fn().mockResolvedValue(new Response(JSON.stringify({challenges:[]}),{status:200})); const stdout=output(); const stderr=output(); await expect(executeCli(["metronome-challenges","list","--goal-id",goalId,"--project-id",projectId,"--json"],env,{fetch,stdout:stdout.write,stderr:stderr.write})).resolves.toBe(0); expect(JSON.parse(stdout.lines[0]!)).toEqual({challenges:[]}); expect(stderr.lines).toEqual([]); });

@@ -1,0 +1,40 @@
+import { createTuiRuntime, type TuiTerminal } from "./runtime.js";
+import type { CliIo } from "../main.js";
+
+export interface InteractiveTuiOptions {
+  cwd: string;
+  env: Record<string, string | undefined>;
+  io: CliIo;
+}
+
+function createProcessTerminal(options: InteractiveTuiOptions, onExit: () => void): TuiTerminal {
+  let onData: ((data: Buffer) => void) | undefined;
+  return {
+    start() {
+      options.io.stdout("\x1b[2J\x1b[HMAESTRO / CONCERTMASTER\n\nWorkspace: " + options.cwd + "\n\nPress Ctrl+C to exit.\n");
+      onData = (data) => {
+        if (data[0] === 3) onExit();
+      };
+      process.stdin.on("data", onData);
+      if (process.stdin.isTTY) process.stdin.setRawMode(true);
+      process.stdin.resume();
+    },
+    stop() {
+      if (onData !== undefined) process.stdin.off("data", onData);
+      if (process.stdin.isTTY) process.stdin.setRawMode(false);
+      process.stdin.pause();
+    },
+  };
+}
+
+export async function startInteractiveTui(options: InteractiveTuiOptions): Promise<number> {
+  return await new Promise<number>((resolve) => {
+    let runtime: ReturnType<typeof createTuiRuntime>;
+    const terminal = createProcessTerminal(options, () => {
+      runtime.stop();
+      resolve(0);
+    });
+    runtime = createTuiRuntime(terminal);
+    runtime.start();
+  });
+}
