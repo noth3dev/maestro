@@ -505,3 +505,19 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Result: **106 test files passed, 1 skipped; 802 tests passed, 2 skipped; 0 failed**. The two skips are the known live-Prime cases.
 - This is the first clean broad result after the final search_path hardening and import-format cleanup; the earlier overlapping/stopped run is discarded.
 - `git diff --check` passes.
+
+
+## 2026-09-06 — Post-acceptance Phase 6 documentation plan
+
+- **Scope:** update the three roadmap-language copies (`docs/05-roadmap-and-phase-status.md`, `docs/en/...`, `docs/ko/...`) after the accepted Step 1 commit.
+- **Status truth:** mark only Phase 6 Step 1 as accepted: immutable, project-private, source-bound Improvement Digests. Keep Phase 6 Steps 2+ deferred.
+- **Boundary truth:** state that Step 1 adds no automatic mutation, replay, rollout, adaptation, or cross-project promotion. Preserve the existing Phase 1–5 operational disclaimer.
+- **Validation:** inspect the diff, run `git diff --check`, and commit/push this documentation checkpoint separately.
+
+
+## 2026-09-06 — Phase 6 Step 1 documentation result
+
+- Updated the root, English, and Korean roadmap copies to mark Phase 6 Step 1 accepted.
+- Documented the accepted boundary: immutable, project-private, source-bound digests with lease/membership/hash protections.
+- Explicitly kept mutation, replay, rollout, adaptation, and cross-project promotion deferred for Phase 6 Steps 2+.
+- `git diff --check` passes for the documentation checkpoint.
