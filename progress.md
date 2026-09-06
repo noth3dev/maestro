@@ -2127,3 +2127,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   constraints; safe pause-point declarations; Portfolio Council; CEO pinning; forecasts in
   app/CLI; concurrency/fairness/contamination tests; a real competing-Goal live scenario) remain
   open, each a separate, substantial slice.
+
+## 2026-09-06 — Progress check and documentation reconciliation
+
+- Reconciled the live repository against the planning documents. `main` is clean at `95bef8e` and matches `origin/main`.
+- Confirmed `npm run build` passes. Confirmed `npm test` passes without PostgreSQL: 61 files/469 tests passed and 51 files/360 tests skipped; no failures.
+- The latest implementation is the Phase 5 first capacity slice: project-wide worker-slot admission control. It intentionally does not implement the complete multi-resource model or a server-side queue.
+- Corrected the current pointer conceptually: the next Phase 5 work is resource inventory/demand reservations/protected floors/admission-control expansion.
+- PostgreSQL-backed acceptance evidence is still pending because this environment has no Docker/local PostgreSQL.

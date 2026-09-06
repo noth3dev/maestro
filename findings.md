@@ -607,3 +607,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Verified: fresh `npm run build` clean; `npm test` (no DB in this runtime) now reports
   **107 test files: 57 passed, 50 skipped, 0 failed; 796 tests: 447 passed, 349 skipped, 0 failed**
   — the three files that previously crashed now skip cleanly like every other DB-gated suite.
+
+## 2026-09-06 — Documentation drift confirmed during progress check
+
+- `task_plan.md` contains historical Phase 5 status wording that understates the current implementation. Live code confirms the broader authenticated API surface and the Electron Secretary architecture described in the later reconciliation entry.
+- The current `main` tip is `95bef8e` (not the older `hardening/lifecycle`/`ce94c3d` reference in the historical entry).
+- No source defect was found in this check. The remaining evidence limitation is environmental: PostgreSQL integration suites cannot run here.
