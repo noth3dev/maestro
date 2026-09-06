@@ -8,7 +8,7 @@ export interface ConnectionEnvironment {
 }
 
 export async function resolveConnection(env: ConnectionEnvironment): Promise<ConnectionState> {
-  const apiUrl = env.MAESTRO_API_URL?.trim();
+  const apiUrl = env.MAESTRO_API_URL?.trim() || (env.MAESTRO_API_TOKEN?.trim() ? "http://127.0.0.1:4310" : undefined);
   const token = env.MAESTRO_API_TOKEN?.trim();
   if (apiUrl !== undefined && apiUrl !== "" && token !== undefined && token !== "") {
     try {
