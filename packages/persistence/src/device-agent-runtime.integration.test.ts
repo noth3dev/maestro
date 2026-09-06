@@ -54,4 +54,38 @@ describeDatabase("device agent durable command authority with PostgreSQL", () =>
     await closeDeviceAgentSession(pool, sessionId);
     await expect(loadDeviceAgentAuthorization(pool, input)).rejects.toThrow();
   });
+
+  it("durably closes a grant that has naturally expired instead of only rejecting the current command (Phase 5 Track B8)", async () => {
+    const goalId = randomUUID(); const projectId = randomUUID();
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "device-test", leaseDurationMs: 60_000 });
+    const device = await enrollDevice(pool, { displayName: "test agent", deviceType: "computer", publicKey: "expiry-device-key" }, { actorId: "ceo", sessionRef: "session:ceo", role: "ceo" });
+    await setLocalDevicePolicy(pool, device.deviceId, { rules: [{ action: "project.file.read", targets: ["/tmp/device-project/README.md"] }], expiresAt: null }, { actorId: "ceo", sessionRef: "session:ceo:policy", role: "ceo" });
+    const issued = await createDeviceGrant(pool, goalId, device.deviceId, scope, new Date(Date.now() + 200).toISOString(), proof, { actorId: "ceo", sessionRef: "session:ceo:grant", role: "ceo" });
+    const sessionId = randomUUID(); await openDeviceAgentSession(pool, sessionId, device.deviceId, device.identityFingerprint);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const unsigned: UnsignedDeviceGrantEnvelope = { version: 1, grantId: issued.grant.grantId, commandId: randomUUID(), goalId, projectId, deviceId: device.deviceId, action: "project.file.read", target: "/tmp/device-project/README.md", projectPath: "/tmp/device-project", application: "filesystem", dataResource: "/tmp/device-project/README.md", networkTarget: "none", policyVersion: 2, goalFencingToken: proof.fencingToken, sequence: 1, issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 30_000).toISOString(), nonce: randomUUID(), issuerKeyId: "issuer-1" };
+    const input: DeviceAgentCommandInput = { envelope: signDeviceGrantEnvelope(unsigned, privateKey), capabilityToken: issued.capabilityToken, sessionId };
+
+    await expect(claimDeviceAgentCommand(pool, input)).rejects.toThrow("not active");
+    const grant = await pool.query<{ state: string }>("SELECT state FROM device_grants WHERE grant_id = $1", [issued.grant.grantId]);
+    expect(grant.rows[0]).toEqual({ state: "expired" });
+  });
+
+  it("durably closes a grant once its Goal reaches a terminal state (Phase 5 Track B8)", async () => {
+    const goalId = randomUUID(); const projectId = randomUUID();
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "device-test", leaseDurationMs: 60_000 });
+    const device = await enrollDevice(pool, { displayName: "test agent", deviceType: "computer", publicKey: "closure-device-key" }, { actorId: "ceo", sessionRef: "session:ceo", role: "ceo" });
+    await setLocalDevicePolicy(pool, device.deviceId, { rules: [{ action: "project.file.read", targets: ["/tmp/device-project/README.md"] }], expiresAt: null }, { actorId: "ceo", sessionRef: "session:ceo:policy", role: "ceo" });
+    const issued = await createDeviceGrant(pool, goalId, device.deviceId, scope, new Date(Date.now() + 60_000).toISOString(), proof, { actorId: "ceo", sessionRef: "session:ceo:grant", role: "ceo" });
+    const sessionId = randomUUID(); await openDeviceAgentSession(pool, sessionId, device.deviceId, device.identityFingerprint);
+    await pool.query("UPDATE goals SET state = 'succeeded' WHERE goal_id = $1", [goalId]);
+    const unsigned: UnsignedDeviceGrantEnvelope = { version: 1, grantId: issued.grant.grantId, commandId: randomUUID(), goalId, projectId, deviceId: device.deviceId, action: "project.file.read", target: "/tmp/device-project/README.md", projectPath: "/tmp/device-project", application: "filesystem", dataResource: "/tmp/device-project/README.md", networkTarget: "none", policyVersion: 2, goalFencingToken: proof.fencingToken, sequence: 1, issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 30_000).toISOString(), nonce: randomUUID(), issuerKeyId: "issuer-1" };
+    const input: DeviceAgentCommandInput = { envelope: signDeviceGrantEnvelope(unsigned, privateKey), capabilityToken: issued.capabilityToken, sessionId };
+
+    await expect(claimDeviceAgentCommand(pool, input)).rejects.toThrow("Goal is closed");
+    const grant = await pool.query<{ state: string }>("SELECT state FROM device_grants WHERE grant_id = $1", [issued.grant.grantId]);
+    expect(grant.rows[0]).toEqual({ state: "closed" });
+  });
 });

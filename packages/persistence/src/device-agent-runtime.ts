@@ -69,6 +69,23 @@ function checkScope(envelope: DeviceGrantEnvelope, runtime: Awaited<ReturnType<t
   const local = evaluateLocalDevicePolicy(enrollment(runtime.device), policy(runtime.policy), { deviceId: envelope.deviceId, identityFingerprint: runtime.device.identity_fingerprint.trim(), action: envelope.action, target: envelope.target });
   if (!local.allowed) throw new DeviceGrantAuthorizationError(`Device local policy denied: ${local.reason}`);
 }
+/**
+ * Durably closes a grant that has naturally lapsed (past its own expiry, or its Goal reaching a
+ * terminal state) instead of only rejecting the current command in memory and leaving
+ * `device_grants.state` reading `active` forever. Requires the grant row already locked by the
+ * caller. A no-op for a grant that is still genuinely live.
+ */
+async function closeGrantIfLapsed(client: PoolClient, runtime: Awaited<ReturnType<typeof loadRuntime>>): Promise<void> {
+  if (runtime.grant.state !== "active") return;
+  if (isTerminalGoalState(runtime.goalState as never)) {
+    await client.query("UPDATE device_grants SET state = 'closed' WHERE grant_id = $1 AND state = 'active'", [runtime.grant.grant_id]);
+    runtime.grant.state = "closed" as DeviceGrantState;
+  } else if (runtime.grant.expires_at.getTime() <= Date.now()) {
+    await client.query("UPDATE device_grants SET state = 'expired' WHERE grant_id = $1 AND state = 'active'", [runtime.grant.grant_id]);
+    runtime.grant.state = "expired" as DeviceGrantState;
+  }
+}
+
 function checkLive(runtime: Awaited<ReturnType<typeof loadRuntime>>, envelope: DeviceGrantEnvelope): void {
   if (runtime.device.state === "revoked") throw new DeviceGrantRevokedError(`Device is revoked: ${runtime.device.device_id}`);
   if (runtime.grant.state === "revoked") throw new DeviceGrantRevokedError(`Device grant is revoked: ${runtime.grant.grant_id}`);
@@ -98,7 +115,7 @@ export async function claimDeviceAgentCommand(pool: Pool, input: DeviceAgentComm
     await client.query("BEGIN"); open = true; await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 29))", [input.envelope.grantId]);
     const session = await client.query<{ identity_fingerprint: string }>("SELECT s.identity_fingerprint FROM device_agent_sessions s JOIN devices d ON d.device_id = s.device_id WHERE s.session_id = $1 AND s.device_id = $2 AND s.identity_fingerprint = d.identity_fingerprint AND d.state = 'enrolled' AND s.state = 'active' FOR UPDATE OF s", [input.sessionId, input.envelope.deviceId]);
     if (session.rowCount !== 1) throw new DeviceGrantAuthorizationError("Device agent session is not active");
-    const runtime = await loadRuntime(client, input, true); checkEnvelopeMatches(input.envelope, runtime); checkLive(runtime, input.envelope);
+    const runtime = await loadRuntime(client, input, true); checkEnvelopeMatches(input.envelope, runtime); await closeGrantIfLapsed(client, runtime); checkLive(runtime, input.envelope);
     const lease = await client.query<{ fencing_token: string }>("SELECT fencing_token FROM goal_leases WHERE goal_id = $1 AND expires_at > clock_timestamp() FOR SHARE", [runtime.grant.goal_id]);
     if (lease.rowCount !== 1 || lease.rows[0]!.fencing_token !== input.envelope.goalFencingToken) throw new DeviceGrantAuthorizationError("Device command Goal fence is stale");
     await assertGoalControlOpen(client, runtime.grant.goal_id); checkScope(input.envelope, runtime);

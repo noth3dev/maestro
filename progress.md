@@ -1978,3 +1978,31 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   and durable automatic grant expiry/closure (currently only rejects at claim time;
   `device_grants.state` never transitions to `expired`/`closed` on its own). Each is a real,
   separate, moderate-sized slice, not attempted in this pass.
+
+
+## 2026-09-06 (continued) — durable automatic device-grant expiry/closure (Track B8)
+
+- Closed Phase 5 Track B8: `device_grants.state` previously only ever transitioned via explicit
+  `revokeDeviceGrant`/the new revocation-cascade; a naturally lapsed grant (past its own
+  `expires_at`, or its Goal reaching a terminal state) was rejected in memory by `checkLive` on
+  every claim attempt but never durably marked `expired`/`closed`, so `listDeviceGrantsForGoal`
+  kept reading it as `active` forever.
+- Added `closeGrantIfLapsed` in `packages/persistence/src/device-agent-runtime.ts`, called with the
+  grant row already locked inside `claimDeviceAgentCommand` right before the existing `checkLive`
+  rejection: a grant whose Goal is terminal durably closes (`state = 'closed'`); a grant past its
+  own expiry durably expires (`state = 'expired'`). Both are opportunistic (triggered by the next
+  claim attempt, not a separate sweep), safe under the existing append-only/terminal-state-final
+  trigger on `device_grants`, and change nothing about the actual authorization outcome -- the
+  claim was already rejected either way; this only makes the durable record agree with reality.
+- Added 2 focused real-PostgreSQL regressions in `device-agent-runtime.integration.test.ts`: one
+  proving a grant past its own expiry closes to `expired` on the next claim attempt, one proving a
+  grant whose Goal reached `succeeded` closes to `closed`. Not run against real PostgreSQL in this
+  runtime (no Docker/local Postgres available here); self-verified for type correctness and
+  skip-registration only.
+- Verified: root `tsc -b` clean, root `npm test` (no DB in this runtime): **111 test files (61
+  passed, 50 skipped), 821 tests (467 passed, 354 skipped), 0 failed** (354 = prior 352 + 2 new,
+  DB-gated skips).
+- **All of Phase 5 Track B's device items are now closed except 6 and 7**: disconnect/
+  dependent-work pause lifecycle (no device session/heartbeat/disconnect tracking beyond the mTLS
+  session table itself) and Metronome device-access observation rules (Metronome never reads
+  device/grant/result state). Both remain open, moderate-sized, separate slices.
