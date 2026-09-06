@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { GoalBudgetSummary } from "@maestro/api-client";
 import type { Certification } from "@maestro/contracts";
 import { loadGoalPageData, type GoalPageData } from "./lib/goal-data.js";
@@ -10,12 +10,14 @@ export interface GoalDetail extends GoalPageData {
   certifications: Certification[];
 }
 
-export function useGoalDetail(): { detail: GoalDetail | undefined; loading: boolean; error: string | undefined } {
+export function useGoalDetail(): { detail: GoalDetail | undefined; loading: boolean; error: string | undefined; refresh: () => void } {
   const { config } = useConnection();
   const { selectedGoalId } = useGoals();
   const [detail, setDetail] = useState<GoalDetail | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+  const [reloadToken, setReloadToken] = useState(0);
+  const refresh = useCallback(() => setReloadToken((current) => current + 1), []);
 
   useEffect(() => {
     if (config === undefined || selectedGoalId === undefined) return;
@@ -41,7 +43,7 @@ export function useGoalDetail(): { detail: GoalDetail | undefined; loading: bool
     return () => {
       cancelled = true;
     };
-  }, [config, selectedGoalId]);
+  }, [config, selectedGoalId, reloadToken]);
 
-  return { detail, loading, error };
+  return { detail, loading, error, refresh };
 }
