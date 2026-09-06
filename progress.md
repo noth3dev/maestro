@@ -1935,3 +1935,46 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   only, reusing the existing rule set unchanged; and a decision on whether the loop should default
   to on with a sane interval in production rather than opt-in, which is a product/ops policy
   choice, not a technical one, left for the next explicit decision point.
+
+
+## 2026-09-06 (continued) — device hardening triage: Track B4 grant-revocation cascade closed; B3/B5 found already resolved
+
+- Audited the remaining Phase 5 Track B device items (3-8) directly against the current
+  `packages/persistence/src/device-agent-runtime.ts` before assuming task_plan.md's Track B list
+  was still accurate (it was stale again, same pattern as the Secretary/Metronome/Discord findings
+  earlier this session -- the Track B1-B2 slice had already closed more than its own name implies):
+  - **Track B5 (typed application/data/network scope enforcement) is already fully implemented.**
+    `checkScope` in `device-agent-runtime.ts` checks `actionTypes`, `projectPaths`, `applications`,
+    `dataScope`, and `networkScope` against the durable grant before every command claim -- not a
+    gap. Not re-implemented.
+  - **Track B3 (authenticated command dispatch, durable pre-effect claims) is already
+    implemented.** `device_command_claims` records an immutable pre-effect claim before any OS
+    effect, and `completeDeviceAgentCommand` requires the exact session/sequence/action/target and
+    capability token to match the claim before recording a result -- a forged or replayed
+    completion is already rejected. A literal per-result Ed25519 signature (beyond the mTLS session
+    + capability-token binding already enforced) would be marginal additional hardening, not a
+    functional gap; left as a possible future refinement, not implemented this pass.
+  - **Track B4 (device revocation cascading to issued grants) had a real, narrow gap.**
+    `revokeDevice` already made every future command claim impossible (`checkLive` in
+    `device-agent-runtime.ts` already rejects any claim once `devices.state = 'revoked'`), but
+    `device_grants.state` itself was never updated, so `listDeviceGrantsForGoal`/`readDeviceGrant`
+    durably read a revoked device's grants as still `active` -- a read-model consistency gap, not
+    a security hole (the enforcement layer was already correct). Fixed:
+    `revokeDevice` now also updates every currently `active` grant for that device to `revoked`
+    (with `revoked_at`) in the same transaction, across every Goal the device holds a grant for.
+    This is a CEO-authorized, cross-Goal admin action and deliberately does not require a
+    per-Goal lease proof for each affected grant, the same way `revokeAuthorityRecord` needs none.
+- Added a focused real-PostgreSQL regression in `device-grant.integration.test.ts` covering two
+  Goals: one grant only reachable via device revocation cascade, one already independently
+  revoked beforehand (proving the cascade does not overwrite an already-revoked grant's
+  `revokedAt`). Not run against real PostgreSQL in this runtime (no Docker here); self-verified
+  for type correctness and skip-registration only.
+- Verified: root `tsc -b` clean, root `npm test` (no DB in this runtime): **111 test files (61
+  passed, 50 skipped), 819 tests (467 passed, 352 skipped), 0 failed** (352 = prior 351 + 1 new,
+  DB-gated skip).
+- Remaining Track B items, now down to 6, 7, 8: disconnect/dependent-work pause lifecycle (no
+  device session/heartbeat/disconnect state exists yet beyond the mTLS session table itself),
+  Metronome device-access observation rules (Metronome never reads device/grant/result state),
+  and durable automatic grant expiry/closure (currently only rejects at claim time;
+  `device_grants.state` never transitions to `expired`/`closed` on its own). Each is a real,
+  separate, moderate-sized slice, not attempted in this pass.
