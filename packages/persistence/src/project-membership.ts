@@ -47,9 +47,9 @@ export async function revokeProjectMembership(pool: Pool, operatorId: string, pr
  * concrete gap that authentication alone let any valid credential act on
  * any project's Goals regardless of organizational membership.
  */
-export async function assertProjectMembership(pool: Pool, operatorId: string, projectId: string): Promise<void> {
+export async function assertProjectMembership(pool: Pool | PoolClient, operatorId: string, projectId: string): Promise<void> {
   const result = await pool.query(
-    "SELECT 1 FROM operator_project_memberships WHERE operator_id = $1 AND project_id = $2 AND active = true",
+    "SELECT 1 FROM operator_project_memberships WHERE operator_id = $1 AND project_id = $2 AND active = true FOR SHARE",
     [operatorId, projectId],
   );
   if (result.rowCount !== 1) throw new ProjectMembershipRequiredError(operatorId, projectId);
