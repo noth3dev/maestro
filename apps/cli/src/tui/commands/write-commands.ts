@@ -31,6 +31,37 @@ function integer(command: ParsedCommand, name: string): number | WriteCommandRes
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : unavailable(`--${name} must be a non-negative integer`);
 }
 
+
+function jsonValue(command: ParsedCommand, name: string): unknown | WriteCommandResult {
+  const raw = option(command, name);
+  if (raw === undefined) return unavailable(`Missing required option --${name}`);
+  try { return JSON.parse(raw) as unknown; } catch { return unavailable(`--${name} must contain valid JSON`); }
+}
+
+function jsonObject(command: ParsedCommand, name: string): Record<string, unknown> | WriteCommandResult {
+  const value = jsonValue(command, name);
+  if (isWriteError(value)) return value as WriteCommandResult;
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return unavailable(`--${name} must contain a JSON object`);
+  return value as Record<string, unknown>;
+}
+
+function voidResult(title: string): WriteCommandResult { return { title, lines: ["Command accepted by Control Plane."] }; }
+
+function isWriteError(value: unknown): value is WriteCommandResult {
+  return typeof value === "object" && value !== null && "title" in value && typeof value.title === "string" && "lines" in value && Array.isArray(value.lines);
+}
+
+
+const supportedKeys = new Set([
+  "admin:project-access", "task-contract:create", "task-contract:amend", "task-contract:select-roles", "task-contract:confirm", "task-contract:launch",
+  "goal:create", "goal:transition", "goal:pause", "goal:stop", "goal:resume", "goal:emergency-stop", "head:activate",
+  "council:create", "council:submit-brief", "council:reveal", "council:decide", "department-plan:create", "department-plan:revise", "mission-bundle:create",
+  "worker:spawn", "worker:observe", "worker:cancel", "worker:accept", "worker:certify", "git:goal-branch", "git:department-branch", "git:worker-worktree", "git:goal-revision",
+  "metronome:scan", "metronome:challenge", "metronome:correct", "metronome:safe-pause", "metronome:resolve", "encore:review", "approval:approve-and-run",
+]);
+
+function flag(command: ParsedCommand, name: string): boolean { return command.options[name] === true || option(command, name) === "true"; }
+
 function commandId(command: ParsedCommand): string { return option(command, "command-id") ?? randomUUID(); }
 function result(title: string, value: { goalId?: string; state?: string; version?: number }): WriteCommandResult {
   const identity = value.goalId === undefined ? title : `Goal ${value.goalId}`;
@@ -45,7 +76,7 @@ async function confirmIfCritical(context: WriteCommandContext, command: ParsedCo
   const decision = await confirmCriticalAction({
     action: `${command.name}.${command.action ?? ""}`.replace(/\.$/, ""),
     target,
-    ...(context.goalId === undefined ? {} : { goalId: context.goalId }),
+    ...((option(command, "goal-id") ?? context.goalId) === undefined ? {} : { goalId: option(command, "goal-id") ?? context.goalId }),
     effect: `Execute ${command.name} ${command.action ?? ""}`.trim(),
     expiresAt: option(command, "expires-at") ?? "server-defined",
   }, context.confirm);
@@ -57,6 +88,8 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
   const action = definition?.actions.find((item) => item.name === command.action);
   if (action === undefined) return unavailable(`Unknown command: ${command.name} ${command.action ?? ""}`.trim());
   if (action.kind === "read") return unavailable(`${command.name} ${command.action ?? ""} is a read; use the read command path`.trim());
+  const key = `${command.name}:${command.action ?? ""}`;
+  if (!supportedKeys.has(key)) return unavailable(`${key} is not available from the typed Control Plane client`);
 
   const target = option(command, "target") ?? option(command, "goal-id") ?? context.goalId ?? context.projectId;
   const cancelled = await confirmIfCritical(context, command, target);
@@ -93,6 +126,149 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
     if (typeof challengeId !== "string") return challengeId;
     const updated = await context.client.requestMetronomeSafePause(goalId, challengeId, { projectId: context.projectId }, id);
     return { title: "Metronome", lines: [`${updated.challengeId} · ${updated.status}`] };
+  }
+
+  if (key === "admin:project-access") {
+    const operatorId = required(command, "operator-id"); const roles = option(command, "roles-json");
+    if (typeof operatorId !== "string") return operatorId;
+    if (roles === undefined) return unavailable("Missing required option --roles-json");
+    let parsedRoles: unknown;
+    try { parsedRoles = JSON.parse(roles); } catch { return unavailable("--roles-json must contain valid JSON"); }
+    const provisioned = await context.client.provisionProjectAccess({ operatorId, projectId: context.projectId, roles: parsedRoles as never });
+    return { title: "Project access", lines: [JSON.stringify(provisioned)] };
+  }
+  if (key === "task-contract:create") {
+    const contractId = required(command, "contract-id"); const substance = jsonObject(command, "substance-json");
+    if (typeof contractId !== "string") return contractId; if (isWriteError(substance)) return substance;
+    const created = await context.client.createTaskContract({ projectId: context.projectId, substance } as Parameters<ApiClient["createTaskContract"]>[0], contractId);
+    return { title: "Task Contract", lines: [`${created.contractId} · ${created.launchState}`] };
+  }
+  if (key === "task-contract:amend") {
+    const contractId = required(command, "contract-id"); const expectedVersion = integer(command, "expected-version"); const substance = jsonObject(command, "substance-json");
+    if (typeof contractId !== "string") return contractId; if (typeof expectedVersion !== "number") return expectedVersion; if (isWriteError(substance)) return substance;
+    const updated = await context.client.updateTaskContract(contractId, { projectId: context.projectId, expectedVersion, substance } as Parameters<ApiClient["updateTaskContract"]>[1], id);
+    return { title: "Task Contract", lines: [`${updated.contractId} · v${updated.version}`] };
+  }
+  if (key === "task-contract:select-roles") {
+    const contractId = required(command, "contract-id"); if (typeof contractId !== "string") return contractId;
+    const selected = await context.client.selectOvertureRoles(contractId, { projectId: context.projectId, outsideEvidenceRequested: flag(command, "outside-evidence"), previewNeeded: flag(command, "preview-needed") }, id);
+    return { title: "Overture roles", lines: [selected.roles.join(", ")] };
+  }
+  if (key === "task-contract:confirm") {
+    const contractId = required(command, "contract-id"); const version = integer(command, "version"); const contentHash = required(command, "content-hash");
+    if (typeof contractId !== "string") return contractId; if (typeof version !== "number") return version; if (typeof contentHash !== "string") return contentHash;
+    await context.client.confirmTaskContract(contractId, { projectId: context.projectId, version, contentHash }, id); return voidResult("Task Contract");
+  }
+  if (key === "task-contract:launch") {
+    const contractId = required(command, "contract-id"); if (typeof contractId !== "string") return contractId;
+    const launched = await context.client.launchTaskContract(contractId, context.projectId, id); return { title: "Task Contract", lines: [`${launched.contractId} · ${launched.launchState}`] };
+  }
+  if (key === "head:activate") {
+    const goalId = required(command, "goal-id"); const activation = jsonObject(command, "activation-json");
+    if (typeof goalId !== "string") return goalId; if (isWriteError(activation)) return activation;
+    const activated = await context.client.activateHead(goalId, { ...activation, projectId: context.projectId } as Parameters<ApiClient["activateHead"]>[1], id);
+    return { title: "Head", lines: [`${activated.departmentId} · ${activated.status}`] };
+  }
+  if (key === "council:create") {
+    const goalId = required(command, "goal-id"); const council = jsonObject(command, "council-json");
+    if (typeof goalId !== "string") return goalId; if (isWriteError(council)) return council;
+    const created = await context.client.createCouncil(goalId, { ...council, projectId: context.projectId } as Parameters<ApiClient["createCouncil"]>[1], id);
+    return { title: "Council", lines: [`${created.councilId} · ${created.state}`] };
+  }
+  if (key === "council:submit-brief") {
+    const councilId = required(command, "council-id"); const departmentId = required(command, "department-id"); const brief = jsonObject(command, "brief-json");
+    if (typeof councilId !== "string") return councilId; if (typeof departmentId !== "string") return departmentId; if (isWriteError(brief)) return brief;
+    await context.client.submitCouncilBrief(councilId, departmentId, { projectId: context.projectId, brief } as Parameters<ApiClient["submitCouncilBrief"]>[2], id); return voidResult("Council brief");
+  }
+  if (key === "council:reveal") {
+    const councilId = required(command, "council-id"); if (typeof councilId !== "string") return councilId;
+    await context.client.revealCouncil(councilId, context.projectId, id); return voidResult("Council");
+  }
+  if (key === "council:decide") {
+    const councilId = required(command, "council-id"); const packet = jsonObject(command, "packet-json");
+    if (typeof councilId !== "string") return councilId; if (isWriteError(packet)) return packet;
+    const decided = await context.client.decideCouncil(councilId, { projectId: context.projectId, packet } as Parameters<ApiClient["decideCouncil"]>[1], id); return { title: "Council", lines: [`${decided.councilId} · ${decided.state}`] };
+  }
+  if (key === "department-plan:create") {
+    const councilId = required(command, "council-id"); const departmentId = required(command, "department-id"); const plan = jsonObject(command, "plan-json");
+    if (typeof councilId !== "string") return councilId; if (typeof departmentId !== "string") return departmentId; if (isWriteError(plan)) return plan;
+    const created = await context.client.createDepartmentPlan(councilId, departmentId, { projectId: context.projectId, substance: plan } as Parameters<ApiClient["createDepartmentPlan"]>[2], id); return { title: "Department Plan", lines: [`version ${created.version}`] };
+  }
+  if (key === "department-plan:revise") {
+    const councilId = required(command, "council-id"); const departmentId = required(command, "department-id"); const plan = jsonObject(command, "plan-json"); const reason = required(command, "reason");
+    if (typeof councilId !== "string") return councilId; if (typeof departmentId !== "string") return departmentId; if (typeof reason !== "string") return reason; if (isWriteError(plan)) return plan;
+    const revised = await context.client.reviseDepartmentPlan(councilId, departmentId, { projectId: context.projectId, expectedVersion: Number(option(command, "expected-version") ?? "0"), substance: plan, reason } as Parameters<ApiClient["reviseDepartmentPlan"]>[2], id); return { title: "Department Plan", lines: [`version ${revised.version}`] };
+  }
+  if (key === "mission-bundle:create") {
+    const councilId = required(command, "council-id"); const departmentId = required(command, "department-id"); const itemId = required(command, "item-id"); const bundle = jsonObject(command, "bundle-json");
+    if (typeof councilId !== "string") return councilId; if (typeof departmentId !== "string") return departmentId; if (typeof itemId !== "string") return itemId; if (isWriteError(bundle)) return bundle;
+    const created = await context.client.createMissionBundle(councilId, departmentId, itemId, { projectId: context.projectId, substance: bundle } as Parameters<ApiClient["createMissionBundle"]>[3], id); return { title: "Mission Bundle", lines: [created.contentHash] };
+  }
+  if (key === "worker:spawn") {
+    const councilId = required(command, "council-id"); const departmentId = required(command, "department-id"); const worker = jsonObject(command, "worker-json");
+    if (typeof councilId !== "string") return councilId; if (typeof departmentId !== "string") return departmentId; if (isWriteError(worker)) return worker;
+    const spawned = await context.client.spawnWorker(councilId, departmentId, { projectId: context.projectId, ...(worker as Record<string, unknown>) } as Parameters<ApiClient["spawnWorker"]>[2], id); return { title: "Worker", lines: [`${spawned.workerId} · ${spawned.status}`] };
+  }
+  if (key === "worker:observe" || key === "worker:cancel") {
+    const workerId = required(command, "worker-id"); if (typeof workerId !== "string") return workerId;
+    const observed = key.endsWith("observe") ? await context.client.observeWorker(workerId, { projectId: context.projectId }, id) : await context.client.cancelWorker(workerId, { projectId: context.projectId }, id);
+    return { title: "Worker", lines: [`${observed.workerId} · ${observed.status}`] };
+  }
+  if (key === "worker:accept") {
+    const workerId = required(command, "worker-id"); const reason = required(command, "reason"); if (typeof workerId !== "string") return workerId; if (typeof reason !== "string") return reason;
+    const accepted = await context.client.acceptWorker(workerId, { projectId: context.projectId, reason }, id); return { title: "Worker acceptance", lines: [JSON.stringify(accepted)] };
+  }
+  if (key === "worker:certify") {
+    const workerId = required(command, "worker-id"); const certification = jsonObject(command, "certification-json"); if (typeof workerId !== "string") return workerId; if (isWriteError(certification)) return certification;
+    const certified = await context.client.certifyWorker(workerId, { ...certification, projectId: context.projectId } as Parameters<ApiClient["certifyWorker"]>[1], id); return { title: "Certification", lines: [JSON.stringify(certified)] };
+  }
+  if (key === "git:goal-branch") {
+    const goalId = required(command, "goal-id"); const repositoryPath = required(command, "repository-path"); const branchName = required(command, "branch-name"); const baseRevision = required(command, "base-revision");
+    if (typeof goalId !== "string") return goalId; if (typeof repositoryPath !== "string") return repositoryPath; if (typeof branchName !== "string") return branchName; if (typeof baseRevision !== "string") return baseRevision;
+    const branch = await context.client.createGoalIntegrationBranch(goalId, { projectId: context.projectId, repositoryPath, branchName, baseRevision }, id); return { title: "Git", lines: [`${branch.branchName} · ${branch.baseRevision}`] };
+  }
+  if (key === "git:department-branch") {
+    const councilId = required(command, "council-id"); const departmentId = required(command, "department-id"); if (typeof councilId !== "string") return councilId; if (typeof departmentId !== "string") return departmentId;
+    const branch = await context.client.createDepartmentBranch(councilId, departmentId, { projectId: context.projectId }, id); return { title: "Git", lines: [branch.branchName] };
+  }
+  if (key === "git:worker-worktree") {
+    const workerId = required(command, "worker-id"); const worktreePath = required(command, "worktree-path"); if (typeof workerId !== "string") return workerId; if (typeof worktreePath !== "string") return worktreePath;
+    const worktree = await context.client.createWorkerWorktree(workerId, { projectId: context.projectId, worktreePath }, id); return { title: "Git", lines: [worktree.worktreePath] };
+  }
+  if (key === "git:goal-revision") {
+    const goalId = required(command, "goal-id"); if (typeof goalId !== "string") return goalId;
+    const revision = await context.client.freezeGoalIntegrationRevision(goalId, { projectId: context.projectId }, id); return { title: "Git", lines: [revision.commitSha] };
+  }
+  if (key === "metronome:scan") {
+    const goalId = required(command, "goal-id"); if (typeof goalId !== "string") return goalId;
+    const findings = await context.client.scanMetronome(goalId, { projectId: context.projectId }, id); return { title: "Metronome", lines: [`findings: ${findings.findings.length}`] };
+  }
+  if (key === "metronome:challenge") {
+    const goalId = required(command, "goal-id"); const reason = required(command, "reason"); const findingIds = jsonValue(command, "finding-ids"); const evidence = jsonValue(command, "evidence-references");
+    if (typeof goalId !== "string") return goalId; if (typeof reason !== "string") return reason; if (isWriteError(findingIds)) return findingIds as WriteCommandResult; if (isWriteError(evidence)) return evidence as WriteCommandResult;
+    if (!Array.isArray(findingIds) || !findingIds.every((item) => typeof item === "string")) return unavailable("--finding-ids must contain a JSON array"); if (!Array.isArray(evidence) || !evidence.every((item) => typeof item === "string")) return unavailable("--evidence-references must contain a JSON array");
+    const challenge = await context.client.raiseMetronomeChallenge(goalId, { projectId: context.projectId, reason, findingIds, evidenceReferences: evidence }, id); return { title: "Metronome", lines: [`${challenge.challengeId} · ${challenge.status}`] };
+  }
+  if (key === "metronome:correct") {
+    const challengeId = required(command, "challenge-id"); const correctionRequest = required(command, "correction-request"); if (typeof challengeId !== "string") return challengeId; if (typeof correctionRequest !== "string") return correctionRequest;
+    const corrected = await context.client.requestMetronomeCorrection(challengeId, { projectId: context.projectId, correctionRequest }, id); return { title: "Metronome", lines: [`${corrected.challengeId} · ${corrected.status}`] };
+  }
+  if (key === "metronome:safe-pause") {
+    const goalId = required(command, "goal-id"); const challengeId = required(command, "challenge-id"); if (typeof goalId !== "string") return goalId; if (typeof challengeId !== "string") return challengeId;
+    const paused = await context.client.requestMetronomeSafePause(goalId, challengeId, { projectId: context.projectId }, id); return { title: "Metronome", lines: [`${paused.challengeId} · ${paused.status}`] };
+  }
+  if (key === "metronome:resolve") {
+    const challengeId = required(command, "challenge-id"); const reason = required(command, "reason"); if (typeof challengeId !== "string") return challengeId; if (typeof reason !== "string") return reason;
+    const resolved = await context.client.resolveMetronomeChallenge(challengeId, { projectId: context.projectId, reason }, id); return { title: "Metronome", lines: [`${resolved.challengeId} · ${resolved.status}`] };
+  }
+  if (key === "encore:review") {
+    const goalId = required(command, "goal-id"); const review = jsonObject(command, "review-json"); if (typeof goalId !== "string") return goalId; if (isWriteError(review)) return review;
+    const reviewed = await context.client.runEncoreReview(goalId, { projectId: context.projectId, ...(review as Record<string, unknown>) } as Parameters<ApiClient["runEncoreReview"]>[1], id); return { title: "Encore", lines: [JSON.stringify(reviewed)] };
+  }
+  if (key === "approval:approve-and-run") {
+    const goalId = required(command, "goal-id"); const actionName = required(command, "action"); const targetName = required(command, "target"); const version = integer(command, "version"); const budgetEffectCents = integer(command, "budget-effect-cents"); const expiresAt = required(command, "expires-at");
+    if (typeof goalId !== "string") return goalId; if (typeof actionName !== "string") return actionName; if (typeof targetName !== "string") return targetName; if (typeof version !== "number") return version; if (typeof budgetEffectCents !== "number") return budgetEffectCents; if (typeof expiresAt !== "string") return expiresAt;
+    const decision = await context.client.approveAndRunCriticalAction(goalId, { projectId: context.projectId, action: actionName, target: targetName, policyVersion: version, budgetEffectCents, expiresAt }, id); return { title: "Critical action", lines: [`${decision.effect} · ${decision.reason}`] };
   }
   return unavailable(`${command.name} ${command.action ?? ""} is not yet wired to a typed write handler`.trim());
 }

@@ -5,7 +5,7 @@ import { resolveWorkspace } from "./workspace.js";
 import { resolveConnection } from "./connection.js";
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { createCommandRegistry } from "./commands/registry.js";
-import { parseInput, type ParsedCommand } from "./commands/parser.js";
+import { parseInput } from "./commands/parser.js";
 import { executeReadCommand, discoverWorkspaceProject, readDashboard } from "./commands/read-commands.js";
 import { executeWriteCommand } from "./commands/write-commands.js";
 import { renderApprovalDialog } from "./components/approval-dialog.js";
