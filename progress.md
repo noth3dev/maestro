@@ -1570,3 +1570,33 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   one real Secretary view (most plausibly `Dashboard`) to `useGoalDetail`/`useGoals` and replace its
   hardcoded arrays, before expanding `electron/apiBridge.ts`'s exposed-method allowlist or adding
   any new capability.
+
+
+## 2026-09-06 (continued) — Secretary Dashboard wired to real Goal state; Setup gate enforced
+
+- Added `apps/secretary/src/lib/dashboard-data.ts`'s pure `summarizeDashboard(goals, detail)` (unit
+  tested, 3/3) as the first real (non-mock) Dashboard view-model: total Goal count, and for the
+  selected Goal its exact durable state/version/certification count/budget-reserved-cost, never a
+  fabricated number -- `selectedGoal` is simply omitted until a Goal is actually loaded.
+- Rewired `Dashboard.tsx` to consume the already-existing but previously orphaned `useConnection`/
+  `useGoals`/`useGoalDetail` hooks instead of hardcoded `departments`/stat constants. The Goal list
+  section now lists real Goals and lets an operator click one to select it (`selectGoal`). The
+  Council/Department Plan/Mission Bundle "pipeline" kanban section (no backing API-bridge read
+  method exists yet) is replaced with the project's own `EmptyState` component instead of retaining
+  fabricated kanban cards -- this component already existed for exactly this purpose but was
+  unused anywhere in the app until now.
+- Closed part of the `App.tsx` "ponytail" bypass: `Connected()` now actually gates on
+  `useConnection()` (`loading` -> a minimal busy shell, `config === undefined` -> the real, already
+  built `Setup` connection form, otherwise the real `Shell`) instead of unconditionally rendering
+  the mock Shell regardless of connection state.
+- Verified: `npm run build` (root, `tsc -b`) clean; `apps/secretary`'s own
+  `tsc -p tsconfig.renderer.json --noEmit` clean; `apps/secretary`'s `vite build` succeeds (bundles
+  1699 modules, pre-existing >500kB chunk warning unrelated to this change); root `npm test` (no DB
+  in this runtime): **108 test files (58 passed, 50 skipped), 799 tests (450 passed, 349 skipped),
+  0 failed** (450 = prior 447 + 3 new `dashboard-data.test.ts` cases).
+- Remaining Dashboard/App gap, left open for the next slice: `Billing`, `Channel`, `Git`,
+  `EvidenceLog`, and the other 8 views are still 100% hardcoded mock data; Council/Department
+  Plan/Mission Bundle reads still need `electron/apiBridge.ts` allowlist entries and real
+  control-plane read routes wired before the "pipeline" `EmptyState` can become real; lifecycle
+  controls (pause/resume/stop/emergency-stop, already in the API-bridge allowlist) are not yet
+  exposed as UI actions anywhere.
