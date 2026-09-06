@@ -2081,3 +2081,49 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   not an extension of an existing capability. This is a substantially larger design/implementation
   effort than anything closed so far this session and is the recommended next checkpoint before
   continuing further.
+
+
+## 2026-09-06 (continued) — Phase 5 capacity model, first slice: project-wide worker-slot admission control
+
+- Started `plan/phase5.md`'s work-sequence step 2 (resource inventory / admission control), scoped
+  to the smallest real slice rather than the full multi-resource capacity model in one pass:
+  `packages/persistence/src/worker.ts`'s `countActiveWorkersForProject(pool, projectId)` counts
+  workers in `spawned`/`running` state across every Goal in a project (a plain, real read -- not a
+  fabricated estimate); `apps/control-plane/src/worker-service.ts`'s `spawn()` now checks this
+  count against an optional `maxConcurrentWorkersPerProject` ceiling before doing any other work,
+  throwing a new `WorkerCapacityExceededError` when at or over the limit.
+- New `MAESTRO_MAX_CONCURRENT_WORKERS_PER_PROJECT` config value; absent by default (unlimited,
+  current behavior unchanged), matching this session's established fail-closed-until-configured
+  convention for new capacity/authority surfaces. Mapped to a new `worker_capacity_exceeded` stable
+  API error code (429).
+- **Deliberately simplified from plan/phase5.md's full capacity model** ("worker slots by risk
+  class," "CPU/memory/storage/browser/environment resources," "enrolled-device exclusivity,"
+  "repository/worktree conflicts," "Quality/Security/Safety/Council validation capacity,"
+  "recovery reserve") to one flat project-wide worker-slot ceiling. This is an explicit, named
+  simplification, not a claim of completing the full capacity model -- risk-class partitioning and
+  the other resource dimensions are separate, larger follow-up slices.
+- **Also deliberately not a queue.** plan/phase5.md's own scheduler behavior calls for "queue
+  rather than degrade all active Goals when capacity is exhausted"; this slice only rejects
+  cleanly with a distinguishable error and a clear message telling the caller to retry once a slot
+  frees, so a client can build a real queue/backoff on top -- building an actual server-side queue
+  is a separate, larger piece of work than admission control itself.
+- Added a real-PostgreSQL regression (`worker.integration.test.ts`) proving the count is 0 for an
+  unrelated project, 1 once a worker is spawned, and back to 0 after that worker is cancelled (a
+  terminal worker no longer occupies a slot). Not run against real PostgreSQL in this runtime (no
+  Docker/local Postgres here); self-verified for type correctness and skip-registration only.
+- **Known, explicit coverage gap:** the `worker-service.ts` admission-check wiring itself (the
+  `if (active >= cap) throw` guard) is not covered by a service-level integration test in this
+  pass -- `createWorkerService.spawn()` isn't currently designed for dependency-injected unit
+  testing of its persistence calls (unlike `metronome-loop.ts`'s deliberately injectable
+  `scanGoal`), and building the full Council/Plan/Bundle/operator-role fixture needed for a
+  real-PostgreSQL service-level test was judged not worth its size relative to the guard's own
+  triviality (a three-line early-return). The underlying count function it depends on is fully
+  proven; the guard itself is the next thing to add coverage for if this slice is revisited.
+- Verified: root `tsc -b` clean, `apps/secretary` build unaffected, root `npm test` (no DB in this
+  runtime): **112 test files (61 passed, 51 skipped), 829 tests (469 passed, 360 skipped), 0
+  failed** (360 = prior 359 + 1 new, DB-gated skip).
+- Remaining canonical Phase 5 work-sequence steps (per-Goal Prime Agent context isolation already
+  holds structurally per the earlier cross-Goal isolation regression; repository/device exclusivity
+  constraints; safe pause-point declarations; Portfolio Council; CEO pinning; forecasts in
+  app/CLI; concurrency/fairness/contamination tests; a real competing-Goal live scenario) remain
+  open, each a separate, substantial slice.

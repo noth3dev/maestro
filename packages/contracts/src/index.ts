@@ -155,7 +155,7 @@ export const StableApiErrorCodeSchema = z.enum([
   "authentication_required", "authentication_unavailable", "credential_forbidden",
   "critical_action_denied", "authority_denied", "critical_action_requires_approval", "critical_action_approval_forbidden", "head_activation_cycle", "head_activation_conflict", "council_not_found", "council_conflict", "council_briefs_sealed", "department_plan_not_found", "department_plan_conflict", "mission_bundle_not_found", "mission_bundle_conflict", "worker_not_found", "worker_conflict", "git_integration_not_found", "git_integration_conflict", "certification_not_found", "certification_conflict", "metronome_not_found", "metronome_conflict", "encore_not_found", "encore_conflict", "project_access_forbidden",
   "task_contract_not_found", "task_contract_conflict", "task_contract_version_conflict",
-  "exact_confirmation_required", "task_contract_integrity_error", "discord_signal_rejected",
+  "exact_confirmation_required", "task_contract_integrity_error", "discord_signal_rejected", "worker_capacity_exceeded",
 ]);
 export const StableApiErrorSchema = z.object({
   error: z.object({ code: StableApiErrorCodeSchema, message: z.string().min(1) }).strict(),

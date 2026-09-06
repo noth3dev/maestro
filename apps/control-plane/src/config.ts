@@ -22,6 +22,8 @@ export interface MaestroConfig {
   discordSignalCredential?: string;
   /** Continuous Metronome scan interval. Absent by default: the loop does not run until explicitly configured. */
   metronomeIntervalMs?: number;
+  /** Phase 5 capacity-model first slice: project-wide worker-slot ceiling. Absent by default: unlimited, matching current behavior. */
+  maxConcurrentWorkersPerProject?: number;
   /** Duration of the startup-only reconciliation-leader lease; never renewed after startup. */
   reconcilerLeaseDurationMs: number;
   /** Maximum time allowed for provider/application shutdown drains. */
@@ -51,6 +53,7 @@ const schema = z.object({
   MAESTRO_TLS_KEY_FILE: z.string().min(1).optional(),
   MAESTRO_DISCORD_SIGNAL_CREDENTIAL: z.string().min(1).optional(),
   MAESTRO_METRONOME_INTERVAL_MS: z.coerce.number().int().positive().optional(),
+  MAESTRO_MAX_CONCURRENT_WORKERS_PER_PROJECT: z.coerce.number().int().positive().optional(),
 });
 
 export function parseConfig(
@@ -78,6 +81,7 @@ export function parseConfig(
     MAESTRO_TLS_KEY_FILE: keyFile,
     MAESTRO_DISCORD_SIGNAL_CREDENTIAL: discordSignalCredential,
     MAESTRO_METRONOME_INTERVAL_MS: metronomeIntervalMs,
+    MAESTRO_MAX_CONCURRENT_WORKERS_PER_PROJECT: maxConcurrentWorkersPerProject,
   } = parsed.data;
 
   const isRemoteBind = host !== "127.0.0.1" && host !== "localhost";
@@ -96,6 +100,7 @@ export function parseConfig(
     ...(operatorProvisioningAdminId === undefined ? {} : { operatorProvisioningAdminId }),
     ...(discordSignalCredential === undefined ? {} : { discordSignalCredential }),
     ...(metronomeIntervalMs === undefined ? {} : { metronomeIntervalMs }),
+    ...(maxConcurrentWorkersPerProject === undefined ? {} : { maxConcurrentWorkersPerProject }),
     ...(isRemoteBind ? { tls: { certFile: certFile!, keyFile: keyFile! } } : {}),
   };
 }

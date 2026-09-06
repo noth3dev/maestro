@@ -103,7 +103,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   const councilService = createCouncilService({ pool, withGoalLease: goalService.withGoalLease! });
   const departmentPlanService = createDepartmentPlanService({ pool, withGoalLease: goalService.withGoalLease! });
   const missionBundleService = createMissionBundleService({ pool, withGoalLease: goalService.withGoalLease! });
-  const workerService = createWorkerService({ pool, kernel: executionKernel, withGoalLease: goalService.withGoalLease! });
+  const workerService = createWorkerService({ pool, kernel: executionKernel, withGoalLease: goalService.withGoalLease!, ...(config.maxConcurrentWorkersPerProject === undefined ? {} : { maxConcurrentWorkersPerProject: config.maxConcurrentWorkersPerProject }) });
   const gitIntegrationService = createGitIntegrationService({
     pool, withGoalLease: goalService.withGoalLease!,
     createGitPort: (context) => overrides.gitPort ?? createLocalGitPort({ authority: authorityExecutor, context, workspaceRoot: config.worktreeRoot }),
