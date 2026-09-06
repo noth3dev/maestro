@@ -4,6 +4,8 @@ import { discoverWorkspaceProject, discoverWorkspaceProjectFromControlPlane, exe
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
+const contractId = "33333333-3333-4333-8333-333333333333";
+const councilId = "44444444-4444-4444-8444-444444444444";
 const goal = { goalId, projectId, state: "active" as const, version: 2 };
 
 function client(overrides: Partial<ApiClient> = {}): ApiClient {
@@ -55,6 +57,27 @@ describe("workspace read commands", () => {
     const result = await readDashboard({ client: client({ listGoals: vi.fn().mockResolvedValue({ goals: [draft, goal] }), listWorkersForGoal: vi.fn().mockResolvedValue({ workers }) }), projectId });
     expect(result.selectedGoal).toEqual(goal);
     expect(result.workerCount).toBe(2);
+  });
+
+  it("routes the remaining typed lifecycle reads instead of reporting them as unavailable", async () => {
+    const api = client({
+      getTaskContract: vi.fn().mockResolvedValue({ contractId, launchState: "launched", version: 3 }),
+      getCouncil: vi.fn().mockResolvedValue({ councilId, state: "resolved" }),
+      getDepartmentPlan: vi.fn().mockResolvedValue({ version: 4 }),
+      getMissionBundle: vi.fn().mockResolvedValue({ planVersion: 4, contentHash: "hash" }),
+    });
+    await expect(executeReadCommand({ client: api, projectId }, { name: "task-contract", action: "get", options: { "contract-id": contractId } })).resolves.toEqual({ title: "Task Contract", lines: [`• ${contractId} · launched · v3`] });
+    await expect(executeReadCommand({ client: api, projectId }, { name: "council", action: "get", options: { "council-id": councilId } })).resolves.toEqual({ title: "Council", lines: [`• ${councilId} · resolved`] });
+    await expect(executeReadCommand({ client: api, projectId }, { name: "department-plan", action: "get", options: { "council-id": councilId, "department-id": "product" } })).resolves.toEqual({ title: "Department Plan", lines: [`• ${councilId}/product · v4`] });
+    await expect(executeReadCommand({ client: api, projectId }, { name: "mission-bundle", action: "get", options: { "council-id": councilId, "department-id": "product", "plan-version": "4", "item-id": "item-1" } })).resolves.toEqual({ title: "Mission Bundle", lines: [`• ${councilId}/product/item-1 · v4 · hash`] });
+    expect(api.getMissionBundle).toHaveBeenCalledWith(councilId, "product", 4, "item-1", projectId);
+  });
+
+  it("rejects an invalid mission bundle plan version before calling the client", async () => {
+    const getMissionBundle = vi.fn();
+    const api = client({ getMissionBundle });
+    await expect(executeReadCommand({ client: api, projectId }, { name: "mission-bundle", action: "get", options: { "council-id": councilId, "department-id": "product", "plan-version": "0", "item-id": "item-1" } })).resolves.toEqual({ title: "Unavailable", lines: ["--plan-version must be a positive integer"] });
+    expect(getMissionBundle).not.toHaveBeenCalled();
   });
 
   it("executes a read command and rejects writes at the read boundary", async () => {
