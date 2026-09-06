@@ -1529,3 +1529,44 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Final clean verification evidence remains: `npm run check` — 106 files passed, 1 skipped; 802 tests passed, 2 skipped; 0 failed. `npm run build` and `git diff --check` passed.
 - No repository ESLint, Prettier, Biome, or Oxlint configuration/local binary is available; this exact limitation is documented by inspection.
 - Phase 6 Step 1 is closed. Phase 6 Steps 2+ remain intentionally deferred; no mutation, replay, rollout, adaptation, or cross-project promotion work was started.
+## 2026-09-06 — Session resumption; Codex dead child; repo-vs-doc reconciliation
+
+- Resumed per `maestro-resume`: read `docs/OPERATING_PROTOCOL.md`, `task_plan.md`, tail of
+  `progress.md`/`findings.md`, confirmed `git log`/`git status` (clean, `hardening/lifecycle` at
+  `ce94c3d`, working tree clean, no stray Maestro Docker containers).
+- Dispatched a Luna-high subagent (`phase5-secretary-console`) into the existing
+  `.worktrees/phase5-secretary-console` worktree to implement Phase 5 Slice 3 (Secretary safety
+  console). It completed with an empty final message; raw session JSONL showed every turn returned
+  `usage_limit_reached` (429, `resets_in_seconds` ~74000 at 2026-09-06T12:46 UTC). Zero real work
+  was produced. Deleted per this project's dead-child protocol; proceeded directly (no subagent).
+- Attempted to implement the Secretary Goal-discovery/lifecycle-control UI directly in that
+  worktree, only to discover it was still parented at `d0ff587` — stale relative to
+  `hardening/lifecycle`'s later Track A1 (worker ownership fields) and Electron-migration
+  (`e55146b`) commits. The stale base produced local `tsc -b` errors unrelated to the new work, and
+  a rebase onto `hardening/lifecycle` surfaced that Secretary's entire Next.js `app/`/`src` tree
+  (the files the new work targeted) had been deleted upstream in favor of the Electron app. No code
+  from this attempt was committed; the worktree was reset to `hardening/lifecycle` HEAD (`git reset
+  --hard` + `git clean -fd` for stray build artifacts) before any further work.
+- While diagnosing, found and fixed a real local-environment defect (no source change): the main
+  worktree's `node_modules/@maestro/` was missing `device-agent`/`device-agent-app` workspace
+  symlinks (every other package had one), so `npm run build` failed with `Cannot find module
+  '@maestro/device-agent'`. `npm install` in the main worktree recreated them with zero
+  `package-lock.json` diff. `npm run build` is now clean on `hardening/lifecycle` HEAD. A follow-up
+  `npm test` (no DB/Docker in this runtime) passed **441 tests, 342 skipped, 3 failed** — the 3
+  failures are a pre-existing, unrelated test-infra gap (see `findings.md`), not caused by this
+  session's changes.
+- Audited the real Electron Secretary app (`apps/secretary`) directly rather than trusting
+  `task_plan.md`'s stale "read-only single-Goal page" description. Findings recorded in full in
+  `task_plan.md`'s new "2026-09-06 — Session resumption: repo-vs-doc reconciliation" section:
+  real, tested, but currently orphaned data-loading plumbing (`connection.tsx`, `goals.tsx`,
+  `useGoalDetail.ts`, `lib/goal-data.ts`, `electron/apiBridge.ts`) exists alongside 13 UI views that
+  are **all** hardcoded mock data with zero real-plumbing usage (confirmed by `grep` across every
+  view file). The control-plane's write-command API surface (Task Contract, Goal lifecycle,
+  critical-action approve-and-run, Council, Department Plan, Mission Bundle, worker, Git
+  integration, Metronome, certification) is also far more complete than the Status block in
+  `task_plan.md`'s Phase 5 section states — that block is corrected in place with a pointer to the
+  new dated section rather than rewritten, per this project's doc-log union convention.
+- Next actionable item, once a subagent model is available again or work continues directly: wire
+  one real Secretary view (most plausibly `Dashboard`) to `useGoalDetail`/`useGoals` and replace its
+  hardcoded arrays, before expanding `electron/apiBridge.ts`'s exposed-method allowlist or adding
+  any new capability.

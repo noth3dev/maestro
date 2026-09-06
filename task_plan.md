@@ -828,3 +828,101 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Final clean verification evidence remains: `npm run check` — 106 files passed, 1 skipped; 802 tests passed, 2 skipped; 0 failed. `npm run build` and `git diff --check` passed.
 - No repository ESLint, Prettier, Biome, or Oxlint configuration/local binary is available; this exact limitation is documented by inspection.
 - Phase 6 Step 1 is closed. Phase 6 Steps 2+ remain intentionally deferred; no mutation, replay, rollout, adaptation, or cross-project promotion work was started.
+## 2026-09-06 — Session resumption: repo-vs-doc reconciliation
+
+Per this project's own resume protocol ("trust the repo, correct the docs"), this session found the
+Phase 5 Status block above (`Track A ... item 3 has its Task Contract intake slice implemented`;
+`Track B (P4 enrolled-device runtime lanes), items 1-8` marked `[not_started]`) to be stale. The
+actual repo state, verified directly against `git log`/file contents on `hardening/lifecycle`
+(`ce94c3d`):
+
+1. **Track A1 (runtime recovery) and Track B1-B2 (device authority) are both done and verified**,
+   not merely in-progress. See progress.md's 2026-09-05 "Track A1 final verification" (790 tests,
+   real-process kill/restart) and "Phase 5 Track B1-B2 device authority implementation and
+   verification" (793 tests, real mTLS/Ed25519 process acceptance) entries. `progress.md`'s
+   "Current slice: Phase 5 Track A1" line (under "Active execution plan — Phase 5 through Phase 6")
+   is superseded by those later entries in the same file; not rewritten here per this project's
+   doc-log union convention, but do not treat it as the current pointer.
+2. **The Task Contract/write-command API surface is far larger than the Status block states.**
+   Direct inspection of `apps/control-plane/src/server.ts` and `packages/api-client/src/index.ts`
+   shows durable authenticated routes/typed client methods already exist for: Task Contract
+   create/read/update/Overture-selection/confirm/launch; Goal create/pause/resume/stop/
+   emergency-stop/transition; **critical-action request and approve-and-run** (Phase 5 Track A
+   item 5's "approval path" — already implemented, not open as the old Track A item 5 wording
+   implies); Head activation; Council create/get/submit-brief/reveal/decide; Department Plan
+   create/get/revise; Mission Bundle create/get; worker spawn/get/observe/cancel; Git integration
+   branch/revision/worktree; worker acceptance/certification (including conditional); Metronome
+   scan/challenge/correction/safe-pause/resolve; Encore review; budget summary; Goal/event/
+   Metronome-challenge/Encore-round/certification/Concertmaster-report listing, all project-scoped.
+   Track A item 3's remaining-work wording ("dependent write commands ... still need authenticated
+   routes") is now largely obsolete; the real remaining gap is UI/CLI wiring to this surface, not
+   the routes themselves. Do not re-implement any of the above; audit for gaps and wire to it.
+3. **Secretary migrated from the Next.js single-Goal read-only page (as Track A7 above still
+   describes) to an Electron desktop app** (`apps/secretary`, main.js entry, IPC bridge in
+   `apps/secretary/electron/`) with thirteen views (`home`, `dashboard`, `channel`, `git`, `floor`,
+   `inbox`, `evlog`, `billing`, `settings`, `luthiery`, `arrangements`, `flashmob`,
+   `flashmobSession`). This is a substantially larger UI surface than Track A7 describes, but:
+   - **Real, tested plumbing exists** and is wired correctly: `connection.tsx` (config get/save/
+     clear through `window.maestro.config`), `goals.tsx` (`GoalsProvider`, lists/selects a Goal via
+     `window.maestro.api.listGoals`), `useGoalDetail.ts` (loads Goal/events/budget/certifications
+     for the selected Goal), `lib/goal-data.ts` (pure read-model assembly, unit-tested), and
+     `electron/apiBridge.ts` (an explicit allowlist of exposed `ApiClient` methods: `listGoals`,
+     `getGoal`, `getBudgetSummary`, `listEvents`, the full Task Contract lifecycle, `pauseGoal`/
+     `resumeGoal`/`stopGoal`/`emergencyStopGoal`, `listCertifications`, `listMetronomeChallenges`,
+     `listEncoreCouncilRounds`, `getConcertmasterReport`).
+   - **Every one of the 13 views is 100% static mock data with zero connection to the real
+     plumbing.** Direct `grep` for `useGoalDetail`/`useGoals()`/`window.maestro` usage across
+     `apps/secretary/src/views/*.tsx` and the top-level `.tsx` files returns only `connection.tsx`,
+     `goals.tsx`, and `theme.tsx` — the providers themselves, never a consumer view. `Dashboard.tsx`,
+     `Billing.tsx`, `Channel.tsx`, `Git.tsx`, `EvidenceLog.tsx` (and by the same pattern, the
+     remaining unaudited views) render hardcoded arrays (e.g. `Billing.tsx`'s `spendByDay`/
+     `usageByGroup`/`recentGoals` constants, `Dashboard.tsx`'s `departments` constant with a
+     hardcoded "4 missions in flight / 3 pending approvals" stat block). `useGoalDetail.ts` and its
+     dependencies are real, unit-tested, and currently orphaned/unused code.
+   - `App.tsx` has a self-documented, intentional shortcut (a `ponytail:` comment) bypassing the
+     real `Setup`/connection gate so the mock Shell always renders regardless of whether a real
+     control-plane connection exists; the comment states this should be removed once write flows
+     are ready.
+   - The `apiBridge.ts` allowlist does not yet expose critical-action request/approve-and-run,
+     Metronome correction/safe-pause/resolve, or any Council/Plan/Mission/worker/Git write method,
+     even though the control-plane routes and typed client methods for all of them already exist
+     per point 2 above.
+   - **Corrected Track A7 status: this is a visual-design prototype shell with real but disconnected
+     data plumbing, not "a read-only single-Goal view" (too pessimistic on view count) and not an
+     operational console (too optimistic on wiring).** The concrete next step is wiring existing
+     views (starting with whichever view maps to "Goal state" duties, most plausibly `Dashboard`)
+     to `useGoalDetail`/`useGoals`, replacing their hardcoded arrays, before adding any new
+     capability or expanding `apiBridge.ts`'s allowlist further.
+4. A stale git-worktree-base defect was found and corrected as pure workflow hygiene, no code
+   impact: `.worktrees/phase5-secretary-console` was still parented at `d0ff587`, which predates
+   both the Track A1 runtime-ownership Worker-type changes and the Electron migration on
+   `hardening/lifecycle`. Attempting new Secretary (then-Next.js-shaped) work there produced
+   irrelevant local `tsc -b` errors unrelated to any change in this session, and would have
+   produced a diff against an architecture (Next.js pages/route handlers) the project no longer
+   uses. No code was committed from that attempt; the worktree was reset to `hardening/lifecycle`
+   HEAD (`git reset --hard hardening/lifecycle` + `git clean -fd` for stray build output) before
+   any further work. Recreate/rebase a Phase 5 worktree from the current `hardening/lifecycle` tip
+   before starting Secretary UI wiring work, not from an older Phase 5 slice branch.
+5. **Local-environment defect found and fixed (no source change):** the main worktree's
+   `node_modules/@maestro/` was missing the `device-agent`/`device-agent-app` workspace symlinks
+   (present for every other package), causing `npm run build` to fail with `Cannot find module
+   '@maestro/device-agent'` purely because of stale local `node_modules` state, not a repo defect.
+   `npm install` in the main worktree recreated the missing symlinks with zero `package-lock.json`
+   change; `npm run build` is now clean on `hardening/lifecycle` HEAD.
+6. **Pre-existing test-infra gap found (not fixed, not caused by this session):** running
+   `npm test` without `MAESTRO_TEST_DATABASE_URL` set correctly skips the vast majority of
+   real-PostgreSQL integration suites, but three specific files throw `TypeError: Invalid URL`
+   instead of skipping cleanly: `apps/control-plane/src/worker.kill-restart.integration.test.ts`,
+   `apps/device-agent/src/main.integration.test.ts`, and
+   `packages/persistence/src/device-agent-runtime.integration.test.ts`. Each constructs a scoped
+   database URL via `new URL(databaseUrl!)` at module scope before any `describe.skipIf`/env
+   guard runs. Fresh `npm test` (no DB, no Docker in this runtime): **441 passed, 342 skipped, 3
+   failed** (only these three files) — everything else that requires PostgreSQL skips as intended.
+   Fix is straightforward (guard the URL construction the same way the other DB-gated suites do)
+   but is left open as a small follow-up, not bundled into this session's unrelated findings.
+7. **Subagent quota exhaustion:** `openai-codex/gpt-5.6-luna` returned `usage_limit_reached` on
+   every turn for a dispatched Secretary-console child this session (zero real work produced,
+   deleted per dead-child protocol); Codex reported `resets_in_seconds` around 74000 at
+   2026-09-06T12:46 UTC (~20h). No subagent work is available on the required model until that
+   resets; this session's Secretary/Operator-lane work must proceed directly (no subagent) until
+   then, per this project's model-restriction policy.
