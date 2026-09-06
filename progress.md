@@ -1753,3 +1753,32 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   `Floor`, `Inbox`, `Settings`, `Luthiery`, `Arrangements`, `Flashmob`, `FlashmobSession` --
   several of these (Settings especially) are pure app-preference screens with no backend
   counterpart needed, and should be triaged individually rather than assumed all need real data.
+
+
+## 2026-09-06 (continued) — Settings triaged: real Connection panel added, fake affordances disabled
+
+- Triaged all 8 remaining fully-mock views before wiring any more of them blindly. `Settings.tsx`
+  was the first result: it had no "connection" panel at all despite `i18n/en.ts` already carrying
+  `settings.connection`/`settings.disconnect` strings for exactly this, and its `providers`/
+  `models`/`authority`/`danger` panels have zero backing capability anywhere in the domain (no
+  provider-connection concept, no model-routing-policy config, no per-project default-authority
+  config, no workspace-reset command) -- these are speculative Phase 6+ design exploration, not
+  something to fake wire.
+- Added a real `connection` panel using the already-tested `useConnection()` hook: shows the actual
+  `apiUrl`/`projectId` this Secretary instance is connected to (read-only, since changing them
+  requires disconnecting first) and a real `disconnect()` button.
+- Every remaining non-functional button in the preview-only panels (`gemini cli`/`local model
+  (ollama)` "connect", "add to pool", "reset workspace") is now `disabled` with a "Not wired to a
+  real backend yet" tooltip, and each panel's own sub-caption says so explicitly, so a user cannot
+  click something that silently does nothing -- matching this project's own `EmptyState` component
+  comment ("never a fake data, never a silently-ignored click").
+- Verified: root `tsc -b` clean, `apps/secretary`'s `tsc -p tsconfig.renderer.json --noEmit` clean,
+  `apps/secretary`'s `vite build` succeeds (1702 modules), root `npm test` unchanged: **109 files
+  (59 passed, 50 skipped), 806 tests (455 passed, 351 skipped), 0 failed**.
+- Remaining triage: `Home`, `Floor`, `Inbox`, `Luthiery`, `Arrangements`, `Flashmob`,
+  `FlashmobSession` still need the same look -- most plausibly Floor (an org-wide view, likely
+  wireable to `listGoals`+`listWorkersForGoal` per Goal) and Inbox (approvals -- likely wireable to
+  the existing critical-action request/approve-and-run surface) first, since those two map to
+  already-real backend capability; Luthiery/Arrangements/Flashmob look like Phase 6+ speculative
+  concepts (persona tuning, scheduling, ad-hoc rapid-response tasking) with no current backing
+  capability at all.
