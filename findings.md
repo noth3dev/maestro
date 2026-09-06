@@ -590,3 +590,20 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   `hardening/lifecycle` HEAD. Not fixed this session -- flagged as a small, isolated follow-up; the
   fix pattern already exists in every other DB-gated suite in this repo (guard the URL
   construction itself, not just the `describe` block, behind the same environment check).
+
+
+## 2026-09-06 — Fixed the 3 skip-guard integration test crashes
+
+- Root cause confirmed: `describe.skip` still synchronously invokes its callback to register the
+  (skipped) test structure; a module-scope `new URL(databaseUrl!)` inside that callback threw
+  before vitest's skip logic ever applied, in exactly the three files noted in findings.md's
+  "Three integration test files crash instead of skipping" entry.
+- Fix: guarded each `scopedUrl` computation with `databaseUrl ? ... : ""`, matching the working
+  pattern used elsewhere in the same files (`describeDatabase = databaseUrl ? describe : describe.skip`).
+  No production code touched; test-only change in
+  `apps/control-plane/src/worker.kill-restart.integration.test.ts`,
+  `apps/device-agent/src/main.integration.test.ts`, and
+  `packages/persistence/src/device-agent-runtime.integration.test.ts`.
+- Verified: fresh `npm run build` clean; `npm test` (no DB in this runtime) now reports
+  **107 test files: 57 passed, 50 skipped, 0 failed; 796 tests: 447 passed, 349 skipped, 0 failed**
+  — the three files that previously crashed now skip cleanly like every other DB-gated suite.

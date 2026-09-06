@@ -161,7 +161,7 @@ async function setupWorkerGraph(pool: Pool, projectId: string) {
 describeDatabase("real HTTP worker recovery with a process-backed provider", () => {
   const basePool = new Pool({ connectionString: databaseUrl });
   const schema = `worker_process_${randomUUID().replaceAll("-", "")}`;
-  const scopedUrl = (() => { const url = new URL(databaseUrl!); url.searchParams.set("options", `-c search_path=${schema}`); return url.toString(); })();
+  const scopedUrl = databaseUrl ? (() => { const url = new URL(databaseUrl); url.searchParams.set("options", `-c search_path=${schema}`); return url.toString(); })() : "";
   let pool: Pool;
 
   beforeAll(async () => {
