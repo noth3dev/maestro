@@ -13,9 +13,13 @@ Maestro는 각 단계의 검증 증거가 완료되어야 다음 단계로 진�
 | **Phase 3** | Encore, Certification & First Usable Release | **코드 완료** | Metronome 실시간 이벤트 모니터링, Encore Council 심의, Quality 독립 인증, Concertmaster 리포트 생성, CLI/App Parity |
 | **Phase 4** | Isolated Environments, Devices & Discord Incidents | **코드 완료** *(자체검증)* | 컨테이너/샌드박스 레시피, Playwright 브라우저 격리, 등록 디바이스 인가, Discord 아웃오브밴드 인시던트 감지 |
 | **Phase 5** | Concurrent Goals & Portfolio Control | 예정 | 다중 Goal 동시 실행 격리, 예산/컴퓨팅 경합 시 포트폴리오 우선순위 제어 |
-| **Phase 6** | Encore Learning & 10-Axis Adaptation | 예정 | 오프라인 리플레이 랩, 10개 성격 축(Persona Axes) 튜닝, 가상 평가, 지식 큐레이션 |
+| **Phase 6** | Encore Learning & 10-Axis Adaptation | **Step 1 승인 완료** *(불변 다이제스트)* | Step 1: 프로젝트 전용·출처 바인딩 Improvement Digest. Step 2 이후(리플레이, 변경, 롤아웃, 적응, 프로젝트 간 승격)는 보류 |
 | **Phase 7** | Full Concertmaster Office & Radial Control Surface | 예정 | Next.js 16 / React 19 웹 UI(Concertmaster Office), `@xyflow/react` 방사형 포트폴리오 대시보드 |
 | **Phase 8** | Full-System Hardening & Release Certification | 예정 | 적대적 장애 주입, 보안 침투 감사, 지속 부하 검증 및 릴리즈 프리즈 |
+
+### Phase 6 Step 1 — 승인된 경계
+
+Phase 6 Step 1은 불변·프로젝트 전용 Improvement Digest slice로 승인되었습니다. 각 digest는 Goal과 프로젝트에 출처 바인딩되고, lease 권한과 멤버십 범위 조회로 보호되며, canonical content hash로 검증됩니다. 이 slice는 자동 변경, 리플레이, 롤아웃, persona 적응 또는 프로젝트 간 승격을 수행하지 않습니다. Phase 6 Step 2 이후는 별도 계획·구현·리뷰·승인 전까지 보류합니다.
 
 ---
 
