@@ -14,6 +14,11 @@ function api(): ApiClient {
     createGoal: vi.fn().mockResolvedValue({ ...goal, state: "draft" as const }),
     createTaskContract: vi.fn(),
     raiseMetronomeChallenge: vi.fn(),
+    provisionProjectAccess: vi.fn(),
+    approveAndRunCriticalAction: vi.fn().mockResolvedValue({ effect: "allow", reason: "approved" }),
+    certifyConditionalWorker: vi.fn().mockResolvedValue({ workerId: "worker-1", status: "certified" }),
+    spawnWorker: vi.fn().mockResolvedValue({ workerId: "worker-1", status: "running" }),
+    runEncoreReview: vi.fn().mockResolvedValue({ roundId: "round-1" }),
   } as unknown as ApiClient;
 }
 
@@ -24,12 +29,57 @@ describe("TUI write commands", () => {
     expect(client.pauseGoal).toHaveBeenCalledWith(goalId, { projectId, expectedVersion: 1 }, commandId);
   });
 
-  it("does not call a critical API before approval, and cancellation makes no mutation", async () => {
+  it("routes the fail-safe emergency stop directly without weakening its server-side authorization", async () => {
     const client = api();
-    const confirm = vi.fn().mockResolvedValue("cancelled" as const);
-    await expect(executeWriteCommand({ client, projectId, confirm }, { name: "goal", action: "emergency-stop", options: { "goal-id": goalId, "expected-version": "1", "command-id": commandId } })).resolves.toEqual({ title: "Cancelled", lines: ["No mutation was sent."] });
-    expect(confirm).toHaveBeenCalledOnce();
-    expect(client.emergencyStopGoal).not.toHaveBeenCalled();
+    const confirm = vi.fn();
+    await expect(executeWriteCommand({ client, projectId, confirm }, { name: "goal", action: "emergency-stop", options: { "goal-id": goalId, "expected-version": "1", "command-id": commandId } })).resolves.toEqual({ title: "Goal", lines: [`Goal ${goal.goalId} · stopped · v${goal.version}`] });
+    expect(confirm).not.toHaveBeenCalled();
+    expect(client.emergencyStopGoal).toHaveBeenCalledWith(goalId, { projectId, expectedVersion: 1 }, commandId);
+  });
+
+  it("never treats a local confirmation as durable approval for project access changes", async () => {
+    const client = api();
+    const confirm = vi.fn().mockResolvedValue("approved" as const);
+    await expect(executeWriteCommand({ client, projectId, confirm }, { name: "admin", action: "project-access", options: { "operator-id": "operator-1", "roles-json": "[]" } })).resolves.toEqual({
+      title: "Unavailable",
+      lines: ["Critical action requires the durable Control Plane approval path; no mutation was sent."],
+    });
+    expect(confirm).not.toHaveBeenCalled();
+    expect(client.provisionProjectAccess).not.toHaveBeenCalled();
+  });
+
+  it("accepts the existing critical-action CLI spelling and reaches the durable approval endpoint", async () => {
+    const client = api();
+    const confirm = vi.fn().mockResolvedValue("approved" as const);
+    const result = await executeWriteCommand({ client, projectId, confirm }, { name: "critical-action", action: "approve-and-run", options: {
+      "goal-id": goalId, action: "git.remote.push", target: "origin/main", version: "1", "budget-effect-cents": "0", "expires-at": "2030-01-01T00:00:00.000Z", "command-id": commandId,
+    } });
+    expect(result.title).toBe("Critical action");
+    expect(client.approveAndRunCriticalAction).toHaveBeenCalledWith(goalId, { projectId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0, expiresAt: "2030-01-01T00:00:00.000Z" }, commandId);
+  });
+
+  it("keeps the workspace project binding when certifying a conditional Worker", async () => {
+    const client = api();
+    await executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "worker", action: "certify-conditional", options: {
+      "worker-id": "worker-1", kind: "security", "certification-json": JSON.stringify({ projectId: "other-project", verdict: "pass" }), "command-id": commandId,
+    } });
+    expect(client.certifyConditionalWorker).toHaveBeenCalledWith("worker-1", "security", { projectId, verdict: "pass" }, commandId);
+  });
+
+  it("keeps the workspace project binding when spawning a Worker", async () => {
+    const client = api();
+    await executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "worker", action: "spawn", options: {
+      "council-id": "council-1", "department-id": "product", "worker-json": JSON.stringify({ projectId: "other-project", workerRole: "scout" }), "command-id": commandId,
+    } });
+    expect(client.spawnWorker).toHaveBeenCalledWith("council-1", "product", { projectId, workerRole: "scout" }, commandId);
+  });
+
+  it("keeps the workspace project binding when starting an Encore review", async () => {
+    const client = api();
+    await executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "encore", action: "review", options: {
+      "goal-id": goalId, "review-json": JSON.stringify({ projectId: "other-project", verdict: "inspect" }), "command-id": commandId,
+    } });
+    expect(client.runEncoreReview).toHaveBeenCalledWith(goalId, { projectId, verdict: "inspect" }, commandId);
   });
 
   it("routes Task Contract intake through the typed client", async () => {

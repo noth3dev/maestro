@@ -15,9 +15,11 @@ describe("TUI command registry", () => {
     expect(registry.find("goal")?.actions.find((action) => action.name === "pause")?.kind).toBe("write");
     expect(registry.find("approval")?.actions.find((action) => action.name === "approve-and-run")?.kind).toBe("critical");
     expect(registry.find("worker")?.actions.find((action) => action.name === "list")?.kind).toBe("read");
+    expect(registry.find("critical-action")?.actions.find((action) => action.name === "approve-and-run")?.kind).toBe("critical");
+    expect(registry.find("workers")?.actions.find((action) => action.name === "list")?.kind).toBe("read");
   });
 
   it("autocomplete filters command names", () => {
-    expect(createCommandRegistry().autocomplete("met").map((command) => command.name)).toEqual(["metronome"]);
+    expect(createCommandRegistry().autocomplete("met").map((command) => command.name)).toEqual(["metronome-challenges", "metronome"]);
   });
 });

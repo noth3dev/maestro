@@ -18,6 +18,12 @@ describe("Maestro TUI shell", () => {
     expect(output).not.toContain("Secretary");
   });
 
+  it("keeps setup-required distinct from a runtime connection error", () => {
+    const output = renderStatusHeader({ ...state, connection: { kind: "setup-required", message: "Control Plane connection is not configured" } }, 200).join("\n");
+    expect(output).toContain("setup required");
+    expect(output).toContain("Control Plane connection is not configured");
+  });
+
   it("renders explicit loading and error states instead of fake values", () => {
     const output = renderStatusHeader({ ...state, connection: { kind: "error", message: "Control Plane unavailable" } }, 80).join("\n");
     expect(output).toContain("Control Plane unavailable");

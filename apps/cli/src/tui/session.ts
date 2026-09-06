@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import type { GoalEvent } from "@maestro/api-client";
@@ -15,6 +15,26 @@ function sessionId(workspacePath: string): string {
   return createHash("sha256").update(workspacePath).digest("hex");
 }
 
+function parseSession(value: unknown): WorkspaceSession | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const allowed = new Set(["workspacePath", "projectId", "goalId", "lastEventCursor"]);
+  if (Object.keys(record).some((key) => !allowed.has(key))) return undefined;
+  if (typeof record.workspacePath !== "string" || record.workspacePath.length === 0) return undefined;
+  const projectId = record.projectId;
+  const goalId = record.goalId;
+  const lastEventCursor = record.lastEventCursor;
+  for (const value of [projectId, goalId, lastEventCursor]) {
+    if (value !== undefined && (typeof value !== "string" || value.length === 0)) return undefined;
+  }
+  return {
+    workspacePath: record.workspacePath,
+    ...(typeof projectId === "string" ? { projectId } : {}),
+    ...(typeof goalId === "string" ? { goalId } : {}),
+    ...(typeof lastEventCursor === "string" ? { lastEventCursor } : {}),
+  };
+}
+
 export function sessionFileFor(workspacePath: string, baseDir = join(homedir(), ".maestro", "sessions")): string {
   return join(baseDir, `${sessionId(workspacePath)}.json`);
 }
@@ -22,8 +42,8 @@ export function sessionFileFor(workspacePath: string, baseDir = join(homedir(), 
 export async function loadWorkspaceSession(workspacePath: string, baseDir?: string): Promise<WorkspaceSession | undefined> {
   try {
     const content = await readFile(sessionFileFor(workspacePath, baseDir), "utf8");
-    const session = JSON.parse(content) as WorkspaceSession;
-    return session.workspacePath === workspacePath ? session : undefined;
+    const session = parseSession(JSON.parse(content));
+    return session?.workspacePath === workspacePath ? session : undefined;
   } catch {
     return undefined;
   }
@@ -50,4 +70,11 @@ export function startNewConversationSession(workspacePath: string, current: Work
     ...(current?.projectId === undefined ? {} : { projectId: current.projectId }),
     ...(current?.lastEventCursor === undefined ? {} : { lastEventCursor: current.lastEventCursor }),
   };
+}
+
+
+export function attachWorkspaceSession(workspacePath: string, current: WorkspaceSession | undefined, projectId: string): WorkspaceSession {
+  if (projectId.trim() === "") throw new Error("Project ID must be non-empty");
+  if (current?.projectId === projectId) return { workspacePath, projectId, ...(current.goalId === undefined ? {} : { goalId: current.goalId }), ...(current.lastEventCursor === undefined ? {} : { lastEventCursor: current.lastEventCursor }) };
+  return { workspacePath, projectId };
 }

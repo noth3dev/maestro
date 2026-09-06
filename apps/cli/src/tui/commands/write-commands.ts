@@ -56,8 +56,8 @@ const supportedKeys = new Set([
   "admin:project-access", "task-contract:create", "task-contract:amend", "task-contract:select-roles", "task-contract:confirm", "task-contract:launch",
   "goal:create", "goal:transition", "goal:pause", "goal:stop", "goal:resume", "goal:emergency-stop", "head:activate",
   "council:create", "council:submit-brief", "council:reveal", "council:decide", "department-plan:create", "department-plan:revise", "mission-bundle:create",
-  "worker:spawn", "worker:observe", "worker:cancel", "worker:accept", "worker:certify", "git:goal-branch", "git:department-branch", "git:worker-worktree", "git:goal-revision",
-  "metronome:scan", "metronome:challenge", "metronome:correct", "metronome:safe-pause", "metronome:resolve", "encore:review", "approval:approve-and-run",
+  "worker:spawn", "worker:observe", "worker:cancel", "worker:accept", "worker:certify", "worker:certify-conditional", "certification:certify", "git:goal-branch", "git:department-branch", "git:worker-worktree", "git:goal-revision",
+  "metronome:scan", "metronome:challenge", "metronome:correct", "metronome:safe-pause", "metronome:resolve", "encore:review", "approval:approve-and-run", "critical-action:approve-and-run",
 ]);
 
 function flag(command: ParsedCommand, name: string): boolean { return command.options[name] === true || option(command, name) === "true"; }
@@ -90,6 +90,12 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
   if (action.kind === "read") return unavailable(`${command.name} ${command.action ?? ""} is a read; use the read command path`.trim());
   const key = `${command.name}:${command.action ?? ""}`;
   if (!supportedKeys.has(key)) return unavailable(`${key} is not available from the typed Control Plane client`);
+  // A local keypress is not a durable CEO approval. Until a critical operation
+  // has a server-side approve-and-run binding, fail closed before prompting or
+  // invoking any mutation-capable client method.
+  if (action.kind === "critical" && key !== "approval:approve-and-run" && key !== "critical-action:approve-and-run") {
+    return unavailable("Critical action requires the durable Control Plane approval path; no mutation was sent.");
+  }
 
   const target = option(command, "target") ?? option(command, "goal-id") ?? context.goalId ?? context.projectId;
   const cancelled = await confirmIfCritical(context, command, target);
@@ -207,7 +213,7 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
   if (key === "worker:spawn") {
     const councilId = required(command, "council-id"); const departmentId = required(command, "department-id"); const worker = jsonObject(command, "worker-json");
     if (typeof councilId !== "string") return councilId; if (typeof departmentId !== "string") return departmentId; if (isWriteError(worker)) return worker;
-    const spawned = await context.client.spawnWorker(councilId, departmentId, { projectId: context.projectId, ...(worker as Record<string, unknown>) } as Parameters<ApiClient["spawnWorker"]>[2], id); return { title: "Worker", lines: [`${spawned.workerId} · ${spawned.status}`] };
+    const spawned = await context.client.spawnWorker(councilId, departmentId, { ...(worker as Record<string, unknown>), projectId: context.projectId } as Parameters<ApiClient["spawnWorker"]>[2], id); return { title: "Worker", lines: [`${spawned.workerId} · ${spawned.status}`] };
   }
   if (key === "worker:observe" || key === "worker:cancel") {
     const workerId = required(command, "worker-id"); if (typeof workerId !== "string") return workerId;
@@ -218,9 +224,14 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
     const workerId = required(command, "worker-id"); const reason = required(command, "reason"); if (typeof workerId !== "string") return workerId; if (typeof reason !== "string") return reason;
     const accepted = await context.client.acceptWorker(workerId, { projectId: context.projectId, reason }, id); return { title: "Worker acceptance", lines: [JSON.stringify(accepted)] };
   }
-  if (key === "worker:certify") {
+  if (key === "worker:certify" || key === "certification:certify") {
     const workerId = required(command, "worker-id"); const certification = jsonObject(command, "certification-json"); if (typeof workerId !== "string") return workerId; if (isWriteError(certification)) return certification;
     const certified = await context.client.certifyWorker(workerId, { ...certification, projectId: context.projectId } as Parameters<ApiClient["certifyWorker"]>[1], id); return { title: "Certification", lines: [JSON.stringify(certified)] };
+  }
+  if (key === "worker:certify-conditional") {
+    const workerId = required(command, "worker-id"); const kind = option(command, "kind"); const certification = jsonObject(command, "certification-json");
+    if (typeof workerId !== "string") return workerId; if (kind !== "security" && kind !== "safety_compliance") return unavailable("--kind must be security or safety_compliance"); if (isWriteError(certification)) return certification;
+    const certified = await context.client.certifyConditionalWorker(workerId, kind, { ...certification, projectId: context.projectId } as Parameters<ApiClient["certifyConditionalWorker"]>[2], id); return { title: "Certification", lines: [JSON.stringify(certified)] };
   }
   if (key === "git:goal-branch") {
     const goalId = required(command, "goal-id"); const repositoryPath = required(command, "repository-path"); const branchName = required(command, "branch-name"); const baseRevision = required(command, "base-revision");
@@ -263,9 +274,9 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
   }
   if (key === "encore:review") {
     const goalId = required(command, "goal-id"); const review = jsonObject(command, "review-json"); if (typeof goalId !== "string") return goalId; if (isWriteError(review)) return review;
-    const reviewed = await context.client.runEncoreReview(goalId, { projectId: context.projectId, ...(review as Record<string, unknown>) } as Parameters<ApiClient["runEncoreReview"]>[1], id); return { title: "Encore", lines: [JSON.stringify(reviewed)] };
+    const reviewed = await context.client.runEncoreReview(goalId, { ...(review as Record<string, unknown>), projectId: context.projectId } as Parameters<ApiClient["runEncoreReview"]>[1], id); return { title: "Encore", lines: [JSON.stringify(reviewed)] };
   }
-  if (key === "approval:approve-and-run") {
+  if (key === "approval:approve-and-run" || key === "critical-action:approve-and-run") {
     const goalId = required(command, "goal-id"); const actionName = required(command, "action"); const targetName = required(command, "target"); const version = integer(command, "version"); const budgetEffectCents = integer(command, "budget-effect-cents"); const expiresAt = required(command, "expires-at");
     if (typeof goalId !== "string") return goalId; if (typeof actionName !== "string") return actionName; if (typeof targetName !== "string") return targetName; if (typeof version !== "number") return version; if (typeof budgetEffectCents !== "number") return budgetEffectCents; if (typeof expiresAt !== "string") return expiresAt;
     const decision = await context.client.approveAndRunCriticalAction(goalId, { projectId: context.projectId, action: actionName, target: targetName, policyVersion: version, budgetEffectCents, expiresAt }, id); return { title: "Critical action", lines: [`${decision.effect} · ${decision.reason}`] };

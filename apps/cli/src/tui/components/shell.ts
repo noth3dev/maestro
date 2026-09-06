@@ -8,7 +8,7 @@ export type AsyncState<T> =
 
 export interface TuiShellState {
   workspace: Workspace;
-  connection: { kind: "connected" } | { kind: "connecting" } | { kind: "error"; message: string };
+  connection: { kind: "connected" } | { kind: "connecting" } | { kind: "setup-required"; message: string } | { kind: "error"; message: string };
   goal: AsyncState<{ name: string; state: string }>;
   workers: AsyncState<number>;
   approvals: AsyncState<number>;
@@ -23,7 +23,7 @@ function stateText<T>(state: AsyncState<T>, format: (value: T) => string): strin
 }
 
 export function renderStatusHeader(state: TuiShellState, width: number): string[] {
-  const connection = state.connection.kind === "connected" ? "● connected" : state.connection.kind === "connecting" ? "○ connecting" : `! ${state.connection.message}`;
+  const connection = state.connection.kind === "connected" ? "● connected" : state.connection.kind === "connecting" ? "○ connecting" : state.connection.kind === "setup-required" ? `! setup required · ${state.connection.message}` : `! ${state.connection.message}`;
   const budget = state.budget.kind === "value" ? `${state.budget.value.spentCents}/${state.budget.value.ceilingCents} cents` : stateText(state.budget, String);
   const lines = [
     `MAESTRO / CONCERTMASTER · ${connection}`,
@@ -43,6 +43,6 @@ export function renderShell(state: TuiShellState, width: number): string[] {
     "",
     "> ",
     "",
-    "Ctrl+K Commands · Ctrl+G Goals · Ctrl+E Events · Ctrl+C Exit",
+    "Ctrl+K Commands · Ctrl+G Goals · Ctrl+E Events · Ctrl+R Retry · Ctrl+C Exit",
   ];
 }

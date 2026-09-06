@@ -7,10 +7,24 @@ describe("mergeEvents", () => {
     const incoming = [{ cursor: "2", eventType: "goal.running" }, { cursor: "3", eventType: "worker.spawned" }];
     expect(mergeEvents(existing, incoming)).toEqual([...existing, incoming[1]]);
   });
+
+  it("deduplicates duplicate identities within one incoming batch", () => {
+    const incoming = [{ eventId: "event-1", cursor: "1" }, { eventId: "event-1", cursor: "1" }];
+    expect(mergeEvents([], incoming)).toEqual([incoming[0]]);
+  });
 });
 
 
 describe("subscribeToEvents", () => {
+  it("bounds failed reconnects and reports retry state", async () => {
+    const calls: string[] = [];
+    const retries: number[] = [];
+    const client = { streamEvents: async function* (query: { projectId: string; after: string }) { calls.push(query.after); throw new Error("offline"); } };
+    for await (const _event of subscribeToEvents({ client, projectId: "project-1", signal: new AbortController().signal, reconnectDelayMs: 0, maxReconnectAttempts: 2, onReconnect: (attempt) => retries.push(attempt) })) {}
+    expect(calls).toHaveLength(3);
+    expect(retries).toEqual([1, 2]);
+  });
+
   it("reconnects from the latest cursor and suppresses duplicate event identities", async () => {
     const calls: string[] = [];
     let attempt = 0;
