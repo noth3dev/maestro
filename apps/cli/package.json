@@ -1,1 +1,1 @@
-{"name":"@maestro/cli","private":true,"type":"module","bin":{"maestro":"./dist/main.js"},"dependencies":{"@maestro/api-client":"*","@maestro/contracts":"*"},"scripts":{"start":"node ./dist/main.js"}}
+{"name":"@maestro/cli","private":true,"type":"module","bin":{"maestro":"./dist/main.js"},"dependencies":{"@maestro/api-client":"*","@maestro/contracts":"*","@earendil-works/pi-tui":"0.85.1"},"scripts":{"start":"node ./dist/main.js"}}
