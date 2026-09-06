@@ -26,6 +26,18 @@ describe("workspace read commands", () => {
     expect(result).toEqual({ projectId, goals: [goal], selectedGoal: goal, budget: { goalId, projectId, budgetCents: 100, reservedCents: 20, costCents: 10 }, workerCount: 1 });
   });
 
+  it("selects an active Goal before older draft records and counts only active Workers", async () => {
+    const draft = { ...goal, goalId: "44444444-4444-4444-8444-444444444444", state: "draft" as const, version: 1 };
+    const workers = [
+      { workerId: "33333333-3333-4333-8333-333333333333", status: "running" },
+      { workerId: "55555555-5555-4555-8555-555555555555", status: "succeeded" },
+      { workerId: "66666666-6666-4666-8666-666666666666", status: "spawned" },
+    ];
+    const result = await readDashboard({ client: client({ listGoals: vi.fn().mockResolvedValue({ goals: [draft, goal] }), listWorkersForGoal: vi.fn().mockResolvedValue({ workers }) }), projectId });
+    expect(result.selectedGoal).toEqual(goal);
+    expect(result.workerCount).toBe(2);
+  });
+
   it("executes a read command and rejects writes at the read boundary", async () => {
     const api = client();
     await expect(executeReadCommand({ client: api, projectId, goalId }, { name: "goals", action: "list", options: {} })).resolves.toEqual({ title: "Goals", lines: ["• active · v2 · " + goalId] });

@@ -1,7 +1,7 @@
 import { CombinedAutocompleteProvider, Container, Editor, ProcessTerminal, Text, TuiAltScreen, matchesKey, type EditorTheme } from "@earendil-works/pi-tui";
 import { createApiClient, type ApiClient, type GoalEvent } from "@maestro/api-client";
 import { createTuiRuntime } from "./runtime.js";
-import { resolveWorkspace } from "./workspace.js";
+import { resolveWorkspace, type Workspace } from "./workspace.js";
 import { resolveConnection } from "./connection.js";
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { createCommandRegistry } from "./commands/registry.js";
@@ -13,7 +13,7 @@ import { renderApprovalDialog } from "./components/approval-dialog.js";
 import { reconcileTuiSession, type RecoverySummary } from "./recovery.js";
 import { renderRecoveryBanner } from "./components/recovery-banner.js";
 import type { CriticalActionSummary, ConfirmationResult } from "./confirmation.js";
-import { advanceWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession, startNewConversationSession, type WorkspaceSession } from "./session.js";
+import { advanceWorkspaceSession, attachWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession, startNewConversationSession, type WorkspaceSession } from "./session.js";
 import { mergeEvents, subscribeToEvents } from "./activity-stream.js";
 import { renderActivityTimeline } from "./components/activity-timeline.js";
 import { renderShell, type TuiShellState } from "./components/shell.js";
@@ -37,7 +37,14 @@ const editorTheme: EditorTheme = {
 };
 
 export async function startInteractiveTui(options: InteractiveTuiOptions): Promise<number> {
-  const workspace = await resolveWorkspace(options.cwd);
+  let workspace: Workspace;
+  let startupError: string | undefined;
+  try {
+    workspace = await resolveWorkspace(options.cwd);
+  } catch (error) {
+    workspace = { cwd: options.cwd };
+    startupError = error instanceof Error ? error.message : "Workspace could not be resolved";
+  }
   const connection = await resolveConnection(options.env);
   const controlPlane = connection.kind === "configured"
     ? await ensureLocalControlPlane({ apiUrl: connection.apiUrl, ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }) })
@@ -57,16 +64,18 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
   }
   const state: TuiShellState = {
     workspace,
-    connection: !connectionReady
+    connection: startupError !== undefined
+      ? { kind: "error", message: `Workspace unavailable: ${startupError}` }
+      : !connectionReady
       ? connection.kind !== "configured"
-        ? { kind: "error", message: connection.reason }
+        ? { kind: "setup-required", message: connection.reason }
         : { kind: "error", message: controlPlane?.kind === "unavailable" ? controlPlane.reason : "Control Plane is not reachable" }
       : client === undefined
         ? { kind: "error", message: "Control Plane client could not be created" }
         : { kind: "connected" },
     goal: { kind: "empty" },
     workers: { kind: "empty" },
-    approvals: { kind: "empty" },
+    approvals: { kind: "error", message: "Approval read surface is not available" },
     budget: { kind: "empty" },
   };
 
@@ -83,7 +92,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let recovery: RecoverySummary = reconcileTuiSession(workspace.cwd, session);
     let pendingConfirmation: { summary: CriticalActionSummary; resolve: (decision: ConfirmationResult) => void } | undefined;
     let activityStarted = false;
-    const abortController = new AbortController();
+    let activityController: AbortController | undefined;
     const render = () => {
       const lines = [...renderShell(state, terminal.columns), "", ...renderRecoveryBanner(recovery, terminal.columns)];
       if (pendingConfirmation !== undefined) lines.push("", ...renderApprovalDialog(pendingConfirmation.summary, terminal.columns));
@@ -118,18 +127,28 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         render();
       }
     };
-    const streamActivity = async () => {
-      if (client === undefined || project.kind !== "attached") return;
+    const streamActivity = async (signal: AbortSignal) => {
+      const streamProject = project;
+      if (client === undefined || streamProject.kind !== "attached") return;
       try {
-        for await (const event of subscribeToEvents({ client, projectId: project.projectId, cursor: session?.lastEventCursor ?? "0", signal: abortController.signal })) {
+        for await (const event of subscribeToEvents({
+          client,
+          projectId: streamProject.projectId,
+          cursor: session?.lastEventCursor ?? "0",
+          signal,
+          maxReconnectAttempts: 5,
+          onReconnect: (attempt, maxAttempts) => append(`Activity stream reconnecting (${attempt}/${maxAttempts})`),
+        })) {
+          if (signal.aborted) return;
           activity = mergeEvents(activity, [event]);
           const nextSession = advanceWorkspaceSession(workspace.cwd, session, event);
           session = nextSession;
           await saveWorkspaceSession(nextSession);
           render();
         }
+        if (!signal.aborted) append("Activity stream unavailable: reconnect attempts exhausted");
       } catch (error) {
-        if (!abortController.signal.aborted) append(`Activity stream unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
+        if (!signal.aborted) append(`Activity stream unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
       }
     };
     const confirm = (summary: CriticalActionSummary): Promise<ConfirmationResult> => new Promise((resolveConfirmation) => {
@@ -137,31 +156,89 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       render();
     });
     const startActivity = () => {
-      if (activityStarted) return;
+      if (activityStarted || client === undefined || project.kind !== "attached") return;
       activityStarted = true;
-      void streamActivity();
+      activityController = new AbortController();
+      void streamActivity(activityController.signal);
+    };
+    const restartActivity = () => {
+      activityController?.abort();
+      activityStarted = false;
+      activityController = undefined;
+      startActivity();
+    };
+    const retryConnection = async () => {
+      append("Retrying Maestro startup checks…");
+      if (startupError !== undefined) {
+        try {
+          workspace = await resolveWorkspace(options.cwd);
+          state.workspace = workspace;
+          startupError = undefined;
+        } catch (error) {
+          startupError = error instanceof Error ? error.message : "Workspace could not be resolved";
+          state.connection = { kind: "error", message: `Workspace unavailable: ${startupError}` };
+          append(`Startup retry failed: ${startupError}`);
+          return;
+        }
+      }
+      if (connection.kind !== "configured") {
+        state.connection = { kind: "setup-required", message: connection.reason };
+        append(`Startup retry blocked: ${connection.reason}`);
+        return;
+      }
+      const health = await ensureLocalControlPlane({ apiUrl: connection.apiUrl, ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }) });
+      if (health.kind !== "ready") {
+        state.connection = { kind: "error", message: health.reason };
+        append(`Startup retry failed: ${health.reason}`);
+        return;
+      }
+      try {
+        client = createApiClient({ baseUrl: connection.apiUrl, token: connection.token, ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }) });
+        project = discoverWorkspaceProject(workspace.cwd, session);
+        state.connection = { kind: "connected" };
+        recovery = reconcileTuiSession(workspace.cwd, session);
+        append("Control Plane connected.");
+        void refreshDashboard();
+        restartActivity();
+      } catch {
+        client = undefined;
+        state.connection = { kind: "error", message: "Control Plane client could not be created" };
+        append("Startup retry failed: Control Plane client could not be created");
+      }
     };
     const submit = async (text: string) => {
       try {
         const parsed = parseInput(text);
         if (parsed.kind === "command" && parsed.name === "session") {
-          if (parsed.action === "new") {
+          if (parsed.action === "retry") {
+            await retryConnection();
+          } else if (parsed.action === "new") {
             session = startNewConversationSession(workspace.cwd, session);
             await saveWorkspaceSession(session);
             recovery = reconcileTuiSession(workspace.cwd, session);
             append("New Concertmaster conversation started. Durable Goal state was preserved.");
-          } else {
+          } else if (parsed.action === "attach") {
+            const requestedProjectId = parsed.options["project-id"];
             const current = await loadWorkspaceSession(workspace.cwd);
-            if (current === undefined) {
-              append("Session: no saved workspace session");
-            } else {
+            if (typeof requestedProjectId === "string" && requestedProjectId.trim() !== "") {
+              session = attachWorkspaceSession(workspace.cwd, current, requestedProjectId);
+              await saveWorkspaceSession(session);
+            } else if (current !== undefined) {
               session = current;
-              project = discoverWorkspaceProject(workspace.cwd, session);
-              recovery = reconcileTuiSession(workspace.cwd, session);
-              append(renderRecoveryBanner(recovery, terminal.columns).join(" · "));
-              void refreshDashboard();
-              startActivity();
+            } else {
+              append("Session attach requires --project-id when no workspace session is saved.");
+              return;
             }
+            project = discoverWorkspaceProject(workspace.cwd, session);
+            recovery = reconcileTuiSession(workspace.cwd, session);
+            append(renderRecoveryBanner(recovery, terminal.columns).join(" · "));
+            void refreshDashboard();
+            restartActivity();
+          } else if (parsed.action === "list") {
+            const current = await loadWorkspaceSession(workspace.cwd);
+            append(current === undefined ? "Session: no saved workspace session" : renderRecoveryBanner(reconcileTuiSession(workspace.cwd, current), terminal.columns).join(" · "));
+          } else {
+            append(`Command: /session ${parsed.action ?? ""} (unknown session action)`.trim());
           }
         } else if (parsed.kind === "command" && client !== undefined && project.kind === "attached") {
           const action = registry.find(parsed.name)?.actions.find((item) => item.name === parsed.action);
@@ -199,7 +276,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       stopped = true;
       pendingConfirmation?.resolve("cancelled");
       pendingConfirmation = undefined;
-      abortController.abort();
+      activityController?.abort();
       tui.stop();
       resolve(0);
     };
@@ -214,6 +291,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       }
       if (matchesKey(data, "ctrl+e")) {
         void submit("/events list");
+        return { consume: true };
+      }
+      if (matchesKey(data, "ctrl+r")) {
+        void submit("/retry");
         return { consume: true };
       }
       if (matchesKey(data, "ctrl+c")) {

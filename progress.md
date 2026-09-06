@@ -2135,3 +2135,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - The latest implementation is the Phase 5 first capacity slice: project-wide worker-slot admission control. It intentionally does not implement the complete multi-resource model or a server-side queue.
 - Corrected the current pointer conceptually: the next Phase 5 work is resource inventory/demand reservations/protected floors/admission-control expansion.
 - PostgreSQL-backed acceptance evidence is still pending because this environment has no Docker/local PostgreSQL.
+
+
+## 2026-09-06 — Maestro TUI bounded shell hardening
+- Built the independent `maestro` terminal TUI above the typed API client, with workspace/Git-root detection, Maestro/Concertmaster branding, truthful Control Plane health, session metadata, dashboard reads, activity timeline, slash parsing/autocomplete, command palette shortcuts, write routing, and approval dialog.
+- Added durable event cursor persistence, event identity deduplication, bounded reconnect attempts with visible retry/exhaustion messages, and session attach/new/retry commands. Session files are validated and forced to mode `0600` in mode `0700` directories.
+- Added CLI spelling aliases (`critical-action`, `workers`, `metronome-challenges`, `encore-council`, `certifications`, and `concertmaster-report`) and project-binding regression coverage for JSON payloads.
+- Critical permission changes fail closed in the TUI until they are bound to the Control Plane durable approval endpoint. Fail-safe emergency stop remains a direct server-authorized control path; local Git branch/worktree operations follow the server's ordinary classification.
+- Verification after hardening: `npm run check` passed with 538 tests and 360 environment-gated skips; `npm run build` and `git diff --check` passed. PostgreSQL/real-process/Prime acceptance remains unrun in this environment.

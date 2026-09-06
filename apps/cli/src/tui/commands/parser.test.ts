@@ -6,6 +6,10 @@ describe("TUI command parser", () => {
     expect(parseInput('/goal get --goal-id "goal 1" --json')).toEqual({ kind: "command", name: "goal", action: "get", options: { "goal-id": "goal 1", json: true } });
   });
 
+  it("treats /retry as the local Control Plane retry command", () => {
+    expect(parseSlashCommand("/retry")).toEqual({ kind: "command", name: "session", action: "retry", options: {} });
+  });
+
   it("treats /new as the workspace session reset command", () => {
     expect(parseSlashCommand("/new")).toEqual({ kind: "command", name: "session", action: "new", options: {} });
   });

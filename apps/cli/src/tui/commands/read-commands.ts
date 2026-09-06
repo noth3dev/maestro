@@ -25,14 +25,16 @@ export interface DashboardReadModel {
 export async function readDashboard(options: { client: ApiClient; projectId: string; goalId?: string }): Promise<DashboardReadModel> {
   const goals = (await options.client.listGoals(options.projectId)).goals;
   const selectedGoal = options.goalId === undefined
-    ? goals[0]
+    ? goals.find((goal) => ["active", "running", "pausing", "resuming"].includes(goal.state)) ?? goals[0]
     : goals.find((goal) => goal.goalId === options.goalId);
   if (selectedGoal === undefined) return { projectId: options.projectId, goals, selectedGoal: undefined, budget: undefined, workerCount: undefined };
   const [budget, workers] = await Promise.all([
     options.client.getBudgetSummary(selectedGoal.goalId, { projectId: options.projectId }),
     options.client.listWorkersForGoal(selectedGoal.goalId, { projectId: options.projectId }),
   ]);
-  return { projectId: options.projectId, goals, selectedGoal, budget, workerCount: workers.workers.length };
+  const activeStatuses = new Set(["spawned", "running"]);
+  const activeWorkerCount = workers.workers.filter((worker) => activeStatuses.has(worker.status)).length;
+  return { projectId: options.projectId, goals, selectedGoal, budget, workerCount: activeWorkerCount };
 }
 
 
@@ -64,7 +66,7 @@ function valueLines<T extends Record<string, unknown>>(title: string, items: rea
 
 export async function executeReadCommand(context: ReadCommandContext, command: ParsedCommand): Promise<ReadCommandResult> {
   const key = `${command.name}:${command.action ?? ""}`;
-  if (!["task-contract:get", "goals:list", "goal:get", "budget:get", "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "worker:list", "workers:list", "git:status", "metronome-challenges:list", "encore-council:list", "certifications:list", "concertmaster-report:get", "events:list", "improvement-digests:list"].includes(key)) {
+  if (!["task-contract:get", "goals:list", "goal:get", "budget:get", "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "worker:list", "workers:get", "workers:list", "git:status", "metronome-challenges:list", "encore-council:list", "certification:list", "certifications:list", "concertmaster-report:get", "events:list", "events:stream", "improvement-digests:list"].includes(key)) {
     const definition = createCommandRegistry().find(command.name);
     const action = definition?.actions.find((item) => item.name === command.action);
     if (action?.kind !== "read") return unavailable(`${command.name} ${command.action ?? ""} is a mutation; use the write command path`.trim());
@@ -97,7 +99,10 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     const workers = await context.client.listWorkersForGoal(goalId, { projectId: context.projectId });
     return valueLines("Workers", workers.workers, (worker) => `• ${worker.workerId} · ${worker.status}`);
   }
-  if (key === "worker:get") {
+  if (key === "events:stream") {
+    return { title: "Events", lines: ["Live event stream is shown in the Activity timeline."] };
+  }
+  if (key === "worker:get" || key === "workers:get") {
     const workerId = required(command, "worker-id");
     if (typeof workerId !== "string") return workerId;
     const worker = await context.client.getWorker(workerId, context.projectId);
@@ -121,7 +126,7 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     const rounds = await context.client.listEncoreCouncilRounds(goalId, { projectId: context.projectId });
     return { title: "Encore", lines: rounds.rounds.length === 0 ? ["No Encore rounds found."] : rounds.rounds.map((round) => `• ${round.roundId}`) };
   }
-  if (key === "certifications:list") {
+  if (key === "certification:list" || key === "certifications:list") {
     const goalId = required(command, "goal-id");
     if (typeof goalId !== "string") return goalId;
     const certifications = await context.client.listCertifications(goalId, { projectId: context.projectId });

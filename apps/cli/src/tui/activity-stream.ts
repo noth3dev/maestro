@@ -7,7 +7,14 @@ function eventIdentity(event: CursorEvent): string { return event.eventId ?? eve
 
 export function mergeEvents<T extends CursorEvent>(existing: readonly T[], incoming: readonly T[]): T[] {
   const identities = new Set(existing.map(eventIdentity));
-  return [...existing, ...incoming.filter((event) => !identities.has(eventIdentity(event)))];
+  const merged = [...existing];
+  for (const event of incoming) {
+    const identity = eventIdentity(event);
+    if (identities.has(identity)) continue;
+    identities.add(identity);
+    merged.push(event);
+  }
+  return merged;
 }
 
 export interface EventStreamClient<T extends CursorEvent> {
@@ -21,6 +28,7 @@ export interface EventSubscriptionOptions<T extends CursorEvent> {
   signal: AbortSignal;
   reconnectDelayMs?: number;
   maxReconnectAttempts?: number;
+  onReconnect?: (attempt: number, maxAttempts: number) => void;
 }
 
 function waitForReconnect(delayMs: number, signal: AbortSignal): Promise<void> {
@@ -34,11 +42,14 @@ function waitForReconnect(delayMs: number, signal: AbortSignal): Promise<void> {
 export async function* subscribeToEvents<T extends CursorEvent>(options: EventSubscriptionOptions<T>): AsyncGenerator<T> {
   let cursor = options.cursor ?? "0";
   let reconnectAttempts = 0;
+  const maxAttempts = options.maxReconnectAttempts ?? 5;
+  if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 0) throw new RangeError("maxReconnectAttempts must be a non-negative safe integer");
   const seen = new Set<string>();
-  while (!options.signal.aborted && reconnectAttempts <= (options.maxReconnectAttempts ?? Number.POSITIVE_INFINITY)) {
+  while (!options.signal.aborted) {
     try {
       for await (const event of options.client.streamEvents({ projectId: options.projectId, after: cursor }, { signal: options.signal })) {
         if (options.signal.aborted) return;
+        reconnectAttempts = 0;
         cursor = event.cursor;
         const identity = eventIdentity(event);
         if (seen.has(identity)) continue;
@@ -50,7 +61,8 @@ export async function* subscribeToEvents<T extends CursorEvent>(options: EventSu
     }
     if (options.signal.aborted) return;
     reconnectAttempts += 1;
-    if (reconnectAttempts > (options.maxReconnectAttempts ?? Number.POSITIVE_INFINITY)) return;
+    if (reconnectAttempts > maxAttempts) return;
+    options.onReconnect?.(reconnectAttempts, maxAttempts);
     await waitForReconnect(options.reconnectDelayMs ?? 250, options.signal);
   }
 }

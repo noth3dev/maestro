@@ -613,3 +613,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - `task_plan.md` contains historical Phase 5 status wording that understates the current implementation. Live code confirms the broader authenticated API surface and the Electron Secretary architecture described in the later reconciliation entry.
 - The current `main` tip is `95bef8e` (not the older `hardening/lifecycle`/`ce94c3d` reference in the historical entry).
 - No source defect was found in this check. The remaining evidence limitation is environmental: PostgreSQL integration suites cannot run here.
+
+
+## 2026-09-06 — Maestro TUI review and hardening
+- Independent review identified a durable-approval bypass risk for project-access provisioning, setup state collapse, missing attach flow, unbounded SSE retry, misleading approval count, project-binding spread order, and command alias drift.
+- The TUI now blocks local-only approval for critical operations without a server-side durable approval binding; only `approval:approve-and-run` reaches the durable endpoint. Setup-required is rendered distinctly, `/session attach --project-id=...` provides an explicit fallback for a workspace with no saved identity, `/new` preserves project/cursor metadata while clearing the active conversation Goal, and `/retry` rechecks startup health.
+- SSE reconnects are bounded to five retries by default and report retry/exhaustion state. Active Worker counts exclude terminal statuses. Session metadata is sanitized on load and permissions are re-applied on every write.
+- Remaining acceptance gaps are intentional: no local PostgreSQL/operator bootstrap, no natural-language Control Plane conversation endpoint, no real-process TUI recovery/parity integration test, and unavailable server surfaces remain explicit rather than fabricated.
