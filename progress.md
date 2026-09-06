@@ -1624,3 +1624,23 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   new `electron/apiBridge.ts` allowlist entries; the Task Contract intake/critical-action-approval
   write paths that already exist in the control plane and API client are not yet exposed anywhere
   in the Electron bridge or UI.
+
+
+## 2026-09-06 (continued) — Evidence Log wired to real certification data
+
+- `EvidenceLog.tsx` now renders `useGoalDetail()`'s real `certifications` array for the selected
+  Goal (kind, verdict, real integrated commit SHA prefix, certifying/producing department) instead
+  of three fabricated `sha256 ...` entries and an "every goal" claim the app cannot back yet.
+  Loading/error/empty/no-Goal-selected states are all explicit and honest (`EmptyState` for
+  no-connection and no-Goal-selected, plain messages for load-in-progress and zero certifications).
+- Deliberately scoped to the *selected* Goal only, not "every Goal" as the old copy claimed --
+  there is no cross-Goal certification aggregator yet; the honest label says so.
+- Verified: root `tsc -b` clean, `apps/secretary`'s `tsc -p tsconfig.renderer.json --noEmit` clean,
+  `apps/secretary`'s `vite build` succeeds (1700 modules), root `npm test` (no DB in this runtime)
+  unchanged from the prior slice: **109 test files (59 passed, 50 skipped), 804 tests (455 passed,
+  349 skipped), 0 failed** (no new pure-logic module needed here; EvidenceLog reuses
+  `useGoalDetail`'s already-tested data).
+- Remaining mock views for the next slice: `Billing`, `Channel`, `Git`, and 8 others still fully
+  hardcoded; still no cross-Goal certification/evidence aggregation; still no
+  `electron/apiBridge.ts` allowlist entries for Council/Department Plan/Mission Bundle/critical-
+  action reads or writes.
