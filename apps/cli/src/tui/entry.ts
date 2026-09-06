@@ -5,6 +5,7 @@ import { resolveWorkspace } from "./workspace.js";
 import { resolveConnection } from "./connection.js";
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { createCommandRegistry } from "./commands/registry.js";
+import { createCommandPalette } from "./commands/palette.js";
 import { parseInput } from "./commands/parser.js";
 import { executeReadCommand, discoverWorkspaceProject, readDashboard } from "./commands/read-commands.js";
 import { executeWriteCommand } from "./commands/write-commands.js";
@@ -45,7 +46,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
   let client: ApiClient | undefined;
   if (connectionReady && connection.kind === "configured") {
     try {
-      client = createApiClient({ baseUrl: connection.apiUrl, token: connection.token });
+      client = createApiClient({ baseUrl: connection.apiUrl, token: connection.token, ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }) });
     } catch {
       // The resolver already validates the endpoint. Keep the UI truthful if
       // a future client invariant rejects it at construction time.
@@ -173,6 +174,18 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       resolve(0);
     };
     tui.addInputListener((data) => {
+      if (matchesKey(data, "ctrl+k")) {
+        append(`Commands: ${createCommandPalette().map((item) => `${item.label} [${item.description}]`).join(" · ")}`);
+        return { consume: true };
+      }
+      if (matchesKey(data, "ctrl+g")) {
+        void submit("/goals list");
+        return { consume: true };
+      }
+      if (matchesKey(data, "ctrl+e")) {
+        void submit("/events list");
+        return { consume: true };
+      }
       if (matchesKey(data, "ctrl+c")) {
         stop();
         return { consume: true };
