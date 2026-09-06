@@ -1664,3 +1664,26 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   `Arrangements`, `Flashmob`, `FlashmobSession`, `Sidebar` badge counts. None of them have a durable
   read surface exposed through `electron/apiBridge.ts` yet for Council/Department Plan/Mission
   Bundle/Git integration/Discord state.
+
+
+## 2026-09-06 (continued) — Channel reframed as a real Goal event feed
+
+- `Channel.tsx` no longer renders a scripted chat transcript (fake "tech head"/"scout-1" messages,
+  a fake approval prompt, a fake "certified" line). It now renders `useGoalDetail()`'s real durable
+  event stream for the selected Goal (event type, cursor, aggregate version, timestamp, raw
+  payload) -- the same real data `goal-data.ts` already loads, just presented as a feed.
+- The message composer is now honestly disabled with an explanatory placeholder: Maestro's domain
+  model has no chat/message-send capability at all, so a "send" button here would have been a UI
+  affordance with nothing behind it.
+- The worker/Head "roster" sidebar is replaced with `EmptyState`: no durable "list active
+  workers/Heads for a Goal" read route exists yet (only single-worker-by-id lookup), so a roster
+  cannot be honestly populated without inventing one first.
+- Verified: root `tsc -b` clean, `apps/secretary`'s `tsc -p tsconfig.renderer.json --noEmit` clean,
+  `apps/secretary`'s `vite build` succeeds (1700 modules), root `npm test` unchanged: **109 files
+  (59 passed, 50 skipped), 804 tests (455 passed, 349 skipped), 0 failed**.
+- Five real (non-mock) Secretary screens now exist: Dashboard, Evidence Log, Billing, Channel.
+  Remaining fully-mock views: `Git`, `Home`, `Floor`, `Inbox`, `Settings`, `Luthiery`,
+  `Arrangements`, `Flashmob`, `FlashmobSession`. `Git` specifically has **no backend read route at
+  all** for Git integration branches/worktrees/revisions (only create/freeze write commands exist)
+  -- wiring it for real would require a new control-plane route + domain/persistence read + typed
+  client method + apiBridge entry first, a larger slice than the read-wiring done so far.
