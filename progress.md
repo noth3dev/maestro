@@ -2143,3 +2143,15 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added CLI spelling aliases (`critical-action`, `workers`, `metronome-challenges`, `encore-council`, `certifications`, and `concertmaster-report`) and project-binding regression coverage for JSON payloads.
 - Critical permission changes fail closed in the TUI until they are bound to the Control Plane durable approval endpoint. Fail-safe emergency stop remains a direct server-authorized control path; local Git branch/worktree operations follow the server's ordinary classification.
 - Verification after hardening: `npm run check` passed with 539 tests and 360 environment-gated skips; `npm run build` and `git diff --check` passed. PostgreSQL/real-process/Prime acceptance remains unrun in this environment.
+
+
+## 2026-09-06 — Maestro TUI fail-safe confirmation hardening
+
+- Classified `goal emergency-stop` and `metronome safe-pause` as critical safety actions in the
+  command registry. Both now require explicit local confirmation before dispatch.
+- Preserved the durable-approval fail-closed rule for permission and other critical mutations;
+  emergency stop remains allowed only as the Control Plane's server-authorized fail-safe path.
+- Added cancellation and approved-dispatch regression tests for emergency stop and updated
+  command-palette/registry safety classifications.
+- Verified: targeted TUI command tests pass (15 tests), `npm run check` passes (84 files passed,
+  51 skipped; 540 tests passed, 360 skipped), `npm run build`, and `git diff --check` pass.
