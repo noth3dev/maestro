@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { executeCli } from "./main.js";
+import { executeCli, shouldRunAsMain } from "./main.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
@@ -190,4 +190,12 @@ it("provisions exact project roles through the authenticated admin command", asy
   expect(await executeCli(["admin", "project-access", "--operator-id", operatorId, "--project-id", projectId, "--roles-json", JSON.stringify(["concertmaster", "head-product"]), "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).toBe(0);
   expect(JSON.parse(stdout.lines[0]!)).toEqual({ operatorId, projectId, roles: ["concertmaster", "head-product"] });
   expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/admin/project-access", expect.objectContaining({ method: "POST" }));
+});
+
+
+describe("CLI entrypoint detection", () => {
+  it("recognizes a symlinked executable by its resolved path", () => {
+    const modulePath = "/work/apps/cli/dist/main.js";
+    expect(shouldRunAsMain(`file://${modulePath}`, "/work/node_modules/.bin/maestro", () => modulePath)).toBe(true);
+  });
 });
