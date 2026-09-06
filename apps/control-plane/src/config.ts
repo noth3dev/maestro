@@ -20,6 +20,8 @@ export interface MaestroConfig {
   operatorProvisioningAdminId?: string;
   /** Shared secret verifying an inbound Discord watchdog signal's own signature. Absent by default: fails closed (route unavailable) until explicitly configured. */
   discordSignalCredential?: string;
+  /** Continuous Metronome scan interval. Absent by default: the loop does not run until explicitly configured. */
+  metronomeIntervalMs?: number;
   /** Duration of the startup-only reconciliation-leader lease; never renewed after startup. */
   reconcilerLeaseDurationMs: number;
   /** Maximum time allowed for provider/application shutdown drains. */
@@ -48,6 +50,7 @@ const schema = z.object({
   MAESTRO_TLS_CERT_FILE: z.string().min(1).optional(),
   MAESTRO_TLS_KEY_FILE: z.string().min(1).optional(),
   MAESTRO_DISCORD_SIGNAL_CREDENTIAL: z.string().min(1).optional(),
+  MAESTRO_METRONOME_INTERVAL_MS: z.coerce.number().int().positive().optional(),
 });
 
 export function parseConfig(
@@ -74,6 +77,7 @@ export function parseConfig(
     MAESTRO_TLS_CERT_FILE: certFile,
     MAESTRO_TLS_KEY_FILE: keyFile,
     MAESTRO_DISCORD_SIGNAL_CREDENTIAL: discordSignalCredential,
+    MAESTRO_METRONOME_INTERVAL_MS: metronomeIntervalMs,
   } = parsed.data;
 
   const isRemoteBind = host !== "127.0.0.1" && host !== "localhost";
@@ -91,6 +95,7 @@ export function parseConfig(
     ...(ceoOperatorId === undefined ? {} : { ceoOperatorId }),
     ...(operatorProvisioningAdminId === undefined ? {} : { operatorProvisioningAdminId }),
     ...(discordSignalCredential === undefined ? {} : { discordSignalCredential }),
+    ...(metronomeIntervalMs === undefined ? {} : { metronomeIntervalMs }),
     ...(isRemoteBind ? { tls: { certFile: certFile!, keyFile: keyFile! } } : {}),
   };
 }

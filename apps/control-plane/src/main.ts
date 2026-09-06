@@ -20,6 +20,7 @@ import { createCertificationService } from "./certification-service.js";
 import { createMetronomeService } from "./metronome-service.js";
 import { createEncoreService } from "./encore-service.js";
 import { buildServer, type OperatorAuthenticator } from "./server.js";
+import { createMetronomeLoop } from "./metronome-loop.js";
 
 export interface ControlPlane {
   app: ReturnType<typeof buildServer>;
@@ -144,6 +145,9 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     readinessCheck: async () => { await pool.query("SELECT 1"); },
     ...(https ? { https } : {}),
   });
+  const metronomeLoop = config.metronomeIntervalMs === undefined
+    ? undefined
+    : createMetronomeLoop({ pool, withGoalLease: goalService.withGoalLease!, intervalMs: config.metronomeIntervalMs });
   let closed = false;
 
   return {
@@ -184,10 +188,12 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
         kernel: executionKernel,
       });
       await app.listen({ host: config.host, port: config.port });
+      metronomeLoop?.start();
     },
     async close() {
       if (closed) return;
       closed = true;
+      metronomeLoop?.stop();
       const timeoutMs = config.shutdownDrainTimeoutMs ?? 5_000;
       try {
         // Stop provider work before releasing the HTTP and database resources.
