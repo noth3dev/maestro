@@ -1600,3 +1600,27 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   control-plane read routes wired before the "pipeline" `EmptyState` can become real; lifecycle
   controls (pause/resume/stop/emergency-stop, already in the API-bridge allowlist) are not yet
   exposed as UI actions anywhere.
+
+
+## 2026-09-06 (continued) — Secretary Dashboard gets real lifecycle controls
+
+- Added `apps/secretary/src/lib/goal-control.ts`'s pure `runGoalControlAction(api, request,
+  commandId?)` (unit tested, 5/5): the first Secretary write path, calling the already-bridged
+  `pauseGoal`/`resumeGoal`/`stopGoal`/`emergencyStopGoal` methods with the caller's exact durable
+  `expectedVersion`, so the control plane -- not this screen -- is the sole authority that decides
+  whether a submission is stale.
+- Extended `useGoalDetail.ts` with a `refresh()` capability (a reload-token counter added to its
+  existing effect dependency list) so a successful lifecycle action can force a fresh durable read
+  instead of the UI silently trusting its own optimistic guess.
+- `Dashboard.tsx` now renders four real lifecycle-control buttons (Pause/Resume/Stop/Emergency
+  stop) for the selected Goal, disabled while any one is in flight, surfacing the control plane's
+  own rejection message on failure (e.g. a stale-version conflict) rather than hiding it.
+- Verified: root `tsc -b` clean; `apps/secretary`'s `tsc -p tsconfig.renderer.json --noEmit` clean;
+  `apps/secretary`'s `vite build` succeeds (1700 modules); root `npm test` (no DB in this runtime):
+  **109 test files (59 passed, 50 skipped), 804 tests (455 passed, 349 skipped), 0 failed** (455 =
+  prior 450 + 5 new `goal-control.test.ts` cases).
+- Remaining Dashboard/App gap for the next slice: `Billing`, `Channel`, `Git`, `EvidenceLog`, and
+  the other 8 views are still fully mock; Council/Department Plan/Mission Bundle reads still need
+  new `electron/apiBridge.ts` allowlist entries; the Task Contract intake/critical-action-approval
+  write paths that already exist in the control plane and API client are not yet exposed anywhere
+  in the Electron bridge or UI.
