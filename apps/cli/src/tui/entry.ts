@@ -7,6 +7,9 @@ import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { createCommandRegistry } from "./commands/registry.js";
 import { parseInput, type ParsedCommand } from "./commands/parser.js";
 import { executeReadCommand, discoverWorkspaceProject, readDashboard } from "./commands/read-commands.js";
+import { executeWriteCommand } from "./commands/write-commands.js";
+import { renderApprovalDialog } from "./components/approval-dialog.js";
+import type { CriticalActionSummary, ConfirmationResult } from "./confirmation.js";
 import { loadWorkspaceSession, saveWorkspaceSession, type WorkspaceSession } from "./session.js";
 import { mergeEvents } from "./activity-stream.js";
 import { renderActivityTimeline } from "./components/activity-timeline.js";
@@ -74,9 +77,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     editor.setAutocompleteProvider(new CombinedAutocompleteProvider(registry.all().map((command) => ({ name: command.name, description: command.description })), workspace.cwd));
     let transcript: string[] = [];
     let activity: GoalEvent[] = [];
+    let pendingConfirmation: { summary: CriticalActionSummary; resolve: (decision: ConfirmationResult) => void } | undefined;
     const abortController = new AbortController();
     const render = () => {
       const lines = [...renderShell(state, terminal.columns)];
+      if (pendingConfirmation !== undefined) lines.push("", ...renderApprovalDialog(pendingConfirmation.summary, terminal.columns));
       if (activity.length > 0) lines.push("", "Activity", ...renderActivityTimeline(activity, terminal.columns));
       if (transcript.length > 0) lines.push("", ...transcript);
       header.setText(lines.join("\n"));
@@ -120,16 +125,30 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         if (!abortController.signal.aborted) append(`Activity stream unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
       }
     };
+    const confirm = (summary: CriticalActionSummary): Promise<ConfirmationResult> => new Promise((resolveConfirmation) => {
+      pendingConfirmation = { summary, resolve: resolveConfirmation };
+      render();
+    });
     const submit = async (text: string) => {
       try {
         const parsed = parseInput(text);
-        if (parsed.kind === "command" && client !== undefined && project.kind === "attached" && parsed.action !== undefined) {
-          const result = await executeReadCommand({ client, projectId: project.projectId, ...(session?.goalId === undefined ? {} : { goalId: session.goalId }) }, parsed);
-          append(`${result.title}: ${result.lines.join(" · ")}`);
+        if (parsed.kind === "command" && client !== undefined && project.kind === "attached") {
+          const action = registry.find(parsed.name)?.actions.find((item) => item.name === parsed.action);
+          if (action?.kind === "read") {
+            const readResult = await executeReadCommand({ client, projectId: project.projectId, ...(session?.goalId === undefined ? {} : { goalId: session.goalId }) }, parsed);
+            append(`${readResult.title}: ${readResult.lines.join(" · ")}`);
+          } else if (action !== undefined) {
+            const writeResult = await executeWriteCommand({ client, projectId: project.projectId, ...(session?.goalId === undefined ? {} : { goalId: session.goalId }), confirm }, parsed);
+            pendingConfirmation = undefined;
+            append(`${writeResult.title}: ${writeResult.lines.join(" · ")}`);
+            void refreshDashboard();
+          } else {
+            append(`Command: /${parsed.name}${parsed.action === undefined ? "" : ` ${parsed.action}`} (unknown command)`);
+          }
         } else if (parsed.kind === "command") {
           append(`Command: /${parsed.name}${parsed.action === undefined ? "" : ` ${parsed.action}`} (unavailable until a workspace project is attached)`);
         } else {
-          append(client === undefined ? `Concertmaster unavailable: ${state.connection.kind === "error" ? state.connection.message : "Control Plane client unavailable"}` : `You: ${parsed.text}`);
+          append(client === undefined ? `Concertmaster unavailable: ${state.connection.kind === "error" ? state.connection.message : "Control Plane client unavailable"}` : "Concertmaster conversation endpoint is not configured");
         }
       } catch (error) {
         append(`Input error: ${error instanceof Error ? error.message : "invalid input"}`);
@@ -147,14 +166,26 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const stop = () => {
       if (stopped) return;
       stopped = true;
+      pendingConfirmation?.resolve("cancelled");
+      pendingConfirmation = undefined;
       abortController.abort();
       tui.stop();
       resolve(0);
     };
     tui.addInputListener((data) => {
-      if (!matchesKey(data, "ctrl+c")) return undefined;
-      stop();
-      return { consume: true };
+      if (matchesKey(data, "ctrl+c")) {
+        stop();
+        return { consume: true };
+      }
+      if (pendingConfirmation !== undefined && (data === "y" || data === "Y" || data === "n" || data === "N" || data === "\r" || data === "\u001b")) {
+        const decision: ConfirmationResult = data === "y" || data === "Y" ? "approved" : "cancelled";
+        const resolveConfirmation = pendingConfirmation.resolve;
+        pendingConfirmation = undefined;
+        resolveConfirmation(decision);
+        render();
+        return { consume: true };
+      }
+      return undefined;
     });
     const runtime = createTuiRuntime({ start: () => tui.start(), stop });
     runtime.start();
