@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
+import { fileURLToPath } from "node:url";
+import { realpathSync } from "node:fs";
 import { ApiError, createApiClient, type GoalEvent, type GoalResult } from "@maestro/api-client";
 import { startInteractiveTui } from "./tui/entry.js";
 
@@ -387,6 +389,15 @@ function printEvents(write: CliIo["stdout"], events: GoalEvent[], nextCursor: st
   else for (const event of events) write(`${event.cursor} ${event.eventType} goal=${event.goalId}\n`);
 }
 
-if (import.meta.url === new URL(process.argv[1]!, "file:").href) {
+export function shouldRunAsMain(moduleUrl: string, argvPath: string | undefined, resolvePath: (path: string) => string = realpathSync): boolean {
+  if (argvPath === undefined) return false;
+  try {
+    return fileURLToPath(moduleUrl) === resolvePath(argvPath);
+  } catch {
+    return false;
+  }
+}
+
+if (shouldRunAsMain(import.meta.url, process.argv[1])) {
   void executeCli(process.argv.slice(2), process.env, { fetch: globalThis.fetch, stdout: (text) => process.stdout.write(text), stderr: (text) => process.stderr.write(text) }).then((code) => { process.exitCode = code; });
 }
