@@ -926,3 +926,41 @@ actual repo state, verified directly against `git log`/file contents on `hardeni
    2026-09-06T12:46 UTC (~20h). No subagent work is available on the required model until that
    resets; this session's Secretary/Operator-lane work must proceed directly (no subagent) until
    then, per this project's model-restriction policy.
+
+
+## Deferred architecture decision — device dependent-work pause granularity (Phase 5 Track B6)
+
+**Decision:** Do not add a worker-to-device dependency link or a new worker pause state in this
+remediation pass.
+
+**Why this is a real design decision, not a wiring gap:** `device_grants` are Goal-scoped, not
+worker-scoped -- no column anywhere records which specific worker (if any) is the intended
+consumer of a device grant or a device command claim. Device session connect/heartbeat/disconnect
+tracking is already complete (`device_agent_sessions`), and `claimDeviceAgentCommand` already
+refuses any new command once a session disconnects, so a disconnected device's commands already
+stop being accepted -- the enforcement half of B6 is already correct. What is missing is the
+concept itself: which unit of work counts as "dependent" on a device, and what pause primitive it
+uses (`WorkerStatus` today is `spawned/running/succeeded/failed/cancelled/unknown` -- no
+"blocked_dependency" or equivalent non-terminal-but-paused state exists, and adding one would
+ripple through `assertValidWorkerTransition`, every contract/route/CLI surface, and every existing
+worker test in the codebase).
+
+**Non-negotiable entry contract before implementing this for real:**
+- an explicit worker-to-device-grant (or worker-to-device) durable link recorded at issuance, not
+  inferred after the fact;
+- an explicit new worker pause state distinct from cancellation, with its own valid-transition
+  rules and resume path back to `running` on reconnect;
+- proof that independent (non-device-dependent) work in the same Goal is provably unaffected --
+  the current Goal-only pause granularity is not enough, since it would pause independent workers
+  too.
+
+**Reason for deferral:** This is a genuinely new domain concept, not an extension of an existing
+one, and forcing it in without an explicit product decision about what "dependent work" means for
+this system risks exactly the over-engineering/under-specification failure mode this project's own
+`docs/OPERATING_PROTOCOL.md` Karpathy-guidelines default is meant to prevent ("simplicity first,"
+"surgical changes"). Every other Phase 5 Track B item (1-5, 7, 8) is closed; this is the sole
+remaining open item, explicitly scoped and blocked on a design decision, not silently skipped.
+
+**Revisit trigger:** When there is an actual dependent-work scenario to design against (e.g. a
+real worker whose Mission Bundle explicitly requires device access mid-task), scope the minimal
+worker-device link and pause state against that concrete case rather than a hypothetical one.
