@@ -4,6 +4,7 @@ import {
   type ExecutionAdmission,
   type ExecutionKernelPort,
   type ExecutionRef,
+  type MissionBundle,
   type TeamLeadGrantSubstance,
   type Worker,
 } from "@maestro/domain";
@@ -11,7 +12,7 @@ import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
 import { assertCurrentWorkerLease, bindWorkerInvocation, cancelUnboundWorkerAfterBindingFailure, markUnboundWorkerUnknown, WorkerNotFoundError } from "./worker.js";
-import { readMissionBundle, type MissionBundle } from "./mission-bundle.js";
+import { readMissionBundle } from "./mission-bundle.js";
 
 export class TeamLeadGrantError extends Error {}
 export class TeamLeadGrantNotFoundError extends TeamLeadGrantError {}
@@ -126,7 +127,7 @@ function assertNativeHelperAdmission(
   if (admission.idempotencyKey.trim() === "" || admission.grant.parentGrantId !== `worker:${parentWorkerId}`) {
     throw new TeamLeadGrantError("Helper admission does not inherit the team-lead grant");
   }
-  if (!isSubset(admission.grant.allowedTools, bundle.substance.allowedTools) || !isSubset(admission.grant.allowedSkills, bundle.substance.allowedSkills) || !isSubset(admission.grant.pathScope, bundle.substance.allowedPaths) || !isSubset(admission.grant.outboundDataClasses, bundle.substance.dataBoundary.split(",").map((value) => value.trim()).filter(Boolean))) {
+  if (!isSubset(admission.grant.allowedTools, bundle.substance.allowedTools) || !isSubset(admission.grant.allowedSkills, bundle.substance.allowedSkills) || !isSubset(admission.grant.pathScope, bundle.substance.allowedPaths) || !isSubset(admission.grant.outboundDataClasses, bundle.substance.dataBoundary)) {
     throw new TeamLeadGrantError("Helper admission widens the Mission Bundle capability scope");
   }
   const remaining = admission.grant.remaining;
@@ -248,8 +249,6 @@ export async function spawnHelperWorker(pool: Pool, kernel: ExecutionKernelPort,
     const ownerLeaseExpiresAt = await lockGoalLease(client, proof);
     await assertAuthorizedHeadForDepartment(pool, grant.council_id, grant.department_id, context, client);
     const council = await readHeadCouncil(pool, grant.council_id);
-    const bundle = await readMissionBundle(pool, grant.council_id, grant.department_id, grant.plan_version, grant.item_id);
-    if (admission !== undefined) assertNativeHelperAdmission(admission, bundle, council.snapshot.projectId, proof, grant.worker_id);
     const teamLead = await client.query<WorkerIdentityRow & { worker_id: string }>(
       "SELECT worker_id, council_id, department_id, plan_version, item_id, execution_ref, status, parent_worker_id FROM workers WHERE worker_id = $1 FOR UPDATE",
       [grant.worker_id],
@@ -267,6 +266,8 @@ export async function spawnHelperWorker(pool: Pool, kernel: ExecutionKernelPort,
     if (currentPlan.rowCount === 1 && currentPlan.rows[0]!.current_version !== grant.plan_version) {
       throw new TeamLeadGrantError(`Team-lead grant task scope ceiling exceeded: mission plan was revised from version ${grant.plan_version} to ${currentPlan.rows[0]!.current_version}`);
     }
+    const bundle = await readMissionBundle(pool, grant.council_id, grant.department_id, grant.plan_version, grant.item_id);
+    if (admission !== undefined) assertNativeHelperAdmission(admission, bundle, council.snapshot.projectId, proof, grant.worker_id);
     const priorHelpers = await client.query<{ status: string }>("SELECT status FROM workers WHERE grant_id = $1 ORDER BY attempt FOR UPDATE", [grantId]);
     if (priorHelpers.rows.some((helper) => helper.status === "unknown")) {
       throw new TeamLeadGrantError("Helper worker provider state is unknown for this team-lead grant; reconcile before retrying");

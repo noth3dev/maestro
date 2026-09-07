@@ -755,3 +755,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added an acceptance test that binds a fake provider credential inside the gateway credential store, starts the actual Model Gateway Fastify server on a loopback TCP port, connects through `createModelGatewayClient`, and routes a native kernel admission through HTTP.
 - The test proves exact model/account binding, host admission fields, prompt execution, terminal observation, provider identity, and kernel/gateway close. It does not use a mocked gateway transport and does not expose the credential.
 - Evidence: `apps/control-plane/src/native-gateway-http.integration.test.ts` passed **1/1** after Prime package deletion.
+
+
+## 2026-09-08 — Post-deletion no-database check
+
+- `npm run check` passed: build plus **102 test files / 665 tests passed**. PostgreSQL-gated files were intentionally skipped: **52 files / 375 tests**.
+- The native HTTP acceptance remained green in that run. No Prime package, import, or lockfile entry returned.
