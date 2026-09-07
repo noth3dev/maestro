@@ -116,7 +116,7 @@ function boundedMessages(messages: readonly ModelMessage[], maxBytes: number): M
   return kept.reverse();
 }
 
-export function createMaestroAgentRuntime(options: { gateway: ModelGatewayPort; binding: GatewayBinding; tools: ToolRegistry; initialMessages?: readonly ModelMessage[]; onModelEvent?: (event: ModelStreamEvent, turnId: string) => void }): MaestroAgentRuntime {
+export function createMaestroAgentRuntime(options: { gateway: ModelGatewayPort; binding: GatewayBinding; tools: ToolRegistry; initialMessages?: readonly ModelMessage[]; onModelEvent?: (event: ModelStreamEvent, turnId: string) => void; closeGateway?: boolean }): MaestroAgentRuntime {
   const records = new Map<InvocationRef, RuntimeRecord>();
   const byExecution = new Map<ExecutionRef, InvocationRef>();
   let closing = false;
@@ -276,7 +276,7 @@ export function createMaestroAgentRuntime(options: { gateway: ModelGatewayPort; 
     async resume() { throw new ExecutionKernelUnavailableError("resume"); },
     async reconnect() { throw new ExecutionKernelUnavailableError("reconnect"); },
     async release(invocation) { records.delete(invocation); },
-    async close() { closing = true; for (const record of records.values()) { if (record.phase !== "terminal") { record.abort.abort(); record.status = "unknown"; record.phase = "terminal"; } } await options.gateway.close(); },
+    async close() { closing = true; for (const record of records.values()) { if (record.phase !== "terminal") { record.abort.abort(); record.status = "unknown"; record.phase = "terminal"; } } if (options.closeGateway !== false) await options.gateway.close(); },
     inspectGrantForTest(invocation) { return requireRecord(invocation).grant; },
   };
   return runtime;

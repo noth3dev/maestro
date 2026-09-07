@@ -714,3 +714,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Current native conversation execution already uses `createMaestroAgentRuntime` and the authenticated Model Gateway. The missing production seam is the Control Plane execution-kernel composition: Worker, Head activation, semantic review, Encore reviewers, and team-lead helpers still issue Prime-era or bare `ExecutionKernelPort` requests.
 - Created `plan/2026-09-08-native-prime-removal-cutover.md`. It sequences native kernel routing, explicit model/grant propagation, durable execution-binding evidence, fixed host tools, real HTTP acceptance, complete Prime deletion, then the Phase 1 PostgreSQL patch queue.
 - The plan requires zero production/test dependency references to `prime-agent`, `@maestro/prime-adapter`, `createPrimeExecutionKernel`, or `primeAgentVersion`; Prime is not allowed as fallback.
+
+
+## 2026-09-08 — Native execution-kernel router Task B green
+
+- Added `apps/control-plane/src/native-execution-kernel.ts`, an authenticated gateway admission/router that binds each root execution to one immutable provider/model/account and routes opaque execution/invocation refs to the correct `MaestroAgentRuntime`. It rejects unscoped requests before gateway admission and closes a shared gateway exactly once.
+- Added four focused tests covering exact model admission, opaque observation/status routing, unscoped rejection, account mismatch rejection, and shared-gateway close behavior.
+- Focused native/model-gateway verification passed **7 files / 33 tests**; `npm run build` passed.
+- This is only the composition seam. Production `main.ts` still uses Prime until Tasks C–G propagate explicit grants and remove the dependency.
