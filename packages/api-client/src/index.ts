@@ -22,6 +22,9 @@ import {
   ModelCatalogEntrySchema,
   ProviderCredentialLoginInputSchema,
   ProviderCredentialBindingSchema,
+  ProviderAccountLoginStartInputSchema,
+  ProviderAccountLoginStartResultSchema,
+  ProviderAccountLoginStatusSchema,
   GoalBudgetSummarySchema,
   GoalResultSchema,
   CriticalActionInputSchema,
@@ -95,6 +98,8 @@ import {
   type ModelCatalogEntry,
   type ProviderCredentialLoginInput,
   type ProviderCredentialBinding,
+  type ProviderAccountLoginStartResult,
+  type ProviderAccountLoginStatus,
   type GoalBudgetSummary,
   type GoalResult,
   type CriticalActionInput,
@@ -166,6 +171,9 @@ export interface ApiClient {
   listModels(): Promise<readonly ModelCatalogEntry[]>;
   loginProvider(input: ProviderCredentialLoginInput): Promise<ProviderCredentialBinding>;
   logoutProvider(providerId: "openai" | "anthropic"): Promise<void>;
+  startAccountLogin(): Promise<ProviderAccountLoginStartResult>;
+  accountLoginStatus(loginId: string): Promise<ProviderAccountLoginStatus>;
+  cancelAccountLogin(loginId: string): Promise<void>;
   createConversation(input: CreateConversationInput): Promise<Conversation>;
   getConversation(conversationId: string, query: GoalQuery): Promise<Conversation>;
   sendConversationTurn(conversationId: string, input: ConversationTurnInput, options?: { signal?: AbortSignal }): Promise<ConversationTurnResult>;
@@ -400,6 +408,24 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
       return request(`v1/provider-credentials/${encodeURIComponent(providerId)}`, {
         method: "DELETE",
         headers: { ...headers, "idempotency-key": cryptoRandomUuid() },
+      }, { parse: () => undefined });
+    },
+    startAccountLogin() {
+      const input = ProviderAccountLoginStartInputSchema.parse({ providerId: "openai-codex" });
+      return request("v1/provider-account-logins/start", {
+        method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": cryptoRandomUuid() }, body: JSON.stringify(input),
+      }, ProviderAccountLoginStartResultSchema);
+    },
+    accountLoginStatus(loginId) {
+      if (typeof loginId !== "string" || loginId.trim() === "") throw new Error("Invalid login session");
+      return request("v1/provider-account-logins/status", {
+        method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": cryptoRandomUuid() }, body: JSON.stringify({ providerId: "openai-codex", loginId }),
+      }, ProviderAccountLoginStatusSchema);
+    },
+    cancelAccountLogin(loginId) {
+      if (typeof loginId !== "string" || loginId.trim() === "") throw new Error("Invalid login session");
+      return request("v1/provider-account-logins/cancel", {
+        method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": cryptoRandomUuid() }, body: JSON.stringify({ providerId: "openai-codex", loginId }),
       }, { parse: () => undefined });
     },
     createConversation(input) {
@@ -668,4 +694,4 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
   };
 }
 
-export type { CreateGoalInput, CreateTaskContractInput, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, GoalGitIntegrationState, WorkerList, ImprovementDigestList };
+export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, GoalGitIntegrationState, WorkerList, ImprovementDigestList };
