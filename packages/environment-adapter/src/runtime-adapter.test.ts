@@ -3,7 +3,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { basename } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { AuthorityDecision, AuthorityRepository } from "@maestro/authority";
 import { AuthorizedEffectExecutor } from "@maestro/authority";

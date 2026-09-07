@@ -7,7 +7,7 @@ import {
   type Worker,
 } from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
-import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
+import { StaleGoalLeaseError, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
 import { assertCurrentWorkerLease, bindWorkerInvocation, cancelUnboundWorkerAfterBindingFailure, markUnboundWorkerUnknown, WorkerNotFoundError } from "./worker.js";
 

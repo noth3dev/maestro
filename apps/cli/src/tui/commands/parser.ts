@@ -10,17 +10,17 @@ export type ParsedInput = ParsedCommand | { kind: "natural-language"; text: stri
 export function tokenize(input: string): string[] {
   const tokens: string[] = [];
   let current = "";
-  let quote: "\"" | "\'" | undefined;
+  let quote: "\"" | "'" | undefined;
   let escaped = false;
   for (const char of input) {
     if (escaped) { current += char; escaped = false; continue; }
-    if (char === "\\" && quote !== "\'") { escaped = true; continue; }
+    if (char === "\\" && quote !== "'") { escaped = true; continue; }
     if (quote !== undefined) {
       if (char === quote) quote = undefined;
       else current += char;
       continue;
     }
-    if (char === "\"" || char === "\'") { quote = char; continue; }
+    if (char === "\"" || char === "'") { quote = char; continue; }
     if (/\s/.test(char)) {
       if (current !== "") { tokens.push(current); current = ""; }
     } else current += char;

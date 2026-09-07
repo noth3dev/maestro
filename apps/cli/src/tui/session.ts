@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import type { GoalEvent } from "@maestro/api-client";
@@ -9,6 +9,9 @@ export interface WorkspaceSession {
   projectId?: string;
   goalId?: string;
   lastEventCursor?: string;
+  /** Durable Control Plane conversation identity; never a credential. */
+  conversationId?: string;
+  model?: string;
 }
 
 function sessionId(workspacePath: string): string {
@@ -18,13 +21,15 @@ function sessionId(workspacePath: string): string {
 function parseSession(value: unknown): WorkspaceSession | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
-  const allowed = new Set(["workspacePath", "projectId", "goalId", "lastEventCursor"]);
+  const allowed = new Set(["workspacePath", "projectId", "goalId", "lastEventCursor", "conversationId", "model"]);
   if (Object.keys(record).some((key) => !allowed.has(key))) return undefined;
   if (typeof record.workspacePath !== "string" || record.workspacePath.length === 0) return undefined;
   const projectId = record.projectId;
   const goalId = record.goalId;
   const lastEventCursor = record.lastEventCursor;
-  for (const value of [projectId, goalId, lastEventCursor]) {
+  const conversationId = record.conversationId;
+  const model = record.model;
+  for (const value of [projectId, goalId, lastEventCursor, conversationId, model]) {
     if (value !== undefined && (typeof value !== "string" || value.length === 0)) return undefined;
   }
   return {
@@ -32,6 +37,8 @@ function parseSession(value: unknown): WorkspaceSession | undefined {
     ...(typeof projectId === "string" ? { projectId } : {}),
     ...(typeof goalId === "string" ? { goalId } : {}),
     ...(typeof lastEventCursor === "string" ? { lastEventCursor } : {}),
+    ...(typeof conversationId === "string" ? { conversationId } : {}),
+    ...(typeof model === "string" ? { model } : {}),
   };
 }
 
@@ -75,7 +82,7 @@ export function startNewConversationSession(workspacePath: string, current: Work
 export function selectWorkspaceGoal(workspacePath: string, current: WorkspaceSession | undefined, goalId: string): WorkspaceSession {
   if (goalId.trim() === "") throw new Error("Goal ID must be non-empty");
   if (current?.workspacePath !== workspacePath || current.projectId === undefined) throw new Error("A project must be attached before selecting a Goal");
-  return { ...current, goalId };
+  return { workspacePath, projectId: current.projectId, goalId, ...(current.lastEventCursor === undefined ? {} : { lastEventCursor: current.lastEventCursor }) };
 }
 
 

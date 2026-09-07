@@ -12,7 +12,11 @@
     "typecheck": "tsc -b",
     "check": "npm run build && npm test",
     "build": "tsc -b",
-    "worktree:add": "node scripts/create-worktree.mjs"
+    "worktree:add": "node scripts/create-worktree.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "engines": {
     "node": ">=24"
@@ -20,8 +24,13 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/pg": "^8.23.1",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
     "fast-check": "^4.9.0",
+    "globals": "^16.5.0",
+    "prettier": "^3.9.6",
     "typescript": "^5.9.0",
+    "typescript-eslint": "^8.69.0",
     "vitest": "^4.0.0"
   },
   "dependencies": {

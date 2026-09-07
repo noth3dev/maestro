@@ -2,7 +2,7 @@ declare const executionRefBrand: unique symbol;
 declare const invocationRefBrand: unique symbol;
 declare const toolEventRefBrand: unique symbol;
 
-/** Opaque Maestro references. Provider identifiers never cross this boundary. */
+/** Opaque Maestro references. Canonical provider/model identity is carried separately as validated evidence. */
 export type ExecutionRef = string & { readonly [executionRefBrand]: "ExecutionRef" };
 export type InvocationRef = string & { readonly [invocationRefBrand]: "InvocationRef" };
 export type ToolEventRef = string & { readonly [toolEventRefBrand]: "ToolEventRef" };
@@ -20,6 +20,36 @@ export type InvocationStatus = "queued" | "running" | "succeeded" | "failed" | "
 export interface SpawnCapabilities {
   allowedTools?: readonly string[];
   allowedSkills?: readonly string[];
+  modelPolicy?: readonly string[];
+}
+
+export interface InvocationContext {
+  readonly operatorId: string;
+  readonly projectId: string;
+  readonly goalId: string;
+  readonly missionBundleId: string;
+  readonly policyVersion: string;
+  readonly accountRef?: string;
+  readonly leaseRef?: string;
+  readonly fencingToken?: string;
+}
+
+export interface CapabilityGrant {
+  readonly grantId: string;
+  readonly parentGrantId?: string;
+  readonly allowedTools: readonly string[];
+  readonly allowedSkills: readonly string[];
+  readonly modelPolicy: readonly string[];
+  readonly pathScope: readonly string[];
+  readonly outboundDataClasses: readonly string[];
+  readonly remaining: {
+    modelTurns: number;
+    toolCalls: number;
+    childCalls: number;
+    outputTokens: number;
+    wallTimeMs: number;
+    retryCount: number;
+  };
 }
 
 export interface SpawnRequest {
@@ -29,6 +59,11 @@ export interface SpawnRequest {
   prompt?: string;
   /** Only meaningful for a root spawn (no parent); a child spawn inherits its root's session. */
   capabilities?: SpawnCapabilities;
+  /** Required by the native runtime; optional while legacy test-only kernels remain supported. */
+  context?: InvocationContext;
+  grant?: CapabilityGrant;
+  modelPolicy?: readonly string[];
+  idempotencyKey?: string;
 }
 
 export interface SpawnedInvocation {

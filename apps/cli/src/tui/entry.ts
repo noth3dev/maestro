@@ -13,7 +13,7 @@ import { renderApprovalDialog } from "./components/approval-dialog.js";
 import { reconcileTuiSession, type RecoverySummary } from "./recovery.js";
 import { renderRecoveryBanner } from "./components/recovery-banner.js";
 import type { CriticalActionSummary, ConfirmationResult } from "./confirmation.js";
-import { advanceWorkspaceSession, attachWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession, selectWorkspaceGoal, startNewConversationSession, type WorkspaceSession } from "./session.js";
+import { advanceWorkspaceSession, attachWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession, selectWorkspaceGoal, startNewConversationSession } from "./session.js";
 import { mergeEvents, subscribeToEvents } from "./activity-stream.js";
 import { renderActivityTimeline } from "./components/activity-timeline.js";
 import { renderShell, type TuiShellState } from "./components/shell.js";
@@ -104,6 +104,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let pendingConfirmation: { summary: CriticalActionSummary; resolve: (decision: ConfirmationResult) => void } | undefined;
     let activityStarted = false;
     let activityController: AbortController | undefined;
+    let conversationTurnController: AbortController | undefined;
     const render = () => {
       const lines = [...renderShell(state, terminal.columns), "", ...renderRecoveryBanner(recovery, terminal.columns)];
       if (pendingConfirmation !== undefined) lines.push("", ...renderApprovalDialog(pendingConfirmation.summary, terminal.columns));
@@ -309,6 +310,19 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             const readResult = await executeReadCommand({ client, projectId: project.kind === "attached" ? project.projectId : "" }, parsed);
             append(`${readResult.title}: ${readResult.lines.join(" · ")}`);
           }
+        } else if (parsed.kind === "command" && parsed.name === "models" && parsed.action === "list") {
+          if (client === undefined) append("Model catalog unavailable until the Control Plane is connected.");
+          else {
+            const models = await client.listModels();
+            append(models.length === 0 ? "No models are currently available." : `Models: ${models.map((model) => `${model.identity.provider}/${model.identity.id}`).join(" · ")}`);
+          }
+        } else if (parsed.kind === "command" && parsed.name === "conversation" && parsed.action === "cancel") {
+          if (client === undefined || project.kind !== "attached" || session?.conversationId === undefined) append("No active conversation is available to cancel.");
+          else {
+            conversationTurnController?.abort();
+            const cancelled = await client.cancelConversation(session.conversationId, { projectId: project.projectId });
+            append(`Conversation ${cancelled.conversationId}: ${cancelled.status}`);
+          }
         } else if (parsed.kind === "command" && client !== undefined && project.kind === "attached") {
           const action = registry.find(parsed.name)?.actions.find((item) => item.name === parsed.action);
           if (action?.kind === "read") {
@@ -325,7 +339,35 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         } else if (parsed.kind === "command") {
           append(`Command: /${parsed.name}${parsed.action === undefined ? "" : ` ${parsed.action}`} (unavailable until a workspace project is attached)`);
         } else {
-          append(client === undefined ? `Concertmaster unavailable: ${state.connection.kind === "error" ? state.connection.message : "Control Plane client unavailable"}` : "Concertmaster conversation endpoint is not configured");
+          if (client === undefined) {
+            append(`Concertmaster unavailable: ${state.connection.kind === "error" ? state.connection.message : "Control Plane client unavailable"}`);
+          } else if (project.kind !== "attached") {
+            append("Concertmaster requires an attached workspace project.");
+          } else if (session?.goalId === undefined) {
+            append("Select a Goal before sending a Concertmaster message (use /goal select --goal-id <id>).");
+          } else {
+            const configuredModel = options.env.MAESTRO_MODEL?.trim() || session.model;
+            if (session.conversationId === undefined && configuredModel === undefined) {
+              append("No model selected. Set MAESTRO_MODEL to an exact provider/model (for example openai/gpt-5), then start a new session.");
+            } else {
+              if (session.conversationId === undefined) {
+                const created = await client.createConversation({ projectId: project.projectId, goalId: session.goalId, model: configuredModel! });
+                session = { workspacePath: workspace.cwd, projectId: project.projectId, goalId: session.goalId, ...(session.lastEventCursor === undefined ? {} : { lastEventCursor: session.lastEventCursor }), conversationId: created.conversationId, model: created.model };
+                await saveWorkspaceSession(session);
+                append(`Concertmaster conversation ${created.conversationId} · ${created.model}`);
+              }
+              const activeConversationId = session.conversationId;
+              if (activeConversationId === undefined) throw new Error("Conversation was not created");
+              const turnController = new AbortController();
+              conversationTurnController = turnController;
+              try {
+                const result = await client.sendConversationTurn(activeConversationId, { projectId: project.projectId, text }, { signal: turnController.signal });
+                append(`Maestro [${result.conversation.status}]: ${result.turn.content}`);
+              } finally {
+                if (conversationTurnController === turnController) conversationTurnController = undefined;
+              }
+            }
+          }
         }
       } catch (error) {
         append(`Input error: ${error instanceof Error ? error.message : "invalid input"}`);
@@ -346,6 +388,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       pendingConfirmation?.resolve("cancelled");
       pendingConfirmation = undefined;
       activityController?.abort();
+      conversationTurnController?.abort();
       tui.stop();
       resolve(0);
     };
@@ -367,6 +410,14 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         return { consume: true };
       }
       if (matchesKey(data, "ctrl+c")) {
+        if (conversationTurnController !== undefined) {
+          conversationTurnController.abort();
+          append("Cancelling the active conversation turn…");
+          if (client !== undefined && project.kind === "attached" && session?.conversationId !== undefined) {
+            void client.cancelConversation(session.conversationId, { projectId: project.projectId }).then((cancelled) => append(`Conversation ${cancelled.conversationId}: ${cancelled.status}`)).catch((error) => append(`Conversation cancellation unavailable: ${error instanceof Error ? error.message : "unknown error"}`));
+          }
+          return { consume: true };
+        }
         stop();
         return { consume: true };
       }

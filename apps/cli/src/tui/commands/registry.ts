@@ -33,6 +33,8 @@ const definitions: CommandDefinition[] = ([
   ["evidence", "evidence bundles and reports", [["list", "read"], ["bundle", "read"], ["report", "read"]]],
   ["approval", "critical action approvals", [["list", "read"], ["approve-and-run", "critical"]]],
   ["events", "durable event stream", [["list", "read"], ["stream", "read"]]],
+  ["models", "available model catalog", [["list", "read"]]],
+  ["conversation", "native Maestro conversation", [["create", "write"], ["turn", "write"], ["get", "read"], ["cancel", "write"]]],
   ["session", "TUI session lifecycle", [["list", "read"], ["attach", "write"], ["new", "write"], ["retry", "write"]]],
   ["portfolio", "concurrent Goal capacity and priority", [["list", "read"], ["prioritize", "write"], ["pause", "critical"]]],
   ["improvement-digests", "Encore improvement artifacts", [["list", "read"], ["inspect", "read"]]],

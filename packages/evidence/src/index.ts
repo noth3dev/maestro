@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, link, open, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, link, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 
 export interface CorrelationContext {

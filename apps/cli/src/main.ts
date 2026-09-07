@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { realpathSync } from "node:fs";
 import { ApiError, createApiClient, type GoalEvent, type GoalResult } from "@maestro/api-client";
 import { startInteractiveTui } from "./tui/entry.js";
+import type { CertifyWorkerInput } from "@maestro/contracts";
 
 export interface CliIo {
   fetch?: typeof globalThis.fetch;
@@ -38,6 +39,9 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
         "operator-id": { type: "string" },
         "roles-json": { type: "string" },
         "goal-id": { type: "string" },
+        "conversation-id": { type: "string" },
+        model: { type: "string" },
+        text: { type: "string" },
         "command-id": { type: "string" },
         "contract-id": { type: "string" },
         "substance-json": { type: "string" },
@@ -121,6 +125,31 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     }
     if (resource === "task-contract" && action === "launch") {
       const result = await client.launchTaskContract(string("contract-id"), string("project-id"), value("command-id") === undefined ? undefined : string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "models" && action === "list") {
+      const result = await client.listModels();
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "conversation" && action === "create") {
+      const result = await client.createConversation({ projectId: string("project-id"), goalId: string("goal-id"), model: string("model") });
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "conversation" && action === "get") {
+      const result = await client.getConversation(string("conversation-id"), { projectId: string("project-id") });
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "conversation" && action === "turn") {
+      const result = await client.sendConversationTurn(string("conversation-id"), { projectId: string("project-id"), text: string("text") });
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "conversation" && action === "cancel") {
+      const result = await client.cancelConversation(string("conversation-id"), { projectId: string("project-id") });
       printState(io.stdout, result, json);
       return 0;
     }
@@ -260,7 +289,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       return 0;
     }
     if (resource === "worker" && (action === "certify" || action === "certify-conditional")) {
-      const certification = parseJsonOption(string("certification-json"), "--certification-json");
+      const certification = parseJsonOption<Omit<CertifyWorkerInput, "projectId">>(string("certification-json"), "--certification-json");
       const input = { ...certification, projectId: string("project-id") };
       const result = action === "certify"
         ? await client.certifyWorker(string("worker-id"), input, string("command-id"))
@@ -350,7 +379,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       else printEvents(io.stdout, page.events, page.nextCursor);
       return 0;
     }
-    throw new Error("Usage: maestro admin project-access|goals list|goal create|get|transition|pause|stop|resume|emergency-stop|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|observe|cancel|accept|certify|certify-conditional|git goal-branch|git department-branch|worker-worktree|goal-revision|metronome scan|challenge|encore review|critical-action request|approve-and-run|budget ... | maestro events list ...");
+    throw new Error("Usage: maestro models list|conversation create|get|turn|cancel|admin project-access|goals list|goal create|get|transition|pause|stop|resume|emergency-stop|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|observe|cancel|accept|certify|certify-conditional|git goal-branch|git department-branch|worker-worktree|goal-revision|metronome scan|challenge|encore review|critical-action request|approve-and-run|budget ... | maestro events list ...");
   } catch (error) {
     const message = error instanceof ApiError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : "Command failed";
     io.stderr(`${message}\n`);
@@ -359,7 +388,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
 }
 
 function helpText(): string {
-  return `Maestro CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  admin project-access --operator-id --project-id --roles-json\n  goal create|get|transition|pause|stop|resume|emergency-stop\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  git goal-branch|department-branch|worker-worktree|goal-revision\n  metronome scan|challenge\n  encore review\n  critical-action request|approve-and-run\n  events list\n\nUse --json for machine-readable output.\n`;
+  return `Maestro CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  admin project-access --operator-id --project-id --roles-json\n  goal create|get|transition|pause|stop|resume|emergency-stop\n  models list\n  conversation create|get|turn|cancel\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  git goal-branch|department-branch|worker-worktree|goal-revision\n  metronome scan|challenge\n  encore review\n  critical-action request|approve-and-run\n  events list\n\nUse --json for machine-readable output.\n`;
 }
 
 function nonNegativeInteger(value: string, option: string): number {
@@ -374,7 +403,7 @@ function safeInteger(value: string, option: string): number {
   return parsed;
 }
 
-function parseJsonOption(value: string, option: string): any {
+function parseJsonOption<T extends object = Record<string, unknown>>(value: string, option: string): T {
   try { return JSON.parse(value); } catch { throw new Error(`${option} must contain valid JSON`); }
 }
 

@@ -7,7 +7,7 @@ import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { localGitPort } from "../../../test/git-port.js";
-import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance } from "@maestro/domain";
+import { type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease, executeGoalCommand } from "./commands.js";
 import { createDurableTaskContract, launchConfirmedTaskContract, recordExactTaskContractConfirmation } from "./task-contract.js";
@@ -15,7 +15,7 @@ import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, su
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, spawnWorker } from "./worker.js";
-import { acceptDepartmentWorkerOutput, certifyQuality, certifyConditional } from "./certification.js";
+import { acceptDepartmentWorkerOutput, certifyQuality } from "./certification.js";
 import { recordGoalIntegrationRevision } from "./git-integration.js";
 import { recordEvidenceBundle, verifyStoredEvidenceBundle, readEvidenceBundle } from "./evidence-bundle.js";
 import { generateConcertmasterFinalReport } from "./concertmaster-report.js";
@@ -182,7 +182,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     // evidence bundle. These are real PostgreSQL rows and a real Git commit.
     await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
     await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "Head reviewed the integrated worker output" }, proof, headContext("product"));
-    const revision = await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
+    await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
     const quality = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: evidenceIds }, "quality", proof, headContext("quality"));
     expect(quality.verdict).toBe("passed");
 

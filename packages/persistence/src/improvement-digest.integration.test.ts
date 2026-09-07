@@ -102,7 +102,7 @@ describeDatabase("Improvement Digest persistence", () => {
     await expect(readImprovementDigest(pool, reader(projectId), uppercaseDigestId)).resolves.toMatchObject({ projectId, goalId, sourceRefs: [{ kind: "goal", sourceId: goalId }] });
     const precisionDigestId = randomUUID();
     const precisionSqlInput: ImprovementDigestInput = {
-      ...uppercaseSqlInput, episodeId: "episode-precision-sql", metrics: [{ name: "ratio", value: 1.234567890123456789, unit: "ratio" }],
+      ...uppercaseSqlInput, episodeId: "episode-precision-sql", metrics: [{ name: "ratio", value: Number("1.234567890123456789"), unit: "ratio" }],
     };
     await pool.query(directDigestSql, [precisionDigestId, precisionSqlInput.projectId, precisionSqlInput.goalId, precisionSqlInput.episodeId, "[]", JSON.stringify(precisionSqlInput.metrics), JSON.stringify(precisionSqlInput.sourceRefs), improvementDigestContentHash(precisionSqlInput)]);
     await expect(readImprovementDigest(pool, reader(projectId), precisionDigestId)).resolves.toMatchObject({ contentHash: improvementDigestContentHash(precisionSqlInput) });

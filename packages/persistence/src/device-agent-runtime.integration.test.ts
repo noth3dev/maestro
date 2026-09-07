@@ -13,7 +13,6 @@ import { signDeviceGrantEnvelope, type UnsignedDeviceGrantEnvelope } from "@maes
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
 const { privateKey } = generateKeyPairSync("ed25519");
-const issuerPublicKey = generateKeyPairSync("ed25519").publicKey;
 const scope: DeviceGrantScope = { actionTypes: ["project.file.read"], projectPaths: ["/tmp/device-project"], applications: ["filesystem"], dataScope: ["/tmp/device-project/README.md"], networkScope: ["none"] };
 
 describeDatabase("device agent durable command authority with PostgreSQL", () => {

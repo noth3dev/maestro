@@ -11,6 +11,7 @@ Maestro uses **npm workspaces** to manage packages and applications:
 ```text
 ├── apps/
 │   ├── control-plane/     # Fastify 5 REST & SSE Backend Server
+│   ├── model-gateway/     # Separate provider SDK and credential process
 │   ├── cli/               # Maestro Command Line Interface (CLI)
 │   ├── secretary/         # Next.js Secretary Office Dashboard
 │   └── discord/           # Out-of-band Discord Incident Daemon
@@ -20,7 +21,10 @@ Maestro uses **npm workspaces** to manage packages and applications:
 │   ├── persistence/       # PostgreSQL 17 / Drizzle ORM layer & migrations
 │   ├── authority/         # Security matrix & AuthorizedEffectExecutor
 │   ├── evidence/          # SHA-256 evidence bundle generation & verification
-│   ├── prime-adapter/     # Prime Agent SDK wrapper & domain ports
+│   ├── agent-runtime/     # Maestro-owned provider-neutral runtime and tool loop
+│   ├── model-provider-openai/ # OpenAI API-key provider adapter
+│   ├── model-provider-anthropic/ # Anthropic API-key provider adapter
+│   ├── prime-adapter/     # Legacy Prime Agent SDK wrapper & domain ports
 │   ├── git-adapter/       # Git worktree, branch & commit executor
 │   └── api-client/        # Type-safe API client library
 ```
@@ -96,6 +100,29 @@ node apps/cli/dist/main.js report get <goalId>
 ```
 
 ---
+
+
+### Native model conversations
+
+Run the model gateway as a separate process. Provider SDKs and API keys belong only in that process:
+
+```bash
+MAESTRO_MODEL_GATEWAY_TOKEN=<random-secret> \
+OPENAI_API_KEY=<key> \
+npm --workspace @maestro/model-gateway start
+```
+
+Configure the Control Plane with the same gateway token and set an exact model in the CLI:
+
+```bash
+export MAESTRO_MODEL_GATEWAY_TOKEN=<random-secret>
+export MAESTRO_MODEL=openai/gpt-5
+maestro models list
+maestro conversation create --project-id <project-uuid> --goal-id <goal-uuid> --model openai/gpt-5
+maestro conversation turn --conversation-id <conversation-uuid> --project-id <project-uuid> --text "status?"
+```
+
+The TUI uses the selected project and Goal and sends free text to the same authenticated conversation API. It does not persist bearer tokens, provider keys, or gateway credentials in its workspace session.
 
 ## 5. Provisioning project access
 

@@ -20,6 +20,9 @@ describe("parseConfig", () => {
       leaseOwnerId: "local-control-plane",
       reconcilerLeaseDurationMs: 30_000,
       shutdownDrainTimeoutMs: 5_000,
+      modelGatewayUrl: "http://127.0.0.1:4321",
+      modelGatewayOperatorId: "local-operator",
+      modelAccountRefs: { openai: "openai-local-operator", anthropic: "anthropic-local-operator" },
     });
   });
 
@@ -112,11 +115,20 @@ describe("parseConfig", () => {
     // never leak into the returned config, regardless of its value.
     expect(withCredentials).toEqual(withoutCredentials);
     expect(Object.keys(withCredentials).sort()).toEqual([
-      "actorId", "databaseUrl", "evidenceDir", "host", "leaseOwnerId", "port", "primeAgentVersion", "reconcilerLeaseDurationMs", "shutdownDrainTimeoutMs", "worktreeRoot",
+      "actorId", "databaseUrl", "evidenceDir", "host", "leaseOwnerId", "modelAccountRefs", "modelGatewayOperatorId", "modelGatewayUrl", "port", "primeAgentVersion", "reconcilerLeaseDurationMs", "shutdownDrainTimeoutMs", "worktreeRoot",
     ]);
     const serialized = JSON.stringify(withCredentials);
     for (const secret of Object.values(providerCredentialMetronomes)) {
       expect(serialized).not.toContain(secret);
     }
   });
+
+  it("configures opaque gateway bindings without returning the gateway token in redacted output", () => {
+    const config = parseConfig({ ...required, MAESTRO_MODEL_GATEWAY_TOKEN: "gateway-secret", MAESTRO_MODEL_GATEWAY_OPERATOR_ID: "operator-a", MAESTRO_MODEL_ACCOUNT_REFS: "openai=acct-openai,anthropic=acct-anthropic" });
+    expect(config.modelGatewayToken).toBe("gateway-secret");
+    expect(config.modelAccountRefs).toEqual({ openai: "acct-openai", anthropic: "acct-anthropic" });
+    expect(redactConfig(config)).not.toHaveProperty("modelGatewayToken");
+    expect(JSON.stringify(redactConfig(config))).not.toContain("gateway-secret");
+  });
+
 });

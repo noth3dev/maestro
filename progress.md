@@ -2249,3 +2249,31 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   explicit unavailable approvals, and session recovery banner. PostgreSQL, real-process, and
   Prime Agent acceptance remain environment-gated and were not claimed.
 - Feature branch is clean at `9d1ca7b`; recent commits are Conventional Commits.
+
+
+## 2026-09-07 — Prime Agent/model replacement audit
+
+- Classified the requested change as **architectural** because it changes the execution-kernel/provider boundary and the model authorization contract. No implementation was started pending design approval.
+- Confirmed the current model-loading path: `packages/prime-adapter/src/execution-kernel.ts:365-379` calls `createAgentSession` without a model override; Prime Agent therefore resolves the model from its registry/settings/authentication path. The adapter can read the resulting identity at `:265-269`, but does not choose it.
+- Confirmed the policy gap: `packages/domain/src/mission-bundle.ts:16,69-70` requires non-empty `approvedModels`, while `packages/persistence/src/worker.ts:209-216` forwards only `allowedTools` and `allowedSkills` to `SpawnRequest`. `grep` found no production consumer of `approvedModels` outside validation/domain code. A Mission Bundle can therefore approve one model while the provider selects another configured/default model.
+- Confirmed provider choices in the pinned Prime Agent dependency: ChatGPT subscription uses Prime Agent's `openai-codex` OAuth/backend path; OpenAI API key uses `openai`; Claude subscription uses `anthropic` OAuth; Claude API key uses `anthropic`; Prime Inference is a separate OpenAI-compatible endpoint. These credentials must remain in the provider boundary and must not be copied into the Control Plane or TUI.
+- Recommended direction: two explicit seams—runtime/kernel selection plus model-provider selection—with direct OpenAI/Claude support introduced first as proposal-only controller capabilities. Prime Agent remains the current worker kernel until lifecycle parity is proven.
+
+
+## 2026-09-07 — Native backend independent adversarial review
+
+- A read-only reviewer found the native design directionally safe but not implementation-ready. The highest-risk gaps are missing conversation endpoint/session/idempotency contracts, executable tool-call/turn/event contracts, host-side delegated authority, child-agent grant semantics, complete model-policy propagation, and durable invocation/recovery bindings.
+- The reviewer also confirmed that `ExecutionKernelPort` currently has no tool dispatch method and that Prime-specific child behavior cannot be copied as the provider-neutral contract. Native Maestro must own this behavior explicitly.
+- Subscription-specific review remains in progress. No production code was changed; implementation is gated on closing these design items in the plan.
+
+
+## 2026-09-07 — Native model conversation vertical slice
+
+- Added provider-neutral conversation/model contracts and stable API error codes.
+- Added durable PostgreSQL tables for conversations, turns, and replayable conversation event cursors in migration `0064_native_agent_runtime.sql`.
+- Composed the authenticated Control Plane model catalog, conversation create/get/turn/cancel routes, and conversation SSE replay route.
+- Composed `createPostgresConversationService` with exact model admission, gateway binding, Maestro-native runtime execution, bounded text handling, per-turn optimistic claim, durable result recording, and truthful unknown outcomes.
+- Added API-client methods and CLI commands: `models list`, `conversation create|get|turn|cancel`.
+- TUI free text now uses the selected project and Goal, an exact `MAESTRO_MODEL`, and the authenticated conversation API. Session files persist only non-secret conversation/model metadata.
+- Added gateway configuration documentation and redaction coverage. The gateway remains a separately started process; provider keys stay there.
+- Fresh verification: `npm run check` passed with 95 files passed, 51 skipped; 587 tests passed, 360 skipped; 0 failed. Gateway `/healthz` process smoke returned HTTP 200. PostgreSQL integration and real provider calls remain environment-gated.

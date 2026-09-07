@@ -13,6 +13,13 @@ import {
   GoalQuerySchema,
   GoalListSchema,
   ProjectListSchema,
+  ConversationSchema,
+  CreateConversationInputSchema,
+  ConversationTurnInputSchema,
+  ConversationTurnResultSchema,
+  ConversationEventQuerySchema,
+  ConversationEventSchema,
+  ModelCatalogEntrySchema,
   GoalBudgetSummarySchema,
   GoalResultSchema,
   CriticalActionInputSchema,
@@ -77,6 +84,13 @@ import {
   type GoalQuery,
   type GoalList,
   type ProjectList,
+  type Conversation,
+  type CreateConversationInput,
+  type ConversationTurnInput,
+  type ConversationTurnResult,
+  type ConversationEvent,
+  type ConversationEventQuery,
+  type ModelCatalogEntry,
   type GoalBudgetSummary,
   type GoalResult,
   type CriticalActionInput,
@@ -145,6 +159,12 @@ export interface ApiClient {
   launchTaskContract(contractId: string, projectId: string, commandId?: string): Promise<TaskContract>;
   listGoals(projectId: string): Promise<GoalList>;
   listProjects(): Promise<ProjectList>;
+  listModels(): Promise<readonly ModelCatalogEntry[]>;
+  createConversation(input: CreateConversationInput): Promise<Conversation>;
+  getConversation(conversationId: string, query: GoalQuery): Promise<Conversation>;
+  sendConversationTurn(conversationId: string, input: ConversationTurnInput, options?: { signal?: AbortSignal }): Promise<ConversationTurnResult>;
+  cancelConversation(conversationId: string, query: GoalQuery): Promise<Conversation>;
+  streamConversationEvents(conversationId: string, query: ConversationEventQuery, options?: { signal?: AbortSignal }): AsyncIterable<ConversationEvent>;
   provisionProjectAccess(input: ProjectAccessProvisionInput): Promise<ProjectAccessProvisionResult>;
   getGoal(goalId: string, query: GoalQuery): Promise<GoalResult>;
   transitionGoal(goalId: string, input: TransitionGoalInput, commandId: string): Promise<GoalResult>;
@@ -236,6 +256,35 @@ async function* readEventStream(fetch: Fetch, base: URL, headers: Record<string,
   }
 }
 
+async function* readConversationEventStream(fetch: Fetch, base: URL, headers: Record<string, string>, conversationId: string, query: ConversationEventQuery, signal?: AbortSignal): AsyncGenerator<ConversationEvent> {
+  const parsed = ConversationEventQuerySchema.parse(query);
+  const url = new URL(`v1/conversations/${encodeURIComponent(conversationId)}/events/stream`, base);
+  url.search = new URLSearchParams({ projectId: parsed.projectId, after: parsed.after }).toString();
+  let response: Response;
+  try { response = await fetch(url.href, { headers, redirect: "error", ...(signal === undefined ? {} : { signal }) }); }
+  catch { throw new Error("Control plane conversation stream failed"); }
+  if (!response.ok) throw new Error(`Control plane conversation stream returned HTTP ${response.status}`);
+  if (response.body === null) throw new Error("Control plane conversation stream returned no body");
+  const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = "";
+  try {
+    while (true) {
+      const chunk = await reader.read(); buffer += decoder.decode(chunk.value, { stream: !chunk.done });
+      const records = buffer.split(/\r?\n\r?\n/); buffer = records.pop() ?? "";
+      for (const record of records) {
+        if (record.match(/^event:\s*(.+)$/m)?.[1] !== "conversation-event") continue;
+        const data = record.match(/^data:\s*(.+)$/m)?.[1]; if (data !== undefined) yield ConversationEventSchema.parse(JSON.parse(data));
+      }
+      if (chunk.done) break;
+    }
+    if (buffer.trim() !== "") {
+      if (buffer.match(/^event:\s*(.+)$/m)?.[1] === "conversation-event") {
+        const data = buffer.match(/^data:\s*(.+)$/m)?.[1];
+        if (data !== undefined) yield ConversationEventSchema.parse(JSON.parse(data));
+      }
+    }
+  } finally { await reader.cancel().catch(() => undefined); }
+}
+
 export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, timeoutMs = 30_000, signal }: { baseUrl: string; token: string; fetch?: Fetch; timeoutMs?: number; signal?: AbortSignal }): ApiClient {
   const base = new URL(baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
   const loopback = base.hostname === "localhost" || base.hostname === "127.0.0.1" || base.hostname === "::1";
@@ -319,6 +368,29 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
     },
     listProjects() {
       return request("v1/projects", { headers }, ProjectListSchema);
+    },
+    listModels() {
+      return request("v1/models", { headers }, { parse(body: unknown) {
+        if (!Array.isArray(body)) throw new Error("Control plane returned malformed model catalog");
+        return body.map((item) => ModelCatalogEntrySchema.parse(item));
+      } });
+    },
+    createConversation(input) {
+      return request("v1/conversations", { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(CreateConversationInputSchema.parse(input)) }, ConversationSchema);
+    },
+    getConversation(conversationId, query) {
+      const parsed = GoalQuerySchema.parse(query);
+      return request(`v1/conversations/${encodeURIComponent(UuidSchema.parse(conversationId))}?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, ConversationSchema);
+    },
+    sendConversationTurn(conversationId, input, options) {
+      return request(`v1/conversations/${encodeURIComponent(UuidSchema.parse(conversationId))}/turns`, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(ConversationTurnInputSchema.parse(input)), ...(options?.signal === undefined ? {} : { signal: options.signal }) }, ConversationTurnResultSchema);
+    },
+    cancelConversation(conversationId, query) {
+      const parsed = GoalQuerySchema.parse(query);
+      return request(`v1/conversations/${encodeURIComponent(UuidSchema.parse(conversationId))}/cancel`, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(parsed) }, ConversationSchema);
+    },
+    streamConversationEvents(conversationId, query, options) {
+      return readConversationEventStream(fetch, base, headers, UuidSchema.parse(conversationId), query, options?.signal);
     },
     provisionProjectAccess(input) {
       return request("v1/admin/project-access", {

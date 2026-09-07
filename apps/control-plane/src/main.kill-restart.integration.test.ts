@@ -303,7 +303,6 @@ describe("control-plane real process kill-and-restart", () => {
           childB.once("exit", () => resolve());
         });
         timings.totalMs = Date.now() - started;
-        // eslint-disable-next-line no-console
         console.log("kill-restart timings (ms):", timings);
       }
     },
