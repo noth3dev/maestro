@@ -2437,3 +2437,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Deleted `packages/prime-adapter`; removed workspace/project refs and regenerated the lockfile. No source or dependency reference remains.
 - Focused post-deletion tests: **50/50**; forced build passed.
 - Next: exercise a real Control Plane + Model Gateway process with a fake provider, prove native Worker admission end to end, then return to remaining PostgreSQL Phase 1 failures.
+
+
+## 2026-09-08 — Native HTTP acceptance
+
+- Real loopback Model Gateway HTTP server + `createModelGatewayClient` + native execution kernel passed **1/1** with a fake provider and in-memory gateway credential store.
+- This is process-boundary evidence for the gateway path; PostgreSQL worker lifecycle evidence remains separately covered by the 35/35 Worker suite.

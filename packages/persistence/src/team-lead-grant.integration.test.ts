@@ -99,7 +99,7 @@ describeDatabase("Team-lead grants and helper workers with PostgreSQL", () => {
     await createMissionBundle(pool, { councilId: resolved.councilId, departmentId: "product", itemId: "exec-1", substance: bundleSubstance() }, proof, headContext("product"));
     const kernel = fakeKernel();
     const worker = await spawnWorker(pool, kernel, { councilId: resolved.councilId, departmentId: "product", planVersion: plan.version, itemId: "exec-1" }, proof, headContext("product"));
-    return { proof, council: resolved, plan, worker, kernel };
+    return { proof, council: resolved, plan, worker, kernel, projectId };
   }
 
   beforeAll(async () => {
@@ -121,10 +121,10 @@ describeDatabase("Team-lead grants and helper workers with PostgreSQL", () => {
   });
 
   it("passes an explicit parent-scoped native admission and child prompt to helper spawn", async () => {
-    const { proof, worker, kernel } = await setupWorker();
+    const { proof, plan, worker, kernel, projectId } = await setupWorker();
     const grant = await grantTeamLead(pool, worker.workerId, grantSubstance({ maxHelpers: 1 }), proof, headContext("product"));
     const admission: ExecutionAdmission = {
-      context: { operatorId: "head:product", projectId: "project", goalId: proof.goalId, missionBundleId: worker.bundleContentHash, policyVersion: "1", fencingToken: proof.fencingToken },
+      context: { operatorId: "head:product", projectId, goalId: proof.goalId, missionBundleId: worker.bundleContentHash, policyVersion: `${plan.version}:${worker.bundleContentHash}`, fencingToken: proof.fencingToken },
       grant: { grantId: "helper-grant", parentGrantId: `worker:${worker.workerId}`, allowedTools: ["write"], allowedSkills: ["implementation"], modelPolicy: ["test/model-a"], pathScope: ["packages/product"], outboundDataClasses: ["repository files only"], remaining: { modelTurns: 8, toolCalls: 8, childCalls: 0, outputTokens: 8192, wallTimeMs: 60_000, retryCount: 0 } },
       modelPolicy: ["test/model-a"],
       idempotencyKey: "helper-command-1",
