@@ -23,6 +23,11 @@ describe("workspace read commands", () => {
     expect(discoverWorkspaceProject("/work/acme", undefined)).toEqual({ kind: "unavailable", reason: "No project is attached to this workspace" });
   });
 
+  it("reads authenticated project discovery through the normal read-command path", async () => {
+    const api = client({ listProjects: vi.fn().mockResolvedValue({ projects: [projectId] }) });
+    await expect(executeReadCommand({ client: api, projectId: "" }, { name: "projects", action: "list", options: {} })).resolves.toEqual({ title: "Projects", lines: [`• ${projectId}`] });
+  });
+
   it("auto-attaches the only project visible to the authenticated operator", async () => {
     const listProjects = vi.fn().mockResolvedValue({ projects: [projectId] });
     await expect(discoverWorkspaceProjectFromControlPlane({ workspacePath: "/work/acme", session: undefined, client: { listProjects } })).resolves.toEqual({ kind: "attached", projectId });

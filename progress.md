@@ -2181,3 +2181,15 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added regression coverage for all four routes and invalid version input.
 - Verification: `npm run check` passes (84 files passed, 51 skipped; 548 tests passed,
   360 skipped), `npm run build`, and `git diff --check` pass.
+
+
+## 2026-09-06 — Maestro TUI Goal selection and project read command
+
+- Added local `/goal select --goal-id=...` context selection. The TUI validates the selected
+  Goal through the authenticated, project-bound `getGoal` API before persisting only the
+  workspace session metadata; it does not mutate durable Goal state.
+- Added `/projects list` to the normal typed read path, while retaining indexed project attach
+  for first-run multi-project workspaces.
+- Added session, registry, and read-command regression coverage.
+- Verification: focused tests pass (22 tests), `npm run build` passes, and `git diff --check`
+  passes.

@@ -13,7 +13,7 @@ import { renderApprovalDialog } from "./components/approval-dialog.js";
 import { reconcileTuiSession, type RecoverySummary } from "./recovery.js";
 import { renderRecoveryBanner } from "./components/recovery-banner.js";
 import type { CriticalActionSummary, ConfirmationResult } from "./confirmation.js";
-import { advanceWorkspaceSession, attachWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession, startNewConversationSession, type WorkspaceSession } from "./session.js";
+import { advanceWorkspaceSession, attachWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession, selectWorkspaceGoal, startNewConversationSession, type WorkspaceSession } from "./session.js";
 import { mergeEvents, subscribeToEvents } from "./activity-stream.js";
 import { renderActivityTimeline } from "./components/activity-timeline.js";
 import { renderShell, type TuiShellState } from "./components/shell.js";
@@ -286,12 +286,28 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           } else {
             append(`Command: /session ${parsed.action ?? ""} (unknown session action)`.trim());
           }
+        } else if (parsed.kind === "command" && parsed.name === "goal" && parsed.action === "select") {
+          const requestedGoalId = parsed.options["goal-id"];
+          if (client === undefined || project.kind !== "attached") {
+            append("Goal selection is unavailable until a workspace project is attached.");
+          } else if (typeof requestedGoalId !== "string" || requestedGoalId.trim() === "") {
+            append("Goal selection requires --goal-id.");
+          } else {
+            const selected = await client.getGoal(requestedGoalId, { projectId: project.projectId });
+            if (selected.projectId !== project.projectId) throw new Error("Selected Goal is bound to another project");
+            const current = await loadWorkspaceSession(workspace.cwd);
+            session = selectWorkspaceGoal(workspace.cwd, current ?? session, selected.goalId);
+            await saveWorkspaceSession(session);
+            recovery = reconcileTuiSession(workspace.cwd, session, { goalState: selected.state });
+            append(`Selected Goal: ${selected.goalId} · ${selected.state} · v${selected.version}`);
+            void refreshDashboard();
+          }
         } else if (parsed.kind === "command" && parsed.name === "projects" && parsed.action === "list") {
           if (client === undefined) {
             append("Projects unavailable until the Control Plane is connected.");
           } else {
-            const projects = (await client.listProjects()).projects;
-            append(projects.length === 0 ? "Projects: No projects are available for this operator" : `Projects: ${projects.map((id, index) => `${index + 1}. ${id}`).join(" · ")}`);
+            const readResult = await executeReadCommand({ client, projectId: project.kind === "attached" ? project.projectId : "" }, parsed);
+            append(`${readResult.title}: ${readResult.lines.join(" · ")}`);
           }
         } else if (parsed.kind === "command" && client !== undefined && project.kind === "attached") {
           const action = registry.find(parsed.name)?.actions.find((item) => item.name === parsed.action);
