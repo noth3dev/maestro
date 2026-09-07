@@ -35,7 +35,7 @@ export interface NativeExecutionKernelOptions {
 function requireAdmission(request: SpawnRequest): {
   modelRef: string;
   model: ModelIdentity;
-  accountRef: string;
+  accountRef?: string;
 } {
   if (request.context === undefined || request.grant === undefined || request.modelPolicy === undefined || request.idempotencyKey === undefined) {
     throw new Error("native invocation requires host-owned context, grant, model policy, and idempotency key");
@@ -48,10 +48,8 @@ function requireAdmission(request: SpawnRequest): {
     throw new Error("native invocation grant model policy mismatch");
   }
   const accountRef = request.context.accountRef;
-  if (accountRef === undefined || accountRef.trim() === "") {
-    throw new Error("native invocation requires an account binding");
-  }
-  return { modelRef, model, accountRef };
+  if (accountRef !== undefined && accountRef.trim() === "") throw new Error("native invocation account binding is empty");
+  return { modelRef, model, ...(accountRef === undefined ? {} : { accountRef }) };
 }
 
 function assertBindingMatches(binding: GatewayBinding, model: ModelIdentity, accountRef: string): void {
@@ -76,18 +74,19 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
   async function admitRoot(request: SpawnRequest): Promise<RuntimeRecord> {
     const admission = requireAdmission(request);
     const configuredAccountRef = options.accountRefs[admission.model.provider];
-    if (configuredAccountRef === undefined || configuredAccountRef !== admission.accountRef) {
+    if (configuredAccountRef === undefined || (admission.accountRef !== undefined && configuredAccountRef !== admission.accountRef)) {
       throw new Error("native invocation account binding mismatch");
     }
+    const accountRef = admission.accountRef ?? configuredAccountRef;
     const binding = await options.gateway.admit({
       requestId: request.idempotencyKey!,
       operatorId: options.gatewayOperatorId,
       providerId: admission.model.provider,
       model: admission.model,
-      accountRef: admission.accountRef,
+      accountRef,
       dataPolicyHash: options.dataPolicyHash,
     });
-    assertBindingMatches(binding, admission.model, admission.accountRef);
+    assertBindingMatches(binding, admission.model, accountRef);
     return {
       binding,
       runtime: createMaestroAgentRuntime({ gateway: options.gateway, binding, tools: options.tools, closeGateway: false }),

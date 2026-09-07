@@ -37,7 +37,7 @@ const planSubstance = (): DepartmentPlanSubstance => ({
 });
 const bundleSubstance = (overrides: Partial<MissionBundleSubstance> = {}): MissionBundleSubstance => ({
   role: "scout", profileRef: "profile-1", goalBrief: "assess risk before implementation",
-  approvedModels: ["model-a"], allowedSkills: ["research"], allowedTools: ["read"], allowedPaths: ["packages/product"],
+  approvedModels: ["test/model-a"], allowedSkills: ["research"], allowedTools: ["read"], allowedPaths: ["packages/product"],
   environment: ["node24"], authorityBoundary: ["read-only"], externalServiceBoundary: ["none"], dataBoundary: ["repository files only"],
   costCeiling: "1 USD", timeCeiling: "1 hour", retryCeiling: 1, workerCeiling: 0,
   deliverable: "a risk report", evidenceRequirements: ["citations"], validationCriteria: ["report reviewed"],
@@ -199,6 +199,27 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     // The exact grant, not a widened or narrowed copy.
     expect(kernel.spawnRequests[0]!.capabilities!.allowedTools).toEqual(["read"]);
     expect(kernel.spawnRequests[0]!.capabilities!.allowedSkills).toEqual(["research"]);
+  });
+
+  it("rejects a selected model outside the immutable Mission Bundle allowlist before provider admission", async () => {
+    const { council, plan, proof } = await setupBundle();
+    const kernel = fakeKernel("succeeded");
+    await expect(spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1", modelRef: "test/not-approved" }, proof, headContext("product"))).rejects.toThrow(/model.*allow|model.*approved/i);
+    expect(kernel.spawnedCount).toBe(0);
+  });
+
+  it("passes host-owned native context, exact model policy, grant, and idempotency to the kernel", async () => {
+    const { council, plan, proof, bundle, projectId } = await setupBundle();
+    const kernel = fakeKernel("succeeded");
+    const commandId = randomUUID();
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1", commandId }, proof, headContext("product"));
+    const request = kernel.spawnRequests[0]!;
+    expect(request.modelPolicy).toEqual(["test/model-a"]);
+    expect(request.grant?.allowedTools).toEqual(bundle.substance.allowedTools);
+    expect(request.grant?.allowedSkills).toEqual(bundle.substance.allowedSkills);
+    expect(request.context).toMatchObject({ projectId, goalId: proof.goalId, missionBundleId: bundle.contentHash, fencingToken: proof.fencingToken });
+    expect(request.idempotencyKey).toBe(commandId);
+    expect(worker.status).toBe("spawned");
   });
 
   it("releases the kernel's in-process invocation record exactly once, only after the terminal status is durably committed (Phase 1 re-patch item 2)", async () => {

@@ -50,7 +50,7 @@ const planSubstance = (): DepartmentPlanSubstance => ({
 
 const bundleSubstance = (overrides: Partial<MissionBundleSubstance> = {}): MissionBundleSubstance => ({
   role: "scout", profileRef: "profile-1", goalBrief: "assess risk before implementation",
-  approvedModels: ["model-a"], allowedSkills: ["research"], allowedTools: ["read"], allowedPaths: ["packages/product"],
+  approvedModels: ["test/model-a"], allowedSkills: ["research"], allowedTools: ["read"], allowedPaths: ["packages/product"],
   environment: ["node24"], authorityBoundary: ["read-only"], externalServiceBoundary: ["none"], dataBoundary: ["repository files only"],
   costCeiling: "1 USD", timeCeiling: "1 hour", retryCeiling: 1, workerCeiling: 0,
   deliverable: "a risk report", evidenceRequirements: ["citations"], validationCriteria: ["report reviewed"],

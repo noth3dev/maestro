@@ -101,7 +101,7 @@ describeDatabase("Concertmaster final report with PostgreSQL", () => {
     const plan = await createDepartmentPlan(pool, { councilId: resolved.councilId, departmentId: "product", substance: planSubstance }, proof, headContext("product"));
     const bundleSubstance: MissionBundleSubstance = {
       role: "execution", profileRef: "profile-1", goalBrief: "implement",
-      approvedModels: ["model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
+      approvedModels: ["test/model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
       environment: ["node24"], authorityBoundary: ["write-scoped"], externalServiceBoundary: ["none"], dataBoundary: ["repository files only"],
       costCeiling: "5 USD", timeCeiling: "1 hour", retryCeiling: 1, workerCeiling: 0,
       deliverable: "a change", evidenceRequirements: ["diff"], validationCriteria: ["tests pass"], terminationConditions: ["deadline passed"],
@@ -133,7 +133,7 @@ describeDatabase("Concertmaster final report with PostgreSQL", () => {
   afterAll(async () => { await pool.end(); });
 
   it("reports success with independent validation when the required certification passes cleanly, and blocks it once a challenge opens", async () => {
-    const { goalId, worker, proof } = await setupWorkerWithCommit();
+    const { goalId, worker, proof, evidenceIds } = await setupWorkerWithCommit();
     await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     const report = await generateConcertmasterFinalReport(pool, goalId, proof);
     expect(report.success).toBe(true);
@@ -149,7 +149,7 @@ describeDatabase("Concertmaster final report with PostgreSQL", () => {
   });
 
   it("blocks a report when immutable actual spend exceeds the Goal envelope", async () => {
-    const { goalId, worker, proof } = await setupWorkerWithCommit();
+    const { goalId, worker, proof, evidenceIds } = await setupWorkerWithCommit();
     await reserveGoalBudget(pool, goalId, 100, "bounded test envelope", proof, context("secretary"));
     const costContext = context("cost-meter");
     const first = await recordActualCost(pool, goalId, 101, "provider:test", proof, costContext);
@@ -180,7 +180,7 @@ describeDatabase("Concertmaster final report with PostgreSQL", () => {
   });
 
   it("includes real Git integration evidence in whatChanged and durably links a real evidence bundle", async () => {
-    const { goalId, worker, proof } = await setupWorkerWithCommit();
+    const { goalId, worker, proof, evidenceIds } = await setupWorkerWithCommit();
     await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     const report = await generateConcertmasterFinalReport(pool, goalId, proof);
     expect(report.whatChanged).toContain("mission: implement");
@@ -207,7 +207,7 @@ describeDatabase("Concertmaster final report with PostgreSQL", () => {
   });
 
   it("rejects the final report when a supplied content reader detects a corrupted evidence artifact hash (Phase 1 re-patch item 6)", async () => {
-    const { goalId, worker, proof } = await setupWorkerWithCommit();
+    const { goalId, worker, proof, evidenceIds } = await setupWorkerWithCommit();
     const store = new FileEvidenceStore(await mkdtemp(join(tmpdir(), "maestro-concertmaster-evidence-")));
     const captured = await store.capture({
       context: { correlationId: randomUUID(), commandId: randomUUID(), projectId: randomUUID(), goalId, actorId: "test" },

@@ -67,7 +67,7 @@ describeDatabase("Metronome challenges with PostgreSQL", () => {
     const plan = await createDepartmentPlan(pool, { councilId: resolved.councilId, departmentId: "product", substance: planSubstance() }, proof, headContext("product"));
     const bundleSubstance = {
       role: "execution" as const, profileRef: "profile-1", goalBrief: "implement",
-      approvedModels: ["model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
+      approvedModels: ["test/model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
       environment: ["node24"], authorityBoundary: ["write-scoped"], externalServiceBoundary: ["none"], dataBoundary: ["repository files only"],
       costCeiling: "5 USD", timeCeiling: "1 hour", retryCeiling: 1, workerCeiling: 0,
       deliverable: "a change", evidenceRequirements: ["diff"], validationCriteria: ["tests pass"],

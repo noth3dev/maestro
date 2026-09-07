@@ -722,3 +722,12 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added four focused tests covering exact model admission, opaque observation/status routing, unscoped rejection, account mismatch rejection, and shared-gateway close behavior.
 - Focused native/model-gateway verification passed **7 files / 33 tests**; `npm run build` passed.
 - This is only the composition seam. Production `main.ts` still uses Prime until Tasks C–G propagate explicit grants and remove the dependency.
+
+
+## 2026-09-08 — Native Worker admission Task C slice
+
+- Mission Bundle validation now rejects unqualified approved models and requires `provider/model-id`. Persistence integration fixtures were migrated from `model-a` to `test/model-a`.
+- `SpawnWorkerInput` accepts an optional host-selected `model`; Worker admission deterministically selects the sole approved model when omitted, rejects an unapproved/ambiguous selection before provider spawn, and passes host-owned context, exact model policy, capability grant, time/retry limits, and command idempotency to `ExecutionKernelPort.spawn`.
+- Native router account resolution remains host-owned: an omitted request account uses the configured provider account; a caller-supplied mismatch is rejected before gateway admission.
+- Focused isolated PostgreSQL Worker lifecycle verification on `maestro-native-cutover-postgres:55473` passed **35/35**. Domain/contracts/native-router focused tests passed **30/30** and build passed.
+- Remaining Task C work: explicit admissions for Head, semantic review, Encore, and team-lead helper paths; no Prime production cutover yet.

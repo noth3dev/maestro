@@ -190,7 +190,7 @@ describeDatabase("Phase 4 work-sequence step 8: Discord incident through Task Co
 
     const bundleSubstance: MissionBundleSubstance = {
       role: "execution", profileRef: "profile-1", goalBrief: "fix and commit the change",
-      approvedModels: ["model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/engineering"],
+      approvedModels: ["test/model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/engineering"],
       environment: ["node24"], authorityBoundary: ["write-scoped"], externalServiceBoundary: ["none"], dataBoundary: ["repository files only"],
       costCeiling: "100 USD", timeCeiling: "1 day", retryCeiling: 1, workerCeiling: 0,
       deliverable: "an implemented, committed fix", evidenceRequirements: ["diff"], validationCriteria: ["tests pass"],

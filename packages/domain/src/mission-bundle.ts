@@ -68,6 +68,9 @@ export function assertValidMissionBundleSubstance(value: unknown): asserts value
   text(value.goalBrief, "Mission bundle goalBrief");
   texts(value.approvedModels, "Mission bundle approvedModels");
   if ((value.approvedModels as readonly string[]).length === 0) throw new InvalidMissionBundleError("Mission bundle requires at least one approved model");
+  if (!(value.approvedModels as readonly string[]).every((model) => /^[^/\s]+\/[^/\s]+$/.test(model))) {
+    throw new InvalidMissionBundleError("Mission bundle approvedModels must use provider/model-id references");
+  }
   texts(value.allowedSkills, "Mission bundle allowedSkills");
   texts(value.allowedTools, "Mission bundle allowedTools");
   texts(value.allowedPaths, "Mission bundle allowedPaths");

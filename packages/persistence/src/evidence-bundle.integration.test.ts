@@ -141,7 +141,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     // 6. Mission Bundle: least-privilege capability grant for the execution item.
     const bundleSubstance: MissionBundleSubstance = {
       role: "execution", profileRef: "profile-1", goalBrief: "implement and commit the change",
-      approvedModels: ["model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
+      approvedModels: ["test/model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
       environment: ["node24"], authorityBoundary: ["write-scoped"], externalServiceBoundary: ["none"], dataBoundary: ["repository files only"],
       costCeiling: "100 USD", timeCeiling: "1 day", retryCeiling: 1, workerCeiling: 0,
       deliverable: "an implemented, committed change", evidenceRequirements: ["diff"], validationCriteria: ["tests pass"],
