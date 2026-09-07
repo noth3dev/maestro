@@ -2567,3 +2567,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Fresh post-edit verification: `npm run build` passed, `npm run lint` passed, `npm test -- apps/cli/src/main.test.ts` passed (21/21), `git diff --check` passed, and the production no-Prime scan returned no matches (expected grep exit 1).
 - `main` is clean and tracks `origin/main`. Protected worktrees remain untouched. The completed full-suite container `maestro-full-4fe40a8` was removed after its 162/162-file, 1066/1066-test result was recorded.
 - The next blocker is product/security scope for host tools; no permissions or tool registration will be invented from documentation alone.
+
+
+## 2026-09-08 — Post-push no-database regression sweep
+
+- Fresh `npm test` on pushed `eecb972` passed **105/162 files and 677/1058 tests**; 57 files and 381 tests were correctly skipped because no `MAESTRO_TEST_DATABASE_URL` was supplied.
+- This complements the earlier fresh disposable-PostgreSQL result of **162/162 files and 1066/1066 tests**, with the database-gated suites enabled.
