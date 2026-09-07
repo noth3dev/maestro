@@ -2535,3 +2535,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Proves: only non-terminal Goals are scanned, terminal Goals are never touched, no fabricated findings on a routine Goal, and a real Goal lease acquired on one pass is correctly released before the next pass needs it again.
 - No product defect found -- one test fixture mistake (missing `bootstrapPermanentOrganization`) caught and fixed first. Full detail in `findings.md` same date.
 - Evidence: new test 1/1; full clean single-worker real-PostgreSQL rerun in progress.
+
+
+## 2026-09-08 — Real Encore Council acceptance coverage
+
+- Added `apps/control-plane/src/encore-acceptance.integration.test.ts` to exercise two Encore reviewer admissions through a real Control Plane HTTP server, real loopback Model Gateway HTTP server, and disposable PostgreSQL.
+- Verified the real Goal lifecycle, project membership/`concertmaster` authorization, two reviewer judgments, honest `sameModelOnly: true` synthesis with one configured model, and two durable native binding records without credential leakage.
+- No product defect found. The test initially exposed only fixture mistakes (missing role and unverifiable raw active Goal); both were corrected.
+- Evidence: build, lint, and focused acceptance regression all pass; full clean single-worker PostgreSQL rerun pending.
