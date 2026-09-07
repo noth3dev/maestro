@@ -1,4 +1,11 @@
-import type { ExecutionBindingEvidence, ExecutionRef, ExecutionAdmission, InvocationRef, ModelIdentity } from "@maestro/domain";
+import type {
+  ExecutionBindingEvidence,
+  ExecutionRef,
+  ExecutionAdmission,
+  ExecutionKernelPort,
+  InvocationRef,
+  ModelIdentity,
+} from "@maestro/domain";
 import type { Pool } from "pg";
 
 export type NativeExecutionAdmissionKind = "conversation" | "worker" | "head" | "semantic_review" | "encore_reviewer" | "team_lead_helper";
@@ -119,4 +126,34 @@ export async function recordNativeExecutionBinding(pool: Pool, input: NativeExec
   } finally {
     client.release();
   }
+}
+
+export interface NativeExecutionBindingCapability {
+  readonly execution: ExecutionRef;
+  readonly invocation: InvocationRef;
+  readonly workerId?: string;
+  readonly goalId: string;
+  readonly projectId: string;
+  readonly admissionKind: NativeExecutionAdmissionKind;
+  readonly admission?: ExecutionAdmission;
+}
+
+/**
+ * Shared bridge for native call sites. Legacy injected kernels intentionally
+ * skip identity evidence; native kernels expose the optional binding method and
+ * therefore fail closed if durable identity recording fails.
+ */
+export async function recordNativeExecutionBindingIfSupported(
+  pool: Pool,
+  kernel: ExecutionKernelPort,
+  input: NativeExecutionBindingCapability,
+): Promise<boolean> {
+  if (input.admission === undefined || kernel.getExecutionBinding === undefined) return false;
+  await recordNativeExecutionBinding(pool, {
+    ...input,
+    admission: input.admission,
+    actualModel: await kernel.getModelIdentity(input.execution),
+    binding: await kernel.getExecutionBinding(input.execution),
+  });
+  return true;
 }

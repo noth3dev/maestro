@@ -11,6 +11,7 @@ import {
   markHeadParticipationActive,
   assertProjectRole,
   type OperatorContext,
+  recordNativeExecutionBindingIfSupported,
 } from "@maestro/persistence";
 import type { Pool } from "pg";
 
@@ -103,11 +104,12 @@ export function createHeadParticipationService(deps: HeadParticipationServiceDep
         const shouldSpawn = await markHeadActivationSpawnStarted(deps.pool, goalId, reserved.departmentId, _commandId, proof);
         if (!shouldSpawn) return toWire(reserved);
         let spawned: import("@maestro/domain").SpawnedInvocation;
+        let admission: ExecutionAdmission | undefined;
         try {
           // Keep the successful provider result if the post-call heartbeat
           // fails; the result is needed to bind opaque ownership before any
           // fail-closed cancellation attempt.
-          const admission = deps.createAdmission?.({ goalId, projectId: input.projectId, departmentId: reserved.departmentId, actorId: operator.operatorId, sessionRef: `operator:${operator.operatorId}`, commandId: _commandId, fencingToken: proof.fencingToken });
+          admission = deps.createAdmission?.({ goalId, projectId: input.projectId, departmentId: reserved.departmentId, actorId: operator.operatorId, sessionRef: `operator:${operator.operatorId}`, commandId: _commandId, fencingToken: proof.fencingToken });
            spawned = await runProviderCall(() => deps.kernel.spawn({ name: `head:${reserved.departmentId}:${randomUUID()}`, ...(admission ?? {}) }), false);
         } catch (error) {
           await resetHeadActivationAfterSpawnFailure(deps.pool, goalId, reserved.departmentId, _commandId, proof).catch(() => {});
@@ -115,6 +117,14 @@ export function createHeadParticipationService(deps: HeadParticipationServiceDep
         }
         try {
           await renew();
+          await recordNativeExecutionBindingIfSupported(deps.pool, deps.kernel, {
+            execution: spawned.execution,
+            invocation: spawned.invocation,
+            goalId,
+            projectId: input.projectId,
+            admissionKind: "head",
+            ...(admission === undefined ? {} : { admission }),
+          });
           const bound = await bindHeadActivationInvocation(deps.pool, goalId, reserved.departmentId, _commandId, spawned.execution, spawned.invocation);
           if (!bound) throw new Error("Head activation provider binding was not accepted");
         } catch (error) {

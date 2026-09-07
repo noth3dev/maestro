@@ -13,6 +13,7 @@ import { StaleGoalLeaseError, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
 import { assertCurrentWorkerLease, bindWorkerInvocation, cancelUnboundWorkerAfterBindingFailure, markUnboundWorkerUnknown, WorkerNotFoundError } from "./worker.js";
 import { readMissionBundle } from "./mission-bundle.js";
+import { recordNativeExecutionBindingIfSupported } from "./native-execution-binding.js";
 
 export class TeamLeadGrantError extends Error {}
 export class TeamLeadGrantNotFoundError extends TeamLeadGrantError {}
@@ -239,6 +240,8 @@ export async function spawnHelperWorker(pool: Pool, kernel: ExecutionKernelPort,
   let helperName: string | undefined;
   let parentWorkerId: string | undefined;
   let helperPrompt: string | undefined;
+  let helperGoalId: string | undefined;
+  let helperProjectId: string | undefined;
   const client = await pool.connect(); let open = false;
   try {
     await client.query("BEGIN"); open = true;
@@ -249,6 +252,8 @@ export async function spawnHelperWorker(pool: Pool, kernel: ExecutionKernelPort,
     const ownerLeaseExpiresAt = await lockGoalLease(client, proof);
     await assertAuthorizedHeadForDepartment(pool, grant.council_id, grant.department_id, context, client);
     const council = await readHeadCouncil(pool, grant.council_id);
+    helperGoalId = council.goalId;
+    helperProjectId = council.snapshot.projectId;
     const teamLead = await client.query<WorkerIdentityRow & { worker_id: string }>(
       "SELECT worker_id, council_id, department_id, plan_version, item_id, execution_ref, status, parent_worker_id FROM workers WHERE worker_id = $1 FOR UPDATE",
       [grant.worker_id],
@@ -306,6 +311,15 @@ export async function spawnHelperWorker(pool: Pool, kernel: ExecutionKernelPort,
       parent: parentExecutionRef,
       prompt: helperPrompt ?? "Perform the bounded helper work and report evidence.",
       ...(admission ?? {}),
+    });
+    await recordNativeExecutionBindingIfSupported(pool, kernel, {
+      execution: spawned.execution,
+      invocation: spawned.invocation,
+      workerId,
+      goalId: helperGoalId!,
+      projectId: helperProjectId!,
+      admissionKind: "team_lead_helper",
+      ...(admission === undefined ? {} : { admission }),
     });
   } catch (error) {
     const unknown = await markUnboundWorkerUnknown(pool, workerId, proof).catch(() => undefined);

@@ -16,6 +16,7 @@ import {
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
 import { withGoalAuthority } from "./goal-authority.js";
+import { recordNativeExecutionBindingIfSupported } from "./native-execution-binding.js";
 
 export class EncoreCouncilError extends Error {}
 
@@ -231,7 +232,7 @@ export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernel
 
   const roundId = request.commandId ?? randomUUID();
   const prepared = await withGoalAuthority(pool, request.proof, 43, async (client) => {
-    const goal = await client.query("SELECT 1 FROM goals WHERE goal_id = $1", [request.goalId]);
+    const goal = await client.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [request.goalId]);
     if (goal.rowCount !== 1) throw new EncoreCouncilError("Goal not found for Encore Council review");
     if (request.commandId !== undefined) {
       const prior = await readEncoreResult(client, roundId);
@@ -257,6 +258,7 @@ export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernel
     // Provider fan-out starts only after withGoalAuthority commits.
     return {
       roundId,
+      projectId: goal.rows[0]!.project_id,
       triggerReasons,
       prompt,
       requestedEvidenceIds: new Set(request.evidenceIds.map((evidenceId) => evidenceId.trim())),
@@ -272,7 +274,16 @@ export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernel
     // fresh, parentless execution and no database transaction is open here.
     for (let index = 0; index < request.reviewerCount; index += 1) {
       const admission = typeof request.admission === "function" ? request.admission(index) : request.admission;
-      spawnedReviewers.push(await kernel.spawn({ name: `encore-review:${randomUUID()}:${index}`, cwd: process.cwd(), ...(admission ?? {}) }));
+      const spawned = await kernel.spawn({ name: `encore-review:${randomUUID()}:${index}`, cwd: process.cwd(), ...(admission ?? {}) });
+      spawnedReviewers.push(spawned);
+      await recordNativeExecutionBindingIfSupported(pool, kernel, {
+        execution: spawned.execution,
+        invocation: spawned.invocation,
+        goalId: request.goalId,
+        projectId: prepared.projectId,
+        admissionKind: "encore_reviewer",
+        ...(admission === undefined ? {} : { admission }),
+      });
     }
 
     for (const spawned of spawnedReviewers) {
