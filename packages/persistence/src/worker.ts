@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   assertValidWorkerTransition,
+  type ExecutionAdmission,
   type ExecutionKernelPort,
   type ExecutionRef,
   type InvocationRef,
@@ -11,6 +12,7 @@ import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
 import { readMissionBundle } from "./mission-bundle.js";
+import { recordNativeExecutionBinding } from "./native-execution-binding.js";
 
 export class WorkerError extends Error {}
 export class WorkerNotFoundError extends WorkerError {}
@@ -228,13 +230,7 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
     await client.query("COMMIT"); open = false;
     let spawned: import("@maestro/domain").SpawnedInvocation;
     try {
-      const providerRequest = {
-        name: `${bundle.substance.role}:${request.itemId}:${nextAttempt}`,
-        prompt: bundle.substance.goalBrief,
-        ...(request.cwd === undefined ? {} : { cwd: request.cwd }),
-        // Keep the legacy capability projection for injected kernels while the
-        // native fields carry the complete host-owned admission contract.
-        capabilities: { allowedTools: bundle.substance.allowedTools, allowedSkills: bundle.substance.allowedSkills },
+      const providerAdmission: ExecutionAdmission = {
         context: {
           operatorId: context.actorId,
           projectId: council.snapshot.projectId,
@@ -262,11 +258,34 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
         modelPolicy: [modelRef],
         idempotencyKey: request.commandId ?? `worker:${workerId}`,
       };
+      const providerRequest = {
+        name: `${bundle.substance.role}:${request.itemId}:${nextAttempt}`,
+        prompt: bundle.substance.goalBrief,
+        ...(request.cwd === undefined ? {} : { cwd: request.cwd }),
+        // Keep the legacy capability projection for injected kernels while the
+        // native fields carry the complete host-owned admission contract.
+        capabilities: { allowedTools: bundle.substance.allowedTools, allowedSkills: bundle.substance.allowedSkills },
+        ...providerAdmission,
+      };
       // The provider call cannot be made atomically with PostgreSQL. Check the
       // live claim immediately before admission; any response is then bound
       // identity-only so a successor can retain the opaque refs after turnover.
       await assertCurrentWorkerLease(pool, workerId, proof);
       spawned = await kernel.spawn(providerRequest);
+      if (kernel.getExecutionBinding !== undefined) {
+        const binding = await kernel.getExecutionBinding(spawned.execution);
+        await recordNativeExecutionBinding(pool, {
+          execution: spawned.execution,
+          invocation: spawned.invocation,
+          workerId,
+          goalId: council.goalId,
+          projectId: council.snapshot.projectId,
+          admissionKind: "worker",
+          admission: providerAdmission,
+          actualModel: await kernel.getModelIdentity(spawned.execution),
+          binding,
+        });
+      }
     } catch (error) {
       // A transport timeout does not prove that the provider created nothing.
       // Keep the durable reservation ambiguous and block automatic retries
