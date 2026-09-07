@@ -2490,3 +2490,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - After fixing `providerTimeoutMs`/`wallTimeMs`, audited the rest of `apps/model-gateway/src/rpc.ts`'s `LimitsSchema` for the same defect class and found two more unclamped domain-derived fields reaching the real wire boundary: `maxToolCalls` (from Mission Bundle `allowedTools.length * 8`, uncapped) and `maxChildCalls` (from Mission Bundle `workerCeiling`, uncapped in `packages/domain/src/mission-bundle.ts`). Extended `limitsFor()`'s defensive clamp to all four bounded fields (`maxModelTurns`, `maxToolCalls`, `maxChildCalls`, `maxOutputTokens`) alongside the two already fixed.
 - Extended the regression test in `packages/agent-runtime/src/agent-runtime.test.ts` to assert every `TurnLimits` field stays within the real schema bounds for a deliberately oversized grant. Full detail in `findings.md` same date.
 - Evidence: agent-runtime 8/8; regression sweep 18 files / 113 tests, 0 failed.
+
+
+## 2026-09-08 — Third real gateway wire-schema defect: unbounded conversation history vs. 128-message wire cap
+
+- Continuing the same wire-schema audit, found that `boundedMessages()` in `packages/agent-runtime/src/agent-runtime.ts` only bounds outgoing turn messages by byte size (64KB), never by array-entry count -- but `apps/model-gateway/src/rpc.ts`'s real `TurnSchema` caps `messages`/`tools` arrays at 128 entries each, independent of byte size. A real conversation with more than 128 short exchanges (a completely ordinary scenario; `apps/control-plane/src/conversation-service.ts` replays the full durable turn history with no row-count limit) would silently and permanently break every subsequent turn with the same opaque `"invalid model turn request"` failure this session's audit keeps finding.
+- Fixed by also capping `boundedMessages()`'s result at 128 entries and slicing the `tools` definitions list to the same cap defensively. Verified the regression test genuinely reproduces the defect (fails without the fix, passes with it).
+- Evidence: agent-runtime 9/9; regression sweep 18 files / 114 tests, 0 failed. Full detail in `findings.md` same date.
