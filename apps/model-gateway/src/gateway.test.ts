@@ -60,6 +60,27 @@ describe("model gateway", () => {
 
 
 describe("managed account login", () => {
+  it("single-flights concurrent idempotent start requests", async () => {
+    const registry = new ProviderRegistry();
+    const credentials = new InMemoryCredentialStore();
+    let starts = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const codex = {
+      startChatGptLogin: async () => { starts += 1; await gate; return { providerId: "openai-codex" as const, loginId: "login-1", authUrl: "https://chatgpt.com/login" }; },
+      loginStatus: async () => ({ loginId: "login-1", state: "pending" as const }), cancelLogin: async () => {},
+    };
+    const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1", codex });
+    const first = gateway.startAccountLogin!({ requestId: "same-request", operatorId: "operator-1", providerId: "openai-codex" });
+    const second = gateway.startAccountLogin!({ requestId: "same-request", operatorId: "operator-1", providerId: "openai-codex" });
+    await Promise.resolve();
+    release();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { providerId: "openai-codex", loginId: "login-1", authUrl: "https://chatgpt.com/login" },
+      { providerId: "openai-codex", loginId: "login-1", authUrl: "https://chatgpt.com/login" },
+    ]);
+    expect(starts).toBe(1);
+  });
   it("binds only metadata after the Codex app-server reports success", async () => {
     const registry = new ProviderRegistry();
     const credentials = new InMemoryCredentialStore();

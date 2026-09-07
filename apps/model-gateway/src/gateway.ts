@@ -26,6 +26,7 @@ export class ModelGateway implements ModelGatewayPort {
   private readonly bindings = new Map<string, InternalBinding>();
   private readonly loginOperators = new Map<string, string>();
   private readonly loginRequests = new Map<string, import("@maestro/agent-runtime").GatewayAccountLoginStartResult>();
+  private readonly loginRequestFlights = new Map<string, Promise<import("@maestro/agent-runtime").GatewayAccountLoginStartResult>>();
   private closed = false;
 
   constructor(private readonly options: GatewayOptions) {}
@@ -46,10 +47,20 @@ export class ModelGateway implements ModelGatewayPort {
     if (request.providerId !== "openai-codex" || this.options.codex === undefined) throw new Error("account login is unavailable");
     const previous = this.loginRequests.get(request.requestId);
     if (previous !== undefined) return previous;
-    const login = await this.options.codex.startChatGptLogin();
-    this.loginOperators.set(login.loginId, request.operatorId);
-    this.loginRequests.set(request.requestId, login);
-    return login;
+    const inFlight = this.loginRequestFlights.get(request.requestId);
+    if (inFlight !== undefined) return inFlight;
+    const flight = (async () => {
+      const login = await this.options.codex!.startChatGptLogin();
+      this.loginOperators.set(login.loginId, request.operatorId);
+      this.loginRequests.set(request.requestId, login);
+      return login;
+    })();
+    this.loginRequestFlights.set(request.requestId, flight);
+    try {
+      return await flight;
+    } finally {
+      if (this.loginRequestFlights.get(request.requestId) === flight) this.loginRequestFlights.delete(request.requestId);
+    }
   }
 
   async accountLoginStatus(request: import("@maestro/agent-runtime").GatewayAccountLoginStatusRequest): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStatusResult> {
