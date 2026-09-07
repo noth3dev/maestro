@@ -1,5 +1,8 @@
 # Phase 2 — Secretary Office Core and Hierarchical Goal Execution
 
+> **Current status (2026-09-07):** This phase describes the hierarchical execution target. Its code-level surface exists, but worker/process usability and native-runtime parity are not accepted. The current worker composition still uses the legacy Prime adapter.
+
+
 ## Outcome
 
 Turn the durable foundation into the complete execution hierarchy for one local software Goal. Concertmaster conducts intake, the Overture Crew produces one Task Contract, the CEO confirms once, only required Heads wake, each Head writes a Department Plan, and bounded Scout and Execution workers deliver isolated Git results.

@@ -1,8 +1,9 @@
 # Maestro Agent Runtime and Model Provider Design
 
-**Date:** 2026-09-07  
-**Status:** Superseded by `2026-09-07-maestro-native-agent-backend-design.md`  
-**Scope:** Natural-language control, swappable model providers, and Prime Agent runtime toggle
+**Date:** 2026-09-07
+**Status:** Superseded by `2026-09-07-maestro-native-agent-backend-design.md`
+> This file is historical design context. Do not implement the `prime-agent on/off` toggle below. Prime removal is a migration gate; current user-facing selection is provider/model based, with the native runtime serving conversations and the legacy adapter limited to workers until cutover.
+**Scope:** Natural-language control, swappable model providers, and Prime Agent runtime toggle (historical)
 
 ## Goal
 

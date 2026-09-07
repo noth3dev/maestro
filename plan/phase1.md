@@ -1,8 +1,11 @@
 # Phase 1 — Technical Foundation and Durable Control Plane
 
+> **Current status (2026-09-07):** This phase is a historical foundation baseline. The conversation path now uses `MaestroAgentRuntime` and `apps/model-gateway`; Prime-backed worker execution remains a legacy bridge tracked by the native backend migration plan. Phase acceptance still requires the documented operational gates.
+
+
 ## Outcome
 
-Create the clean-slate Maestro foundation on Prime Agent. At the end of this phase, one Goal can exist as durable state; the app shell and CLI can issue the same commands; authority is default-deny; pause, stop, resume, leases, events, evidence, and restart reconciliation work without any production agent hierarchy yet.
+Create the clean-slate Maestro foundation with a provider-neutral execution seam. The original baseline used Prime Agent for execution, but the current conversation path is native; the remaining Prime-backed worker bridge is tracked by the native backend migration. At the end of this phase, one Goal can exist as durable state; the app shell and CLI can issue the same commands; authority is default-deny; pause, stop, resume, leases, events, evidence, and restart reconciliation work without any production agent hierarchy yet.
 
 This phase establishes the technical rules every later phase must use. Later phases may add behavior but may not create a second runtime, database, authority path, event truth, or UI-owned state.
 

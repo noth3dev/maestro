@@ -8,7 +8,7 @@ Maestro는 각 단계의 검증 증거가 완료되어야 다음 단계로 진�
 
 | 단계 | 명칭 | 코드 상태 | 검증 기준 및 운영 승인 게이트 |
 | :--- | :--- | :---: | :--- |
-| **Phase 1** | Technical Foundation & Durable Control Plane | **코드 완료** | Fastify REST/SSE API, PostgreSQL 17 이벤트 소싱, 단조 리스 펜싱 토큰, Prime어댑터 격리 |
+| **Phase 1** | Technical Foundation & Durable Control Plane | **코드 완료** | Fastify REST/SSE API, PostgreSQL 17 이벤트 소싱, 단조 리스 펜싱 토큰, 네이티브 runtime/provider gateway 경계 및 레거시 워커 브리지 격리 |
 | **Phase 2** | Concertmaster Office Core & Hierarchical Execution | **코드 완료** | Overture Crew 접수, Task Contract 불변성, Head Council 봉인 심의, Department Plans, Git 격리 실행 |
 | **Phase 3** | Encore, Certification & First Usable Release | **코드 완료** | Metronome 실시간 이벤트 모니터링, Encore Council 심의, Quality 독립 인증, Concertmaster 리포트 생성, CLI/App Parity |
 | **Phase 4** | Isolated Environments, Devices & Discord Incidents | **코드 완료** *(자체검증)* | 컨테이너/샌드박스 레시피, Playwright 브라우저 격리, 등록 디바이스 인가, Discord 아웃오브밴드 인시던트 감지 |
@@ -16,6 +16,12 @@ Maestro는 각 단계의 검증 증거가 완료되어야 다음 단계로 진�
 | **Phase 6** | Encore Learning & 10-Axis Adaptation | **Step 1 승인 완료** *(불변 다이제스트)* | Step 1: 프로젝트 전용·출처 바인딩 Improvement Digest. Step 2 이후(리플레이, 변경, 롤아웃, 적응, 프로젝트 간 승격)는 보류 |
 | **Phase 7** | Full Concertmaster Office & Radial Control Surface | 예정 | Next.js 16 / React 19 웹 UI(Concertmaster Office), `@xyflow/react` 방사형 포트폴리오 대시보드 |
 | **Phase 8** | Full-System Hardening & Release Certification | 예정 | 적대적 장애 주입, 보안 침투 감사, 지속 부하 검증 및 릴리즈 프리즈 |
+
+### 네이티브 에이전트 백엔드 마이그레이션 — 현재 경계
+
+Maestro 네이티브 런타임과 인증된 model gateway는 구현되어 대화 경로를 제공합니다. ChatGPT account-login recovery도 내구성 상태, fenced status/cancel 작업 및 metadata-only 저장을 포함하여 통합되었습니다. 그러나 마이그레이션은 **아직 승인 완료가 아닙니다**. `apps/control-plane/src/main.ts`는 워커 실행에 `createPrimeExecutionKernel()`을 아직 구성하고 있으며, workspace에도 `@maestro/prime-adapter`가 남아 있습니다. Prime 제거에는 네이티브 워커 parity, 프로세스/recovery 증거, Prime 전용 테스트 이전 및 새로운 no-Prime source/dependency scan이 필요합니다.
+
+CLI TUI는 `@earendil-works/pi-tui` `0.85.1` 터미널 primitive를 사용합니다. 이는 표현 계층 의존성이며 Prime Agent 런타임이 아닙니다. TUI는 Control Plane을 우회하거나 provider credential을 승인하지 않습니다.
 
 ### Phase 6 Step 1 — 승인된 경계
 
@@ -27,7 +33,7 @@ Phase 6 Step 1은 불변·프로젝트 전용 Improvement Digest slice로 승인
 
 > [!IMPORTANT]
 > **운영 사용성 게이트 공지:**  
-> Phase 1–4의 도메인/영속성 단위 테스트는 GREEN 상태이지만, 독립 감사 결과 Phase 1–3 제어 평면 기능은 실운영 사용성 요구사항(엔드투엔드 서비스 API 실행 경로, Git 실효 어댑터 연결, 상시 Metronome 관찰)이 완료되어야 승인됩니다. Phase 4 디바이스 제어 역시 실제 라이브 기기 에이전트 프로토콜 연결을 대기 중입니다. 이 수정 계획은 **Phase 5 Remediation Plan** 하에서 진행됩니다.
+> Phase 1–4의 도메인/영속성 단위 테스트는 GREEN 상태이지만, 독립 감사 결과 Phase 1–3 제어 평면 기능은 실운영 사용성 요구사항(엔드투엔드 서비스 API 실행 경로, Git 실효 어댑터 연결, 상시 Metronome 관찰)이 완료되어야 승인됩니다. 네이티브 대화 경로는 사용할 수 있지만 워커 실행은 네이티브 백엔드 parity 및 recovery 게이트가 통과될 때까지 레거시 Prime 어댑터에 의존합니다. Phase 4 디바이스 제어 역시 실제 라이브 기기 에이전트 프로토콜 연결을 대기 중입니다. 이 수정 계획은 **Phase 5 Remediation Plan** 하에서 진행됩니다.
 
 ---
 

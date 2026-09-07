@@ -1,5 +1,8 @@
 # Phase 5 Execution Slices — Runtime, Device, Operator
 
+> **Current status (2026-09-07):** The original `hardening/lifecycle` baseline is historical. Use root `task_plan.md` and `progress.md` for the current `main` pointer; this slice plan does not override the native backend migration or current repository evidence.
+
+
 **Decision date:** 2026-09-05  
 **Baseline:** `hardening/lifecycle` at `3580e35`  
 **Goal:** turn the Phase 1–4 code-level surface into a genuinely operable Maestro system. Green unit/component tests alone do not count as operational acceptance.

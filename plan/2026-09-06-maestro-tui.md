@@ -2,11 +2,11 @@
 
 > **Implementation workflow:** Execute this plan task by task and keep the checkboxes updated. Use the repository's current agent workflow; this document is the source of truth for scope and order.
 
-**Goal:** Build an interactive Prime Agent-style terminal TUI invoked by `maestro` that exposes the complete Maestro operational surface through the existing Control Plane, typed API client, durable events, and approval boundaries.
+**Goal:** Build an interactive conversation-first terminal TUI invoked by `maestro` that exposes the complete Maestro operational surface through the existing Control Plane, typed API client, durable events, and approval boundaries.
 
-**Architecture:** Add a TUI client layer above `@maestro/api-client`; keep Control Plane, PostgreSQL, leases, fencing, approvals, and Prime Agent adapter authoritative. Preserve existing non-interactive CLI and `--json` modes. Start with a truthful shell/connection/session foundation, then add full capability routing and progressive-disclosure views without inventing a second runtime.
+**Architecture:** Add a TUI client layer above `@maestro/api-client`; keep Control Plane, PostgreSQL, leases, fencing, approvals, and the provider-neutral `MaestroAgentRuntime` authoritative. Preserve existing non-interactive CLI and `--json` modes. The TUI never owns provider credentials or worker authority. Start with a truthful shell/connection/session foundation, then add streaming conversation and progressive-disclosure views without inventing a second runtime.
 
-**Tech Stack:** TypeScript, Node.js 24, npm workspaces, existing `@maestro/api-client`, Fastify Control Plane HTTP/SSE, Prime Agent-compatible terminal UI primitives, Vitest, real PostgreSQL integration fixtures, and real-process tests where lifecycle behavior is involved.
+**Tech Stack:** TypeScript, Node.js 24, npm workspaces, existing `@maestro/api-client`, Fastify Control Plane HTTP/SSE, `@earendil-works/pi-tui` `0.85.1`, Vitest, real PostgreSQL integration fixtures, and real-process tests where lifecycle behavior is involved.
 
 **Spec:** `plan/specs/2026-09-06-maestro-tui-design.md`
 
@@ -14,7 +14,7 @@
 
 - The current working directory is the Maestro workspace; detect its Git root without requiring Project/Goal IDs in the normal local flow.
 - `maestro` opens interactive TUI; `maestro <command>` remains non-interactive; `maestro --json ...` remains machine-readable.
-- The TUI never imports persistence internals, writes PostgreSQL, spawns Prime Agent directly, or creates a second scheduler/recovery protocol.
+- The TUI never imports persistence internals, writes PostgreSQL, spawns a provider/runtime directly, or creates a second scheduler/recovery protocol.
 - All mutations use the existing typed API, authenticated actor/project/Goal context, command identity, lease/fencing proof where required, and durable acceptance.
 - Critical actions, external sends, remote Git effects, deployment, payment, deletion, permission/credential changes, and other configured high-impact actions require explicit confirmation.
 - No fabricated success, mock operational state, plaintext bearer-secret fallback, or silent unavailable behavior.
@@ -40,7 +40,7 @@
 
 - [ ] Write tests proving `--help`, existing subcommands, and `--json` do not enter TUI; no-subcommand mode selects TUI; Ctrl-C stops cleanly.
 - [ ] Run `npm test -- apps/cli/src/main.test.ts apps/cli/src/tui/runtime.test.ts` and confirm the new no-subcommand assertions fail for the missing runtime.
-- [ ] Implement the smallest runtime boundary using the chosen Prime Agent-compatible TUI primitives or a minimal local adapter if the dependency is not yet present.
+- [ ] Implement the smallest runtime boundary using the installed `@earendil-works/pi-tui` primitives.
 - [ ] Run the focused tests and `npm run build`; confirm existing command tests remain green.
 - [ ] Commit with `feat(cli): add interactive maestro tui entrypoint`.
 
@@ -122,7 +122,7 @@
 
 - [ ] Write tests for command parsing, quoted values, unknown commands, autocomplete, multiline input, IME-safe cursor behavior, and keyboard shortcuts.
 - [ ] Run focused tests in RED state.
-- [ ] Implement the editor and registry with Prime Agent TUI input patterns, keeping output in the conversation timeline.
+- [ ] Implement the editor and registry with native pi-tui input patterns, keeping output in the conversation timeline.
 - [ ] Run focused tests and build.
 - [ ] Commit with `feat(cli): add maestro conversational input`.
 
@@ -241,7 +241,7 @@
 
 - [ ] Write the representative end-to-end acceptance scenarios from the spec and phase plans before implementation of the gate.
 - [ ] Run the new acceptance suite in RED state until all prior slices are present.
-- [ ] Run `npm run build`, focused tests, full `npm run check`, disposable PostgreSQL tests, and real-process Prime Agent/Control Plane tests where required.
+- [ ] Run `npm run build`, focused tests, full `npm run check`, disposable PostgreSQL tests, and real-process Control Plane/provider tests where required.
 - [ ] Perform a manual terminal live run for `maestro`, a natural-language status request, a slash command, a safe mutation, and an approval-gated action; stop before any external irreversible effect.
 - [ ] Record exact evidence, known limitations, and any environment-gated cases in the project docs.
 - [ ] Commit with `test(cli): certify maestro tui parity and live flow`.
@@ -250,7 +250,7 @@
 
 Tasks 1-5 establish the interactive runtime. Task 6 may begin only after typed read models and event/session behavior are truthful. Task 7 follows the read surface and approval dialog. Task 8 follows the command registry and server conversation contract. Task 9 follows event reconnect and server recovery evidence. Task 10 may proceed in parallel only as a branding-only slice but must not rename internal package paths casually. Task 11 is the final acceptance gate.
 
-Every task ends with focused RED/GREEN evidence, build evidence, and a Conventional Commit. Do not mark the TUI operationally accepted without real PostgreSQL, real Control Plane/Prime Agent process behavior, parity evidence, and independent no-edit review.
+Every task ends with focused RED/GREEN evidence, build evidence, and a Conventional Commit. Do not mark the TUI operationally accepted without real PostgreSQL, real Control Plane/provider process behavior, durable stream/reconnect evidence, parity evidence, and independent no-edit review.
 
 ## Current execution note
 

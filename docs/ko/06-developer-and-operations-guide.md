@@ -11,6 +11,7 @@ Maestro는 **npm workspaces** 기반의 모노레포 구조로 관리됩니다:
 ```text
 ├── apps/
 │   ├── control-plane/     # Fastify 5 REST & SSE 제어 평면 백엔드 서버
+│   ├── model-gateway/     # Provider SDK 및 credential 전용 프로세스
 │   ├── cli/               # Maestro 명령줄 인터페이스 (CLI)
 │   ├── secretary/         # Next.js Concertmaster Office 웹 대시보드
 │   └── discord/           # 아웃오브밴드 Discord 인시던트 감지 데몬
@@ -20,7 +21,10 @@ Maestro는 **npm workspaces** 기반의 모노레포 구조로 관리됩니다:
 │   ├── persistence/       # PostgreSQL 17 / Drizzle ORM 레이어 및 마이그레이션
 │   ├── authority/         # 보안 매트릭스 및 AuthorizedEffectExecutor
 │   ├── evidence/          # SHA-256 증거 번들 생성 및 무결성 검증
-│   ├── prime-adapter/     # Prime Agent SDK 어댑터 및 도메인 포트
+│   ├── agent-runtime/     # Maestro 소유 provider-neutral runtime 및 Tool loop
+│   ├── model-provider-openai/ # OpenAI API key 및 Codex app-server adapter
+│   ├── model-provider-anthropic/ # Anthropic API key adapter
+│   ├── prime-adapter/     # 제거 예정인 레거시 워커 브리지
 │   ├── git-adapter/       # Git 워크트리, 브랜치 및 커밋 실행기
 │   └── api-client/        # 타입 안전 API 클라이언트 라이브러리
 ```
@@ -33,7 +37,7 @@ Maestro는 **npm workspaces** 기반의 모노레포 구조로 관리됩니다:
 * **npm**: `v10.x` 이상
 * **PostgreSQL**: `17.x` (통합 테스트 실행 시 필요)
 * **Docker**: 로컬 PostgreSQL 테스트 컨테이너 (`Testcontainers`) 실행 시 필요
-* **OS**: Linux (Prime Agent 보안 격리 정책상 권장)
+* **OS**: Docker/PostgreSQL 및 프로세스 통합 테스트에는 Linux를 권장합니다. 네이티브 대화 runtime에는 Prime Agent 격리 primitive가 필요하지 않습니다.
 
 ---
 
@@ -63,11 +67,14 @@ npm run check
 MAESTRO_TEST_DATABASE_URL=postgresql://maestro_test:maestro_test@127.0.0.1:55432/maestro_test npm test
 ```
 
-### 5) Live Prime Agent SDK 테스트
-실제 라이브 Prime Agent SDK 런타임과 연동 테스트를 수행합니다:
+### 5) 레거시 Prime 어댑터 호환성 테스트
+워커 실행 브리지에는 환경 변수로 제어되는 호환성 테스트가 남아 있습니다. 이 테스트만으로 네이티브 백엔드 마이그레이션을 승인할 수 없습니다:
 ```bash
 MAESTRO_LIVE_PRIME=1 npm test -- packages/prime-adapter/src/sdk.live.test.ts
 ```
+
+### 6) 현재 TUI 및 runtime 경계
+CLI TUI는 `@earendil-works/pi-tui` `0.85.1`을 터미널 렌더링, 입력, overlay 및 scrolling에 사용합니다. Prime Agent를 runtime으로 사용하지 않으며 PostgreSQL이나 provider credential을 직접 쓰지 않습니다. 대화 요청은 인증된 Control Plane conversation API와 `MaestroAgentRuntime`을 통과합니다. 워커 실행은 네이티브 parity 및 restart-recovery 증거가 승인될 때까지 레거시 Prime 어댑터를 사용합니다.
 
 ---
 

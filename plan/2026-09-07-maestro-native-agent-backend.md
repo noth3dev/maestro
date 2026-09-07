@@ -1,6 +1,8 @@
 # Maestro Native Agent Backend Implementation Plan
 
 > **Implementation workflow:** Execute this plan task by task and keep the checkboxes updated. Use the repository's current agent workflow; this document is the source of truth for scope and order.
+>
+> **Current status (2026-09-07):** Tasks 1–4 and the conversation/account-login portions of Tasks 6–7 are implemented in the repository. The native conversation path is usable behind the authenticated Control Plane/model gateway. Task 5 is **not accepted**: worker execution still composes `createPrimeExecutionKernel()` and `@maestro/prime-adapter` remains in the dependency graph. Durable account-login hardening added migration `0066_harden_provider_account_login_identity.sql`; PostgreSQL verification is required before closing that slice.
 
 **Goal:** Remove Prime Agent from Maestro and replace it with a native provider-pluggable agent backend that supports natural-language control, common Tool/child-agent execution, OpenAI/Anthropic API-key authentication, and OpenAI subscription access only through the documented Codex app-server boundary. Claude Pro/Max subscription OAuth is blocked without written Anthropic approval.
 
@@ -524,7 +526,7 @@ git commit -m "feat(runtime): add native maestro agent execution"
 **Files:**
 - Modify: `packages/domain/src/mission-bundle.ts`, `packages/contracts/src/index.ts`
 - Modify: `packages/persistence/src/worker.ts`, `packages/persistence/src/head-participation.ts`, `packages/persistence/src/semantic-review.ts`, `packages/persistence/src/encore-council.ts`, `apps/control-plane/src/worker-service.ts`
-- Create: `packages/persistence/migrations/0064_native_agent_runtime.sql`
+- Create/modify: `packages/persistence/migrations/0064_native_agent_runtime.sql`, `0065_provider_account_login_sessions.sql`, `0066_harden_provider_account_login_identity.sql`
 - Modify: `apps/control-plane/src/config.ts`, `apps/control-plane/src/main.ts`, `apps/control-plane/package.json`
 - Modify: `package.json`, `package-lock.json`, `tsconfig.json`
 - Delete: `packages/prime-adapter/*`
@@ -572,7 +574,7 @@ Use `provider/model-id` for `approvedModels`. Add a named durable controller pro
 
 - [ ] **Step 4: Add durable binding/evidence migration and compose native runtime**
 
-Create durable conversation/turn/invocation/tool/event/provider-binding/idempotency/quota records. Capture the actual model identity before or atomically with each Worker/Head/reviewer admission; if identity cannot be observed, fail before external admission. Then replace Prime composition with `createMaestroAgentRuntime({ registry, ... })`.
+Durable conversation/turn/event-cursor and provider-binding records, authenticated gateway admission, and native conversation composition are implemented. Durable invocation/tool/quota parity and native Worker/Head/reviewer admission remain open. Capture the actual model identity before or atomically with each admission; if identity cannot be observed, fail before external admission. The remaining cutover is replacing Prime composition with `createMaestroAgentRuntime({ registry, ... })`.
 
 Replace `createPrimeExecutionKernel()` in `apps/control-plane/src/main.ts` with `createMaestroAgentRuntime({ registry, ... })`. Register provider plugins explicitly. Remove `primeAgentVersion` from config and all fixtures. Preserve `ControlPlaneOverrides.executionKernel` for tests.
 
