@@ -1052,3 +1052,11 @@ worker-device link and pause state against that concrete case rather than a hypo
 - Root-caused and fixed a real bug that a resource-exhausted host (12 stale disposable `maestro-*-postgres` containers) was masking as flaky `Connection terminated unexpectedly` failures: `device.integration.test.ts` used a stale hand-picked migration subset missing `0046_device_grants.sql`, so `revokeDevice`'s grant-revocation cascade failed once the suite actually got to run. Fixed to `applyAllMigrations`, matching every sibling device suite. See `findings.md` same date for full detail.
 - Cleaned up all 12 stale Maestro disposable containers; one fresh, single, cleanly named container now runs the final full-suite rerun (`maestro-phase1-final-clean`, port 55480).
 - **Next:** confirm the final full clean single-worker PostgreSQL rerun passes end to end, then re-run build/lint/no-Prime-scan/HTTP-acceptance as the closing Phase 1 gate evidence and update the roadmap doc's Phase 1 status line accordingly.
+
+
+## 2026-09-08 — Full PostgreSQL rerun closed clean
+
+- Full single-worker real-PostgreSQL rerun on a fresh disposable container: **154/154 files, 1049/1049 tests, 0 failed.** `npm run build`, `npm run lint`, and the no-Prime scan are all clean on the same tree.
+- This closes the previously-open "finish the full PostgreSQL rerun" and "reproduce/fix the git-integration frozen-revision failure" items — both are green (the git-integration suite was already fixed and reconfirmed earlier in this session; the two connection-drop failures were host resource contention, and the real bug found underneath, a stale migration subset in `device.integration.test.ts`, is fixed).
+- **Still open for full Phase 1 acceptance:** (1) wire and register production native host tools and prove tool enforcement through the real gateway path; (2) add a full Control Plane + PostgreSQL + Model Gateway Worker acceptance scenario beyond the current fake-provider HTTP test (`native-gateway-http.integration.test.ts`).
+- `.github/workflows/ci.yml` is written and committed but not pushed — the current token lacks the `workflow` OAuth scope; the workflow-file commit is preserved on local branch `ci-workflow-pending` for a token with that scope to push. Every other commit from that history is already on `main`.
