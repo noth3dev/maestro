@@ -93,10 +93,7 @@ export function createPostgresAccountLoginStore(pool: Pool): AccountLoginStore {
       if (providerLoginId.trim() === "" || providerLoginId.length > 256) throw new Error("provider account login returned invalid metadata");
       assertAuthUrl(authUrl);
       const result = await pool.query<LoginRow>(
-        `UPDATE provider_account_login_sessions
-            SET provider_login_id = $2, auth_url = $3, state = 'pending', message = NULL
-          WHERE login_id = $1 AND state = 'starting'
-          RETURNING ${columns}`,
+        `SELECT ${columns} FROM complete_provider_account_login_start($1, $2, $3)`,
         [loginId, providerLoginId, authUrl],
       );
       if (result.rowCount === 1) return map(result.rows[0]!);
@@ -134,7 +131,10 @@ export function createPostgresAccountLoginStore(pool: Pool): AccountLoginStore {
       try {
         const result = await pool.query<LoginRow>(`UPDATE provider_account_login_sessions
             SET state = $3, message = $4, operation = NULL, operation_owner = NULL, operation_token = NULL, operation_started_at = NULL
-          WHERE login_id = $1 AND operator_id = $2 AND ($5::text IS NULL OR (operation_owner = $5 AND operation_token = $6) OR operation_owner IS NULL)
+          WHERE login_id = $1 AND operator_id = $2 AND (
+            ($5::text IS NULL AND $6::uuid IS NULL AND operation_owner IS NULL)
+            OR ($5::text IS NOT NULL AND $6::uuid IS NOT NULL AND operation_owner = $5 AND operation_token = $6::uuid)
+          )
           RETURNING ${columns}`, [loginId, operatorId, state, safeMessage, operationOwnerId ?? null, operationToken ?? null]);
         if (result.rowCount === 1) return map(result.rows[0]!);
       } catch (error) {

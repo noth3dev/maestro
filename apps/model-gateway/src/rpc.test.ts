@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ProviderRegistry, type ModelProviderPort, type ProviderPlugin } from "@maestro/agent-runtime";
 import { InMemoryCredentialStore } from "./credential-store.js";
 import { createModelGateway } from "./gateway.js";
+import { CodexAppServerError } from "@maestro/model-provider-openai";
 import { buildModelGatewayServer } from "./rpc.js";
 
 function fakePlugin(): ProviderPlugin {
@@ -35,11 +36,13 @@ describe("model gateway error boundaries", () => {
     const registry = new ProviderRegistry();
     const codex = {
       startChatGptLogin: async () => ({ providerId: "openai-codex" as const, loginId: "login-1", authUrl: "https://chatgpt.com/login" }),
-      loginStatus: async () => { throw new Error("account login session is unknown"); },
+      loginStatus: async () => { throw new CodexAppServerError("account_login_session_unknown", "Codex login session is unknown"); },
       cancelLogin: async () => {}, close: async () => {},
     };
     const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1", codex });
     const app = buildModelGatewayServer({ gateway, token: "gateway-secret", operatorId: "operator-1" });
+    const started = await app.inject({ method: "POST", url: "/v1/account-logins/start", headers: { authorization: "Bearer gateway-secret" }, payload: { requestId: "start-1", operatorId: "operator-1", providerId: "openai-codex" } });
+    expect(started.statusCode).toBe(200);
     const response = await app.inject({ method: "POST", url: "/v1/account-logins/status", headers: { authorization: "Bearer gateway-secret" }, payload: { requestId: "status-1", operatorId: "operator-1", providerId: "openai-codex", loginId: "login-1" } });
     expect(response.statusCode).toBe(409);
     expect(response.json()).toEqual({ error: { code: "account_login_session_unknown", message: "account login session is unknown" } });

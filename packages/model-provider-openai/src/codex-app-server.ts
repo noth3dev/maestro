@@ -32,7 +32,7 @@ export type CodexLoginStatus =
 
 export class CodexAppServerError extends Error {
   readonly name = "CodexAppServerError";
-  constructor(readonly code: "provider_auth" | "provider_unavailable" | "provider_cancelled" | "provider_malformed_response", message: string) { super(message); }
+  constructor(readonly code: "provider_auth" | "provider_unavailable" | "provider_cancelled" | "provider_malformed_response" | "account_login_session_unknown", message: string) { super(message); }
 }
 
 export interface CodexAccountSummary {
@@ -238,12 +238,12 @@ export class CodexAppServerClient {
 
   async loginStatus(loginId: string): Promise<CodexLoginStatus> {
     const status = this.logins.get(loginId);
-    if (status === undefined) throw new Error("Codex login session is unknown");
+    if (status === undefined) throw new CodexAppServerError("account_login_session_unknown", "account login session is unknown");
     return status;
   }
 
   async cancelLogin(loginId: string): Promise<void> {
-    if (!this.logins.has(loginId)) throw new Error("Codex login session is unknown");
+    if (!this.logins.has(loginId)) throw new CodexAppServerError("account_login_session_unknown", "account login session is unknown");
     await this.requestRaw("account/login/cancel", { loginId });
     this.logins.set(loginId, { loginId, state: "cancelled" });
   }

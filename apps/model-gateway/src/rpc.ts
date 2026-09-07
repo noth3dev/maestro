@@ -50,7 +50,8 @@ function authorized(request: { headers: Record<string, unknown> }, token: string
 
 function errorCode(error: unknown): { status: number; code: string; message: string } {
   const message = error instanceof Error ? error.message : "model gateway request failed";
-  if (message === "account login session is unknown") return { status: 409, code: "account_login_session_unknown", message };
+  const code = error && typeof error === "object" && "code" in error ? (error as { code?: unknown }).code : undefined;
+  if (code === "account_login_session_unknown" || message === "account login session is unknown") return { status: 409, code: "account_login_session_unknown", message: "account login session is unknown" };
   if (message.includes("credential binding")) return { status: 403, code: "provider_auth_required", message: "provider credential binding is unavailable" };
   if (message.includes("unknown provider") || message.includes("unknown model")) return { status: 400, code: "model_not_allowed", message: "provider or model is not allowed" };
   if (message.includes("identity") || message.includes("binding")) return { status: 409, code: "provider_binding_mismatch", message: "provider binding could not be verified" };

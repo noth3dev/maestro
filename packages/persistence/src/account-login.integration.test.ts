@@ -74,10 +74,32 @@ describeDatabase("durable provider account login sessions", () => {
     await expect(store.updateState(reserved.record.loginId, "operator-1", "cancelled", undefined, "control-plane-1", tokenB!)).resolves.toMatchObject({ state: "cancelled" });
   });
 
+  it("does not let a released token update state", async () => {
+    const store = createPostgresAccountLoginStore(pool);
+    const reserved = await store.reserveStart("operator-1", "request-released-token", "openai-codex", "control-plane-1");
+    await store.completeStart(reserved.record.loginId, "provider-login-released", "https://chatgpt.com/login");
+    const token = await store.claimOperation(reserved.record.loginId, "operator-1", "status", "control-plane-1", 30_000);
+    expect(token).toEqual(expect.any(String));
+    await store.releaseOperation(reserved.record.loginId, "operator-1", "control-plane-1", token!);
+    await expect(store.updateState(reserved.record.loginId, "operator-1", "succeeded", undefined, "control-plane-1", token!)).resolves.toMatchObject({ state: "pending" });
+    await expect(store.get(reserved.record.loginId, "operator-1")).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it("does not let an unleased update overwrite an active operation", async () => {
+    const store = createPostgresAccountLoginStore(pool);
+    const reserved = await store.reserveStart("operator-1", "request-active-no-token", "openai-codex", "control-plane-1");
+    await store.completeStart(reserved.record.loginId, "provider-login-active", "https://chatgpt.com/login");
+    const token = await store.claimOperation(reserved.record.loginId, "operator-1", "status", "control-plane-1", 30_000);
+    expect(token).toEqual(expect.any(String));
+    await expect(store.updateState(reserved.record.loginId, "operator-1", "succeeded")).resolves.toMatchObject({ state: "pending" });
+    await expect(store.get(reserved.record.loginId, "operator-1")).resolves.toMatchObject({ state: "pending" });
+  });
+
   it("keeps login identity append-only and rejects deletion", async () => {
     const store = createPostgresAccountLoginStore(pool);
     const reserved = await store.reserveStart("operator-1", "request-identity", "openai-codex", "control-plane-1");
     await expect(pool.query("UPDATE provider_account_login_sessions SET request_id = 'rewritten' WHERE login_id = $1", [reserved.record.loginId])).rejects.toThrow("identity is immutable");
+    await expect(pool.query("UPDATE provider_account_login_sessions SET provider_login_id = 'injected-provider', auth_url = 'https://chatgpt.com/injected', state = 'pending' WHERE login_id = $1", [reserved.record.loginId])).rejects.toThrow("identity is immutable");
     await expect(pool.query("DELETE FROM provider_account_login_sessions WHERE login_id = $1", [reserved.record.loginId])).rejects.toThrow("append-only");
     await store.completeStart(reserved.record.loginId, "provider-login-identity", "https://chatgpt.com/login?state=opaque");
     await expect(pool.query("UPDATE provider_account_login_sessions SET provider_login_id = 'rewritten-provider' WHERE login_id = $1", [reserved.record.loginId])).rejects.toThrow("identity is immutable");
