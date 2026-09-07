@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -231,7 +231,7 @@ describeDatabase("Phase 3 adversarial fixtures with PostgreSQL", () => {
   });
 
   it("blocks the final report when an independent Quality Department finds a seeded critical defect", async () => {
-    const { goalId, worker, evidenceIds, commitSha, proof } = await setupWorkerWithRealCommit(pool, repositoryPath, baseRevision, worktreePaths);
+    const { goalId, worker, commitSha, proof } = await setupWorkerWithRealCommit(pool, repositoryPath, baseRevision, worktreePaths);
     expect(worker.status).toBe("succeeded");
     expect(commitSha).toMatch(/^[0-9a-f]{40}$/);
     const certification = await certifyQuality(

@@ -394,7 +394,7 @@ async function reconcileHeadActivationCommands(
           updateProof,
           heartbeatIntervalMs,
         );
-      } catch (error) {
+      } catch {
         // Provider failure is not proof of cancellation. Marking orphaned
         // revokes durable Head authority while retaining opaque refs.
         try { await markOrphaned(command); } catch (cleanupError) {
@@ -416,7 +416,7 @@ async function reconcileHeadActivationCommands(
           updateProof,
           heartbeatIntervalMs,
         );
-      } catch (error) {
+      } catch {
         try { await markOrphaned(command); } catch (cleanupError) {
           if (cleanupError instanceof StaleGoalLeaseError) continue;
           throw cleanupError;

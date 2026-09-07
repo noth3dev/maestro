@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { runMigrations, MigrationChecksumMismatchError } from "./migrate.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;

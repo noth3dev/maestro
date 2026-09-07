@@ -613,3 +613,27 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - `task_plan.md` contains historical Phase 5 status wording that understates the current implementation. Live code confirms the broader authenticated API surface and the Electron Secretary architecture described in the later reconciliation entry.
 - The current `main` tip is `95bef8e` (not the older `hardening/lifecycle`/`ce94c3d` reference in the historical entry).
 - No source defect was found in this check. The remaining evidence limitation is environmental: PostgreSQL integration suites cannot run here.
+
+
+## 2026-09-06 — Maestro TUI review and hardening
+- Independent review identified a durable-approval bypass risk for project-access provisioning, setup state collapse, missing attach flow, unbounded SSE retry, misleading approval count, project-binding spread order, and command alias drift.
+- The TUI now blocks local-only approval for critical operations without a server-side durable approval binding; only `approval:approve-and-run` reaches the durable endpoint. Setup-required is rendered distinctly, `/session attach --project-id=...` provides an explicit fallback for a workspace with no saved identity, `/new` preserves project/cursor metadata while clearing the active conversation Goal, and `/retry` rechecks startup health.
+- SSE reconnects are bounded to five retries by default and report retry/exhaustion state. Active Worker counts exclude terminal statuses. Session metadata is sanitized on load and permissions are re-applied on every write.
+- Remaining acceptance gaps are intentional: no local PostgreSQL/operator bootstrap, no natural-language Control Plane conversation endpoint, no real-process TUI recovery/parity integration test, and unavailable server surfaces remain explicit rather than fabricated. The emergency-stop fail-safe is server-authorized and now also requires explicit local confirmation; it is not treated as durable CEO approval.
+
+
+## 2026-09-07 — Prime Agent/model replacement audit finding
+
+- **Confirmed policy mismatch:** Mission Bundle `approvedModels` is required and included in the bundle contract (`packages/domain/src/mission-bundle.ts:16,69-70`), but worker admission sends only `allowedTools` and `allowedSkills` (`packages/persistence/src/worker.ts:209-216`). The default Prime adapter calls `createAgentSession` without a model (`packages/prime-adapter/src/execution-kernel.ts:365-379`), so model choice is delegated to Prime Agent's registry/settings/auth path. No production consumer of `approvedModels` was found outside validation/domain code.
+- **Risk:** the actual provider/model can differ from the model approved for the mission; `getModelIdentity` only reports the chosen model after admission (`packages/prime-adapter/src/execution-kernel.ts:265-269`). This must be fixed before claiming model-provider replacement or stronger approval semantics.
+- **Boundary:** no code or credentials were changed in this audit. Direct ChatGPT/OpenAI and Claude adapters remain design candidates only; subscription/API credentials stay provider-local.
+
+
+## 2026-09-07 — Native backend adversarial review findings
+
+- **Critical:** The native design described a conversation flow but no executable authenticated `create/turn/stream/cancel/reconnect` endpoint contract, session/turn IDs, idempotency, or durable cursor. Evidence: `apps/control-plane/src/server.ts:358-834` has no conversation route; `apps/cli/src/tui/commands/registry.ts:5-39` has no model/chat/send path.
+- **Critical:** `ModelProviderPort.turn()` lacked normalized tool-call, tool-result, turn budget, duplicate/replay, abort, and streaming contracts. Evidence: `docs/superpowers/specs/2026-09-07-maestro-native-agent-backend-design.md` only defined `turn/cancel/close`; `packages/domain/src/execution-kernel.ts:95-106` has no tool-dispatch method.
+- **Critical:** Host-side authority delegation was underspecified. Model output must never carry the operator bearer or approve-and-run authority. Critical approval must bind to exact args, command, project/Goal, expiry, and human confirmation. Evidence: `apps/control-plane/src/server.ts:694-713` and `packages/authority/src/authority.ts:185-243`.
+- **Critical:** Child-agent behavior, capability narrowing, budget/depth ceilings, cancellation cascade, and durable parent/child bindings were not executable contracts. Existing child behavior is Prime-specific at `packages/prime-adapter/src/execution-kernel.ts:156-167,235-244`.
+- **Critical:** Model authorization is incomplete beyond workers. `approvedModels` is not canonical/provider-qualified; workers omit it at `packages/persistence/src/worker.ts:209-216`; Head, semantic-review, and Encore paths also need policy propagation. Worker schema/API mapping lacks actual provider/model identity (`migrations/0024_workers.sql:7-24`, `apps/control-plane/src/worker-service.ts:30-36`).
+- **High:** Result-only provider calls cannot satisfy streaming/observation acceptance; add bounded event sink and durable cursor. Also define per-session serialization, provider request-ID namespacing, and A1 unknown/fenced recovery before implementation.

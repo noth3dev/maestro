@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { executeCli } from "./main.js";
+import { executeCli, shouldRunAsMain } from "./main.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
@@ -106,6 +106,17 @@ describe("executeCli", () => {
     expect(stderr.lines.join("")).toContain("MAESTRO_API_URL");
     expect(stderr.lines.join("")).not.toContain("top-secret");
   });
+
+
+  it("starts the interactive TUI for a bare invocation before requiring API credentials", async () => {
+    const stdout = output();
+    const stderr = output();
+    const startTui = vi.fn().mockResolvedValue(0);
+
+    await expect(executeCli([], {}, { stdout: stdout.write, stderr: stderr.write, startTui })).resolves.toBe(0);
+    expect(startTui).toHaveBeenCalledWith(expect.any(String), {}, expect.objectContaining({ stdout: stdout.write }));
+    expect(stderr.lines).toEqual([]);
+  });
 });
 
 it("reads Metronome challenges through the parity command", async () => { const fetch=vi.fn().mockResolvedValue(new Response(JSON.stringify({challenges:[]}),{status:200})); const stdout=output(); const stderr=output(); await expect(executeCli(["metronome-challenges","list","--goal-id",goalId,"--project-id",projectId,"--json"],env,{fetch,stdout:stdout.write,stderr:stderr.write})).resolves.toBe(0); expect(JSON.parse(stdout.lines[0]!)).toEqual({challenges:[]}); expect(stderr.lines).toEqual([]); });
@@ -133,6 +144,19 @@ it("drives the Task Contract intake lifecycle through CLI commands", async () =>
   expect(fetch).toHaveBeenNthCalledWith(1, "https://maestro.test/v1/task-contracts", expect.anything());
 });
 
+
+it("requests a critical action through the CLI", async () => {
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ goalId, effect: "allow", reason: "policy allows", classification: "ordinary", recordId: commandId }), { status: 200 }));
+  const stdout = output();
+  const exitCode = await executeCli([
+    "critical-action", "request", "--goal-id", goalId, "--project-id", projectId,
+    "--action", "deploy", "--target", "staging", "--version", "2",
+    "--budget-effect-cents", "0", "--command-id", commandId, "--json",
+  ], env, { fetch, stdout: stdout.write, stderr: output().write });
+  expect(exitCode).toBe(0);
+  expect(JSON.parse(stdout.lines[0]!)).toMatchObject({ effect: "allow", recordId: commandId });
+  expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/critical-actions`, expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "idempotency-key": commandId }) }));
+});
 
 it("approves and runs a critical action through the CLI", async () => {
   const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ goalId, effect: "allow", reason: "exact_approval", classification: "critical", recordId: commandId }), { status: 200 }));
@@ -179,4 +203,28 @@ it("provisions exact project roles through the authenticated admin command", asy
   expect(await executeCli(["admin", "project-access", "--operator-id", operatorId, "--project-id", projectId, "--roles-json", JSON.stringify(["concertmaster", "head-product"]), "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).toBe(0);
   expect(JSON.parse(stdout.lines[0]!)).toEqual({ operatorId, projectId, roles: ["concertmaster", "head-product"] });
   expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/admin/project-access", expect.objectContaining({ method: "POST" }));
+});
+
+
+describe("CLI entrypoint detection", () => {
+  it("recognizes a symlinked executable by its resolved path", () => {
+    const modulePath = "/work/apps/cli/dist/main.js";
+    expect(shouldRunAsMain(`file://${modulePath}`, "/work/node_modules/.bin/maestro", () => modulePath)).toBe(true);
+  });
+});
+
+
+describe("native conversation commands", () => {
+  it("lists models and runs a conversation turn through the API", async () => {
+    const conversationId = "44444444-4444-4444-8444-444444444444";
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ identity: { provider: "openai", id: "gpt-5" }, capabilities: ["text"], authModes: ["api-key"], dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy", trainsOnCustomerData: false, regions: ["US"] } }]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ conversationId, projectId, goalId, model: "openai/gpt-5", status: "active", version: 1 }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ conversation: { conversationId, projectId, goalId, model: "openai/gpt-5", status: "succeeded", version: 2 }, turn: { turnId: "55555555-5555-4555-8555-555555555555", conversationId, role: "assistant", content: "hello", status: "completed", cursor: "2", createdAt: "2030-01-01T00:00:00.000Z" } }), { status: 200 }));
+    const stdout = output(); const stderr = output();
+    expect(await executeCli(["models", "list", "--json"], env, { fetch, stdout: stdout.write, stderr: stderr.write })).toBe(0);
+    expect(await executeCli(["conversation", "create", "--project-id", projectId, "--goal-id", goalId, "--model", "openai/gpt-5", "--json"], env, { fetch, stdout: stdout.write, stderr: stderr.write })).toBe(0);
+    expect(await executeCli(["conversation", "turn", "--conversation-id", conversationId, "--project-id", projectId, "--text", "hi", "--json"], env, { fetch, stdout: stdout.write, stderr: stderr.write })).toBe(0);
+    expect(stderr.lines).toEqual([]);
+  });
 });

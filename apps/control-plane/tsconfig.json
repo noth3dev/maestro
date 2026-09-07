@@ -20,6 +20,9 @@
       "path": "../../packages/authority"
     },
     {
+      "path": "../../packages/agent-runtime"
+    },
+    {
       "path": "../../packages/contracts"
     },
     {

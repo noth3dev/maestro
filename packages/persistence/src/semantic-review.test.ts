@@ -61,7 +61,7 @@ function fakeKernel(sequence: readonly InvocationObservation[]): ExecutionKernel
   const calls: string[] = [];
   const spawned: SpawnedInvocation = { execution, invocation };
   return {
-    spawn: vi.fn(async (request: SpawnRequest) => {
+    spawn: vi.fn(async (_request: SpawnRequest) => {
       calls.push("spawn");
       return spawned;
     }),

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.worktrees/
+coverage/
+tmp/
+*.lock

@@ -1,0 +1,21 @@
+{
+  "name": "@maestro/agent-runtime",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./model-provider": {
+      "types": "./dist/model-provider.d.ts",
+      "import": "./dist/model-provider.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@maestro/domain": "*",
+    "zod": "^4.0.0"
+  }
+}

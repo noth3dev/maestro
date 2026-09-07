@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { ActionRequest, AuthorityDecision } from "@maestro/authority";
+import type { ActionRequest } from "@maestro/authority";
 import {
   assertValidBrowserCommandRequest,
   assertValidEnvironmentRecord,

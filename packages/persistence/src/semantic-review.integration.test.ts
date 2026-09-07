@@ -10,7 +10,7 @@ const describeDatabase = databaseUrl ? describe : describe.skip;
 
 function fakeKernelReturning(answerText: string): ExecutionKernelPort {
   return {
-    async spawn(request) { return { execution: "exec-1" as never, invocation: "inv-1" as never }; },
+    async spawn(_request) { return { execution: "exec-1" as never, invocation: "inv-1" as never }; },
     async prompt() {}, async sendMessage() {},
     async observe() {
       return [{ invocation: "inv-1" as never, name: "semantic-review", status: "succeeded", toolEvents: { state: "empty", events: [] }, usage: { state: "available", totalTokens: 1 }, answer: { state: "available", text: answerText } }];

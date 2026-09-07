@@ -119,3 +119,7 @@ The first implementation must establish a working interactive shell and truthful
 - Do not make the Electron app and TUI share renderer code merely for visual consistency.
 - Do not add a speculative provider-routing layer or a server-side queue solely for the TUI.
 - Do not claim Phase 5 portfolio completion or Phase 6 adaptive mutation merely because a navigation item exists; each capability remains gated by its own plan and evidence.
+
+## Implementation constraint discovered
+
+The current Control Plane composition requires PostgreSQL `DATABASE_URL` and authenticated operator credentials. The repository does not yet contain a local PostgreSQL manager, first-run operator/token bootstrap endpoint, or safe embedded replacement. Therefore the first TUI slice must expose an explicit `setup-required` state when those prerequisites are absent, never fabricate a connection, and leave automatic local provisioning as a separate server/bootstrap slice.

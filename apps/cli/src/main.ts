@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
+import { fileURLToPath } from "node:url";
+import { realpathSync } from "node:fs";
 import { ApiError, createApiClient, type GoalEvent, type GoalResult } from "@maestro/api-client";
+import { startInteractiveTui } from "./tui/entry.js";
+import type { CertifyWorkerInput } from "@maestro/contracts";
 
 export interface CliIo {
   fetch?: typeof globalThis.fetch;
   stdout: (text: string) => void;
   stderr: (text: string) => void;
+  startTui?: (cwd: string, env: Env, io: CliIo) => Promise<number>;
 }
 
 type Env = Record<string, string | undefined>;
@@ -19,6 +24,9 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     io.stdout("maestro development\n");
     return 0;
   }
+  if (args.length === 0) {
+    return (io.startTui ?? ((cwd, environment, tuiIo) => startInteractiveTui({ cwd, env: environment, io: tuiIo })))(process.cwd(), env, io);
+  }
   try {
     const baseUrl = requireEnvironment(env, "MAESTRO_API_URL");
     const token = requireEnvironment(env, "MAESTRO_API_TOKEN");
@@ -31,6 +39,9 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
         "operator-id": { type: "string" },
         "roles-json": { type: "string" },
         "goal-id": { type: "string" },
+        "conversation-id": { type: "string" },
+        model: { type: "string" },
+        text: { type: "string" },
         "command-id": { type: "string" },
         "contract-id": { type: "string" },
         "substance-json": { type: "string" },
@@ -114,6 +125,31 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     }
     if (resource === "task-contract" && action === "launch") {
       const result = await client.launchTaskContract(string("contract-id"), string("project-id"), value("command-id") === undefined ? undefined : string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "models" && action === "list") {
+      const result = await client.listModels();
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "conversation" && action === "create") {
+      const result = await client.createConversation({ projectId: string("project-id"), goalId: string("goal-id"), model: string("model") });
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "conversation" && action === "get") {
+      const result = await client.getConversation(string("conversation-id"), { projectId: string("project-id") });
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "conversation" && action === "turn") {
+      const result = await client.sendConversationTurn(string("conversation-id"), { projectId: string("project-id"), text: string("text") });
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "conversation" && action === "cancel") {
+      const result = await client.cancelConversation(string("conversation-id"), { projectId: string("project-id") });
       printState(io.stdout, result, json);
       return 0;
     }
@@ -253,7 +289,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       return 0;
     }
     if (resource === "worker" && (action === "certify" || action === "certify-conditional")) {
-      const certification = parseJsonOption(string("certification-json"), "--certification-json");
+      const certification = parseJsonOption<Omit<CertifyWorkerInput, "projectId">>(string("certification-json"), "--certification-json");
       const input = { ...certification, projectId: string("project-id") };
       const result = action === "certify"
         ? await client.certifyWorker(string("worker-id"), input, string("command-id"))
@@ -276,6 +312,17 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     }
     if (resource === "department-plan" && action === "revise") {
       const result = await client.reviseDepartmentPlan(string("council-id"), string("department-id"), { ...parseJsonOption(string("plan-json"), "--plan-json"), reason: string("reason") }, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "critical-action" && action === "request") {
+      const result = await client.requestCriticalAction(string("goal-id"), {
+        projectId: string("project-id"),
+        action: string("action"),
+        target: string("target"),
+        policyVersion: nonNegativeInteger(string("version"), "--version"),
+        budgetEffectCents: safeInteger(string("budget-effect-cents"), "--budget-effect-cents"),
+      }, string("command-id"));
       printState(io.stdout, result, json);
       return 0;
     }
@@ -332,7 +379,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       else printEvents(io.stdout, page.events, page.nextCursor);
       return 0;
     }
-    throw new Error("Usage: maestro admin project-access|goals list|goal create|get|transition|pause|stop|resume|emergency-stop|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|observe|cancel|accept|certify|certify-conditional|git goal-branch|git department-branch|worker-worktree|goal-revision|metronome scan|challenge|encore review|critical-action approve-and-run|budget ... | maestro events list ...");
+    throw new Error("Usage: maestro models list|conversation create|get|turn|cancel|admin project-access|goals list|goal create|get|transition|pause|stop|resume|emergency-stop|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|observe|cancel|accept|certify|certify-conditional|git goal-branch|git department-branch|worker-worktree|goal-revision|metronome scan|challenge|encore review|critical-action request|approve-and-run|budget ... | maestro events list ...");
   } catch (error) {
     const message = error instanceof ApiError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : "Command failed";
     io.stderr(`${message}\n`);
@@ -341,7 +388,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
 }
 
 function helpText(): string {
-  return `Maestro CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  admin project-access --operator-id --project-id --roles-json\n  goal create|get|transition|pause|stop|resume|emergency-stop\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  git goal-branch|department-branch|worker-worktree|goal-revision\n  metronome scan|challenge\n  encore review\n  critical-action approve-and-run\n  events list\n\nUse --json for machine-readable output.\n`;
+  return `Maestro CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  admin project-access --operator-id --project-id --roles-json\n  goal create|get|transition|pause|stop|resume|emergency-stop\n  models list\n  conversation create|get|turn|cancel\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  git goal-branch|department-branch|worker-worktree|goal-revision\n  metronome scan|challenge\n  encore review\n  critical-action request|approve-and-run\n  events list\n\nUse --json for machine-readable output.\n`;
 }
 
 function nonNegativeInteger(value: string, option: string): number {
@@ -356,7 +403,7 @@ function safeInteger(value: string, option: string): number {
   return parsed;
 }
 
-function parseJsonOption(value: string, option: string): any {
+function parseJsonOption<T extends object = Record<string, unknown>>(value: string, option: string): T {
   try { return JSON.parse(value); } catch { throw new Error(`${option} must contain valid JSON`); }
 }
 
@@ -382,6 +429,15 @@ function printEvents(write: CliIo["stdout"], events: GoalEvent[], nextCursor: st
   else for (const event of events) write(`${event.cursor} ${event.eventType} goal=${event.goalId}\n`);
 }
 
-if (import.meta.url === new URL(process.argv[1]!, "file:").href) {
+export function shouldRunAsMain(moduleUrl: string, argvPath: string | undefined, resolvePath: (path: string) => string = realpathSync): boolean {
+  if (argvPath === undefined) return false;
+  try {
+    return fileURLToPath(moduleUrl) === resolvePath(argvPath);
+  } catch {
+    return false;
+  }
+}
+
+if (shouldRunAsMain(import.meta.url, process.argv[1])) {
   void executeCli(process.argv.slice(2), process.env, { fetch: globalThis.fetch, stdout: (text) => process.stdout.write(text), stderr: (text) => process.stderr.write(text) }).then((code) => { process.exitCode = code; });
 }

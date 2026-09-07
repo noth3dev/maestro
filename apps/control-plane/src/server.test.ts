@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { once } from "node:events";
 import { request as httpRequest, type IncomingMessage } from "node:http";
-import { buildServer, type EventService, type GoalService, type OperatorAuthenticator, type HeadParticipationService, type CouncilService, type EncoreService } from "./server.js";
+import { buildServer, type EventService, type GoalService, type OperatorAuthenticator, type HeadParticipationService, type CouncilService, type EncoreService, type ProjectDiscoveryService } from "./server.js";
 import type { ReadStateService } from "./read-state-service.js";
 import { ProjectMembershipRequiredError, ProjectAccessAdminRequiredError, StaleGoalLeaseError, HeadActivationRequesterInactiveError } from "@maestro/persistence";
 
@@ -46,6 +46,26 @@ describe("health routes", () => {
   it("fails readiness when the configured dependency check fails", async () => {
     const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readinessCheck: async () => { throw new Error("database unavailable"); } });
     expect((await app.inject({ method: "GET", url: "/readyz" })).statusCode).toBe(503);
+    await app.close();
+  });
+});
+
+describe("project discovery route", () => {
+  it("lists only the authenticated operator's durable project memberships", async () => {
+    const listProjects = vi.fn(async (operatorId: string) => operatorId === operator.operatorId ? [goal.projectId] : []);
+    const projectDiscovery: ProjectDiscoveryService = { listProjects };
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), projectDiscovery });
+    const response = await app.inject({ method: "GET", url: "/v1/projects", headers: { authorization: "Bearer test-secret" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ projects: [goal.projectId] });
+    expect(listProjects).toHaveBeenCalledWith(operator.operatorId);
+    await app.close();
+  });
+
+  it("fails closed when project discovery is not composed", async () => {
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated() });
+    const response = await app.inject({ method: "GET", url: "/v1/projects", headers: { authorization: "Bearer test-secret" } });
+    expect(response.statusCode).toBe(503);
     await app.close();
   });
 });

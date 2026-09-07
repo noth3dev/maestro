@@ -251,3 +251,7 @@
 Tasks 1-5 establish the interactive runtime. Task 6 may begin only after typed read models and event/session behavior are truthful. Task 7 follows the read surface and approval dialog. Task 8 follows the command registry and server conversation contract. Task 9 follows event reconnect and server recovery evidence. Task 10 may proceed in parallel only as a branding-only slice but must not rename internal package paths casually. Task 11 is the final acceptance gate.
 
 Every task ends with focused RED/GREEN evidence, build evidence, and a Conventional Commit. Do not mark the TUI operationally accepted without real PostgreSQL, real Control Plane/Prime Agent process behavior, parity evidence, and independent no-edit review.
+
+## Current execution note
+
+Task 3 is constrained by the existing Control Plane boundary: it requires `DATABASE_URL` and an authenticated token, while no local database manager or first-run credential bootstrap exists. Implement the truthful resolver and setup-required UX first. Do not add an embedded database, plaintext token file, or fake local connection. A later server/bootstrap task must define and verify the local PostgreSQL and credential lifecycle before transparent auto-start can be claimed.

@@ -145,7 +145,7 @@ export async function listDeviceGrantsForGoal(pool: Pick<Pool, "query">, goalId:
 
 /** Revocation is immediate, one-way, and CEO-authorized. Retrying an
  * already-revoked grant is idempotent. */
-export async function revokeDeviceGrant(pool: Pool, grantId: string, proof: GoalLeaseProof, context: CouncilActorContext): Promise<DeviceGrant> {
+export async function revokeDeviceGrant(pool: Pool, grantId: string, proof: GoalLeaseProof, _context: CouncilActorContext): Promise<DeviceGrant> {
   const client = await pool.connect();
   let open = false;
   try {
