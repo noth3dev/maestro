@@ -2135,3 +2135,145 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - The latest implementation is the Phase 5 first capacity slice: project-wide worker-slot admission control. It intentionally does not implement the complete multi-resource model or a server-side queue.
 - Corrected the current pointer conceptually: the next Phase 5 work is resource inventory/demand reservations/protected floors/admission-control expansion.
 - PostgreSQL-backed acceptance evidence is still pending because this environment has no Docker/local PostgreSQL.
+
+
+## 2026-09-06 — Maestro TUI bounded shell hardening
+- Built the independent `maestro` terminal TUI above the typed API client, with workspace/Git-root detection, Maestro/Concertmaster branding, truthful Control Plane health, session metadata, dashboard reads, activity timeline, slash parsing/autocomplete, command palette shortcuts, write routing, and approval dialog.
+- Added durable event cursor persistence, event identity deduplication, bounded reconnect attempts with visible retry/exhaustion messages, and session attach/new/retry commands. Session files are validated and forced to mode `0600` in mode `0700` directories.
+- Added CLI spelling aliases (`critical-action`, `workers`, `metronome-challenges`, `encore-council`, `certifications`, and `concertmaster-report`) and project-binding regression coverage for JSON payloads.
+- Critical permission changes fail closed in the TUI until they are bound to the Control Plane durable approval endpoint. Fail-safe emergency stop remains a direct server-authorized control path; local Git branch/worktree operations follow the server's ordinary classification.
+- Verification after hardening: `npm run check` passed with 539 tests and 360 environment-gated skips; `npm run build` and `git diff --check` passed. PostgreSQL/real-process/Prime acceptance remains unrun in this environment.
+
+
+## 2026-09-06 — Maestro TUI fail-safe confirmation hardening
+
+- Classified `goal emergency-stop` and `metronome safe-pause` as critical safety actions in the
+  command registry. Both now require explicit local confirmation before dispatch.
+- Preserved the durable-approval fail-closed rule for permission and other critical mutations;
+  emergency stop remains allowed only as the Control Plane's server-authorized fail-safe path.
+- Added cancellation and approved-dispatch regression tests for emergency stop and updated
+  command-palette/registry safety classifications.
+- Verified: targeted TUI command tests pass (15 tests), `npm run check` passes (84 files passed,
+  51 skipped; 540 tests passed, 360 skipped), `npm run build`, and `git diff --check` pass.
+
+
+## 2026-09-06 — Maestro TUI first-run project discovery
+
+- Added an authenticated `GET /v1/projects` Control Plane route backed by active
+  `operator_project_memberships`; the route fails closed when discovery is not composed.
+- Added the typed `ApiClient.listProjects()` contract and schema.
+- A workspace with no saved project now auto-attaches when exactly one authorized project is
+  visible, persists the validated session metadata, and never guesses when there are zero or
+  multiple projects. Added `/projects list` and `/session attach --project-index=<n>` for the
+  multi-project case while retaining the explicit project-ID fallback.
+- Added API, server, and resolver tests for authenticated discovery, unavailable composition,
+  single-project auto-attach, empty/ambiguous results, and attachment preservation.
+- Verification: focused tests pass (65 tests), `npm run build` passes, and `git diff --check`
+  passes.
+
+
+## 2026-09-06 — Maestro TUI typed read parity
+
+- Wired the existing typed Control Plane reads for Task Contract, Council, Department Plan,
+  and Mission Bundle into the TUI read-command path. Each validates required identifiers and
+  returns a concise durable record summary instead of a false "not wired" state.
+- Mission Bundle `--plan-version` is validated as a positive integer before any client call.
+- Added regression coverage for all four routes and invalid version input.
+- Verification: `npm run check` passes (84 files passed, 51 skipped; 548 tests passed,
+  360 skipped), `npm run build`, and `git diff --check` pass.
+
+
+## 2026-09-06 — Maestro TUI Goal selection and project read command
+
+- Added local `/goal select --goal-id=...` context selection. The TUI validates the selected
+  Goal through the authenticated, project-bound `getGoal` API before persisting only the
+  workspace session metadata; it does not mutate durable Goal state.
+- Added `/projects list` to the normal typed read path, while retaining indexed project attach
+  for first-run multi-project workspaces.
+- Added session, registry, and read-command regression coverage.
+- Verification: focused tests pass (22 tests), `npm run build` passes, and `git diff --check`
+  passes.
+
+
+## 2026-09-06 — Maestro TUI Metronome scan classification fix
+
+- Corrected `metronome scan` from read to write in the TUI registry. The existing typed
+  `scanMetronome` route is an idempotent POST and was otherwise unreachable because the read
+  boundary rejected it before the implemented write handler.
+- Added registry and dispatch regression coverage.
+- Verification: targeted command tests pass (16 tests), `npm run build` passes, and
+  `git diff --check` passes.
+
+
+## 2026-09-06 — Maestro TUI critical-action request parity
+
+- Exposed the existing Control Plane critical-action request route through a typed
+  `ApiClient.requestCriticalAction()` method.
+- Added `/critical-action request` to the TUI. It validates the project/Goal-bound action,
+  target, policy version, and budget effect, then reports the server's durable decision.
+  Approval-and-run remains a separate critical command and still requires the durable approval
+  path plus local confirmation.
+- Corrected the missing request surface with API, registry, and write-router tests.
+- Verification: focused tests pass (30 tests), `npm run build` passes, and `git diff --check`
+  passes.
+
+
+## 2026-09-06 — Maestro TUI selected-Goal defaults
+
+- Goal-scoped TUI reads and writes now use the persisted selected session Goal when
+  `--goal-id` is omitted. Explicit IDs still override the session context.
+- Commands fail truthfully with `No Goal is selected; use --goal-id or /goal select` when
+  neither source is available. Project binding remains supplied by the workspace session.
+- Added read/write regression coverage for the no-ID path.
+- Verification: focused tests pass (26 tests), `npm run build` passes, and `git diff --check`
+  passes.
+
+
+## 2026-09-06 — Maestro CLI critical-action request parity
+
+- Added the existing Control Plane critical-action request route to the non-interactive CLI
+  as `critical-action request`, preserving the existing approve-and-run path.
+- Added `--json` and typed request coverage so CLI and TUI use the same API client contract.
+- Updated CLI usage/help text.
+- Verification: `apps/cli` main tests pass (17 tests), `npm run build` passes, and
+  `git diff --check` passes.
+
+
+## 2026-09-06 — Maestro TUI batch verification
+
+- Final branch verification after project discovery, Goal selection, typed read parity,
+  critical-action request parity, and Metronome classification hardening: `npm run check`
+  passed with 84 files passed, 51 skipped; 557 tests passed, 360 skipped; 0 failed.
+- `npm run build` and `git diff --check` passed.
+- Bounded bare-TUI smoke rendered the truthful setup-required state, workspace/Git root,
+  explicit unavailable approvals, and session recovery banner. PostgreSQL, real-process, and
+  Prime Agent acceptance remain environment-gated and were not claimed.
+- Feature branch is clean at `9d1ca7b`; recent commits are Conventional Commits.
+
+
+## 2026-09-07 — Prime Agent/model replacement audit
+
+- Classified the requested change as **architectural** because it changes the execution-kernel/provider boundary and the model authorization contract. No implementation was started pending design approval.
+- Confirmed the current model-loading path: `packages/prime-adapter/src/execution-kernel.ts:365-379` calls `createAgentSession` without a model override; Prime Agent therefore resolves the model from its registry/settings/authentication path. The adapter can read the resulting identity at `:265-269`, but does not choose it.
+- Confirmed the policy gap: `packages/domain/src/mission-bundle.ts:16,69-70` requires non-empty `approvedModels`, while `packages/persistence/src/worker.ts:209-216` forwards only `allowedTools` and `allowedSkills` to `SpawnRequest`. `grep` found no production consumer of `approvedModels` outside validation/domain code. A Mission Bundle can therefore approve one model while the provider selects another configured/default model.
+- Confirmed provider choices in the pinned Prime Agent dependency: ChatGPT subscription uses Prime Agent's `openai-codex` OAuth/backend path; OpenAI API key uses `openai`; Claude subscription uses `anthropic` OAuth; Claude API key uses `anthropic`; Prime Inference is a separate OpenAI-compatible endpoint. These credentials must remain in the provider boundary and must not be copied into the Control Plane or TUI.
+- Recommended direction: two explicit seams—runtime/kernel selection plus model-provider selection—with direct OpenAI/Claude support introduced first as proposal-only controller capabilities. Prime Agent remains the current worker kernel until lifecycle parity is proven.
+
+
+## 2026-09-07 — Native backend independent adversarial review
+
+- A read-only reviewer found the native design directionally safe but not implementation-ready. The highest-risk gaps are missing conversation endpoint/session/idempotency contracts, executable tool-call/turn/event contracts, host-side delegated authority, child-agent grant semantics, complete model-policy propagation, and durable invocation/recovery bindings.
+- The reviewer also confirmed that `ExecutionKernelPort` currently has no tool dispatch method and that Prime-specific child behavior cannot be copied as the provider-neutral contract. Native Maestro must own this behavior explicitly.
+- Subscription-specific review remains in progress. No production code was changed; implementation is gated on closing these design items in the plan.
+
+
+## 2026-09-07 — Native model conversation vertical slice
+
+- Added provider-neutral conversation/model contracts and stable API error codes.
+- Added durable PostgreSQL tables for conversations, turns, and replayable conversation event cursors in migration `0064_native_agent_runtime.sql`.
+- Composed the authenticated Control Plane model catalog, conversation create/get/turn/cancel routes, and conversation SSE replay route.
+- Composed `createPostgresConversationService` with exact model admission, gateway binding, Maestro-native runtime execution, bounded text handling, per-turn optimistic claim, durable result recording, and truthful unknown outcomes.
+- Added API-client methods and CLI commands: `models list`, `conversation create|get|turn|cancel`.
+- TUI free text now uses the selected project and Goal, an exact `MAESTRO_MODEL`, and the authenticated conversation API. Session files persist only non-secret conversation/model metadata.
+- Added gateway configuration documentation and redaction coverage. The gateway remains a separately started process; provider keys stay there.
+- Fresh verification: `npm run check` passed with 95 files passed, 51 skipped; 587 tests passed, 360 skipped; 0 failed. Gateway `/healthz` process smoke returned HTTP 200. PostgreSQL integration and real provider calls remain environment-gated.

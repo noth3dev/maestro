@@ -1,5 +1,4 @@
 import { readFile } from "node:fs/promises";
-import { createServer } from "node:https";
 import { Pool } from "pg";
 import { createBoundedProjectFileReader, createDeviceAgentServer, DeviceFenceState } from "@maestro/device-agent";
 import { readDevice } from "@maestro/persistence";

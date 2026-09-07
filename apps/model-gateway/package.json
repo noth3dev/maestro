@@ -1,0 +1,23 @@
+{
+  "name": "@maestro/model-gateway",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@maestro/agent-runtime": "*",
+    "fastify": "^5.0.0",
+    "zod": "^4.0.0",
+    "@maestro/model-provider-openai": "*",
+    "@maestro/model-provider-anthropic": "*"
+  },
+  "scripts": {
+    "start": "node ./dist/main.js"
+  }
+}

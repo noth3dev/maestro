@@ -1,6 +1,6 @@
 import type { MetronomeCorrectionInput, MetronomeFindingList, MetronomeResolutionInput, MetronomeSafePauseInput, RaiseMetronomeChallengeInput } from "@maestro/contracts";
 import { METRONOME_ACTOR_ID } from "@maestro/domain";
-import { readMetronomeChallenge, raiseMetronomeChallenge, requestMetronomeCorrection, requestMetronomeSafePause, resolveMetronomeChallenge, scanGoalForMetronomeFindings, type MetronomeActorContext, type MetronomeFindingRecord } from "@maestro/persistence";
+import { raiseMetronomeChallenge, requestMetronomeCorrection, requestMetronomeSafePause, resolveMetronomeChallenge, scanGoalForMetronomeFindings, type MetronomeActorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
 
 export interface MetronomeService {

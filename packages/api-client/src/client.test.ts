@@ -6,6 +6,14 @@ const goalId = "22222222-2222-4222-8222-222222222222";
 const commandId = "33333333-3333-4333-8333-333333333333";
 
 describe("createApiClient", () => {
+  it("lists authenticated project memberships for first-run workspace discovery", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ projects: [projectId] }), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test/", token: "top-secret", fetch });
+
+    await expect(client.listProjects()).resolves.toEqual({ projects: [projectId] });
+    expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/projects", expect.objectContaining({ headers: { authorization: "Bearer top-secret" } }));
+  });
+
   it("sends authenticated idempotent create commands and parses the result", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ goalId, projectId, state: "draft", version: 0 }), { status: 201 }));
     const client = createApiClient({ baseUrl: "https://maestro.test/", token: "top-secret", fetch });
@@ -39,6 +47,14 @@ describe("createApiClient", () => {
     try { await client.transitionGoal(goalId, { projectId, expectedVersion: 0, to: "active" }, commandId); } catch (error) {
       expect(String(error)).not.toContain("top-secret");
     }
+  });
+
+  it("requests critical-action evaluation through the authenticated typed route", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ goalId, effect: "allow", reason: "policy allows", classification: "ordinary", recordId: commandId }), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+    const input = { projectId, action: "deploy", target: "staging", policyVersion: 2, budgetEffectCents: 0 };
+    await expect(client.requestCriticalAction(goalId, input, commandId)).resolves.toMatchObject({ effect: "allow" });
+    expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/critical-actions`, expect.objectContaining({ method: "POST", body: JSON.stringify(input), headers: expect.objectContaining({ "idempotency-key": commandId }) }));
   });
 
   it("sends project-bound idempotent Goal control operations", async () => {
@@ -163,4 +179,44 @@ describe("project access provisioning", () => {
     await expect(client.provisionProjectAccess({ operatorId, projectId, roles: ["concertmaster", "head-product"] })).resolves.toEqual({ operatorId, projectId, roles: ["concertmaster", "head-product"] });
     expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/admin/project-access", expect.objectContaining({ method: "POST", headers: { authorization: "Bearer secret", "content-type": "application/json" }, body: JSON.stringify({ operatorId, projectId, roles: ["concertmaster", "head-product"] }) }));
   });
+});
+
+
+it("streams authenticated durable events from the reconnect cursor", async () => {
+  const event = { cursor: "8", eventId: commandId, projectId, goalId, aggregateVersion: "1", eventType: "goal.running", schemaVersion: 1, payload: {}, occurredAt: "2030-01-01T00:00:00.000Z" };
+  const fetch = vi.fn().mockResolvedValue(new Response(`id: 8\nevent: goal-event\ndata: ${JSON.stringify(event)}\n\n: heartbeat\n\n`));
+  const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+  const received = [];
+  for await (const item of client.streamEvents({ projectId, after: "7" })) received.push(item);
+  expect(received).toEqual([event]);
+  expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/events/stream?projectId=${projectId}&after=7`, expect.objectContaining({ headers: { authorization: "Bearer secret" }, redirect: "error" }));
+});
+
+
+describe("native conversation client", () => {
+  const conversation = { conversationId: "44444444-4444-4444-8444-444444444444", projectId, goalId, model: "openai/gpt-5", status: "active", version: 1 };
+  it("lists models and sends a real authenticated conversation turn", async () => {
+    const turn = { conversation: { ...conversation, status: "succeeded", version: 2 }, turn: { turnId: "55555555-5555-4555-8555-555555555555", conversationId: conversation.conversationId, role: "assistant", content: "hello", status: "completed", cursor: "2", createdAt: "2030-01-01T00:00:00.000Z" } };
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ identity: { provider: "openai", id: "gpt-5" }, capabilities: ["text"], authModes: ["api-key"], dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy", trainsOnCustomerData: false, regions: ["US"] } }]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(conversation), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(turn), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+    await expect(client.listModels()).resolves.toHaveLength(1);
+    await expect(client.createConversation({ projectId, goalId, model: "openai/gpt-5" })).resolves.toEqual(conversation);
+    await expect(client.sendConversationTurn(conversation.conversationId, { projectId, text: "hi" })).resolves.toEqual(turn);
+    expect(fetch.mock.calls[2]![0]).toBe(`https://maestro.test/v1/conversations/${conversation.conversationId}/turns`);
+  });
+});
+
+
+it("streams conversation events from a durable reconnect cursor", async () => {
+  const conversationId = "44444444-4444-4444-8444-444444444444";
+  const event = { cursor: "2", eventId: "55555555-5555-4555-8555-555555555555", conversationId, projectId, eventType: "turn_completed", payload: { status: "succeeded" }, occurredAt: "2030-01-01T00:00:00.000Z" };
+  const fetch = vi.fn().mockResolvedValue(new Response(`id: 2\nevent: conversation-event\ndata: ${JSON.stringify(event)}\n\n`));
+  const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+  const received = [];
+  for await (const item of client.streamConversationEvents(conversationId, { projectId, after: "1" })) received.push(item);
+  expect(received).toEqual([event]);
+  expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/conversations/${conversationId}/events/stream?projectId=${projectId}&after=1`, expect.objectContaining({ headers: { authorization: "Bearer secret" }, redirect: "error" }));
 });

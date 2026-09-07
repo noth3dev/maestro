@@ -973,3 +973,33 @@ worker-device link and pause state against that concrete case rather than a hypo
 - Current Phase 5 slice: project-wide active-worker admission control via `MAESTRO_MAX_CONCURRENT_WORKERS_PER_PROJECT`; this is a deliberate first slice, not completion of the full resource-capacity model or queue behavior.
 - Local verification on this environment: `npm run build` passed; `npm test` passed with 61 files/469 tests passed and 51 files/360 tests skipped because no PostgreSQL URL is available. Full PostgreSQL verification remains blocked by the environment.
 - Next actionable work: extend the capacity model with resource inventory, demand reservations, protected floors, and admission behavior, while preserving the explicit flat-worker-cap boundary until each additional resource has a defined contract.
+
+
+## 2026-09-07 — Prime Agent/model replacement audit remediation plan
+
+- [not_started] **Model-policy enforcement:** the Mission Bundle `approvedModels` list is validated and hashed, but is not currently carried into `SpawnRequest` or consumed by the Prime adapter. Before any provider swap, extend the provider-neutral request with a typed model policy, reject a provider/model outside that policy before external admission, and persist/report the selected `ModelIdentity`.
+- [not_started] **Explicit runtime selection:** retain `ExecutionKernelPort` as the provider-neutral seam, add an explicit runtime/provider registry and capability matrix, and never silently fall back from a requested OpenAI/Claude adapter to Prime Agent.
+- [not_started] **Staged direct-provider support:** direct ChatGPT/OpenAI and Claude adapters may initially be proposal-only controller backends. Worker execution remains unavailable until tool, child, cancellation, observation, usage, and recovery semantics meet the existing lifecycle contract.
+- **Acceptance fence:** this is a design/audit record only. No implementation or credential movement is authorized until the design is approved. Required evidence includes approved-model allow/deny tests, truthful unavailable fallback, model-identity evidence, credential-boundary tests, and existing PostgreSQL/real-process gates.
+
+
+## 2026-09-07 — Native backend adversarial design review gates
+
+- [not_started] Define authenticated conversation `create/turn/stream/cancel/reconnect` contracts with session/turn IDs, idempotency, durable cursors, per-session serialization, and route-bound project/Goal context before implementing runtime code.
+- [not_started] Define executable normalized model/tool/event contracts: tool-call IDs, strict argument/result schemas, tool-result message role, bounded turn/call/byte/token/time budgets, duplicate/replay handling, provider capability negotiation, and abort semantics.
+- [not_started] Define host-side `ToolContext`/delegated capability contract. Models must never receive bearer tokens or approve-and-run authority; critical approval must remain human-bound to exact args hash, command, project/Goal, expiry, and independent confirmation.
+- [not_started] Define durable parent/child binding, grant intersection, model policy, depth/worker ceilings, budget aggregation, cancellation cascade, and recorded child-message channels.
+- [not_started] Carry canonical provider/model policy through every kernel consumer (Worker, Head, semantic review, Encore, helpers), add durable actual model identity, and reject adapter identity mismatch before/after admission.
+- [not_started] Define streaming/event sink and durable invocation/turn/tool/provider usage evidence; do not use a result-only provider method for a streaming product surface.
+- [not_started] Define per-session turn locking, immutable runtime/model binding, provider request-ID namespacing, non-idempotent tool retry rules, and A1 unknown/fenced recovery semantics.
+- [not_started] Prime removal must include all project references, transitive lockfile packages, config fixtures, live tests, and security documentation, followed by a no-Prime dependency scan.
+
+
+## 2026-09-07 — Native conversation/CLI slice completed
+
+- [completed] Add authenticated model catalog and conversation contracts/routes/client methods.
+- [completed] Add PostgreSQL conversation, turn, and event-cursor migration.
+- [completed] Compose Control Plane with the separate model gateway when `MAESTRO_MODEL_GATEWAY_TOKEN` is configured.
+- [completed] Connect CLI commands and TUI free-text turns using `MAESTRO_MODEL` and non-secret session metadata.
+- [completed] Verify full build/test suite and gateway process health smoke.
+- [remaining] Add provider token streaming, durable restart reattachment/recovery, tool registry persistence, Codex app-server pairing, PostgreSQL integration acceptance, and remove legacy Prime composition after parity.

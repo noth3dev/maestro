@@ -14,6 +14,15 @@
       "path": "packages/domain"
     },
     {
+      "path": "packages/agent-runtime"
+    },
+    {
+      "path": "packages/model-provider-openai"
+    },
+    {
+      "path": "packages/model-provider-anthropic"
+    },
+    {
       "path": "packages/authority"
     },
     {
@@ -36,6 +45,9 @@
     },
     {
       "path": "apps/control-plane"
+    },
+    {
+      "path": "apps/model-gateway"
     },
     {
       "path": "apps/device-agent"

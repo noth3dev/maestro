@@ -8,7 +8,7 @@ import https from "node:https";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { deviceIdentityFingerprint, type DeviceGrantScope } from "@maestro/domain";
+import { type DeviceGrantScope } from "@maestro/domain";
 import { signDeviceGrantEnvelope, type UnsignedDeviceGrantEnvelope } from "@maestro/device-agent";
 import { applyAllMigrations, acquireGoalLease, bootstrapPermanentOrganization, createDeviceGrant, enrollDevice, revokeDevice, setLocalDevicePolicy } from "@maestro/persistence";
 
@@ -84,7 +84,7 @@ describeDatabase("real device-agent mTLS and signed grant process", () => {
 
   it("executes one real file read only after mTLS, signature, local fence, and durable grant rechecks", async () => {
     const tlsDir = await mkdtemp(join(tmpdir(), "maestro-device-tls-"));
-    const issuer = generateKeyPairSync("ed25519"); const deviceKeys = generateKeyPairSync("ed25519"); const otherKeys = generateKeyPairSync("ed25519");
+    const issuer = generateKeyPairSync("ed25519"); const deviceKeys = generateKeyPairSync("ed25519");
     const devicePublic = deviceKeys.publicKey.export({ type: "spki", format: "pem" }).toString();
     const tls = await createTlsMaterial(tlsDir, deviceKeys.privateKey.export({ type: "pkcs8", format: "pem" }).toString());
     const goalId = randomUUID(); const projectId = randomUUID(); const projectRoot = await mkdtemp(join(tmpdir(), "maestro-device-project-")); const target = join(projectRoot, "README.md"); await writeFile(target, "hello device");

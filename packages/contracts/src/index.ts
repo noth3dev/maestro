@@ -43,6 +43,65 @@ export type GoalResult = z.infer<typeof GoalResultSchema>;
 export const GoalListSchema = z.object({ goals: z.array(GoalResultSchema) }).strict();
 export type GoalList = z.infer<typeof GoalListSchema>;
 
+
+export const ModelRefSchema = z.string().regex(/^[^\s/]+\/[^\s/]+$/).max(320);
+export type ModelRef = z.infer<typeof ModelRefSchema>;
+export const ConversationStatusSchema = z.enum(["active", "running", "succeeded", "failed", "cancelled", "unknown"]);
+export type ConversationStatus = z.infer<typeof ConversationStatusSchema>;
+export const ConversationSchema = z.object({
+  conversationId: UuidSchema,
+  projectId: UuidSchema,
+  goalId: UuidSchema,
+  model: ModelRefSchema,
+  status: ConversationStatusSchema,
+  version: CommandVersionSchema,
+}).strict();
+export type Conversation = z.infer<typeof ConversationSchema>;
+export const CreateConversationInputSchema = z.object({ projectId: UuidSchema, goalId: UuidSchema, model: ModelRefSchema }).strict();
+export type CreateConversationInput = z.infer<typeof CreateConversationInputSchema>;
+export const ConversationTurnInputSchema = z.object({ projectId: UuidSchema, text: z.string().min(1).max(64_000) }).strict();
+export type ConversationTurnInput = z.infer<typeof ConversationTurnInputSchema>;
+export const ConversationTurnSchema = z.object({
+  turnId: UuidSchema,
+  conversationId: UuidSchema,
+  role: z.enum(["user", "assistant", "tool"]),
+  content: z.string().max(64_000),
+  status: z.enum(["accepted", "completed", "failed", "cancelled", "unknown"]),
+  cursor: z.string().regex(/^(0|[1-9][0-9]*)$/),
+  createdAt: z.string().datetime(),
+}).strict();
+export type ConversationTurn = z.infer<typeof ConversationTurnSchema>;
+export const ConversationTurnResultSchema = z.object({ conversation: ConversationSchema, turn: ConversationTurnSchema }).strict();
+export type ConversationTurnResult = z.infer<typeof ConversationTurnResultSchema>;
+export const ConversationEventSchema = z.object({
+  cursor: z.string().regex(/^(0|[1-9][0-9]*)$/),
+  eventId: UuidSchema,
+  conversationId: UuidSchema,
+  projectId: UuidSchema,
+  eventType: z.enum(["conversation_created", "turn_started", "turn_completed", "turn_failed", "turn_cancelled", "turn_unknown"]),
+  payload: z.record(z.string(), z.unknown()),
+  occurredAt: z.string().datetime(),
+}).strict();
+export type ConversationEvent = z.infer<typeof ConversationEventSchema>;
+export const ConversationEventQuerySchema = z.object({ projectId: UuidSchema, after: z.string().regex(/^(0|[1-9][0-9]*)$/).default("0") }).strict();
+export type ConversationEventQuery = z.infer<typeof ConversationEventQuerySchema>;
+export const ModelCatalogEntrySchema = z.object({
+  identity: z.object({ provider: z.string().min(1), id: z.string().min(1) }).strict(),
+  capabilities: z.array(z.string().min(1)),
+  authModes: z.array(z.enum(["api-key", "managed-subscription"])),
+  dataPolicy: z.object({
+    allowedDataClasses: z.array(z.enum(["public", "workspace", "private", "pii", "phi", "secret"])),
+    retention: z.enum(["none", "provider-policy", "durable"]),
+    trainsOnCustomerData: z.boolean(),
+    regions: z.array(z.string().min(1)),
+  }).strict(),
+}).strict();
+export type ModelCatalogEntry = z.infer<typeof ModelCatalogEntrySchema>;
+
+/** Project identities visible to the authenticated operator for workspace attachment. */
+export const ProjectListSchema = z.object({ projects: z.array(UuidSchema) }).strict();
+export type ProjectList = z.infer<typeof ProjectListSchema>;
+
 const NonEmptyStringListSchema = z.array(z.string().min(1)).readonly();
 const TaskContractProjectSchema = z.object({
   projectId: UuidSchema,
@@ -156,6 +215,7 @@ export const StableApiErrorCodeSchema = z.enum([
   "critical_action_denied", "authority_denied", "critical_action_requires_approval", "critical_action_approval_forbidden", "head_activation_cycle", "head_activation_conflict", "council_not_found", "council_conflict", "council_briefs_sealed", "department_plan_not_found", "department_plan_conflict", "mission_bundle_not_found", "mission_bundle_conflict", "worker_not_found", "worker_conflict", "git_integration_not_found", "git_integration_conflict", "certification_not_found", "certification_conflict", "metronome_not_found", "metronome_conflict", "encore_not_found", "encore_conflict", "project_access_forbidden",
   "task_contract_not_found", "task_contract_conflict", "task_contract_version_conflict",
   "exact_confirmation_required", "task_contract_integrity_error", "discord_signal_rejected", "worker_capacity_exceeded",
+  "conversation_not_found", "conversation_conflict", "conversation_unavailable", "model_not_allowed", "provider_unavailable",
 ]);
 export const StableApiErrorSchema = z.object({
   error: z.object({ code: StableApiErrorCodeSchema, message: z.string().min(1) }).strict(),

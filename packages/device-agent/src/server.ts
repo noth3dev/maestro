@@ -82,7 +82,6 @@ function requestSession(request: IncomingMessage): Session | undefined {
 export function createDeviceAgentServer(options: DeviceAgentServerOptions): Server {
   const maxBodyBytes = options.maxBodyBytes ?? 64 * 1024;
   const server = createServer({ ...options.tls, requestCert: true, rejectUnauthorized: true }, async (request, response) => {
-    const socket = request.socket as TLSSocket;
     const session = requestSession(request);
     if (session === undefined) return json(response, 401, { error: "device_session_required" });
     try {

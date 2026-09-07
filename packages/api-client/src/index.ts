@@ -9,10 +9,20 @@ import {
   OvertureRoleSelectionResultSchema,
   EventQuerySchema,
   GoalEventPageSchema,
+  GoalEventSchema,
   GoalQuerySchema,
   GoalListSchema,
+  ProjectListSchema,
+  ConversationSchema,
+  CreateConversationInputSchema,
+  ConversationTurnInputSchema,
+  ConversationTurnResultSchema,
+  ConversationEventQuerySchema,
+  ConversationEventSchema,
+  ModelCatalogEntrySchema,
   GoalBudgetSummarySchema,
   GoalResultSchema,
+  CriticalActionInputSchema,
   CriticalActionApprovalInputSchema,
   CriticalActionResultSchema,
   HeadParticipationInputSchema,
@@ -73,8 +83,17 @@ import {
   type GoalEvent,
   type GoalQuery,
   type GoalList,
+  type ProjectList,
+  type Conversation,
+  type CreateConversationInput,
+  type ConversationTurnInput,
+  type ConversationTurnResult,
+  type ConversationEvent,
+  type ConversationEventQuery,
+  type ModelCatalogEntry,
   type GoalBudgetSummary,
   type GoalResult,
+  type CriticalActionInput,
   type CriticalActionApprovalInput,
   type CriticalActionResult,
   type HeadParticipationInput,
@@ -139,6 +158,13 @@ export interface ApiClient {
   confirmTaskContract(contractId: string, input: TaskContractConfirmationInput, commandId?: string): Promise<void>;
   launchTaskContract(contractId: string, projectId: string, commandId?: string): Promise<TaskContract>;
   listGoals(projectId: string): Promise<GoalList>;
+  listProjects(): Promise<ProjectList>;
+  listModels(): Promise<readonly ModelCatalogEntry[]>;
+  createConversation(input: CreateConversationInput): Promise<Conversation>;
+  getConversation(conversationId: string, query: GoalQuery): Promise<Conversation>;
+  sendConversationTurn(conversationId: string, input: ConversationTurnInput, options?: { signal?: AbortSignal }): Promise<ConversationTurnResult>;
+  cancelConversation(conversationId: string, query: GoalQuery): Promise<Conversation>;
+  streamConversationEvents(conversationId: string, query: ConversationEventQuery, options?: { signal?: AbortSignal }): AsyncIterable<ConversationEvent>;
   provisionProjectAccess(input: ProjectAccessProvisionInput): Promise<ProjectAccessProvisionResult>;
   getGoal(goalId: string, query: GoalQuery): Promise<GoalResult>;
   transitionGoal(goalId: string, input: TransitionGoalInput, commandId: string): Promise<GoalResult>;
@@ -146,6 +172,7 @@ export interface ApiClient {
   stopGoal(goalId: string, input: GoalControlInput, commandId: string): Promise<GoalResult>;
   resumeGoal(goalId: string, input: GoalControlInput, commandId: string): Promise<GoalResult>;
   emergencyStopGoal(goalId: string, input: GoalControlInput, commandId: string): Promise<GoalResult>;
+  requestCriticalAction(goalId: string, input: CriticalActionInput, commandId: string): Promise<CriticalActionResult>;
   approveAndRunCriticalAction(goalId: string, input: CriticalActionApprovalInput, commandId: string): Promise<CriticalActionResult>;
   activateHead(goalId: string, input: HeadParticipationInput, commandId: string): Promise<HeadParticipation>;
   createCouncil(goalId: string, input: CreateHeadCouncilInput, commandId: string): Promise<HeadCouncil>;
@@ -177,6 +204,7 @@ export interface ApiClient {
   runEncoreReview(goalId: string, input: EncoreReviewInput, commandId: string): Promise<EncoreCouncilResult>;
   getBudgetSummary(goalId: string, query: GoalQuery): Promise<GoalBudgetSummary>;
   listEvents(query: EventQuery): Promise<GoalEventPage>;
+  streamEvents(query: EventQuery, options?: { signal?: AbortSignal }): AsyncIterable<GoalEvent>;
   listMetronomeChallenges(goalId: string, query: GoalQuery): Promise<MetronomeChallengeList>;
   listEncoreCouncilRounds(goalId: string, query: GoalQuery): Promise<EncoreCouncilRoundList>;
   listCertifications(goalId: string, query: GoalQuery): Promise<CertificationList>;
@@ -187,6 +215,75 @@ export interface ApiClient {
 }
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+async function* readEventStream(fetch: Fetch, base: URL, headers: Record<string, string>, query: EventQuery, signal?: AbortSignal): AsyncGenerator<GoalEvent> {
+  const parsed = EventQuerySchema.parse(query);
+  const url = new URL("v1/events/stream", base);
+  url.search = new URLSearchParams({ projectId: parsed.projectId, after: parsed.after }).toString();
+  let response: Response;
+  try {
+    response = await fetch(url.href, { headers, redirect: "error", ...(signal === undefined ? {} : { signal }) });
+  } catch {
+    throw new Error("Control plane event stream failed");
+  }
+  if (!response.ok) throw new Error(`Control plane event stream returned HTTP ${response.status}`);
+  if (response.body === null) throw new Error("Control plane event stream returned no body");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      buffer += decoder.decode(chunk.value, { stream: !chunk.done });
+      const records = buffer.split(/\r?\n\r?\n/);
+      buffer = records.pop() ?? "";
+      for (const record of records) {
+        const eventName = record.match(/^event:\s*(.+)$/m)?.[1];
+        const data = record.match(/^data:\s*(.+)$/m)?.[1];
+        if (eventName !== "goal-event" || data === undefined) continue;
+        yield GoalEventSchema.parse(JSON.parse(data));
+      }
+      if (chunk.done) break;
+    }
+    if (buffer.trim() !== "") {
+      const eventName = buffer.match(/^event:\s*(.+)$/m)?.[1];
+      const data = buffer.match(/^data:\s*(.+)$/m)?.[1];
+      if (eventName === "goal-event" && data !== undefined) yield GoalEventSchema.parse(JSON.parse(data));
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+}
+
+async function* readConversationEventStream(fetch: Fetch, base: URL, headers: Record<string, string>, conversationId: string, query: ConversationEventQuery, signal?: AbortSignal): AsyncGenerator<ConversationEvent> {
+  const parsed = ConversationEventQuerySchema.parse(query);
+  const url = new URL(`v1/conversations/${encodeURIComponent(conversationId)}/events/stream`, base);
+  url.search = new URLSearchParams({ projectId: parsed.projectId, after: parsed.after }).toString();
+  let response: Response;
+  try { response = await fetch(url.href, { headers, redirect: "error", ...(signal === undefined ? {} : { signal }) }); }
+  catch { throw new Error("Control plane conversation stream failed"); }
+  if (!response.ok) throw new Error(`Control plane conversation stream returned HTTP ${response.status}`);
+  if (response.body === null) throw new Error("Control plane conversation stream returned no body");
+  const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = "";
+  try {
+    while (true) {
+      const chunk = await reader.read(); buffer += decoder.decode(chunk.value, { stream: !chunk.done });
+      const records = buffer.split(/\r?\n\r?\n/); buffer = records.pop() ?? "";
+      for (const record of records) {
+        if (record.match(/^event:\s*(.+)$/m)?.[1] !== "conversation-event") continue;
+        const data = record.match(/^data:\s*(.+)$/m)?.[1]; if (data !== undefined) yield ConversationEventSchema.parse(JSON.parse(data));
+      }
+      if (chunk.done) break;
+    }
+    if (buffer.trim() !== "") {
+      if (buffer.match(/^event:\s*(.+)$/m)?.[1] === "conversation-event") {
+        const data = buffer.match(/^data:\s*(.+)$/m)?.[1];
+        if (data !== undefined) yield ConversationEventSchema.parse(JSON.parse(data));
+      }
+    }
+  } finally { await reader.cancel().catch(() => undefined); }
+}
 
 export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, timeoutMs = 30_000, signal }: { baseUrl: string; token: string; fetch?: Fetch; timeoutMs?: number; signal?: AbortSignal }): ApiClient {
   const base = new URL(baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
@@ -269,6 +366,32 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
       const parsedProjectId = UuidSchema.parse(projectId);
       return request(`v1/goals?${new URLSearchParams({ projectId: parsedProjectId })}`, { headers }, GoalListSchema);
     },
+    listProjects() {
+      return request("v1/projects", { headers }, ProjectListSchema);
+    },
+    listModels() {
+      return request("v1/models", { headers }, { parse(body: unknown) {
+        if (!Array.isArray(body)) throw new Error("Control plane returned malformed model catalog");
+        return body.map((item) => ModelCatalogEntrySchema.parse(item));
+      } });
+    },
+    createConversation(input) {
+      return request("v1/conversations", { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(CreateConversationInputSchema.parse(input)) }, ConversationSchema);
+    },
+    getConversation(conversationId, query) {
+      const parsed = GoalQuerySchema.parse(query);
+      return request(`v1/conversations/${encodeURIComponent(UuidSchema.parse(conversationId))}?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, ConversationSchema);
+    },
+    sendConversationTurn(conversationId, input, options) {
+      return request(`v1/conversations/${encodeURIComponent(UuidSchema.parse(conversationId))}/turns`, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(ConversationTurnInputSchema.parse(input)), ...(options?.signal === undefined ? {} : { signal: options.signal }) }, ConversationTurnResultSchema);
+    },
+    cancelConversation(conversationId, query) {
+      const parsed = GoalQuerySchema.parse(query);
+      return request(`v1/conversations/${encodeURIComponent(UuidSchema.parse(conversationId))}/cancel`, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(parsed) }, ConversationSchema);
+    },
+    streamConversationEvents(conversationId, query, options) {
+      return readConversationEventStream(fetch, base, headers, UuidSchema.parse(conversationId), query, options?.signal);
+    },
     provisionProjectAccess(input) {
       return request("v1/admin/project-access", {
         method: "POST",
@@ -303,6 +426,13 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
     },
     emergencyStopGoal(goalId, input, commandId) {
       return controlGoal(goalId, input, commandId, "emergency-stop");
+    },
+    requestCriticalAction(goalId, input, commandId) {
+      return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/critical-actions`, {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
+        body: JSON.stringify(CriticalActionInputSchema.parse(input)),
+      }, CriticalActionResultSchema);
     },
     approveAndRunCriticalAction(goalId, input, commandId) {
       return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/critical-actions/approve-and-run`, {
@@ -505,7 +635,10 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
       const parsed = EventQuerySchema.parse(query);
       return request(`v1/events?${new URLSearchParams({ projectId: parsed.projectId, after: parsed.after })}`, { headers }, GoalEventPageSchema);
     },
+    streamEvents(query, options) {
+      return readEventStream(fetch, base, headers, query, options?.signal);
+    },
   };
 }
 
-export type { CreateGoalInput, CreateTaskContractInput, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, GoalGitIntegrationState, WorkerList, ImprovementDigestList };
+export type { CreateGoalInput, CreateTaskContractInput, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, GoalGitIntegrationState, WorkerList, ImprovementDigestList };

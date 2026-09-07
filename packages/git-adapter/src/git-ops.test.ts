@@ -18,7 +18,7 @@ const gitContext = {
   controlEpoch: "1",
 };
 
-function authorityWith(recordPatch: (request: Parameters<AuthorityRepository["load"]>[0]) => Partial<AuthorityRecord>) {
+function authorityWith(recordPatch: (_request: Parameters<AuthorityRepository["load"]>[0]) => Partial<AuthorityRecord>) {
   const repository: AuthorityRepository = {
     async load(request) {
       return [{
@@ -145,9 +145,9 @@ describe("local Git operations", () => {
   });
 
   it.each([
-    ["expired", (request: Parameters<AuthorityRepository["load"]>[0]) => ({ expiresAt: new Date("2028-01-01T00:00:00Z") }), "expired_grant"],
-    ["out-of-scope", (request: Parameters<AuthorityRepository["load"]>[0]) => ({ target: "another-repository" }), "no_grant"],
-    ["forged-actor", (request: Parameters<AuthorityRepository["load"]>[0]) => ({ actorId: "real-worker" }), "no_grant"],
+    ["expired", (_request: Parameters<AuthorityRepository["load"]>[0]) => ({ expiresAt: new Date("2028-01-01T00:00:00Z") }), "expired_grant"],
+    ["out-of-scope", (_request: Parameters<AuthorityRepository["load"]>[0]) => ({ target: "another-repository" }), "no_grant"],
+    ["forged-actor", (_request: Parameters<AuthorityRepository["load"]>[0]) => ({ actorId: "real-worker" }), "no_grant"],
   ] as const)("rejects %s authority before spawning Git", async (_label, recordPatch, reason) => {
     const deniedPort = createLocalGitPort({ authority: authorityWith(recordPatch), context: gitContext });
     await expect(deniedPort.createBranch(repositoryPath, `denied/${_label}`, baseRevision))
