@@ -27,14 +27,14 @@ Maestro: Self-Improving &amp; Durable Agent Orchestration for Versatile Tasks
 
 > **Languages:** [**English (en)**](docs/en/README.md) | [**한국어 (ko)**](docs/ko/README.md)
 
-Maestro is an open-source enterprise AI orchestration framework designed for reliable, long-running, multi-agent goal execution. Its current conversation path is owned by the **Maestro native agent runtime** and an authenticated provider gateway. The legacy Prime adapter remains only in the worker-execution composition while the native backend migration is completed. Maestro models real human organization structures—incorporating separation of powers, permanent domain departments, monotonic fencing leases, and cryptographic auditability to ensure zero unapproved side effects.
+Maestro is an open-source enterprise AI orchestration framework designed for reliable, long-running, multi-agent goal execution. Its current conversation path is owned by the **Maestro native agent runtime** and an authenticated provider gateway. All execution paths are owned by the native Maestro runtime and authenticated model gateway. Maestro models real human organization structures—incorporating separation of powers, permanent domain departments, monotonic fencing leases, and cryptographic auditability to ensure zero unapproved side effects.
 
 ## Current Runtime Boundary
 
 - **Conversation path:** `MaestroAgentRuntime` in the Control Plane, using the authenticated `apps/model-gateway` process.
 - **Provider authentication:** API keys stay in the gateway credential store. OpenAI ChatGPT subscription login is delegated to the documented Codex app-server; Maestro persists only login metadata and state.
-- **Worker path:** `ExecutionKernelPort` is still composed with the legacy `@maestro/prime-adapter`. Prime removal is not accepted until native worker parity, restart recovery, and no-Prime dependency checks pass.
-- **Terminal UI:** `@earendil-works/pi-tui` is used for presentation only. It is not the Prime Agent runtime.
+- **Worker path:** `ExecutionKernelPort` is composed with the native Model Gateway router. Every admission carries host context, capability grant, model policy, account binding, and idempotency.
+- **Terminal UI:** `@earendil-works/pi-tui` is used for presentation only and has no execution authority.
 
 ## Core Architecture & Pillars
 

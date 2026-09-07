@@ -181,7 +181,7 @@ describe("Encore and persistence error routes", () => {
   it("forwards the idempotency key to Encore and maps stale durable leases", async () => {
     const commandId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f0a";
     const input = { projectId: goal.projectId, question: "should we proceed?", criteria: [{ criterionId: "safety", description: "preserve safety" }], evidenceIds: [], reviewerCount: 1 };
-    const result = { roundId: commandId, judgments: [{ modelProvider: "prime", modelId: "kimi", verdict: "proceed" as const, confidence: "high" as const, reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [] }], synthesis: { finalVerdict: "proceed" as const, sameModelOnly: true, escalated: false, dissentNotes: [] } };
+    const result = { roundId: commandId, judgments: [{ modelProvider: "test", modelId: "test-model", verdict: "proceed" as const, confidence: "high" as const, reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [] }], synthesis: { finalVerdict: "proceed" as const, sameModelOnly: true, escalated: false, dissentNotes: [] } };
     const review = vi.fn(async (_goalId: string, _input: typeof input, receivedCommandId: string) => { expect(receivedCommandId).toBe(commandId); return result; });
     const encore: EncoreService = { review };
     const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), encoreService: encore });

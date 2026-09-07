@@ -82,7 +82,7 @@ describeDatabase("Encore Council with PostgreSQL", () => {
   it("runs a genuinely multi-model review, records real model identities, and reaches proceed with no dissent", async () => {
     const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
     const kernel = fakeKernelWithVerdicts([
-      { provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
+      { provider: "test", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
       { provider: "openai", id: "gpt", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
     ]);
     const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
@@ -90,13 +90,13 @@ describeDatabase("Encore Council with PostgreSQL", () => {
     expect(result.synthesis.sameModelOnly).toBe(false);
     expect(result.synthesis.escalated).toBe(false);
     const models = await pool.query("SELECT model_provider, model_id FROM encore_council_judgments WHERE round_id = $1 ORDER BY reviewer_index", [result.roundId]);
-    expect(models.rows).toEqual([{ model_provider: "prime", model_id: "kimi" }, { model_provider: "openai", model_id: "gpt" }]);
+    expect(models.rows).toEqual([{ model_provider: "test", model_id: "kimi" }, { model_provider: "openai", model_id: "gpt" }]);
   });
 
   it("replays a completed review by command identity without spawning reviewers again", async () => {
     const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
     const kernel = fakeKernelWithVerdicts([
-      { provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
+      { provider: "test", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
     ]);
     const spawn = vi.spyOn(kernel, "spawn");
     const commandId = randomUUID();
@@ -111,7 +111,7 @@ describeDatabase("Encore Council with PostgreSQL", () => {
   it("escalates and preserves the dissent note when reviewers materially disagree", async () => {
     const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
     const kernel = fakeKernelWithVerdicts([
-      { provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
+      { provider: "test", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
       { provider: "openai", id: "gpt", text: JSON.stringify({ verdict: "do_not_proceed", confidence: "high", reasoning: "unsafe", conditions: [], dissentNote: "I believe this is unsafe", citedEvidenceIds: [evidenceId] }) },
     ]);
     const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
@@ -126,8 +126,8 @@ describeDatabase("Encore Council with PostgreSQL", () => {
   it("labels a same-model-only round honestly and rejects an evidence reference that is not durable", async () => {
     const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
     const kernel = fakeKernelWithVerdicts([
-      { provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
-      { provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
+      { provider: "test", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
+      { provider: "test", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
     ]);
     const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
     expect(result.synthesis.sameModelOnly).toBe(true);
@@ -164,7 +164,7 @@ describeDatabase("Encore Council with PostgreSQL", () => {
         return [{ invocation: invocation as never, name: "reviewer", status: "succeeded", toolEvents: { state: "empty", events: [] }, usage: { state: "available", totalTokens: 1 }, answer: { state: "available", text: answers[index]! } }];
       },
       async cancel() { return { cancelled: true }; },
-      async getModelIdentity() { return { provider: "prime", id: "kimi" }; },
+      async getModelIdentity() { return { provider: "test", id: "kimi" }; },
       async getToolEvents() { return { state: "empty", events: [] }; },
       async getUsage() { return { state: "available", totalTokens: 1 }; },
       async getInvocationStatus() { return "succeeded"; },
@@ -181,7 +181,7 @@ describeDatabase("Encore Council with PostgreSQL", () => {
       goalId, proof, question: "Should this unsupported claim be allowed to influence release?", criteria, evidenceIds: [evidenceId], reviewerCount: 3,
     });
     expect(result.judgments).toHaveLength(3);
-    expect(result.judgments.every((judgment) => judgment.modelProvider === "prime" && judgment.modelId === "kimi")).toBe(true);
+    expect(result.judgments.every((judgment) => judgment.modelProvider === "test" && judgment.modelId === "kimi")).toBe(true);
     expect(result.synthesis.sameModelOnly).toBe(true);
     expect(result.synthesis.escalated).toBe(true);
     expect(result.synthesis.finalVerdict).toBe("escalate");
@@ -210,7 +210,7 @@ describeDatabase("Encore Council with PostgreSQL", () => {
 
   it("rejects direct tampering with immutable Encore Council records", async () => {
     const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
-    const kernel = fakeKernelWithVerdicts([{ provider: "prime", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) }]);
+    const kernel = fakeKernelWithVerdicts([{ provider: "test", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) }]);
     const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "q", criteria, evidenceIds: [evidenceId], reviewerCount: 1 });
     await expect(pool.query("UPDATE encore_council_syntheses SET final_verdict = 'proceed' WHERE round_id = $1", [result.roundId])).rejects.toThrow();
     await expect(pool.query("UPDATE encore_council_judgments SET verdict = 'escalate' WHERE round_id = $1", [result.roundId])).rejects.toThrow();

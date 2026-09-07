@@ -24,7 +24,7 @@ Maestro uses **npm workspaces** to manage packages and applications:
 │   ├── agent-runtime/     # Maestro-owned provider-neutral runtime and tool loop
 │   ├── model-provider-openai/ # OpenAI API-key provider adapter
 │   ├── model-provider-anthropic/ # Anthropic API-key provider adapter
-│   ├── prime-adapter/     # Legacy worker bridge; scheduled for removal
+│   ├── agent-runtime/     # Native execution runtime
 │   ├── model-provider-openai/ # OpenAI API-key and Codex app-server adapters
 │   ├── model-provider-anthropic/ # Anthropic API-key adapter
 │   ├── git-adapter/       # Git worktree, branch & commit executor
@@ -39,7 +39,7 @@ Maestro uses **npm workspaces** to manage packages and applications:
 * **npm**: `v10.x` or higher
 * **PostgreSQL**: `17.x` (required for persistence integration tests)
 * **Docker**: Required for running disposable PostgreSQL test containers (`Testcontainers`)
-* **OS**: Linux recommended for Docker/PostgreSQL and process-based integration tests; the native conversation runtime does not require Prime Agent isolation primitives.
+* **OS**: Linux recommended for Docker/PostgreSQL and process-based integration tests; the native runtime uses the authenticated Model Gateway for provider isolation.
 
 ---
 
@@ -69,14 +69,8 @@ To run real database integration suites, pass a disposable PostgreSQL URL via `M
 MAESTRO_TEST_DATABASE_URL=postgresql://maestro_test:maestro_test@127.0.0.1:55432/maestro_test npm test
 ```
 
-### 5) Legacy Prime adapter compatibility testing
-The worker-execution bridge still has an environment-gated compatibility suite. This does not certify the native backend migration:
-```bash
-MAESTRO_LIVE_PRIME=1 npm test -- packages/prime-adapter/src/sdk.live.test.ts
-```
-
 ### 6) Current TUI and runtime boundary
-The CLI TUI uses `@earendil-works/pi-tui` `0.85.1` for terminal rendering, input, overlays, and scrolling. It does not use Prime Agent as a runtime and never writes PostgreSQL or provider credentials. Conversation requests go through the authenticated Control Plane conversation API and `MaestroAgentRuntime`; worker execution still uses the legacy Prime adapter until native parity and restart-recovery evidence are accepted.
+The CLI TUI uses `@earendil-works/pi-tui` `0.85.1` for terminal rendering, input, overlays, and scrolling. It has no execution authority and never writes PostgreSQL or provider credentials. All execution requests go through the authenticated Control Plane and native runtime.
 
 ---
 

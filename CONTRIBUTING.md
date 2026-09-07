@@ -1,6 +1,6 @@
 # Contributing to Maestro
 
-Thank you for your interest in contributing to **Maestro**! Maestro is an open-source enterprise AI orchestration framework built on top of the **Prime Agent SDK**, designed for reliable, long-running, multi-agent goal execution.
+Thank you for your interest in contributing to **Maestro**! Maestro is an open-source enterprise AI orchestration framework built on the **Maestro native agent runtime** and authenticated model gateway, designed for reliable, long-running, multi-agent goal execution.
 
 We welcome contributions of all forms—bug reports, feature proposals, documentation improvements, and pull requests.
 

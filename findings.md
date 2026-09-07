@@ -740,3 +740,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Removed `primeAgentVersion` from Maestro configuration and all source fixtures.
 - Evidence: Head HTTP PostgreSQL suite **2/2**, team-lead PostgreSQL suite **11/11** on disposable port `55475`, semantic review **3/3**, Encore **8/8**, config/native router **19/19**, forced TypeScript build passed.
 - Remaining: delete the Prime package/dependency and lockfile references; wire durable semantic/Encore admission callers where production surfaces exist; add real Model Gateway HTTP process evidence.
+
+
+## 2026-09-08 — Prime package deletion verification
+
+- Removed `packages/prime-adapter`, its Control Plane dependency, root and app TypeScript references, and all Prime tarball entries from `package-lock.json`; `npm prune --ignore-scripts` removed the stale installed packages.
+- Source/dependency scan: `git grep -in prime -- '*.ts' '*.tsx' '*.js' '*.json' '*.toml' '*.yaml' '*.yml'` is clean; `prime` is absent from `package-lock.json`; `node_modules/@maestro/prime-adapter` and `node_modules/prime-agent` are absent. Historical findings retain their original audit evidence.
+- Native focused verification after deletion: 5 files / 50 tests passed; forced TypeScript build passed.
+- Full real Model Gateway process acceptance is still open; no credential or provider secret was added to tests or persistence.

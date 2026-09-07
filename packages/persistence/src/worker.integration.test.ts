@@ -45,7 +45,7 @@ const bundleSubstance = (overrides: Partial<MissionBundleSubstance> = {}): Missi
   ...overrides,
 });
 
-/** A minimal, deterministic fake standing in for a real Prime execution kernel. */
+/** A minimal, deterministic fake standing in for a real native execution kernel. */
 function fakeKernel(finalStatus: InvocationObservation["status"] = "succeeded"): ExecutionKernelPort & { spawnedCount: number; cancelledInvocations: string[]; releasedInvocations: string[]; spawnRequests: Parameters<ExecutionKernelPort["spawn"]>[0][] } {
   let counter = 0;
   const invocations = new Map<string, { execution: string; name: string }>();

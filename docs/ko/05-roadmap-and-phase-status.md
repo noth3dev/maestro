@@ -19,9 +19,9 @@ Maestro는 각 단계의 검증 증거가 완료되어야 다음 단계로 진�
 
 ### 네이티브 에이전트 백엔드 마이그레이션 — 현재 경계
 
-Maestro 네이티브 런타임과 인증된 model gateway는 구현되어 대화 경로를 제공합니다. ChatGPT account-login recovery도 내구성 상태, fenced status/cancel 작업 및 metadata-only 저장을 포함하여 통합되었습니다. 그러나 마이그레이션은 **아직 승인 완료가 아닙니다**. `apps/control-plane/src/main.ts`는 워커 실행에 `createPrimeExecutionKernel()`을 아직 구성하고 있으며, workspace에도 `@maestro/prime-adapter`가 남아 있습니다. Prime 제거에는 네이티브 워커 parity, 프로세스/recovery 증거, Prime 전용 테스트 이전 및 새로운 no-Prime source/dependency scan이 필요합니다.
+Maestro 네이티브 런타임과 인증된 model gateway가 대화와 워커 실행을 모두 담당합니다. ChatGPT account-login recovery도 내구성 상태, fenced status/cancel 작업 및 metadata-only 저장을 포함하여 통합되었습니다. 네이티브 admission은 host context, immutable grant, 정확한 provider-qualified model policy, account binding 및 idempotency를 포함합니다. 남은 Phase 1 gate는 실제 gateway process와 PostgreSQL evidence를 요구합니다.
 
-CLI TUI는 `@earendil-works/pi-tui` `0.85.1` 터미널 primitive를 사용합니다. 이는 표현 계층 의존성이며 Prime Agent 런타임이 아닙니다. TUI는 Control Plane을 우회하거나 provider credential을 승인하지 않습니다.
+CLI TUI는 `@earendil-works/pi-tui` `0.85.1` 터미널 primitive를 사용합니다. 이는 provider나 실행 권한이 없는 표현 계층 의존성입니다.
 
 ### Phase 6 Step 1 — 승인된 경계
 
@@ -33,7 +33,7 @@ Phase 6 Step 1은 불변·프로젝트 전용 Improvement Digest slice로 승인
 
 > [!IMPORTANT]
 > **운영 사용성 게이트 공지:**  
-> Phase 1–4의 도메인/영속성 단위 테스트는 GREEN 상태이지만, 독립 감사 결과 Phase 1–3 제어 평면 기능은 실운영 사용성 요구사항(엔드투엔드 서비스 API 실행 경로, Git 실효 어댑터 연결, 상시 Metronome 관찰)이 완료되어야 승인됩니다. 네이티브 대화 경로는 사용할 수 있지만 워커 실행은 네이티브 백엔드 parity 및 recovery 게이트가 통과될 때까지 레거시 Prime 어댑터에 의존합니다. Phase 4 디바이스 제어 역시 실제 라이브 기기 에이전트 프로토콜 연결을 대기 중입니다. 이 수정 계획은 **Phase 5 Remediation Plan** 하에서 진행됩니다.
+> Phase 1–4의 도메인/영속성 단위 테스트는 GREEN 상태이지만, 독립 감사 결과 Phase 1–3 제어 평면 기능은 실운영 사용성 요구사항(엔드투엔드 서비스 API 실행 경로, Git 실효 어댑터 연결, 상시 Metronome 관찰)이 완료되어야 승인됩니다. 네이티브 대화와 워커 경로를 모두 사용할 수 있으며, 남은 승인 조건은 실제 gateway process, 재시작 및 recovery evidence입니다. Phase 4 디바이스 제어 역시 실제 라이브 기기 에이전트 프로토콜 연결을 대기 중입니다. 이 수정 계획은 **Phase 5 Remediation Plan** 하에서 진행됩니다.
 
 ---
 
