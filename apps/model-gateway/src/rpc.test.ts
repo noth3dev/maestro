@@ -29,6 +29,24 @@ async function server() {
   return { app, account };
 }
 
+describe("model gateway error boundaries", () => {
+  it("preserves a stable lost-login code for Control Plane recovery", async () => {
+    const credentials = new InMemoryCredentialStore();
+    const registry = new ProviderRegistry();
+    const codex = {
+      startChatGptLogin: async () => ({ providerId: "openai-codex" as const, loginId: "login-1", authUrl: "https://chatgpt.com/login" }),
+      loginStatus: async () => { throw new Error("account login session is unknown"); },
+      cancelLogin: async () => {}, close: async () => {},
+    };
+    const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1", codex });
+    const app = buildModelGatewayServer({ gateway, token: "gateway-secret", operatorId: "operator-1" });
+    const response = await app.inject({ method: "POST", url: "/v1/account-logins/status", headers: { authorization: "Bearer gateway-secret" }, payload: { requestId: "status-1", operatorId: "operator-1", providerId: "openai-codex", loginId: "login-1" } });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ error: { code: "account_login_session_unknown", message: "account login session is unknown" } });
+    await app.close();
+  });
+});
+
 describe("model gateway RPC", () => {
   it("requires gateway authentication and exposes only normalized models", async () => {
     const { app } = await server();
