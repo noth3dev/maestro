@@ -14,7 +14,7 @@ const validInput = () => ({
     contractId: "contract-1",
     version: 2,
     content: { desiredOutcome: "ship it", constraints: ["bounded"] },
-    contentHash: taskContractContentHash({ desiredOutcome: "ship it", constraints: ["bounded"] } as never),
+    contentHash: taskContractContentHash({ desiredOutcome: "ship it", constraints: ["bounded"] }),
   },
   participants: [
     { participantId: "head-a", sessionRef: "session-a" },

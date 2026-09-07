@@ -298,9 +298,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
   readinessCheck?: () => Promise<void>;
   conversationService?: ConversationService;
 }): FastifyInstance {
-  const app: FastifyInstance = https
-    ? (Fastify({ https }) as unknown as FastifyInstance)
-    : Fastify();
+  const app: FastifyInstance = https === undefined ? Fastify() : Fastify({ https });
   const activeStreams = new Set<() => void>();
   const maxActiveStreams = 128;
   const loginOwnerId = accountLoginOwnerId ?? `control-plane-${randomUUID()}`;

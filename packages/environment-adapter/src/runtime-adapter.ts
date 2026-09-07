@@ -87,13 +87,25 @@ type SpawnPlan = {
   readonly options: ProcessSpawnOptions;
 };
 
-const defaultProcessSpawner: ProcessSpawner = (executable, args, options) =>
-  nodeSpawn(executable, [...args], {
+const defaultProcessSpawner: ProcessSpawner = (executable, args, options) => {
+  const child = nodeSpawn(executable, [...args], {
     cwd: options.cwd,
     env: { ...options.env },
     shell: false,
     stdio: ["ignore", "pipe", "pipe"],
-  }) as unknown as SpawnedProcess;
+  });
+  if (child.stdout === null || child.stderr === null) throw new EnvironmentBoundaryError("Process output pipes were not created");
+  return {
+    stdout: { on: (event, listener) => child.stdout.on(event, listener) },
+    stderr: { on: (event, listener) => child.stderr.on(event, listener) },
+    on: (event, listener) => {
+      if (event === "error") return child.on("error", listener as (error: Error) => unknown);
+      const closeListener = listener as (code: number | null, signal: string | null) => unknown;
+      return child.on("close", (code, signal) => closeListener(code, signal));
+    },
+    kill: (signal?: string) => signal === undefined ? child.kill() : child.kill(signal as NodeJS.Signals),
+  };
+};
 
 function nonblank(value: unknown): value is string {
   return typeof value === "string" && value.trim() !== "";

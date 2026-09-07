@@ -7,6 +7,18 @@ export type ExecutionRef = string & { readonly [executionRefBrand]: "ExecutionRe
 export type InvocationRef = string & { readonly [invocationRefBrand]: "InvocationRef" };
 export type ToolEventRef = string & { readonly [toolEventRefBrand]: "ToolEventRef" };
 
+/** Convert a non-empty persisted/provider execution identifier at the boundary. */
+export function toExecutionRef(value: string): ExecutionRef {
+  if (value.trim() === "") throw new Error("Execution reference must be non-empty");
+  return value as ExecutionRef;
+}
+
+/** Convert a non-empty persisted/provider invocation identifier at the boundary. */
+export function toInvocationRef(value: string): InvocationRef {
+  if (value.trim() === "") throw new Error("Invocation reference must be non-empty");
+  return value as InvocationRef;
+}
+
 /** `unknown` means no provider state or terminal evidence is available. */
 export type InvocationStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "unknown";
 

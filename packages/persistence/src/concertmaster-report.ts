@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { certificationsConflict, evaluateCertificationCompleteness, requiredConditionalCertifications, taskContractContentHash, type CertificationRecordFact } from "@maestro/domain";
+import { assertValidTaskContractSubstance, certificationsConflict, evaluateCertificationCompleteness, requiredConditionalCertifications, taskContractContentHash, type CertificationRecordFact } from "@maestro/domain";
 import type { EvidenceContentReader } from "@maestro/evidence";
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
@@ -184,7 +184,8 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
   const snapshotContract = (council.snapshot_payload?.contract ?? {}) as { contractId?: string; version?: number; contentHash?: string };
   let contractHashValid = true;
   try {
-    contractHashValid = taskContractContentHash(contractContent as never) === expectedHash;
+    assertValidTaskContractSubstance(contractContent);
+    contractHashValid = taskContractContentHash(contractContent) === expectedHash;
   } catch {
     contractHashValid = false;
   }

@@ -129,7 +129,9 @@ export function assertValidTaskContractSubstance(value: unknown): asserts value 
   if (!budget || typeof budget !== "object" || typeof budget.ceiling !== "string" || budget.ceiling.trim() === "" || !Array.isArray(budget.reportingExpectations) || !Array.isArray(budget.stoppingConditions) || !budget.reportingExpectations.every((item) => typeof item === "string" && item.trim() !== "") || !budget.stoppingConditions.every((item) => typeof item === "string" && item.trim() !== "")) throw new InvalidTaskContractError("Task Contract budget is required");
 }
 
-export function taskContractContentHash(substance: TaskContractSubstance): string {
+export function taskContractContentHash(substance: TaskContractSubstance): string;
+export function taskContractContentHash(substance: Readonly<Record<string, unknown>>): string;
+export function taskContractContentHash(substance: TaskContractSubstance | Readonly<Record<string, unknown>>): string {
   return createHash("sha256").update(canonicalJson(substance)).digest("hex");
 }
 

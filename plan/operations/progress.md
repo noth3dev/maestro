@@ -2543,3 +2543,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Verified the real Goal lifecycle, project membership/`concertmaster` authorization, two reviewer judgments, honest `sameModelOnly: true` synthesis with one configured model, and two durable native binding records without credential leakage.
 - No product defect found. The test initially exposed only fixture mistakes (missing role and unverifiable raw active Goal); both were corrected.
 - Evidence: build, lint, and focused acceptance regression all pass; full clean single-worker PostgreSQL rerun pending.
+
+## 2026-09-08 — Typed boundary cleanup complete
+
+- Completed the current production unsafe-cast cleanup. Runtime reference constructors and Goal-state guards are now centralized in the domain package.
+- TUI structured JSON commands validate with contract schemas before invoking API clients. Malformed payload rejection is covered by regression tests.
+- Removed the Fastify HTTPS double assertion and replaced the process-spawner double assertion with an explicit adapter over Node's child process events and streams.
+- Verification passed: build; lint; focused 6-file/99-test sweep; PostgreSQL worker/council 56-test acceptance rerun. Full PostgreSQL suite remains the final gate after the prior `Connection terminated unexpectedly` run.

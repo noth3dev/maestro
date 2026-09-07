@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   assertValidWorkerTransition,
+  toExecutionRef,
+  toInvocationRef,
   type ExecutionAdmission,
   type ExecutionKernelPort,
   type ExecutionRef,
@@ -509,7 +511,7 @@ export async function recoverWorkerAfterRestart(
 export async function observeWorker(pool: Pool, kernel: ExecutionKernelPort, workerId: string, proof: GoalLeaseProof, context?: CouncilActorContext): Promise<Worker> {
   const initial = await readWorker(pool, workerId);
   if (initial.status === "succeeded" || initial.status === "failed" || initial.status === "cancelled") return initial;
-  const observations = await kernel.observe(initial.executionRef as unknown as ExecutionRef);
+  const observations = await kernel.observe(toExecutionRef(initial.executionRef));
   const observation = observations.find((candidate) => candidate.invocation === initial.invocationRef);
   const nextStatus: WorkerStatus = observation === undefined ? "unknown" : observation.status === "queued" ? "spawned" : observation.status;
   const answerText = observation?.answer.state === "available" ? observation.answer.text : initial.answerText;
@@ -550,7 +552,7 @@ export async function observeWorker(pool: Pool, kernel: ExecutionKernelPort, wor
     );
     await client.query("COMMIT"); open = false;
     const result = mapWorker(updated.rows[0] ?? row);
-    if (result.status === "succeeded" || result.status === "failed" || result.status === "cancelled") await kernel.release?.(result.invocationRef as unknown as InvocationRef).catch(() => {});
+    if (result.status === "succeeded" || result.status === "failed" || result.status === "cancelled") await kernel.release?.(toInvocationRef(result.invocationRef)).catch(() => {});
     return result;
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
@@ -594,7 +596,7 @@ export async function cancelWorker(pool: Pool, kernel: ExecutionKernelPort, work
     }
     if (worker.owner_id !== proof.ownerId || worker.owner_fencing_token !== proof.fencingToken) throw new WorkerError("Worker owner proof is stale or fenced");
     await assertWorkerAuthorization(pool, client, worker, proof, context);
-    return { terminal: false as const, cancelled: (await kernel.cancel(initial.invocationRef as unknown as InvocationRef)).cancelled };
+    return { terminal: false as const, cancelled: (await kernel.cancel(toInvocationRef(initial.invocationRef))).cancelled };
   });
   if (cancellation.terminal) return readWorker(pool, workerId);
 
@@ -602,7 +604,7 @@ export async function cancelWorker(pool: Pool, kernel: ExecutionKernelPort, work
   let answerText = initial.answerText;
   let usage = initial.usageTotalTokens;
   if (!cancellation.cancelled) {
-    const observations = await kernel.observe(initial.executionRef as unknown as ExecutionRef);
+    const observations = await kernel.observe(toExecutionRef(initial.executionRef));
     const observation = observations.find((candidate) => candidate.invocation === initial.invocationRef);
     nextStatus = observation === undefined ? "unknown" : observation.status === "queued" ? "spawned" : observation.status;
     answerText = observation?.answer.state === "available" ? observation.answer.text : answerText;
@@ -641,7 +643,7 @@ export async function cancelWorker(pool: Pool, kernel: ExecutionKernelPort, work
     );
     await client.query("COMMIT"); open = false;
     const result = mapWorker(updated.rows[0] ?? row);
-    if (nextStatus === "succeeded" || nextStatus === "failed" || nextStatus === "cancelled") await kernel.release?.(result.invocationRef as unknown as InvocationRef).catch(() => {});
+    if (nextStatus === "succeeded" || nextStatus === "failed" || nextStatus === "cancelled") await kernel.release?.(toInvocationRef(result.invocationRef)).catch(() => {});
     return result;
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }

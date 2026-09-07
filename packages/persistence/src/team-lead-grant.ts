@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   assertValidTeamLeadGrantSubstance,
+  toExecutionRef,
   type ExecutionAdmission,
   type ExecutionKernelPort,
   type ExecutionRef,
@@ -281,7 +282,7 @@ export async function spawnHelperWorker(pool: Pool, kernel: ExecutionKernelPort,
     if (priorHelpers.rows.length >= grant.max_helpers) throw new TeamLeadGrantError(`Team-lead grant helper ceiling reached: ${grant.max_helpers}`);
 
     workerId = randomUUID();
-    parentExecutionRef = teamLead.rows[0]!.execution_ref as unknown as ExecutionRef;
+    parentExecutionRef = toExecutionRef(teamLead.rows[0]!.execution_ref);
     helperName = `helper:${grant.item_id}:${nextHelperNumber}`;
     parentWorkerId = grant.worker_id;
     helperPrompt = grant.task_scope;

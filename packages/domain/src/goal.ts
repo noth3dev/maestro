@@ -14,6 +14,15 @@ export type GoalState =
   | "failed"
   | "recovering";
 
+const GOAL_STATES: readonly GoalState[] = [
+  "draft", "ready_for_confirmation", "launched", "active", "pausing", "paused", "resuming", "stopping",
+  "stopped", "blocked", "certifying", "succeeded", "failed", "recovering",
+];
+
+export function isGoalState(value: unknown): value is GoalState {
+  return typeof value === "string" && GOAL_STATES.includes(value as GoalState);
+}
+
 export const TERMINAL_GOAL_STATES: ReadonlySet<GoalState> = new Set([
   "stopped",
   "succeeded",

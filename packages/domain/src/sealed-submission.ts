@@ -229,7 +229,7 @@ function assertValidInput(input: unknown): asserts input is SealedSubmissionInpu
   if (typeof contentHash !== "string" || !CONTENT_HASH_PATTERN.test(contentHash)) throw new InvalidSealedSubmissionSnapshotError("contract.contentHash must be a sha256 hex digest");
   const content = ownDataValue(contract, "content", "contract.content");
   assertObject(content, "contract.content");
-  if (taskContractContentHash(content as never) !== contentHash) throw new InvalidSealedSubmissionSnapshotError("contract content hash mismatch");
+  if (taskContractContentHash(content) !== contentHash) throw new InvalidSealedSubmissionSnapshotError("contract content hash mismatch");
 
   const participants = ownDataValue(input, "participants", "participants");
   if (!Array.isArray(participants) || participants.length === 0) throw new InvalidSealedSubmissionSnapshotError("participants must be a non-empty list");

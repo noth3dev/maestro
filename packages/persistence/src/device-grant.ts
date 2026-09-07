@@ -3,6 +3,7 @@ import {
   assertValidDeviceCommandResult,
   assertValidDeviceGrantScope,
   deviceGrantRequiresCeoApproval,
+  isGoalState,
   isTerminalGoalState,
   type DeviceGrant,
   type DeviceGrantScope,
@@ -263,9 +264,10 @@ export async function recordDeviceCommandResult(
     if (grant.state === "closed") throw new DeviceGrantExpiredError(`Device grant is closed: ${grantId}`);
     if (Date.parse(grant.expires_at.toISOString()) <= Date.now()) throw new DeviceGrantExpiredError(`Device grant has expired: ${grantId}`);
     const goalResult = await client.query<{ state: string }>("SELECT state FROM goals WHERE goal_id = $1", [grant.goal_id]);
-    if (goalResult.rowCount !== 1 || isTerminalGoalState(goalResult.rows[0]!.state as never)) {
-      throw new DeviceGrantExpiredError(`Device grant's Goal is closed: ${grant.goal_id}`);
-    }
+    if (goalResult.rowCount !== 1) throw new DeviceGrantExpiredError(`Device grant's Goal is closed: ${grant.goal_id}`);
+    const goalState = goalResult.rows[0]!.state;
+    if (!isGoalState(goalState)) throw new DeviceGrantAuthorizationError(`Device grant's Goal state is invalid: ${grant.goal_id}`);
+    if (isTerminalGoalState(goalState)) throw new DeviceGrantExpiredError(`Device grant's Goal is closed: ${grant.goal_id}`);
     // A paused/stopping Goal must halt device command execution the same
     // way it halts every other write path in this codebase (Department
     // Plans, Mission Bundles, budget). A grant is not a bypass of the
