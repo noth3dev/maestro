@@ -1,6 +1,6 @@
 # Phase 3 — Encore, Independent Certification, and First Usable Release
 
-> **Current status (2026-09-07):** This phase remains operationally gated. Conversation and account-login paths are implemented, but first-usable-release claims require live PostgreSQL, authority, provider-process, and recovery evidence.
+> **Current status (2026-09-08):** This phase remains operationally gated. Conversation, account-login, and native runtime paths are implemented, but first-usable-release claims require live PostgreSQL, authority, provider-process, TUI parity, and recovery evidence.
 
 
 ## Outcome
@@ -8,6 +8,19 @@
 Complete the first usable Maestro by adding continuous Metronome observation, selective Council adjudication, independent Quality certification, and an evidence-backed CEO report. The complete Phase 1–3 system must pass one real Goal with forced restart and critical-action denial.
 
 Encore is outside the production command hierarchy. It observes and judges; it does not own product direction, rewrite Department Plans, or spawn production workers.
+
+### CLI TUI acceptance (Phase 3)
+
+The CLI TUI is part of the Phase 3 first-usable-release surface under **CLI/App parity**. Phase 1 defines only its authority and data boundaries; Phase 3 verifies that the TUI is operationally truthful:
+
+- reads Goal, event, worker, Metronome, Encore, certification, and report state through `@maestro/api-client` and authenticated Control Plane routes;
+- sends commands through the same lease, fencing, capability, approval, and idempotency path as every other client;
+- preserves the server event cursor across disconnect/reconnect and never duplicates or invents visible events;
+- renders loading, empty, stale, authorization-denied, gateway-unavailable, and recovery states explicitly;
+- keeps provider credentials, prompts, raw gateway bindings, and secret-bearing tool output out of terminal state, local session files, and logs;
+- remains a presentation layer using `@earendil-works/pi-tui`, not a second runtime or database client.
+
+The Phase 3 live Goal scenario must exercise at least one API action and the equivalent TUI action, then compare their durable PostgreSQL state and event evidence.
 
 ## Encore components
 

@@ -67,8 +67,15 @@ npm run check
 MAESTRO_TEST_DATABASE_URL=postgresql://maestro_test:maestro_test@127.0.0.1:55432/maestro_test npm test
 ```
 
+
+### 5) CI와 동일한 PostgreSQL 실행
+GitHub Actions는 정적 검사와 깨끗한 PostgreSQL 17 service job을 실행합니다. 병렬 schema race 없이 DB job을 로컬에서 재현하려면 다음을 사용합니다.
+```bash
+MAESTRO_TEST_DATABASE_URL=postgresql://maestro_test:maestro_test@127.0.0.1:55432/maestro_test npm test -- --pool forks --maxWorkers 1
+```
+
 ### 6) 현재 TUI 및 runtime 경계
-CLI TUI는 `@earendil-works/pi-tui` `0.85.1`을 터미널 렌더링, 입력, overlay 및 scrolling에 사용합니다. 실행 권한이 없으며 PostgreSQL이나 provider credential을 직접 쓰지 않습니다. 모든 실행 요청은 인증된 Control Plane과 native runtime을 통과합니다.
+CLI TUI는 `@earendil-works/pi-tui` `0.85.1`을 터미널 렌더링, 입력, overlay 및 scrolling에 사용합니다. 실행 권한이 없으며 PostgreSQL이나 provider credential을 직접 쓰지 않습니다. 모든 실행 요청은 인증된 Control Plane과 native runtime을 통과합니다. Phase 1에서는 이 경계를 고정하고, Phase 3에서는 cursor 보존 재연결과 명시적 실패 상태를 포함한 CLI/App parity의 일부로 TUI를 승인합니다.
 
 ---
 

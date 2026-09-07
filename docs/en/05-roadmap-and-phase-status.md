@@ -23,6 +23,10 @@ The Maestro native runtime and authenticated model gateway own conversation and 
 
 The CLI TUI uses `@earendil-works/pi-tui` terminal primitives. This is a presentation dependency with no provider or execution authority.
 
+### TUI Phase Boundary
+
+The TUI is an operator view and command client, not a second control plane. It reads authoritative state and sends commands only through `@maestro/api-client` and authenticated Control Plane routes. It must not connect to PostgreSQL, the Model Gateway, provider APIs, or device transports directly. Phase acceptance requires API/TUI parity for the same real Goal, SSE cursor-safe reconnect, explicit loading/error/stale states, and no credential, prompt, raw gateway-binding, or secret-bearing output in terminal state or logs. Terminal input never bypasses leases, fencing, capability grants, approvals, or idempotency.
+
 ### Phase 6 Step 1 — Accepted Boundary
 
 Phase 6 Step 1 is accepted as an immutable, project-private Improvement Digest slice. Each digest is source-bound to a Goal and its project, protected by lease authority and membership-scoped reads, and validated against its canonical content hash. This slice does **not** perform automatic mutation, replay, rollout, persona adaptation, or cross-project promotion. Phase 6 Steps 2+ remain deferred until separately planned, implemented, reviewed, and accepted.
