@@ -1041,3 +1041,14 @@ worker-device link and pause state against that concrete case rather than a hypo
 - Control Plane composes the native Model Gateway kernel and fails closed when the gateway is absent. There is no Prime fallback.
 - Native admission evidence is complete for Worker, Head, semantic review, Encore, and bounded team-lead helper seams. Real loopback Model Gateway HTTP acceptance passed 1/1; no-database `npm run check` passed 102 files / 665 tests.
 - The full PostgreSQL rerun is the active gate. Do not mark Phase 1 complete until its failures are independently reproduced, fixed, and rerun with real process evidence.
+
+
+## 2026-09-08 — Documentation, split-files, CI, and full-suite hardening pass
+
+- Documented every app/package README, and moved the CLI TUI into its correct phase scope: Phase 1 fixes its authority/data boundary, Phase 3 adds it to the CLI/App-parity acceptance gate. No behavior change, boundary was already correct in code.
+- Split `apps/cli/src/tui/entry.ts` and `apps/control-plane/src/server.ts` into smaller focused modules (`components/editors.ts`, `components/conversation-viewport.ts`, `server-input.ts`) with no behavior change; build/lint/tests green throughout.
+- Added durable native-admission binding evidence (`native_execution_bindings`, migration `0070`) across every native call site (Worker, Head, semantic review, Encore reviewers, team-lead helper) via a shared `recordNativeExecutionBindingIfSupported` bridge that fails closed (cancels + releases the provider session) if durable recording fails.
+- Added `.github/workflows/ci.yml` (static gate + real-PostgreSQL-service gate). The workflow file itself could not be pushed with the current token (`workflow` scope missing); it is preserved on local branch `ci-workflow-pending` and every other change from that commit is already on `main` via cherry-pick.
+- Root-caused and fixed a real bug that a resource-exhausted host (12 stale disposable `maestro-*-postgres` containers) was masking as flaky `Connection terminated unexpectedly` failures: `device.integration.test.ts` used a stale hand-picked migration subset missing `0046_device_grants.sql`, so `revokeDevice`'s grant-revocation cascade failed once the suite actually got to run. Fixed to `applyAllMigrations`, matching every sibling device suite. See `findings.md` same date for full detail.
+- Cleaned up all 12 stale Maestro disposable containers; one fresh, single, cleanly named container now runs the final full-suite rerun (`maestro-phase1-final-clean`, port 55480).
+- **Next:** confirm the final full clean single-worker PostgreSQL rerun passes end to end, then re-run build/lint/no-Prime-scan/HTTP-acceptance as the closing Phase 1 gate evidence and update the roadmap doc's Phase 1 status line accordingly.

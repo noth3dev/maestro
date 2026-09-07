@@ -9,3 +9,4 @@ dist/
 *.tsbuildinfo
 graphify-out/
 docs/OPERATING_PROTOCOL.md
+*.log
