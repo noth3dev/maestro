@@ -202,6 +202,7 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     expect(empty.latestRevision).toBeUndefined();
 
     const goalBranch = await recordGoalIntegrationBranch(pool, localGitPort, goalId, repositoryPath, "goal/integration", baseRevision, proof);
+    await recordDepartmentBranch(pool, localGitPort, council.councilId, "product", proof, headContext("product"));
     const afterBranch = await getGoalGitIntegrationState(pool, goalId);
     expect(afterBranch.branch).toEqual(goalBranch);
     expect(afterBranch.latestRevision).toBeUndefined();
