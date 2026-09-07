@@ -10,7 +10,7 @@ All system actions are categorized into four explicit security levels (`packages
 
 | Classification | Action Types | Default Security Policy |
 | :--- | :--- | :--- |
-| **`ordinary`** | `project.file.edit`, `project.test.run`, `git.local.commit` | Allowed autonomously within an active Task Contract and Mission Bundle. |
+| **`ordinary`** | `project.file.edit`, `project.test.run`, `git.local.branch.create`, `git.local.branch.advance`, `git.local.commit`, `git.local.revision.read`, `git.local.worktree.create`, `git.local.worktree.remove`, `browser.navigate`, `browser.click`, `browser.fill`, `browser.get_text`, `browser.screenshot` | Allowed only with an active, matching grant and Mission Bundle. The classification does not register or enable a production tool by itself. |
 | **`critical`** | `git.remote.push`, `deployment.release`, `external.send`, `permanent.delete`, `payment.spend`, `authority.change`, `external.connect` | Requires explicit, pre-recorded Conductor / Authority confirmation. |
 | **`forbidden`** | `system.policy.bypass`, unauthorized privilege escalation | Permanently blocked. Raises a security audit violation immediately. |
 | **`ambiguous`** | Unrecognized or unclassified action strings | Default-denied. Requires explicit classification review before execution. |
@@ -44,6 +44,14 @@ flowchart TD
 1. **Audit-Before-Effect**: An audit intent record MUST be committed to PostgreSQL *before* the tool or side effect is executed.
 2. **Goal & Lease Context Verification**: Requests must present matching `goalId`, `actorId`, and active monotonic fencing tokens. Expired tokens result in immediate rejection.
 3. **No Direct System Calls**: Tool adapters (Git, shell, containers) cannot invoke system primitives directly without passing through `AuthorizedEffectExecutor`.
+
+### Required authority context and capability scope
+
+Every effect request is bound to `commandId`, `projectId`, `actorId`, `goalId`, exact `target`, `policyVersion`, `budgetEffectCents`, and the current `controlEpoch`. A matching grant or exact critical approval must cover every field; changing even the target or budget creates a different request.
+
+A Mission Bundle separately constrains the worker's approved models, skills, tools, paths, environment, authority actions, external/data boundaries, retry limits, worker/child ceilings, and time/budget limits. Installed capability is not assigned capability. The host validates these fields before provider admission and again before any effect.
+
+The production Control Plane currently composes an empty native `ToolRegistry`; unregistered model tools are rejected. The Git adapter is an explicit authority-backed Control Plane service, not a hidden worker callback. The generic critical-action route has no default effect adapter and fails closed rather than claiming success.
 
 ---
 

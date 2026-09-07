@@ -1,6 +1,6 @@
 # Act 1 Operational Build Plan
 
-**Status:** in_progress — Phase 1 audit and operational gate reconciliation
+**Status:** in_progress — documentation parity and remaining operational/product gates
 **Started:** 2026-09-07
 
 ## Goal
@@ -20,7 +20,7 @@ Raise Maestro from a code-complete phase baseline to an operationally usable Act
 2. Each slice has a focused failing test, minimal implementation, focused verification, full check, required disposable-PostgreSQL and real-process evidence, independent review, and immediate documentation.
 3. Never modify or discard unrelated in-flight worktrees. No remote push, deployment, credential change, or destructive cleanup without explicit authorization.
 4. PostgreSQL is disposable and task-scoped. Provider and external effects remain bounded, observable, and fail closed.
-5. Native conversation runtime and Model Gateway are current. Legacy Prime Worker execution remains until the native backend migration clears its own parity and no-Prime gates.
+5. Native conversation and Worker execution through the Model Gateway are current. There is no Prime fallback; host-tool registration remains blocked until its product/security contract is approved.
 
 ## Phase 1 execution sequence
 
@@ -29,7 +29,7 @@ Raise Maestro from a code-complete phase baseline to an operationally usable Act
 - [ ] Map every Phase 1 outcome, record, state rule, failure case, test, and exit-gate clause to exact implementation and test evidence.
 - [ ] Run fresh no-database build/check and record pass/skip/failure counts.
 - [ ] Run the Phase 1 persistence/API suites against a dedicated disposable PostgreSQL database.
-- [ ] Run the real-process restart/reconciliation and public Prime parent/child gates where the environment allows.
+- [ ] Run the real-process restart/reconciliation and native bounded parent/child gates where the environment allows.
 - [ ] Classify each gap as resolved, environment-gated, missing implementation, or requiring a product decision.
 - [ ] Update the root ledger with the resulting single next slice.
 
@@ -45,7 +45,7 @@ Raise Maestro from a code-complete phase baseline to an operationally usable Act
 - [ ] App/CLI/TUI read the same durable state through the typed API.
 - [ ] Stale lease/fencing writes are rejected with no durable mutation.
 - [ ] Unauthorized critical action never reaches its effect adapter; exact approval executes once.
-- [ ] Live Prime compatibility is either replaced by native parity or explicitly retained as a verified legacy bridge until the native migration gate is complete.
+- [ ] Native Model Gateway/provider-process parity and bounded child semantics are evidenced; no legacy bridge is retained.
 - [ ] Independent review and all required environment gates are recorded before Phase 1 is re-claimed.
 
 ## Later Act 1 phases
@@ -54,4 +54,4 @@ Phase 2–8 remain blocked behind the preceding phase exit gate. Their requireme
 
 ## Current next action
 
-Execute `plan/2026-09-08-native-prime-removal-cutover.md` through the no-Prime native composition gate before resuming the remaining Phase 1 patch queue.
+Keep `plan/operations/task_plan.md` current, finish the documentation parity commit, then take the first remaining product-scoped host-tool decision or TUI/device acceptance item. Do not implement a host tool from assumptions.

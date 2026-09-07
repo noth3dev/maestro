@@ -10,25 +10,25 @@ Maestro uses **npm workspaces** to manage packages and applications:
 
 ```text
 ├── apps/
-│   ├── control-plane/     # Fastify 5 REST & SSE Backend Server
-│   ├── model-gateway/     # Separate provider SDK and credential process
-│   ├── cli/               # Maestro Command Line Interface (CLI)
-│   ├── secretary/         # Next.js Secretary Office Dashboard
-│   └── discord/           # Out-of-band Discord Incident Daemon
+│   ├── control-plane/     # Fastify 5 REST & SSE authoritative service
+│   ├── model-gateway/     # Credential-owning provider process
+│   ├── cli/               # Authenticated command client and TUI
+│   ├── secretary/         # Electron + React desktop client
+│   ├── discord/           # Out-of-band Discord incident daemon
+│   └── device-agent/      # Enrolled-device protocol process
 ├── packages/
 │   ├── contracts/         # Zod schemas, API contracts & event definitions
-│   ├── domain/            # Core business models (Goal, TaskContract, HeadCouncil)
-│   ├── persistence/       # PostgreSQL 17 / Drizzle ORM layer & migrations
-│   ├── authority/         # Security matrix & AuthorizedEffectExecutor
+│   ├── domain/            # Core business models and runtime boundary types
+│   ├── persistence/       # PostgreSQL 17 / pg queries, services & migrations
+│   ├── authority/         # Action classification & AuthorizedEffectExecutor
 │   ├── evidence/          # SHA-256 evidence bundle generation & verification
 │   ├── agent-runtime/     # Maestro-owned provider-neutral runtime and tool loop
-│   ├── model-provider-openai/ # OpenAI API-key provider adapter
-│   ├── model-provider-anthropic/ # Anthropic API-key provider adapter
-│   ├── agent-runtime/     # Native execution runtime
-│   ├── model-provider-openai/ # OpenAI API-key and Codex app-server adapters
+│   ├── model-provider-openai/     # OpenAI and Codex app-server adapters
 │   ├── model-provider-anthropic/ # Anthropic API-key adapter
+│   ├── environment-adapter/      # Environment and browser boundaries
+│   ├── device-agent/      # Device protocol support and grant validation
 │   ├── git-adapter/       # Git worktree, branch & commit executor
-│   └── api-client/        # Type-safe API client library
+│   └── api-client/        # Type-safe HTTP and SSE client library
 ```
 
 ---
@@ -38,7 +38,7 @@ Maestro uses **npm workspaces** to manage packages and applications:
 * **Node.js**: `v24.x LTS`
 * **npm**: `v10.x` or higher
 * **PostgreSQL**: `17.x` (required for persistence integration tests)
-* **Docker**: Required for running disposable PostgreSQL test containers (`Testcontainers`)
+* **Docker**: Optional helper for starting a disposable PostgreSQL instance; tests consume `MAESTRO_TEST_DATABASE_URL` directly (the repository does not use Testcontainers).
 * **OS**: Linux recommended for Docker/PostgreSQL and process-based integration tests; the native runtime uses the authenticated Model Gateway for provider isolation.
 
 ---
@@ -58,9 +58,10 @@ npm test
 ```
 
 ### 3) Full System Check (`npm run check`)
-Runs TypeScript build, linting, and all unit test suites in sequence:
+Runs the TypeScript build and all Vitest suites in sequence. Linting is a separate command:
 ```bash
 npm run check
+npm run lint
 ```
 
 ### 4) PostgreSQL Integration Testing
@@ -81,28 +82,40 @@ The CLI TUI uses `@earendil-works/pi-tui` `0.85.1` for terminal rendering, input
 
 ---
 
-## 4. Command-Line Interface (CLI) Usage
+## 4. Runtime, tool, and permission boundaries
 
-The Maestro CLI (`apps/cli`) provides full operational parity with the control plane HTTP REST API.
+The following boundaries are current production behavior, not design intent:
+
+| Surface | Current authority | Current limitation |
+| :--- | :--- | :--- |
+| `apps/control-plane` | Authenticated routes, PostgreSQL leases/fencing, project roles, capability grants, and idempotency | It fails closed when the Model Gateway or a required concrete adapter is missing. |
+| `apps/model-gateway` | Provider credentials, provider/account admission, model identity, cancellation, and managed login | Credentials never cross into Control Plane persistence or prompts. |
+| Native `ToolRegistry` | Validates registered tool names, argument schemas, output schemas, grants, and data class | Production composition currently registers **zero** host tools. Unregistered tools are rejected. |
+| OpenAI Codex app-server adapter | Text turns through the public app-server protocol | Tool-bearing turns are rejected; sessions use read-only sandbox and no approvals. |
+| Git adapter | Local branch/worktree/commit operations through `AuthorizedEffectExecutor` | Remote push and other critical effects require explicit approval and a concrete effect adapter. |
+| Critical-action route | Records exact approval and invokes an injected effect seam | Production has no default no-op effect: an absent adapter throws instead of claiming success. |
+| CLI/TUI and Secretary | Authenticated API client only | Neither client connects directly to PostgreSQL, providers, gateway credentials, or device transports. |
+
+Do not document a tool, permission, filesystem scope, or network scope until it has a named contract, an authority classification, a concrete adapter, and acceptance coverage through the real gateway/process boundary. The current native Worker is therefore a bounded text-generation path, not a general shell or file-editing agent.
+
+## 5. Command-Line Interface (CLI) Usage
+
+The Maestro CLI (`apps/cli`) is an authenticated command client for the control plane HTTP REST API. It exposes the currently implemented lifecycle, review, Git, budget, and reporting commands; the TUI and Secretary remain client layers rather than independent runtimes.
 
 ```bash
 # Get details for a specific Goal
-node apps/cli/dist/main.js goal get <goalId>
+node apps/cli/dist/main.js goal get --project-id <projectId> --goal-id <goalId>
 
 # List append-only domain events for a Goal
-node apps/cli/dist/main.js events list --goalId <goalId>
+node apps/cli/dist/main.js events list --project-id <projectId>
 
-# Query a Metronome challenge
-node apps/cli/dist/main.js metronome challenge <challengeId>
+# List Metronome challenges, Encore rounds, and certifications for a Goal
+node apps/cli/dist/main.js metronome-challenges list --project-id <projectId> --goal-id <goalId>
+node apps/cli/dist/main.js encore-council list --project-id <projectId> --goal-id <goalId>
+node apps/cli/dist/main.js certifications list --project-id <projectId> --goal-id <goalId>
 
-# Query an Encore Council deliberation round
-node apps/cli/dist/main.js council round <roundId>
-
-# Retrieve a Quality certification record
-node apps/cli/dist/main.js certification get <certificationId>
-
-# Retrieve the final certified Concertmaster report for a Goal
-node apps/cli/dist/main.js report get <goalId>
+# Retrieve the Concertmaster report for a Goal
+node apps/cli/dist/main.js concertmaster-report get --project-id <projectId> --goal-id <goalId>
 ```
 
 ---
@@ -118,10 +131,12 @@ OPENAI_API_KEY=<key> \
 npm --workspace @maestro/model-gateway start
 ```
 
-Configure the Control Plane with the same gateway token and set an exact model in the CLI:
+Configure the Control Plane with the same gateway token. Set `MAESTRO_NATIVE_MODEL` only when host-created Head/Encore sessions need a default; conversation turns select an exact model through the CLI/API:
 
 ```bash
 export MAESTRO_MODEL_GATEWAY_TOKEN=<random-secret>
+export MAESTRO_NATIVE_MODEL=openai/gpt-5
+# Optional CLI/TUI default; the TUI also accepts an exact --model value per conversation.
 export MAESTRO_MODEL=openai/gpt-5
 maestro models list
 maestro conversation create --project-id <project-uuid> --goal-id <goal-uuid> --model openai/gpt-5
@@ -152,7 +167,17 @@ maestro models list
 
 Use an exact model identity such as `openai-codex/gpt-5.3-codex`. Anthropic Pro/Max subscription login is intentionally unavailable until Anthropic publishes or approves a supported integration. API-key login remains a separate legacy path for providers that support it.
 
-## 5. Provisioning project access
+## 6. Phase 4 process boundaries
+
+### Device Agent
+
+`apps/device-agent` is a separately running mTLS process. It requires `MAESTRO_DEVICE_AGENT_CONFIG` as JSON. Required keys are `databaseUrl`, `host`, `port`, `deviceId`, `identityFingerprint`, `issuerKeyId`, `issuerPublicKey`, `keyPath`, `certPath`, `caPath`, `statePath`, and `projectRoot`; `maxReadBytes` is optional. The database device must already be enrolled and its certificate fingerprint must match. The agent performs only the bounded project-file operation below `projectRoot`, after validating the signed Goal/grant/fencing envelope. It does not own Goal authority or provider credentials. See [`apps/device-agent/README.md`](../../apps/device-agent/README.md) for the launch example.
+
+### Discord Watchdog
+
+`apps/discord` requires `DISCORD_BUFFER_PATH` and `DISCORD_CREDENTIAL`. `DISCORD_FLUSH_INTERVAL_MS` and `DISCORD_FRESHNESS_WINDOW_MS` have bounded defaults. `DISCORD_TARGET_API_URL` and `DISCORD_TARGET_API_TOKEN` are optional and enable delivery to the authenticated Control Plane. The credential signs watchdog envelopes and must not be written to evidence, logs, or PostgreSQL. See [`apps/discord/README.md`](../../apps/discord/README.md).
+
+## 7. Provisioning project access
 
 Project membership and roles are granted through the authenticated admin endpoint. Set `MAESTRO_OPERATOR_PROVISIONING_ADMIN_ID` to the UUID of an active operator during deployment. If it is not set, the endpoint stays unavailable; no authenticated operator can grant access.
 
@@ -171,7 +196,7 @@ The admin route is intentionally not covered by the ordinary project-membership 
 
 ---
 
-## 6. Operating Protocol Summary
+## 8. Operating Protocol Summary
 
 When working on the Maestro codebase, strictly adhere to the project operating protocol (`docs/OPERATING_PROTOCOL.md`):
 

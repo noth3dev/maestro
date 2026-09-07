@@ -869,3 +869,17 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - TUI JSON inputs now use the existing `@maestro/contracts` schemas for conditional certification, worker spawn, Encore review, and Task Contract intake. Invalid payloads are rejected before any client method is called. Added a regression test for malformed worker JSON.
 - Preserved sealed-submission compatibility for generic contract content by adding a typed `taskContractContentHash` overload instead of incorrectly applying the full Task Contract validator to partial sealed content.
 - **Evidence:** TypeScript AST/lint audit reports zero explicit `any`; production source has zero `as unknown as`, zero `as Parameters<...>`, and no executable `as never`. `npm run build` and `npm run lint` passed. Focused domain/adapter/Control Plane/CLI sweep passed 6 files / 99 tests. Fresh PostgreSQL worker/council rerun passed 2 files / 56 tests; the earlier attempt was started before `pg_isready` and was correctly treated as environmental setup failure, not product evidence.
+
+
+## 2026-09-08 — Documentation parity audit findings
+
+Two independent read-only audits found documentation drift that could misroute future implementation:
+
+1. **Runtime truth:** active plans and architecture pages still named the removed Prime worker bridge, `createPrimeExecutionKernel`, or a legacy worker composition. Current production composition is native `ExecutionKernelPort` → authenticated Model Gateway; the gateway is absent => fail closed.
+2. **Workspace truth:** phase/docs maps named nonexistent `apps/secretary-office`, `packages/git-ops`, `packages/orchestration`, `packages/persona`, `packages/observability`, and `packages/test-harness`, and omitted live `apps/device-agent`, `packages/device-agent`, and `packages/environment-adapter`.
+3. **Operator commands:** README and guides advertised nonexistent CLI reads (`council round`, `certification get`, `report get`). They now use the implemented `metronome-challenges list`, `encore-council list`, `certifications list`, and `concertmaster-report get` forms with project/Goal context.
+4. **Permission/tool truth:** the authority matrix now lists the ordinary Git/browser actions actually classified in `packages/authority`, required request identity fields, Mission Bundle scope dimensions, and the empty production native ToolRegistry boundary. This prevents design prose from implying shell/file tools exist.
+5. **Process launch truth:** device-agent JSON configuration and Discord buffer/signing/delivery variables are documented in their READMEs and the operations guide. Provider credentials remain gateway-owned.
+6. **Phase/status truth:** roadmap and plan pointers now distinguish code/test evidence from release acceptance. Phase 4 has real process evidence; independent review/production deployment acceptance remains. Phase 1's only product-scoped technical gap is host-tool registration/enforcement.
+
+No source behavior was changed in this documentation slice. The audit did not authorize adding a production host tool, permission, filesystem scope, or network scope.

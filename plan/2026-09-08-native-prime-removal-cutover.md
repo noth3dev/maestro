@@ -1,6 +1,8 @@
 # Maestro Native Backend and Prime Removal Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status (2026-09-08): COMPLETED.** This document is the historical execution checklist for the native cutover. Its unchecked task lists and baseline findings describe the pre-cutover tree; they are not current work instructions. The current pointer is `plan/operations/task_plan.md`, and the current tree has no Prime package, import, lockfile entry, or fallback.
+>
+> **For historical execution only:** the original workers used the repository's test-first and independent-review workflow. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Remove Prime Agent from every production and test dependency path, run Worker/Head/reviewer execution through the native Maestro runtime and Model Gateway, and then resume the Phase 1 hardening queue with real PostgreSQL and real-process evidence.
 
@@ -24,7 +26,7 @@
 - Each implementation slice must have a focused red test, a green focused test, `npm run build`, an independent review, a Conventional Commit, a push to `origin/main`, and an evidence entry in `plan/operations/findings.md` and `plan/operations/progress.md`.
 - Phase acceptance requires disposable PostgreSQL and real-process gates. Unit tests alone never close a phase.
 
-## Current Repository Findings
+## Historical baseline findings (pre-cutover; do not treat as current)
 
 - `apps/control-plane/src/main.ts:8,78` still imports and constructs `createPrimeExecutionKernel()`.
 - `apps/control-plane/package.json`, `apps/control-plane/tsconfig.json`, root `tsconfig.json`, `package-lock.json`, and `packages/prime-adapter` still carry Prime.

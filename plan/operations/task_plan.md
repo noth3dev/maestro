@@ -1,5 +1,19 @@
 # Maestro Phase 1–2 Execution Plan
 
+## Current canonical status — 2026-09-08
+
+This block is the authoritative status for the current `main` tree. Older phase markers, branch maps, and “next step” entries below are historical execution notes unless they are explicitly updated here.
+
+- **Branch:** `main`; current committed base before this documentation slice: `4fe40a8`. Protected worktrees remain untouched.
+- **Phase 1:** technical/runtime gate is evidenced: native-only composition, no-Prime scan, real Model Gateway HTTP acceptance, real Control Plane + PostgreSQL + native Worker acceptance, and a clean single-worker PostgreSQL run of **162/162 files and 1066/1066 tests**. The remaining product decision is the exact production host-tool/data/effect contract; no tool is registered until that contract is approved.
+- **Phase 2:** hierarchical code surface and PostgreSQL evidence are present. Worker admissions are real but text/evidence-only because production `ToolRegistry` is empty. Control Plane Git operations remain explicit authority-backed services, not implicit worker callbacks.
+- **Phase 3:** Metronome, Encore, certification/reporting, CLI/API parity, conversation, and restart/fencing evidence are present. First-release acceptance still requires a dedicated TUI parity/reconnect gate and the Phase 1 host-tool decision.
+- **Phase 4:** environment, browser, Discord, and separately running device-agent protocol slices have code and real-process/PostgreSQL evidence. Independent no-edit review and production deployment acceptance remain open.
+- **Phase 5:** the project-wide worker cap is implemented. Resource inventory, demand reservations, protected floors, and Portfolio Council scheduling are not implemented.
+- **Phase 6:** Step 1 immutable project-private Improvement Digest is accepted; replay, mutation, rollout, and persona adaptation remain deferred.
+- **Phases 7–8:** planned and not accepted.
+- **Immediate work:** finish this documentation parity slice, run build/lint/targeted checks plus `git diff --check`, commit, push, and record the evidence. Do not start host-tool implementation without product scope.
+
 ## Goal
 Complete the remaining Phase 1 durable control-plane safety foundations, then implement Phase 2 hierarchical execution for one local software Goal.
 
@@ -7,9 +21,8 @@ Complete the remaining Phase 1 durable control-plane safety foundations, then im
 ## Operating protocol
 Read `docs/OPERATING_PROTOCOL.md` first, every session, before doing anything else. It has the session-resume checklist, git/worktree hygiene, disposable-DB container hygiene, subagent spawn rules (model/thinking-level/dead-child handling), and the commit checkpoint policy. This section stays a one-line pointer so the protocol has a single source of truth.
 
-## Assumptions and boundaries
-- Work remains in the existing isolated worktree `phase1/control-plane`.
-- No remote push, deployment, external send, credential change, or deletion is authorized.
+## Historical assumptions and boundaries
+The original Phase 1/2 execution assumptions below are retained as history. They do not override the current canonical status above. Current work is on `main`; remote push is authorized by the user's current instruction, while deployment, external sends, credential changes, and destructive deletion remain separately gated.
 - Phase 1 and Phase 2 are implemented incrementally with test-first proof for each behavior.
 - Planning sources read in full before execution: `plan1.md`, `plan/phase1.md`, `plan/phase2.md`.
 
@@ -20,7 +33,7 @@ Read `docs/OPERATING_PROTOCOL.md` first, every session, before doing anything el
 4. Every design or implementation decision is recorded in `plan/operations/findings.md` and `plan/operations/progress.md`.
 
 
-## Current cutover status — 2026-09-08
+## Historical cutover status — 2026-09-08 (superseded by canonical status above)
 
 - Prime execution package, dependency, lockfile entries, source imports, and configuration field have been removed.
 - Control Plane composition uses the native Model Gateway execution kernel or an explicit fail-closed unavailable kernel.
@@ -28,7 +41,7 @@ Read `docs/OPERATING_PROTOCOL.md` first, every session, before doing anything el
 - Post-deletion no-database check: `npm run check` passed with 102 files / 665 tests and 52 PostgreSQL-gated files / 375 skipped tests.
 - Real loopback Model Gateway HTTP acceptance passed with a fake provider and no credential leakage. Full PostgreSQL rerun and remaining Phase 1 operational failures are still open.
 
-## Phases
+## Historical execution phase markers
 - [complete] 1. Reconcile current code with Phase 1 requirements; define the smallest safe remaining vertical slice.
 - [complete_with_environment_gate] 2. Implement and verify Phase 1 lease/fencing persistence and guarded state-changing writes.
 - [complete_with_environment_gate] 3. Complete remaining Phase 1 command/recovery/evidence boundaries required by Phase 2. Tag `phase1-accepted` at `541ce7d`.
@@ -40,8 +53,8 @@ Read `docs/OPERATING_PROTOCOL.md` first, every session, before doing anything el
 - [pending] 7. Run Phase 1–2 acceptance scenarios, document gaps, and report.
 - [in_progress] 9. Phase 4 (plan/phase4.md) preparation: baseline branch `phase4/integration` created from accepted Phase 3 exit gate (`1effc49`), worktree `.worktrees/p4` added, build verified clean. Recommended two-track work-sequence split recorded in plan/operations/progress.md (Track A: environments+devices, steps 1-5; Track B: Discord, steps 6-9; step 10 integrates both). Playwright dependency not yet added (needed for step 3). Implementation not yet started.
 
-## Next step
-See "Phase 5 remediation plan — operational usability" below. Prior P1-P4 completion phase markers describe code/test status only and are not operational-acceptance claims; do not treat them as ready for normal use until Phase 5 tracks land.
+## Historical next-step note
+The former Phase 5 remediation pointer is retained for chronology. Use the canonical status block above and the latest progress/findings entries for the next action.
 
 ## Next step (superseded — kept for history)
 Phase 3 is fully exit-gate accepted (all 13 live-gate steps, all 18 Tests items). Main now carries the real Phase 2+3 source code (this merge). Next: decide whether to start Phase 4 Track A (environments/devices) and Track B (Discord) implementation, e.g. via parallel subagents in `.worktrees/p4`-derived worktrees, matching the pattern used throughout Phase 3.

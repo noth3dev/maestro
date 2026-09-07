@@ -8,18 +8,18 @@ Maestro는 각 단계의 검증 증거가 완료되어야 다음 단계로 진�
 
 | 단계 | 명칭 | 코드 상태 | 검증 기준 및 운영 승인 게이트 |
 | :--- | :--- | :---: | :--- |
-| **Phase 1** | Technical Foundation & Durable Control Plane | **코드 완료** | Fastify REST/SSE API, PostgreSQL 17 이벤트 소싱, 단조 리스 펜싱 토큰, 네이티브 runtime/provider gateway 경계 및 레거시 워커 브리지 격리 |
-| **Phase 2** | Concertmaster Office Core & Hierarchical Execution | **코드 완료** | Overture Crew 접수, Task Contract 불변성, Head Council 봉인 심의, Department Plans, Git 격리 실행 |
-| **Phase 3** | Encore, Certification & First Usable Release | **코드 완료** | Metronome 실시간 이벤트 모니터링, Encore Council 심의, Quality 독립 인증, Concertmaster 리포트 생성, CLI/App Parity |
-| **Phase 4** | Isolated Environments, Devices & Discord Incidents | **코드 완료** *(자체검증)* | 컨테이너/샌드박스 레시피, Playwright 브라우저 격리, 등록 디바이스 인가, Discord 아웃오브밴드 인시던트 감지 |
-| **Phase 5** | Concurrent Goals & Portfolio Control | 예정 | 다중 Goal 동시 실행 격리, 예산/컴퓨팅 경합 시 포트폴리오 우선순위 제어 |
+| **Phase 1** | Technical Foundation & Durable Control Plane | **운영 게이트 1개(제품 결정) 대기** | REST/SSE, PostgreSQL 17 durability, fencing, 네이티브 runtime/provider gateway 경계, 실제 Worker acceptance 및 전체 suite 증거 완료. Production host-tool 계약은 제품 승인 대기 |
+| **Phase 2** | Concertmaster Office Core & Hierarchical Execution | **구현 및 PostgreSQL 검증 완료** | Overture 접수, Task Contract, Head Council, Department Plans, Mission Bundle, native Worker admission 및 Git 격리 실행 |
+| **Phase 3** | Encore, Certification & First Usable Release | **구현; 릴리스 게이트 대기** | Metronome loop, Encore, Quality 인증, 보고서, CLI/API parity 및 native process 증거 구현. TUI parity/reconnect와 host-tool 범위는 별도 게이트 |
+| **Phase 4** | Isolated Environments, Devices & Discord Incidents | **구현; 독립 승인 대기** | Environment/browser/Discord 및 별도 실행 authenticated device-agent live gate 증거가 있음. 독립 review와 production deployment 승인은 남음 |
+| **Phase 5** | Concurrent Goals & Portfolio Control | **활성 remediation/capacity 작업** | 프로젝트별 worker cap은 구현됨. Resource inventory, demand reservation 및 portfolio scheduling은 향후 작업 |
 | **Phase 6** | Encore Learning & 10-Axis Adaptation | **Step 1 승인 완료** *(불변 다이제스트)* | Step 1: 프로젝트 전용·출처 바인딩 Improvement Digest. Step 2 이후(리플레이, 변경, 롤아웃, 적응, 프로젝트 간 승격)는 보류 |
 | **Phase 7** | Full Concertmaster Office & Radial Control Surface | 예정 | Next.js 16 / React 19 웹 UI(Concertmaster Office), `@xyflow/react` 방사형 포트폴리오 대시보드 |
 | **Phase 8** | Full-System Hardening & Release Certification | 예정 | 적대적 장애 주입, 보안 침투 감사, 지속 부하 검증 및 릴리즈 프리즈 |
 
 ### 네이티브 에이전트 백엔드 마이그레이션 — 현재 경계
 
-Maestro 네이티브 런타임과 인증된 model gateway가 대화와 워커 실행을 모두 담당합니다. ChatGPT account-login recovery도 내구성 상태, fenced status/cancel 작업 및 metadata-only 저장을 포함하여 통합되었습니다. 네이티브 admission은 host context, immutable grant, 정확한 provider-qualified model policy, account binding 및 idempotency를 포함하며, 모든 native 호출 지점(Worker, Head, semantic review, Encore reviewer, team-lead helper)이 selected/actual 모델과 gateway binding identity를 append-only `native_execution_bindings` 테이블에 durable하게 기록합니다. 깨끗한 disposable 컨테이너에서 실행한 단일 worker 전체 real-PostgreSQL 재실행이 **155/155 파일, 1051/1051 테스트, 실패 0건**으로 통과했습니다(2026-09-08), kill/restart 복구, fencing, authority denial, loopback Model Gateway HTTP acceptance 테스트, 그리고 실제 Model Gateway를 사용하는 전체 Control Plane + PostgreSQL + Worker acceptance 테스트(`native-worker-acceptance.integration.test.ts`)를 포함합니다. 이 테스트를 만드는 과정에서 실제 wire-schema 결함(`limitsFor()`가 10분을 넘는 모든 Mission Bundle time ceiling에 대해 clamp되지 않은 per-call timeout을 보냄)도 발견해 수정했습니다. 남은 Phase 1 항목은 하나입니다: 실제 gateway 경로를 통한 production native host-tool 등록/집행 -- `ToolRegistry`는 fail-closed로 올바르게 구현되어 있지만 production에는 아직 등록된 Maestro-callback tool이 없고, OpenAI Codex adapter는 모든 세션을 read-only로 실행하므로 현재 native Worker는 텍스트 생성만 가능합니다.
+Maestro 네이티브 런타임과 인증된 model gateway가 대화와 워커 실행을 모두 담당합니다. ChatGPT account-login recovery도 내구성 상태, fenced status/cancel 작업 및 metadata-only 저장을 포함하여 통합되었습니다. 네이티브 admission은 host context, immutable grant, 정확한 provider-qualified model policy, account binding 및 idempotency를 포함하며, 모든 native 호출 지점(Worker, Head, semantic review, Encore reviewer, team-lead helper)이 selected/actual 모델과 gateway binding identity를 append-only `native_execution_bindings` 테이블에 durable하게 기록합니다. 깨끗한 disposable 컨테이너에서 실행한 단일 worker 전체 real-PostgreSQL 재실행이 **162/162 파일, 1066/1066 테스트, 실패 0건**으로 통과했습니다(2026-09-08), kill/restart 복구, fencing, authority denial, loopback Model Gateway HTTP acceptance 테스트, 그리고 실제 Model Gateway를 사용하는 전체 Control Plane + PostgreSQL + Worker acceptance 테스트(`native-worker-acceptance.integration.test.ts`)를 포함합니다. 이 테스트를 만드는 과정에서 실제 wire-schema 결함(`limitsFor()`가 10분을 넘는 모든 Mission Bundle time ceiling에 대해 clamp되지 않은 per-call timeout을 보냄)도 발견해 수정했습니다. 남은 Phase 1 항목은 하나입니다: 실제 gateway 경로를 통한 production native host-tool 등록/집행 -- `ToolRegistry`는 fail-closed로 올바르게 구현되어 있지만 production에는 아직 등록된 Maestro-callback tool이 없고, OpenAI Codex adapter는 모든 세션을 read-only로 실행하므로 현재 native Worker는 텍스트 생성만 가능합니다.
 
 CLI TUI는 `@earendil-works/pi-tui` `0.85.1` 터미널 primitive를 사용합니다. 이는 provider나 실행 권한이 없는 표현 계층 의존성입니다.
 
@@ -37,7 +37,7 @@ Phase 6 Step 1은 불변·프로젝트 전용 Improvement Digest slice로 승인
 
 > [!IMPORTANT]
 > **운영 사용성 게이트 공지:**  
-> Phase 1–4의 도메인/영속성 단위 테스트는 GREEN 상태이지만, 독립 감사 결과 Phase 1–3 제어 평면 기능은 실운영 사용성 요구사항(엔드투엔드 서비스 API 실행 경로, Git 실효 어댑터 연결, 상시 Metronome 관찰)이 완료되어야 승인됩니다. 네이티브 대화와 워커 경로를 모두 사용할 수 있으며, 남은 승인 조건은 실제 gateway process, 재시작 및 recovery evidence입니다. Phase 4 디바이스 제어 역시 실제 라이브 기기 에이전트 프로토콜 연결을 대기 중입니다. 이 수정 계획은 **Phase 5 Remediation Plan** 하에서 진행됩니다.
+> 코드 및 PostgreSQL 증거는 릴리스 승인을 뜻하지 않습니다. Native conversation과 Worker는 실제 Model Gateway/PostgreSQL acceptance 및 restart/fencing 증거를 갖추었습니다. 남은 게이트는 production host-tool 제품 승인·구현, TUI parity/reconnect 증거, 별도 실행 authenticated device-agent protocol의 독립 review/production 승인입니다(실제 process gate 자체는 구현됨). 상세 상태는 `plan/operations/task_plan.md`에 기록합니다.
 
 ---
 
@@ -45,7 +45,7 @@ Phase 6 Step 1은 불변·프로젝트 전용 Improvement Digest slice로 승인
 
 ### 1) Luthiery (동적 MCP 공방)
 
-**Luthiery**(Phase 9 후보)는 작업 실행 중 필요한 전용 **Model Context Protocol (MCP)** 서버 및 도구를 런타임에 안전하게 생성, 감사, 실행, 재사용할 수 있는 공방 모듈입니다 ([`plan/post-phase8-ideas.md`](file:///home/ubuntu/projects/ms/plan/post-phase8-ideas.md)).
+**Luthiery**(Phase 9 후보)는 작업 실행 중 필요한 전용 **Model Context Protocol (MCP)** 서버 및 도구를 런타임에 안전하게 생성, 감사, 실행, 재사용할 수 있는 공방 모듈입니다 ([`plan/post-phase8-ideas.md`](../../plan/post-phase8-ideas.md)).
 
 ```mermaid
 flowchart LR
@@ -67,7 +67,7 @@ flowchart LR
 
 ### 2) Autonomous Treasury & Real Capital Wallet (자율 재무부 지갑)
 
-**Autonomous Treasury**(Phase 9/10 후보)는 Maestro 시스템에 영속적인 자율 지갑을 내장하여, 외부 API, 클라우드 컴퓨팅 자원, Web3 스마트 컨트랙트 결제를 직접 집행할 수 있는 자산 자율성을 부여합니다 ([`plan/post-phase8-ideas.md`](file:///home/ubuntu/projects/ms/plan/post-phase8-ideas.md)).
+**Autonomous Treasury**(Phase 9/10 후보)는 Maestro 시스템에 영속적인 자율 지갑을 내장하여, 외부 API, 클라우드 컴퓨팅 자원, Web3 스마트 컨트랙트 결제를 직접 집행할 수 있는 자산 자율성을 부여합니다 ([`plan/post-phase8-ideas.md`](../../plan/post-phase8-ideas.md)).
 
 #### Treasury 핵심 원칙
 1. **사용자 충전식 예치금 모델**: Conductor(사용자)가 미리 충전한 예치금(Web3 암호화폐 USDC/ETH/Solana 및 Stripe/Plaid 전통 금융 결제) 기반 작동.

@@ -1,6 +1,6 @@
 # Phase 4 — Isolated Environments, Enrolled Devices, and Discord Incidents
 
-> **Current status (2026-09-07):** This phase remains operationally gated for live environments, devices, and incidents. Do not infer acceptance from code-level tests alone.
+> **Current status (2026-09-08):** Environment, Discord, and separately running device-agent live-gate evidence exists on `main`. Phase acceptance remains pending independent no-edit review and production deployment/operations evidence; do not infer release acceptance from self-verified tests alone.
 
 
 ## Outcome
@@ -177,7 +177,7 @@ A worker completes one representative browser or enrolled-device task inside a n
 
 Purpose:
 
-- Detect when Maestro, Prime Agent integration, an enrolled runtime, or an observed project experiences a crash, persistent health failure, functional regression, bug signal, security vulnerability, dependency exposure, or other actionable anomaly.
+- Detect when Maestro runtime, an enrolled device/runtime, or an observed project experiences a crash, persistent health failure, functional regression, bug signal, security vulnerability, dependency exposure, or other actionable anomaly.
 - Continue observing and reporting even when Maestro's primary control plane or Encore is unhealthy.
 - Convert a detected anomaly into a bounded, evidence-backed incident signal and wake the relevant organizational expertise.
 
@@ -214,7 +214,7 @@ Department Heads may directly call other existing Department Heads:
 Initial Discord monitoring is limited to explicitly registered surfaces:
 
 - Maestro control-plane and app health.
-- Prime Agent runtime availability and heartbeat.
+- Native runtime/Model Gateway availability and heartbeat.
 - Active Goal workers, leases, and abnormal silence or crash signals.
 - Explicitly registered local project health endpoints.
 - Approved CI results.
@@ -225,6 +225,6 @@ Initial Discord monitoring is limited to explicitly registered surfaces:
 Notification paths:
 
 - During normal operation, Discord reports to the app's Incidents channel, Concertmaster, Metronome, and the relevant Department Heads.
-- If Maestro or Prime Agent is unavailable, Discord may use one pre-approved out-of-band emergency channel, such as a dedicated Discord emergency channel or enrolled-device desktop notification.
+- If Maestro runtime or the Control Plane is unavailable, Discord may use one pre-approved out-of-band emergency channel, such as a dedicated Discord emergency channel or enrolled-device desktop notification.
 - The emergency message contains only the incident identity, affected system, severity and confidence, first observation, concise evidence, and safe next action.
 - This pre-approval permits bounded emergency notification only. It does not grant Discord remediation, shell execution, broader external messaging, or new-service authority.

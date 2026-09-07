@@ -10,7 +10,7 @@ The phase documents in this directory define the intended implementation order. 
 4. `phase5.md` — Concurrent Goals and Portfolio Control (partial capacity/remediation work)
 5. `phase6.md` through `phase8.md` — later phases, in numeric order
 
-**Current implementation pointer (2026-09-07):** the native runtime/model gateway serves conversations, and durable ChatGPT account-login recovery is integrated. Worker execution still composes the legacy Prime adapter. Do not mark the native backend or the first usable release accepted until the phase-specific PostgreSQL, process-recovery, authority, and usability gates pass.
+**Current implementation pointer (2026-09-08):** the native runtime/model gateway serves conversations and Worker execution; durable ChatGPT account-login recovery is integrated. Prime Agent and its adapter are removed from the current tree. A clean single-worker real-PostgreSQL run passed **162/162 files and 1066/1066 tests**. Remaining release gates are the product-defined production host-tool contract, TUI parity/reconnect evidence, and independent/live acceptance review for the Phase 4 device protocol; see `plan/operations/task_plan.md` for the canonical status.
 
 `extra.md` records the newer architecture naming/specification:
 
@@ -22,7 +22,7 @@ The phase documents in this directory define the intended implementation order. 
 Durable feature plans are kept directly under `plan/`. Their design specifications are kept under `plan/specs/`. These paths are the repository source of truth and are independent of any agent or tool-specific folder layout.
 
 - `2026-09-06-maestro-tui.md` — Maestro terminal TUI implementation plan (conversation-first slice next)
-- `2026-09-07-maestro-native-agent-backend.md` — native runtime and provider gateway plan (worker Prime removal still open)
+- `2026-09-07-maestro-native-agent-backend.md` — native runtime and provider gateway plan (Prime removal completed; retained as implementation history and boundary specification)
 - `specs/` — design specifications referenced by the feature plans
 
 ## Historical material

@@ -2550,3 +2550,12 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - TUI structured JSON commands validate with contract schemas before invoking API clients. Malformed payload rejection is covered by regression tests.
 - Removed the Fastify HTTPS double assertion and replaced the process-spawner double assertion with an explicit adapter over Node's child process events and streams.
 - Verification passed: build; lint; focused 6-file/99-test sweep; PostgreSQL worker/council 56-test acceptance rerun. Full PostgreSQL suite remains the final gate after the prior `Connection terminated unexpectedly` run.
+
+
+## 2026-09-08 — Documentation/code parity audit and full PostgreSQL gate
+
+- Independent read-only audits compared `README.md`, all committed `docs/` language copies, app/package READMEs, `plan/phase1.md` through `plan/phase8.md`, active feature plans, CLI handlers, route registrations, permission classifications, and native runtime composition against `main` at `4fe40a8`.
+- Corrected stale present-tense claims: deleted Prime runtime/bridge, nonexistent workspace names, Drizzle/Testcontainers usage, Next.js Secretary, invalid CLI read commands, outdated `MAESTRO_MODEL` startup guidance, and the claim that Phase 4 device wiring was absent. Historical Prime design remains only where explicitly labeled as historical/superseded.
+- Documented current security boundaries: production `ToolRegistry` is empty and fails closed for unregistered tools; Codex is read-only/text-only; Git is an explicit authority-backed Control Plane adapter; the generic critical-action effect adapter has no production default and fails closed; device-agent and Discord launch configuration is now documented.
+- Fresh single-worker real-PostgreSQL suite completed with **162/162 test files and 1066/1066 tests passed, 0 failed**. The result includes the native Worker acceptance, account-login/credential-bind acceptance, Discord signal delivery, Metronome loop, Encore, and kill/restart suites.
+- Remaining product/acceptance boundaries are recorded rather than hidden: production host-tool contract, dedicated TUI parity/reconnect evidence, and independent/production acceptance review for the device protocol. No host tool was invented without product scope.

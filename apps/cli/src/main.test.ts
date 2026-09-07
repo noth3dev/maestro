@@ -18,6 +18,9 @@ describe("executeCli", () => {
     expect(await executeCli(["--help"], {}, { stdout: stdout.write, stderr: stderr.write })).toBe(0);
     expect(stdout.lines[0]).toContain("MAESTRO_API_URL");
     expect(stdout.lines[0]).toContain("goal create");
+    expect(stdout.lines[0]).toContain("metronome-challenges list");
+    expect(stdout.lines[0]).toContain("encore-council list");
+    expect(stdout.lines[0]).toContain("concertmaster-report get");
     expect(stderr.lines).toEqual([]);
     stdout.lines.length = 0;
     expect(await executeCli(["--version"], {}, { stdout: stdout.write, stderr: stderr.write })).toBe(0);
