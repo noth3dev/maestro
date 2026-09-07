@@ -28,6 +28,7 @@ import {
 } from "./commands/read-commands.js";
 import { executeWriteCommand } from "./commands/write-commands.js";
 import { renderApprovalDialog } from "./components/approval-dialog.js";
+import { renderProviderLoginDialog, type AccountLoginProviderSelection } from "./components/provider-login-dialog.js";
 import { reconcileTuiSession, type RecoverySummary } from "./recovery.js";
 import { renderRecoveryBanner } from "./components/recovery-banner.js";
 import type { CriticalActionSummary, ConfirmationResult } from "./confirmation.js";
@@ -45,6 +46,7 @@ import { renderActivityTimeline } from "./components/activity-timeline.js";
 import { renderShell, renderTranscript, renderTuiFooter, type TuiShellState } from "./components/shell.js";
 import { getModeAccentProgress, setModeAccentProgress, tuiTheme } from "./theme.js";
 import type { CliIo } from "../main.js";
+import { openExternalUrl } from "../external-url.js";
 
 export interface InteractiveTuiOptions {
   cwd: string;
@@ -255,6 +257,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let activityController: AbortController | undefined;
     let conversationTurnController: AbortController | undefined;
     let pendingProviderLogin: "openai" | "anthropic" | undefined;
+    let accountLoginSelection: AccountLoginProviderSelection | undefined;
+    let accountLoginState: "selecting" | "opening" | "waiting" | undefined;
+    let accountLoginController: AbortController | undefined;
+    let accountLoginId: string | undefined;
     const syncModelState = (): void => {
       const model = options.env.MAESTRO_MODEL?.trim() || session?.model;
       if (model === undefined) delete state.model;
@@ -442,6 +448,49 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         append("Startup retry failed: Control Plane client could not be created");
       }
     };
+    const cancelAccountLogin = (): void => {
+      const controller = accountLoginController;
+      accountLoginController = undefined;
+      const loginId = accountLoginId;
+      accountLoginId = undefined;
+      accountLoginSelection = undefined;
+      accountLoginState = undefined;
+      editor.hidden = false;
+      editor.setText("");
+      controller?.abort();
+      if (loginId !== undefined && client !== undefined) void client.cancelAccountLogin(loginId).catch(() => undefined);
+      render();
+    };
+    const startAccountLogin = async (): Promise<void> => {
+      if (client === undefined) { append("Account login is unavailable until the Control Plane is connected."); cancelAccountLogin(); return; }
+      if (accountLoginSelection === 1) { append("Claude Pro / Max account login is unavailable until Anthropic approves a public OAuth integration."); cancelAccountLogin(); return; }
+      accountLoginState = "opening";
+      render();
+      const controller = new AbortController();
+      accountLoginController = controller;
+      try {
+        const login = await client.startAccountLogin();
+        accountLoginId = login.loginId;
+        if (controller.signal.aborted) return;
+        accountLoginState = "waiting";
+        render();
+        try { await (options.io.openExternalUrl ?? openExternalUrl)(login.authUrl); }
+        catch { append(`Open this URL in your browser to sign in: ${login.authUrl}`); }
+        const timeoutMs = Number(options.env.MAESTRO_LOGIN_TIMEOUT_MS ?? "120000");
+        const pollMs = Number(options.env.MAESTRO_LOGIN_POLL_MS ?? "500");
+        const deadline = Date.now() + (Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 120000);
+        let status = await client.accountLoginStatus(login.loginId);
+        while (status.state === "pending" && Date.now() < deadline && !controller.signal.aborted) {
+          await new Promise<void>((resolveFrame) => setTimeout(resolveFrame, Number.isFinite(pollMs) && pollMs >= 0 ? pollMs : 500));
+          status = await client.accountLoginStatus(login.loginId);
+        }
+        if (controller.signal.aborted) return;
+        if (status.state === "succeeded") { append("Account login complete: openai-codex"); void refreshDashboard(); }
+        else append(`Account login ${status.state}: ${status.message ?? "no additional details"}`);
+      } catch (error) { if (!controller.signal.aborted) append(`Account login failed: ${error instanceof Error ? error.message : "request failed"}`); }
+      finally { if (accountLoginController === controller) { accountLoginController = undefined; accountLoginId = undefined; accountLoginSelection = undefined; accountLoginState = undefined; editor.hidden = false; render(); } }
+    };
+
     const submit = async (text: string) => {
       if (pendingProviderLogin !== undefined) {
         const providerId = pendingProviderLogin;
@@ -464,6 +513,19 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         const parsed = parseInput(text);
         if (parsed.kind === "command" && parsed.name === "help") {
           append(`Commands: ${createCommandPalette().map((item) => `${item.label} [${item.description}]`).join(" · ")}`);
+        } else if (parsed.kind === "command" && parsed.name === "login" && parsed.action === undefined) {
+          accountLoginSelection = 0;
+          accountLoginState = "selecting";
+          editor.hidden = true;
+          editor.setText("");
+          render();
+        } else if (parsed.kind === "command" && parsed.name === "login" && parsed.action === "openai-codex") {
+          accountLoginSelection = 0;
+          accountLoginState = "selecting";
+          editor.hidden = true;
+          editor.setText("");
+          render();
+          void startAccountLogin();
         } else if (parsed.kind === "command" && parsed.name === "login" && (parsed.action === "openai" || parsed.action === "anthropic")) {
           if (client === undefined) {
             append("Provider login is unavailable until the Control Plane is connected.");
@@ -473,6 +535,13 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             editor.setText("");
             append(`Enter the ${parsed.action} API key and press Enter. Input is hidden and never saved to session history.`);
             render();
+          }
+        } else if (parsed.kind === "command" && parsed.name === "logout" && parsed.action === "openai-codex") {
+          if (client === undefined) append("Account logout is unavailable until the Control Plane is connected.");
+          else {
+            await client.logoutAccount();
+            append("ChatGPT account signed out; its model bindings were revoked.");
+            void refreshDashboard();
           }
         } else if (parsed.kind === "command" && parsed.name === "logout" && (parsed.action === "openai" || parsed.action === "anthropic")) {
           if (client === undefined) append("Provider logout is unavailable until the Control Plane is connected.");
@@ -724,6 +793,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       pendingConfirmation = undefined;
       activityController?.abort();
       conversationTurnController?.abort();
+      accountLoginController?.abort();
       flashmobAnimationId += 1;
       tui.stop();
       resolve(0);
@@ -764,6 +834,21 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           return { consume: true };
         }
         stop();
+        return { consume: true };
+      }
+      if (accountLoginSelection !== undefined && accountLoginState === "selecting") {
+        if (matchesKey(data, "up") || matchesKey(data, "down")) {
+          accountLoginSelection = accountLoginSelection === 0 ? 1 : 0;
+          render();
+          return { consume: true };
+        }
+        if (matchesKey(data, "escape")) { cancelAccountLogin(); return { consume: true }; }
+        if (matchesKey(data, "enter")) { void startAccountLogin(); return { consume: true }; }
+        return { consume: true };
+      }
+      if (accountLoginSelection !== undefined && accountLoginState === "waiting" && matchesKey(data, "escape")) {
+        cancelAccountLogin();
+        append("Account login cancelled.");
         return { consume: true };
       }
       if (

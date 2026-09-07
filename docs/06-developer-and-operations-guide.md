@@ -124,6 +124,28 @@ maestro conversation turn --conversation-id <conversation-uuid> --project-id <pr
 
 The TUI uses the selected project and Goal and sends free text to the same authenticated conversation API. It does not persist bearer tokens, provider keys, or gateway credentials in its workspace session.
 
+### ChatGPT account login (OAuth handled by the public Codex app-server)
+
+Maestro does not copy private ChatGPT or Anthropic OAuth endpoints. ChatGPT Plus/Pro account login is delegated to the public OpenAI Codex app-server protocol. The app-server owns its browser OAuth callback and refresh tokens; Maestro receives only a login URL and status metadata.
+
+Configure the gateway with a separately installed and trusted `codex` executable:
+
+```bash
+MAESTRO_MODEL_GATEWAY_TOKEN=<random-secret> \
+MAESTRO_CODEX_APP_SERVER_COMMAND=codex \
+MAESTRO_CODEX_MODELS=gpt-5.3-codex \
+npm --workspace @maestro/model-gateway start
+```
+
+Then sign in from the TUI with `/login`, choose `ChatGPT Plus / Pro`, and complete the browser flow. The non-interactive equivalent is:
+
+```bash
+maestro login openai-codex
+maestro models list
+```
+
+Use an exact model identity such as `openai-codex/gpt-5.3-codex`. Anthropic Pro/Max subscription login is intentionally unavailable until Anthropic publishes or approves a supported integration. API-key login remains a separate legacy path for providers that support it.
+
 ## 5. Provisioning project access
 
 Project membership and roles are granted through the authenticated admin endpoint. Set `MAESTRO_OPERATOR_PROVISIONING_ADMIN_ID` to the UUID of an active operator during deployment. If it is not set, the endpoint stays unavailable; no authenticated operator can grant access.

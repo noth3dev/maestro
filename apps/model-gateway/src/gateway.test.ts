@@ -76,3 +76,16 @@ describe("managed account login", () => {
     await expect(credentials.resolveForGateway("openai-codex-operator-1")).rejects.toThrow("no gateway secret");
   });
 });
+
+
+it("logs out of the managed account and revokes its metadata binding", async () => {
+  const registry = new ProviderRegistry();
+  const credentials = new InMemoryCredentialStore();
+  await credentials.bindManaged({ operatorId: "operator-1", providerId: "openai-codex", accountRef: "openai-codex-operator-1" });
+  let loggedOut = false;
+  const codex = { startChatGptLogin: async () => ({ providerId: "openai-codex" as const, loginId: "login-1", authUrl: "https://chatgpt.com/login" }), loginStatus: async () => ({ loginId: "login-1", state: "succeeded" as const }), cancelLogin: async () => {}, logout: async () => { loggedOut = true; }, close: async () => {} };
+  const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1", codex });
+  await expect(gateway.logoutAccount?.({ requestId: "r1", operatorId: "operator-1", providerId: "openai-codex" })).resolves.toBeUndefined();
+  expect(loggedOut).toBe(true);
+  await expect(credentials.ensure("openai-codex-operator-1")).resolves.toBeUndefined();
+});

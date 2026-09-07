@@ -2,6 +2,7 @@
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 import { realpathSync } from "node:fs";
+import { openExternalUrl } from "./external-url.js";
 import { ApiError, createApiClient, type GoalEvent, type GoalResult } from "@maestro/api-client";
 import { startInteractiveTui } from "./tui/entry.js";
 import { resolveConnection } from "./tui/connection.js";
@@ -10,6 +11,8 @@ import type { CertifyWorkerInput } from "@maestro/contracts";
 
 export interface CliIo {
   fetch?: typeof globalThis.fetch;
+  /** Opens a provider-owned login URL without passing account secrets through argv. */
+  openExternalUrl?: (url: string) => Promise<void>;
   stdout: (text: string) => void;
   stderr: (text: string) => void;
   /** Reads a secret without echoing it; primarily supplied by tests or embedding hosts. */
@@ -135,12 +138,35 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       printState(io.stdout, result, json);
       return 0;
     }
+    if (resource === "login" && action === "openai-codex") {
+      const login = await client.startAccountLogin();
+      io.stdout(`Opening ChatGPT account login in your browser: ${login.authUrl}\n`);
+      try { await (io.openExternalUrl ?? openExternalUrl)(login.authUrl); } catch { io.stdout(`If the browser did not open, visit: ${login.authUrl}\n`); }
+      const timeoutMs = Number(env.MAESTRO_LOGIN_TIMEOUT_MS ?? "120000");
+      const pollMs = Number(env.MAESTRO_LOGIN_POLL_MS ?? "500");
+      const deadline = Date.now() + (Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 120_000);
+      let status = await client.accountLoginStatus(login.loginId);
+      while (status.state === "pending" && Date.now() < deadline) {
+        await new Promise<void>((resolve) => setTimeout(resolve, Number.isFinite(pollMs) && pollMs >= 0 ? pollMs : 500));
+        status = await client.accountLoginStatus(login.loginId);
+      }
+      if (status.state === "succeeded") { if (!json) io.stdout(`Account login complete: ${login.providerId}\n`); printState(io.stdout, { providerId: login.providerId, loginId: login.loginId, state: status.state }, json); return 0; }
+      if (status.state === "pending") throw new Error("Provider account login timed out");
+      throw new Error(status.message ?? `Provider account login ${status.state}`);
+    }
+
     if (resource === "login" && (action === "openai" || action === "anthropic")) {
       const secret = await (io.readSecret ?? ((prompt) => readSecretFromStdin(io, prompt)))(`${action} API key`);
       const result = await client.loginProvider({ providerId: action, authMode: "api-key", secret });
       printState(io.stdout, result, json);
       return 0;
     }
+    if (resource === "logout" && action === "openai-codex") {
+      await client.logoutAccount();
+      printState(io.stdout, { providerId: action, revoked: true }, json);
+      return 0;
+    }
+
     if (resource === "logout" && (action === "openai" || action === "anthropic")) {
       await client.logoutProvider(action);
       printState(io.stdout, { providerId: action, revoked: true }, json);

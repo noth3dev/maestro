@@ -16,11 +16,13 @@ export interface ConversationService {
   turn(conversationId: string, input: ConversationTurnInput, operator: OperatorContext): Promise<ConversationTurnResult>;
   cancel(conversationId: string, projectId: string, operator: OperatorContext): Promise<Conversation>;
   listEvents(conversationId: string, projectId: string, after: string, operator: OperatorContext): Promise<readonly ConversationEvent[]>;
+  /** Rebuilds in-memory runtime handles for active conversations after a process restart. */
+  recover?(): Promise<{ recovered: number; markedUnknown: number }>;
   close?(): Promise<void>;
 }
 
 type RuntimeHandle = { execution: import("@maestro/domain").ExecutionRef; invocation: import("@maestro/domain").InvocationRef; runtime: ReturnType<typeof createMaestroAgentRuntime>; binding: GatewayBinding };
-type ConversationRow = { conversation_id: string; project_id: string; goal_id: string; model_provider: string; model_id: string; status: Conversation["status"]; version: number };
+type ConversationRow = { conversation_id: string; operator_id: string; project_id: string; goal_id: string; model_provider: string; model_id: string; status: Conversation["status"]; version: number; binding: GatewayBinding };
 
 const MAX_TEXT = 64_000;
 const SECRET_LIKE = /(bearer\s+[\w./+=-]{12,}|(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|passwd|private[_-]?key)\s*[:=]|-----begin .*private key-----|(?:^|[^a-z0-9])sk-[a-z0-9_-]{16,})/i;
@@ -52,13 +54,22 @@ export function createPostgresConversationService(options: {
   const policyHash = options.dataPolicyHash ?? "maestro-local-v1";
 
   async function read(conversationId: string, projectId: string): Promise<ConversationRow> {
-    const result = await options.pool.query<ConversationRow>("SELECT conversation_id, project_id, goal_id, model_provider, model_id, status, version FROM conversations WHERE conversation_id = $1 AND project_id = $2", [conversationId, projectId]);
+    const result = await options.pool.query<ConversationRow>("SELECT conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding FROM conversations WHERE conversation_id = $1 AND project_id = $2", [conversationId, projectId]);
     if (result.rowCount !== 1) throw new ConversationNotFoundError();
     return result.rows[0]!;
   }
   async function addEvent(client: { query: (text: string, values?: unknown[]) => Promise<{ rows: Array<{ cursor: string }> }> }, conversationId: string, projectId: string, eventType: ConversationEvent["eventType"], payload: Record<string, unknown>): Promise<string> {
     const result = await client.query("INSERT INTO conversation_events (event_id, conversation_id, project_id, event_type, payload) VALUES ($1, $2, $3, $4, $5) RETURNING cursor::text", [randomUUID(), conversationId, projectId, eventType, JSON.stringify(payload)]);
     return result.rows[0]!.cursor;
+  }
+
+  function grantFor(row: ConversationRow, accountRef: string) {
+    return { grantId: `grant-${row.conversation_id}`, allowedTools: [], allowedSkills: [], modelPolicy: [formatModelRef({ provider: row.model_provider, id: row.model_id })], pathScope: [], outboundDataClasses: ["public", "workspace"], remaining: { modelTurns: 8, toolCalls: 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } };
+  }
+  async function rebuildRuntime(row: ConversationRow): Promise<RuntimeHandle> {
+    const runtime = createMaestroAgentRuntime({ gateway: options.gateway, binding: row.binding, tools });
+    const spawned = await runtime.spawn({ name: `conversation-${row.conversation_id}`, context: { operatorId: row.operator_id, projectId: row.project_id, goalId: row.goal_id, missionBundleId: "conversation", policyVersion: "1", accountRef: row.binding.account.accountRef }, grant: grantFor(row, row.binding.account.accountRef), modelPolicy: [formatModelRef({ provider: row.model_provider, id: row.model_id })], idempotencyKey: row.conversation_id });
+    return { execution: spawned.execution, invocation: spawned.invocation, runtime, binding: row.binding };
   }
 
   return {
@@ -77,7 +88,7 @@ export function createPostgresConversationService(options: {
       const conversationId = randomUUID();
       const binding = await options.gateway.admit({ requestId: `admit-${conversationId}`, operatorId: operator.operatorId, providerId: parsed.provider, model: parsed, accountRef, dataPolicyHash: policyHash });
       const runtime = createMaestroAgentRuntime({ gateway: options.gateway, binding, tools });
-      const grant = { grantId: `grant-${conversationId}`, allowedTools: [], allowedSkills: [], modelPolicy: [input.model], pathScope: [], outboundDataClasses: ["public", "workspace"], remaining: { modelTurns: 8, toolCalls: 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } };
+
       const client = await options.pool.connect();
       try {
         await client.query("BEGIN");
@@ -87,7 +98,7 @@ export function createPostgresConversationService(options: {
       } catch (error) { await client.query("ROLLBACK"); await runtime.close?.(); throw error; } finally { client.release(); }
       let spawned: Awaited<ReturnType<typeof runtime.spawn>>;
       try {
-        spawned = await runtime.spawn({ name: `conversation-${conversationId}`, context: { operatorId: operator.operatorId, projectId: input.projectId, goalId: input.goalId, missionBundleId: "conversation", policyVersion: "1", accountRef }, grant, modelPolicy: [input.model], idempotencyKey: conversationId });
+        spawned = await runtime.spawn({ name: `conversation-${conversationId}`, context: { operatorId: operator.operatorId, projectId: input.projectId, goalId: input.goalId, missionBundleId: "conversation", policyVersion: "1", accountRef }, grant: { grantId: `grant-${conversationId}`, allowedTools: [], allowedSkills: [], modelPolicy: [input.model], pathScope: [], outboundDataClasses: ["public", "workspace"], remaining: { modelTurns: 8, toolCalls: 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } }, modelPolicy: [input.model], idempotencyKey: conversationId });
       } catch {
         await options.pool.query("UPDATE conversations SET status = 'unknown', version = version + 1, updated_at = transaction_timestamp() WHERE conversation_id = $1", [conversationId]);
         await runtime.close?.();
@@ -146,6 +157,21 @@ export function createPostgresConversationService(options: {
       await read(conversationId, projectId);
       const result = await options.pool.query<{ cursor: string; event_id: string; conversation_id: string; project_id: string; event_type: ConversationEvent["eventType"]; payload: Record<string, unknown>; occurred_at: string }>("SELECT cursor::text AS cursor, event_id, conversation_id, project_id, event_type, payload, occurred_at FROM conversation_events WHERE conversation_id = $1 AND project_id = $2 AND cursor > $3::bigint ORDER BY cursor ASC LIMIT 256", [conversationId, projectId, after]);
       return result.rows.map((row) => ({ cursor: row.cursor, eventId: row.event_id, conversationId: row.conversation_id, projectId: row.project_id, eventType: row.event_type, payload: row.payload, occurredAt: new Date(row.occurred_at).toISOString() }));
+    },
+    async recover() {
+      const rows = await options.pool.query<ConversationRow>("SELECT conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding FROM conversations WHERE status IN ('active', 'running') ORDER BY created_at ASC");
+      let recovered = 0; let markedUnknown = 0;
+      for (const row of rows.rows) {
+        try {
+          const handle = await rebuildRuntime(row);
+          runtimes.set(row.conversation_id, handle);
+          recovered += 1;
+        } catch {
+          await options.pool.query("UPDATE conversations SET status = 'unknown', version = version + 1, updated_at = transaction_timestamp() WHERE conversation_id = $1 AND status IN ('active', 'running')", [row.conversation_id]);
+          markedUnknown += 1;
+        }
+      }
+      return { recovered, markedUnknown };
     },
     async close() { await Promise.all([...runtimes.values()].map(async (handle) => { await handle.runtime.close?.(); })); runtimes.clear(); },
   };

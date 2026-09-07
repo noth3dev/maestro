@@ -36,6 +36,18 @@ describe("executeCli", () => {
     expect(stderr.lines).toEqual([]);
   });
 
+  it("opens the approved account login in a browser and waits for completion", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ providerId: "openai-codex", loginId: "login-1", authUrl: "https://chatgpt.com/login" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ providerId: "openai-codex", loginId: "login-1", state: "succeeded" }), { status: 200 }));
+    const stdout = output();
+    const openExternalUrl = vi.fn(async () => {});
+    await expect(executeCli(["login", "openai-codex"], env, { fetch, openExternalUrl, stdout: stdout.write, stderr: output().write })).resolves.toBe(0);
+    expect(openExternalUrl).toHaveBeenCalledWith("https://chatgpt.com/login");
+    expect(stdout.lines.join(" ")).toContain("Account login complete");
+    expect(stdout.lines.join(" ")).not.toContain("access_token");
+  });
+
   it("creates a goal from environment-only connection settings and prints JSON", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ goalId, projectId, state: "draft", version: 0 }), { status: 201 }));
     const stdout = output();

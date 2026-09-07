@@ -13,6 +13,7 @@ class FakePool {
   async query(sql: string, _params: unknown[] = []) {
     if (sql.startsWith("SELECT project_id FROM goals")) return { rowCount: 1, rows: [{ project_id: projectId }] };
     if (sql.startsWith("SELECT conversation_id")) return { rowCount: this.conversation ? 1 : 0, rows: this.conversation ? [this.conversation] : [] };
+    if (sql.includes("FROM conversations WHERE status IN")) return { rowCount: this.conversation ? 1 : 0, rows: this.conversation ? [this.conversation] : [] };
     if (sql.includes("UPDATE conversations")) return { rowCount: 1, rows: [] };
     return { rowCount: 1, rows: [] };
   }
@@ -20,7 +21,7 @@ class FakePool {
     return { query: async (sql: string, params: unknown[] = []) => {
       if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") return { rowCount: 1, rows: [] };
       if (sql.startsWith("INSERT INTO conversations")) {
-        this.conversation = { conversation_id: params[0], project_id: params[2], goal_id: params[3], model_provider: params[4], model_id: params[5], status: "active", version: 1 };
+        this.conversation = { conversation_id: params[0], operator_id: params[1], project_id: params[2], goal_id: params[3], model_provider: params[4], model_id: params[5], status: "active", version: 1, binding: JSON.parse(String(params[6])) };
         return { rowCount: 1, rows: [] };
       }
       if (sql.startsWith("INSERT INTO conversation_events")) return { rowCount: 1, rows: [{ cursor: String(++this.cursor) }] };
@@ -53,4 +54,12 @@ describe("postgres conversation service", () => {
     expect(result.turn.content).toBe("hello from model");
     expect(result.conversation.status).toBe("succeeded");
   });
+  it("rebuilds active conversation runtime handles after restart", async () => {
+    const pool = new FakePool();
+    pool.conversation = { conversation_id: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f03", operator_id: operator.operatorId, project_id: projectId, goal_id: goalId, model_provider: "openai", model_id: "gpt-5", status: "active", version: 1, binding: { bindingId: "binding-1", gatewayInstanceId: "gateway-1", provider: { provider: "openai", id: "gpt-5" }, account: { providerId: "openai", accountRef: "acct-1", authMode: "api-key" }, dataPolicyHash: "policy" } };
+    const service = createPostgresConversationService({ pool: pool as never, gateway: fakeGateway(), gatewayOperatorId: "gateway-operator", accountRefs: { openai: "acct-1" } });
+    await expect(service.recover?.()).resolves.toEqual({ recovered: 1, markedUnknown: 0 });
+    await expect(service.turn("018f3c9b-7e71-7b44-ae23-3b5d4e8c9f03", { projectId, text: "hi" }, operator)).resolves.toMatchObject({ turn: { content: "hello from model" } });
+  });
+
 });

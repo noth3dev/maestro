@@ -30,6 +30,9 @@ const AccountLoginStartSchema = z.object({
 const AccountLoginStatusSchema = z.object({
   requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.literal("openai-codex"), loginId: z.string().min(1).max(256),
 }).strict();
+const AccountLogoutSchema = z.object({
+  requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.literal("openai-codex"),
+}).strict();
 const TurnSchema = z.object({
   binding: BindingSchema, requestId: z.string().min(1).max(128), sessionId: z.string().min(1).max(128), turnId: z.string().min(1).max(128),
   messages: z.array(z.unknown()).max(128), tools: z.array(z.unknown()).max(128), limits: LimitsSchema,
@@ -100,6 +103,18 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
       return await options.gateway.accountLoginStatus(parsed.data as GatewayAccountLoginStatusRequest);
     } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
   });
+  app.post("/v1/account-logins/logout", async (request, reply) => {
+    if (!(await guard(request, reply))) return;
+    const parsed = AccountLogoutSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: { code: "invalid_gateway_request", message: "invalid account logout request" } });
+    if (parsed.data.operatorId !== options.operatorId) return reply.code(403).send({ error: { code: "gateway_auth_required", message: "gateway operator context is invalid" } });
+    try {
+      if (!options.gateway.logoutAccount) throw new Error("account logout is unavailable");
+      await options.gateway.logoutAccount(parsed.data);
+      return { revoked: true };
+    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+  });
+
   app.post("/v1/account-logins/cancel", async (request, reply) => {
     if (!(await guard(request, reply))) return;
     const parsed = AccountLoginStatusSchema.safeParse(request.body);

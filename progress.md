@@ -2311,3 +2311,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Model gateway owns the app-server login session, operator binding, successful managed account metadata, and cancellation. The credential store records managed-subscription metadata without inventing a gateway secret.
 - Added provider-neutral account-login contracts, API-client methods, route/RPC tests, and Codex JSON-RPC transport tests. Anthropic subscription login remains truthfully unavailable.
 - Verification after forced source compilation: full `npm test` passed with 99 files passed, 51 skipped, 0 failed; PostgreSQL-gated integration suites remain unavailable in this environment.
+
+
+## 2026-09-07 — Durable native conversation restart recovery
+
+- Closed the real restart gap in native conversations: active/running rows are now loaded before Control Plane traffic starts, their persisted gateway binding and operator/project/Goal context are used to rebuild the runtime handle, and only successfully rebuilt conversations remain usable. Failed rebuilds are durably changed to `unknown` rather than falsely advertised as active.
+- Added `ConversationService.recover()` and startup invocation after migrations and worker reconciliation. Added a regression proving an active conversation can be rebuilt and accept a subsequent turn.
+- This is runtime-handle recovery, not a claim that an in-flight provider token stream survives a process crash; an interrupted turn remains subject to the existing unknown-outcome boundary.
+- Forced build and full test suite passed: 99 files passed, 51 skipped, 0 failed.

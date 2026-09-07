@@ -5,6 +5,7 @@ import type { ModelMessage, ModelProviderPort, ModelStreamEvent, ModelTurnReques
 export interface CodexAppServerTransport {
   send(message: unknown): void;
   onMessage(listener: (message: unknown) => void): () => void;
+  onError?(listener: (error: Error) => void): () => void;
   close(): Promise<void>;
 }
 
@@ -75,6 +76,7 @@ function redactChildEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 class StdioTransport implements CodexAppServerTransport {
   private readonly child: ChildProcessWithoutNullStreams;
   private readonly listeners = new Set<(message: unknown) => void>();
+  private readonly errorListeners = new Set<(error: Error) => void>();
   private readonly lines;
 
   constructor(command: string, args: readonly string[], env: NodeJS.ProcessEnv) {
@@ -90,6 +92,8 @@ class StdioTransport implements CodexAppServerTransport {
     });
     // Drain stderr without forwarding provider/account details to logs.
     this.child.stderr.resume();
+    this.child.once("error", (error) => { for (const listener of this.errorListeners) listener(error); });
+    this.child.once("exit", (code, signal) => { if (code !== 0 && !this.child.killed) { for (const listener of this.errorListeners) listener(new Error(`Codex app-server exited (${code ?? signal ?? "unknown"})`)); } });
   }
 
   send(message: unknown): void {
@@ -99,6 +103,11 @@ class StdioTransport implements CodexAppServerTransport {
   onMessage(listener: (message: unknown) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  onError(listener: (error: Error) => void): () => void {
+    this.errorListeners.add(listener);
+    return () => this.errorListeners.delete(listener);
   }
 
   async close(): Promise<void> {
@@ -119,12 +128,14 @@ export class CodexAppServerClient {
   private initialized?: Promise<void>;
   private closed = false;
   private readonly unsubscribe: () => void;
+  private readonly unsubscribeError?: () => void;
 
   constructor(options: CodexAppServerOptions = {}) {
     this.transport = options.transport ?? new StdioTransport(options.command ?? "codex", options.args ?? ["app-server"], options.env ?? process.env);
     this.requestTimeoutMs = options.requestTimeoutMs ?? 15_000;
     this.clientInfo = options.clientInfo ?? { name: "maestro", title: "Maestro", version: "development" };
     this.unsubscribe = this.transport.onMessage((message) => this.handleMessage(message));
+    this.unsubscribeError = this.transport.onError?.((error) => this.failPending(error));
   }
 
   onNotification(listener: (message: JsonRpcNotification) => void): () => void {
@@ -184,9 +195,11 @@ export class CodexAppServerClient {
     });
     notifications.then(cleanup, cleanup).catch(() => undefined);
     let outcome: { text: string; status: "completed" | "interrupted" };
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
-      outcome = await Promise.race([notifications, new Promise<never>((_, reject) => setTimeout(() => reject(new CodexAppServerError("provider_unavailable", "Codex app-server turn timed out")), this.requestTimeoutMs))]);
-    } finally { this.activeTurns.delete(input.requestId); }
+      const deadline = new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new CodexAppServerError("provider_unavailable", "Codex app-server turn timed out")), this.requestTimeoutMs); });
+      outcome = await Promise.race([notifications, deadline]);
+    } finally { if (timeout !== undefined) clearTimeout(timeout); this.activeTurns.delete(input.requestId); }
     if (outcome.status === "interrupted") throw new CodexAppServerError("provider_cancelled", "Codex request cancelled");
     return { requestId: input.requestId, model: { provider: "openai-codex", id: input.model }, text: outcome.text, toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
   }
@@ -204,7 +217,7 @@ export class CodexAppServerClient {
     if (!isRecord(result) || result.type !== "chatgpt") throw new Error("Codex app-server did not start ChatGPT login");
     const loginId = requiredString(result.loginId, "loginId");
     const authUrl = validateAuthUrl(result.authUrl);
-    this.logins.set(loginId, { loginId, state: "pending" });
+    if (this.logins.get(loginId)?.state !== "succeeded") this.logins.set(loginId, { loginId, state: "pending" });
     return { providerId: "openai-codex", loginId, authUrl };
   }
 
@@ -242,6 +255,7 @@ export class CodexAppServerClient {
     if (this.closed) return;
     this.closed = true;
     this.unsubscribe();
+    this.unsubscribeError?.();
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
       pending.reject(new Error("Codex app-server closed"));
@@ -272,6 +286,14 @@ export class CodexAppServerClient {
       this.pending.set(id, { resolve, reject, timer });
       this.transport.send({ method, id, ...(params === undefined ? {} : { params }) });
     });
+  }
+
+  private failPending(error: Error): void {
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
+    }
+    this.pending.clear();
   }
 
   private handleMessage(message: unknown): void {
