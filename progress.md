@@ -2527,3 +2527,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added `apps/control-plane/src/discord-signal-acceptance.integration.test.ts`, driving `createHttpDelivery`'s exact real request shape (operator Bearer auth + JSON body with an embedded HMAC signature) against a real Control Plane HTTP server and real PostgreSQL, plus a tamper-rejection case. This is the first real end-to-end test of the Discord ingestion boundary; every prior test used an in-memory `fetchStub`.
 - No product defect found -- both accept and tamper-rejection worked correctly on the first genuinely correct run. Two of my own test fixture mistakes were caught and fixed first (stale hardcoded timestamps failing real freshness verification; a PostgreSQL bigint column returned as a string, not a number). Full detail in `findings.md` same date.
 - Evidence: new test 1/1; regression sweep 9 files / 73 tests, 0 failed. Full clean single-worker real-PostgreSQL rerun in progress.
+
+
+## 2026-09-08 — Real Metronome continuous loop acceptance test (genuine negative result)
+
+- Added `apps/control-plane/src/metronome-loop.integration.test.ts`, the first real-PostgreSQL test of the scheduled continuous Metronome loop using the real `createDurableGoalService`'s `withGoalLease` (no injected fake). Every prior test injected fakes for both the lease and the scan seam.
+- Proves: only non-terminal Goals are scanned, terminal Goals are never touched, no fabricated findings on a routine Goal, and a real Goal lease acquired on one pass is correctly released before the next pass needs it again.
+- No product defect found -- one test fixture mistake (missing `bootstrapPermanentOrganization`) caught and fixed first. Full detail in `findings.md` same date.
+- Evidence: new test 1/1; full clean single-worker real-PostgreSQL rerun in progress.
