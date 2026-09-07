@@ -175,4 +175,37 @@ describe("native Maestro agent runtime", () => {
     expect(execute).not.toHaveBeenCalled();
     expect(await runtime.getInvocationStatus(spawned.invocation)).toBe("failed");
   });
+
+  it("bounds providerTimeoutMs and wallTimeMs to the real Model Gateway wire schema even for a multi-day Mission Bundle time ceiling", async () => {
+    // A real Mission Bundle timeCeiling of days/hours produces a
+    // correspondingly large grant.remaining.wallTimeMs (see
+    // packages/persistence/src/worker.ts's missionTimeLimitMs). The Model
+    // Gateway's real wire schema caps providerTimeoutMs at 600_000ms and
+    // wallTimeMs at 3_600_000ms (apps/model-gateway/src/rpc.ts's
+    // TurnSchema); sending an unclamped value through a real gateway process
+    // fails schema validation and durably strands the invocation as
+    // "unknown" with an opaque "invalid model turn request" -- this is a
+    // real defect this test reproduces and pins closed.
+    let received: { providerTimeoutMs: number; wallTimeMs: number } | undefined;
+    const modelGateway: ModelGatewayPort = {
+      async listModels() { return []; },
+      async admit() { return binding; },
+      async turn(request) {
+        received = { providerTimeoutMs: request.limits.providerTimeoutMs, wallTimeMs: request.limits.wallTimeMs };
+        return { requestId: request.requestId, model: identity, text: "ok", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
+      },
+      async cancel() { return { state: "confirmed" as const }; },
+      async recover() { return "reconnected" as const; },
+      async close() {},
+    };
+    const longRunningGrant = { ...grant, remaining: { ...grant.remaining, wallTimeMs: 3 * 24 * 60 * 60 * 1000 } };
+    const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools: new ToolRegistry() });
+    const spawned = await runtime.spawn({ name: "long-mission", modelPolicy: ["fake/model-a"], idempotencyKey: "long-mission-1", context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1" }, grant: longRunningGrant });
+    await runtime.prompt(spawned.execution, "return a bounded result");
+
+    expect(received).toBeDefined();
+    expect(received!.providerTimeoutMs).toBeLessThanOrEqual(600_000);
+    expect(received!.wallTimeMs).toBeLessThanOrEqual(3_600_000);
+    expect(await runtime.getInvocationStatus(spawned.invocation)).toBe("succeeded");
+  });
 });

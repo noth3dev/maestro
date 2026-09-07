@@ -94,8 +94,20 @@ const asToolEvent = (value: string): ToolEvent["ref"] => value as ToolEvent["ref
 const defaultUsage: InvocationUsage = { state: "unknown" };
 const defaultAnswer: InvocationAnswer = { state: "unavailable", reason: "snapshot-unavailable" };
 
+// The Model Gateway's real wire schema (apps/model-gateway/src/rpc.ts's
+// TurnSchema) caps providerTimeoutMs at 600_000ms and wallTimeMs at
+// 3_600_000ms. A Mission Bundle's timeCeiling is a multi-day domain-level
+// budget (packages/persistence/src/worker.ts's missionTimeLimitMs), so
+// grant.remaining.wallTimeMs commonly exceeds both wire ceilings. Sending an
+// unclamped value fails real gateway schema validation and durably strands
+// the invocation as "unknown" -- clamp defensively rather than let a
+// Mission Bundle author's time ceiling silently break every real turn.
+const MAX_WIRE_PROVIDER_TIMEOUT_MS = 600_000;
+const MAX_WIRE_WALL_TIME_MS = 3_600_000;
+
 function limitsFor(grant: CapabilityGrant): TurnLimits {
-  return { maxModelTurns: grant.remaining.modelTurns, maxToolCalls: grant.remaining.toolCalls, maxChildCalls: grant.remaining.childCalls, maxOutputTokens: grant.remaining.outputTokens, maxInputBytes: 64_000, maxResultBytes: 64_000, providerTimeoutMs: Math.max(1, grant.remaining.wallTimeMs), wallTimeMs: grant.remaining.wallTimeMs };
+  const wallTimeMs = Math.min(Math.max(1, grant.remaining.wallTimeMs), MAX_WIRE_WALL_TIME_MS);
+  return { maxModelTurns: grant.remaining.modelTurns, maxToolCalls: grant.remaining.toolCalls, maxChildCalls: grant.remaining.childCalls, maxOutputTokens: grant.remaining.outputTokens, maxInputBytes: 64_000, maxResultBytes: 64_000, providerTimeoutMs: Math.min(wallTimeMs, MAX_WIRE_PROVIDER_TIMEOUT_MS), wallTimeMs };
 }
 
 function textMessage(text: string): ModelMessage { return { role: "user", content: [{ kind: "text", text }] }; }
