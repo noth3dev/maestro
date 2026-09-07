@@ -1028,3 +1028,10 @@ worker-device link and pause state against that concrete case rather than a hypo
 - [completed] Reconciled current README/docs/plans. The docs now state that `MaestroAgentRuntime` serves conversations, pi-tui is presentation-only, and legacy Prime composition remains for workers.
 - [open] Native worker backend cutover: replace `createPrimeExecutionKernel`, migrate worker/Head/reviewer lifecycle parity, remove `@maestro/prime-adapter`, and pass no-Prime scan plus real-process recovery evidence.
 - [next] Conversation-centric TUI streaming slice: obtain approval for the design, then add durable `turn_delta` events, SSE reconnect/cursor rendering, Markdown transcript rendering, cancellation/unknown feedback, and interaction tests.
+
+
+## 2026-09-07 — Phase 5 conversation/login operational slice
+
+- **[self_verified_pending_full_db_gate]** Native conversation turns now retain assistant context across turns and restore ordered durable history after Control Plane runtime rebuild. Gateway and Control Plane SSE paths enforce disconnect/backpressure bounds, and invalid JSONB-hostile text is rejected before persistence.
+- **[self_verified_pending_full_db_gate]** Codex managed login now uses the official `codex_cli_rs` app-server originator by default. The TUI renders the provider URL and supports `Alt+C` shell-free clipboard copy. A real installed Codex app-server probe confirmed the URL shape and originator. Full PostgreSQL `npm run check` remains blocked by unrelated pre-existing integration failures; focused conversation/migration PostgreSQL evidence is 8/8.
+- **Next:** restart and exercise the built local gateway/control-plane HTTP path, then commit/push. Do not mark Phase 5 or native worker migration accepted until full DB and real-process recovery gates pass.

@@ -13,6 +13,8 @@ export interface CliIo {
   fetch?: typeof globalThis.fetch;
   /** Opens a provider-owned login URL without passing account secrets through argv. */
   openExternalUrl?: (url: string) => Promise<void>;
+  /** Copies a provider-owned login URL without passing it through a shell or argv. */
+  copyToClipboard?: (text: string) => Promise<void>;
   stdout: (text: string) => void;
   stderr: (text: string) => void;
   /** Reads a secret without echoing it; primarily supplied by tests or embedding hosts. */

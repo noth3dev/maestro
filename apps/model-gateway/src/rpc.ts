@@ -170,30 +170,50 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
     if (!parsed.success) return reply.code(400).send({ error: { code: "invalid_gateway_request", message: "invalid model turn request" } });
     const body = parsed.data;
     const eventLimit = 256;
+    const maxBufferedBytes = 1_000_000;
     let eventCount = 0;
+    let closed = false;
+    const controller = new AbortController();
+    const onClosed = () => { closed = true; controller.abort(); };
+    request.raw.once("aborted", onClosed);
+    request.raw.socket?.once("close", onClosed);
     reply.hijack();
     reply.raw.setHeader("content-type", "text/event-stream; charset=utf-8");
     reply.raw.setHeader("cache-control", "no-cache");
     reply.raw.setHeader("connection", "keep-alive");
+    const writeFrame = (frame: string): void => {
+      if (closed || reply.raw.writableEnded) throw new Error("gateway stream closed");
+      if (reply.raw.writableLength + Buffer.byteLength(frame, "utf8") > maxBufferedBytes) { onClosed(); throw new Error("gateway stream backpressure limit exceeded"); }
+      // `false` only means Node crossed its high-water mark; the explicit byte
+      // cap above is the hard memory fence. The drain may happen while the
+      // provider is still working, so do not abort a valid frame here.
+      reply.raw.write(frame);
+    };
     const writeEvent = (event: ModelStreamEvent) => {
       eventCount += 1;
-      if (eventCount > eventLimit) throw new Error("gateway event limit exceeded");
-      reply.raw.write(`event: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`);
+      if (eventCount > eventLimit) { onClosed(); throw new Error("gateway event limit exceeded"); }
+      writeFrame(`event: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`);
     };
     const turn: GatewayTurnRequest = {
       binding: body.binding as GatewayBinding, requestId: body.requestId, sessionId: body.sessionId, turnId: body.turnId,
-      messages: body.messages as ModelMessage[], tools: body.tools as ModelToolDefinition[], limits: body.limits as TurnLimits, signal: new AbortController().signal,
+      messages: body.messages as ModelMessage[], tools: body.tools as ModelToolDefinition[], limits: body.limits as TurnLimits, signal: controller.signal,
       emit: writeEvent,
     };
     try {
       const result = await options.gateway.turn(turn);
-      reply.raw.write(`event: result\ndata: ${JSON.stringify(result)}\n\n`);
-      reply.raw.end();
+      if (!closed) { writeFrame(`event: result\ndata: ${JSON.stringify(result)}\n\n`); reply.raw.end(); }
       return reply;
     } catch (error) {
       const mapped = errorCode(error);
-      if (!reply.raw.writableEnded) { reply.raw.write(`event: error\ndata: ${JSON.stringify({ code: mapped.code, message: mapped.message })}\n\n`); reply.raw.end(); }
+      if (!closed && !reply.raw.writableEnded) {
+        try { writeFrame(`event: error\ndata: ${JSON.stringify({ code: mapped.code, message: mapped.message })}\n\n`); reply.raw.end(); }
+        catch { onClosed(); }
+      }
       return reply;
+    } finally {
+      request.raw.removeListener("aborted", onClosed);
+      request.raw.socket?.removeListener("close", onClosed);
+      if (!closed) onClosed();
     }
   });
   app.post("/v1/cancel", async (request, reply) => {

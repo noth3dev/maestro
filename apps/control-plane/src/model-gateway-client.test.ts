@@ -28,17 +28,41 @@ describe("Control Plane model gateway client", () => {
     await expect(client.listModels({ operatorId: "operator-1" })).rejects.not.toThrow("do-not-leak");
   });
 
-  it("serializes turns without signal or host callbacks", async () => {
+  it("sanitizes gateway stream errors and bounds incomplete records", async () => {
+    const errorFetch = async () => new Response(`event: error\ndata: ${JSON.stringify({ code: "provider_secret_leak", message: "Bearer provider-secret-token" })}\n\n`, { status: 200, headers: { "content-type": "text/event-stream" } });
+    const client = createModelGatewayClient({ baseUrl: "http://127.0.0.1:4321", token: "gateway-secret", fetch: errorFetch });
+    const input = { binding: { bindingId: "binding-1", gatewayInstanceId: "gateway-1", provider: model.identity, account: { providerId: "openai", accountRef: "account-1", authMode: "api-key" as const }, dataPolicyHash: "policy-1" }, requestId: "request-1", sessionId: "session-1", turnId: "turn-1", messages: [], tools: [], limits: { maxModelTurns: 1, maxToolCalls: 0, maxChildCalls: 0, maxOutputTokens: 8, maxInputBytes: 1024, maxResultBytes: 1024, providerTimeoutMs: 1000, wallTimeMs: 1000 }, signal: new AbortController().signal, emit: () => {} };
+    await expect(client.turn(input)).rejects.toMatchObject({ code: "provider_unavailable", message: "model gateway stream failed" });
+
+    const oversized = createModelGatewayClient({ baseUrl: "http://127.0.0.1:4321", token: "gateway-secret", fetch: async () => new Response("x".repeat(128_001), { status: 200, headers: { "content-type": "text/event-stream" } }) });
+    await expect(oversized.turn(input)).rejects.toMatchObject({ code: "gateway_request_failed", message: "model gateway stream record is too large" });
+  });
+
+  it("rejects a stale streamed result with a different request identity", async () => {
+    const fetch = async () => new Response([`event: result\ndata: ${JSON.stringify({ requestId: "stale-request", model: model.identity, text: "stale", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } })}\n\n`].join(""), { status: 200, headers: { "content-type": "text/event-stream" } });
+    const client = createModelGatewayClient({ baseUrl: "http://127.0.0.1:4321", token: "gateway-secret", fetch });
+    const input = { binding: { bindingId: "binding-1", gatewayInstanceId: "gateway-1", provider: model.identity, account: { providerId: "openai", accountRef: "account-1", authMode: "api-key" as const }, dataPolicyHash: "policy-1" }, requestId: "request-1", sessionId: "session-1", turnId: "turn-1", messages: [], tools: [], limits: { maxModelTurns: 1, maxToolCalls: 0, maxChildCalls: 0, maxOutputTokens: 8, maxInputBytes: 1024, maxResultBytes: 1024, providerTimeoutMs: 1000, wallTimeMs: 1000 }, signal: new AbortController().signal, emit: () => {} };
+
+    await expect(client.turn(input)).rejects.toMatchObject({ code: "gateway_request_failed", message: "model gateway returned a mismatched request" });
+  });
+
+  it("forwards provider stream events and returns the terminal result", async () => {
     const result: ModelTurnResult = { requestId: "request-1", model: model.identity, text: "ok", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
-    const fetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe("http://127.0.0.1:4321/v1/turn/stream");
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
       expect(body).not.toHaveProperty("signal");
       expect(body).not.toHaveProperty("emit");
-      return response(result);
+      return new Response([
+        `event: text-delta\ndata: ${JSON.stringify({ kind: "text-delta", cursor: 1, text: "ok" })}\n\n`,
+        `event: result\ndata: ${JSON.stringify(result)}\n\n`,
+      ].join(""), { status: 200, headers: { "content-type": "text/event-stream" } });
     };
+    const events: string[] = [];
     const client = createModelGatewayClient({ baseUrl: "http://127.0.0.1:4321", token: "gateway-secret", fetch });
-    const actual = await client.turn({ binding: { bindingId: "binding-1", gatewayInstanceId: "gateway-1", provider: model.identity, account: { providerId: "openai", accountRef: "account-1", authMode: "api-key" }, dataPolicyHash: "policy-1" }, requestId: "request-1", sessionId: "session-1", turnId: "turn-1", messages: [], tools: [], limits: { maxModelTurns: 1, maxToolCalls: 0, maxChildCalls: 0, maxOutputTokens: 8, maxInputBytes: 1024, maxResultBytes: 1024, providerTimeoutMs: 1000, wallTimeMs: 1000 }, signal: new AbortController().signal, emit: () => {} });
+    const actual = await client.turn({ binding: { bindingId: "binding-1", gatewayInstanceId: "gateway-1", provider: model.identity, account: { providerId: "openai", accountRef: "account-1", authMode: "api-key" }, dataPolicyHash: "policy-1" }, requestId: "request-1", sessionId: "session-1", turnId: "turn-1", messages: [], tools: [], limits: { maxModelTurns: 1, maxToolCalls: 0, maxChildCalls: 0, maxOutputTokens: 8, maxInputBytes: 1024, maxResultBytes: 1024, providerTimeoutMs: 1000, wallTimeMs: 1000 }, signal: new AbortController().signal, emit: (event) => events.push(event.kind) });
     expect(actual.text).toBe("ok");
+    expect(events).toEqual(["text-delta"]);
   });
 });
 

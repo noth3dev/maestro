@@ -10,4 +10,10 @@ describe("provider login dialog", () => {
     expect(rendered).toContain("provider approval required");
     expect(rendered).toContain("Enter continue");
   });
+  it("shows the login URL and copy shortcut while waiting", () => {
+    const rendered = renderProviderLoginDialog(180, 0, "waiting", "https://auth.openai.com/oauth/authorize?state=test").join("\n");
+    expect(rendered).toContain("https://auth.openai.com/oauth/authorize?state=test");
+    expect(rendered).toContain("Alt+C copy link");
+  });
+
 });

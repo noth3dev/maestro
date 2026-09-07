@@ -949,7 +949,10 @@ export function buildServer({ goalService, authenticator, eventService, critical
 
   app.post("/v1/conversations", async (request, reply) => {
     const input = parse(CreateConversationInputSchema, request.body);
-    const conversation = await conversations.create(input, requestOperator(request as { operator?: OperatorContext }));
+    const header = request.headers["idempotency-key"];
+    if (typeof header !== "string" || header.trim() === "") throw new RequestValidationError("Idempotency-Key is required");
+    const requestId = parse(UuidSchema, header);
+    const conversation = await conversations.create(input, requestOperator(request as { operator?: OperatorContext }), requestId);
     return reply.status(201).send(ConversationSchema.parse(conversation));
   });
 
@@ -963,7 +966,10 @@ export function buildServer({ goalService, authenticator, eventService, critical
   app.post("/v1/conversations/:conversationId/turns", async (request, reply) => {
     const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
     const input = parse(ConversationTurnInputSchema, request.body);
-    const result = await conversations.turn(conversationId, input, requestOperator(request as { operator?: OperatorContext }));
+    const header = request.headers["idempotency-key"];
+    if (typeof header !== "string" || header.trim() === "") throw new RequestValidationError("Idempotency-Key is required");
+    const requestId = parse(UuidSchema, header);
+    const result = await conversations.turn(conversationId, input, requestOperator(request as { operator?: OperatorContext }), requestId);
     return reply.status(200).send(ConversationTurnResultSchema.parse(result));
   });
 
@@ -974,15 +980,30 @@ export function buildServer({ goalService, authenticator, eventService, critical
     return reply.status(200).send(ConversationSchema.parse(result));
   });
 
-  app.get("/v1/conversations/:conversationId/events/stream", async (request, reply) => {
+  app.get("/v1/conversations/:conversationId/events", async (request, reply) => {
     const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
     const query = parse(ConversationEventQuerySchema, request.query);
+    const events = await conversations.listEvents(conversationId, query.projectId, query.after, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(events.map((event) => ConversationEventSchema.parse(event)));
+  });
+
+  app.get("/v1/conversations/:conversationId/events/stream", async (request, reply) => {
+    const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
+    const rawQuery = request.query as { projectId?: unknown; after?: unknown };
+    const query = parse(ConversationEventQuerySchema, request.query);
+    const queryCursor = rawQuery.after === undefined ? undefined : query.after;
+    const lastEventId = request.headers["last-event-id"];
+    const headerCursor = lastEventId === undefined ? undefined : parse(EventCursorSchema, lastEventId);
+    if (queryCursor !== undefined && headerCursor !== undefined && queryCursor !== headerCursor) throw new RequestValidationError();
     const operator = requestOperator(request as { operator?: OperatorContext });
-    let cursor = query.after;
+    let cursor = headerCursor ?? queryCursor ?? "0";
     let closed = false;
     let pollTimer: unknown;
     let heartbeatTimer: unknown;
     let polling = false;
+    let backpressured = false;
+    let drainListenerInstalled = false;
+    const MAX_SSE_BUFFER_BYTES = 1_000_000;
     const cleanup = () => {
       if (closed) return;
       closed = true;
@@ -994,7 +1015,19 @@ export function buildServer({ goalService, authenticator, eventService, critical
     if (activeStreams.size >= maxActiveStreams) throw new Error("SSE stream capacity reached");
     request.raw.once("aborted", cleanup); reply.raw.once("close", cleanup); activeStreams.add(terminate);
     const write = (listed: import("@maestro/contracts").ConversationEvent[]) => {
-      for (const event of listed) { if (closed) return; cursor = event.cursor; reply.raw.write(`id: ${event.cursor}\nevent: conversation-event\ndata: ${JSON.stringify(ConversationEventSchema.parse(event))}\n\n`); }
+      for (const event of listed) {
+        if (closed || backpressured) return;
+        const payload = `id: ${event.cursor}\nevent: conversation-event\ndata: ${JSON.stringify(ConversationEventSchema.parse(event))}\n\n`;
+        if (reply.raw.writableLength + Buffer.byteLength(payload, "utf8") > MAX_SSE_BUFFER_BYTES) { terminate(); return; }
+        cursor = event.cursor;
+        if (!reply.raw.write(payload)) {
+          backpressured = true;
+          if (!drainListenerInstalled) {
+            drainListenerInstalled = true;
+            reply.raw.once("drain", () => { drainListenerInstalled = false; if (closed) return; backpressured = false; void poll(); });
+          }
+        }
+      }
     };
     let initial: readonly import("@maestro/contracts").ConversationEvent[];
     try { initial = await conversations.listEvents(conversationId, query.projectId, cursor, operator); }
@@ -1002,7 +1035,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
     if (closed) return reply;
     reply.hijack(); reply.raw.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" }); reply.raw.flushHeaders(); write([...initial]);
     const poll = async () => {
-      if (closed || polling) return;
+      if (closed || polling || backpressured) return;
       polling = true;
       try {
         const listed = await conversations.listEvents(conversationId, query.projectId, cursor, operator);
@@ -1014,8 +1047,20 @@ export function buildServer({ goalService, authenticator, eventService, critical
       } finally { polling = false; }
     };
     pollTimer = pollingScheduler.setInterval(() => { void poll(); }, 250);
-    heartbeatTimer = pollingScheduler.setInterval(() => { if (!closed) reply.raw.write(": heartbeat\n\n"); }, 15_000);
-    if (!closed) reply.raw.write(": heartbeat\n\n");
+    const writeHeartbeat = () => {
+      if (closed || backpressured) return;
+      const payload = ": heartbeat\n\n";
+      if (reply.raw.writableLength + Buffer.byteLength(payload, "utf8") > MAX_SSE_BUFFER_BYTES) { terminate(); return; }
+      if (!reply.raw.write(payload)) {
+        backpressured = true;
+        if (!drainListenerInstalled) {
+          drainListenerInstalled = true;
+          reply.raw.once("drain", () => { drainListenerInstalled = false; if (closed) return; backpressured = false; void poll(); });
+        }
+      }
+    };
+    heartbeatTimer = pollingScheduler.setInterval(writeHeartbeat, 15_000);
+    writeHeartbeat();
     return reply;
   });
 
@@ -1105,6 +1150,9 @@ export function buildServer({ goalService, authenticator, eventService, critical
     let closed = false;
     let polling = false;
     let timer: unknown;
+    let backpressured = false;
+    let drainListenerInstalled = false;
+    const MAX_SSE_BUFFER_BYTES = 1_000_000;
     const streamOperator = (request as typeof request & { operator?: OperatorContext }).operator;
     const streamSecret = bearerSecret(request.headers.authorization);
     const reauthorize = async (): Promise<void> => {
@@ -1135,20 +1183,33 @@ export function buildServer({ goalService, authenticator, eventService, critical
     reply.raw.once("close", cleanup);
     activeStreams.add(terminate);
 
+    const markBackpressure = () => {
+      backpressured = true;
+      if (!drainListenerInstalled) {
+        drainListenerInstalled = true;
+        reply.raw.once("drain", () => { drainListenerInstalled = false; if (closed) return; backpressured = false; void fetchAndWrite(); });
+      }
+    };
+    const writeFrame = (payload: string): boolean => {
+      if (closed) return false;
+      if (reply.raw.writableLength + Buffer.byteLength(payload, "utf8") > MAX_SSE_BUFFER_BYTES) { terminate(); return false; }
+      if (!reply.raw.write(payload)) markBackpressure();
+      return true;
+    };
     const writeEvents = (listed: import("@maestro/contracts").GoalEvent[]) => {
       for (const event of listed) {
-        if (closed) return;
+        if (closed || backpressured) return;
         cursor = event.cursor;
-        reply.raw.write(`id: ${event.cursor}\nevent: goal-event\ndata: ${JSON.stringify(event)}\n\n`);
+        if (!writeFrame(`id: ${event.cursor}\nevent: goal-event\ndata: ${JSON.stringify(event)}\n\n`)) return;
       }
     };
     const fetchAndWrite = async () => {
-      if (closed || polling) return;
+      if (closed || polling || backpressured) return;
       polling = true;
       try {
         await reauthorize();
         const listed = await events.listEvents(projectId, cursor);
-        if (listed.length === 0 && !closed) reply.raw.write(": heartbeat\n\n");
+        if (listed.length === 0 && !closed) writeFrame(": heartbeat\n\n");
         else writeEvents(listed);
       } catch {
         if (!closed) {
@@ -1296,8 +1357,9 @@ function mapError(error: unknown): { status: number; body: StableApiError } {
   if (error instanceof DiscordPersistenceError) return apiError(400, "discord_signal_rejected", error.message);
 
   if (error instanceof ModelGatewayClientError) {
-    if (error.code === "model_not_allowed") return apiError(400, "model_not_allowed", error.message);
-    return apiError(503, "provider_unavailable", error.message);
+    if (error.code === "model_not_allowed") return apiError(400, "model_not_allowed", "Requested model is not allowed");
+    if (error.code === "account_login_session_unknown") return apiError(409, "account_login_session_unknown", "Account login session is unknown");
+    return apiError(503, "provider_unavailable", "Provider is currently unavailable");
   }
   if (error instanceof ConversationNotFoundError) return apiError(404, "conversation_not_found", "Conversation was not found");
   if (error instanceof ConversationConflictError) return apiError(409, "conversation_conflict", error.message);

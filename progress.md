@@ -2350,3 +2350,14 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added migration `0066_harden_provider_account_login_identity.sql`; verified the account-login integration suite against the dedicated PostgreSQL container: 8/8 passed. Targeted gateway/control-plane tests: 15/15 passed. Build: passed.
 - Reconciled root/English/Korean README, architecture, roadmap, developer guide, SVG, TUI plan/spec, and superseded provider-toggle design. Documentation now distinguishes pi-tui presentation from Prime runtime and records that worker Prime composition is still open.
 - Next: obtain explicit approval for the conversation-streaming TUI design, then implement durable delta events, SSE reconnect rendering, Markdown transcript output, cancel/unknown status handling, and focused TUI tests. Do not remove Prime until native worker parity and recovery gates pass.
+
+
+## 2026-09-07 — Conversation runtime hardening and Codex login UX
+
+- Fixed multi-turn context loss: the native runtime now appends bounded assistant messages, bounds recovered input history, and rebuilds active conversations from ordered durable user/assistant turns.
+- Fixed the gateway peer identity used for model catalog/admission, rejected invalid NUL/unpaired-surrogate conversation text before JSONB persistence, and made idempotent replay return current conversation metadata.
+- Added bounded SSE write/backpressure handling for Control Plane goal/conversation streams and gateway disconnect abort fencing. `Last-Event-ID` is sent on reconnect.
+- Root cause of the Codex `Invalid authorize request` report was the default app-server `originator=maestro`; the public Codex flow expects the official `codex_cli_rs` originator. The default client identity now uses that value. A real installed Codex app-server probe produced an `auth.openai.com` URL with state, PKCE challenge, and `originator=codex_cli_rs`.
+- Added a visible login URL and `Alt+C` clipboard action in the TUI. Clipboard writes use shell-free stdin to `wl-copy`, `xclip`, `xsel`, or WSL `clip.exe`; no URL is placed in argv.
+- Verification: `npm run build` passed; no-database `npm test` passed with 102 files / 665 tests and 53 skipped files / 374 skipped tests; focused PostgreSQL conversation and migration tests passed 8/8; real Codex app-server originator probe passed. The earlier full PostgreSQL run remains blocked by unrelated existing suites (6 files, 13 failures including device grant expiry, Git setup, Metronome rule constraint, and a worker test `projectId` reference); no full DB green claim is made.
+- Next: restart the built local gateway/control-plane processes, verify login/model listing through the real HTTP path, then push this coherent slice. Native worker Prime removal remains a separate Phase 5 gate.

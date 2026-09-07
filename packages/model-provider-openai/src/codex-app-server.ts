@@ -136,7 +136,7 @@ export class CodexAppServerClient {
   constructor(options: CodexAppServerOptions = {}) {
     this.transport = options.transport ?? new StdioTransport(options.command ?? "codex", options.args ?? ["app-server"], options.env ?? process.env);
     this.requestTimeoutMs = options.requestTimeoutMs ?? 15_000;
-    this.clientInfo = options.clientInfo ?? { name: "maestro", title: "Maestro", version: "development" };
+    this.clientInfo = options.clientInfo ?? { name: "codex_cli_rs", title: "Maestro", version: "development" };
     this.unsubscribe = this.transport.onMessage((message) => this.handleMessage(message));
     this.unsubscribeError = this.transport.onError?.((error) => { this.transportError = new Error("Codex app-server is unavailable"); this.failPending(error); });
   }

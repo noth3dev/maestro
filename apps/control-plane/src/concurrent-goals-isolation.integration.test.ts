@@ -42,7 +42,7 @@ describeDatabase("Phase 5 readiness: concurrent Goals in one project stay isolat
     projectId = randomUUID();
     goalA = randomUUID();
     goalB = randomUUID();
-    await pool.query("INSERT INTO local_operators (operator_id) VALUES ($1)", [operatorId]);
+    await pool.query("INSERT INTO local_operators (operator_id) VALUES ($1) ON CONFLICT (operator_id) DO NOTHING", [operatorId]);
     await grantProjectMembership(pool, operatorId, projectId);
     for (const goalId of [goalA, goalB]) {
       await pool.query(
