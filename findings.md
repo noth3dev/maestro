@@ -761,3 +761,8 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - `npm run check` passed: build plus **102 test files / 665 tests passed**. PostgreSQL-gated files were intentionally skipped: **52 files / 375 tests**.
 - The native HTTP acceptance remained green in that run. No Prime package, import, or lockfile entry returned.
+
+
+## 2026-09-08 — Explicit native model configuration
+
+- Removed the temporary default `openai/gpt-5` from `MAESTRO_NATIVE_MODEL`. Host-created Head/Encore admissions now require an explicit provider-qualified model; omitted configuration fails closed instead of authorizing an implicit model. Config tests cover both the required qualification and absence behavior.
