@@ -72,6 +72,12 @@ export function startNewConversationSession(workspacePath: string, current: Work
   };
 }
 
+export function selectWorkspaceGoal(workspacePath: string, current: WorkspaceSession | undefined, goalId: string): WorkspaceSession {
+  if (goalId.trim() === "") throw new Error("Goal ID must be non-empty");
+  if (current?.workspacePath !== workspacePath || current.projectId === undefined) throw new Error("A project must be attached before selecting a Goal");
+  return { ...current, goalId };
+}
+
 
 export function attachWorkspaceSession(workspacePath: string, current: WorkspaceSession | undefined, projectId: string): WorkspaceSession {
   if (projectId.trim() === "") throw new Error("Project ID must be non-empty");

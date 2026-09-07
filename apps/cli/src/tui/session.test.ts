@@ -1,6 +1,6 @@
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { advanceWorkspaceSession, attachWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession, sessionFileFor, startNewConversationSession } from "./session.js";
+import { advanceWorkspaceSession, attachWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession, selectWorkspaceGoal, sessionFileFor, startNewConversationSession } from "./session.js";
 
 describe("workspace session", () => {
   it("round trips non-secret workspace session metadata", async () => {
@@ -27,6 +27,14 @@ describe("workspace session", () => {
     expect(attachWorkspaceSession("/work/acme", { workspacePath: "/work/acme", projectId: "old-project", goalId: "old-goal", lastEventCursor: "42" }, "new-project")).toEqual({
       workspacePath: "/work/acme", projectId: "new-project",
     });
+  });
+
+  it("selects a Goal without changing the project or event cursor", () => {
+    expect(selectWorkspaceGoal("/work/acme", { workspacePath: "/work/acme", projectId: "project-1", lastEventCursor: "42" }, "goal-2")).toEqual({ workspacePath: "/work/acme", projectId: "project-1", goalId: "goal-2", lastEventCursor: "42" });
+  });
+
+  it("requires an attached project before selecting a Goal", () => {
+    expect(() => selectWorkspaceGoal("/work/acme", undefined, "goal-1")).toThrow("A project must be attached before selecting a Goal");
   });
 
   it("starts a new conversation without dropping workspace binding or event progress", () => {

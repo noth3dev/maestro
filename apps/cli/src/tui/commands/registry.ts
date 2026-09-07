@@ -11,7 +11,7 @@ const definitions: CommandDefinition[] = ([
   // Emergency stop is the server-authorized fail-safe lifecycle command. It
   // still requires explicit local confirmation; the Control Plane enforces the
   // concertmaster role and records the durable Goal command.
-  ["goal", "Goal lifecycle and control", [["create", "write"], ["get", "read"], ["transition", "write"], ["pause", "write"], ["resume", "write"], ["stop", "write"], ["emergency-stop", "critical"]]],
+  ["goal", "Goal lifecycle and control", [["create", "write"], ["get", "read"], ["select", "write"], ["transition", "write"], ["pause", "write"], ["resume", "write"], ["stop", "write"], ["emergency-stop", "critical"]]],
   ["budget", "budget and cost state", [["get", "read"], ["forecast", "read"]]],
   ["head", "Head activation and participation", [["activate", "write"], ["sleep", "write"], ["resume", "write"]]],
   ["council", "Head Council deliberation", [["create", "write"], ["get", "read"], ["submit-brief", "write"], ["reveal", "write"], ["decide", "write"]]],

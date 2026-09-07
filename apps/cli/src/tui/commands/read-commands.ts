@@ -78,19 +78,23 @@ function required(command: ParsedCommand, name: string): string | ReadCommandRes
   return option(command, name) ?? unavailable(`Missing required option --${name}`);
 }
 
-function valueLines<T extends Record<string, unknown>>(title: string, items: readonly T[], format: (item: T) => string): ReadCommandResult {
+function valueLines<T>(title: string, items: readonly T[], format: (item: T) => string): ReadCommandResult {
   return { title, lines: items.length === 0 ? ["No records found."] : items.map(format) };
 }
 
 export async function executeReadCommand(context: ReadCommandContext, command: ParsedCommand): Promise<ReadCommandResult> {
   const key = `${command.name}:${command.action ?? ""}`;
-  if (!["task-contract:get", "goals:list", "goal:get", "budget:get", "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "worker:list", "workers:get", "workers:list", "git:status", "metronome-challenges:list", "encore-council:list", "certification:list", "certifications:list", "concertmaster-report:get", "events:list", "events:stream", "improvement-digests:list"].includes(key)) {
+  if (!["projects:list", "task-contract:get", "goals:list", "goal:get", "budget:get", "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "worker:list", "workers:get", "workers:list", "git:status", "metronome-challenges:list", "encore-council:list", "certification:list", "certifications:list", "concertmaster-report:get", "events:list", "events:stream", "improvement-digests:list"].includes(key)) {
     const definition = createCommandRegistry().find(command.name);
     const action = definition?.actions.find((item) => item.name === command.action);
     if (action?.kind !== "read") return unavailable(`${command.name} ${command.action ?? ""} is a mutation; use the write command path`.trim());
     return unavailable(`${command.name} ${command.action ?? ""} is not available from this Control Plane client`);
   }
 
+  if (key === "projects:list") {
+    const projects = (await context.client.listProjects()).projects;
+    return valueLines("Projects", projects, (projectId) => `• ${projectId}`);
+  }
   if (key === "goals:list") {
     const goals = (await context.client.listGoals(context.projectId)).goals;
     return valueLines("Goals", goals, (goal) => `• ${goal.state} · v${goal.version} · ${goal.goalId}`);
