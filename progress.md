@@ -2512,3 +2512,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added real `node:http`-server-backed tests for both `packages/model-provider-openai` and `packages/model-provider-anthropic`, replacing hand-rolled mocked `Response` objects with a genuine loopback TCP server for both the success path and cancellation. Cancellation is verified from the *server side* (`req.on("close")`), proving a real in-flight connection is genuinely torn down, not just that the client-side promise settles.
 - Both providers passed cleanly on the first real-process run -- an honest, verified negative result confirming their abort-signal wiring is already correct, not an assumption carried forward from mocked tests.
 - Evidence: 4 new tests, both packages 6 files / 16 tests, 0 failed; regression sweep 18 files / 96 tests, 0 failed. Full detail in `findings.md` same date.
+
+
+## 2026-09-08 — Critical fix: real credential-bind and account-login acceptance were completely broken
+
+- Added `apps/control-plane/src/account-login-acceptance.integration.test.ts`, the first real Control Plane + real Model Gateway HTTP process + real PostgreSQL end-to-end test for `/v1/provider-account-logins/*` and `/v1/provider-credentials`. It immediately hit a genuine, severe production bug: `main.ts` forwarded the *real authenticated end-user's* operatorId to six gateway-facing calls (bind/revoke credential, start/status/cancel account login, logout), but `ModelGateway` strictly checks that operatorId against its own fixed `config.modelGatewayOperatorId` -- meaning credential binding and account login were completely broken for every real operator, in every real deployment. This is the most severe defect found this session: not an edge case, but the ordinary first-time provider setup path.
+- Fixed by overriding `operatorId` to `config.modelGatewayOperatorId` for all six gateway-facing calls, matching how native admission already does this correctly, while leaving Maestro's own durable per-operator store calls untouched.
+- Verified genuine reproduction (fails without the fix with the exact real error, passes with it) before committing. Full detail in `findings.md` same date.
+- Evidence: new test 1/1; regression sweep 15 files / 115 tests, 0 failed. Full clean single-worker real-PostgreSQL rerun in progress.
