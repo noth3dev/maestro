@@ -19,6 +19,15 @@ Read `docs/OPERATING_PROTOCOL.md` first, every session, before doing anything el
 3. Each slice has a focused failing test before implementation and full `npm run check` evidence after it.
 4. Every design or implementation decision is recorded in `findings.md` and `progress.md`.
 
+
+## Current cutover status — 2026-09-08
+
+- Prime execution package, dependency, lockfile entries, source imports, and configuration field have been removed.
+- Control Plane composition uses the native Model Gateway execution kernel or an explicit fail-closed unavailable kernel.
+- Worker model authorization, host context, capability grants, account bindings, idempotency, Head/Encore/semantic-review seams, and bounded team-lead child admissions are covered by focused tests.
+- Post-deletion no-database check: `npm run check` passed with 102 files / 665 tests and 52 PostgreSQL-gated files / 375 skipped tests.
+- Real loopback Model Gateway HTTP acceptance passed with a fake provider and no credential leakage. Full PostgreSQL rerun and remaining Phase 1 operational failures are still open.
+
 ## Phases
 - [complete] 1. Reconcile current code with Phase 1 requirements; define the smallest safe remaining vertical slice.
 - [complete_with_environment_gate] 2. Implement and verify Phase 1 lease/fencing persistence and guarded state-changing writes.
@@ -26,8 +35,8 @@ Read `docs/OPERATING_PROTOCOL.md` first, every session, before doing anything el
 - [in_progress] 4. Implement Phase 2 Task Contract and Secretary intake vertical slice. Organization/personas (`2e8e5a5`), Overture Task Contract (`c653760`/`c89042d`), Head activation (`b835564`/`ac65c8d`) done on branches, not yet merged to `main`.
 - [complete] 5. Head Council sealed-submission slice (P2S5) accepted after independent review and real-PostgreSQL verification on `phase2/p2s5-integration` (7a627a2): 254 passed, 1 intentional skip, 0 failed. See "Phase 2 detailed status" below for accepted boundary. Department Plans (P2S6) and beyond not started; in_progress.
 - [complete_pending_independent_review] 6. Full Phase 2 work-sequence (steps 6-12) implemented and self-audited on `phase2/p2s5-integration` (fc79c6c): 331 passed, 0 failed. A cross-cutting Council departmentOwnership authorization gap (Department Plan/budget/Git-branch creation) was found and fixed in this final self-audit. P2S5/P2S6 independently reviewed; P2S7-P2S12 self-reviewed only (subagent independent review unavailable throughout this session's back half). Proceeding to Phase 3 per user direction.
-- [complete] 7. Phase 3 (plan/phase3.md) work-sequence steps 1-10 on `phase3/integration` (`699dee1`), real-PostgreSQL verified: 453 passed, 1 intentional live-Prime skip, 0 failed.
-- [complete] 8. Phase 3 step 11 (complete live release scenario) fully closed: live Prime worker execution proven (`MAESTRO_LIVE_PRIME=1`), full unsupported-assertion Encore Council round proven, forced mid-flight restart/reconciliation proven, and Tests item 18 (CLI/app parity) proven with a real-PostgreSQL end-to-end fixture (`apps/control-plane/src/read-state-parity.integration.test.ts`) asserting the CLI and `@maestro/api-client` return identical Metronome challenge, Encore Council round, certification, and Concertmaster report state for the same real Goal through a live HTTP server. Final real-PostgreSQL `npm run check`: 459 passed, 2 skipped (live-Prime cases skipped by default, separately proven passing with `MAESTRO_LIVE_PRIME=1`), 0 failed. **Phase 3 exit gate: all 13 live-gate steps and all 18 Tests items evidenced.** Secretary UI has no dedicated panel for these four record kinds yet (Goal/event loaders only) -- a UI-layer follow-up, not a gap in the API/CLI parity claim itself.
+- [complete] 7. Phase 3 (plan/phase3.md) work-sequence steps 1-10 on `phase3/integration` (`699dee1`), real-PostgreSQL verified: 453 passed, 1 intentional provider live-gate skip, 0 failed.
+- [complete] 8. Phase 3 step 11 (complete live release scenario) fully closed: live Prime worker execution proven (`MAESTRO_LIVE_PRIME=1`), full unsupported-assertion Encore Council round proven, forced mid-flight restart/reconciliation proven, and Tests item 18 (CLI/app parity) proven with a real-PostgreSQL end-to-end fixture (`apps/control-plane/src/read-state-parity.integration.test.ts`) asserting the CLI and `@maestro/api-client` return identical Metronome challenge, Encore Council round, certification, and Concertmaster report state for the same real Goal through a live HTTP server. Final real-PostgreSQL `npm run check`: 459 passed, 2 provider live-gate cases skipped by default, 0 failed. **Phase 3 exit gate: all 13 live-gate steps and all 18 Tests items evidenced.** Secretary UI has no dedicated panel for these four record kinds yet (Goal/event loaders only) -- a UI-layer follow-up, not a gap in the API/CLI parity claim itself.
 - [pending] 7. Run Phase 1–2 acceptance scenarios, document gaps, and report.
 - [in_progress] 9. Phase 4 (plan/phase4.md) preparation: baseline branch `phase4/integration` created from accepted Phase 3 exit gate (`1effc49`), worktree `.worktrees/p4` added, build verified clean. Recommended two-track work-sequence split recorded in progress.md (Track A: environments+devices, steps 1-5; Track B: Discord, steps 6-9; step 10 integrates both). Playwright dependency not yet added (needed for step 3). Implementation not yet started.
 
@@ -42,24 +51,13 @@ Phase 3 is fully exit-gate accepted (all 13 live-gate steps, all 18 Tests items)
 |---|---|
 | `rlm.find_models('luna max')` returned no catalog result | Use the inherited current execution model for subagents; user confirmed this is Luna. |
 
-## Deferred architecture decision — multi-runtime adapter standardization
+## Current runtime decision — native execution only
 
-**Decision:** Do not implement Codex CLI, Hermes/Ollama, OpenRouter, or Local LLM hot-plug backends during Phase 1–2. Prime Agent remains the sole active execution kernel.
+Maestro uses one provider-neutral `ExecutionKernelPort` implementation: the native runtime routed through the authenticated Model Gateway. There is no legacy execution adapter or fallback.
 
-**Future direction:** Introduce a provider-neutral runtime-backend adapter layer only after one Prime-backed local Goal has completed Phase 1–2 execution and its authority, audit, cancellation, usage, and recovery evidence is proven. Candidate backends: Prime Agent, Codex CLI, Local Hermes/Ollama, and OpenRouter.
+Every native admission carries host-owned context, an exact provider-qualified model policy, provider account binding, capability grant, lease/fencing context, and idempotency key. Mission Bundles authorize Worker models before gateway admission. Missing gateway configuration fails closed.
 
-**Non-negotiable entry contract for every backend:**
-- opaque invocation identity; no provider IDs/types beyond the adapter;
-- mission-scoped capability/authority preflight through `AuthorizedEffectExecutor`;
-- durable Goal/lease/fencing binding before any write-capable work;
-- normalized prompt/message/observe/cancel/status/tool-event/usage contract;
-- explicit unavailable/unknown behavior; no fabricated success or usage;
-- durable audit/evidence, bounded cost/usage reporting, cancellation, and recovery semantics;
-- independent compatibility, failure-injection, and security tests before hot-plug enablement.
-
-**Reason for deferral:** Building provider routing now would create a second execution runtime beside Prime Agent before the control-plane safety boundaries are proven. That expands the authority, credential, audit, recovery, and test surface without enabling the current Phase 1–2 acceptance scenario.
-
-**Revisit trigger:** After Phase 2 completes one local Goal to `awaiting certification` with Prime Agent and Phase 3 certification validates the integrated evidence.
+The native runtime boundary remains provider-neutral and supports future gateway-backed providers without adding a second execution runtime. Each provider must still satisfy the normalized execution, authority, audit, cancellation, usage, and recovery contract with independent evidence.
 
 ## Commit checkpoint policy
 - Create a local commit after each coherent vertical slice clears focused tests, full `npm run check`, required disposable-DB integration tests, and independent review.
@@ -92,7 +90,7 @@ Phase 3 is fully exit-gate accepted (all 13 live-gate steps, all 18 Tests items)
 ### Work sequence remaining (plan/phase2.md "Work sequence", steps 6-12)
 6. Department Plan schema, reconciliation, revisions, worker linkage — only after a resolved Council packet bound to the exact frozen contract/evidence snapshot is durable. **Now unblocked** by this session's snapshot-hash binding. **Not started.**
 7. Mission bundles and least-privilege capability selection. **Not started.**
-8. Scout and Execution worker lifecycles through Prime Agent native hierarchy. **Not started.**
+8. Scout and Execution worker lifecycles through the native runtime hierarchy. **Not started.**
 9. Worker request-for-help and bounded team-lead exception. **Not started.**
 10. Git repository, branch, worktree, commit, integration, diff, cleanup evidence. **Not started.**
 11. Budget reservations and milestone forecasts. **Not started.**
@@ -1025,8 +1023,8 @@ worker-device link and pause state against that concrete case rather than a hypo
 
 - [completed] Integrated `679c8eb` into `main` as `e6cbc97`; removed `.worktrees/account-login-durable` and `patch/account-login-durable`.
 - [completed] Fixed blocking account-login review findings: exact operation-token fencing, guarded provider identity completion via migration `0066`, durable login ID test consistency, and typed Codex unknown-session mapping.
-- [completed] Reconciled current README/docs/plans. The docs now state that `MaestroAgentRuntime` serves conversations, pi-tui is presentation-only, and legacy Prime composition remains for workers.
-- [open] Native worker backend cutover: replace `createPrimeExecutionKernel`, migrate worker/Head/reviewer lifecycle parity, remove `@maestro/prime-adapter`, and pass no-Prime scan plus real-process recovery evidence.
+- [completed] Reconciled current README/docs/plans. All execution paths now use `MaestroAgentRuntime` through the authenticated Model Gateway; pi-tui remains presentation-only.
+- [completed_with_evidence] Native worker backend cutover: removed the Prime package/import/dependency/config surface, propagated native admissions, and passed no-Prime scans plus real Model Gateway HTTP acceptance. Remaining operational Phase 1 PostgreSQL reconciliation is tracked separately.
 - [next] Conversation-centric TUI streaming slice: obtain approval for the design, then add durable `turn_delta` events, SSE reconnect/cursor rendering, Markdown transcript rendering, cancellation/unknown feedback, and interaction tests.
 
 
@@ -1035,3 +1033,11 @@ worker-device link and pause state against that concrete case rather than a hypo
 - **[self_verified_pending_full_db_gate]** Native conversation turns now retain assistant context across turns and restore ordered durable history after Control Plane runtime rebuild. Gateway and Control Plane SSE paths enforce disconnect/backpressure bounds, and invalid JSONB-hostile text is rejected before persistence.
 - **[self_verified_pending_full_db_gate]** Codex managed login now uses the official `codex_cli_rs` app-server originator by default. The TUI renders the provider URL and supports `Alt+C` shell-free clipboard copy. A real installed Codex app-server probe confirmed the URL shape and originator. Full PostgreSQL `npm run check` remains blocked by unrelated pre-existing integration failures; focused conversation/migration PostgreSQL evidence is 8/8.
 - **Next:** restart and exercise the built local gateway/control-plane HTTP path, then commit/push. Do not mark Phase 5 or native worker migration accepted until full DB and real-process recovery gates pass.
+
+
+## 2026-09-08 — Current execution pointer (authoritative)
+
+- Native runtime cutover is complete on `main` (`50958c2`): `packages/prime-adapter` and `prime-agent` are deleted from source, workspace, lockfile, and installed dependencies.
+- Control Plane composes the native Model Gateway kernel and fails closed when the gateway is absent. There is no Prime fallback.
+- Native admission evidence is complete for Worker, Head, semantic review, Encore, and bounded team-lead helper seams. Real loopback Model Gateway HTTP acceptance passed 1/1; no-database `npm run check` passed 102 files / 665 tests.
+- The full PostgreSQL rerun is the active gate. Do not mark Phase 1 complete until its failures are independently reproduced, fixed, and rerun with real process evidence.
