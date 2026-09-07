@@ -2399,3 +2399,12 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Reproduced the Worker mid-flight restart failure in isolation against `maestro-phase1-audit-postgres`: the failure was a missing `projectId` local in the test assertion, causing `ReferenceError` before reconciliation behavior was checked.
 - Added the missing destructuring field. Focused result: `packages/persistence/src/worker.integration.test.ts` **33 passed, 0 failed** on PostgreSQL.
 - `npm run build` passed after the fix. Next: rerun the full PostgreSQL suite and take the next independently reproduced failure.
+
+
+## 2026-09-08 — Native backend cutover planning
+
+- Paused implementation after the user requested a full architecture plan before further edits.
+- Audited the current native surfaces: `packages/agent-runtime` has the provider-neutral loop; `apps/model-gateway` has authenticated listing/admission/turn/cancel/recovery and Codex login routes; `apps/control-plane/src/conversation-service.ts` is the existing native composition.
+- Confirmed the remaining cutover gap: `apps/control-plane/src/main.ts` still constructs `createPrimeExecutionKernel()`, while Worker/Head/semantic/Encore/team-lead paths do not pass the native runtime's required host context, grant, model policy, and idempotency key.
+- Wrote `plan/2026-09-08-native-prime-removal-cutover.md` with eight gated tasks. No native implementation code was changed during this planning pass.
+- The active full PostgreSQL rerun from `d0f14d3` remains a separate evidence process and must be preserved before Task H patch work.
