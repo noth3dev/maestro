@@ -10,3 +10,4 @@ dist/
 graphify-out/
 docs/OPERATING_PROTOCOL.md
 *.log
+tmp/

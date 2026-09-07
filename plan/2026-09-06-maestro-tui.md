@@ -231,9 +231,9 @@
 **Files:**
 - Create: `apps/cli/src/tui/acceptance/representative-goal.test.ts`
 - Create: `apps/cli/src/tui/acceptance/tui-cli-parity.test.ts`
-- Modify: `progress.md`
-- Modify: `findings.md`
-- Modify: `task_plan.md`
+- Modify: `plan/operations/progress.md`
+- Modify: `plan/operations/findings.md`
+- Modify: `plan/operations/task_plan.md`
 
 **Interfaces:**
 - Representative acceptance uses the same Goal identity and compares durable results from TUI, CLI, and Electron/API surfaces.

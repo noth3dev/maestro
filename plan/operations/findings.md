@@ -129,7 +129,7 @@
 - Direct repair added header flushing for empty streams and a guard against writes after a disconnect during the initial durable read.
 - SSE scheduler/frame test was made deterministic by pausing the test response until data listeners are installed and awaiting the first frame; it passed five consecutive focused runs.
 - Final dedicated-PostgreSQL verification: 98 passed, one explicitly gated Prime live test skipped; DB-less mode cleanly skips DB integration tests.
-- `designsystem.html` has an unrelated pre-existing working-tree modification and is excluded from the control-plane checkpoint commit.
+- `docs/assets/design/design-system.html` has an unrelated pre-existing working-tree modification and is excluded from the control-plane checkpoint commit.
 
 ## 2026-09-01 — Parallel Phase 1 slices completed
 - Three isolated worktrees branched from checkpoint ce03550: phase1/evidence, phase1/recovery, phase1/client-cli.
@@ -533,7 +533,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 ## 2026-09-06 — Secretary Electron shell is a fully mocked prototype, not a wired console
 
 - `apps/secretary` is an Electron app (migrated from Next.js in `hardening/lifecycle`'s `e55146b`),
-  not the single-Goal Next.js page `task_plan.md`'s Phase 5 Track A7 section still describes.
+  not the single-Goal Next.js page `plan/operations/task_plan.md`'s Phase 5 Track A7 section still describes.
 - Real, unit-tested data plumbing exists end to end: `connection.tsx` (IPC-backed connection
   config get/save/clear), `goals.tsx` (`GoalsProvider`, lists/selects a Goal via
   `window.maestro.api.listGoals`), `useGoalDetail.ts` (loads Goal + events + budget +
@@ -596,7 +596,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Root cause confirmed: `describe.skip` still synchronously invokes its callback to register the
   (skipped) test structure; a module-scope `new URL(databaseUrl!)` inside that callback threw
-  before vitest's skip logic ever applied, in exactly the three files noted in findings.md's
+  before vitest's skip logic ever applied, in exactly the three files noted in plan/operations/findings.md's
   "Three integration test files crash instead of skipping" entry.
 - Fix: guarded each `scopedUrl` computation with `databaseUrl ? ... : ""`, matching the working
   pattern used elsewhere in the same files (`describeDatabase = databaseUrl ? describe : describe.skip`).
@@ -610,7 +610,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 ## 2026-09-06 — Documentation drift confirmed during progress check
 
-- `task_plan.md` contains historical Phase 5 status wording that understates the current implementation. Live code confirms the broader authenticated API surface and the Electron Secretary architecture described in the later reconciliation entry.
+- `plan/operations/task_plan.md` contains historical Phase 5 status wording that understates the current implementation. Live code confirms the broader authenticated API surface and the Electron Secretary architecture described in the later reconciliation entry.
 - The current `main` tip is `95bef8e` (not the older `hardening/lifecycle`/`ce94c3d` reference in the historical entry).
 - No source defect was found in this check. The remaining evidence limitation is environmental: PostgreSQL integration suites cannot run here.
 

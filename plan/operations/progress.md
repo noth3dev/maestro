@@ -62,7 +62,7 @@
 - SSE final review blocked acceptance: ambiguous write-after-cleanup error path and real-time polling test flakiness.
 - Next: narrow deterministic scheduler/lifecycle repair before checkpoint commit.
 - Authenticated SSE slice accepted after direct lifecycle/frame repair. Focused loopback tests and full disposable-PostgreSQL check passed (98 passed, 1 live-Prime skip).
-- Preparing the first local Phase 1 checkpoint commit; exclude unrelated designsystem.html modification.
+- Preparing the first local Phase 1 checkpoint commit; exclude unrelated docs/assets/design/design-system.html modification.
 - All three parallel Phase 1 worktrees now committed: evidence e0b85fd, client-cli d89399a, recovery f83fe29 (after direct control-latch ordering repair).
 - Next: merge the three branches into phase1/control-plane sequentially, resolve the 0006 migration numbering collision, and re-run full check with real PostgreSQL.
 - All three parallel Phase 1 slices merged into phase1/control-plane and fully re-verified with real PostgreSQL: 115 passed, 1 live-Prime skip.
@@ -78,16 +78,16 @@
 
 
 ## 2026-09-01 (continued, this session — reconnected after interruption)
-- Session resumed at P2S5 (plan/phase2.md Work sequence step 5). Read task_plan.md, progress.md, findings.md, and plan/phase1.md–phase2.md in full.
-- Note: this file (root `progress.md` on `main`) is the canonical planning-doc log. Active Phase 2 code work happens in `.worktrees/phase2-*` on unmerged branches; each worktree has its own copy of progress.md/findings.md that is ahead of this one until merged. See task_plan.md "Phase 2 detailed status" for the full branch/commit map.
+- Session resumed at P2S5 (plan/phase2.md Work sequence step 5). Read plan/operations/task_plan.md, plan/operations/progress.md, plan/operations/findings.md, and plan/phase1.md–phase2.md in full.
+- Note: this file (`plan/operations/progress.md` on `main`) is the canonical planning-doc log. Active Phase 2 code work happens in `.worktrees/phase2-*` on unmerged branches; each worktree has its own copy of plan/operations/progress.md/findings.md that is ahead of this one until merged. See plan/operations/task_plan.md "Phase 2 detailed status" for the full branch/commit map.
 - Parallel read-only audit subagents (first Terra, then explicitly requested `openai-codex/gpt-5.6-luna` at max thinking) were dispatched twice for Phase-wide context gathering; both rounds completed/were cancelled without sending a reply. Discarded — no salvage attempted beyond a quick transcript check.
 - Proceeded directly (no subagent) in `.worktrees/phase2-sealed-submissions` and `.worktrees/phase2-council-briefs`:
   - Implemented `packages/domain/src/sealed-submission.ts` (frozen, deep-copied, participant-order-normalized snapshot + hash). 4/4 unit tests pass. Committed `59bc408` on `phase2/sealed-submissions`.
   - Merged into `phase2/council-briefs` and wired `createHeadCouncil` to actually freeze a real snapshot (project/goal/contract identity + active participant sessionRefs) and persist `snapshot_hash` (migration `0013_council_briefs.sql` extended). Council integration test asserts a real 64-hex hash. Committed `d86ba7f`.
   - `npm run build && npm test` on `phase2/council-briefs`: 129 passed, 71 skipped (Docker unavailable this session, so all real-PostgreSQL integration suites remain environment-gated skips, not run).
   - This slice is self-verified only — no independent (no-edit) review yet. Do not treat as accepted.
-- User then asked to continue with parallel Sonnet subagents. Before dispatch, produced a detailed current-state update (this entry + task_plan.md "Phase 2 detailed status") so each subagent and the user have an accurate baseline.
-- Next: dispatch parallel `anthropic/claude-sonnet-4-5` (or newer, per `rlm.find_models`) subagents per the parallelization plan in task_plan.md — starting with Department Plan schema (step 6), independent review of the sealed-submission/council slice, and completing the in-progress canonical Overture role rename in `phase2-overture-role-refresh`.
+- User then asked to continue with parallel Sonnet subagents. Before dispatch, produced a detailed current-state update (this entry + plan/operations/task_plan.md "Phase 2 detailed status") so each subagent and the user have an accurate baseline.
+- Next: dispatch parallel `anthropic/claude-sonnet-4-5` (or newer, per `rlm.find_models`) subagents per the parallelization plan in plan/operations/task_plan.md — starting with Department Plan schema (step 6), independent review of the sealed-submission/council slice, and completing the in-progress canonical Overture role rename in `phase2-overture-role-refresh`.
 
 - Stabilization run started with four isolated `openai-codex/gpt-5.6-luna` subagents at `thinking=max`: canonical Overture-role completion; Head activation hardening; no-edit Council review; and a no-edit cross-slice acceptance audit. Ownership is disjoint by worktree.
 - Docker became available after recovery. Created a dedicated disposable PostgreSQL 17 container `maestro-phase2-postgres` on `127.0.0.1:55432` with database/user `maestro_test`; first `pg_isready` probe occurred during initialization and returned no response. Treat it as not-ready until a later test command proves connectivity.
@@ -188,7 +188,7 @@
 - Verified: full `npm run check`: **328 passed, 1 intentional live-Prime skip, 0 failed.**
 - Merged (fast-forward) into `phase2/p2s5-integration`, now HEAD `1f91fd2`. Removed the superseded worktree/branch.
 - **Phase 2 work-sequence (plan/phase2.md, all 12 steps) is complete at the code level on `phase2/p2s5-integration`.** P2S5 and P2S6 received genuine independent-agent reviews (multiple rounds each, with real blocking findings found and fixed). P2S7-P2S12 were self-reviewed only, because every subagent spawn attempted for independent review during this session's back half failed immediately with an empty response (reported by the user as a provider rate limit; repeated probes throughout confirmed it had not cleared). A first independent-review dispatch for the complete P2S7-P2S12 surface was sent as soon as this slice landed; its result is pending.
-- Per task_plan.md's existing Phase 3 start gate ("all required Phase 2 slices independently reviewed and real-PostgreSQL verified; one bounded local Goal has durable Contract/Council/Plan/worker/Git/budget/evidence lineage and stops at the Phase 2 boundary... no unresolved safety/authority/recovery blocker"): the real-PostgreSQL verification and bounded-Goal-lineage criteria are now met; the independent-review criterion is only partially met (P2S5/P2S6 yes, P2S7-P2S12 self-review only, pending the dispatched review). Do not treat Phase 2 as fully gate-cleared for Phase 3 until that review returns or a documented equivalent-rigor decision is made.
+- Per plan/operations/task_plan.md's existing Phase 3 start gate ("all required Phase 2 slices independently reviewed and real-PostgreSQL verified; one bounded local Goal has durable Contract/Council/Plan/worker/Git/budget/evidence lineage and stops at the Phase 2 boundary... no unresolved safety/authority/recovery blocker"): the real-PostgreSQL verification and bounded-Goal-lineage criteria are now met; the independent-review criterion is only partially met (P2S5/P2S6 yes, P2S7-P2S12 self-review only, pending the dispatched review). Do not treat Phase 2 as fully gate-cleared for Phase 3 until that review returns or a documented equivalent-rigor decision is made.
 
 
 ## 2026-09-01 (continued) — Cross-cutting Council departmentOwnership gap found and closed; Phase 2 self-review complete
@@ -365,7 +365,7 @@
 ## 2026-09-03 — Phase 4 integration merge: environments, devices, Discord, shared migration runner
 - Merged four accepted, independently-hardened branches into `phase4/integration`: `fix/shared-migration-runner` (a46b973), `phase4/p4s1-environments` (1d8a2cf, includes P4S2 local/container runtime adapters), `phase4/p4s4-devices` (252aa3d), `phase4/p4s6-discord` (9cf8eb9, includes P4S7 dedup/silence hardening).
 - Resolved migration numbering collision: Discord's migrations independently used 0039-0042; renumbered to 0042-0045 (`0042_discord_signals.sql`, `0043_discord_signal_hardening.sql`, `0044_discord_incidents.sql`, `0045_discord_integrity.sql`) to sit after devices' 0040-0041, since devices already carried environments' 0039 in its own history.
-- Resolved four merge conflicts: `packages/domain/src/index.ts` and `packages/persistence/src/index.ts` (additive export lists, kept both sides), `progress.md`/`task_plan.md` (append-only logs, kept both sides' entries).
+- Resolved four merge conflicts: `packages/domain/src/index.ts` and `packages/persistence/src/index.ts` (additive export lists, kept both sides), `plan/operations/progress.md`/`plan/operations/task_plan.md` (append-only logs, kept both sides' entries).
 - Fresh `npm install` was required in the worktree: a stale `node_modules/.bin/vitest` symlink pointed at the parent repo checkout's `node_modules` instead of this worktree's own, causing `ERR_MODULE_NOT_FOUND`. `rm -rf node_modules && npm install` fixed it; not a code defect.
 - Full real-PostgreSQL `npm run check` against a dedicated fresh disposable PostgreSQL 17 container (`maestro-p4-integration-postgres`, 127.0.0.1:55450): **532 passed, 2 intentional live-Prime skips, 0 failed**, stable across 2 consecutive fresh-database runs.
 - **Phase 4 work-sequence status: steps 1, 2, 4, 6, 7 are integrated and real-PostgreSQL verified together on `phase4/integration`.** Remaining: step 3 (browser environment adapter, Playwright), step 5 (Goal-scoped device grants and short-lived command channel), step 8 (Incident Brief, triage activation, Task Contract, Department Plans, remediation, closure), step 9 (incident outcome/false-positive improvement evidence), step 10 (device-scope and seeded-incident live gates).
@@ -404,7 +404,7 @@
 
 
 ## 2026-09-04 (continued) — Consolidation: merged Phase 1-4 onto main, removed all worktrees/branches
-- Committed the Phase 5 remediation-plan documentation update (`6fdcdda`), then merged `phase4/integration` into `main` (`fb4b88a`), resolving append-only conflicts in `progress.md`/`task_plan.md` by keeping both sides' entries (same policy used throughout this project).
+- Committed the Phase 5 remediation-plan documentation update (`6fdcdda`), then merged `phase4/integration` into `main` (`fb4b88a`), resolving append-only conflicts in `plan/operations/progress.md`/`plan/operations/task_plan.md` by keeping both sides' entries (same policy used throughout this project).
 - Fresh `npm install`, `npm run build`: clean. No-DB `npm run check`: 345 passed, 236 skipped (DB-gated), 0 failed. Real-PostgreSQL `npm run check` (fresh disposable container `maestro-main-verify-postgres`, 127.0.0.1:55460): **584 passed, 2 skipped (intentional live-Prime), 0 failed.**
 - Removed all now-merged git worktrees (`p1`, `p2`, `p3`, `p4`, and every Phase 4 sub-worktree) and deleted their local branches (`phase1/control-plane`, `phase2/p2s5-integration`, `phase3/integration`, `phase4/integration`, all `phase4/p4s*` and `review/p4s*` branches, `fix/shared-migration-runner`). `main` is now the sole branch and worktree.
 - Removed all leftover disposable PostgreSQL 17 containers from prior worktree sessions (14 containers) after re-verifying main independently; no shared/production database was touched.
@@ -414,8 +414,8 @@
 HEAD
 ## 2026-09-04 (continued) — Second hardening audit wave consolidated; re-patch execution order set
 - Four parallel read-only audits (security, concurrency/data-integrity, test quality, budget/evidence-bundle/certification domain correctness) completed against `main`. A fifth (feature-completeness/real-world usability) was dispatched but its subagent aborted mid-run with no findings; not re-dispatched this session.
-- Two new P0s found beyond the known list: (1) certification/evidence-bundle/concertmaster-report/encore-council write paths have zero goal_lease/fencing/control-latch check (a stale/fenced-out actor can certify, run a real Council round, or produce a Concertmaster report on a paused/emergency-stopped Goal); (2) budget reservations silently double-count across envelope revisions — empirically reproduced 78% overspend undetected against real PostgreSQL. Full findings recorded per-phase in task_plan.md's new "Re-patch execution order" section.
-- User decision: instead of the Track A/B subsystem split, re-patch phases in original order — Phase 1, then 2, then 3, then 4 — closing every item recorded under each phase before re-claiming that phase accepted or moving to the next. task_plan.md now carries this as the current source of truth for open work; Track A/B stays for reference only.
+- Two new P0s found beyond the known list: (1) certification/evidence-bundle/concertmaster-report/encore-council write paths have zero goal_lease/fencing/control-latch check (a stale/fenced-out actor can certify, run a real Council round, or produce a Concertmaster report on a paused/emergency-stopped Goal); (2) budget reservations silently double-count across envelope revisions — empirically reproduced 78% overspend undetected against real PostgreSQL. Full findings recorded per-phase in plan/operations/task_plan.md's new "Re-patch execution order" section.
+- User decision: instead of the Track A/B subsystem split, re-patch phases in original order — Phase 1, then 2, then 3, then 4 — closing every item recorded under each phase before re-claiming that phase accepted or moving to the next. plan/operations/task_plan.md now carries this as the current source of truth for open work; Track A/B stays for reference only.
 - Next: start Phase 1's 8 remaining open items (auth DoS, memory leaks, TLS gap, production migration runner, fast-check coverage, evidence-hash-corruption consumer tests, config credential-key test, plus the already-known restart-recovery/project-scope-auth P0s), each test-first, each independently reviewed before acceptance, per docs/OPERATING_PROTOCOL.md (local-only file, not committed).
 
 
@@ -423,7 +423,7 @@ HEAD
 - The aborted subagent (`p1-3-feature-completeness-audit`) was not re-dispatched. The parent session completed the sweep directly by reading `apps/cli/src/main.ts`, `apps/secretary/src/goal-page.tsx`, `apps/control-plane/src/server.ts`, `apps/discord/src/main.ts`, and plan/phase2.md.
 - Two findings sharpen existing known P0s to their single clearest illustration: "Concertmaster" natural-language intake is a display-name string only, with zero CLI/HTTP entry point to the existing Task Contract persistence functions; Discord's own `main()` wires a delivery-transport stub that always throws, and no Discord/desktop emergency channel (promised by plan/phase4.md #46) exists anywhere.
 - Two new cross-cutting gaps: no Goal-listing route/command/UI anywhere (only single-Goal-by-UUID lookup); no cost/budget-at-a-glance surface for a human despite the budget accounting-integrity issues already found.
-- Recorded in task_plan.md's "Re-patch execution order" section, folded into the phase items they illustrate rather than as a separate untracked list.
+- Recorded in plan/operations/task_plan.md's "Re-patch execution order" section, folded into the phase items they illustrate rather than as a separate untracked list.
 
 
 ## 2026-09-04 (continued) — Phase 1 re-patch item 1 (auth CPU amplification) resolved
@@ -604,9 +604,9 @@ HEAD
 
 
 ## 2026-09-04 (continued) — Operating protocol designed via grill-me, extracted to docs/OPERATING_PROTOCOL.md
-- Ran a grill-me PLAN MODE interview with the user to design the session-continuity/subagent-spawn protocol properly (rather than the earlier unilateral draft at commit 1fd3948). Decisions: keep task_plan.md as the first-read entry point but move detailed rules into a separate `docs/OPERATING_PROTOCOL.md` (English); scope covers this project first, plus a lightweight reusable pattern saved as a global memory for future projects.
+- Ran a grill-me PLAN MODE interview with the user to design the session-continuity/subagent-spawn protocol properly (rather than the earlier unilateral draft at commit 1fd3948). Decisions: keep plan/operations/task_plan.md as the first-read entry point but move detailed rules into a separate `docs/OPERATING_PROTOCOL.md` (English); scope covers this project first, plus a lightweight reusable pattern saved as a global memory for future projects.
 - Amendments folded in: subagents default to `openai-codex/gpt-5.6-luna` (with `openrouter/openai/gpt-5.6-luna` as a same-model fallback before dropping to the inherited default), thinking level scaled medium/high/max by task difficulty; new worktrees symlink `node_modules` from `main` instead of a fresh `npm install`, with the exact caveat from the 2026-09-03 Phase 4 merge's stale-symlink incident; Karpathy guidelines declared the default engineering discipline for this repo.
-- Live behavior test (grill-me's closing step, not skipped): created a throwaway worktree `.worktrees/protocol-test`, symlinked `node_modules` from main, ran `npm run build` clean from inside it, then deleted the worktree per the protocol's own lifecycle rule. Confirmed the `task_plan.md` -> `docs/OPERATING_PROTOCOL.md` pointer chain resolves.
+- Live behavior test (grill-me's closing step, not skipped): created a throwaway worktree `.worktrees/protocol-test`, symlinked `node_modules` from main, ran `npm run build` clean from inside it, then deleted the worktree per the protocol's own lifecycle rule. Confirmed the `plan/operations/task_plan.md` -> `docs/OPERATING_PROTOCOL.md` pointer chain resolves.
 - Committed at `d80adb0`. Saved a global cross-project memory (`session_continuity_operating_protocol_pattern_for_multi_session_software_project`) capturing the reusable pattern for future projects.
 
 
@@ -855,7 +855,7 @@ HEAD
   remains the recommended next step before Phase 1 is formally re-accepted; the parent session's
   own review this session substituted for that step throughout due to independent-review subagents
   being unavailable/unreliable for most of this session.
-- Next: per the re-patch execution order (`task_plan.md`), Phase 2's remaining items 1-9 are now
+- Next: per the re-patch execution order (`plan/operations/task_plan.md`), Phase 2's remaining items 1-9 are now
   the front of the queue -- starting with item 1, the P0 empirically-reproduced budget-reservation
   double-counting defect (78% overspend undetected against real PostgreSQL in the original audit).
 
@@ -905,10 +905,10 @@ HEAD
 ## 2026-09-04 (continued) — Doc/repo sync on resume; Phase 2 re-patch item 2 confirmed merged
 - Session resume found a doc/repo mismatch: `main` already carried commit `efc40c8` ("merge:
   Phase 2 re-patch item 2 -- thread Mission Bundle capability scoping to real spawn call",
-  merging `6d791d5`), but `task_plan.md` still listed that item as open `[HIGH, test quality]`
-  and `progress.md`'s last entry described it as "next" work not yet done. Per the operating
+  merging `6d791d5`), but `plan/operations/task_plan.md` still listed that item as open `[HIGH, test quality]`
+  and `plan/operations/progress.md`'s last entry described it as "next" work not yet done. Per the operating
   protocol ("if they disagree, trust the repo and correct the docs, not the reverse"), updated
-  `task_plan.md` item 2 to `[RESOLVED]` with the real commit evidence (SpawnCapabilities threaded
+  `plan/operations/task_plan.md` item 2 to `[RESOLVED]` with the real commit evidence (SpawnCapabilities threaded
   to the real Prime Agent spawn call via `allowedToolNames`; scout-read-only *enforcement* and
   path/authority-boundary scoping deliberately left out of this item's scope, per the commit's own
   documented rationale) and updated the Phase 2 status line from `[not_started]` to `[in_progress]`
@@ -959,14 +959,14 @@ HEAD
   child's real reply (or apply dead-child protocol per docs/OPERATING_PROTOCOL.md section D.2 if
   one stalls/errors), independently review each diff directly (no independent-review subagent
   layer this round, per established practice this session), merge one at a time to `main` with
-  re-verification, then update `task_plan.md`/this file per item and proceed to Phase 3's remaining
+  re-verification, then update `plan/operations/task_plan.md`/this file per item and proceed to Phase 3's remaining
   items (7) and Phase 4's Track A/B items.
 
 
 ## 2026-09-04 — Phase 2 re-patch item 3 review blocked pending cost-accounting decision
 - Resumed against clean `main` at `d931bd2`; repository state showed Phase 2 items 5 (`9157324`) and 8 (`bcbd15b`/`e160af5`) already merged even though the remediation text was stale. The first still-open Phase 2 item is item 3.
 - Independently reviewed the clean candidate `patch/p2-team-lead-ceilings` commit `9135765`. Its duration check (grant age) and scope check (Department Plan version) are concrete, but its proposed cost enforcement parses a free-text string such as `1 USD` and charges an invented one unit per helper. No actual/estimated worker cost field or pricing unit exists in the repository, so this cannot truthfully enforce a monetary ceiling.
-- Result: **NOT ACCEPTABLE; not merged.** Recorded the blocker in `task_plan.md`. Next requires a user decision defining the helper-spawn cost accounting source/unit (or explicitly changing the ceiling to a non-monetary helper-count rule). The candidate worktree and its disposable PostgreSQL container remain intact pending that decision.
+- Result: **NOT ACCEPTABLE; not merged.** Recorded the blocker in `plan/operations/task_plan.md`. Next requires a user decision defining the helper-spawn cost accounting source/unit (or explicitly changing the ceiling to a non-monetary helper-count rule). The candidate worktree and its disposable PostgreSQL container remain intact pending that decision.
 
 
 ## 2026-09-04 (continued) — Phase 2 re-patch item 4 (Mission persona overlay) resolved; no subagents this pass
@@ -1318,7 +1318,7 @@ The final review reproduced two concrete blockers before the Step 1 checkpoint: 
 
 1. Read the final broad-check result and final independent review.
 2. Fix only concrete blockers found there; record a new plan before each fix and rerun focused validation.
-3. Record final counts and residual boundaries in this file and `findings.md`.
+3. Record final counts and residual boundaries in this file and `plan/operations/findings.md`.
 4. Run `npm run build`, focused DB/domain tests, no-DB skip-safe tests, `git diff --check`, and final status inspection.
 5. Commit the completed Step 1 with a Conventional Commit on `phase6/improvement-digest`, push it, then cherry-pick/synchronize the validated commit to `hardening/lifecycle` and push.
 6. Stop. Do not begin Phase 6 Step 2 in the same checkpoint.
@@ -1333,7 +1333,7 @@ The next work is not another Phase 6 feature. It is a new, separately recorded o
 - **Phase 1 Step D — approval and critical-action path:** implement one user-facing CEO approval/re-run flow, exactly-once and audit-bound.
 - **Phase 1 Step E — operational observation/parity:** add the required running Metronome observation and matching operator surfaces only after the prior P0 steps pass.
 
-Each Phase 1 step must follow: plan in `task_plan.md` → failing test → minimal patch → focused PostgreSQL/real-process verification → independent no-edit review → progress/findings record → Conventional Commit and push → stop for the next step.
+Each Phase 1 step must follow: plan in `plan/operations/task_plan.md` → failing test → minimal patch → focused PostgreSQL/real-process verification → independent no-edit review → progress/findings record → Conventional Commit and push → stop for the next step.
 
 ### Readiness rule
 
@@ -1531,8 +1531,8 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Phase 6 Step 1 is closed. Phase 6 Steps 2+ remain intentionally deferred; no mutation, replay, rollout, adaptation, or cross-project promotion work was started.
 ## 2026-09-06 — Session resumption; Codex dead child; repo-vs-doc reconciliation
 
-- Resumed per `maestro-resume`: read `docs/OPERATING_PROTOCOL.md`, `task_plan.md`, tail of
-  `progress.md`/`findings.md`, confirmed `git log`/`git status` (clean, `hardening/lifecycle` at
+- Resumed per `maestro-resume`: read `docs/OPERATING_PROTOCOL.md`, `plan/operations/task_plan.md`, tail of
+  `plan/operations/progress.md`/`plan/operations/findings.md`, confirmed `git log`/`git status` (clean, `hardening/lifecycle` at
   `ce94c3d`, working tree clean, no stray Maestro Docker containers).
 - Dispatched a Luna-high subagent (`phase5-secretary-console`) into the existing
   `.worktrees/phase5-secretary-console` worktree to implement Phase 5 Slice 3 (Secretary safety
@@ -1553,18 +1553,18 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   '@maestro/device-agent'`. `npm install` in the main worktree recreated them with zero
   `package-lock.json` diff. `npm run build` is now clean on `hardening/lifecycle` HEAD. A follow-up
   `npm test` (no DB/Docker in this runtime) passed **441 tests, 342 skipped, 3 failed** — the 3
-  failures are a pre-existing, unrelated test-infra gap (see `findings.md`), not caused by this
+  failures are a pre-existing, unrelated test-infra gap (see `plan/operations/findings.md`), not caused by this
   session's changes.
 - Audited the real Electron Secretary app (`apps/secretary`) directly rather than trusting
-  `task_plan.md`'s stale "read-only single-Goal page" description. Findings recorded in full in
-  `task_plan.md`'s new "2026-09-06 — Session resumption: repo-vs-doc reconciliation" section:
+  `plan/operations/task_plan.md`'s stale "read-only single-Goal page" description. Findings recorded in full in
+  `plan/operations/task_plan.md`'s new "2026-09-06 — Session resumption: repo-vs-doc reconciliation" section:
   real, tested, but currently orphaned data-loading plumbing (`connection.tsx`, `goals.tsx`,
   `useGoalDetail.ts`, `lib/goal-data.ts`, `electron/apiBridge.ts`) exists alongside 13 UI views that
   are **all** hardcoded mock data with zero real-plumbing usage (confirmed by `grep` across every
   view file). The control-plane's write-command API surface (Task Contract, Goal lifecycle,
   critical-action approve-and-run, Council, Department Plan, Mission Bundle, worker, Git
   integration, Metronome, certification) is also far more complete than the Status block in
-  `task_plan.md`'s Phase 5 section states — that block is corrected in place with a pointer to the
+  `plan/operations/task_plan.md`'s Phase 5 section states — that block is corrected in place with a pointer to the
   new dated section rather than rewritten, per this project's doc-log union convention.
 - Next actionable item, once a subagent model is available again or work continues directly: wire
   one real Secretary view (most plausibly `Dashboard`) to `useGoalDetail`/`useGoals` and replace its
@@ -1940,7 +1940,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 ## 2026-09-06 (continued) — device hardening triage: Track B4 grant-revocation cascade closed; B3/B5 found already resolved
 
 - Audited the remaining Phase 5 Track B device items (3-8) directly against the current
-  `packages/persistence/src/device-agent-runtime.ts` before assuming task_plan.md's Track B list
+  `packages/persistence/src/device-agent-runtime.ts` before assuming plan/operations/task_plan.md's Track B list
   was still accurate (it was stale again, same pattern as the Secretary/Metronome/Discord findings
   earlier this session -- the Track B1-B2 slice had already closed more than its own name implies):
   - **Track B5 (typed application/data/network scope enforcement) is already fully implemented.**
@@ -2368,7 +2368,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Began the user-requested Act 1 build as a Phase 1-first operational audit rather than jumping to later feature work.
 - Read `plan/phase1.md` in full and reconciled it with the native backend/TUI plans and current `main` (`47c4aa0`).
 - Created `plan/act1-execution.md` as the sequential execution ledger. The first action is a complete Phase 1 requirements-to-code/test/real-process/real-PostgreSQL evidence matrix.
-- Recorded initial findings in `findings.md`: core Goal/lease/authority/evidence/reconciliation paths exist; outbox delivery, installation/notification records, and the legacy Prime Worker boundary require explicit gate verification or scoped follow-up.
+- Recorded initial findings in `plan/operations/findings.md`: core Goal/lease/authority/evidence/reconciliation paths exist; outbox delivery, installation/notification records, and the legacy Prime Worker boundary require explicit gate verification or scoped follow-up.
 - Started disposable PostgreSQL container `maestro-phase1-audit-postgres` on `127.0.0.1:55471`; no code changes were made on `main`.
 
 
@@ -2480,7 +2480,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 ## 2026-09-08 — New full-path native acceptance test found and fixed a real gateway wire-schema bug
 
 - Added `apps/control-plane/src/native-worker-acceptance.integration.test.ts`: the first test that exercises the REAL production composition path (`createControlPlane(config)` with no `executionKernel`/`nativeAdmission` override) against a real Model Gateway Fastify HTTP process and real PostgreSQL, driving Goal creation, real native Head activation, Council, Department Plan, Mission Bundle, and a real native Worker admission end to end through authenticated HTTP, then asserting durable `native_execution_bindings` evidence for both admissions with the real gateway's returned model/account identity and no credential leakage.
-- Building this test surfaced a real, previously invisible defect: `packages/agent-runtime/src/agent-runtime.ts`'s `limitsFor()` sent an unclamped `providerTimeoutMs`/`wallTimeMs` derived directly from a Mission Bundle's `timeCeiling`, which fails the real Model Gateway's wire schema (`apps/model-gateway/src/rpc.ts`'s `TurnSchema`, capped at 600s/3600s) for any mission longer than 10 minutes -- i.e., effectively every realistic Mission Bundle in this codebase's own fixtures (`"1 hour"`, `"1 day"`, `"3 days"`). Every fake-kernel-injected test in the suite bypassed this real validation entirely, so it was undetected until this end-to-end test exercised the actual wire path. See `findings.md` same date for full root-cause detail.
+- Building this test surfaced a real, previously invisible defect: `packages/agent-runtime/src/agent-runtime.ts`'s `limitsFor()` sent an unclamped `providerTimeoutMs`/`wallTimeMs` derived directly from a Mission Bundle's `timeCeiling`, which fails the real Model Gateway's wire schema (`apps/model-gateway/src/rpc.ts`'s `TurnSchema`, capped at 600s/3600s) for any mission longer than 10 minutes -- i.e., effectively every realistic Mission Bundle in this codebase's own fixtures (`"1 hour"`, `"1 day"`, `"3 days"`). Every fake-kernel-injected test in the suite bypassed this real validation entirely, so it was undetected until this end-to-end test exercised the actual wire path. See `plan/operations/findings.md` same date for full root-cause detail.
 - Fixed by clamping both values in `limitsFor()` to the wire schema's own bounds; added a dedicated regression test in `packages/agent-runtime/src/agent-runtime.test.ts`.
 - Evidence: agent-runtime 8/8, new acceptance test 1/1, broader regression sweep (agent-runtime, native-execution-kernel, native-gateway-http, head-participation-api, conversation-service, worker, semantic-review, encore-council, team-lead-grant, both model providers, Model Gateway app) 18 files / 113 tests, 0 failed. Full clean single-worker real-PostgreSQL rerun on a fresh disposable container confirmed no regression: **155/155 files, 1051/1051 tests, 0 failed.**
 
@@ -2488,7 +2488,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 ## 2026-09-08 — Extended the gateway wire-schema fix to all turn limits (audit follow-through)
 
 - After fixing `providerTimeoutMs`/`wallTimeMs`, audited the rest of `apps/model-gateway/src/rpc.ts`'s `LimitsSchema` for the same defect class and found two more unclamped domain-derived fields reaching the real wire boundary: `maxToolCalls` (from Mission Bundle `allowedTools.length * 8`, uncapped) and `maxChildCalls` (from Mission Bundle `workerCeiling`, uncapped in `packages/domain/src/mission-bundle.ts`). Extended `limitsFor()`'s defensive clamp to all four bounded fields (`maxModelTurns`, `maxToolCalls`, `maxChildCalls`, `maxOutputTokens`) alongside the two already fixed.
-- Extended the regression test in `packages/agent-runtime/src/agent-runtime.test.ts` to assert every `TurnLimits` field stays within the real schema bounds for a deliberately oversized grant. Full detail in `findings.md` same date.
+- Extended the regression test in `packages/agent-runtime/src/agent-runtime.test.ts` to assert every `TurnLimits` field stays within the real schema bounds for a deliberately oversized grant. Full detail in `plan/operations/findings.md` same date.
 - Evidence: agent-runtime 8/8; regression sweep 18 files / 113 tests, 0 failed.
 
 
@@ -2496,14 +2496,14 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Continuing the same wire-schema audit, found that `boundedMessages()` in `packages/agent-runtime/src/agent-runtime.ts` only bounds outgoing turn messages by byte size (64KB), never by array-entry count -- but `apps/model-gateway/src/rpc.ts`'s real `TurnSchema` caps `messages`/`tools` arrays at 128 entries each, independent of byte size. A real conversation with more than 128 short exchanges (a completely ordinary scenario; `apps/control-plane/src/conversation-service.ts` replays the full durable turn history with no row-count limit) would silently and permanently break every subsequent turn with the same opaque `"invalid model turn request"` failure this session's audit keeps finding.
 - Fixed by also capping `boundedMessages()`'s result at 128 entries and slicing the `tools` definitions list to the same cap defensively. Verified the regression test genuinely reproduces the defect (fails without the fix, passes with it).
-- Evidence: agent-runtime 9/9; regression sweep 18 files / 114 tests, 0 failed. Full detail in `findings.md` same date.
+- Evidence: agent-runtime 9/9; regression sweep 18 files / 114 tests, 0 failed. Full detail in `plan/operations/findings.md` same date.
 
 
 ## 2026-09-08 — Real subprocess test for Codex transport: found and fixed a provider-crash misclassification bug
 
 - Added `packages/model-provider-openai/src/codex-stdio-transport.test.ts` plus a real Node.js fixture child process (`packages/model-provider-openai/test/fake-codex-app-server.mjs`) so `CodexAppServerClient`'s `StdioTransport` is exercised as a genuine OS process boundary for the first time (every prior test used an in-memory transport fake). The real `codex` binary is not installable in this sandbox, so the fixture speaks the identical JSON-RPC-over-JSONL protocol instead.
 - Found and fixed a real bug: a genuine Codex app-server process crash was misclassified by `apps/model-gateway/src/rpc.ts`'s `errorCode()` as a 400 client-request error instead of a 503 provider-unavailable error, because Codex's crash-error wording never matched the message-substring checks written for the HTTP-based providers. Normalized Codex's transport-failure error to the same typed `provider_unavailable` code every provider plugin already uses, and added a code-based branch to `errorCode()` ahead of the fragile substring matching.
-- Verified both this fix and the redaction test genuinely reproduce their defects (fail without the fix, pass with it) before committing. Full detail in `findings.md` same date.
+- Verified both this fix and the redaction test genuinely reproduce their defects (fail without the fix, pass with it) before committing. Full detail in `plan/operations/findings.md` same date.
 - Evidence: codex-stdio-transport 2/2, rpc.test.ts 7/7, regression sweep 19 files / 117 tests, 0 failed.
 
 
@@ -2511,21 +2511,21 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Added real `node:http`-server-backed tests for both `packages/model-provider-openai` and `packages/model-provider-anthropic`, replacing hand-rolled mocked `Response` objects with a genuine loopback TCP server for both the success path and cancellation. Cancellation is verified from the *server side* (`req.on("close")`), proving a real in-flight connection is genuinely torn down, not just that the client-side promise settles.
 - Both providers passed cleanly on the first real-process run -- an honest, verified negative result confirming their abort-signal wiring is already correct, not an assumption carried forward from mocked tests.
-- Evidence: 4 new tests, both packages 6 files / 16 tests, 0 failed; regression sweep 18 files / 96 tests, 0 failed. Full detail in `findings.md` same date.
+- Evidence: 4 new tests, both packages 6 files / 16 tests, 0 failed; regression sweep 18 files / 96 tests, 0 failed. Full detail in `plan/operations/findings.md` same date.
 
 
 ## 2026-09-08 — Critical fix: real credential-bind and account-login acceptance were completely broken
 
 - Added `apps/control-plane/src/account-login-acceptance.integration.test.ts`, the first real Control Plane + real Model Gateway HTTP process + real PostgreSQL end-to-end test for `/v1/provider-account-logins/*` and `/v1/provider-credentials`. It immediately hit a genuine, severe production bug: `main.ts` forwarded the *real authenticated end-user's* operatorId to six gateway-facing calls (bind/revoke credential, start/status/cancel account login, logout), but `ModelGateway` strictly checks that operatorId against its own fixed `config.modelGatewayOperatorId` -- meaning credential binding and account login were completely broken for every real operator, in every real deployment. This is the most severe defect found this session: not an edge case, but the ordinary first-time provider setup path.
 - Fixed by overriding `operatorId` to `config.modelGatewayOperatorId` for all six gateway-facing calls, matching how native admission already does this correctly, while leaving Maestro's own durable per-operator store calls untouched.
-- Verified genuine reproduction (fails without the fix with the exact real error, passes with it) before committing. Full detail in `findings.md` same date.
+- Verified genuine reproduction (fails without the fix with the exact real error, passes with it) before committing. Full detail in `plan/operations/findings.md` same date.
 - Evidence: new test 1/1; regression sweep 15 files / 115 tests, 0 failed. Full clean single-worker real-PostgreSQL rerun in progress.
 
 
 ## 2026-09-08 — Real Discord signal delivery acceptance test (genuine negative result)
 
 - Added `apps/control-plane/src/discord-signal-acceptance.integration.test.ts`, driving `createHttpDelivery`'s exact real request shape (operator Bearer auth + JSON body with an embedded HMAC signature) against a real Control Plane HTTP server and real PostgreSQL, plus a tamper-rejection case. This is the first real end-to-end test of the Discord ingestion boundary; every prior test used an in-memory `fetchStub`.
-- No product defect found -- both accept and tamper-rejection worked correctly on the first genuinely correct run. Two of my own test fixture mistakes were caught and fixed first (stale hardcoded timestamps failing real freshness verification; a PostgreSQL bigint column returned as a string, not a number). Full detail in `findings.md` same date.
+- No product defect found -- both accept and tamper-rejection worked correctly on the first genuinely correct run. Two of my own test fixture mistakes were caught and fixed first (stale hardcoded timestamps failing real freshness verification; a PostgreSQL bigint column returned as a string, not a number). Full detail in `plan/operations/findings.md` same date.
 - Evidence: new test 1/1; regression sweep 9 files / 73 tests, 0 failed. Full clean single-worker real-PostgreSQL rerun in progress.
 
 
@@ -2533,7 +2533,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Added `apps/control-plane/src/metronome-loop.integration.test.ts`, the first real-PostgreSQL test of the scheduled continuous Metronome loop using the real `createDurableGoalService`'s `withGoalLease` (no injected fake). Every prior test injected fakes for both the lease and the scan seam.
 - Proves: only non-terminal Goals are scanned, terminal Goals are never touched, no fabricated findings on a routine Goal, and a real Goal lease acquired on one pass is correctly released before the next pass needs it again.
-- No product defect found -- one test fixture mistake (missing `bootstrapPermanentOrganization`) caught and fixed first. Full detail in `findings.md` same date.
+- No product defect found -- one test fixture mistake (missing `bootstrapPermanentOrganization`) caught and fixed first. Full detail in `plan/operations/findings.md` same date.
 - Evidence: new test 1/1; full clean single-worker real-PostgreSQL rerun in progress.
 
 

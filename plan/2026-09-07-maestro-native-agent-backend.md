@@ -101,7 +101,7 @@ The following contract details are binding and override any earlier abbreviated 
 - `packages/prime-adapter/*` — delete after migration; migrate useful contract tests to native runtime tests.
 - `apps/control-plane/src/*.test.ts`, `apps/device-agent/src/*.test.ts`, and other config fixtures — remove `primeAgentVersion` and use native runtime test injection.
 - `apps/cli/src/main.ts` and TUI command files — add conversation/model/auth commands while preserving existing typed commands.
-- `findings.md`, `progress.md`, and `task_plan.md` — append implementation evidence after each verified slice.
+- `plan/operations/findings.md`, `plan/operations/progress.md`, and `plan/operations/task_plan.md` — append implementation evidence after each verified slice.
 
 ---
 
@@ -755,7 +755,7 @@ git add apps/cli docs
 
 **Files:**
 - Modify/add focused contract and integration tests across `packages/agent-runtime`, provider packages, `apps/control-plane`, `packages/persistence`, and CLI/TUI.
-- Modify: `findings.md`, `progress.md`, `task_plan.md` with evidence only after each gate.
+- Modify: `plan/operations/findings.md`, `plan/operations/progress.md`, `plan/operations/task_plan.md` with evidence only after each gate.
 
 **Interfaces:**
 - Consumes: Tasks 1–7 complete implementation.
@@ -791,7 +791,7 @@ Have a separate reviewer inspect the full diff and evidence against the spec. Th
 
 - [ ] **Step 7: Record final evidence and commit**
 
-Append exact command output and remaining environmental limitations to `findings.md`/`progress.md`. Only after verification:
+Append exact command output and remaining environmental limitations to `plan/operations/findings.md`/`plan/operations/progress.md`. Only after verification:
 
 ```bash
 git diff --check

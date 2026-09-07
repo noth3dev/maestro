@@ -1,6 +1,6 @@
 export type Paint = (text: string) => string;
 
-// Warm Earth design-system tokens from designsystem.html (dark theme).
+// Warm Earth design-system tokens from docs/assets/design/design-system.html (dark theme).
 // True-colour ANSI keeps the terminal palette visually aligned with the web UI.
 const foreground = (hex: string): Paint => {
   const value = hex.replace("#", "");

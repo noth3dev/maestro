@@ -2,7 +2,7 @@
 
 ## Canonical roadmap
 
-The phase documents in this directory define the intended implementation order. The current execution pointer and evidence are maintained in the root `task_plan.md`, `progress.md`, and `findings.md`:
+The phase documents in this directory define the intended implementation order. The current execution pointer and evidence are maintained in `plan/operations/task_plan.md`, `plan/operations/progress.md`, and `plan/operations/findings.md`:
 
 1. `phase1.md` — Technical Foundation and Durable Control Plane (code baseline; operational gates remain)
 2. `phase2.md` — Secretary Office Core and Hierarchical Goal Execution (code baseline; operational gates remain)

@@ -33,7 +33,7 @@ Phase 6 Step 1 is accepted as an immutable, project-private Improvement Digest s
 
 > [!IMPORTANT]
 > **Operational Usability Gate Disclaimer:**  
-> While domain and persistence unit test suites for Phases 1–4 are green, an independent operational usability audit (`task_plan.md`) established that Phase 1–3 control plane features remain gated behind operational usability requirements (e.g., end-to-end service API execution pathways, real effect executor wiring for Git, and continuous Metronome observation). The native conversation and worker paths are available; remaining acceptance depends on real gateway-process, restart, and recovery evidence. Phase 4 device controls similarly await live device agent protocol wiring. Implementation of these operational usability tracks is tracked under the **Phase 5 Remediation Plan**.
+> While domain and persistence unit test suites for Phases 1–4 are green, an independent operational usability audit (`plan/operations/task_plan.md`) established that Phase 1–3 control plane features remain gated behind operational usability requirements (e.g., end-to-end service API execution pathways, real effect executor wiring for Git, and continuous Metronome observation). The native conversation and worker paths are available; remaining acceptance depends on real gateway-process, restart, and recovery evidence. Phase 4 device controls similarly await live device agent protocol wiring. Implementation of these operational usability tracks is tracked under the **Phase 5 Remediation Plan**.
 
 ---
 
