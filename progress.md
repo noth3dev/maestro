@@ -2227,3 +2227,13 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added read/write regression coverage for the no-ID path.
 - Verification: focused tests pass (26 tests), `npm run build` passes, and `git diff --check`
   passes.
+
+
+## 2026-09-06 — Maestro CLI critical-action request parity
+
+- Added the existing Control Plane critical-action request route to the non-interactive CLI
+  as `critical-action request`, preserving the existing approve-and-run path.
+- Added `--json` and typed request coverage so CLI and TUI use the same API client contract.
+- Updated CLI usage/help text.
+- Verification: `apps/cli` main tests pass (17 tests), `npm run build` passes, and
+  `git diff --check` passes.

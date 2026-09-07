@@ -286,6 +286,17 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       printState(io.stdout, result, json);
       return 0;
     }
+    if (resource === "critical-action" && action === "request") {
+      const result = await client.requestCriticalAction(string("goal-id"), {
+        projectId: string("project-id"),
+        action: string("action"),
+        target: string("target"),
+        policyVersion: nonNegativeInteger(string("version"), "--version"),
+        budgetEffectCents: safeInteger(string("budget-effect-cents"), "--budget-effect-cents"),
+      }, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
     if (resource === "critical-action" && action === "approve-and-run") {
       const expiresAt = string("expires-at");
       const result = await client.approveAndRunCriticalAction(string("goal-id"), {
@@ -339,7 +350,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       else printEvents(io.stdout, page.events, page.nextCursor);
       return 0;
     }
-    throw new Error("Usage: maestro admin project-access|goals list|goal create|get|transition|pause|stop|resume|emergency-stop|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|observe|cancel|accept|certify|certify-conditional|git goal-branch|git department-branch|worker-worktree|goal-revision|metronome scan|challenge|encore review|critical-action approve-and-run|budget ... | maestro events list ...");
+    throw new Error("Usage: maestro admin project-access|goals list|goal create|get|transition|pause|stop|resume|emergency-stop|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|observe|cancel|accept|certify|certify-conditional|git goal-branch|git department-branch|worker-worktree|goal-revision|metronome scan|challenge|encore review|critical-action request|approve-and-run|budget ... | maestro events list ...");
   } catch (error) {
     const message = error instanceof ApiError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : "Command failed";
     io.stderr(`${message}\n`);
@@ -348,7 +359,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
 }
 
 function helpText(): string {
-  return `Maestro CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  admin project-access --operator-id --project-id --roles-json\n  goal create|get|transition|pause|stop|resume|emergency-stop\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  git goal-branch|department-branch|worker-worktree|goal-revision\n  metronome scan|challenge\n  encore review\n  critical-action approve-and-run\n  events list\n\nUse --json for machine-readable output.\n`;
+  return `Maestro CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  admin project-access --operator-id --project-id --roles-json\n  goal create|get|transition|pause|stop|resume|emergency-stop\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  git goal-branch|department-branch|worker-worktree|goal-revision\n  metronome scan|challenge\n  encore review\n  critical-action request|approve-and-run\n  events list\n\nUse --json for machine-readable output.\n`;
 }
 
 function nonNegativeInteger(value: string, option: string): number {
