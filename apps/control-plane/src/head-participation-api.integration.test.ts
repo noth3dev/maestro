@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ExecutionKernelPort, GitPort } from "@maestro/domain";
+import type { ExecutionAdmission, ExecutionKernelPort, GitPort } from "@maestro/domain";
 import { applyAllMigrations, bootstrapLocalOperator, bootstrapPermanentOrganization, createDurableTaskContract, launchConfirmedTaskContract, recordExactTaskContractConfirmation } from "@maestro/persistence";
 import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 import { createControlPlane } from "./main.js";
@@ -61,7 +61,12 @@ describeDatabase("authenticated Head activation API", () => {
     await grantProjectMembership(pool, operatorId, projectId);
     await grantProjectRole(pool, operatorId, projectId, "concertmaster");
     const { kernel: executionKernel, spawn } = kernel();
-    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `head-api-${randomUUID()}` }, { executionKernel });
+    const admission: ExecutionAdmission = {
+      context: { operatorId, projectId, goalId, missionBundleId: "head-bundle", policyVersion: "head-policy" },
+      grant: { grantId: "head-grant", allowedTools: ["read"], allowedSkills: ["head"], modelPolicy: ["test/model-a"], pathScope: ["/tmp"], outboundDataClasses: ["repository files only"], remaining: { modelTurns: 8, toolCalls: 8, childCalls: 0, outputTokens: 8192, wallTimeMs: 60_000, retryCount: 0 } },
+      modelPolicy: ["test/model-a"], idempotencyKey: "head-admission-1",
+    };
+    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, actorId: "maestro-control-plane", leaseOwnerId: `head-api-${randomUUID()}` }, { executionKernel, nativeAdmission: () => admission });
     await controlPlane.listen();
     const address = controlPlane.app.server.address();
     if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
@@ -82,6 +87,7 @@ describeDatabase("authenticated Head activation API", () => {
       const second = await fetch(`${baseUrl}/v1/goals/${goalId}/head-participations`, { method: "POST", headers: { ...auth, "idempotency-key": activationCommandId }, body: JSON.stringify(activation) });
       expect(second.status).toBe(200);
       expect(spawn).toHaveBeenCalledTimes(1);
+      expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ context: admission.context, grant: admission.grant, modelPolicy: admission.modelPolicy, idempotencyKey: admission.idempotencyKey }));
       const stored = await pool.query("SELECT status, active_session_ref FROM goal_head_participations WHERE goal_id = $1 AND department_id = 'product'", [goalId]);
       expect(stored.rows).toEqual([{ status: "active", active_session_ref: "execution-head-1" }]);
     } finally { await controlPlane.close(); }
@@ -111,7 +117,7 @@ describeDatabase("authenticated Head activation API", () => {
     const { kernel: executionKernel } = kernel();
     const { git: testGit, createBranch } = gitPort();
     process.env.MAESTRO_WORKTREE_ROOT = "/tmp";
-    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `council-api-${randomUUID()}` }, { executionKernel, gitPort: testGit });
+    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, actorId: "maestro-control-plane", leaseOwnerId: `council-api-${randomUUID()}` }, { executionKernel, gitPort: testGit });
     await controlPlane.listen();
     const address = controlPlane.app.server.address();
     if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
@@ -158,7 +164,7 @@ describeDatabase("authenticated Head activation API", () => {
       expect(readPlan.status).toBe(200);
       expect((await readPlan.json()).contentHash).toMatch(/^[a-f0-9]{64}$/);
       const bundle = {
-        role: "execution", profileRef: "profile/product", goalBrief: "implement the selected direction", approvedModels: ["test-model"],
+        role: "execution", profileRef: "profile/product", goalBrief: "implement the selected direction", approvedModels: ["test/model-a"],
         allowedSkills: ["testing"], allowedTools: ["git"], allowedPaths: ["src"], environment: ["test"], authorityBoundary: ["local commit"],
         externalServiceBoundary: ["none"], dataBoundary: ["repository only"], costCeiling: "20 USD", timeCeiling: "30 minutes", retryCeiling: 1,
         workerCeiling: 0, deliverable: "implemented change", evidenceRequirements: ["test result"], validationCriteria: ["tests pass"], terminationConditions: ["done"],

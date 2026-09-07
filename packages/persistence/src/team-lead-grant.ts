@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   assertValidTeamLeadGrantSubstance,
+  type ExecutionAdmission,
   type ExecutionKernelPort,
   type ExecutionRef,
   type TeamLeadGrantSubstance,
@@ -197,10 +198,12 @@ export async function revokeTeamLeadGrant(pool: Pool, grantId: string, proof: Go
  * native hierarchy) and remains visible under the same Department Plan
  * mission.
  */
-export async function spawnHelperWorker(pool: Pool, kernel: ExecutionKernelPort, grantId: string, proof: GoalLeaseProof, context: CouncilActorContext): Promise<Worker> {
+export async function spawnHelperWorker(pool: Pool, kernel: ExecutionKernelPort, grantId: string, proof: GoalLeaseProof, context: CouncilActorContext, admission?: ExecutionAdmission): Promise<Worker> {
   let workerId: string | undefined;
   let parentExecutionRef: ExecutionRef | undefined;
   let helperName: string | undefined;
+  let parentWorkerId: string | undefined;
+  let helperPrompt: string | undefined;
   const client = await pool.connect(); let open = false;
   try {
     await client.query("BEGIN"); open = true;
@@ -237,6 +240,8 @@ export async function spawnHelperWorker(pool: Pool, kernel: ExecutionKernelPort,
     workerId = randomUUID();
     parentExecutionRef = teamLead.rows[0]!.execution_ref as unknown as ExecutionRef;
     helperName = `helper:${grant.item_id}:${nextHelperNumber}`;
+    parentWorkerId = grant.worker_id;
+    helperPrompt = grant.task_scope;
     const pendingExecutionRef = `pending:${workerId}:execution`;
     const pendingInvocationRef = `pending:${workerId}:invocation`;
     await client.query(
@@ -248,14 +253,31 @@ export async function spawnHelperWorker(pool: Pool, kernel: ExecutionKernelPort,
     await client.query("COMMIT"); open = false;
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 
-  if (workerId === undefined || parentExecutionRef === undefined || helperName === undefined) {
+  if (workerId === undefined || parentExecutionRef === undefined || helperName === undefined || parentWorkerId === undefined) {
     throw new TeamLeadGrantError("Helper worker reservation did not produce a worker identity");
   }
 
   let spawned: Awaited<ReturnType<ExecutionKernelPort["spawn"]>>;
   try {
     await assertCurrentWorkerLease(pool, workerId, proof);
-    spawned = await kernel.spawn({ name: helperName, parent: parentExecutionRef });
+    // Native runtimes require an explicit child admission and prompt. Keep the
+    // optional argument for injected legacy test kernels, but never widen a
+    // host-created helper grant: its parent identity must be the durable root
+    // worker grant, and the selected model must match the root Mission Bundle.
+    if (admission !== undefined) {
+      if (admission.modelPolicy.length !== 1 || admission.grant.modelPolicy.length !== 1 || admission.grant.modelPolicy[0] !== admission.modelPolicy[0]) {
+        throw new TeamLeadGrantError("Helper admission model policy is invalid");
+      }
+      if (parentWorkerId === undefined || admission.grant.parentGrantId !== `worker:${parentWorkerId}`) {
+        throw new TeamLeadGrantError("Helper admission does not inherit the team-lead grant");
+      }
+    }
+    spawned = await kernel.spawn({
+      name: helperName,
+      parent: parentExecutionRef,
+      prompt: helperPrompt ?? "Perform the bounded helper work and report evidence.",
+      ...(admission ?? {}),
+    });
   } catch (error) {
     const unknown = await markUnboundWorkerUnknown(pool, workerId, proof).catch(() => undefined);
     if (unknown !== undefined) return unknown;

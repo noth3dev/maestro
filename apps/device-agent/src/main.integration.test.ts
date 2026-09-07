@@ -41,7 +41,7 @@ async function startProvider(): Promise<{ child: ChildProcessWithoutNullStreams;
 }
 async function startControlPlane(database: string, providerPort: number): Promise<{ child: ChildProcessWithoutNullStreams; port: number }> {
   const child = spawn(process.execPath, [controlHarness], {
-    cwd: process.cwd(), env: { ...process.env, MAESTRO_PROVIDER_PORT: String(providerPort), MAESTRO_CONTROL_PLANE_CONFIG: JSON.stringify({ databaseUrl: database, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `device-test-${randomUUID()}`, reconcilerLeaseDurationMs: 30_000, shutdownDrainTimeoutMs: 100 }) }, stdio: ["ignore", "pipe", "pipe"],
+    cwd: process.cwd(), env: { ...process.env, MAESTRO_PROVIDER_PORT: String(providerPort), MAESTRO_CONTROL_PLANE_CONFIG: JSON.stringify({ databaseUrl: database, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, actorId: "maestro-control-plane", leaseOwnerId: `device-test-${randomUUID()}`, reconcilerLeaseDurationMs: 30_000, shutdownDrainTimeoutMs: 100 }) }, stdio: ["ignore", "pipe", "pipe"],
   });
   return { child, ...(await waitForReady(child)) };
 }

@@ -11,7 +11,6 @@ export interface MaestroConfig {
   worktreeRoot: string;
   host: string;
   port: number;
-  primeAgentVersion: string;
   actorId: string;
   leaseOwnerId: string;
   /** Optional explicit CEO identity; approvals fail closed when absent. */
@@ -28,8 +27,10 @@ export interface MaestroConfig {
   reconcilerLeaseDurationMs: number;
   /** Maximum time allowed for provider/application shutdown drains. */
   shutdownDrainTimeoutMs?: number;
-  /** Optional authenticated model gateway; conversation routes are unavailable when absent. */
+  /** Optional authenticated model gateway; native execution is unavailable when absent. */
   modelGatewayUrl?: string;
+  /** Explicit provider-qualified model used for host-created Head/Encore sessions. */
+  nativeModelRef?: string;
   modelGatewayToken?: string;
   modelGatewayOperatorId: string;
   modelAccountRefs: Readonly<Record<string, string>>;
@@ -57,6 +58,7 @@ const schema = z.object({
   MAESTRO_MODEL_GATEWAY_URL: z.string().url().default("http://127.0.0.1:4321"),
   MAESTRO_MODEL_GATEWAY_TOKEN: z.string().min(1).optional(),
   MAESTRO_MODEL_GATEWAY_OPERATOR_ID: z.string().min(1).default("local-operator"),
+  MAESTRO_NATIVE_MODEL: z.string().regex(/^[^/\s]+\/[^/\s]+$/).optional(),
   MAESTRO_MODEL_ACCOUNT_REFS: z.string().optional(),
   MAESTRO_TLS_CERT_FILE: z.string().min(1).optional(),
   MAESTRO_TLS_KEY_FILE: z.string().min(1).optional(),
@@ -89,6 +91,7 @@ export function parseConfig(
     MAESTRO_MODEL_GATEWAY_URL: modelGatewayUrl,
     MAESTRO_MODEL_GATEWAY_TOKEN: modelGatewayToken,
     MAESTRO_MODEL_GATEWAY_OPERATOR_ID: modelGatewayOperatorId,
+    MAESTRO_NATIVE_MODEL: nativeModelRef,
     MAESTRO_MODEL_ACCOUNT_REFS: modelAccountRefsRaw,
     MAESTRO_TLS_CERT_FILE: certFile,
     MAESTRO_TLS_KEY_FILE: keyFile,
@@ -118,10 +121,11 @@ export function parseConfig(
   for (const provider of ["openai", "anthropic"]) accountRefs[provider] ??= `${provider}-${modelGatewayOperatorId}`;
 
   return {
-    databaseUrl, evidenceDir, worktreeRoot, host, port, primeAgentVersion: "0.8.0", actorId, leaseOwnerId, reconcilerLeaseDurationMs, shutdownDrainTimeoutMs,
+    databaseUrl, evidenceDir, worktreeRoot, host, port, actorId, leaseOwnerId, reconcilerLeaseDurationMs, shutdownDrainTimeoutMs,
     modelGatewayOperatorId, modelAccountRefs: accountRefs,
     modelGatewayUrl,
     ...(modelGatewayToken === undefined ? {} : { modelGatewayToken }),
+    ...(nativeModelRef === undefined ? {} : { nativeModelRef }),
     ...(ceoOperatorId === undefined ? {} : { ceoOperatorId }),
     ...(operatorProvisioningAdminId === undefined ? {} : { operatorProvisioningAdminId }),
     ...(discordSignalCredential === undefined ? {} : { discordSignalCredential }),

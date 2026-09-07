@@ -2422,3 +2422,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - TDD red test caught `SpawnRequest.modelPolicy` being undefined for Worker admissions. Implemented canonical Mission Bundle model validation, public optional model selection, and native host-owned request fields.
 - Focused evidence: isolated PostgreSQL Worker suite **35/35**, domain/contracts/router **30/30**, and `npm run build` passed. The first attempted focus against the shared Phase 1 DB hit a deadlock because the full suite was running concurrently; the successful rerun used a separate disposable PostgreSQL container on `127.0.0.1:55473`.
 - Next: make Head, semantic-review, Encore, and team-lead helper admissions explicit and native before replacing the production Prime composition.
+
+
+## 2026-09-08 — Native composition slice
+
+- `main.ts` no longer composes `createPrimeExecutionKernel`; it composes the native gateway router or a fail-closed unavailable kernel. `primeAgentVersion` is gone from active config and fixtures.
+- Root Head/Encore service paths and semantic/team-lead persistence paths carry the new `ExecutionAdmission` seam. Team-lead child admission validates parent grant inheritance before spawn.
+- Verified with real PostgreSQL: Head API 2/2 and team-lead 11/11 on isolated disposable databases.
+- Next: remove `@maestro/prime-adapter` and `prime-agent`, then run no-Prime dependency/source scans before native HTTP acceptance.

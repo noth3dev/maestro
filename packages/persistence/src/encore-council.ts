@@ -3,6 +3,7 @@ import {
   assertValidEncoreJudgmentSubstance,
   evaluateEncoreTriggers,
   synthesizeEncoreJudgments,
+  type ExecutionAdmission,
   type ExecutionKernelPort,
   type InvocationObservation,
   type InvocationStatus,
@@ -27,6 +28,8 @@ export interface EncoreCouncilRoundRequest {
   readonly criteria: readonly { readonly criterionId: string; readonly description: string }[];
   readonly evidenceIds: readonly string[];
   readonly reviewerCount: number;
+  /** Host-owned native admission; a factory receives the reviewer index so every root has a unique idempotency key. */
+  readonly admission?: ExecutionAdmission | ((reviewerIndex: number) => ExecutionAdmission);
 }
 
 export interface EncoreCouncilRound {
@@ -268,7 +271,8 @@ export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernel
     // Admit every reviewer before prompting any reviewer. Each root is a
     // fresh, parentless execution and no database transaction is open here.
     for (let index = 0; index < request.reviewerCount; index += 1) {
-      spawnedReviewers.push(await kernel.spawn({ name: `encore-review:${randomUUID()}:${index}`, cwd: process.cwd() }));
+      const admission = typeof request.admission === "function" ? request.admission(index) : request.admission;
+      spawnedReviewers.push(await kernel.spawn({ name: `encore-review:${randomUUID()}:${index}`, cwd: process.cwd(), ...(admission ?? {}) }));
     }
 
     for (const spawned of spawnedReviewers) {

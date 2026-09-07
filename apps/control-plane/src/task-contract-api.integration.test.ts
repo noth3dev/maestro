@@ -33,7 +33,7 @@ describeDatabase("Task Contract control-plane API", () => {
     const contractId = randomUUID();
     await grantProjectMembership(setupPool, operatorId, projectId);
     await grantProjectRole(setupPool, operatorId, projectId, "concertmaster");
-    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `task-contract-${randomUUID()}` });
+    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, actorId: "maestro-control-plane", leaseOwnerId: `task-contract-${randomUUID()}` });
     try {
       await controlPlane.listen();
       const address = controlPlane.app.server.address();

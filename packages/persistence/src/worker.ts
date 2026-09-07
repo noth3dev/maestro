@@ -51,7 +51,7 @@ interface WorkerRow {
   usage_total_tokens: number | null;
 }
 
-function selectWorkerModel(bundle: Awaited<ReturnType<typeof readMissionBundle>>, requested: string | undefined): string {
+export function selectWorkerModel(bundle: Awaited<ReturnType<typeof readMissionBundle>>, requested: string | undefined): string {
   const model = requested ?? (bundle.substance.approvedModels.length === 1 ? bundle.substance.approvedModels[0] : undefined);
   if (model === undefined) throw new WorkerError("Worker model selection is ambiguous; choose one approved model");
   if (!bundle.substance.approvedModels.includes(model)) throw new WorkerError(`Worker model is not approved by the Mission Bundle: ${model}`);
@@ -59,7 +59,7 @@ function selectWorkerModel(bundle: Awaited<ReturnType<typeof readMissionBundle>>
   return model;
 }
 
-function missionTimeLimitMs(value: string): number {
+export function missionTimeLimitMs(value: string): number {
   const match = /^(\d+)\s+(millisecond|second|minute|hour|day)s?$/.exec(value.trim().toLowerCase());
   if (match === null) throw new WorkerError(`Mission Bundle timeCeiling is unsupported: ${value}`);
   const amount = Number(match[1]);

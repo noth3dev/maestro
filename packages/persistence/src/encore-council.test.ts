@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type {
+  ExecutionAdmission,
   ExecutionKernelPort,
   InvocationAnswer,
   InvocationObservation,
@@ -107,6 +108,11 @@ describe("Encore Council execution", () => {
     dissentNote: null,
     citedEvidenceIds: [evidenceId],
   });
+  const admission: ExecutionAdmission = {
+    context: { operatorId: "operator-1", projectId: "project-1", goalId, missionBundleId: "encore-bundle", policyVersion: "encore-policy" },
+    grant: { grantId: "encore-grant", allowedTools: [], allowedSkills: ["review"], modelPolicy: ["test/model-a"], pathScope: [], outboundDataClasses: ["repository files only"], remaining: { modelTurns: 2, toolCalls: 0, childCalls: 0, outputTokens: 2048, wallTimeMs: 20_000, retryCount: 0 } },
+    modelPolicy: ["test/model-a"], idempotencyKey: "encore-command-1",
+  };
 
   it("spawns all repository-rooted reviewers before prompting and waits for terminal judgments", async () => {
     const kernel = fakeKernel([
@@ -127,11 +133,12 @@ describe("Encore Council execution", () => {
       criteria,
       evidenceIds: [evidenceId],
       reviewerCount: 2,
+      admission: (index) => ({ ...admission, idempotencyKey: `${admission.idempotencyKey}:${index}` }),
     });
 
     expect(kernel.spawn).toHaveBeenCalledTimes(2);
-    for (const [request] of kernel.spawn.mock.calls) {
-      expect(request).toMatchObject({ cwd: process.cwd() });
+    for (const [index, [request]] of kernel.spawn.mock.calls.entries()) {
+      expect(request).toMatchObject({ cwd: process.cwd(), context: admission.context, grant: admission.grant, modelPolicy: admission.modelPolicy, idempotencyKey: `${admission.idempotencyKey}:${index}` });
       expect(request.prompt).toBeUndefined();
     }
     expect(kernel.prompt).toHaveBeenCalledTimes(2);

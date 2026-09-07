@@ -145,7 +145,7 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
     const plan = await createDepartmentPlan(pool, { councilId: resolved.councilId, departmentId: "product", substance: planSubstance }, proof, headContext("product"));
     const bundleSubstance: MissionBundleSubstance = {
       role: "execution", profileRef: "profile-1", goalBrief: "implement",
-      approvedModels: ["model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
+      approvedModels: ["test/model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
       environment: ["node24"], authorityBoundary: ["write-scoped"], externalServiceBoundary: ["none"], dataBoundary: ["repository files only"],
       costCeiling: "5 USD", timeCeiling: "1 hour", retryCeiling: 1, workerCeiling: 0,
       deliverable: "a change", evidenceRequirements: ["diff"], validationCriteria: ["tests pass"], terminationConditions: ["deadline passed"],
@@ -185,7 +185,7 @@ describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Test
     const bearerToken = `${credentialId}.${secret}`;
     const controlPlane = createControlPlane({
       databaseUrl: databaseUrl!, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0,
-      primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `read-state-parity-${randomUUID()}`,
+      actorId: "maestro-control-plane", leaseOwnerId: `read-state-parity-${randomUUID()}`,
       reconcilerLeaseDurationMs: 30_000,
     });
     await controlPlane.listen();

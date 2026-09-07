@@ -15,8 +15,7 @@ describe("parseConfig", () => {
       worktreeRoot: required.MAESTRO_WORKTREE_ROOT,
       host: "127.0.0.1",
       port: 4310,
-      primeAgentVersion: "0.8.0",
-      actorId: "maestro-control-plane",
+            actorId: "maestro-control-plane",
       leaseOwnerId: "local-control-plane",
       reconcilerLeaseDurationMs: 30_000,
       shutdownDrainTimeoutMs: 5_000,
@@ -115,7 +114,7 @@ describe("parseConfig", () => {
     // never leak into the returned config, regardless of its value.
     expect(withCredentials).toEqual(withoutCredentials);
     expect(Object.keys(withCredentials).sort()).toEqual([
-      "actorId", "databaseUrl", "evidenceDir", "host", "leaseOwnerId", "modelAccountRefs", "modelGatewayOperatorId", "modelGatewayUrl", "port", "primeAgentVersion", "reconcilerLeaseDurationMs", "shutdownDrainTimeoutMs", "worktreeRoot",
+      "actorId", "databaseUrl", "evidenceDir", "host", "leaseOwnerId", "modelAccountRefs", "modelGatewayOperatorId", "modelGatewayUrl", "port", "reconcilerLeaseDurationMs", "shutdownDrainTimeoutMs", "worktreeRoot",
     ]);
     const serialized = JSON.stringify(withCredentials);
     for (const secret of Object.values(providerCredentialMetronomes)) {

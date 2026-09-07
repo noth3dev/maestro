@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type {
+  ExecutionAdmission,
   ExecutionKernelPort,
   InvocationAnswer,
   InvocationObservation,
@@ -94,6 +95,12 @@ describe("semantic review execution", () => {
     citedEvidenceIds: ["evidence-1"],
     reasoning: "durable evidence matches",
   });
+  const admission: ExecutionAdmission = {
+    context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "review", policyVersion: "1" },
+    grant: { grantId: "grant-review", allowedTools: [], allowedSkills: [], modelPolicy: ["test/model-a"], pathScope: [], outboundDataClasses: ["public"], remaining: { modelTurns: 2, toolCalls: 0, childCalls: 0, outputTokens: 1024, wallTimeMs: 10_000, retryCount: 0 } },
+    modelPolicy: ["test/model-a"],
+    idempotencyKey: "review-command-1",
+  };
 
   it("creates a repository-rooted execution, prompts it after spawn, and waits for a terminal answer", async () => {
     const kernel = fakeKernel([
@@ -101,12 +108,16 @@ describe("semantic review execution", () => {
       observation("succeeded", { state: "available", text: supported }),
     ]);
 
-    const review = await requestSemanticReview(fakePool(), kernel, "goal-1", "the claim", criteria);
+    const review = await requestSemanticReview(fakePool(), kernel, "goal-1", "the claim", criteria, admission);
 
-    expect(kernel.spawn).toHaveBeenCalledWith({
+    expect(kernel.spawn).toHaveBeenCalledWith(expect.objectContaining({
       name: expect.stringMatching(/^semantic-review:/),
       cwd: process.cwd(),
-    });
+      context: admission.context,
+      grant: admission.grant,
+      modelPolicy: admission.modelPolicy,
+      idempotencyKey: admission.idempotencyKey,
+    }));
     expect(kernel.spawn.mock.calls[0]![0].prompt).toBeUndefined();
     expect(kernel.prompt).toHaveBeenCalledWith(execution, expect.stringContaining("the claim"));
     expect(kernel.calls.indexOf("spawn")).toBeLessThan(kernel.calls.indexOf("prompt"));

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance, type TeamLeadGrantSubstance } from "@maestro/domain";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionAdmission, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance, type TeamLeadGrantSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease, StaleGoalLeaseError } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
@@ -49,13 +49,14 @@ const grantSubstance = (overrides: Partial<TeamLeadGrantSubstance> = {}): TeamLe
   ...overrides,
 });
 
-function fakeKernel(): ExecutionKernelPort {
+function fakeKernel(): ExecutionKernelPort & { spawn: ReturnType<typeof vi.fn> } {
   let counter = 0;
+  const spawn = vi.fn(async () => {
+    counter += 1;
+    return { execution: `exec-${counter}` as never, invocation: `inv-${counter}` as never };
+  });
   return {
-    async spawn() {
-      counter += 1;
-      return { execution: `exec-${counter}` as never, invocation: `inv-${counter}` as never };
-    },
+    spawn,
     async prompt() {}, async sendMessage() {},
     async observe() { return []; },
     async cancel() { return { cancelled: true }; },
@@ -117,6 +118,26 @@ describeDatabase("Team-lead grants and helper workers with PostgreSQL", () => {
     expect(helper1.itemId).toBe(worker.itemId);
     expect(helper2.attempt).not.toBe(helper1.attempt);
     await expect(spawnHelperWorker(pool, kernel, grant.grantId, proof, headContext("product"))).rejects.toBeInstanceOf(TeamLeadGrantError);
+  });
+
+  it("passes an explicit parent-scoped native admission and child prompt to helper spawn", async () => {
+    const { proof, worker, kernel } = await setupWorker();
+    const grant = await grantTeamLead(pool, worker.workerId, grantSubstance({ maxHelpers: 1 }), proof, headContext("product"));
+    const admission: ExecutionAdmission = {
+      context: { operatorId: "head:product", projectId: "project", goalId: proof.goalId, missionBundleId: worker.bundleContentHash, policyVersion: "1", fencingToken: proof.fencingToken },
+      grant: { grantId: "helper-grant", parentGrantId: `worker:${worker.workerId}`, allowedTools: ["write"], allowedSkills: ["implementation"], modelPolicy: ["test/model-a"], pathScope: ["packages/product"], outboundDataClasses: ["repository files only"], remaining: { modelTurns: 8, toolCalls: 8, childCalls: 0, outputTokens: 8192, wallTimeMs: 60_000, retryCount: 0 } },
+      modelPolicy: ["test/model-a"],
+      idempotencyKey: "helper-command-1",
+    };
+    await spawnHelperWorker(pool, kernel, grant.grantId, proof, headContext("product"), admission);
+    expect(kernel.spawn).toHaveBeenCalledWith(expect.objectContaining({
+      parent: worker.executionRef,
+      prompt: grantSubstance().taskScope,
+      context: admission.context,
+      grant: admission.grant,
+      modelPolicy: admission.modelPolicy,
+      idempotencyKey: admission.idempotencyKey,
+    }));
   });
 
   it("records helper ownership before provider spawn and returns the durable owner binding", async () => {

@@ -66,6 +66,14 @@ export interface SpawnRequest {
   idempotencyKey?: string;
 }
 
+/** Host-created native admission fields passed unchanged into an ExecutionKernelPort. */
+export interface ExecutionAdmission {
+  readonly context: InvocationContext;
+  readonly grant: CapabilityGrant;
+  readonly modelPolicy: readonly string[];
+  readonly idempotencyKey: string;
+}
+
 export interface SpawnedInvocation {
   execution: ExecutionRef;
   invocation: InvocationRef;
