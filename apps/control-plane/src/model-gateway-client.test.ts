@@ -12,7 +12,7 @@ const model: ModelCatalogEntry = {
 describe("Control Plane model gateway client", () => {
   it("sends only the authenticated narrow gateway request and normalizes model sets", async () => {
     const fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-      expect(String(input)).toBe("http://127.0.0.1:4321/v1/models?operatorId=operator-1");
+      expect(String(input)).toBe("http://127.0.0.1:4321/v1/models");
       expect(init?.headers).toMatchObject({ authorization: "Bearer gateway-secret" });
       return response([{ ...model, capabilities: ["text"] }]);
     };

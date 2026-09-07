@@ -41,4 +41,10 @@ describe("Maestro TUI shell", () => {
     const header = renderStatusHeader(state, 120, 30);
     expect(header.some((line) => line.includes("⢀⡀"))).toBe(true);
   });
+
+  it("centers the artwork vertically beside the getting-started copy", () => {
+    const header = renderStatusHeader(state, 120, 30);
+    expect(header.findIndex((line) => line.includes("Tips for getting started"))).toBe(3);
+    expect(header.findIndex((line) => line.includes("⢀⡀"))).toBeGreaterThan(3);
+  });
 });

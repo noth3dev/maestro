@@ -22,6 +22,12 @@ describe("TUI command parser", () => {
   it("exposes slash parsing without executing the command", () => {
     expect(parseSlashCommand("/goals list")).toEqual({ kind: "command", name: "goals", action: "list", options: {} });
   });
+
+  it("defaults read-only collection shortcuts to list", () => {
+    expect(parseSlashCommand("/goals")).toEqual({ kind: "command", name: "goals", action: "list", options: {} });
+    expect(parseSlashCommand("/model")).toEqual({ kind: "command", name: "model", action: "list", options: {} });
+    expect(parseSlashCommand("/events")).toEqual({ kind: "command", name: "events", action: "list", options: {} });
+  });
   it("parses Flashmob mode shortcuts", () => {
     expect(parseSlashCommand("/flashmob")).toEqual({ kind: "command", name: "flashmob", options: {} });
     expect(parseSlashCommand("/mode flashmob")).toEqual({ kind: "command", name: "mode", action: "flashmob", options: {} });

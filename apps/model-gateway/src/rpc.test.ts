@@ -21,8 +21,8 @@ async function server() {
   const account = await credentials.bind({ operatorId: "operator-1", providerId: "fake", authMode: "api-key", accountRef: "account-1" }, "secret");
   const registry = new ProviderRegistry();
   registry.register(fakePlugin());
-  const gateway = createModelGateway({ registry, credentials, instanceId: "gateway-1" });
-  const app = buildModelGatewayServer({ gateway, token: "gateway-secret" });
+  const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1" });
+  const app = buildModelGatewayServer({ gateway, token: "gateway-secret", operatorId: "operator-1" });
   return { app, account };
 }
 
@@ -34,6 +34,17 @@ describe("model gateway RPC", () => {
     const allowed = await app.inject({ method: "GET", url: "/v1/models", headers: { authorization: "Bearer gateway-secret" } });
     expect(allowed.statusCode).toBe(200);
     expect(allowed.json()).toEqual([{ identity: { provider: "fake", id: "model-a" }, authModes: ["api-key"], capabilities: ["text"], dataPolicy: { allowedDataClasses: ["public"], retention: "none", trainsOnCustomerData: false, regions: ["us"] } }]);
+  });
+
+  it("binds and revokes credentials through the authenticated gateway boundary", async () => {
+    const { app } = await server();
+    const headers = { authorization: "Bearer gateway-secret" };
+    const bind = await app.inject({ method: "POST", url: "/v1/credentials/bind", headers, payload: { requestId: "bind-1", operatorId: "operator-1", providerId: "fake", authMode: "api-key", secret: "new-secret" } });
+    // The narrow RPC schema intentionally exposes only the production API-key providers.
+    expect(bind.statusCode).toBe(400);
+    const spoof = await app.inject({ method: "POST", url: "/v1/credentials/bind", headers, payload: { requestId: "bind-2", operatorId: "operator-2", providerId: "openai", authMode: "api-key", secret: "new-secret" } });
+    expect(spoof.statusCode).toBe(403);
+    expect(spoof.body).not.toContain("new-secret");
   });
 
   it("admits and turns without accepting credentials or authority fields", async () => {

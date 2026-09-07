@@ -4,8 +4,10 @@ import {
   Container,
   Editor,
   ProcessTerminal,
+  ScrollView,
   Text,
   TuiAltScreen,
+  VStack,
   matchesKey,
   type EditorTheme,
 } from "@earendil-works/pi-tui";
@@ -14,6 +16,7 @@ import { createTuiRuntime } from "./runtime.js";
 import { resolveWorkspace, type Workspace } from "./workspace.js";
 import { resolveConnection } from "./connection.js";
 import { ensureLocalControlPlane } from "./local-control-plane.js";
+import { resolveLocalConnection } from "./local-bootstrap.js";
 import { createCommandRegistry } from "./commands/registry.js";
 import { createCommandPalette } from "./commands/palette.js";
 import { parseInput } from "./commands/parser.js";
@@ -70,27 +73,60 @@ class MaestroEditor extends Editor {
   }
 }
 
+class SecretEditor extends MaestroEditor {
+  hidden = false;
+
+  override render(width: number): string[] {
+    const lines = super.render(width);
+    if (!this.hidden) return lines;
+    // Keep the editor frame and ANSI control sequences intact while replacing
+    // only the content rows. The raw key remains in Editor state only until
+    // submit and is never added to the normal prompt history.
+    return lines.map((line, index) => index === 0 || index === lines.length - 1 ? line : maskVisibleText(line));
+  }
+}
+
+function maskVisibleText(line: string): string {
+  let masked = "";
+  for (let index = 0; index < line.length;) {
+    if (line[index] !== "\u001b") {
+      const codePoint = line.codePointAt(index)!;
+      masked += "•";
+      index += codePoint > 0xffff ? 2 : 1;
+      continue;
+    }
+    const start = index;
+    index += 1;
+    if (line[index] === "[" || line[index] === "]" || line[index] === "_") {
+      index += 1;
+      if (line[start + 1] === "[") {
+        while (index < line.length && (line.charCodeAt(index) < 0x40 || line.charCodeAt(index) > 0x7e)) index += 1;
+        if (index < line.length) index += 1;
+      } else {
+        while (index < line.length && line[index] !== "\u0007") index += 1;
+        if (index < line.length) index += 1;
+      }
+    } else if (index < line.length) index += 1;
+    masked += line.slice(start, index);
+  }
+  return masked;
+}
+
 /** Keeps the conversation area pinned above the input dock and footer. */
 class FullHeightText {
   private readonly text = new Text("", 0, 0);
   private contentRenderer: () => string = () => "";
-
-  constructor(
-    private readonly terminal: { readonly rows: number },
-    private readonly reservedRows: (width: number) => number,
-  ) {}
 
   setContentRenderer(renderer: () => string): void {
     this.contentRenderer = renderer;
   }
 
   render(width: number): string[] {
-    // Rebuild on every render so a terminal resize can switch between the
-    // compact and wide layouts without waiting for another user action.
+    // FullscreenViewport owns the available height and scroll position. Do
+    // not pad this component: padding would create fake transcript rows and
+    // make the viewport follow blank space instead of the latest message.
     this.text.setText(this.contentRenderer());
-    const lines = this.text.render(width);
-    const targetRows = Math.max(lines.length, this.terminal.rows - this.reservedRows(width));
-    return [...lines, ...Array.from({ length: targetRows - lines.length }, () => " ".repeat(width))];
+    return this.text.render(width);
   }
 
   invalidate(): void {
@@ -116,6 +152,12 @@ class FramedComposer {
   }
 }
 
+function shouldAutoBootstrapLocal(env: Record<string, string | undefined>): boolean {
+  return (env.MAESTRO_API_URL?.trim() ?? "") === ""
+    && (env.MAESTRO_API_TOKEN?.trim() ?? "") === ""
+    && env.MAESTRO_DISABLE_LOCAL_AUTOSTART !== "true";
+}
+
 export async function startInteractiveTui(options: InteractiveTuiOptions): Promise<number> {
   let workspace: Workspace;
   let startupError: string | undefined;
@@ -125,7 +167,13 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     workspace = { cwd: options.cwd };
     startupError = error instanceof Error ? error.message : "Workspace could not be resolved";
   }
-  const connection = await resolveConnection(options.env);
+  let connection = await resolveConnection(options.env);
+  if (connection.kind !== "configured" && shouldAutoBootstrapLocal(options.env)) {
+    connection = await resolveLocalConnection({
+      env: options.env,
+      ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }),
+    });
+  }
   const controlPlane =
     connection.kind === "configured"
       ? await ensureLocalControlPlane({ apiUrl: connection.apiUrl, ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }) })
@@ -142,15 +190,16 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         token: connection.token,
         ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }),
       });
-      if (project.kind !== "attached") {
-        const discovered = await discoverWorkspaceProjectFromControlPlane({ workspacePath: workspace.cwd, session, client });
-        project = discovered;
-        if (discovered.kind === "attached") {
+      const previousProject = project;
+      const discovered = await discoverWorkspaceProjectFromControlPlane({ workspacePath: workspace.cwd, session, client });
+      project = discovered;
+      if (discovered.kind === "attached") {
+        if (previousProject.kind !== "attached" || previousProject.projectId !== discovered.projectId) {
           session = attachWorkspaceSession(workspace.cwd, session, discovered.projectId);
           await saveWorkspaceSession(session);
-        } else {
-          projectDiscoveryNotice = discovered.reason;
         }
+      } else {
+        projectDiscoveryNotice = discovered.reason;
       }
     } catch {
       // The resolver already validates the endpoint. Keep the UI truthful if
@@ -182,8 +231,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
   return await new Promise<number>((resolve) => {
     const terminal = new ProcessTerminal();
     const tui = new TuiAltScreen(terminal, true);
-    const root = new Container();
-    const editor = new MaestroEditor(tui, editorTheme, { paddingX: 2, autocompleteMaxVisible: 6 });
+    const editor = new SecretEditor(tui, editorTheme, { paddingX: 2, autocompleteMaxVisible: 6 });
     const inputPanel = new Box(1, 0, tuiTheme.inputSurface);
     inputPanel.addChild(
       new Text(`${tuiTheme.muted("message to Concertmaster")} ${tuiTheme.border("·")} ${tuiTheme.dim("Enter to send")}`, 0, 0),
@@ -191,7 +239,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     inputPanel.addChild(editor);
     const composer = new FramedComposer(inputPanel);
     const footer = new Text("", 0, 0);
-    const header = new FullHeightText(terminal, (width) => composer.render(width).length + footer.render(width).length);
+    const header = new FullHeightText();
     const registry = createCommandRegistry();
     editor.setAutocompleteProvider(
       new CombinedAutocompleteProvider(
@@ -206,6 +254,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let activityStarted = false;
     let activityController: AbortController | undefined;
     let conversationTurnController: AbortController | undefined;
+    let pendingProviderLogin: "openai" | "anthropic" | undefined;
     const syncModelState = (): void => {
       const model = options.env.MAESTRO_MODEL?.trim() || session?.model;
       if (model === undefined) delete state.model;
@@ -220,7 +269,6 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     });
     const render = () => {
       footer.setText(renderTuiFooter(terminal.columns));
-      root.invalidate();
       tui.requestRender(true);
     };
     const append = (line: string) => {
@@ -337,9 +385,21 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         }
       }
       if (connection.kind !== "configured") {
-        state.connection = { kind: "setup-required", message: connection.reason };
-        append(`Startup retry blocked: ${connection.reason}`);
-        return;
+        if (shouldAutoBootstrapLocal(options.env)) {
+          connection = await resolveLocalConnection({
+            env: options.env,
+            ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }),
+          });
+          if (connection.kind !== "configured") {
+            state.connection = { kind: "setup-required", message: connection.reason };
+            append(`Startup retry blocked: ${connection.reason}`);
+            return;
+          }
+        } else {
+          state.connection = { kind: "setup-required", message: connection.reason };
+          append(`Startup retry blocked: ${connection.reason}`);
+          return;
+        }
       }
       const health = await ensureLocalControlPlane({
         apiUrl: connection.apiUrl,
@@ -358,16 +418,17 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         });
         project = discoverWorkspaceProject(workspace.cwd, session);
         projectDiscoveryNotice = undefined;
-        if (project.kind !== "attached") {
-          const discovered = await discoverWorkspaceProjectFromControlPlane({ workspacePath: workspace.cwd, session, client });
-          project = discovered;
-          if (discovered.kind === "attached") {
+        const previousProject = project;
+        const discovered = await discoverWorkspaceProjectFromControlPlane({ workspacePath: workspace.cwd, session, client });
+        project = discovered;
+        if (discovered.kind === "attached") {
+          if (previousProject.kind !== "attached" || previousProject.projectId !== discovered.projectId) {
             session = attachWorkspaceSession(workspace.cwd, session, discovered.projectId);
             syncModelState();
             await saveWorkspaceSession(session);
-          } else {
-            projectDiscoveryNotice = discovered.reason;
           }
+        } else {
+          projectDiscoveryNotice = discovered.reason;
         }
         state.connection = { kind: "connected" };
         recovery = reconcileTuiSession(workspace.cwd, session);
@@ -382,9 +443,44 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       }
     };
     const submit = async (text: string) => {
+      if (pendingProviderLogin !== undefined) {
+        const providerId = pendingProviderLogin;
+        pendingProviderLogin = undefined;
+        editor.hidden = false;
+        editor.setText("");
+        if (client === undefined) {
+          append("Provider login is unavailable until the Control Plane is connected.");
+          return;
+        }
+        try {
+          await client.loginProvider({ providerId, authMode: "api-key", secret: text });
+          append(`Provider login complete: ${providerId} API key stored by the model gateway.`);
+        } catch (error) {
+          append(`Provider login failed: ${error instanceof Error ? error.message : "request failed"}`);
+        }
+        return;
+      }
       try {
         const parsed = parseInput(text);
-        if (parsed.kind === "command" && parsed.name === "flashmob" && (parsed.action === undefined || parsed.action === "toggle")) {
+        if (parsed.kind === "command" && parsed.name === "help") {
+          append(`Commands: ${createCommandPalette().map((item) => `${item.label} [${item.description}]`).join(" · ")}`);
+        } else if (parsed.kind === "command" && parsed.name === "login" && (parsed.action === "openai" || parsed.action === "anthropic")) {
+          if (client === undefined) {
+            append("Provider login is unavailable until the Control Plane is connected.");
+          } else {
+            pendingProviderLogin = parsed.action;
+            editor.hidden = true;
+            editor.setText("");
+            append(`Enter the ${parsed.action} API key and press Enter. Input is hidden and never saved to session history.`);
+            render();
+          }
+        } else if (parsed.kind === "command" && parsed.name === "logout" && (parsed.action === "openai" || parsed.action === "anthropic")) {
+          if (client === undefined) append("Provider logout is unavailable until the Control Plane is connected.");
+          else {
+            await client.logoutProvider(parsed.action);
+            append(`Provider credential revoked: ${parsed.action}.`);
+          }
+        } else if (parsed.kind === "command" && parsed.name === "flashmob" && (parsed.action === undefined || parsed.action === "toggle")) {
           await animateFlashmobMode(!flashmobMode);
         } else if (parsed.kind === "command" && parsed.name === "mode" && (parsed.action === undefined || parsed.action === "list")) {
           append(`Mode: ${flashmobMode ? "flashmob" : "maestro"} · use /mode flashmob, /mode maestro, or /flashmob to toggle`);
@@ -480,7 +576,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             );
             append(`${readResult.title}: ${readResult.lines.join(" · ")}`);
           }
-        } else if (parsed.kind === "command" && (parsed.name === "models" || parsed.name === "model") && parsed.action === "list") {
+        } else if (parsed.kind === "command" && (parsed.name === "models" || parsed.name === "model") && (parsed.action === undefined || parsed.action === "list")) {
           if (client === undefined) append("Model catalog unavailable until the Control Plane is connected.");
           else {
             const models = await client.listModels();
@@ -535,7 +631,12 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             append(`${writeResult.title}: ${writeResult.lines.join(" · ")}`);
             void refreshDashboard();
           } else {
-            append(`Command: /${parsed.name}${parsed.action === undefined ? "" : ` ${parsed.action}`} (unknown command)`);
+            const definition = registry.find(parsed.name);
+            append(
+              definition === undefined
+                ? `Unknown command: /${parsed.name}. Use /help for available commands.`
+                : `Command /${parsed.name} requires an action: ${definition.actions.map((item) => item.name).join(", ")}`,
+            );
           }
         } else if (parsed.kind === "command") {
           append(
@@ -604,10 +705,14 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     editor.onSubmit = (text) => {
       void submit(text);
     };
-    root.addChild(header);
-    root.addChild(composer);
-    root.addChild(footer);
-    tui.setLayoutRoot(root);
+    // The explicit alternate-screen layout gives the transcript a constrained,
+    // independently scrollable region and keeps the composer/footer pinned.
+    const transcriptView = new ScrollView(header, { follow: "end", primary: true, overscroll: "chain", scrollbar: "auto" });
+    const dock = new VStack([composer, footer]);
+    tui.setLayoutRoot(new VStack([
+      { component: transcriptView, basis: 0, grow: 1, minSize: 1 },
+      { component: dock, basis: "auto", shrink: 1, minSize: 1 },
+    ]));
     tui.setFocus(editor);
     render();
 

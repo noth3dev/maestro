@@ -32,6 +32,19 @@ describe("local operator auth CPU bounds", () => {
     release?.();
   });
 
+  it("queues a bounded authentication attempt until a scrypt slot is released", async () => {
+    const guard = new ScryptConcurrencyGuard(1);
+    const release = guard.tryAcquire();
+    const query = vi.fn(async () => ({ rows: [row] }));
+    const deriveVerifier = vi.fn(async () => Buffer.alloc(64));
+    const pool = { query } as never;
+    const pending = authenticateLocalOperator(pool, `${row.credential_id}.queued-secret`, { scryptGuard: guard, deriveVerifier });
+    await new Promise<void>((resolve) => setTimeout(resolve, 5));
+    release?.();
+    await expect(pending).resolves.toEqual({ outcome: "authenticated", operator: { operatorId: row.operator_id, credentialId: row.credential_id } });
+    expect(deriveVerifier).toHaveBeenCalledOnce();
+  });
+
   it("looks up the credential selector before deriving the verifier", async () => {
     const credentialId = row.credential_id;
     const query = vi.fn(async () => ({ rows: [{ ...row, credential_id: credentialId }] }));

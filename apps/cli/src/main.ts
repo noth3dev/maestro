@@ -4,12 +4,16 @@ import { fileURLToPath } from "node:url";
 import { realpathSync } from "node:fs";
 import { ApiError, createApiClient, type GoalEvent, type GoalResult } from "@maestro/api-client";
 import { startInteractiveTui } from "./tui/entry.js";
+import { resolveConnection } from "./tui/connection.js";
+import { resolveLocalConnection } from "./tui/local-bootstrap.js";
 import type { CertifyWorkerInput } from "@maestro/contracts";
 
 export interface CliIo {
   fetch?: typeof globalThis.fetch;
   stdout: (text: string) => void;
   stderr: (text: string) => void;
+  /** Reads a secret without echoing it; primarily supplied by tests or embedding hosts. */
+  readSecret?: (prompt: string) => Promise<string>;
   startTui?: (cwd: string, env: Env, io: CliIo) => Promise<number>;
 }
 
@@ -28,8 +32,9 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     return (io.startTui ?? ((cwd, environment, tuiIo) => startInteractiveTui({ cwd, env: environment, io: tuiIo })))(process.cwd(), env, io);
   }
   try {
-    const baseUrl = requireEnvironment(env, "MAESTRO_API_URL");
-    const token = requireEnvironment(env, "MAESTRO_API_TOKEN");
+    const connection = await resolveCliConnection(env, io.fetch);
+    const baseUrl = connection.apiUrl;
+    const token = connection.token;
     const parsed = parseArgs({
       args,
       allowPositionals: true,
@@ -84,7 +89,9 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       },
     });
     const client = createApiClient({ baseUrl, token, ...(io.fetch === undefined ? {} : { fetch: io.fetch }) });
-    const [resource, action] = parsed.positionals;
+    let [resource, action] = parsed.positionals;
+    if (resource === "model") resource = "models";
+    if (resource === "models" && action === undefined) action = "list";
     if (parsed.positionals.length > 2) throw new Error("Unexpected positional argument");
     const value = (name: keyof typeof parsed.values) => parsed.values[name];
     const string = (name: keyof typeof parsed.values) => requiredOption(value(name), `--${name}`);
@@ -128,6 +135,18 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       printState(io.stdout, result, json);
       return 0;
     }
+    if (resource === "login" && (action === "openai" || action === "anthropic")) {
+      const secret = await (io.readSecret ?? ((prompt) => readSecretFromStdin(io, prompt)))(`${action} API key`);
+      const result = await client.loginProvider({ providerId: action, authMode: "api-key", secret });
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "logout" && (action === "openai" || action === "anthropic")) {
+      await client.logoutProvider(action);
+      printState(io.stdout, { providerId: action, revoked: true }, json);
+      return 0;
+    }
+
     if (resource === "models" && action === "list") {
       const result = await client.listModels();
       printState(io.stdout, result, json);
@@ -379,7 +398,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       else printEvents(io.stdout, page.events, page.nextCursor);
       return 0;
     }
-    throw new Error("Usage: maestro models list|conversation create|get|turn|cancel|admin project-access|goals list|goal create|get|transition|pause|stop|resume|emergency-stop|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|observe|cancel|accept|certify|certify-conditional|git goal-branch|git department-branch|worker-worktree|goal-revision|metronome scan|challenge|encore review|critical-action request|approve-and-run|budget ... | maestro events list ...");
+    throw new Error("Usage: maestro login openai|anthropic|logout openai|anthropic|models list|conversation create|get|turn|cancel|admin project-access|goals list|goal create|get|transition|pause|stop|resume|emergency-stop|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|observe|cancel|accept|certify|certify-conditional|git goal-branch|git department-branch|worker-worktree|goal-revision|metronome scan|challenge|encore review|critical-action request|approve-and-run|budget ... | maestro events list ...");
   } catch (error) {
     const message = error instanceof ApiError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : "Command failed";
     io.stderr(`${message}\n`);
@@ -388,7 +407,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
 }
 
 function helpText(): string {
-  return `Maestro CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  admin project-access --operator-id --project-id --roles-json\n  goal create|get|transition|pause|stop|resume|emergency-stop\n  models list\n  conversation create|get|turn|cancel\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  git goal-branch|department-branch|worker-worktree|goal-revision\n  metronome scan|challenge\n  encore review\n  critical-action request|approve-and-run\n  events list\n\nUse --json for machine-readable output.\n`;
+  return `Maestro CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  login openai|anthropic   (reads API key without echoing it)\n  logout openai|anthropic\n  admin project-access --operator-id --project-id --roles-json\n  goal create|get|transition|pause|stop|resume|emergency-stop\n  models list (also: model list)\n  conversation create|get|turn|cancel\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  git goal-branch|department-branch|worker-worktree|goal-revision\n  metronome scan|challenge\n  encore review\n  critical-action request|approve-and-run\n  events list\n\nUse --json for machine-readable output.\n`;
 }
 
 function nonNegativeInteger(value: string, option: string): number {
@@ -407,10 +426,58 @@ function parseJsonOption<T extends object = Record<string, unknown>>(value: stri
   try { return JSON.parse(value); } catch { throw new Error(`${option} must contain valid JSON`); }
 }
 
-function requireEnvironment(env: Env, name: string): string {
-  const value = env[name];
-  if (!value) throw new Error(`${name} is required`);
-  return value;
+async function readSecretFromStdin(io: CliIo, prompt: string): Promise<string> {
+  io.stderr(`${prompt}: `);
+  const stdin = process.stdin;
+  if (!stdin.isTTY || stdin.setRawMode === undefined) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of stdin) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+    const secret = Buffer.concat(chunks).toString("utf8").split(/\r?\n/, 1)[0] ?? "";
+    if (secret.trim() === "") throw new Error("A non-empty provider API key is required");
+    return secret.trim();
+  }
+  return await new Promise<string>((resolve, reject) => {
+    let secret = "";
+    const cleanup = (): void => {
+      stdin.off("data", onData);
+      stdin.setRawMode?.(false);
+      stdin.pause();
+      io.stderr("\n");
+    };
+    const onData = (chunk: Buffer | string): void => {
+      for (const char of String(chunk)) {
+        if (char === "\u0003") { cleanup(); reject(new Error("Provider login cancelled")); return; }
+        if (char === "\r" || char === "\n") {
+          cleanup();
+          if (secret.trim() === "") reject(new Error("A non-empty provider API key is required"));
+          else resolve(secret.trim());
+          return;
+        }
+        if (char === "\u007f" || char === "\b") secret = secret.slice(0, -1);
+        else secret += char;
+      }
+    };
+    stdin.setEncoding("utf8");
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.on("data", onData);
+  });
+}
+
+async function resolveCliConnection(env: Env, fetch: typeof globalThis.fetch | undefined): Promise<{ apiUrl: string; token: string }> {
+  // Keep non-interactive commands explicit when a bearer token is supplied by
+  // hand. Bare interactive `maestro` is the path that owns local auto-setup.
+  if ((env.MAESTRO_API_URL?.trim() ?? "") === "" && (env.MAESTRO_API_TOKEN?.trim() ?? "") !== "") {
+    throw new Error("MAESTRO_API_URL is required");
+  }
+  const direct = await resolveConnection(env);
+  if (direct.kind === "configured") return direct;
+  if ((env.MAESTRO_API_URL?.trim() ?? "") !== "" || (env.MAESTRO_API_TOKEN?.trim() ?? "") !== "" || env.MAESTRO_DISABLE_LOCAL_AUTOSTART === "true") {
+    throw new Error(direct.reason);
+  }
+  const local = await resolveLocalConnection({ env, ...(fetch === undefined ? {} : { fetch }) });
+  if (local.kind !== "configured") throw new Error(local.reason);
+  return local;
 }
 
 function requiredOption(value: string | boolean | undefined, name: string): string {

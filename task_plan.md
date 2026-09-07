@@ -1002,4 +1002,5 @@ worker-device link and pause state against that concrete case rather than a hypo
 - [completed] Compose Control Plane with the separate model gateway when `MAESTRO_MODEL_GATEWAY_TOKEN` is configured.
 - [completed] Connect CLI commands and TUI free-text turns using `MAESTRO_MODEL` and non-secret session metadata.
 - [completed] Verify full build/test suite and gateway process health smoke.
-- [remaining] Add provider token streaming, durable restart reattachment/recovery, tool registry persistence, Codex app-server pairing, PostgreSQL integration acceptance, and remove legacy Prime composition after parity.
+- [completed] Add the first API-key credential lifecycle slice for OpenAI/Anthropic: strict contracts, hidden TUI/TTY input, authenticated Control Plane routes, gateway bind/revoke RPC, operator checks, replacement invalidation, and gateway-owned keychain persistence.
+- [remaining] Add provider token streaming, durable restart reattachment/recovery, tool registry persistence, Codex app-server pairing, PostgreSQL integration acceptance, dynamic signed gateway operator context, and remove legacy Prime composition after parity.

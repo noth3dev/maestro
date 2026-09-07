@@ -15,7 +15,8 @@
     "fastify": "^5.0.0",
     "zod": "^4.0.0",
     "@maestro/model-provider-openai": "*",
-    "@maestro/model-provider-anthropic": "*"
+    "@maestro/model-provider-anthropic": "*",
+    "@napi-rs/keyring": "^2.0.0"
   },
   "scripts": {
     "start": "node ./dist/main.js"

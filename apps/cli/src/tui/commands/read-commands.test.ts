@@ -41,10 +41,15 @@ describe("workspace read commands", () => {
     expect(many).toEqual({ kind: "unavailable", reason: "Multiple projects are available; choose one with /session attach --project-index=<1-2>" });
   });
 
-  it("keeps an existing workspace attachment without making a discovery request", async () => {
-    const listProjects = vi.fn();
+  it("keeps an existing workspace attachment when it is still visible", async () => {
+    const listProjects = vi.fn().mockResolvedValue({ projects: [projectId] });
     await expect(discoverWorkspaceProjectFromControlPlane({ workspacePath: "/work/acme", session: { workspacePath: "/work/acme", projectId }, client: { listProjects } })).resolves.toEqual({ kind: "attached", projectId });
-    expect(listProjects).not.toHaveBeenCalled();
+    expect(listProjects).toHaveBeenCalledOnce();
+  });
+
+  it("drops a stale workspace attachment before dashboard reads", async () => {
+    const listProjects = vi.fn().mockResolvedValue({ projects: ["55555555-5555-4555-8555-555555555555"] });
+    await expect(discoverWorkspaceProjectFromControlPlane({ workspacePath: "/work/acme", session: { workspacePath: "/work/acme", projectId }, client: { listProjects } })).resolves.toEqual({ kind: "attached", projectId: "55555555-5555-4555-8555-555555555555" });
   });
 
   it("uses the selected session Goal for a Goal-scoped read when no ID is supplied", async () => {

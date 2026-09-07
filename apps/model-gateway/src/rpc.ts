@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
-import type { GatewayAdmissionRequest, GatewayBinding, GatewayTurnRequest, ModelGatewayPort, ModelMessage, ModelStreamEvent, ModelToolDefinition, TurnLimits } from "@maestro/agent-runtime";
+import type { GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialRevokeRequest, GatewayTurnRequest, ModelGatewayPort, ModelMessage, ModelStreamEvent, ModelToolDefinition, TurnLimits } from "@maestro/agent-runtime";
 
 const IdentitySchema = z.object({ provider: z.string().min(1).max(64), id: z.string().min(1).max(256) }).strict();
 const BindingSchema = z.object({
@@ -17,6 +17,12 @@ const LimitsSchema = z.object({
 }).strict();
 const AdmitSchema = z.object({
   requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.string().min(1).max(64), model: IdentitySchema, accountRef: z.string().min(1).max(256), dataPolicyHash: z.string().min(1).max(256),
+}).strict();
+const CredentialBindSchema = z.object({
+  requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.enum(["openai", "anthropic"]), authMode: z.literal("api-key"), secret: z.string().min(1).max(512),
+}).strict();
+const CredentialRevokeSchema = z.object({
+  requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.enum(["openai", "anthropic"]),
 }).strict();
 const TurnSchema = z.object({
   binding: BindingSchema, requestId: z.string().min(1).max(128), sessionId: z.string().min(1).max(128), turnId: z.string().min(1).max(128),
@@ -42,7 +48,7 @@ function errorCode(error: unknown): { status: number; code: string; message: str
   return { status: 400, code: "invalid_gateway_request", message: "model gateway request is invalid" };
 }
 
-export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; token: string; bodyLimit?: number }): FastifyInstance {
+export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; token: string; operatorId: string; bodyLimit?: number }): FastifyInstance {
   const app = Fastify({ bodyLimit: options.bodyLimit ?? 1_048_576 });
   const guard = async (request: { headers: Record<string, unknown> }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }): Promise<boolean> => {
     if (authorized(request, options.token)) return true;
@@ -54,15 +60,37 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
   app.get("/v1/models", async (request, reply) => {
     if (!(await guard(request, reply))) return;
     try {
-      const query = request.query as { operatorId?: string };
-      const models = await options.gateway.listModels({ operatorId: query.operatorId ?? "gateway-client" });
+      const models = await options.gateway.listModels({ operatorId: options.operatorId });
       return models.map((model) => ({ ...model, capabilities: [...model.capabilities] }));
     } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
   });
+  app.post("/v1/credentials/bind", async (request, reply) => {
+    if (!(await guard(request, reply))) return;
+    const parsed = CredentialBindSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: { code: "invalid_gateway_request", message: "invalid credential binding request" } });
+    if (parsed.data.operatorId !== options.operatorId) return reply.code(403).send({ error: { code: "gateway_auth_required", message: "gateway operator context is invalid" } });
+    try {
+      if (!options.gateway.bindCredential) throw new Error("credential binding is unavailable");
+      return await options.gateway.bindCredential(parsed.data as GatewayCredentialBindRequest);
+    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+  });
+  app.post("/v1/credentials/revoke", async (request, reply) => {
+    if (!(await guard(request, reply))) return;
+    const parsed = CredentialRevokeSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: { code: "invalid_gateway_request", message: "invalid credential revocation request" } });
+    if (parsed.data.operatorId !== options.operatorId) return reply.code(403).send({ error: { code: "gateway_auth_required", message: "gateway operator context is invalid" } });
+    try {
+      if (!options.gateway.revokeCredential) throw new Error("credential binding is unavailable");
+      await options.gateway.revokeCredential(parsed.data as GatewayCredentialRevokeRequest);
+      return { revoked: true };
+    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+  });
+
   app.post("/v1/admit", async (request, reply) => {
     if (!(await guard(request, reply))) return;
     const parsed = AdmitSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: { code: "invalid_gateway_request", message: "invalid model admission request" } });
+    if (parsed.data.operatorId !== options.operatorId) return reply.code(403).send({ error: { code: "gateway_auth_required", message: "gateway operator context is invalid" } });
     try { return await options.gateway.admit(parsed.data as GatewayAdmissionRequest); }
     catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
   });

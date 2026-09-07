@@ -637,3 +637,12 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - **Critical:** Child-agent behavior, capability narrowing, budget/depth ceilings, cancellation cascade, and durable parent/child bindings were not executable contracts. Existing child behavior is Prime-specific at `packages/prime-adapter/src/execution-kernel.ts:156-167,235-244`.
 - **Critical:** Model authorization is incomplete beyond workers. `approvedModels` is not canonical/provider-qualified; workers omit it at `packages/persistence/src/worker.ts:209-216`; Head, semantic-review, and Encore paths also need policy propagation. Worker schema/API mapping lacks actual provider/model identity (`migrations/0024_workers.sql:7-24`, `apps/control-plane/src/worker-service.ts:30-36`).
 - **High:** Result-only provider calls cannot satisfy streaming/observation acceptance; add bounded event sink and durable cursor. Also define per-session serialization, provider request-ID namespacing, and A1 unknown/fenced recovery before implementation.
+
+
+## 2026-09-07 — API-key login and TUI layout implementation findings
+
+- **Resolved:** `/model` was parsed as a command with no action in the stale compiled CLI artifact. Source and rebuilt `apps/cli/dist` now normalize it to `model list`; users must restart an already-running TUI process after rebuilding.
+- **Resolved:** the logo was visually top-heavy beside the getting-started text. One leading blank artwork row and two trailing rows now center the fixed ten-row mark beside the thirteen-row copy.
+- **Boundary:** provider API keys travel only from hidden TUI/TTY input to the authenticated Control Plane, then across the narrow authenticated gateway RPC. The gateway persists the encrypted/native keychain envelope and exposes only binding metadata. No API key is accepted as a command-line option.
+- **Boundary:** the gateway rejects credential bind/admit requests whose operator context does not match its configured local operator. Multi-operator dynamic gateway context and signed service assertions remain future work; local bootstrap aligns fresh local operators to `local-operator`.
+- **Open acceptance:** the keychain backend and live provider calls still need a host with an available OS keychain, configured gateway token, provider key, and real PostgreSQL process test.

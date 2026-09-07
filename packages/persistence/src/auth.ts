@@ -44,19 +44,44 @@ export class ActiveCredentialLimitError extends Error {
 
 export class ScryptConcurrencyGuard {
   private active = 0;
+  private readonly waiters: Array<{ resolve: (release: (() => void) | undefined) => void; timer: ReturnType<typeof setTimeout> }> = [];
 
-  constructor(private readonly limit = SCRYPT_CONCURRENCY_LIMIT) {}
+  constructor(private readonly limit = SCRYPT_CONCURRENCY_LIMIT, private readonly pendingLimit = 8) {}
 
   tryAcquire(): (() => void) | undefined {
     if (this.active >= this.limit) return undefined;
     this.active += 1;
     let released = false;
     return () => {
-      if (!released) {
-        released = true;
-        this.active -= 1;
-      }
+      if (released) return;
+      released = true;
+      this.active -= 1;
+      this.drain();
     };
+  }
+
+  /** Wait briefly for a bounded slot so normal concurrent UI reads do not fail spuriously. */
+  acquire(timeoutMs = 500): Promise<(() => void) | undefined> {
+    const immediate = this.tryAcquire();
+    if (immediate !== undefined) return Promise.resolve(immediate);
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || this.waiters.length >= this.pendingLimit) return Promise.resolve(undefined);
+    return new Promise((resolve) => {
+      const waiter = { resolve, timer: setTimeout(() => {
+        const index = this.waiters.indexOf(waiter);
+        if (index >= 0) this.waiters.splice(index, 1);
+        resolve(undefined);
+      }, timeoutMs) };
+      this.waiters.push(waiter);
+    });
+  }
+
+  private drain(): void {
+    while (this.active < this.limit && this.waiters.length > 0) {
+      const waiter = this.waiters.shift()!;
+      clearTimeout(waiter.timer);
+      const release = this.tryAcquire();
+      waiter.resolve(release);
+    }
   }
 }
 
@@ -164,7 +189,7 @@ export async function authenticateLocalOperator(
   const row = result.rows[0];
   if (!row) return { outcome: "invalid" };
 
-  const release = (options.scryptGuard ?? processScryptGuard).tryAcquire();
+  const release = await (options.scryptGuard ?? processScryptGuard).acquire();
   if (!release) return { outcome: "unavailable" };
   try {
     const verifier = await (options.deriveVerifier ?? deriveVerifier)(secret, row.salt);

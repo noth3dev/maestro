@@ -117,7 +117,9 @@ function wideStatusRows(state: TuiShellState, width: number): string[] {
   // breathing room, not to the logo's source whitespace.
   // Rows 6–7 are the omitted decorative upper flourish; row 8 is the first real
   // contour and must stay visible.
-  const logo = [...MAESTRO_LOGO.slice(8, 18), ...Array.from({ length: 3 }, () => " ".repeat(50))];
+  // The side copy has 13 rows while the artwork has 10. Keep one quiet row
+  // above and two below so the mark is vertically centered beside the copy.
+  const logo = [" ".repeat(50), ...MAESTRO_LOGO.slice(8, 18), ...Array.from({ length: 2 }, () => " ".repeat(50))];
   const budget =
     state.budget.kind === "value"
       ? `${state.budget.value.spentCents}/${state.budget.value.ceilingCents} cents`

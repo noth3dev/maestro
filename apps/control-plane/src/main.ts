@@ -130,6 +130,12 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     authenticator,
     eventService: { listEvents: (projectId, after) => listGoalEvents(pool, { projectId, after }) },
     ...(conversationService === undefined ? {} : { conversationService }),
+    ...(modelGateway === undefined || modelGateway.bindCredential === undefined || modelGateway.revokeCredential === undefined ? {} : {
+      providerCredentials: {
+        bind: (input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic"; authMode: "api-key"; secret: string }) => modelGateway.bindCredential!(input),
+        revoke: (input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic" }) => modelGateway.revokeCredential!(input),
+      },
+    }),
     criticalActionService,
     readStateService: createReadStateService(pool),
     taskContractService: createDurableTaskContractService(pool),

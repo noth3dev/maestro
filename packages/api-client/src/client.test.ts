@@ -14,6 +14,18 @@ describe("createApiClient", () => {
     expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/projects", expect.objectContaining({ headers: { authorization: "Bearer top-secret" } }));
   });
 
+  it("logs in and revokes provider credentials without exposing the bearer token", async () => {
+    const binding = { bindingId: "credential-1", providerId: "openai", authMode: "api-key", accountRef: "openai-operator", configuredAt: "2025-01-01T00:00:00.000Z" };
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(binding), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ revoked: true }), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+    await expect(client.loginProvider({ providerId: "openai", authMode: "api-key", secret: "sk-test" })).resolves.toEqual(binding);
+    await expect(client.logoutProvider("openai")).resolves.toBeUndefined();
+    expect(fetch).toHaveBeenNthCalledWith(1, "https://maestro.test/v1/provider-credentials", expect.objectContaining({ method: "POST", body: JSON.stringify({ providerId: "openai", authMode: "api-key", secret: "sk-test" }), headers: expect.objectContaining({ authorization: "Bearer top-secret", "idempotency-key": expect.any(String) }) }));
+    expect(fetch).toHaveBeenNthCalledWith(2, "https://maestro.test/v1/provider-credentials/openai", expect.objectContaining({ method: "DELETE", headers: expect.objectContaining({ authorization: "Bearer top-secret", "idempotency-key": expect.any(String) }) }));
+  });
+
   it("sends authenticated idempotent create commands and parses the result", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ goalId, projectId, state: "draft", version: 0 }), { status: 201 }));
     const client = createApiClient({ baseUrl: "https://maestro.test/", token: "top-secret", fetch });

@@ -1,7 +1,7 @@
 import { createOpenAiPlugin } from "@maestro/model-provider-openai";
 import { createAnthropicPlugin } from "@maestro/model-provider-anthropic";
 import { ProviderRegistry } from "@maestro/agent-runtime";
-import { InMemoryCredentialStore } from "./credential-store.js";
+import { KeychainCredentialStore } from "./credential-store.js";
 import { createModelGateway } from "./gateway.js";
 import { buildModelGatewayServer } from "./rpc.js";
 
@@ -20,23 +20,23 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv): ModelGatewayRuntim
   const token = env.MAESTRO_MODEL_GATEWAY_TOKEN;
   if (!token) throw new Error("model gateway token is required");
   const operatorId = env.MAESTRO_OPERATOR_ID ?? "local-operator";
-  const credentials = new InMemoryCredentialStore();
+  const credentials = new KeychainCredentialStore(env.MAESTRO_MODEL_GATEWAY_CREDENTIAL_SERVICE ?? "maestro-model-gateway");
   const registry = new ProviderRegistry();
   const accountRefs: Record<string, string> = {};
-  if (env.OPENAI_API_KEY) {
-    const accountRef = `openai-${operatorId}`;
-    accountRefs.openai = accountRef;
-    void credentials.bind({ operatorId, providerId: "openai", authMode: "api-key", accountRef }, env.OPENAI_API_KEY);
-    registry.register(createOpenAiPlugin({ models: modelsFromEnv(env.OPENAI_MODELS, "gpt-5"), resolveApiKey: (ref) => credentials.resolveForGateway(ref) }));
-  }
-  if (env.ANTHROPIC_API_KEY) {
-    const accountRef = `anthropic-${operatorId}`;
-    accountRefs.anthropic = accountRef;
-    void credentials.bind({ operatorId, providerId: "anthropic", authMode: "api-key", accountRef }, env.ANTHROPIC_API_KEY);
-    registry.register(createAnthropicPlugin({ models: modelsFromEnv(env.ANTHROPIC_MODELS, "claude-sonnet-4-5"), resolveApiKey: (ref) => credentials.resolveForGateway(ref) }));
-  }
-  const gateway = createModelGateway({ registry, credentials, instanceId: env.MAESTRO_MODEL_GATEWAY_INSTANCE_ID ?? `gateway-${process.pid}` });
-  return { app: buildModelGatewayServer({ gateway, token }), gateway, accountRefs };
+  const openAiAccountRef = `openai-${operatorId}`;
+  const anthropicAccountRef = `anthropic-${operatorId}`;
+  accountRefs.openai = openAiAccountRef;
+  accountRefs.anthropic = anthropicAccountRef;
+  // Register provider adapters independently from credentials. The gateway
+  // filters discovery and admission by the active operator-owned binding.
+  registry.register(createOpenAiPlugin({ models: modelsFromEnv(env.OPENAI_MODELS, "gpt-5"), resolveApiKey: (ref) => credentials.resolveForGateway(ref) }));
+  registry.register(createAnthropicPlugin({ models: modelsFromEnv(env.ANTHROPIC_MODELS, "claude-sonnet-4-5"), resolveApiKey: (ref) => credentials.resolveForGateway(ref) }));
+  const initialBindings = Promise.all([
+    env.OPENAI_API_KEY ? credentials.bindEphemeral!({ operatorId, providerId: "openai", authMode: "api-key", accountRef: openAiAccountRef }, env.OPENAI_API_KEY) : undefined,
+    env.ANTHROPIC_API_KEY ? credentials.bindEphemeral!({ operatorId, providerId: "anthropic", authMode: "api-key", accountRef: anthropicAccountRef }, env.ANTHROPIC_API_KEY) : undefined,
+  ]).then(() => undefined);
+  const gateway = createModelGateway({ registry, credentials, operatorId, ready: initialBindings, instanceId: env.MAESTRO_MODEL_GATEWAY_INSTANCE_ID ?? `gateway-${process.pid}` });
+  return { app: buildModelGatewayServer({ gateway, token, operatorId }), gateway, accountRefs };
 }
 
 export async function startModelGateway(env = process.env): Promise<{ close: () => Promise<void> }> {

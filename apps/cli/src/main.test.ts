@@ -24,6 +24,18 @@ describe("executeCli", () => {
     expect(stdout.lines[0]).toMatch(/^maestro /);
   });
 
+  it("reads provider login secrets through the hidden-input boundary, not argv", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ bindingId: "credential-1", providerId: "openai", authMode: "api-key", accountRef: "openai-operator", configuredAt: "2025-01-01T00:00:00.000Z" }), { status: 200 }));
+    const stdout = output();
+    const stderr = output();
+    const readSecret = vi.fn(async () => "sk-test");
+    await expect(executeCli(["login", "openai", "--json"], env, { fetch, readSecret, stdout: stdout.write, stderr: stderr.write })).resolves.toBe(0);
+    expect(readSecret).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/provider-credentials", expect.objectContaining({ body: JSON.stringify({ providerId: "openai", authMode: "api-key", secret: "sk-test" }) }));
+    expect(stdout.lines[0]).not.toContain("sk-test");
+    expect(stderr.lines).toEqual([]);
+  });
+
   it("creates a goal from environment-only connection settings and prints JSON", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ goalId, projectId, state: "draft", version: 0 }), { status: 201 }));
     const stdout = output();
@@ -215,6 +227,15 @@ describe("CLI entrypoint detection", () => {
 
 
 describe("native conversation commands", () => {
+  it("accepts the singular model alias and defaults to list", async () => {
+    const models = [{ identity: { provider: "openai", id: "gpt-5" }, capabilities: ["text"], authModes: ["api-key"], dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy", trainsOnCustomerData: false, regions: ["US"] } }];
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(models), { status: 200 }));
+    const stdout = output();
+    await expect(executeCli(["model", "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).resolves.toBe(0);
+    expect(JSON.parse(stdout.lines[0]!)).toEqual(models);
+    expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/models", expect.anything());
+  });
+
   it("lists models and runs a conversation turn through the API", async () => {
     const conversationId = "44444444-4444-4444-8444-444444444444";
     const fetch = vi.fn()

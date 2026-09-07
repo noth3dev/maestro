@@ -21,9 +21,9 @@ export function discoverWorkspaceProject(workspacePath: string, session: Workspa
  */
 export async function discoverWorkspaceProjectFromControlPlane(options: { workspacePath: string; session: WorkspaceSession | undefined; client: Pick<ApiClient, "listProjects"> }): Promise<WorkspaceProject> {
   const existing = discoverWorkspaceProject(options.workspacePath, options.session);
-  if (existing.kind === "attached") return existing;
   try {
     const projects = (await options.client.listProjects()).projects;
+    if (existing.kind === "attached" && projects.includes(existing.projectId)) return existing;
     if (projects.length === 1) return { kind: "attached", projectId: projects[0]! };
     if (projects.length === 0) return { kind: "unavailable", reason: "No projects are available for this operator" };
     return { kind: "unavailable", reason: `Multiple projects are available; choose one with /session attach --project-index=<1-${projects.length}>` };
