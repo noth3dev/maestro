@@ -2505,3 +2505,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Found and fixed a real bug: a genuine Codex app-server process crash was misclassified by `apps/model-gateway/src/rpc.ts`'s `errorCode()` as a 400 client-request error instead of a 503 provider-unavailable error, because Codex's crash-error wording never matched the message-substring checks written for the HTTP-based providers. Normalized Codex's transport-failure error to the same typed `provider_unavailable` code every provider plugin already uses, and added a code-based branch to `errorCode()` ahead of the fragile substring matching.
 - Verified both this fix and the redaction test genuinely reproduce their defects (fail without the fix, pass with it) before committing. Full detail in `findings.md` same date.
 - Evidence: codex-stdio-transport 2/2, rpc.test.ts 7/7, regression sweep 19 files / 117 tests, 0 failed.
+
+
+## 2026-09-08 — Real-HTTP-server tests for both model providers (closes a coverage gap, no defect this time)
+
+- Added real `node:http`-server-backed tests for both `packages/model-provider-openai` and `packages/model-provider-anthropic`, replacing hand-rolled mocked `Response` objects with a genuine loopback TCP server for both the success path and cancellation. Cancellation is verified from the *server side* (`req.on("close")`), proving a real in-flight connection is genuinely torn down, not just that the client-side promise settles.
+- Both providers passed cleanly on the first real-process run -- an honest, verified negative result confirming their abort-signal wiring is already correct, not an assumption carried forward from mocked tests.
+- Evidence: 4 new tests, both packages 6 files / 16 tests, 0 failed; regression sweep 18 files / 96 tests, 0 failed. Full detail in `findings.md` same date.
