@@ -19,7 +19,7 @@ Maestro는 각 단계의 검증 증거가 완료되어야 다음 단계로 진�
 
 ### 네이티브 에이전트 백엔드 마이그레이션 — 현재 경계
 
-Maestro 네이티브 런타임과 인증된 model gateway가 대화와 워커 실행을 모두 담당합니다. ChatGPT account-login recovery도 내구성 상태, fenced status/cancel 작업 및 metadata-only 저장을 포함하여 통합되었습니다. 네이티브 admission은 host context, immutable grant, 정확한 provider-qualified model policy, account binding 및 idempotency를 포함합니다. 남은 Phase 1 gate는 실제 gateway process와 PostgreSQL evidence를 요구합니다.
+Maestro 네이티브 런타임과 인증된 model gateway가 대화와 워커 실행을 모두 담당합니다. ChatGPT account-login recovery도 내구성 상태, fenced status/cancel 작업 및 metadata-only 저장을 포함하여 통합되었습니다. 네이티브 admission은 host context, immutable grant, 정확한 provider-qualified model policy, account binding 및 idempotency를 포함하며, 모든 native 호출 지점(Worker, Head, semantic review, Encore reviewer, team-lead helper)이 selected/actual 모델과 gateway binding identity를 append-only `native_execution_bindings` 테이블에 durable하게 기록합니다. 깨끗한 disposable 컨테이너에서 실행한 단일 worker 전체 real-PostgreSQL 재실행이 **154/154 파일, 1049/1049 테스트, 실패 0건**으로 통과했습니다(2026-09-08), kill/restart 복구, fencing, authority denial, loopback Model Gateway HTTP acceptance 테스트를 포함합니다. 남은 Phase 1 항목 두 가지는 아직 열려 있습니다: 실제 gateway 경로를 통한 production native host-tool 등록/집행, 그리고 현재의 fake-provider HTTP 테스트를 넘어서는 전체 Control Plane + PostgreSQL + Model Gateway Worker acceptance 시나리오.
 
 CLI TUI는 `@earendil-works/pi-tui` `0.85.1` 터미널 primitive를 사용합니다. 이는 provider나 실행 권한이 없는 표현 계층 의존성입니다.
 
