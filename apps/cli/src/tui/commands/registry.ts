@@ -27,7 +27,7 @@ const definitions: CommandDefinition[] = ([
   ["encore-council", "Encore Council records", [["list", "read"]]],
   ["certifications", "Worker certification records", [["list", "read"]]],
   ["concertmaster-report", "Concertmaster report", [["get", "read"]]],
-  ["metronome", "process integrity oversight", [["scan", "read"], ["challenge", "write"], ["correct", "write"], ["safe-pause", "critical"], ["resolve", "write"]]],
+  ["metronome", "process integrity oversight", [["scan", "write"], ["challenge", "write"], ["correct", "write"], ["safe-pause", "critical"], ["resolve", "write"]]],
   ["encore", "independent improvement review", [["review", "write"]]],
   ["certification", "quality and conditional certification", [["list", "read"], ["certify", "write"]]],
   ["evidence", "evidence bundles and reports", [["list", "read"], ["bundle", "read"], ["report", "read"]]],

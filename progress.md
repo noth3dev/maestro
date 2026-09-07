@@ -2193,3 +2193,13 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added session, registry, and read-command regression coverage.
 - Verification: focused tests pass (22 tests), `npm run build` passes, and `git diff --check`
   passes.
+
+
+## 2026-09-06 — Maestro TUI Metronome scan classification fix
+
+- Corrected `metronome scan` from read to write in the TUI registry. The existing typed
+  `scanMetronome` route is an idempotent POST and was otherwise unreachable because the read
+  boundary rejected it before the implemented write handler.
+- Added registry and dispatch regression coverage.
+- Verification: targeted command tests pass (16 tests), `npm run build` passes, and
+  `git diff --check` passes.

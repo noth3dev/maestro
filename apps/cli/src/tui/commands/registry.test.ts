@@ -19,6 +19,7 @@ describe("TUI command registry", () => {
     expect(registry.find("worker")?.actions.find((action) => action.name === "list")?.kind).toBe("read");
     expect(registry.find("critical-action")?.actions.find((action) => action.name === "approve-and-run")?.kind).toBe("critical");
     expect(registry.find("workers")?.actions.find((action) => action.name === "list")?.kind).toBe("read");
+    expect(registry.find("metronome")?.actions.find((action) => action.name === "scan")?.kind).toBe("write");
   });
 
   it("autocomplete filters command names", () => {
