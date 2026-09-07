@@ -2237,3 +2237,15 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Updated CLI usage/help text.
 - Verification: `apps/cli` main tests pass (17 tests), `npm run build` passes, and
   `git diff --check` passes.
+
+
+## 2026-09-06 — Maestro TUI batch verification
+
+- Final branch verification after project discovery, Goal selection, typed read parity,
+  critical-action request parity, and Metronome classification hardening: `npm run check`
+  passed with 84 files passed, 51 skipped; 557 tests passed, 360 skipped; 0 failed.
+- `npm run build` and `git diff --check` passed.
+- Bounded bare-TUI smoke rendered the truthful setup-required state, workspace/Git root,
+  explicit unavailable approvals, and session recovery banner. PostgreSQL, real-process, and
+  Prime Agent acceptance remain environment-gated and were not claimed.
+- Feature branch is clean at `9d1ca7b`; recent commits are Conventional Commits.
