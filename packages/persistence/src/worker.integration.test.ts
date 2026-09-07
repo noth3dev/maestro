@@ -254,7 +254,7 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
   });
 
   it("reconciles a genuinely mid-flight worker after a fresh control-plane restart without duplicate effects or stale authority reuse", async () => {
-    const { council, plan, proof, goalId } = await setupBundle();
+    const { council, plan, proof, goalId, projectId } = await setupBundle();
     const preRestartKernel = fakeKernel("running");
     const worker = await spawnWorker(pool, preRestartKernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
     const captured = await observeWorker(pool, preRestartKernel, worker.workerId, proof, headContext("product"));

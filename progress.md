@@ -2392,3 +2392,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Confirmed the authenticated boundary fails closed: unauthenticated Control Plane `/v1/models` returned HTTP 401 with `authentication_required`; no model catalog was exposed.
 - Confirmed the live Prime compatibility gate recorded 2/2 passing tests, including parent/direct-child exchange and disposable worker effect, with reported identity `openai-codex/gpt-5.6-luna`.
 - Removed only generated local acceptance logs; no source artifacts remain untracked.
+
+
+## 2026-09-07 — Phase 1 first failure fixed
+
+- Reproduced the Worker mid-flight restart failure in isolation against `maestro-phase1-audit-postgres`: the failure was a missing `projectId` local in the test assertion, causing `ReferenceError` before reconciliation behavior was checked.
+- Added the missing destructuring field. Focused result: `packages/persistence/src/worker.integration.test.ts` **33 passed, 0 failed** on PostgreSQL.
+- `npm run build` passed after the fix. Next: rerun the full PostgreSQL suite and take the next independently reproduced failure.

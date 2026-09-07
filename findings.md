@@ -699,3 +699,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Live compatibility evidence is now fresh: `MAESTRO_LIVE_PRIME=1 npm test -- packages/prime-adapter/src/sdk.live.test.ts` passed 2/2. It exercised a real parent/named-child exchange and a disposable repository worker effect.
 - The real SDK identity was `openai-codex/gpt-5.6-luna`. Child answer text remains an explicit provider-unavailable value for this SDK build; the adapter does not invent text.
+
+
+## 2026-09-07 — Phase 1 worker restart regression closed
+
+- The first isolated PostgreSQL failure was a `ReferenceError: projectId is not defined` in `packages/persistence/src/worker.integration.test.ts:272`, not a reconciliation implementation failure. The test called `setupBundle()` but omitted its returned `projectId` from destructuring before asserting the durable recovery report.
+- Fixed the test to capture `projectId`. Focused PostgreSQL verification now passes **33/33 tests**, including the live-lease `lease_contended` restart case. `npm run build` also passes.
+- The broader PostgreSQL run must be repeated after this fix; prior observed failures in Concertmaster/Git/Metronome/certification/device-agent suites remain open until independently reproduced and closed.
