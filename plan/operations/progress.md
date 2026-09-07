@@ -2559,3 +2559,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Documented current security boundaries: production `ToolRegistry` is empty and fails closed for unregistered tools; Codex is read-only/text-only; Git is an explicit authority-backed Control Plane adapter; the generic critical-action effect adapter has no production default and fails closed; device-agent and Discord launch configuration is now documented.
 - Fresh single-worker real-PostgreSQL suite completed with **162/162 test files and 1066/1066 tests passed, 0 failed**. The result includes the native Worker acceptance, account-login/credential-bind acceptance, Discord signal delivery, Metronome loop, Encore, and kill/restart suites.
 - Remaining product/acceptance boundaries are recorded rather than hidden: production host-tool contract, dedicated TUI parity/reconnect evidence, and independent/production acceptance review for the device protocol. No host tool was invented without product scope.
+
+
+## 2026-09-08 — Documentation checkpoint pushed
+
+- Committed the parity slice as `e63d134 docs(parity): reconcile current runtime and operator surfaces` and pushed it to `origin/main`.
+- Fresh post-edit verification: `npm run build` passed, `npm run lint` passed, `npm test -- apps/cli/src/main.test.ts` passed (21/21), `git diff --check` passed, and the production no-Prime scan returned no matches (expected grep exit 1).
+- `main` is clean and tracks `origin/main`. Protected worktrees remain untouched. The completed full-suite container `maestro-full-4fe40a8` was removed after its 162/162-file, 1066/1066-test result was recorded.
+- The next blocker is product/security scope for host tools; no permissions or tool registration will be invented from documentation alone.

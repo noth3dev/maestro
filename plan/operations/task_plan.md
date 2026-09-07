@@ -4,7 +4,7 @@
 
 This block is the authoritative status for the current `main` tree. Older phase markers, branch maps, and “next step” entries below are historical execution notes unless they are explicitly updated here.
 
-- **Branch:** `main`; current committed base before this documentation slice: `4fe40a8`. Protected worktrees remain untouched.
+- **Branch:** `main`; current committed base after the documentation slice: `e63d134`. Protected worktrees remain untouched.
 - **Phase 1:** technical/runtime gate is evidenced: native-only composition, no-Prime scan, real Model Gateway HTTP acceptance, real Control Plane + PostgreSQL + native Worker acceptance, and a clean single-worker PostgreSQL run of **162/162 files and 1066/1066 tests**. The remaining product decision is the exact production host-tool/data/effect contract; no tool is registered until that contract is approved.
 - **Phase 2:** hierarchical code surface and PostgreSQL evidence are present. Worker admissions are real but text/evidence-only because production `ToolRegistry` is empty. Control Plane Git operations remain explicit authority-backed services, not implicit worker callbacks.
 - **Phase 3:** Metronome, Encore, certification/reporting, CLI/API parity, conversation, and restart/fencing evidence are present. First-release acceptance still requires a dedicated TUI parity/reconnect gate and the Phase 1 host-tool decision.
@@ -12,7 +12,8 @@ This block is the authoritative status for the current `main` tree. Older phase 
 - **Phase 5:** the project-wide worker cap is implemented. Resource inventory, demand reservations, protected floors, and Portfolio Council scheduling are not implemented.
 - **Phase 6:** Step 1 immutable project-private Improvement Digest is accepted; replay, mutation, rollout, and persona adaptation remain deferred.
 - **Phases 7–8:** planned and not accepted.
-- **Immediate work:** finish this documentation parity slice, run build/lint/targeted checks plus `git diff --check`, commit, push, and record the evidence. Do not start host-tool implementation without product scope.
+- **Documentation checkpoint:** completed in `e63d134`; build, lint, CLI 21-test regression, diff check, and push to `origin/main` passed. The disposable PostgreSQL container used for the 162/1066 run was removed.
+- **Immediate work:** obtain the product/security decision for production host tools or take the next independently scoped TUI/device acceptance item. Do not start host-tool implementation without product scope.
 
 ## Goal
 Complete the remaining Phase 1 durable control-plane safety foundations, then implement Phase 2 hierarchical execution for one local software Goal.
