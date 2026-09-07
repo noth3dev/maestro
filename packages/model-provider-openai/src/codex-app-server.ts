@@ -138,7 +138,18 @@ export class CodexAppServerClient {
     this.requestTimeoutMs = options.requestTimeoutMs ?? 15_000;
     this.clientInfo = options.clientInfo ?? { name: "codex_cli_rs", title: "Maestro", version: "development" };
     this.unsubscribe = this.transport.onMessage((message) => this.handleMessage(message));
-    this.unsubscribeError = this.transport.onError?.((error) => { this.transportError = new Error("Codex app-server is unavailable"); this.failPending(error); });
+    this.unsubscribeError = this.transport.onError?.(() => {
+      // Normalize every transport-level failure (spawn error, unexpected
+      // exit, stream error) to the same typed, structured error the rest of
+      // this class already uses for provider failures, and reuse the exact
+      // same object for already-pending requests. Two different wordings
+      // for the identical failure -- one for requests already in flight,
+      // another for requests made afterward -- made this failure mode
+      // unreliable to detect downstream (apps/model-gateway/src/rpc.ts's
+      // errorCode() maps on the structured code, not incidental wording).
+      this.transportError = new CodexAppServerError("provider_unavailable", "Codex app-server is unavailable");
+      this.failPending(this.transportError);
+    });
   }
 
   onNotification(listener: (message: JsonRpcNotification) => void): () => void {

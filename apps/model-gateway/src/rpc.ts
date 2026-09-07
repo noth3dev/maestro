@@ -52,6 +52,15 @@ function errorCode(error: unknown): { status: number; code: string; message: str
   const message = error instanceof Error ? error.message : "model gateway request failed";
   const code = error && typeof error === "object" && "code" in error ? (error as { code?: unknown }).code : undefined;
   if (code === "account_login_session_unknown" || message === "account login session is unknown") return { status: 409, code: "account_login_session_unknown", message: "account login session is unknown" };
+  // Every provider plugin (OpenAI, Anthropic, Codex) already throws a typed
+  // error carrying code: "provider_unavailable" for auth-independent
+  // transport/process failures. Checking the structured code first is more
+  // reliable than the message-substring checks below, which only happen to
+  // match the HTTP-based providers' specific wording ("...transport
+  // failed") and previously missed the Codex app-server's real process-exit
+  // wording entirely, misclassifying a genuine provider crash as a 400
+  // client request error instead of a 503 provider-unavailable error.
+  if (code === "provider_unavailable") return { status: 503, code: "provider_unavailable", message: "provider is currently unavailable" };
   if (message.includes("credential binding")) return { status: 403, code: "provider_auth_required", message: "provider credential binding is unavailable" };
   if (message.includes("unknown provider") || message.includes("unknown model")) return { status: 400, code: "model_not_allowed", message: "provider or model is not allowed" };
   if (message.includes("identity") || message.includes("binding")) return { status: 409, code: "provider_binding_mismatch", message: "provider binding could not be verified" };
