@@ -748,3 +748,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Source/dependency scan: `git grep -in prime -- '*.ts' '*.tsx' '*.js' '*.json' '*.toml' '*.yaml' '*.yml'` is clean; `prime` is absent from `package-lock.json`; `node_modules/@maestro/prime-adapter` and `node_modules/prime-agent` are absent. Historical findings retain their original audit evidence.
 - Native focused verification after deletion: 5 files / 50 tests passed; forced TypeScript build passed.
 - Full real Model Gateway process acceptance is still open; no credential or provider secret was added to tests or persistence.
+
+
+## 2026-09-08 — Real Model Gateway HTTP native execution evidence
+
+- Added an acceptance test that binds a fake provider credential inside the gateway credential store, starts the actual Model Gateway Fastify server on a loopback TCP port, connects through `createModelGatewayClient`, and routes a native kernel admission through HTTP.
+- The test proves exact model/account binding, host admission fields, prompt execution, terminal observation, provider identity, and kernel/gateway close. It does not use a mocked gateway transport and does not expose the credential.
+- Evidence: `apps/control-plane/src/native-gateway-http.integration.test.ts` passed **1/1** after Prime package deletion.
