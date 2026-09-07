@@ -1,8 +1,10 @@
+import { randomUUID } from "node:crypto";
 import {
   Box,
   CombinedAutocompleteProvider,
   Container,
   Editor,
+  Markdown,
   ProcessTerminal,
   ScrollView,
   Text,
@@ -10,8 +12,10 @@ import {
   VStack,
   matchesKey,
   type EditorTheme,
+  type MarkdownTheme,
 } from "@earendil-works/pi-tui";
 import { createApiClient, type ApiClient, type GoalEvent } from "@maestro/api-client";
+import type { ConversationEvent } from "@maestro/contracts";
 import { createTuiRuntime } from "./runtime.js";
 import { resolveWorkspace, type Workspace } from "./workspace.js";
 import { resolveConnection } from "./connection.js";
@@ -43,11 +47,12 @@ import {
   startNewConversationSession,
 } from "./session.js";
 import { mergeEvents, subscribeToEvents } from "./activity-stream.js";
+import { addConversationMessage, applyConversationEvent, createConversationTranscript, renderConversationMarkdown, type ConversationTranscriptState } from "./conversation-transcript.js";
 import { renderActivityTimeline } from "./components/activity-timeline.js";
-import { renderShell, renderTranscript, renderTuiFooter, type TuiShellState } from "./components/shell.js";
+import { renderShell, renderTuiFooter, type TuiShellState } from "./components/shell.js";
 import { getModeAccentProgress, setModeAccentProgress, tuiTheme } from "./theme.js";
 import type { CliIo } from "../main.js";
-import { openExternalUrl } from "../external-url.js";
+import { copyToClipboard, openExternalUrl } from "../external-url.js";
 
 export interface InteractiveTuiOptions {
   cwd: string;
@@ -115,26 +120,41 @@ function maskVisibleText(line: string): string {
   return masked;
 }
 
-/** Keeps the conversation area pinned above the input dock and footer. */
-class FullHeightText {
-  private readonly text = new Text("", 0, 0);
-  private contentRenderer: () => string = () => "";
+const markdownTheme: MarkdownTheme = {
+  heading: (text) => tuiTheme.primary(text),
+  link: (text) => tuiTheme.teal(text),
+  linkUrl: (text) => tuiTheme.muted(text),
+  code: (text) => tuiTheme.olive(text),
+  codeBlock: (text) => tuiTheme.olive(text),
+  codeBlockBorder: (text) => tuiTheme.border(text),
+  quote: (text) => tuiTheme.secondary(text),
+  quoteBorder: (text) => tuiTheme.borderStrong(text),
+  hr: (text) => tuiTheme.border(text),
+  listBullet: (text) => tuiTheme.primary(text),
+  bold: (text) => tuiTheme.text(text),
+  italic: (text) => tuiTheme.secondary(text),
+  strikethrough: (text) => tuiTheme.muted(text),
+  underline: (text) => tuiTheme.text(text),
+};
 
-  setContentRenderer(renderer: () => string): void {
-    this.contentRenderer = renderer;
-  }
+/** Keeps the conversation area pinned above the input dock and footer. */
+class ConversationViewport {
+  private readonly markdown = new Markdown("", 0, 0, markdownTheme);
+  private statusRenderer: () => string[] = () => [];
+  private transcriptRenderer: () => string = () => "";
+
+  setStatusRenderer(renderer: () => string[]): void { this.statusRenderer = renderer; }
+  setTranscriptRenderer(renderer: () => string): void { this.transcriptRenderer = renderer; }
 
   render(width: number): string[] {
-    // FullscreenViewport owns the available height and scroll position. Do
-    // not pad this component: padding would create fake transcript rows and
-    // make the viewport follow blank space instead of the latest message.
-    this.text.setText(this.contentRenderer());
-    return this.text.render(width);
+    const status = this.statusRenderer();
+    const transcript = this.transcriptRenderer();
+    if (transcript === "") return status;
+    this.markdown.setText(transcript);
+    return [...status, "", ...this.markdown.render(width)];
   }
 
-  invalidate(): void {
-    this.text.invalidate();
-  }
+  invalidate(): void { this.markdown.invalidate(); }
 }
 
 /** A quiet, terminal-native composer. It uses borders, not a forced surface colour. */
@@ -242,7 +262,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     inputPanel.addChild(editor);
     const composer = new FramedComposer(inputPanel);
     const footer = new Text("", 0, 0);
-    const header = new FullHeightText();
+    const header = new ConversationViewport();
     const registry = createCommandRegistry();
     editor.setAutocompleteProvider(
       new CombinedAutocompleteProvider(
@@ -250,7 +270,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         workspace.cwd,
       ),
     );
-    let transcript: string[] = [];
+    let conversation: ConversationTranscriptState = createConversationTranscript();
     let activity: GoalEvent[] = [];
     let recovery: RecoverySummary = reconcileTuiSession(workspace.cwd, session);
     let pendingConfirmation: { summary: CriticalActionSummary; resolve: (decision: ConfirmationResult) => void } | undefined;
@@ -262,24 +282,27 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let accountLoginState: "selecting" | "opening" | "waiting" | undefined;
     let accountLoginController: AbortController | undefined;
     let accountLoginId: string | undefined;
+    let accountLoginUrl: string | undefined;
     const syncModelState = (): void => {
       const model = options.env.MAESTRO_MODEL?.trim() || session?.model;
       if (model === undefined) delete state.model;
       else state.model = model;
     };
-    header.setContentRenderer(() => {
+    header.setStatusRenderer(() => {
       const lines = [...renderShell(state, terminal.columns, terminal.rows), "", ...renderRecoveryBanner(recovery, terminal.columns)];
       if (pendingConfirmation !== undefined) lines.push("", ...renderApprovalDialog(pendingConfirmation.summary, terminal.columns));
+      if (accountLoginSelection !== undefined && accountLoginState !== undefined) lines.push("", ...renderProviderLoginDialog(terminal.columns, accountLoginSelection, accountLoginState, accountLoginUrl));
       if (activity.length > 0) lines.push("", "Activity", ...renderActivityTimeline(activity, terminal.columns));
-      if (transcript.length > 0) lines.push("", ...renderTranscript(transcript, terminal.columns));
-      return lines.join("\n");
+      return lines;
     });
+    header.setTranscriptRenderer(() => renderConversationMarkdown(conversation));
     const render = () => {
       footer.setText(renderTuiFooter(terminal.columns));
       tui.requestRender(true);
     };
     const append = (line: string) => {
-      transcript = [...transcript.slice(-40), line];
+      const next = addConversationMessage(conversation, "system", line);
+      conversation = { ...next, messages: next.messages.slice(-80) };
       render();
     };
     let flashmobMode = false;
@@ -360,6 +383,62 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         if (!signal.aborted) append(`Activity stream unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
       }
     };
+    let conversationStreamController: AbortController | undefined;
+    let conversationHydration: Promise<void> = Promise.resolve();
+    let conversationHydrationGeneration = 0;
+    const isTerminalConversationEvent = (event: ConversationEvent): boolean =>
+      event.eventType === "turn_completed" || event.eventType === "turn_failed" || event.eventType === "turn_cancelled" || event.eventType === "turn_unknown";
+    const streamConversation = async (conversationId: string, projectId: string, controller: AbortController): Promise<void> => {
+      if (client === undefined) return;
+      const signal = controller.signal;
+      try {
+        const streamClient = {
+          streamEvents: (query: { projectId: string; after: string }, streamOptions: { signal: AbortSignal }) =>
+            client!.streamConversationEvents(conversationId, query, streamOptions),
+        };
+        for await (const event of subscribeToEvents({
+          client: streamClient,
+          projectId,
+          cursor: conversation.lastCursor,
+          signal,
+          maxReconnectAttempts: 5,
+          onReconnect: (attempt, maxAttempts) => append(`Conversation stream reconnecting (${attempt}/${maxAttempts})`),
+        })) {
+          if (signal.aborted || session?.conversationId !== conversationId || project.kind !== "attached" || project.projectId !== projectId) return;
+          conversation = applyConversationEvent(conversation, event);
+          render();
+          if (isTerminalConversationEvent(event)) {
+            if (!signal.aborted) controller.abort();
+            return;
+          }
+        }
+        if (!signal.aborted) append("Conversation stream unavailable: reconnect attempts exhausted");
+      } catch (error) {
+        if (!signal.aborted) append(`Conversation stream unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
+      }
+    };
+
+    const hydrateConversation = async (conversationId: string | undefined, projectId: string, generation: number): Promise<void> => {
+      if (client === undefined || conversationId === undefined) return;
+      try {
+        let hydrated = createConversationTranscript();
+        let cursor = "0";
+        for (let page = 0; page < 64; page += 1) {
+          const events = await client.listConversationEvents(conversationId, { projectId, after: cursor });
+          if (generation !== conversationHydrationGeneration || session?.conversationId !== conversationId || project.kind !== "attached" || project.projectId !== projectId) return;
+          for (const event of events) hydrated = applyConversationEvent(hydrated, event);
+          const nextCursor = events.at(-1)?.cursor;
+          if (nextCursor === undefined || events.length < 256) break;
+          cursor = nextCursor;
+        }
+        if (generation !== conversationHydrationGeneration || session?.conversationId !== conversationId || project.kind !== "attached" || project.projectId !== projectId) return;
+        conversation = hydrated;
+        render();
+      } catch (error) {
+        if (generation === conversationHydrationGeneration) append(`Conversation history unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
+      }
+    };
+
     const confirm = (summary: CriticalActionSummary): Promise<ConfirmationResult> =>
       new Promise((resolveConfirmation) => {
         pendingConfirmation = { summary, resolve: resolveConfirmation };
@@ -454,6 +533,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       accountLoginController = undefined;
       const loginId = accountLoginId;
       accountLoginId = undefined;
+      accountLoginUrl = undefined;
       accountLoginSelection = undefined;
       accountLoginState = undefined;
       editor.hidden = false;
@@ -472,6 +552,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       try {
         const login = await client.startAccountLogin();
         accountLoginId = login.loginId;
+        accountLoginUrl = login.authUrl;
         if (controller.signal.aborted) return;
         accountLoginState = "waiting";
         render();
@@ -489,7 +570,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         if (status.state === "succeeded") { append("Account login complete: openai-codex"); void refreshDashboard(); }
         else append(`Account login ${status.state}: ${status.message ?? "no additional details"}`);
       } catch (error) { if (!controller.signal.aborted) append(`Account login failed: ${error instanceof Error ? error.message : "request failed"}`); }
-      finally { if (accountLoginController === controller) { accountLoginController = undefined; accountLoginId = undefined; accountLoginSelection = undefined; accountLoginState = undefined; editor.hidden = false; render(); } }
+      finally { if (accountLoginController === controller) { accountLoginController = undefined; accountLoginId = undefined; accountLoginUrl = undefined; accountLoginSelection = undefined; accountLoginState = undefined; editor.hidden = false; render(); } }
     };
 
     const submit = async (text: string) => {
@@ -562,11 +643,21 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           if (parsed.action === "retry") {
             await retryConnection();
           } else if (parsed.action === "new") {
+            conversationStreamController?.abort();
+            conversationStreamController = undefined;
+            conversationHydrationGeneration += 1;
+            conversationHydration = Promise.resolve();
+            conversation = createConversationTranscript();
             session = startNewConversationSession(workspace.cwd, session);
             await saveWorkspaceSession(session);
             recovery = reconcileTuiSession(workspace.cwd, session);
             append("New Concertmaster conversation started. Durable Goal state was preserved.");
           } else if (parsed.action === "attach") {
+            conversationStreamController?.abort();
+            conversationStreamController = undefined;
+            conversationHydrationGeneration += 1;
+            conversationHydration = Promise.resolve();
+            conversation = createConversationTranscript();
             const requestedProjectId = parsed.options["project-id"];
             const requestedProjectIndex = parsed.options["project-index"];
             const current = await loadWorkspaceSession(workspace.cwd);
@@ -610,6 +701,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             append(renderRecoveryBanner(recovery, terminal.columns).join(" · "));
             void refreshDashboard();
             restartActivity();
+            if (project.kind === "attached") {
+              const generation = ++conversationHydrationGeneration;
+              conversationHydration = hydrateConversation(session?.conversationId, project.projectId, generation);
+            }
           } else if (parsed.action === "list") {
             const current = await loadWorkspaceSession(workspace.cwd);
             append(
@@ -737,7 +832,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
                   projectId: project.projectId,
                   goalId: session.goalId,
                   model: configuredModel!,
-                });
+                }, { idempotencyKey: randomUUID() });
                 session = {
                   workspacePath: workspace.cwd,
                   projectId: project.projectId,
@@ -752,15 +847,33 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               }
               const activeConversationId = session.conversationId;
               if (activeConversationId === undefined) throw new Error("Conversation was not created");
+              await conversationHydration;
+              conversation = addConversationMessage(conversation, "user", text);
+              render();
+              const streamController = new AbortController();
+              conversationStreamController?.abort();
+              conversationStreamController = streamController;
+              void streamConversation(activeConversationId, project.projectId, streamController);
               const turnController = new AbortController();
               conversationTurnController = turnController;
               try {
                 const result = await client.sendConversationTurn(
                   activeConversationId,
                   { projectId: project.projectId, text },
-                  { signal: turnController.signal },
+                  { signal: turnController.signal, idempotencyKey: randomUUID() },
                 );
-                append(`Maestro [${result.conversation.status}]: ${result.turn.content}`);
+                const terminalType = result.turn.status === "completed" ? "turn_completed" : result.turn.status === "cancelled" ? "turn_cancelled" : result.turn.status === "failed" ? "turn_failed" : "turn_unknown";
+                const terminalEvent: ConversationEvent = {
+                  cursor: result.turn.cursor,
+                  eventId: result.turn.turnId,
+                  conversationId: result.turn.conversationId,
+                  projectId: project.projectId,
+                  eventType: terminalType,
+                  payload: { turnId: result.turn.turnId, status: result.conversation.status, ...(result.turn.status === "completed" ? { content: result.turn.content } : { message: result.turn.content }) },
+                  occurredAt: result.turn.createdAt,
+                };
+                conversation = applyConversationEvent(conversation, terminalEvent);
+                render();
               } finally {
                 if (conversationTurnController === turnController) conversationTurnController = undefined;
               }
@@ -794,6 +907,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       pendingConfirmation = undefined;
       activityController?.abort();
       conversationTurnController?.abort();
+      conversationStreamController?.abort();
       accountLoginController?.abort();
       if (accountLoginId !== undefined && client !== undefined) void client.cancelAccountLogin(accountLoginId).catch(() => undefined);
       flashmobAnimationId += 1;
@@ -848,6 +962,16 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         if (matchesKey(data, "enter")) { void startAccountLogin(); return { consume: true }; }
         return { consume: true };
       }
+      if (accountLoginSelection !== undefined && accountLoginState === "waiting" && matchesKey(data, "alt+c")) {
+        const url = accountLoginUrl;
+        if (url === undefined) append("The provider login link is not ready yet.");
+        else {
+          void (options.io.copyToClipboard ?? copyToClipboard)(url)
+            .then(() => append("Provider login link copied to the clipboard."))
+            .catch(() => append(`Clipboard unavailable. Copy this provider login link: ${url}`));
+        }
+        return { consume: true };
+      }
       if (accountLoginSelection !== undefined && accountLoginState === "waiting" && matchesKey(data, "escape")) {
         cancelAccountLogin();
         append("Account login cancelled.");
@@ -871,5 +995,9 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     if (projectDiscoveryNotice !== undefined) append(projectDiscoveryNotice);
     void refreshDashboard();
     startActivity();
+    if (project.kind === "attached") {
+      const generation = ++conversationHydrationGeneration;
+      conversationHydration = hydrateConversation(session?.conversationId, project.projectId, generation);
+    }
   });
 }

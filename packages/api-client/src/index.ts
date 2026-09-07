@@ -175,10 +175,11 @@ export interface ApiClient {
   accountLoginStatus(loginId: string): Promise<ProviderAccountLoginStatus>;
   cancelAccountLogin(loginId: string): Promise<void>;
   logoutAccount(): Promise<void>;
-  createConversation(input: CreateConversationInput): Promise<Conversation>;
+  createConversation(input: CreateConversationInput, options?: { idempotencyKey?: string }): Promise<Conversation>;
   getConversation(conversationId: string, query: GoalQuery): Promise<Conversation>;
-  sendConversationTurn(conversationId: string, input: ConversationTurnInput, options?: { signal?: AbortSignal }): Promise<ConversationTurnResult>;
+  sendConversationTurn(conversationId: string, input: ConversationTurnInput, options?: { signal?: AbortSignal; idempotencyKey?: string }): Promise<ConversationTurnResult>;
   cancelConversation(conversationId: string, query: GoalQuery): Promise<Conversation>;
+  listConversationEvents(conversationId: string, query: ConversationEventQuery): Promise<readonly ConversationEvent[]>;
   streamConversationEvents(conversationId: string, query: ConversationEventQuery, options?: { signal?: AbortSignal }): AsyncIterable<ConversationEvent>;
   provisionProjectAccess(input: ProjectAccessProvisionInput): Promise<ProjectAccessProvisionResult>;
   getGoal(goalId: string, query: GoalQuery): Promise<GoalResult>;
@@ -243,7 +244,7 @@ async function* readEventStream(fetch: Fetch, base: URL, headers: Record<string,
   url.search = new URLSearchParams({ projectId: parsed.projectId, after: parsed.after }).toString();
   let response: Response;
   try {
-    response = await fetch(url.href, { headers, redirect: "error", ...(signal === undefined ? {} : { signal }) });
+    response = await fetch(url.href, { headers: { ...headers, "last-event-id": parsed.after }, redirect: "error", ...(signal === undefined ? {} : { signal }) });
   } catch {
     throw new Error("Control plane event stream failed");
   }
@@ -277,12 +278,14 @@ async function* readEventStream(fetch: Fetch, base: URL, headers: Record<string,
   }
 }
 
+const MAX_CONVERSATION_STREAM_RECORD_BYTES = 128_000;
+
 async function* readConversationEventStream(fetch: Fetch, base: URL, headers: Record<string, string>, conversationId: string, query: ConversationEventQuery, signal?: AbortSignal): AsyncGenerator<ConversationEvent> {
   const parsed = ConversationEventQuerySchema.parse(query);
   const url = new URL(`v1/conversations/${encodeURIComponent(conversationId)}/events/stream`, base);
   url.search = new URLSearchParams({ projectId: parsed.projectId, after: parsed.after }).toString();
   let response: Response;
-  try { response = await fetch(url.href, { headers, redirect: "error", ...(signal === undefined ? {} : { signal }) }); }
+  try { response = await fetch(url.href, { headers: { ...headers, "last-event-id": parsed.after }, redirect: "error", ...(signal === undefined ? {} : { signal }) }); }
   catch { throw new Error("Control plane conversation stream failed"); }
   if (!response.ok) throw new Error(`Control plane conversation stream returned HTTP ${response.status}`);
   if (response.body === null) throw new Error("Control plane conversation stream returned no body");
@@ -291,13 +294,16 @@ async function* readConversationEventStream(fetch: Fetch, base: URL, headers: Re
     while (true) {
       const chunk = await reader.read(); buffer += decoder.decode(chunk.value, { stream: !chunk.done });
       const records = buffer.split(/\r?\n\r?\n/); buffer = records.pop() ?? "";
+      if (Buffer.byteLength(buffer, "utf8") > MAX_CONVERSATION_STREAM_RECORD_BYTES) throw new Error("Control plane conversation stream record is too large");
       for (const record of records) {
+        if (Buffer.byteLength(record, "utf8") > MAX_CONVERSATION_STREAM_RECORD_BYTES) throw new Error("Control plane conversation stream record is too large");
         if (record.match(/^event:\s*(.+)$/m)?.[1] !== "conversation-event") continue;
         const data = record.match(/^data:\s*(.+)$/m)?.[1]; if (data !== undefined) yield ConversationEventSchema.parse(JSON.parse(data));
       }
       if (chunk.done) break;
     }
     if (buffer.trim() !== "") {
+      if (Buffer.byteLength(buffer, "utf8") > MAX_CONVERSATION_STREAM_RECORD_BYTES) throw new Error("Control plane conversation stream record is too large");
       if (buffer.match(/^event:\s*(.+)$/m)?.[1] === "conversation-event") {
         const data = buffer.match(/^data:\s*(.+)$/m)?.[1];
         if (data !== undefined) yield ConversationEventSchema.parse(JSON.parse(data));
@@ -437,19 +443,23 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
         return undefined;
       } });
     },
-    createConversation(input) {
-      return request("v1/conversations", { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(CreateConversationInputSchema.parse(input)) }, ConversationSchema);
+    createConversation(input, options) {
+      return request("v1/conversations", { method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": options?.idempotencyKey === undefined ? cryptoRandomUuid() : UuidSchema.parse(options.idempotencyKey) }, body: JSON.stringify(CreateConversationInputSchema.parse(input)) }, ConversationSchema);
     },
     getConversation(conversationId, query) {
       const parsed = GoalQuerySchema.parse(query);
       return request(`v1/conversations/${encodeURIComponent(UuidSchema.parse(conversationId))}?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, ConversationSchema);
     },
     sendConversationTurn(conversationId, input, options) {
-      return request(`v1/conversations/${encodeURIComponent(UuidSchema.parse(conversationId))}/turns`, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(ConversationTurnInputSchema.parse(input)), ...(options?.signal === undefined ? {} : { signal: options.signal }) }, ConversationTurnResultSchema);
+      return request(`v1/conversations/${encodeURIComponent(UuidSchema.parse(conversationId))}/turns`, { method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": options?.idempotencyKey === undefined ? cryptoRandomUuid() : UuidSchema.parse(options.idempotencyKey) }, body: JSON.stringify(ConversationTurnInputSchema.parse(input)), ...(options?.signal === undefined ? {} : { signal: options.signal }) }, ConversationTurnResultSchema);
     },
     cancelConversation(conversationId, query) {
       const parsed = GoalQuerySchema.parse(query);
       return request(`v1/conversations/${encodeURIComponent(UuidSchema.parse(conversationId))}/cancel`, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(parsed) }, ConversationSchema);
+    },
+    listConversationEvents(conversationId, query) {
+      const parsed = ConversationEventQuerySchema.parse(query);
+      return request(`v1/conversations/${encodeURIComponent(UuidSchema.parse(conversationId))}/events?${new URLSearchParams({ projectId: parsed.projectId, after: parsed.after }).toString()}`, { headers }, ConversationEventSchema.array());
     },
     streamConversationEvents(conversationId, query, options) {
       return readConversationEventStream(fetch, base, headers, UuidSchema.parse(conversationId), query, options?.signal);

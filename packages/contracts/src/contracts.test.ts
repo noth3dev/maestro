@@ -53,3 +53,24 @@ describe("project access provisioning contracts", () => {
     expect(ProjectAccessProvisionInputSchema.safeParse({ operatorId: projectId, projectId, roles: ["*"] }).success).toBe(false);
   });
 });
+
+
+describe("conversation streaming contracts", () => {
+  it("accepts the stable unknown account-login error code", async () => {
+    const { StableApiErrorSchema } = await import("./index.js");
+    expect(StableApiErrorSchema.parse({ error: { code: "account_login_session_unknown", message: "Account login session is unknown" } }).error.code).toBe("account_login_session_unknown");
+  });
+
+  it("accepts durable turn delta events", async () => {
+    const { ConversationEventSchema } = await import("./index.js");
+    expect(ConversationEventSchema.parse({
+      cursor: "3",
+      eventId: projectId,
+      conversationId: projectId,
+      projectId,
+      eventType: "turn_delta",
+      payload: { turnId: projectId, text: "chunk" },
+      occurredAt: "2030-01-01T00:00:00.000Z",
+    }).eventType).toBe("turn_delta");
+  });
+});

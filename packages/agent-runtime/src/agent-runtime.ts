@@ -101,8 +101,22 @@ function limitsFor(grant: CapabilityGrant): TurnLimits {
 function textMessage(text: string): ModelMessage { return { role: "user", content: [{ kind: "text", text }] }; }
 function toolMessage(callId: string, result: ToolExecutionResult): ModelMessage { return { role: "tool", content: [{ kind: "tool-result", toolCallId: callId, status: result.status, content: result.content, origin: "host", trust: "untrusted-data" }] }; }
 function safeJson(value: unknown): string { try { return JSON.stringify(value) ?? "null"; } catch { return "[unserializable tool result]"; } }
+function assistantMessage(text: string): ModelMessage { return { role: "assistant", content: [{ kind: "text", text }] }; }
+function messageBytes(message: ModelMessage): number { return Buffer.byteLength(safeJson(message.content), "utf8"); }
+function boundedMessages(messages: readonly ModelMessage[], maxBytes: number): ModelMessage[] {
+  const kept: ModelMessage[] = [];
+  let bytes = 0;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]!;
+    const size = messageBytes(message);
+    if (bytes + size > maxBytes) continue;
+    kept.push(message);
+    bytes += size;
+  }
+  return kept.reverse();
+}
 
-export function createMaestroAgentRuntime(options: { gateway: ModelGatewayPort; binding: GatewayBinding; tools: ToolRegistry }): MaestroAgentRuntime {
+export function createMaestroAgentRuntime(options: { gateway: ModelGatewayPort; binding: GatewayBinding; tools: ToolRegistry; initialMessages?: readonly ModelMessage[]; onModelEvent?: (event: ModelStreamEvent, turnId: string) => void }): MaestroAgentRuntime {
   const records = new Map<InvocationRef, RuntimeRecord>();
   const byExecution = new Map<ExecutionRef, InvocationRef>();
   let closing = false;
@@ -132,6 +146,7 @@ export function createMaestroAgentRuntime(options: { gateway: ModelGatewayPort; 
   }
 
   async function executeTurn(record: RuntimeRecord, text?: string): Promise<void> {
+    if (record.abort.signal.aborted || (record.phase === "terminal" && record.status !== "succeeded")) return;
     if (text !== undefined) record.messages.push(textMessage(text));
     record.status = "running";
     record.phase = "provider_turn";
@@ -144,19 +159,51 @@ export function createMaestroAgentRuntime(options: { gateway: ModelGatewayPort; 
       record.activeRequestId = requestId;
       record.phase = "provider_turn";
       let result;
+      let streamedText = "";
+      let streamedBytes = 0;
+      let streamExceeded = false;
+      const turnLimits = limitsFor(record.grant);
       try {
-        result = await options.gateway.turn({ binding: options.binding, requestId, sessionId: record.sessionId, turnId: `${record.invocation}-turn-${record.turnCount}`, messages: [...record.messages], tools: options.tools.definitions(record.grant.allowedTools), limits: limitsFor(record.grant), signal: record.abort.signal, emit: (event: ModelStreamEvent) => { if (event.kind === "text-delta" && event.text) record.answer = { state: "available", text: event.text }; } });
+        result = await options.gateway.turn({ binding: options.binding, requestId, sessionId: record.sessionId, turnId: `${record.invocation}-turn-${record.turnCount}`, messages: boundedMessages(record.messages, turnLimits.maxInputBytes), tools: options.tools.definitions(record.grant.allowedTools), limits: turnLimits, signal: record.abort.signal, emit: (event: ModelStreamEvent) => {
+          if (event.kind !== "text-delta" || event.text === "") { options.onModelEvent?.(event, `${record.invocation}-turn-${record.turnCount}`); return; }
+          const remaining = turnLimits.maxResultBytes - streamedBytes;
+          if (remaining <= 0) { streamExceeded = true; record.abort.abort(); return; }
+          let end = event.text.length;
+          while (end > 0 && Buffer.byteLength(event.text.slice(0, end), "utf8") > remaining) end -= 1;
+          if (end < event.text.length && end > 0) {
+            const previous = event.text.charCodeAt(end - 1);
+            const next = event.text.charCodeAt(end);
+            if (previous >= 0xd800 && previous <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) end -= 1;
+          }
+          const bounded = event.text.slice(0, end);
+          streamedText += bounded;
+          streamedBytes += Buffer.byteLength(bounded, "utf8");
+          record.answer = { state: "available", text: streamedText };
+          if (bounded !== event.text) { streamExceeded = true; record.abort.abort(); }
+          if (bounded !== "") options.onModelEvent?.(bounded === event.text ? event : { ...event, text: bounded }, `${record.invocation}-turn-${record.turnCount}`);
+        } });
       } catch (error) {
         record.activeRequestId = undefined;
         record.phase = "terminal";
-        if (record.abort.signal.aborted) { record.status = "unknown"; record.error = "provider cancellation outcome is unknown"; }
-        else { record.status = "unknown"; record.error = error instanceof Error ? error.message : "provider outcome is unknown"; }
+        if (streamExceeded) { record.status = "failed"; record.error = "model output limit exceeded"; return; }
+        if (record.abort.signal.aborted) {
+          if ((record.status as InvocationStatus) !== "cancelled" && (record.status as InvocationStatus) !== "unknown") { record.status = "unknown"; record.error = "provider cancellation outcome is unknown"; }
+        } else { record.status = "unknown"; record.error = error instanceof Error ? error.message : "provider outcome is unknown"; }
         return;
       }
       record.activeRequestId = undefined;
+      if (streamExceeded) { record.status = "failed"; record.error = "model output limit exceeded"; record.phase = "terminal"; return; }
+      if (record.abort.signal.aborted) {
+        if ((record.status as InvocationStatus) !== "cancelled") { record.status = "unknown"; record.error = "provider cancellation outcome is unknown"; }
+        record.phase = "terminal";
+        return;
+      }
+      if (Buffer.byteLength(result.text, "utf8") > turnLimits.maxResultBytes) { record.status = "failed"; record.error = "model output limit exceeded"; record.phase = "terminal"; return; }
       if (result.model.provider !== options.binding.provider.provider || result.model.id !== options.binding.provider.id) { record.status = "failed"; record.error = "provider model identity mismatch"; record.phase = "terminal"; return; }
       record.model = result.model; record.usage = result.usage;
       if (result.text) record.answer = { state: "available", text: result.text };
+      const assistantText = result.text || streamedText;
+      if (assistantText !== "") record.messages.push(assistantMessage(assistantText));
       if (result.toolCalls.length === 0) { record.status = "succeeded"; record.phase = "terminal"; return; }
       const seen = new Map<string, string>();
       for (const call of result.toolCalls) {
@@ -201,7 +248,7 @@ export function createMaestroAgentRuntime(options: { gateway: ModelGatewayPort; 
       }
       const execution = asExecution(`execution-${randomUUID()}`);
       const invocation = asInvocation(`invocation-${randomUUID()}`);
-      const record: RuntimeRecord = { execution, invocation, name: request.name, context: admission.context, grant: admission.grant, modelPolicy: admission.modelPolicy, idempotencyKey: admission.idempotencyKey, sessionId: `session-${randomUUID()}`, messages: [], toolEvents: [], abort: new AbortController(), status: "queued", phase: "queued", activeRequestId: undefined, usage: defaultUsage, answer: defaultAnswer, turnCount: 0, toolCount: 0, sessionVersion: 0, lastCursor: 0 };
+      const record: RuntimeRecord = { execution, invocation, name: request.name, context: admission.context, grant: admission.grant, modelPolicy: admission.modelPolicy, idempotencyKey: admission.idempotencyKey, sessionId: `session-${randomUUID()}`, messages: boundedMessages(options.initialMessages ?? [], 64_000), toolEvents: [], abort: new AbortController(), status: "queued", phase: "queued", activeRequestId: undefined, usage: defaultUsage, answer: defaultAnswer, turnCount: 0, toolCount: 0, sessionVersion: 0, lastCursor: 0 };
       records.set(invocation, record); byExecution.set(execution, invocation);
       return { execution, invocation };
     },

@@ -16,6 +16,7 @@ const expectedTables = [
   "task_contract_decisions", "task_contracts", "permanent_head_roles", "role_persona_axes", "permanent_roles", "departments", "organization_groups",
   "reconciler_leader_lease", "goal_controls", "authority_decisions", "authority_records", "local_operator_credentials", "local_operators", "goal_leases",
   "outbox", "goal_events", "command_receipts", "goals", "head_activation_edges", "head_activation_attempts", "evidence_records",
+  "conversations", "conversation_events", "conversation_turns",
 ];
 
 describeDatabase("shared PostgreSQL migration runner", () => {
@@ -36,6 +37,13 @@ describeDatabase("shared PostgreSQL migration runner", () => {
     const actualTables = result.rows.map(({ table_name }) => table_name);
 
     expect(actualTables).toEqual(expect.arrayContaining(expectedTables));
+  });
+
+  it("keeps turn delta events inside the durable conversation event contract", async () => {
+    const result = await pool.query<{ definition: string }>(
+      "SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conname = 'conversation_events_event_type_check'",
+    );
+    expect(result.rows[0]?.definition).toContain("turn_delta");
   });
 
   it("resets the active search-path schema before applying migrations", async () => {

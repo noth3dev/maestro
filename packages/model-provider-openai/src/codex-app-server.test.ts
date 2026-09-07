@@ -43,6 +43,15 @@ describe("Codex app-server managed login", () => {
     await client.close();
   });
 
+  it("uses the official Codex originator by default", async () => {
+    const transport = new FakeTransport();
+    const client = new CodexAppServerClient({ transport });
+    await client.startChatGptLogin();
+    const initialize = transport.messages.find((message) => (message as { method?: string }).method === "initialize") as { params: { clientInfo: { name: string } } };
+    expect(initialize.params.clientInfo.name).toBe("codex_cli_rs");
+    await client.close();
+  });
+
   it("maps failed completion and supports cancellation", async () => {
     const transport = new FakeTransport();
     const client = new CodexAppServerClient({ transport });

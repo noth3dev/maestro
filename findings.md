@@ -668,3 +668,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Fixes are present but not yet committed: `updateState` now requires an exact live `(operation_owner, operation_token)` pair when fenced, or an explicitly unleased no-token update; migration `0066_harden_provider_account_login_identity.sql` provides the only provider-identity completion function and rejects direct identity transitions; tests cover stale-after-release, no-token-active, direct identity injection, durable route IDs, and typed Codex unknown errors.
 - Verification: targeted gateway/control-plane tests passed 15/15; durable PostgreSQL account-login integration passed 8/8 on `postgresql://maestro@127.0.0.1:55465/maestro_test`; `npm run build` passed. `npm install --ignore-scripts` repaired stale root workspace symlinks and reported the pre-existing 3 high-severity npm audit findings.
 - Current runtime/doc truth: native `MaestroAgentRuntime` serves conversations; `apps/control-plane/src/main.ts` still composes `createPrimeExecutionKernel()` for worker execution. Prime removal remains an open migration gate, not a completed phase.
+
+
+## 2026-09-07 — Codex authorize URL and TUI copy finding
+
+- A real Codex app-server 0.153.4 probe showed Maestro's previous default URL carried `originator=maestro`. The provider login endpoint returned `Invalid authorize request`; the official Codex client identity is `codex_cli_rs`. The default app-server client identity now uses that originator while keeping Maestro as the display title.
+- The TUI previously opened the browser but did not retain or render the URL, leaving no reliable manual recovery path. The waiting dialog now shows the URL and advertises `Alt+C`; the action copies through a shell-free stdin boundary and reports a safe fallback when no clipboard utility exists.
+- This does not claim successful account completion: the local app-server process and browser callback still require a running supported Codex installation and a real browser session.

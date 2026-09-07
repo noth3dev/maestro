@@ -1,4 +1,4 @@
-import type { GatewayAccountLoginStartRequest, GatewayAccountLoginStartResult, GatewayAccountLoginStatusRequest, GatewayAccountLoginStatusResult, GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialBinding, GatewayCredentialRevokeRequest, GatewayModelListRequest, GatewayTurnRequest, ModelCatalogEntry, ModelGatewayPort, ModelProviderPort, ModelTurnResult, ProviderCancellationOutcome, ProviderCapability } from "@maestro/agent-runtime";
+import type { GatewayAccountLoginStartRequest, GatewayAccountLoginStartResult, GatewayAccountLoginStatusRequest, GatewayAccountLoginStatusResult, GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialBinding, GatewayCredentialRevokeRequest, GatewayModelListRequest, GatewayTurnRequest, ModelCatalogEntry, ModelGatewayPort, ModelProviderPort, ModelStreamEvent, ModelTurnResult, ProviderCancellationOutcome, ProviderCapability } from "@maestro/agent-runtime";
 
 export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -32,6 +32,107 @@ function parseError(body: unknown, status: number): ModelGatewayClientError {
   const code = candidate && typeof candidate.code === "string" ? candidate.code : status >= 500 ? "provider_unavailable" : "gateway_request_failed";
   const message = candidate && typeof candidate.message === "string" ? candidate.message : "model gateway request failed";
   return new ModelGatewayClientError(code, status, message);
+}
+
+
+const MAX_STREAM_RECORD_BYTES = 128_000;
+const streamEventKinds = new Set<ModelStreamEvent["kind"]>(["text-delta", "tool-proposed", "tool-validated", "tool-executing", "tool-completed", "tool-rejected", "usage", "provider-error", "terminal"]);
+
+function parseGatewayTurnResult(value: unknown): ModelTurnResult {
+  if (!value || typeof value !== "object") throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed turn result");
+  const result = value as Record<string, unknown>;
+  if (typeof result.requestId !== "string" || typeof result.text !== "string" || !Array.isArray(result.toolCalls) || !result.model || typeof result.model !== "object") {
+    throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed turn result");
+  }
+  return value as ModelTurnResult;
+}
+
+function parseGatewayStreamEvent(value: unknown): ModelStreamEvent {
+  if (!value || typeof value !== "object") throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed stream event");
+  const event = value as Record<string, unknown>;
+  if (typeof event.kind !== "string" || !streamEventKinds.has(event.kind as ModelStreamEvent["kind"]) || !Number.isSafeInteger(event.cursor) || (event.cursor as number) < 0) {
+    throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed stream event");
+  }
+  if (event.kind === "text-delta" && (typeof event.text !== "string" || Buffer.byteLength(event.text, "utf8") > 60_000)) throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed stream event");
+  return value as ModelStreamEvent;
+}
+
+async function streamGatewayTurn(
+  fetchImpl: Fetch,
+  base: URL,
+  headers: Record<string, string>,
+  input: GatewayTurnRequest,
+  timeoutMs: number,
+): Promise<ModelTurnResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const body = { binding: input.binding, requestId: input.requestId, sessionId: input.sessionId, turnId: input.turnId, messages: input.messages, tools: input.tools, limits: input.limits };
+  let response: Response;
+  try {
+    response = await fetchImpl(new URL("v1/turn/stream", base).href, {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify(body),
+      redirect: "error",
+      signal: AbortSignal.any([controller.signal, input.signal]),
+    });
+    if (!response.ok) {
+      const errorBody: unknown = await response.json().catch(() => undefined);
+      throw parseError(errorBody, response.status);
+    }
+    if (response.body === null) throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned no stream body");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let result: ModelTurnResult | undefined;
+    let outputBytes = 0;
+    const consume = (record: string): void => {
+      const eventName = record.match(/^event:\s*(.+)$/m)?.[1];
+      const data = record.match(/^data:\s*(.+)$/m)?.[1];
+      if (eventName === undefined || data === undefined) return;
+      let parsed: unknown;
+      try { parsed = JSON.parse(data); } catch { throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed stream data"); }
+      if (eventName === "result") {
+        result = parseGatewayTurnResult(parsed);
+        if (result.requestId !== input.requestId) throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned a mismatched request");
+        if (Buffer.byteLength(result.text, "utf8") > input.limits.maxResultBytes) throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway output exceeds configured limit");
+        return;
+      }
+      if (eventName === "error") {
+        throw new ModelGatewayClientError("provider_unavailable", 502, "model gateway stream failed");
+      }
+      const event = parseGatewayStreamEvent(parsed);
+      if (event.kind === "text-delta") {
+        outputBytes += Buffer.byteLength(event.text, "utf8");
+        if (outputBytes > input.limits.maxResultBytes) throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway output exceeds configured limit");
+      }
+      input.emit(event);
+    };
+    try {
+      while (true) {
+        const chunk = await reader.read();
+        buffer += decoder.decode(chunk.value, { stream: !chunk.done });
+        const records = buffer.split(/\r?\n\r?\n/);
+        buffer = records.pop() ?? "";
+        if (Buffer.byteLength(buffer, "utf8") > MAX_STREAM_RECORD_BYTES) throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway stream record is too large");
+        for (const record of records) {
+          if (Buffer.byteLength(record, "utf8") > MAX_STREAM_RECORD_BYTES) throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway stream record is too large");
+          consume(record);
+        }
+        if (chunk.done) break;
+      }
+      if (buffer.trim() !== "") consume(buffer);
+    } finally {
+      await reader.cancel().catch(() => undefined);
+    }
+    if (result === undefined) throw new ModelGatewayClientError("provider_unavailable", 503, "model gateway stream ended without a result");
+    return result;
+  } catch (error) {
+    if (error instanceof ModelGatewayClientError) throw error;
+    throw new ModelGatewayClientError("provider_unavailable", 503, "model gateway request failed");
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function createModelGatewayClient(options: { baseUrl: string; token: string; fetch?: Fetch; timeoutMs?: number }): ModelGatewayPort {
@@ -120,8 +221,7 @@ export function createModelGatewayClient(options: { baseUrl: string; token: stri
       });
     },
     async turn(input: GatewayTurnRequest): Promise<ModelTurnResult> {
-      const body = { binding: input.binding, requestId: input.requestId, sessionId: input.sessionId, turnId: input.turnId, messages: input.messages, tools: input.tools, limits: input.limits };
-      return request("v1/turn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: input.signal }, (value) => value as ModelTurnResult);
+      return streamGatewayTurn(fetchImpl, base, headers, input, timeoutMs);
     },
     async cancel(requestId: string, signal?: AbortSignal): Promise<ProviderCancellationOutcome> {
       return request("v1/cancel", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ requestId }), ...(signal === undefined ? {} : { signal }) }, (value) => value as ProviderCancellationOutcome);
