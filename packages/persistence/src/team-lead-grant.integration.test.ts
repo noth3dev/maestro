@@ -140,6 +140,20 @@ describeDatabase("Team-lead grants and helper workers with PostgreSQL", () => {
     }));
   });
 
+  it("rejects a helper admission that widens the durable Mission Bundle scope", async () => {
+    const { proof, plan, worker, kernel, projectId } = await setupWorker();
+    const grant = await grantTeamLead(pool, worker.workerId, grantSubstance({ maxHelpers: 1 }), proof, headContext("product"));
+    kernel.spawn.mockClear();
+    const admission: ExecutionAdmission = {
+      context: { operatorId: "head:product", projectId, goalId: proof.goalId, missionBundleId: worker.bundleContentHash, policyVersion: `${plan.version}:${worker.bundleContentHash}`, fencingToken: proof.fencingToken },
+      grant: { grantId: "helper-grant", parentGrantId: `worker:${worker.workerId}`, allowedTools: ["write"], allowedSkills: ["implementation"], modelPolicy: ["test/model-a"], pathScope: ["packages/product", "outside"], outboundDataClasses: ["repository files only"], remaining: { modelTurns: 8, toolCalls: 8, childCalls: 0, outputTokens: 8192, wallTimeMs: 60_000, retryCount: 0 } },
+      modelPolicy: ["test/model-a"], idempotencyKey: "helper-command-widened",
+    };
+    await expect(spawnHelperWorker(pool, kernel, grant.grantId, proof, headContext("product"), admission))
+      .rejects.toThrow("widens the Mission Bundle capability scope");
+    expect(kernel.spawn).not.toHaveBeenCalled();
+  });
+
   it("records helper ownership before provider spawn and returns the durable owner binding", async () => {
     const { proof, worker, kernel } = await setupWorker();
     const grant = await grantTeamLead(pool, worker.workerId, grantSubstance({ maxHelpers: 1 }), proof, headContext("product"));
