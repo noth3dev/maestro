@@ -95,19 +95,35 @@ const defaultUsage: InvocationUsage = { state: "unknown" };
 const defaultAnswer: InvocationAnswer = { state: "unavailable", reason: "snapshot-unavailable" };
 
 // The Model Gateway's real wire schema (apps/model-gateway/src/rpc.ts's
-// TurnSchema) caps providerTimeoutMs at 600_000ms and wallTimeMs at
-// 3_600_000ms. A Mission Bundle's timeCeiling is a multi-day domain-level
-// budget (packages/persistence/src/worker.ts's missionTimeLimitMs), so
-// grant.remaining.wallTimeMs commonly exceeds both wire ceilings. Sending an
-// unclamped value fails real gateway schema validation and durably strands
-// the invocation as "unknown" -- clamp defensively rather than let a
-// Mission Bundle author's time ceiling silently break every real turn.
+// LimitsSchema) caps every one of these fields. Every value here is
+// ultimately domain-derived -- a Mission Bundle's timeCeiling is a
+// multi-day budget (packages/persistence/src/worker.ts's
+// missionTimeLimitMs), and nothing in packages/domain/src/mission-bundle.ts
+// bounds allowedTools.length or workerCeiling against the gateway's own
+// maxToolCalls/maxChildCalls ceilings either. Sending any unclamped value
+// fails real gateway schema validation and durably strands the invocation
+// as an opaque "unknown" -- clamp every field defensively so a Mission
+// Bundle author's otherwise-legitimate choice can never silently break
+// every real turn against the actual wire boundary.
+const MAX_WIRE_MODEL_TURNS = 100;
+const MAX_WIRE_TOOL_CALLS = 1_000;
+const MAX_WIRE_CHILD_CALLS = 100;
+const MAX_WIRE_OUTPUT_TOKENS = 1_000_000;
 const MAX_WIRE_PROVIDER_TIMEOUT_MS = 600_000;
 const MAX_WIRE_WALL_TIME_MS = 3_600_000;
 
 function limitsFor(grant: CapabilityGrant): TurnLimits {
   const wallTimeMs = Math.min(Math.max(1, grant.remaining.wallTimeMs), MAX_WIRE_WALL_TIME_MS);
-  return { maxModelTurns: grant.remaining.modelTurns, maxToolCalls: grant.remaining.toolCalls, maxChildCalls: grant.remaining.childCalls, maxOutputTokens: grant.remaining.outputTokens, maxInputBytes: 64_000, maxResultBytes: 64_000, providerTimeoutMs: Math.min(wallTimeMs, MAX_WIRE_PROVIDER_TIMEOUT_MS), wallTimeMs };
+  return {
+    maxModelTurns: Math.min(Math.max(0, grant.remaining.modelTurns), MAX_WIRE_MODEL_TURNS),
+    maxToolCalls: Math.min(Math.max(0, grant.remaining.toolCalls), MAX_WIRE_TOOL_CALLS),
+    maxChildCalls: Math.min(Math.max(0, grant.remaining.childCalls), MAX_WIRE_CHILD_CALLS),
+    maxOutputTokens: Math.min(Math.max(1, grant.remaining.outputTokens), MAX_WIRE_OUTPUT_TOKENS),
+    maxInputBytes: 64_000,
+    maxResultBytes: 64_000,
+    providerTimeoutMs: Math.min(wallTimeMs, MAX_WIRE_PROVIDER_TIMEOUT_MS),
+    wallTimeMs,
+  };
 }
 
 function textMessage(text: string): ModelMessage { return { role: "user", content: [{ kind: "text", text }] }; }

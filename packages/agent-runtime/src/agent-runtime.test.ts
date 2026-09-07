@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { InvocationObservation, ModelIdentity } from "@maestro/domain";
-import type { GatewayBinding, ModelGatewayPort, ModelTurnResult } from "./model-provider.js";
+import type { GatewayBinding, ModelGatewayPort, ModelTurnResult, TurnLimits } from "./model-provider.js";
 import { createMaestroAgentRuntime, ToolRegistry } from "./agent-runtime.js";
 
 const identity: ModelIdentity = { provider: "fake", id: "model-a" };
@@ -176,34 +176,40 @@ describe("native Maestro agent runtime", () => {
     expect(await runtime.getInvocationStatus(spawned.invocation)).toBe("failed");
   });
 
-  it("bounds providerTimeoutMs and wallTimeMs to the real Model Gateway wire schema even for a multi-day Mission Bundle time ceiling", async () => {
+  it("bounds every wire-validated turn limit to the real Model Gateway schema for an oversized domain grant", async () => {
     // A real Mission Bundle timeCeiling of days/hours produces a
     // correspondingly large grant.remaining.wallTimeMs (see
-    // packages/persistence/src/worker.ts's missionTimeLimitMs). The Model
-    // Gateway's real wire schema caps providerTimeoutMs at 600_000ms and
-    // wallTimeMs at 3_600_000ms (apps/model-gateway/src/rpc.ts's
-    // TurnSchema); sending an unclamped value through a real gateway process
+    // packages/persistence/src/worker.ts's missionTimeLimitMs), and nothing
+    // in packages/domain/src/mission-bundle.ts bounds allowedTools.length or
+    // workerCeiling either, so grant.remaining.toolCalls/childCalls can also
+    // exceed the gateway's own caps. The Model Gateway's real wire schema
+    // (apps/model-gateway/src/rpc.ts's LimitsSchema) caps every one of these
+    // fields; sending an unclamped value through a real gateway process
     // fails schema validation and durably strands the invocation as
     // "unknown" with an opaque "invalid model turn request" -- this is a
     // real defect this test reproduces and pins closed.
-    let received: { providerTimeoutMs: number; wallTimeMs: number } | undefined;
+    let received: TurnLimits | undefined;
     const modelGateway: ModelGatewayPort = {
       async listModels() { return []; },
       async admit() { return binding; },
       async turn(request) {
-        received = { providerTimeoutMs: request.limits.providerTimeoutMs, wallTimeMs: request.limits.wallTimeMs };
+        received = request.limits;
         return { requestId: request.requestId, model: identity, text: "ok", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
       },
       async cancel() { return { state: "confirmed" as const }; },
       async recover() { return "reconnected" as const; },
       async close() {},
     };
-    const longRunningGrant = { ...grant, remaining: { ...grant.remaining, wallTimeMs: 3 * 24 * 60 * 60 * 1000 } };
+    const oversizedGrant = { ...grant, remaining: { ...grant.remaining, modelTurns: 500, toolCalls: 5_000, childCalls: 500, outputTokens: 5_000_000, wallTimeMs: 3 * 24 * 60 * 60 * 1000 } };
     const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools: new ToolRegistry() });
-    const spawned = await runtime.spawn({ name: "long-mission", modelPolicy: ["fake/model-a"], idempotencyKey: "long-mission-1", context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1" }, grant: longRunningGrant });
+    const spawned = await runtime.spawn({ name: "oversized-grant", modelPolicy: ["fake/model-a"], idempotencyKey: "oversized-grant-1", context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1" }, grant: oversizedGrant });
     await runtime.prompt(spawned.execution, "return a bounded result");
 
     expect(received).toBeDefined();
+    expect(received!.maxModelTurns).toBeLessThanOrEqual(100);
+    expect(received!.maxToolCalls).toBeLessThanOrEqual(1_000);
+    expect(received!.maxChildCalls).toBeLessThanOrEqual(100);
+    expect(received!.maxOutputTokens).toBeLessThanOrEqual(1_000_000);
     expect(received!.providerTimeoutMs).toBeLessThanOrEqual(600_000);
     expect(received!.wallTimeMs).toBeLessThanOrEqual(3_600_000);
     expect(await runtime.getInvocationStatus(spawned.invocation)).toBe("succeeded");
