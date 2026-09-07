@@ -1,11 +1,27 @@
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { advanceWorkspaceSession, attachWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession, selectWorkspaceGoal, sessionFileFor, startNewConversationSession } from "./session.js";
+import {
+  advanceWorkspaceSession,
+  attachWorkspaceSession,
+  loadWorkspaceSession,
+  saveWorkspaceSession,
+  selectWorkspaceGoal,
+  selectWorkspaceModel,
+  sessionFileFor,
+  startNewConversationSession,
+} from "./session.js";
 
 describe("workspace session", () => {
   it("round trips non-secret workspace session metadata", async () => {
     const baseDir = "/tmp/maestro-session-test";
-    const session = { workspacePath: "/work/acme", projectId: "project-1", goalId: "goal-1", lastEventCursor: "42", conversationId: "conversation-1", model: "openai/gpt-5" };
+    const session = {
+      workspacePath: "/work/acme",
+      projectId: "project-1",
+      goalId: "goal-1",
+      lastEventCursor: "42",
+      conversationId: "conversation-1",
+      model: "openai/gpt-5",
+    };
     await saveWorkspaceSession(session, baseDir);
     await expect(loadWorkspaceSession(session.workspacePath, baseDir)).resolves.toEqual(session);
     const sessionFile = sessionFileFor(session.workspacePath, baseDir);
@@ -24,30 +40,86 @@ describe("workspace session", () => {
   });
 
   it("attaches an explicitly selected project without reusing another project's Goal cursor", () => {
-    expect(attachWorkspaceSession("/work/acme", { workspacePath: "/work/acme", projectId: "old-project", goalId: "old-goal", lastEventCursor: "42" }, "new-project")).toEqual({
-      workspacePath: "/work/acme", projectId: "new-project",
+    expect(
+      attachWorkspaceSession(
+        "/work/acme",
+        { workspacePath: "/work/acme", projectId: "old-project", goalId: "old-goal", lastEventCursor: "42" },
+        "new-project",
+      ),
+    ).toEqual({
+      workspacePath: "/work/acme",
+      projectId: "new-project",
     });
   });
 
   it("selects a Goal without changing the project or event cursor", () => {
-    expect(selectWorkspaceGoal("/work/acme", { workspacePath: "/work/acme", projectId: "project-1", lastEventCursor: "42", conversationId: "conversation-1", model: "openai/gpt-5" }, "goal-2")).toEqual({ workspacePath: "/work/acme", projectId: "project-1", goalId: "goal-2", lastEventCursor: "42" });
+    expect(
+      selectWorkspaceGoal(
+        "/work/acme",
+        {
+          workspacePath: "/work/acme",
+          projectId: "project-1",
+          lastEventCursor: "42",
+          conversationId: "conversation-1",
+          model: "openai/gpt-5",
+        },
+        "goal-2",
+      ),
+    ).toEqual({ workspacePath: "/work/acme", projectId: "project-1", goalId: "goal-2", lastEventCursor: "42", model: "openai/gpt-5" });
   });
 
   it("requires an attached project before selecting a Goal", () => {
     expect(() => selectWorkspaceGoal("/work/acme", undefined, "goal-1")).toThrow("A project must be attached before selecting a Goal");
   });
 
+  it("selects a model without clearing the workspace or Goal binding", () => {
+    expect(
+      selectWorkspaceModel(
+        "/work/acme",
+        { workspacePath: "/work/acme", projectId: "project-1", goalId: "goal-1", lastEventCursor: "42" },
+        "openai/gpt-5",
+      ),
+    ).toEqual({
+      workspacePath: "/work/acme",
+      projectId: "project-1",
+      goalId: "goal-1",
+      lastEventCursor: "42",
+      model: "openai/gpt-5",
+    });
+  });
+
   it("starts a new conversation without dropping workspace binding or event progress", () => {
-    expect(startNewConversationSession("/work/acme", { workspacePath: "/work/acme", projectId: "project-1", goalId: "goal-1", lastEventCursor: "42" })).toEqual({
-      workspacePath: "/work/acme", projectId: "project-1", lastEventCursor: "42",
+    expect(
+      startNewConversationSession("/work/acme", {
+        workspacePath: "/work/acme",
+        projectId: "project-1",
+        goalId: "goal-1",
+        lastEventCursor: "42",
+        model: "anthropic/claude-sonnet-4-5",
+      }),
+    ).toEqual({
+      workspacePath: "/work/acme",
+      projectId: "project-1",
+      goalId: "goal-1",
+      lastEventCursor: "42",
+      model: "anthropic/claude-sonnet-4-5",
     });
   });
 
   it("binds the active Goal when a replayed event establishes the session", () => {
-    expect(advanceWorkspaceSession("/work/acme", undefined, {
-      cursor: "42", eventId: "event-1", projectId: "project-1", goalId: "goal-1", aggregateVersion: "1",
-      eventType: "goal.running", schemaVersion: 1, payload: {}, occurredAt: "2030-01-01T00:00:00.000Z",
-    })).toEqual({ workspacePath: "/work/acme", projectId: "project-1", goalId: "goal-1", lastEventCursor: "42" });
+    expect(
+      advanceWorkspaceSession("/work/acme", undefined, {
+        cursor: "42",
+        eventId: "event-1",
+        projectId: "project-1",
+        goalId: "goal-1",
+        aggregateVersion: "1",
+        eventType: "goal.running",
+        schemaVersion: 1,
+        payload: {},
+        occurredAt: "2030-01-01T00:00:00.000Z",
+      }),
+    ).toEqual({ workspacePath: "/work/acme", projectId: "project-1", goalId: "goal-1", lastEventCursor: "42" });
   });
 
   it("returns undefined for a workspace without a saved session", async () => {
