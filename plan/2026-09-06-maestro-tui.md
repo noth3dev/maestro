@@ -1,6 +1,6 @@
 # Maestro Terminal TUI Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Implementation workflow:** Execute this plan task by task and keep the checkboxes updated. Use the repository's current agent workflow; this document is the source of truth for scope and order.
 
 **Goal:** Build an interactive Prime Agent-style terminal TUI invoked by `maestro` that exposes the complete Maestro operational surface through the existing Control Plane, typed API client, durable events, and approval boundaries.
 
@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Node.js 24, npm workspaces, existing `@maestro/api-client`, Fastify Control Plane HTTP/SSE, Prime Agent-compatible terminal UI primitives, Vitest, real PostgreSQL integration fixtures, and real-process tests where lifecycle behavior is involved.
 
-**Spec:** `docs/superpowers/specs/2026-09-06-maestro-tui-design.md`
+**Spec:** `plan/specs/2026-09-06-maestro-tui-design.md`
 
 ## Global Constraints
 
