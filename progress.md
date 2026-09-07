@@ -2384,3 +2384,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - `MAESTRO_LIVE_PRIME=1 npm test -- packages/prime-adapter/src/sdk.live.test.ts` passed: **2 tests, 0 failed**.
 - The real pinned SDK completed a parent plus named direct child exchange and a disposable in-repository worker effect. The SDK reported model identity `{ provider: "openai-codex", id: "gpt-5.6-luna" }`.
 - The adapter honestly reported child answer text as unavailable for this SDK build rather than fabricating it; both live scenarios still completed with durable test assertions.
+
+
+## 2026-09-07 — Built local process acceptance smoke
+
+- Reused the running built local processes rather than treating unit tests as deployment proof: Model Gateway `127.0.0.1:4321/healthz` returned HTTP 200 and Control Plane `127.0.0.1:4310/healthz` returned HTTP 200.
+- Confirmed the authenticated boundary fails closed: unauthenticated Control Plane `/v1/models` returned HTTP 401 with `authentication_required`; no model catalog was exposed.
+- Confirmed the live Prime compatibility gate recorded 2/2 passing tests, including parent/direct-child exchange and disposable worker effect, with reported identity `openai-codex/gpt-5.6-luna`.
+- Removed only generated local acceptance logs; no source artifacts remain untracked.
