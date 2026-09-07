@@ -47,6 +47,12 @@ describe("workspace read commands", () => {
     expect(listProjects).not.toHaveBeenCalled();
   });
 
+  it("uses the selected session Goal for a Goal-scoped read when no ID is supplied", async () => {
+    const api = client();
+    await expect(executeReadCommand({ client: api, projectId, goalId }, { name: "budget", action: "get", options: {} })).resolves.toEqual({ title: "Budget", lines: [`• ${goalId} · spent 10/100 cents · reserved 20`] });
+    expect(api.getBudgetSummary).toHaveBeenCalledWith(goalId, { projectId });
+  });
+
   it("reads goals and the selected goal dashboard through the typed client", async () => {
     const result = await readDashboard({ client: client(), projectId });
     expect(result).toEqual({ projectId, goals: [goal], selectedGoal: goal, budget: { goalId, projectId, budgetCents: 100, reservedCents: 20, costCents: 10 }, workerCount: 1 });

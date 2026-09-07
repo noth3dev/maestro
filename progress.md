@@ -2216,3 +2216,14 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Corrected the missing request surface with API, registry, and write-router tests.
 - Verification: focused tests pass (30 tests), `npm run build` passes, and `git diff --check`
   passes.
+
+
+## 2026-09-06 — Maestro TUI selected-Goal defaults
+
+- Goal-scoped TUI reads and writes now use the persisted selected session Goal when
+  `--goal-id` is omitted. Explicit IDs still override the session context.
+- Commands fail truthfully with `No Goal is selected; use --goal-id or /goal select` when
+  neither source is available. Project binding remains supplied by the workspace session.
+- Added read/write regression coverage for the no-ID path.
+- Verification: focused tests pass (26 tests), `npm run build` passes, and `git diff --check`
+  passes.

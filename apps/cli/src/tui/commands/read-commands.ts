@@ -78,6 +78,10 @@ function required(command: ParsedCommand, name: string): string | ReadCommandRes
   return option(command, name) ?? unavailable(`Missing required option --${name}`);
 }
 
+function selectedGoal(command: ParsedCommand, context: ReadCommandContext): string | ReadCommandResult {
+  return option(command, "goal-id") ?? context.goalId ?? unavailable("No Goal is selected; use --goal-id or /goal select");
+}
+
 function valueLines<T>(title: string, items: readonly T[], format: (item: T) => string): ReadCommandResult {
   return { title, lines: items.length === 0 ? ["No records found."] : items.map(format) };
 }
@@ -134,13 +138,13 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     return { title: "Mission Bundle", lines: [`• ${councilId}/${departmentId}/${itemId} · v${bundle.planVersion} · ${bundle.contentHash}`] };
   }
   if (key === "goal:get") {
-    const goalId = required(command, "goal-id");
+    const goalId = selectedGoal(command, context);
     if (typeof goalId !== "string") return goalId;
     const goal = await context.client.getGoal(goalId, { projectId: context.projectId });
     return { title: "Goal", lines: [`• ${goal.goalId} · ${goal.state} · v${goal.version}`] };
   }
   if (key === "budget:get") {
-    const goalId = required(command, "goal-id");
+    const goalId = selectedGoal(command, context);
     if (typeof goalId !== "string") return goalId;
     const budget = await context.client.getBudgetSummary(goalId, { projectId: context.projectId });
     return { title: "Budget", lines: [`• ${budget.goalId} · spent ${budget.costCents}/${budget.budgetCents} cents · reserved ${budget.reservedCents}`] };
@@ -150,7 +154,7 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     return { title: "Events", lines: page.events.length === 0 ? [`No events. Next cursor: ${page.nextCursor}`] : page.events.map((event) => `• ${event.cursor} · ${event.eventType} · ${event.goalId}`) };
   }
   if (key === "worker:list" || key === "workers:list") {
-    const goalId = required(command, "goal-id");
+    const goalId = selectedGoal(command, context);
     if (typeof goalId !== "string") return goalId;
     const workers = await context.client.listWorkersForGoal(goalId, { projectId: context.projectId });
     return valueLines("Workers", workers.workers, (worker) => `• ${worker.workerId} · ${worker.status}`);
@@ -165,36 +169,36 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     return { title: "Worker", lines: [`• ${worker.workerId} · ${worker.status}`] };
   }
   if (key === "git:status") {
-    const goalId = required(command, "goal-id");
+    const goalId = selectedGoal(command, context);
     if (typeof goalId !== "string") return goalId;
     const state = await context.client.getGitIntegrationState(goalId, { projectId: context.projectId });
     return { title: "Git", lines: [JSON.stringify(state)] };
   }
   if (key === "metronome-challenges:list") {
-    const goalId = required(command, "goal-id");
+    const goalId = selectedGoal(command, context);
     if (typeof goalId !== "string") return goalId;
     const challenges = await context.client.listMetronomeChallenges(goalId, { projectId: context.projectId });
     return { title: "Metronome", lines: challenges.challenges.length === 0 ? ["No challenges found."] : challenges.challenges.map((challenge) => `• ${challenge.challengeId} · ${challenge.status}`) };
   }
   if (key === "encore-council:list") {
-    const goalId = required(command, "goal-id");
+    const goalId = selectedGoal(command, context);
     if (typeof goalId !== "string") return goalId;
     const rounds = await context.client.listEncoreCouncilRounds(goalId, { projectId: context.projectId });
     return { title: "Encore", lines: rounds.rounds.length === 0 ? ["No Encore rounds found."] : rounds.rounds.map((round) => `• ${round.roundId}`) };
   }
   if (key === "certification:list" || key === "certifications:list") {
-    const goalId = required(command, "goal-id");
+    const goalId = selectedGoal(command, context);
     if (typeof goalId !== "string") return goalId;
     const certifications = await context.client.listCertifications(goalId, { projectId: context.projectId });
     return { title: "Certifications", lines: certifications.certifications.length === 0 ? ["No certifications found."] : certifications.certifications.map((certification) => `• ${certification.certificationId} · ${certification.verdict}`) };
   }
   if (key === "concertmaster-report:get") {
-    const goalId = required(command, "goal-id");
+    const goalId = selectedGoal(command, context);
     if (typeof goalId !== "string") return goalId;
     return { title: "Concertmaster report", lines: [JSON.stringify(await context.client.getConcertmasterReport(goalId, { projectId: context.projectId }))] };
   }
   if (key === "improvement-digests:list") {
-    const goalId = required(command, "goal-id");
+    const goalId = selectedGoal(command, context);
     if (typeof goalId !== "string") return goalId;
     const digests = await context.client.listImprovementDigestsForGoal(goalId, { projectId: context.projectId });
     return { title: "Improvement digests", lines: digests.digests.length === 0 ? ["No improvement digests found."] : digests.digests.map((digest) => `• ${digest.digestId} · ${digest.trigger}`) };
