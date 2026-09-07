@@ -165,15 +165,31 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     eventService: { listEvents: (projectId, after) => listGoalEvents(pool, { projectId, after }) },
     ...(conversationService === undefined ? {} : { conversationService }),
     ...(accountLoginStore === undefined ? {} : { accountLoginStore, accountLoginOwnerId }),
+    // The Model Gateway process authenticates one fixed gateway-level
+    // operator identity (config.modelGatewayOperatorId), matching exactly
+    // how native admission already calls gateway.admit() with
+    // gatewayOperatorId rather than the calling end-user's own operator ID
+    // (apps/control-plane/src/native-execution-kernel.ts). Provider
+    // credentials and managed logins are shared per Control-Plane process,
+    // not per individual Maestro operator; the real end-user's identity and
+    // authorization remain enforced entirely by Maestro's own persistence
+    // layer (accountLoginStore, project membership, roles), which still
+    // receives and scopes by the real operatorId untouched. Forwarding the
+    // real end-user operatorId to the gateway's own operatorId-equality
+    // check instead of this fixed constant made every credential bind and
+    // every account-login call fail closed with "credential operator
+    // context mismatch" for any authenticated operator whose ID is not
+    // literally equal to the configured gateway operator ID -- i.e. always,
+    // for every real multi-operator deployment.
     ...(modelGateway === undefined || modelGateway.bindCredential === undefined || modelGateway.revokeCredential === undefined ? {} : {
       providerCredentials: {
-        bind: (input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic"; authMode: "api-key"; secret: string }) => modelGateway.bindCredential!(input),
-        revoke: (input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic" }) => modelGateway.revokeCredential!(input),
+        bind: (input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic"; authMode: "api-key"; secret: string }) => modelGateway.bindCredential!({ ...input, operatorId: config.modelGatewayOperatorId }),
+        revoke: (input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic" }) => modelGateway.revokeCredential!({ ...input, operatorId: config.modelGatewayOperatorId }),
         ...(modelGateway.startAccountLogin === undefined || modelGateway.accountLoginStatus === undefined || modelGateway.cancelAccountLogin === undefined ? {} : {
-          startAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex" }) => modelGateway.startAccountLogin!(input),
-          accountLoginStatus: (input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }) => modelGateway.accountLoginStatus!(input),
-          cancelAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }) => modelGateway.cancelAccountLogin!(input),
-          ...(modelGateway.logoutAccount === undefined ? {} : { logoutAccount: (input: { operatorId: string; requestId: string; providerId: "openai-codex" }) => modelGateway.logoutAccount!(input) }),
+          startAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex" }) => modelGateway.startAccountLogin!({ ...input, operatorId: config.modelGatewayOperatorId }),
+          accountLoginStatus: (input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }) => modelGateway.accountLoginStatus!({ ...input, operatorId: config.modelGatewayOperatorId }),
+          cancelAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }) => modelGateway.cancelAccountLogin!({ ...input, operatorId: config.modelGatewayOperatorId }),
+          ...(modelGateway.logoutAccount === undefined ? {} : { logoutAccount: (input: { operatorId: string; requestId: string; providerId: "openai-codex" }) => modelGateway.logoutAccount!({ ...input, operatorId: config.modelGatewayOperatorId }) }),
         }),
       },
     }),
