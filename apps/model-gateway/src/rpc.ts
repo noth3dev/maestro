@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
-import type { GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialRevokeRequest, GatewayTurnRequest, ModelGatewayPort, ModelMessage, ModelStreamEvent, ModelToolDefinition, TurnLimits } from "@maestro/agent-runtime";
+import type { GatewayAccountLoginStartRequest, GatewayAccountLoginStatusRequest, GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialRevokeRequest, GatewayTurnRequest, ModelGatewayPort, ModelMessage, ModelStreamEvent, ModelToolDefinition, TurnLimits } from "@maestro/agent-runtime";
 
 const IdentitySchema = z.object({ provider: z.string().min(1).max(64), id: z.string().min(1).max(256) }).strict();
 const BindingSchema = z.object({
@@ -23,6 +23,12 @@ const CredentialBindSchema = z.object({
 }).strict();
 const CredentialRevokeSchema = z.object({
   requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.enum(["openai", "anthropic"]),
+}).strict();
+const AccountLoginStartSchema = z.object({
+  requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.literal("openai-codex"),
+}).strict();
+const AccountLoginStatusSchema = z.object({
+  requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.literal("openai-codex"), loginId: z.string().min(1).max(256),
 }).strict();
 const TurnSchema = z.object({
   binding: BindingSchema, requestId: z.string().min(1).max(128), sessionId: z.string().min(1).max(128), turnId: z.string().min(1).max(128),
@@ -74,6 +80,38 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
       return await options.gateway.bindCredential(parsed.data as GatewayCredentialBindRequest);
     } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
   });
+  app.post("/v1/account-logins/start", async (request, reply) => {
+    if (!(await guard(request, reply))) return;
+    const parsed = AccountLoginStartSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: { code: "invalid_gateway_request", message: "invalid account login request" } });
+    if (parsed.data.operatorId !== options.operatorId) return reply.code(403).send({ error: { code: "gateway_auth_required", message: "gateway operator context is invalid" } });
+    try {
+      if (!options.gateway.startAccountLogin) throw new Error("account login is unavailable");
+      return await options.gateway.startAccountLogin(parsed.data as GatewayAccountLoginStartRequest);
+    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+  });
+  app.post("/v1/account-logins/status", async (request, reply) => {
+    if (!(await guard(request, reply))) return;
+    const parsed = AccountLoginStatusSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: { code: "invalid_gateway_request", message: "invalid account login status request" } });
+    if (parsed.data.operatorId !== options.operatorId) return reply.code(403).send({ error: { code: "gateway_auth_required", message: "gateway operator context is invalid" } });
+    try {
+      if (!options.gateway.accountLoginStatus) throw new Error("account login is unavailable");
+      return await options.gateway.accountLoginStatus(parsed.data as GatewayAccountLoginStatusRequest);
+    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+  });
+  app.post("/v1/account-logins/cancel", async (request, reply) => {
+    if (!(await guard(request, reply))) return;
+    const parsed = AccountLoginStatusSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: { code: "invalid_gateway_request", message: "invalid account login cancellation request" } });
+    if (parsed.data.operatorId !== options.operatorId) return reply.code(403).send({ error: { code: "gateway_auth_required", message: "gateway operator context is invalid" } });
+    try {
+      if (!options.gateway.cancelAccountLogin) throw new Error("account login is unavailable");
+      await options.gateway.cancelAccountLogin(parsed.data as GatewayAccountLoginStatusRequest);
+      return { cancelled: true };
+    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+  });
+
   app.post("/v1/credentials/revoke", async (request, reply) => {
     if (!(await guard(request, reply))) return;
     const parsed = CredentialRevokeSchema.safeParse(request.body);
@@ -108,6 +146,38 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
     };
     try { return await options.gateway.turn(turn); }
     catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+  });
+  app.post("/v1/turn/stream", async (request, reply) => {
+    if (!(await guard(request, reply))) return;
+    const parsed = TurnSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: { code: "invalid_gateway_request", message: "invalid model turn request" } });
+    const body = parsed.data;
+    const eventLimit = 256;
+    let eventCount = 0;
+    reply.hijack();
+    reply.raw.setHeader("content-type", "text/event-stream; charset=utf-8");
+    reply.raw.setHeader("cache-control", "no-cache");
+    reply.raw.setHeader("connection", "keep-alive");
+    const writeEvent = (event: ModelStreamEvent) => {
+      eventCount += 1;
+      if (eventCount > eventLimit) throw new Error("gateway event limit exceeded");
+      reply.raw.write(`event: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`);
+    };
+    const turn: GatewayTurnRequest = {
+      binding: body.binding as GatewayBinding, requestId: body.requestId, sessionId: body.sessionId, turnId: body.turnId,
+      messages: body.messages as ModelMessage[], tools: body.tools as ModelToolDefinition[], limits: body.limits as TurnLimits, signal: new AbortController().signal,
+      emit: writeEvent,
+    };
+    try {
+      const result = await options.gateway.turn(turn);
+      reply.raw.write(`event: result\ndata: ${JSON.stringify(result)}\n\n`);
+      reply.raw.end();
+      return reply;
+    } catch (error) {
+      const mapped = errorCode(error);
+      if (!reply.raw.writableEnded) { reply.raw.write(`event: error\ndata: ${JSON.stringify({ code: mapped.code, message: mapped.message })}\n\n`); reply.raw.end(); }
+      return reply;
+    }
   });
   app.post("/v1/cancel", async (request, reply) => {
     if (!(await guard(request, reply))) return;

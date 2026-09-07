@@ -2295,3 +2295,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added authenticated Control Plane credential routes, narrow gateway RPC bind/revoke routes, operator-context checks, replacement invalidation, and gateway-owned OS-keychain persistence via `@napi-rs/keyring`. Raw provider keys are excluded from response metadata, session files, and error messages.
 - Verification: `npm run check` passed with 98 files passed, 51 skipped; 606 tests passed, 360 skipped; 0 failed. Focused post-change verification passed 56 tests.
 - Remaining gates: a running model gateway with real provider credentials is still required for live model responses; PostgreSQL integration suites remain environment-gated; Codex subscription and Claude OAuth remain intentionally unsupported.
+
+
+## 2026-09-07 — Native provider token streaming boundary
+
+- Added authenticated model-gateway `POST /v1/turn/stream` SSE transport. Provider `ModelStreamEvent` values are forwarded as typed SSE events, followed by a result event; the route enforces the existing 256-event bound, validates the same strict turn schema, never accepts credentials, and redacts failures to stable gateway errors.
+- Added RPC regression coverage for auth, event forwarding, result completion, content type, and absence of provider secrets.
+- During verification, found the workspace incremental TypeScript build had stale `dist` output for newly added managed-login methods; forced compilation (`tsc -b --force`) exposed and validated the actual source. Fresh source builds remain the required CI behavior.
+- Verification: forced `tsc -b --force`, focused RPC and provider-login tests passed, full `npm test` passed with 99 files passed, 51 skipped, 0 failed (PostgreSQL-gated suites remain skipped because no test database is available).

@@ -9,7 +9,10 @@ function fakePlugin(): ProviderPlugin {
   const dataPolicy = { allowedDataClasses: ["public"] as const, retention: "none" as const, trainsOnCustomerData: false, regions: ["us"] };
   const port: ModelProviderPort = {
     identity, accountRef: "account-1", capabilities: new Set(["text"]),
-    async turn(request) { return { requestId: request.requestId, model: identity, text: "ok", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } }; },
+    async turn(request) {
+      request.emit({ kind: "text-delta", cursor: 1, text: "o" });
+      return { requestId: request.requestId, model: identity, text: "ok", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
+    },
     async cancel() { return { state: "confirmed" as const }; },
     async close() {},
   };
@@ -67,5 +70,45 @@ describe("model gateway RPC", () => {
     });
     expect(turn.statusCode).toBe(200);
     expect(turn.json()).toMatchObject({ text: "ok", model: { provider: "fake", id: "model-a" } });
+  });
+  it("streams provider events over authenticated SSE without exposing credentials", async () => {
+    const { app, account } = await server();
+    const headers = { authorization: "Bearer gateway-secret" };
+    const admit = await app.inject({ method: "POST", url: "/v1/admit", headers, payload: { requestId: "admit-stream", operatorId: "operator-1", providerId: "fake", model: { provider: "fake", id: "model-a" }, accountRef: account.accountRef, dataPolicyHash: "policy-1" } });
+    const binding = admit.json();
+    const streamed = await app.inject({ method: "POST", url: "/v1/turn/stream", headers, payload: { binding, requestId: "request-stream", sessionId: "session-1", turnId: "turn-stream", messages: [], tools: [], limits: { maxModelTurns: 1, maxToolCalls: 0, maxChildCalls: 0, maxOutputTokens: 8, maxInputBytes: 1024, maxResultBytes: 1024, providerTimeoutMs: 1000, wallTimeMs: 1000 } } });
+    expect(streamed.statusCode).toBe(200);
+    expect(streamed.headers["content-type"]).toContain("text/event-stream");
+    expect(streamed.body).toContain("event: text-delta");
+    expect(streamed.body).toContain('"text":"o"');
+    expect(streamed.body).toContain("event: result");
+    expect(streamed.body).not.toContain("secret");
+  });
+
+
+});
+
+
+describe("managed account login RPC", () => {
+  it("returns a browser URL and exposes only status metadata", async () => {
+    const credentials = new InMemoryCredentialStore();
+    const registry = new ProviderRegistry();
+    const codex = {
+      startChatGptLogin: async () => ({ providerId: "openai-codex" as const, loginId: "login-1", authUrl: "https://chatgpt.com/login" }),
+      loginStatus: async () => ({ loginId: "login-1", state: "pending" as const }),
+      cancelLogin: async () => {},
+      close: async () => {},
+    };
+    const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1", codex });
+    const app = buildModelGatewayServer({ gateway, token: "gateway-secret", operatorId: "operator-1" });
+    const headers = { authorization: "Bearer gateway-secret" };
+    const start = await app.inject({ method: "POST", url: "/v1/account-logins/start", headers, payload: { requestId: "login-1", operatorId: "operator-1", providerId: "openai-codex" } });
+    expect(start.statusCode).toBe(200);
+    expect(start.json()).toEqual({ providerId: "openai-codex", loginId: "login-1", authUrl: "https://chatgpt.com/login" });
+    const status = await app.inject({ method: "POST", url: "/v1/account-logins/status", headers, payload: { requestId: "login-2", operatorId: "operator-1", providerId: "openai-codex", loginId: "login-1" } });
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toEqual({ providerId: "openai-codex", loginId: "login-1", state: "pending" });
+    expect(status.body).not.toContain("token");
+    await app.close();
   });
 });
