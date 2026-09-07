@@ -1,6 +1,6 @@
 # Maestro Native Agent Backend Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Implementation workflow:** Execute this plan task by task and keep the checkboxes updated. Use the repository's current agent workflow; this document is the source of truth for scope and order.
 
 **Goal:** Remove Prime Agent from Maestro and replace it with a native provider-pluggable agent backend that supports natural-language control, common Tool/child-agent execution, OpenAI/Anthropic API-key authentication, and OpenAI subscription access only through the documented Codex app-server boundary. Claude Pro/Max subscription OAuth is blocked without written Anthropic approval.
 
@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Node.js, Fastify 5, Zod 4, PostgreSQL/`pg`, native `fetch`/`AbortController`, OpenAI Responses API, Anthropic Messages API, Vitest, existing `@maestro/api-client` and `@maestro/contracts` packages.
 
-**Spec:** `docs/superpowers/specs/2026-09-07-maestro-native-agent-backend-design.md`
+**Spec:** `plan/specs/2026-09-07-maestro-native-agent-backend-design.md`
 
 ## Global Constraints
 
