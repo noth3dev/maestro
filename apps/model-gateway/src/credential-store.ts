@@ -8,7 +8,8 @@ export interface CredentialBinding extends ProviderAccountBinding {
 }
 
 interface StoredCredential extends CredentialBinding {
-  readonly secret: string;
+  /** API-key material exists only for api-key bindings. Managed accounts have no Maestro secret. */
+  readonly secret?: string;
 }
 
 export interface CredentialStore {
@@ -16,6 +17,8 @@ export interface CredentialStore {
   bind(input: { operatorId: string; providerId: string; authMode: ProviderAuthMode; accountRef?: string }, secret: string): Promise<CredentialBinding>;
   /** Register a process-provided secret without copying it to the secure store. */
   bindEphemeral?(input: { operatorId: string; providerId: string; authMode: ProviderAuthMode; accountRef?: string }, secret: string): Promise<CredentialBinding>;
+  /** Register metadata for a provider-managed account; no provider secret crosses this API. */
+  bindManaged?(input: { operatorId: string; providerId: string; accountRef?: string }): Promise<CredentialBinding>;
   resolve(accountRef: string, operatorId: string, providerId: string): Promise<string>;
   /** Hydrate one known account from the gateway-owned secure store. */
   ensure(accountRef: string): Promise<CredentialBinding | undefined>;
@@ -44,6 +47,16 @@ function createBinding(input: { operatorId: string; providerId: string; authMode
   };
 }
 
+function createManagedBinding(input: { operatorId: string; providerId: string; accountRef?: string }): StoredCredential {
+  return {
+    bindingId: `credential-${randomUUID()}`,
+    operatorId: input.operatorId,
+    providerId: input.providerId,
+    authMode: "managed-subscription",
+    accountRef: input.accountRef ?? `account-${randomUUID()}`,
+  };
+}
+
 export class InMemoryCredentialStore implements CredentialStore {
   private readonly credentials = new Map<string, StoredCredential>();
 
@@ -57,9 +70,16 @@ export class InMemoryCredentialStore implements CredentialStore {
     return this.bind(input, secret);
   }
 
+  async bindManaged(input: { operatorId: string; providerId: string; accountRef?: string }): Promise<CredentialBinding> {
+    const binding = createManagedBinding(input);
+    this.credentials.set(binding.accountRef, binding);
+    return publicBinding(binding);
+  }
+
   async resolve(accountRef: string, operatorId: string, providerId: string): Promise<string> {
     const stored = this.credentials.get(accountRef);
     if (stored === undefined || stored.operatorId !== operatorId || stored.providerId !== providerId) throw new Error("credential binding is not owned by operator");
+    if (stored.secret === undefined) throw new Error("managed credential has no gateway secret");
     return stored.secret;
   }
 
@@ -71,6 +91,7 @@ export class InMemoryCredentialStore implements CredentialStore {
   async resolveForGateway(accountRef: string): Promise<string> {
     const stored = this.credentials.get(accountRef);
     if (stored === undefined) throw new Error("credential binding is unavailable");
+    if (stored.secret === undefined) throw new Error("managed credential has no gateway secret");
     return stored.secret;
   }
 
@@ -117,6 +138,14 @@ export class KeychainCredentialStore implements CredentialStore {
     return publicBinding(binding);
   }
 
+  async bindManaged(input: { operatorId: string; providerId: string; accountRef?: string }): Promise<CredentialBinding> {
+    const binding = createManagedBinding(input);
+    await this.write(binding);
+    this.credentials.set(binding.accountRef, binding);
+    await this.writeIndex();
+    return publicBinding(binding);
+  }
+
   async ensure(accountRef: string): Promise<CredentialBinding | undefined> {
     const cached = this.credentials.get(accountRef);
     if (cached !== undefined) return publicBinding(cached);
@@ -135,12 +164,14 @@ export class KeychainCredentialStore implements CredentialStore {
   async resolve(accountRef: string, operatorId: string, providerId: string): Promise<string> {
     const stored = await this.get(accountRef);
     if (stored === undefined || stored.operatorId !== operatorId || stored.providerId !== providerId) throw new Error("credential binding is not owned by operator");
+    if (stored.secret === undefined) throw new Error("managed credential has no gateway secret");
     return stored.secret;
   }
 
   async resolveForGateway(accountRef: string): Promise<string> {
     const stored = await this.get(accountRef);
     if (stored === undefined) throw new Error("credential binding is unavailable");
+    if (stored.secret === undefined) throw new Error("managed credential has no gateway secret");
     return stored.secret;
   }
 
@@ -236,8 +267,8 @@ function parseStoredCredential(value: string): StoredCredential {
       typeof parsed.providerId !== "string" ||
       (parsed.authMode !== "api-key" && parsed.authMode !== "managed-subscription") ||
       typeof parsed.accountRef !== "string" ||
-      typeof parsed.secret !== "string" ||
-      parsed.secret.trim() === ""
+      (parsed.authMode === "api-key" && (typeof parsed.secret !== "string" || parsed.secret.trim() === "")) ||
+      (parsed.authMode === "managed-subscription" && parsed.secret !== undefined)
     ) throw new Error("invalid credential");
     return parsed as StoredCredential;
   } catch {

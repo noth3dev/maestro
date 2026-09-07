@@ -11,6 +11,13 @@ class FakeTransport implements CodexAppServerTransport {
     if (request.method === "initialize") queueMicrotask(() => this.listener?.({ id: request.id, result: { userAgent: "codex-test" } }));
     if (request.method === "account/login/start") queueMicrotask(() => this.listener?.({ id: request.id, result: { type: "chatgpt", loginId: "login-1", authUrl: "https://chatgpt.com/oauth?state=opaque" } }));
     if (request.method === "account/login/cancel") queueMicrotask(() => this.listener?.({ id: request.id, result: {} }));
+    if (request.method === "account/read") queueMicrotask(() => this.listener?.({ id: request.id, result: { account: { type: "chatgpt", email: "user@example.com", planType: "pro" } } }));
+    if (request.method === "thread/start") queueMicrotask(() => this.listener?.({ id: request.id, result: { thread: { id: "thread-1" } } }));
+    if (request.method === "turn/start") queueMicrotask(() => {
+      this.listener?.({ id: request.id, result: { turn: { id: "turn-1", status: "inProgress" } } });
+      this.listener?.({ method: "item/agentMessage/delta", params: { threadId: "thread-1", turnId: "turn-1", delta: "Hello from Codex" } });
+      this.listener?.({ method: "turn/completed", params: { threadId: "thread-1", turn: { id: "turn-1", status: "completed" } } });
+    });
   }
   notify(message: unknown): void { this.listener?.(message); }
   async close(): Promise<void> {}
@@ -45,4 +52,17 @@ describe("Codex app-server managed login", () => {
     await expect(client.cancelLogin("login-1")).resolves.toBeUndefined();
     await client.close();
   });
+});
+
+
+it("runs a text turn through the managed app-server and supports cancellation", async () => {
+  const transport = new FakeTransport();
+  const client = new CodexAppServerClient({ transport });
+  transport.notify({ id: 99, result: {} }); // ignored response
+  const resultPromise = client.runTextTurn({
+    model: "gpt-5.3-codex", requestId: "request-1", messages: [{ role: "user", content: [{ kind: "text", text: "hello" }] }], tools: [],
+    signal: new AbortController().signal, maxOutputTokens: 100,
+  });
+  await expect(resultPromise).resolves.toMatchObject({ requestId: "request-1", model: { provider: "openai-codex", id: "gpt-5.3-codex" }, text: "Hello from Codex" });
+  await client.close();
 });

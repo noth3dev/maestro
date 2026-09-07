@@ -1,4 +1,4 @@
-import { createOpenAiPlugin } from "@maestro/model-provider-openai";
+import { CodexAppServerClient, createCodexAppServerPlugin, createOpenAiPlugin } from "@maestro/model-provider-openai";
 import { createAnthropicPlugin } from "@maestro/model-provider-anthropic";
 import { ProviderRegistry } from "@maestro/agent-runtime";
 import { KeychainCredentialStore } from "./credential-store.js";
@@ -27,6 +27,12 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv): ModelGatewayRuntim
   const anthropicAccountRef = `anthropic-${operatorId}`;
   accountRefs.openai = openAiAccountRef;
   accountRefs.anthropic = anthropicAccountRef;
+  const codexCommand = env.MAESTRO_CODEX_APP_SERVER_COMMAND?.trim();
+  const codex = codexCommand === undefined || codexCommand === "" ? undefined : new CodexAppServerClient({ command: codexCommand, args: ["app-server"], requestTimeoutMs: Number(env.MAESTRO_CODEX_APP_SERVER_TIMEOUT_MS ?? "30000") });
+  if (codex !== undefined) {
+    accountRefs["openai-codex"] = `openai-codex-${operatorId}`;
+    registry.register(createCodexAppServerPlugin({ client: codex, models: modelsFromEnv(env.MAESTRO_CODEX_MODELS, "gpt-5.3-codex") }));
+  }
   // Register provider adapters independently from credentials. The gateway
   // filters discovery and admission by the active operator-owned binding.
   registry.register(createOpenAiPlugin({ models: modelsFromEnv(env.OPENAI_MODELS, "gpt-5"), resolveApiKey: (ref) => credentials.resolveForGateway(ref) }));
@@ -35,7 +41,7 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv): ModelGatewayRuntim
     env.OPENAI_API_KEY ? credentials.bindEphemeral!({ operatorId, providerId: "openai", authMode: "api-key", accountRef: openAiAccountRef }, env.OPENAI_API_KEY) : undefined,
     env.ANTHROPIC_API_KEY ? credentials.bindEphemeral!({ operatorId, providerId: "anthropic", authMode: "api-key", accountRef: anthropicAccountRef }, env.ANTHROPIC_API_KEY) : undefined,
   ]).then(() => undefined);
-  const gateway = createModelGateway({ registry, credentials, operatorId, ready: initialBindings, instanceId: env.MAESTRO_MODEL_GATEWAY_INSTANCE_ID ?? `gateway-${process.pid}` });
+  const gateway = createModelGateway({ registry, credentials, codex, operatorId, ready: initialBindings, instanceId: env.MAESTRO_MODEL_GATEWAY_INSTANCE_ID ?? `gateway-${process.pid}` });
   return { app: buildModelGatewayServer({ gateway, token, operatorId }), gateway, accountRefs };
 }
 

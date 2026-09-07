@@ -178,6 +178,32 @@ export interface GatewayCredentialRevokeRequest {
   readonly providerId: string;
 }
 
+export interface GatewayAccountLoginStartRequest {
+  readonly requestId: string;
+  readonly operatorId: string;
+  readonly providerId: "openai-codex";
+}
+
+export interface GatewayAccountLoginStartResult {
+  readonly providerId: "openai-codex";
+  readonly loginId: string;
+  readonly authUrl: string;
+}
+
+export interface GatewayAccountLoginStatusRequest {
+  readonly requestId: string;
+  readonly operatorId: string;
+  readonly providerId: "openai-codex";
+  readonly loginId: string;
+}
+
+export interface GatewayAccountLoginStatusResult {
+  readonly providerId: "openai-codex";
+  readonly loginId: string;
+  readonly state: "pending" | "succeeded" | "failed" | "cancelled";
+  readonly message?: string;
+}
+
 export interface GatewayBinding {
   readonly bindingId: string;
   readonly gatewayInstanceId: string;
@@ -196,6 +222,9 @@ export interface ModelGatewayPort {
   /** Provider credential lifecycle is optional for test-only gateway doubles. */
   bindCredential?(request: GatewayCredentialBindRequest): Promise<GatewayCredentialBinding>;
   revokeCredential?(request: GatewayCredentialRevokeRequest): Promise<void>;
+  startAccountLogin?(request: GatewayAccountLoginStartRequest): Promise<GatewayAccountLoginStartResult>;
+  accountLoginStatus?(request: GatewayAccountLoginStatusRequest): Promise<GatewayAccountLoginStatusResult>;
+  cancelAccountLogin?(request: GatewayAccountLoginStatusRequest): Promise<void>;
   turn(request: GatewayTurnRequest): Promise<ModelTurnResult>;
   cancel(requestId: string, signal?: AbortSignal): Promise<ProviderCancellationOutcome>;
   recover(binding: GatewayBinding): Promise<"reconnected" | "terminal" | "unknown">;

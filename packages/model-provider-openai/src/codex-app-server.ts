@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
+import type { ModelMessage, ModelProviderPort, ModelStreamEvent, ModelTurnRequest, ProviderDataPolicy, ProviderModelRequest, ProviderPlugin, ModelCatalogEntry } from "@maestro/agent-runtime";
 
 export interface CodexAppServerTransport {
   send(message: unknown): void;
@@ -27,6 +28,11 @@ export type CodexLoginStatus =
   | { readonly loginId: string; readonly state: "succeeded" }
   | { readonly loginId: string; readonly state: "failed"; readonly message: string }
   | { readonly loginId: string; readonly state: "cancelled" };
+
+export class CodexAppServerError extends Error {
+  readonly name = "CodexAppServerError";
+  constructor(readonly code: "provider_auth" | "provider_unavailable" | "provider_cancelled" | "provider_malformed_response", message: string) { super(message); }
+}
 
 export interface CodexAccountSummary {
   readonly authMode: "chatgpt" | "apikey" | "personalAccessToken" | "null" | "unknown";
@@ -107,6 +113,8 @@ export class CodexAppServerClient {
   private readonly clientInfo: NonNullable<CodexAppServerOptions["clientInfo"]>;
   private readonly pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private readonly logins = new Map<string, CodexLoginStatus>();
+  private readonly notificationListeners = new Set<(message: JsonRpcNotification) => void>();
+  private readonly activeTurns = new Map<string, { threadId: string; turnId: string }>();
   private nextRequestId = 1;
   private initialized?: Promise<void>;
   private closed = false;
@@ -117,6 +125,77 @@ export class CodexAppServerClient {
     this.requestTimeoutMs = options.requestTimeoutMs ?? 15_000;
     this.clientInfo = options.clientInfo ?? { name: "maestro", title: "Maestro", version: "development" };
     this.unsubscribe = this.transport.onMessage((message) => this.handleMessage(message));
+  }
+
+  onNotification(listener: (message: JsonRpcNotification) => void): () => void {
+    this.notificationListeners.add(listener);
+    return () => this.notificationListeners.delete(listener);
+  }
+
+  async runTextTurn(input: {
+    readonly model: string;
+    readonly requestId: string;
+    readonly messages: readonly ModelMessage[];
+    readonly tools: readonly unknown[];
+    readonly signal: AbortSignal;
+    readonly maxOutputTokens: number;
+    readonly emit?: (event: ModelStreamEvent) => void;
+  }): Promise<{ requestId: string; model: { provider: "openai-codex"; id: string }; text: string; toolCalls: readonly []; stopReason: "end_turn" | "cancelled"; usage: { state: "unknown" } }> {
+    if (input.tools.length > 0) throw new CodexAppServerError("provider_unavailable", "Codex app-server tool bridge is not enabled");
+    if (input.signal.aborted) throw new CodexAppServerError("provider_cancelled", "Codex request cancelled");
+    const account = await this.accountRead();
+    if (account.authMode !== "chatgpt") throw new CodexAppServerError("provider_auth", "ChatGPT account authentication is required");
+    const threadResult = await this.requestRaw("thread/start", { model: input.model, approvalPolicy: "never", sandboxPolicy: { type: "readOnly" }, personality: "none" });
+    const thread = isRecord(threadResult) && isRecord(threadResult.thread) ? threadResult.thread : undefined;
+    const threadId = requiredString(thread?.id, "thread.id");
+    const transcript = input.messages.map((message) => {
+      const text = message.content.filter((part): part is Extract<ModelMessage["content"][number], { kind: "text" }> => part.kind === "text").map((part) => part.text).join("\n");
+      return `${message.role}: ${text}`;
+    }).join("\n\n");
+    let cleanup = () => {};
+    const notifications = new Promise<{ text: string; status: "completed" | "interrupted" }>((resolve, reject) => {
+      let text = "";
+      const unsubscribe = this.onNotification((notification) => {
+        const params = notification.params;
+        if (!isRecord(params) || params.threadId !== threadId) return;
+        if (notification.method === "item/agentMessage/delta" && typeof params.delta === "string") {
+          text += params.delta;
+          input.emit?.({ kind: "text-delta", cursor: text.length, text: params.delta });
+        }
+        if (notification.method !== "turn/completed" || !isRecord(params.turn)) return;
+        const status = params.turn.status;
+        if (status === "completed") resolve({ text, status });
+        else if (status === "interrupted") resolve({ text, status });
+        else if (status === "failed") reject(new CodexAppServerError("provider_unavailable", "Codex app-server turn failed"));
+      });
+      void this.requestRaw("turn/start", { threadId, input: [{ type: "text", text: transcript }], model: input.model, approvalPolicy: "never", sandboxPolicy: { type: "readOnly" }, maxOutputTokens: input.maxOutputTokens }).then((turnResult) => {
+        const turn = isRecord(turnResult) && isRecord(turnResult.turn) ? turnResult.turn : undefined;
+        const turnId = requiredString(turn?.id, "turn.id");
+        this.activeTurns.set(input.requestId, { threadId, turnId });
+        if (input.signal.aborted) void this.requestRaw("turn/interrupt", { threadId, turnId }).catch(() => undefined);
+      }).catch((error: unknown) => reject(error instanceof Error ? error : new Error("Codex app-server turn failed")));
+      const onAbort = () => {
+        const active = this.activeTurns.get(input.requestId);
+        if (active) void this.requestRaw("turn/interrupt", active).catch(() => undefined);
+        reject(new CodexAppServerError("provider_cancelled", "Codex request cancelled"));
+      };
+      input.signal.addEventListener("abort", onAbort, { once: true });
+      cleanup = () => { unsubscribe(); input.signal.removeEventListener("abort", onAbort); };
+    });
+    notifications.then(cleanup, cleanup).catch(() => undefined);
+    let outcome: { text: string; status: "completed" | "interrupted" };
+    try {
+      outcome = await Promise.race([notifications, new Promise<never>((_, reject) => setTimeout(() => reject(new CodexAppServerError("provider_unavailable", "Codex app-server turn timed out")), this.requestTimeoutMs))]);
+    } finally { this.activeTurns.delete(input.requestId); }
+    if (outcome.status === "interrupted") throw new CodexAppServerError("provider_cancelled", "Codex request cancelled");
+    return { requestId: input.requestId, model: { provider: "openai-codex", id: input.model }, text: outcome.text, toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
+  }
+
+  async cancelTurn(requestId: string): Promise<"requested" | "unsupported"> {
+    const active = this.activeTurns.get(requestId);
+    if (active === undefined) return "unsupported";
+    await this.requestRaw("turn/interrupt", active);
+    return "requested";
   }
 
   async startChatGptLogin(): Promise<CodexManagedLogin> {
@@ -209,10 +288,66 @@ export class CodexAppServerClient {
     }
     if (typeof message.method !== "string") return;
     const notification = message as JsonRpcNotification;
+    for (const listener of this.notificationListeners) listener(notification);
     if (notification.method !== "account/login/completed" || !isRecord(notification.params)) return;
     const loginId = notification.params.loginId;
     if (typeof loginId !== "string") return;
     if (notification.params.success === true) this.logins.set(loginId, { loginId, state: "succeeded" });
     else this.logins.set(loginId, { loginId, state: "failed", message: typeof notification.params.error === "string" && notification.params.error ? notification.params.error : "Codex account login failed" });
   }
+}
+
+
+const codexDataPolicy: ProviderDataPolicy = {
+  allowedDataClasses: ["public", "workspace"],
+  retention: "provider-policy",
+  trainsOnCustomerData: false,
+  regions: ["us"],
+};
+
+class CodexAppServerProvider implements ModelProviderPort {
+  readonly capabilities = new Set(["text", "cancellation", "managed-subscription"] as const);
+
+  constructor(readonly identity: { provider: "openai-codex"; id: string }, readonly accountRef: string, private readonly client: CodexAppServerClient) {}
+
+  async turn(request: ModelTurnRequest) {
+    return this.client.runTextTurn({
+      model: this.identity.id,
+      requestId: request.requestId,
+      messages: request.messages,
+      tools: request.tools,
+      signal: request.signal,
+      maxOutputTokens: request.limits.maxOutputTokens,
+      emit: request.emit,
+    });
+  }
+
+  async cancel(requestId: string): Promise<{ state: "requested" | "unsupported"; providerRequestRef?: string }> {
+    const state = await this.client.cancelTurn(requestId);
+    return state === "requested" ? { state, providerRequestRef: requestId } : { state };
+  }
+
+  async close(): Promise<void> {}
+}
+
+export interface CodexAppServerPluginOptions {
+  readonly client: CodexAppServerClient;
+  readonly models?: readonly string[];
+}
+
+export function createCodexAppServerPlugin(options: CodexAppServerPluginOptions): ProviderPlugin {
+  const models = options.models ?? ["gpt-5.3-codex"];
+  const catalog = (): readonly ModelCatalogEntry[] => models.map((id) => ({ identity: { provider: "openai-codex", id }, capabilities: new Set(["text", "cancellation", "managed-subscription"] as const), authModes: ["managed-subscription"], dataPolicy: codexDataPolicy }));
+  return {
+    id: "openai-codex",
+    authModes: ["managed-subscription"],
+    capabilities: new Set(["text", "cancellation", "managed-subscription"] as const),
+    dataPolicy: codexDataPolicy,
+    listModels: catalog,
+    async create(request: ProviderModelRequest): Promise<ModelProviderPort> {
+      if (request.model.provider !== "openai-codex" || request.account.providerId !== "openai-codex" || request.account.authMode !== "managed-subscription") throw new CodexAppServerError("provider_auth", "Codex managed account binding mismatch");
+      if (!models.includes(request.model.id)) throw new CodexAppServerError("provider_malformed_response", "Codex model is not in the configured catalog");
+      return new CodexAppServerProvider(request.model as { provider: "openai-codex"; id: string }, request.account.accountRef, options.client);
+    },
+  };
 }

@@ -134,6 +134,11 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       providerCredentials: {
         bind: (input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic"; authMode: "api-key"; secret: string }) => modelGateway.bindCredential!(input),
         revoke: (input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic" }) => modelGateway.revokeCredential!(input),
+        ...(modelGateway.startAccountLogin === undefined || modelGateway.accountLoginStatus === undefined || modelGateway.cancelAccountLogin === undefined ? {} : {
+          startAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex" }) => modelGateway.startAccountLogin!(input),
+          accountLoginStatus: (input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }) => modelGateway.accountLoginStatus!(input),
+          cancelAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }) => modelGateway.cancelAccountLogin!(input),
+        }),
       },
     }),
     criticalActionService,

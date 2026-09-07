@@ -1,4 +1,4 @@
-import type { GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialBinding, GatewayCredentialRevokeRequest, GatewayModelListRequest, GatewayTurnRequest, ModelCatalogEntry, ModelGatewayPort, ModelProviderPort, ModelTurnResult, ProviderCancellationOutcome, ProviderCapability } from "@maestro/agent-runtime";
+import type { GatewayAccountLoginStartRequest, GatewayAccountLoginStartResult, GatewayAccountLoginStatusRequest, GatewayAccountLoginStatusResult, GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialBinding, GatewayCredentialRevokeRequest, GatewayModelListRequest, GatewayTurnRequest, ModelCatalogEntry, ModelGatewayPort, ModelProviderPort, ModelTurnResult, ProviderCancellationOutcome, ProviderCapability } from "@maestro/agent-runtime";
 
 export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -9,6 +9,22 @@ export class ModelGatewayClientError extends Error {
 
 function mapModel(model: { identity: { provider: string; id: string }; capabilities: readonly string[]; authModes: readonly ("api-key" | "managed-subscription")[]; dataPolicy: ModelCatalogEntry["dataPolicy"] }): ModelCatalogEntry {
   return { ...model, capabilities: new Set(model.capabilities as readonly ProviderCapability[]) };
+}
+
+function accountLoginStart(value: unknown): GatewayAccountLoginStartResult {
+  if (!value || typeof value !== "object") throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed account login");
+  const record = value as Record<string, unknown>;
+  if (record.providerId !== "openai-codex" || typeof record.loginId !== "string" || typeof record.authUrl !== "string") throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed account login");
+  let url: URL;
+  try { url = new URL(record.authUrl); } catch { throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed account login URL"); }
+  if (url.protocol !== "https:" || !["chatgpt.com", "auth.openai.com"].includes(url.hostname)) throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned untrusted account login URL");
+  return { providerId: "openai-codex", loginId: record.loginId, authUrl: record.authUrl };
+}
+function accountLoginStatus(value: unknown): GatewayAccountLoginStatusResult {
+  if (!value || typeof value !== "object") throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed account login status");
+  const record = value as Record<string, unknown>;
+  if (record.providerId !== "openai-codex" || typeof record.loginId !== "string" || !["pending", "succeeded", "failed", "cancelled"].includes(String(record.state))) throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed account login status");
+  return { providerId: "openai-codex", loginId: record.loginId, state: record.state as GatewayAccountLoginStatusResult["state"], ...(typeof record.message === "string" ? { message: record.message } : {}) };
 }
 
 function parseError(body: unknown, status: number): ModelGatewayClientError {
@@ -90,6 +106,17 @@ export function createModelGatewayClient(options: { baseUrl: string; token: stri
     async revokeCredential(input: GatewayCredentialRevokeRequest) {
       await request("v1/credentials/revoke", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) }, (value) => {
         if (!value || typeof value !== "object" || (value as { revoked?: unknown }).revoked !== true) throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed credential revocation");
+      });
+    },
+    async startAccountLogin(input: GatewayAccountLoginStartRequest): Promise<GatewayAccountLoginStartResult> {
+      return request("v1/account-logins/start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) }, accountLoginStart);
+    },
+    async accountLoginStatus(input: GatewayAccountLoginStatusRequest): Promise<GatewayAccountLoginStatusResult> {
+      return request("v1/account-logins/status", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) }, accountLoginStatus);
+    },
+    async cancelAccountLogin(input: GatewayAccountLoginStatusRequest): Promise<void> {
+      await request("v1/account-logins/cancel", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) }, (value) => {
+        if (!value || typeof value !== "object" || (value as { cancelled?: unknown }).cancelled !== true) throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed account login cancellation");
       });
     },
     async turn(input: GatewayTurnRequest): Promise<ModelTurnResult> {

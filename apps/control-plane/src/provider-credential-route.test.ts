@@ -39,3 +39,31 @@ describe("provider credential routes", () => {
     await app.close();
   });
 });
+
+
+describe("provider account login routes", () => {
+  it("returns only the approved OpenAI Codex browser login state", async () => {
+    const startAccountLogin = vi.fn(async () => ({ providerId: "openai-codex" as const, loginId: "login-1", authUrl: "https://chatgpt.com/login" }));
+    const accountLoginStatus = vi.fn(async () => ({ providerId: "openai-codex" as const, loginId: "login-1", state: "pending" as const }));
+    const service: ProviderCredentialService = { bind: vi.fn(), revoke: vi.fn(), startAccountLogin, accountLoginStatus, cancelAccountLogin: vi.fn() };
+    const app = buildServer({ goalService, authenticator, providerCredentials: service });
+    const headers = { authorization: "Bearer test-secret", "content-type": "application/json" };
+    const start = await app.inject({ method: "POST", url: "/v1/provider-account-logins/start", headers, payload: { providerId: "openai-codex" } });
+    expect(start.statusCode).toBe(200);
+    expect(start.json()).toEqual({ providerId: "openai-codex", loginId: "login-1", authUrl: "https://chatgpt.com/login" });
+    expect(startAccountLogin).toHaveBeenCalledWith({ operatorId: operator.operatorId, requestId: expect.any(String), providerId: "openai-codex" });
+    const status = await app.inject({ method: "POST", url: "/v1/provider-account-logins/status", headers, payload: { providerId: "openai-codex", loginId: "login-1" } });
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toEqual({ providerId: "openai-codex", loginId: "login-1", state: "pending" });
+    await app.close();
+  });
+
+  it("does not offer an Anthropic subscription login", async () => {
+    const service: ProviderCredentialService = { bind: vi.fn(), revoke: vi.fn(), startAccountLogin: vi.fn() };
+    const app = buildServer({ goalService, authenticator, providerCredentials: service });
+    const response = await app.inject({ method: "POST", url: "/v1/provider-account-logins/start", headers: { authorization: "Bearer test-secret", "content-type": "application/json" }, payload: { providerId: "anthropic" } });
+    expect(response.statusCode).toBe(400);
+    expect(service.startAccountLogin).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
