@@ -675,3 +675,27 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - A real Codex app-server 0.153.4 probe showed Maestro's previous default URL carried `originator=maestro`. The provider login endpoint returned `Invalid authorize request`; the official Codex client identity is `codex_cli_rs`. The default app-server client identity now uses that originator while keeping Maestro as the display title.
 - The TUI previously opened the browser but did not retain or render the URL, leaving no reliable manual recovery path. The waiting dialog now shows the URL and advertises `Alt+C`; the action copies through a shell-free stdin boundary and reports a safe fallback when no clipboard utility exists.
 - This does not claim successful account completion: the local app-server process and browser callback still require a running supported Codex installation and a real browser session.
+
+
+## 2026-09-07 — Act 1 Phase 1 operational audit started
+
+- The user directed a sequential Act 1 build: inspect and close Phase 1 first, then advance phase by phase with documentation and real acceptance evidence. A dedicated execution ledger now lives at `plan/act1-execution.md`; it does not override the phase requirement documents or root evidence ledger.
+- `plan/phase1.md` still names a historical Prime-centered stack, but its current-status note explicitly treats `MaestroAgentRuntime`/`apps/model-gateway` as the conversation path and the Prime adapter as a legacy Worker bridge. The native backend plan remains the authority for removing that bridge.
+- Initial source audit found Phase 1 durable Goal/command/event/lease/authority/evidence/reconciliation implementations and focused tests. `packages/persistence/src/events.ts:6-20` uses `goal_events` as replay truth; `packages/persistence/src/commands.ts:313-317` writes the transactional outbox and emits `pg_notify`. No separate outbox consumer/claim service was found in the current source tree, so outbox delivery/recovery must be verified before treating the Phase 1 transport requirement as operational.
+- Initial source audit found no persisted installation or notification record/schema in `packages/persistence/migrations`; the only non-provider notification matches are UI labels and Codex JSON-RPC notifications. These are audit findings, not yet implementation decisions; scope will be confirmed against the Phase 1 exit gate before patching.
+- `apps/control-plane/src/main.ts:78` still composes `createPrimeExecutionKernel()` for Worker/Head execution. This is documented as an intentional legacy bridge, not a Phase 1 conversation-runtime failure, and is governed by the native backend migration plan.
+- Two unrelated worktrees remain outside this audit: `.worktrees/device-grant-expiry` now contains the independently created `239db3e fix(device-agent): persist lapsed grant closure` commit and is clean; `.worktrees/local-gateway-bootstrap` still has uncommitted TUI local-bootstrap changes. Neither worktree was edited here.
+- A dedicated disposable database was started as `maestro-phase1-audit-postgres` on loopback port `55471`; readiness and the Phase 1 database suites are still pending.
+
+
+## 2026-09-07 — Phase 1 baseline evidence
+
+- Fresh no-database `npm run check` passed with 102 files / 665 tests passed and 53 files / 374 tests skipped. This is not a Phase 1 operational acceptance claim because all PostgreSQL and live-Prime gates were skipped.
+- The no-database run printed three non-fatal `fatal: Needed a single revision` messages while still exiting 0. The messages come from the intentional negative `git rev-parse --verify` assertion in `packages/git-adapter/src/git-ops.test.ts:155-156`; the test passes and this is expected stderr noise, not a failed gate.
+- The current workspace package manifests contain no `pino`, OpenTelemetry, or OpenAPI/Swagger dependency/source despite Phase 1's locked stack naming structured logs, traces/metrics, and one generated OpenAPI contract. This is a likely Phase 1 foundation gap, subject to the exit-gate relevance audit.
+
+
+## 2026-09-07 — Phase 1 live Prime gate passed
+
+- Live compatibility evidence is now fresh: `MAESTRO_LIVE_PRIME=1 npm test -- packages/prime-adapter/src/sdk.live.test.ts` passed 2/2. It exercised a real parent/named-child exchange and a disposable repository worker effect.
+- The real SDK identity was `openai-codex/gpt-5.6-luna`. Child answer text remains an explicit provider-unavailable value for this SDK build; the adapter does not invent text.
