@@ -68,6 +68,8 @@ export function advanceWorkspaceSession(workspacePath: string, current: Workspac
     projectId: current?.projectId ?? event.projectId,
     goalId: current?.goalId ?? event.goalId,
     lastEventCursor: event.cursor,
+    ...(current?.conversationId === undefined ? {} : { conversationId: current.conversationId }),
+    ...(current?.model === undefined ? {} : { model: current.model }),
   };
 }
 
@@ -75,19 +77,46 @@ export function startNewConversationSession(workspacePath: string, current: Work
   return {
     workspacePath,
     ...(current?.projectId === undefined ? {} : { projectId: current.projectId }),
+    ...(current?.goalId === undefined ? {} : { goalId: current.goalId }),
     ...(current?.lastEventCursor === undefined ? {} : { lastEventCursor: current.lastEventCursor }),
+    ...(current?.model === undefined ? {} : { model: current.model }),
   };
 }
 
 export function selectWorkspaceGoal(workspacePath: string, current: WorkspaceSession | undefined, goalId: string): WorkspaceSession {
   if (goalId.trim() === "") throw new Error("Goal ID must be non-empty");
-  if (current?.workspacePath !== workspacePath || current.projectId === undefined) throw new Error("A project must be attached before selecting a Goal");
-  return { workspacePath, projectId: current.projectId, goalId, ...(current.lastEventCursor === undefined ? {} : { lastEventCursor: current.lastEventCursor }) };
+  if (current?.workspacePath !== workspacePath || current.projectId === undefined)
+    throw new Error("A project must be attached before selecting a Goal");
+  return {
+    workspacePath,
+    projectId: current.projectId,
+    goalId,
+    ...(current.lastEventCursor === undefined ? {} : { lastEventCursor: current.lastEventCursor }),
+    ...(current.model === undefined ? {} : { model: current.model }),
+  };
 }
 
+export function selectWorkspaceModel(workspacePath: string, current: WorkspaceSession | undefined, model: string): WorkspaceSession {
+  if (model.trim() === "") throw new Error("Model identity must be non-empty");
+  return {
+    workspacePath,
+    ...(current?.projectId === undefined ? {} : { projectId: current.projectId }),
+    ...(current?.goalId === undefined ? {} : { goalId: current.goalId }),
+    ...(current?.lastEventCursor === undefined ? {} : { lastEventCursor: current.lastEventCursor }),
+    model,
+  };
+}
 
 export function attachWorkspaceSession(workspacePath: string, current: WorkspaceSession | undefined, projectId: string): WorkspaceSession {
   if (projectId.trim() === "") throw new Error("Project ID must be non-empty");
-  if (current?.projectId === projectId) return { workspacePath, projectId, ...(current.goalId === undefined ? {} : { goalId: current.goalId }), ...(current.lastEventCursor === undefined ? {} : { lastEventCursor: current.lastEventCursor }) };
-  return { workspacePath, projectId };
+  if (current?.projectId === projectId)
+    return {
+      workspacePath,
+      projectId,
+      ...(current.goalId === undefined ? {} : { goalId: current.goalId }),
+      ...(current.lastEventCursor === undefined ? {} : { lastEventCursor: current.lastEventCursor }),
+      ...(current.conversationId === undefined ? {} : { conversationId: current.conversationId }),
+      ...(current.model === undefined ? {} : { model: current.model }),
+    };
+  return { workspacePath, projectId, ...(current?.model === undefined ? {} : { model: current.model }) };
 }

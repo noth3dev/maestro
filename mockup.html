@@ -1,0 +1,1650 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design System — Warm Earth</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+/* =========================================================
+   DESIGN SYSTEM — Warm Earth (Improved)
+   ========================================================= */
+:root {
+  --bg-page: #f5f4f1;
+  --surface-1: #eeece6;
+  --surface-2: #ffffff;
+  --surface-3: #f9f8f5;
+  --text-primary: #1a1a18;
+  --text-secondary: #6b6a64;
+  --text-muted: #8a8880;
+  --border: rgba(0,0,0,0.08);
+  --border-strong: rgba(0,0,0,0.14);
+  --shadow: 0 4px 20px rgba(0,0,0,0.06);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.1);
+
+  --font-sans: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  --duration-fast: 0.15s;
+  --duration: 0.2s;
+  --duration-slow: 0.3s;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --icon-sm: 14px;
+  --icon-md: 16px;
+  --icon-lg: 20px;
+
+  --terracotta: #b5603f; --terracotta-bg: #f2e3da; --terracotta-text: #7a3c26;
+  --rust: #a34b3a;       --rust-bg: #f3ddd6;       --rust-text: #732f22;
+  --ochre: #c08a3e;      --ochre-bg: #f4e6cd;      --ochre-text: #7d5620;
+  --clay: #c17b6e;       --clay-bg: #f5e2dd;       --clay-text: #85473a;
+  --olive: #8a8355;      --olive-bg: #ecead9;      --olive-text: #5c5636;
+
+  --p-red: #c45c4a;    --p-red-bg: #f5e0db;    --p-red-text: #8a3a2e;
+  --p-orange: #c47a3e; --p-orange-bg: #f5e6d4; --p-orange-text: #8a5520;
+  --p-amber: #c49a3e;  --p-amber-bg: #f5ecd4;  --p-amber-text: #8a6a20;
+  --p-yellow: #b8a84a; --p-yellow-bg: #f3efd8; --p-yellow-text: #7a7028;
+  --p-lime: #8fa05a;   --p-lime-bg: #e8ecd9;   --p-lime-text: #5a6a30;
+  --p-green: #6a9a6a;  --p-green-bg: #dde8dd;  --p-green-text: #3e6a3e;
+  --p-teal: #5a9a8a;   --p-teal-bg: #d9ebe6;   --p-teal-text: #2e6a5a;
+  --p-cyan: #5a8a9a;   --p-cyan-bg: #d9e6eb;   --p-cyan-text: #2e5a6a;
+  --p-blue: #5a7a9a;   --p-blue-bg: #d9e2eb;   --p-blue-text: #2e4a6a;
+  --p-indigo: #6a6a9a; --p-indigo-bg: #e0e0eb; --p-indigo-text: #3e3e6a;
+  --p-violet: #7a6a9a; --p-violet-bg: #e4e0eb; --p-violet-text: #4a3e6a;
+  --p-purple: #8a6a9a; --p-purple-bg: #e8e0eb; --p-purple-text: #5a3e6a;
+  --p-pink: #b86a8a;   --p-pink-bg: #f0dfe6;   --p-pink-text: #7a3e5a;
+  --p-rose: #c45a7a;   --p-rose-bg: #f5dfe6;   --p-rose-text: #8a2e4a;
+  --p-brown: #9a6b4f;  --p-brown-bg: #f0e4da;  --p-brown-text: #6b4530;
+  --p-slate: #6a6a64;  --p-slate-bg: #e8e8e4;  --p-slate-text: #3e3e3a;
+}
+
+[data-theme="dark"] {
+  --bg-page: #171614;
+  --surface-1: #232220;
+  --surface-2: #1d1c1a;
+  --surface-3: #22211f;
+  --text-primary: #ede9e2;
+  --text-secondary: #a8a59c;
+  --text-muted: #75726a;
+  --border: rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.14);
+  --shadow: 0 4px 20px rgba(0,0,0,0.3);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.45);
+
+  --terracotta: #c97855; --terracotta-bg: #3a2a20; --terracotta-text: #e8a67f;
+  --rust: #c86a58;       --rust-bg: #3a2620;       --rust-text: #e8a08f;
+  --ochre: #d4a85a;      --ochre-bg: #3a3220;      --ochre-text: #e8c987;
+  --clay: #d48a7a;       --clay-bg: #3a2622;       --clay-text: #e8ab9c;
+  --olive: #a8a06a;      --olive-bg: #303221;      --olive-text: #c9c48f;
+
+  --p-red: #d47a6a;    --p-red-bg: #3a2824;    --p-red-text: #e8b0a4;
+  --p-orange: #d49a6a; --p-orange-bg: #3a3024; --p-orange-text: #e8c4a4;
+  --p-amber: #d4b46a;  --p-amber-bg: #3a3424;  --p-amber-text: #e8d4a4;
+  --p-yellow: #c8bc6a; --p-yellow-bg: #353424; --p-yellow-text: #e0d8a4;
+  --p-lime: #a0b46a;   --p-lime-bg: #2e3424;   --p-lime-text: #c8d4a4;
+  --p-green: #7aba7a;  --p-green-bg: #243424;  --p-green-text: #a8d4a8;
+  --p-teal: #6abaaa;   --p-teal-bg: #243430;   --p-teal-text: #a4d4c8;
+  --p-cyan: #6aaaba;   --p-cyan-bg: #243034;   --p-cyan-text: #a4c8d4;
+  --p-blue: #6a9aba;   --p-blue-bg: #242e34;   --p-blue-text: #a4bcd4;
+  --p-indigo: #7a7aba; --p-indigo-bg: #282834; --p-indigo-text: #b0b0d4;
+  --p-violet: #8a7aba; --p-violet-bg: #2c2834; --p-violet-text: #bcb0d4;
+  --p-purple: #9a7aba; --p-purple-bg: #302834; --p-purple-text: #c8b0d4;
+  --p-pink: #c87a9a;   --p-pink-bg: #342830;   --p-pink-text: #e0b0c4;
+  --p-rose: #d46a8a;   --p-rose-bg: #3a2430;   --p-rose-text: #e8a4bc;
+  --p-brown: #b48a6a;  --p-brown-bg: #342c24;  --p-brown-text: #d4b8a4;
+  --p-slate: #8a8a84;  --p-slate-bg: #2c2c2a;  --p-slate-text: #c0c0ba;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg-page);
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  line-height: 1.55;
+  padding-bottom: 80px;
+  transition: background var(--duration), color var(--duration);
+}
+
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--terracotta);
+  outline-offset: 2px;
+}
+
+/* ── Layout ── */
+.ds-frame { max-width: 920px; margin: 0 auto; padding: 40px 24px 0; }
+.ds-header {
+  margin-bottom: 48px;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 16px; flex-wrap: wrap;
+}
+.ds-eyebrow { font-size: 13px; color: var(--text-muted); letter-spacing: 0.04em; margin-bottom: 6px; }
+.ds-title { font-size: 26px; font-weight: 500; letter-spacing: -0.02em; }
+.ds-desc { font-size: 14px; color: var(--text-secondary); margin-top: 8px; max-width: 480px; }
+
+.section { margin-bottom: 52px; }
+.section-title {
+  font-size: 12px; font-weight: 500; color: var(--text-muted);
+  letter-spacing: 0.07em; text-transform: uppercase;
+  margin-bottom: 14px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.section-sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 18px; }
+
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 640px) {
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+}
+
+/* ── Theme Toggle ── */
+.theme-btn {
+  width: 36px; height: 36px; border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2); color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all var(--duration-fast);
+}
+.theme-btn:hover {
+  background: var(--terracotta-bg); border-color: var(--terracotta); color: var(--terracotta-text);
+}
+.theme-btn svg { width: var(--icon-md); height: var(--icon-md); }
+
+/* ── Color Swatches ── */
+.swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.swatch {
+  border-radius: var(--radius); overflow: hidden;
+  border: 1px solid var(--border); background: var(--surface-2);
+}
+.swatch-color { height: 44px; }
+.swatch-info { padding: 9px 11px; }
+.swatch-name { font-size: 12px; font-weight: 500; }
+.swatch-hex { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  padding: 8px 15px; border-radius: var(--radius); border: 1px solid transparent;
+  cursor: pointer; transition: all var(--duration-fast); white-space: nowrap;
+  position: relative;
+}
+.btn:active:not(:disabled) { transform: scale(0.97); }
+.btn svg { width: var(--icon-sm); height: var(--icon-sm); }
+.btn-primary { background: var(--terracotta); color: #fff; }
+.btn-primary:hover:not(:disabled) { opacity: 0.88; }
+.btn-secondary {
+  background: var(--surface-2); border-color: var(--border-strong); color: var(--text-primary);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--terracotta-bg); border-color: var(--terracotta); color: var(--terracotta-text);
+}
+.btn-ghost { background: transparent; color: var(--text-secondary); }
+.btn-ghost:hover:not(:disabled) { background: var(--surface-1); color: var(--text-primary); }
+.btn-ochre { background: var(--ochre); color: #fff; }
+.btn-olive { background: var(--olive); color: #fff; }
+.btn-rust { background: var(--rust); color: #fff; }
+.btn-sm { padding: 5px 11px; font-size: 12px; }
+.btn-lg { padding: 11px 20px; font-size: 14px; }
+.btn-icon { width: 34px; height: 34px; padding: 0; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+.btn.loading { color: transparent !important; pointer-events: none; }
+.btn.loading::after {
+  content: '';
+  position: absolute;
+  width: 16px; height: 16px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+}
+.btn-primary.loading::after { border-color: #fff; border-right-color: transparent; }
+.btn-secondary.loading::after { border-color: var(--text-primary); border-right-color: transparent; }
+
+/* ── Badges & Tags ── */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 500; padding: 3px 9px;
+  border-radius: var(--radius); white-space: nowrap;
+}
+.badge-terracotta { background: var(--terracotta-bg); color: var(--terracotta-text); }
+.badge-rust { background: var(--rust-bg); color: var(--rust-text); }
+.badge-ochre { background: var(--ochre-bg); color: var(--ochre-text); }
+.badge-clay { background: var(--clay-bg); color: var(--clay-text); }
+.badge-olive { background: var(--olive-bg); color: var(--olive-text); }
+
+.tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 500; padding: 4px 11px;
+  border-radius: var(--radius-full); cursor: pointer; transition: filter var(--duration-fast);
+}
+.tag:hover { filter: brightness(0.96); }
+.tag-terracotta { background: var(--terracotta-bg); color: var(--terracotta-text); }
+.tag-rust { background: var(--rust-bg); color: var(--rust-text); }
+.tag-ochre { background: var(--ochre-bg); color: var(--ochre-text); }
+.tag-clay { background: var(--clay-bg); color: var(--clay-text); }
+.tag-olive { background: var(--olive-bg); color: var(--olive-text); }
+
+.tag-removable { padding-right: 6px; }
+.tag-remove {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: transparent; border: none; cursor: pointer;
+  color: inherit; opacity: 0.7; transition: opacity var(--duration-fast);
+}
+.tag-remove:hover { opacity: 1; background: rgba(0,0,0,0.08); }
+.tag-remove svg { width: 10px; height: 10px; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500; padding: 5px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2); color: var(--text-secondary);
+  cursor: pointer; transition: all var(--duration-fast);
+}
+.chip:hover { border-color: var(--terracotta); color: var(--terracotta-text); }
+.chip.active {
+  background: var(--terracotta-bg); border-color: var(--terracotta); color: var(--terracotta-text);
+}
+
+/* ── Avatar ── */
+.avatar {
+  width: 38px; height: 38px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 500; flex-shrink: 0; position: relative;
+}
+.avatar-sm { width: 26px; height: 26px; font-size: 10px; }
+.avatar-lg { width: 48px; height: 48px; font-size: 16px; }
+.avatar-xl { width: 60px; height: 60px; font-size: 20px; }
+.status-dot {
+  position: absolute; bottom: 0; right: 0;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--p-green); border: 2px solid var(--surface-2);
+}
+.avatar-group { display: flex; }
+.avatar-group .avatar { margin-left: -7px; border: 2px solid var(--surface-2); }
+.avatar-group .avatar:first-child { margin-left: 0; }
+
+.av-red { background: var(--p-red-bg); color: var(--p-red-text); }
+.av-orange { background: var(--p-orange-bg); color: var(--p-orange-text); }
+.av-amber { background: var(--p-amber-bg); color: var(--p-amber-text); }
+.av-yellow { background: var(--p-yellow-bg); color: var(--p-yellow-text); }
+.av-lime { background: var(--p-lime-bg); color: var(--p-lime-text); }
+.av-green { background: var(--p-green-bg); color: var(--p-green-text); }
+.av-teal { background: var(--p-teal-bg); color: var(--p-teal-text); }
+.av-cyan { background: var(--p-cyan-bg); color: var(--p-cyan-text); }
+.av-blue { background: var(--p-blue-bg); color: var(--p-blue-text); }
+.av-indigo { background: var(--p-indigo-bg); color: var(--p-indigo-text); }
+.av-violet { background: var(--p-violet-bg); color: var(--p-violet-text); }
+.av-purple { background: var(--p-purple-bg); color: var(--p-purple-text); }
+.av-pink { background: var(--p-pink-bg); color: var(--p-pink-text); }
+.av-rose { background: var(--p-rose-bg); color: var(--p-rose-text); }
+.av-brown { background: var(--p-brown-bg); color: var(--p-brown-text); }
+.av-slate { background: var(--p-slate-bg); color: var(--p-slate-text); }
+
+/* ── Form Field ── */
+.form-field { display: flex; flex-direction: column; gap: 5px; }
+.form-label { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+.form-hint { font-size: 11px; color: var(--text-muted); }
+.form-error { font-size: 11px; color: var(--rust-text); }
+.form-success { font-size: 11px; color: var(--olive-text); }
+
+/* ── Inputs ── */
+.input {
+  width: 100%; padding: 9px 13px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-3); font-family: inherit; font-size: 13px;
+  color: var(--text-primary); outline: none; transition: border-color var(--duration-fast);
+}
+.input::placeholder { color: var(--text-muted); }
+.input:focus { border-color: var(--terracotta); }
+.input.error { border-color: var(--rust); }
+.input.success { border-color: var(--olive); }
+.input-icon-wrap { position: relative; }
+.input-icon-wrap svg {
+  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+  width: var(--icon-sm); height: var(--icon-sm); color: var(--text-muted); pointer-events: none;
+}
+.input-icon-wrap .input { padding-left: 34px; }
+textarea.input { resize: vertical; min-height: 76px; }
+
+/* ── Custom Select (Dropdown style) ── */
+.custom-select { position: relative; width: 100%; }
+.custom-select-trigger {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 13px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-3); font-family: inherit; font-size: 13px;
+  color: var(--text-primary); cursor: pointer; transition: border-color var(--duration-fast);
+  gap: 8px;
+}
+.custom-select-trigger:hover { border-color: var(--border-strong); }
+.custom-select.open .custom-select-trigger { border-color: var(--terracotta); }
+.custom-select-trigger svg { width: 14px; height: 14px; color: var(--text-muted); flex-shrink: 0; transition: transform var(--duration-fast); }
+.custom-select.open .custom-select-trigger svg { transform: rotate(180deg); }
+.custom-select-value { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.custom-select-menu {
+  position: absolute; top: calc(100% + 5px); left: 0; right: 0;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  padding: 5px; z-index: 50; max-height: 220px; overflow-y: auto;
+  opacity: 0; visibility: hidden; transform: translateY(-3px);
+  transition: all var(--duration-fast);
+}
+.custom-select.open .custom-select-menu { opacity: 1; visibility: visible; transform: translateY(0); }
+.custom-select-option {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 11px; border-radius: var(--radius); font-size: 13px;
+  color: var(--text-primary); cursor: pointer; transition: background var(--duration-fast);
+}
+.custom-select-option:hover { background: var(--surface-1); }
+.custom-select-option.selected { background: var(--terracotta-bg); color: var(--terracotta-text); font-weight: 500; }
+.custom-select-option svg { width: 14px; height: 14px; }
+
+/* ── Dropdown ── */
+.dropdown { position: relative; display: inline-block; }
+.dropdown-menu {
+  position: absolute; top: calc(100% + 5px); left: 0; min-width: 170px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  padding: 5px; z-index: 50;
+  opacity: 0; visibility: hidden; transform: translateY(-3px);
+  transition: all var(--duration-fast);
+}
+.dropdown.open .dropdown-menu { opacity: 1; visibility: visible; transform: translateY(0); }
+.dropdown-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 11px; border-radius: var(--radius); font-size: 13px;
+  color: var(--text-primary); cursor: pointer; transition: background var(--duration-fast);
+}
+.dropdown-item:hover { background: var(--surface-1); }
+.dropdown-item svg { width: var(--icon-sm); height: var(--icon-sm); color: var(--text-muted); }
+.dropdown-divider { height: 1px; background: var(--border); margin: 3px 0; }
+
+/* ── Toggle ── */
+.toggle {
+  position: relative; width: 40px; height: 22px;
+  background: var(--surface-1); border-radius: var(--radius-full);
+  border: 1px solid var(--border); cursor: pointer; transition: all var(--duration);
+  flex-shrink: 0;
+}
+.toggle::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--surface-2); box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  transition: transform var(--duration);
+}
+.toggle.on { background: var(--terracotta); border-color: var(--terracotta); }
+.toggle.on::after { transform: translateX(18px); }
+
+/* ── Checkbox & Radio ── */
+.check-wrap, .radio-wrap {
+  display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 13px;
+}
+.check-box {
+  width: 16px; height: 16px; border-radius: 4px;
+  border: 1.5px solid var(--border-strong); background: var(--surface-2);
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--duration-fast); flex-shrink: 0;
+}
+.check-box.checked { background: var(--terracotta); border-color: var(--terracotta); color: #fff; }
+.check-box svg { width: 10px; height: 10px; opacity: 0; }
+.check-box.checked svg { opacity: 1; }
+
+.radio-circle {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 1.5px solid var(--border-strong); background: var(--surface-2);
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--duration-fast); flex-shrink: 0;
+}
+.radio-circle.checked { border-color: var(--terracotta); }
+.radio-circle.checked::after {
+  content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--terracotta);
+}
+
+/* ── Tabs ── */
+.tabs {
+  display: flex; gap: 2px; background: var(--surface-1);
+  border-radius: var(--radius); padding: 3px; width: fit-content;
+}
+.tab {
+  padding: 6px 14px; font-size: 13px; font-weight: 500;
+  border-radius: 6px; border: none; background: transparent;
+  color: var(--text-muted); cursor: pointer; transition: all var(--duration-fast);
+  font-family: inherit;
+}
+.tab.active {
+  background: var(--surface-2); color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.tab:hover:not(.active) { color: var(--text-secondary); }
+
+/* ── Progress ── */
+.progress-wrap { display: flex; flex-direction: column; gap: 6px; max-width: 360px; }
+.progress-label {
+  display: flex; justify-content: space-between;
+  font-size: 12px; color: var(--text-secondary);
+}
+.progress {
+  height: 8px; background: var(--surface-1);
+  border-radius: var(--radius-full); overflow: hidden;
+}
+.progress-bar {
+  height: 100%; border-radius: var(--radius-full);
+  transition: width 0.5s var(--ease);
+}
+.progress-bar.terracotta { background: var(--terracotta); }
+.progress-bar.ochre { background: var(--ochre); }
+.progress-bar.olive { background: var(--olive); }
+.progress-bar.rust { background: var(--rust); }
+.progress-bar.indeterminate {
+  width: 40% !important;
+  animation: indeterminate 1.4s ease-in-out infinite;
+}
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+/* ── Loaders ── */
+.spinner {
+  width: 26px; height: 26px;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--terracotta);
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+}
+.spinner-sm { width: 16px; height: 16px; border-width: 2px; }
+.spinner-lg { width: 36px; height: 36px; border-width: 3px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.dots-loader { display: flex; gap: 5px; align-items: center; }
+.dots-loader span {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--terracotta);
+  animation: bounce 1.2s ease-in-out infinite;
+}
+.dots-loader span:nth-child(2) { animation-delay: 0.15s; }
+.dots-loader span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0.55); opacity: 0.35; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-1) 25%, var(--surface-3) 50%, var(--surface-1) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease infinite;
+  border-radius: var(--radius);
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton-text { height: 11px; margin-bottom: 7px; }
+.skeleton-title { height: 16px; width: 55%; margin-bottom: 10px; }
+.skeleton-avatar { width: 38px; height: 38px; border-radius: 50%; }
+
+/* ── Cards ── */
+.card {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 18px; transition: box-shadow var(--duration);
+}
+.card:hover { box-shadow: var(--shadow); }
+.card-title { font-size: 14px; font-weight: 500; margin-bottom: 5px; }
+.card-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 14px; }
+
+.stat-card { border-radius: var(--radius); padding: 14px 16px; }
+.stat-label { font-size: 12px; opacity: 0.75; margin-bottom: 3px; }
+.stat-value { font-size: 24px; font-weight: 500; letter-spacing: -0.02em; }
+.stat-terracotta { background: var(--terracotta-bg); color: var(--terracotta-text); }
+.stat-ochre { background: var(--ochre-bg); color: var(--ochre-text); }
+.stat-olive { background: var(--olive-bg); color: var(--olive-text); }
+.stat-rust { background: var(--rust-bg); color: var(--rust-text); }
+
+/* ── List ── */
+.list {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); overflow: hidden;
+}
+.list-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+  transition: background var(--duration-fast); cursor: pointer;
+}
+.list-item:last-child { border-bottom: none; }
+.list-item:hover { background: var(--surface-1); }
+.list-item-left { display: flex; align-items: center; gap: 11px; }
+.icon-box {
+  width: 32px; height: 32px; border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.icon-box svg { width: var(--icon-sm); height: var(--icon-sm); }
+.icon-box.terracotta { background: var(--terracotta-bg); color: var(--terracotta-text); }
+.icon-box.rust { background: var(--rust-bg); color: var(--rust-text); }
+.icon-box.ochre { background: var(--ochre-bg); color: var(--ochre-text); }
+.icon-box.olive { background: var(--olive-bg); color: var(--olive-text); }
+.list-title { font-size: 13px; font-weight: 500; }
+.list-sub { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+/* ── Profile Card (List style) ── */
+.profile-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); transition: box-shadow var(--duration);
+}
+.profile-card:hover { box-shadow: var(--shadow); }
+.profile-card-info { flex: 1; min-width: 0; }
+.profile-card-name { font-size: 14px; font-weight: 500; }
+.profile-card-role { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.profile-card-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.profile-card-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+.profile-list {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); overflow: hidden;
+}
+.profile-list-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+  transition: background var(--duration-fast); cursor: pointer;
+}
+.profile-list-item:last-child { border-bottom: none; }
+.profile-list-item:hover { background: var(--surface-1); }
+.profile-list-info { flex: 1; min-width: 0; }
+.profile-list-name { font-size: 13px; font-weight: 500; }
+.profile-list-role { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+/* ── Table ── */
+.table-wrap {
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  overflow: hidden; background: var(--surface-2);
+}
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th {
+  text-align: left; padding: 10px 14px;
+  font-weight: 500; color: var(--text-secondary);
+  background: var(--surface-1); border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.table td {
+  padding: 11px 14px; border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+.table tr:last-child td { border-bottom: none; }
+.table tr:hover td { background: var(--surface-3); }
+
+/* ── Alert ── */
+.alert {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px; border-radius: var(--radius);
+  font-size: 13px; line-height: 1.45;
+}
+.alert svg { width: var(--icon-md); height: var(--icon-md); flex-shrink: 0; margin-top: 1px; }
+.alert-info { background: var(--p-blue-bg); color: var(--p-blue-text); }
+.alert-success { background: var(--olive-bg); color: var(--olive-text); }
+.alert-warning { background: var(--ochre-bg); color: var(--ochre-text); }
+.alert-danger { background: var(--rust-bg); color: var(--rust-text); }
+
+/* ── Tooltip ── */
+.tooltip-wrap { position: relative; display: inline-block; }
+.tooltip {
+  position: absolute; bottom: calc(100% + 7px); left: 50%; transform: translateX(-50%);
+  background: var(--text-primary); color: var(--bg-page);
+  font-size: 11px; padding: 4px 9px; border-radius: var(--radius-sm);
+  white-space: nowrap; opacity: 0; visibility: hidden; transition: all var(--duration-fast);
+  pointer-events: none; z-index: 60;
+}
+.tooltip-wrap:hover .tooltip,
+.tooltip-wrap:focus-within .tooltip { opacity: 1; visibility: visible; }
+
+/* ── Accordion ── */
+.accordion {
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  overflow: hidden; background: var(--surface-2);
+}
+.acc-item { border-bottom: 1px solid var(--border); }
+.acc-item:last-child { border-bottom: none; }
+.acc-trigger {
+  width: 100%; display: flex; justify-content: space-between; align-items: center;
+  padding: 13px 16px; background: none; border: none; font-family: inherit;
+  font-size: 13px; font-weight: 500; color: var(--text-primary); cursor: pointer;
+  transition: background var(--duration-fast);
+}
+.acc-trigger:hover { background: var(--surface-1); }
+.acc-trigger svg { width: var(--icon-sm); height: var(--icon-sm); color: var(--text-muted); transition: transform var(--duration); }
+.acc-item.open .acc-trigger svg { transform: rotate(180deg); }
+.acc-content {
+  max-height: 0; overflow: hidden; transition: max-height var(--duration-slow) ease;
+  font-size: 13px; color: var(--text-secondary);
+}
+.acc-item.open .acc-content { max-height: 180px; }
+.acc-content-inner { padding: 0 16px 14px; }
+
+/* ── Breadcrumb ── */
+.breadcrumb { display: flex; align-items: center; gap: 5px; font-size: 13px; }
+.breadcrumb a { color: var(--text-muted); text-decoration: none; transition: color var(--duration-fast); }
+.breadcrumb a:hover { color: var(--terracotta); }
+.breadcrumb span { color: var(--text-primary); font-weight: 500; }
+.breadcrumb svg { width: 12px; height: 12px; color: var(--text-muted); }
+
+/* ── Pagination ── */
+.pagination { display: flex; gap: 3px; align-items: center; }
+.page-btn {
+  width: 32px; height: 32px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--surface-2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--text-secondary); cursor: pointer;
+  transition: all var(--duration-fast); font-family: inherit;
+}
+.page-btn:hover:not(:disabled) { background: var(--surface-1); }
+.page-btn.active { background: var(--terracotta); border-color: var(--terracotta); color: #fff; }
+.page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.page-btn svg { width: 13px; height: 13px; }
+
+/* ── Range ── */
+.range {
+  -webkit-appearance: none; width: 100%; height: 5px;
+  background: var(--surface-1); border-radius: var(--radius-full); outline: none;
+  max-width: 300px;
+}
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--terracotta); cursor: pointer;
+  border: 2px solid var(--surface-2); box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
+/* ── Message ── */
+.msg { display: flex; gap: 9px; max-width: 72%; margin-bottom: 10px; }
+.msg.mine { align-self: flex-end; flex-direction: row-reverse; margin-left: auto; }
+.bubble {
+  padding: 9px 13px; border-radius: 13px; font-size: 13px; line-height: 1.5;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.msg.mine .bubble {
+  background: var(--terracotta-bg); border-color: transparent;
+  border-radius: 13px 13px 3px 13px; color: var(--terracotta-text);
+}
+.msg:not(.mine) .bubble { border-radius: 13px 13px 13px 3px; }
+
+/* ── Chat Input / Composer ── */
+.chat-composer {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); overflow: hidden;
+}
+.chat-composer-reply {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px; background: var(--surface-1);
+  border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.chat-composer-reply-content { flex: 1; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-composer-reply-close {
+  background: none; border: none; cursor: pointer; color: var(--text-muted);
+  display: flex; padding: 2px;
+}
+.chat-composer-reply-close svg { width: 14px; height: 14px; }
+.chat-composer-body { display: flex; flex-direction: column; }
+.chat-composer-input {
+  width: 100%; border: none; background: transparent;
+  padding: 12px 14px; font-family: inherit; font-size: 13px;
+  color: var(--text-primary); resize: none; outline: none;
+  min-height: 44px; max-height: 120px; line-height: 1.5;
+}
+.chat-composer-input::placeholder { color: var(--text-muted); }
+.chat-composer-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 10px 10px; gap: 8px;
+}
+.chat-composer-actions { display: flex; gap: 2px; }
+.chat-composer-actions .btn-icon { width: 30px; height: 30px; color: var(--text-muted); }
+.chat-composer-actions .btn-icon:hover { color: var(--text-primary); background: var(--surface-1); }
+
+/* ── Empty & Upload ── */
+.empty {
+  text-align: center; padding: 40px 20px;
+  background: var(--surface-2); border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+}
+.empty svg { width: 32px; height: 32px; color: var(--text-muted); margin-bottom: 10px; }
+.empty h3 { font-size: 14px; font-weight: 500; margin-bottom: 5px; }
+.empty p { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
+
+.upload-zone {
+  border: 1.5px dashed var(--border-strong); border-radius: var(--radius-lg);
+  padding: 28px; text-align: center; cursor: pointer;
+  transition: all var(--duration-fast); background: var(--surface-3);
+}
+.upload-zone:hover,
+.upload-zone.dragover {
+  border-color: var(--terracotta); background: var(--terracotta-bg);
+}
+.upload-zone svg { width: 24px; height: 24px; color: var(--text-muted); margin-bottom: 6px; }
+.upload-zone p { font-size: 13px; color: var(--text-secondary); }
+.upload-zone span { font-size: 11px; color: var(--text-muted); }
+
+/* ── Notification ── */
+.notif-wrap { position: relative; display: inline-flex; }
+.notif-dot {
+  position: absolute; top: -1px; right: -1px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--rust); border: 1.5px solid var(--surface-2);
+}
+
+/* ── Modal ── */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.32);
+  display: none; align-items: center; justify-content: center; z-index: 100;
+  animation: fadeIn var(--duration);
+}
+.modal-backdrop.show { display: flex; }
+.modal {
+  background: var(--surface-2); border-radius: var(--radius-xl);
+  padding: 24px; width: 90%; max-width: 380px;
+  box-shadow: var(--shadow-lg); animation: slideUp 0.22s ease;
+}
+.modal h3 { font-size: 16px; font-weight: 500; margin-bottom: 6px; }
+.modal p { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; }
+.modal-actions { display: flex; gap: 7px; justify-content: flex-end; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Toast ── */
+.toast-container {
+  position: fixed; bottom: 20px; right: 20px; z-index: 200;
+  display: flex; flex-direction: column; gap: 7px;
+}
+.toast {
+  display: flex; align-items: center; gap: 9px;
+  padding: 11px 14px; border-radius: var(--radius);
+  background: var(--surface-2); border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg); font-size: 13px;
+  animation: slideInRight 0.25s ease; min-width: 240px;
+}
+.toast svg { width: var(--icon-md); height: var(--icon-md); flex-shrink: 0; }
+.toast.success { border-color: var(--olive); }
+.toast.warning { border-color: var(--ochre); }
+.toast.error { border-color: var(--rust); }
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Divider ── */
+.divider-label {
+  display: flex; align-items: center; gap: 12px; margin: 28px 0;
+  font-size: 11px; color: var(--text-muted); letter-spacing: 0.04em;
+}
+.divider-label::before, .divider-label::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+.divider-v {
+  width: 1px; height: 20px; background: var(--border); margin: 0 8px;
+}
+
+/* ── Git Components ── */
+.git-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 14px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+}
+.git-branch {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: var(--radius);
+  background: var(--surface-1); font-size: 12px; font-weight: 500;
+  color: var(--text-primary); cursor: pointer; border: 1px solid transparent;
+  transition: all var(--duration-fast);
+}
+.git-branch:hover { border-color: var(--border-strong); background: var(--surface-3); }
+.git-branch svg { width: 13px; height: 13px; color: var(--text-muted); }
+.git-status {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--text-secondary);
+}
+.git-status-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+}
+.git-status-dot.clean { background: var(--olive); }
+.git-status-dot.modified { background: var(--ochre); }
+.git-status-dot.conflict { background: var(--rust); }
+
+.git-file-list {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); overflow: hidden;
+}
+.git-file-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px; border-bottom: 1px solid var(--border);
+  font-size: 13px; transition: background var(--duration-fast);
+}
+.git-file-item:last-child { border-bottom: none; }
+.git-file-item:hover { background: var(--surface-1); }
+.git-file-status {
+  width: 18px; height: 18px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 600; flex-shrink: 0;
+}
+.git-file-status.M { background: var(--ochre-bg); color: var(--ochre-text); }
+.git-file-status.A { background: var(--olive-bg); color: var(--olive-text); }
+.git-file-status.D { background: var(--rust-bg); color: var(--rust-text); }
+.git-file-status.U { background: var(--p-blue-bg); color: var(--p-blue-text); }
+.git-file-name { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.git-file-path { color: var(--text-muted); font-size: 11px; }
+
+.git-commit {
+  display: flex; gap: 12px; padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.git-commit:last-child { border-bottom: none; }
+.git-commit-hash {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; color: var(--terracotta-text);
+  background: var(--terracotta-bg); padding: 2px 7px;
+  border-radius: var(--radius-sm); height: fit-content; flex-shrink: 0;
+}
+.git-commit-body { flex: 1; min-width: 0; }
+.git-commit-msg { font-size: 13px; font-weight: 500; }
+.git-commit-meta { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+.demo-box {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 18px;
+}
+</style>
+</head>
+<body>
+
+<div class="ds-frame">
+
+  <!-- Header -->
+  <div class="ds-header">
+    <div>
+      <p class="ds-eyebrow">DESIGN SYSTEM</p>
+      <h1 class="ds-title">Warm Earth</h1>
+      <p class="ds-desc">웜톤 파운데이션 + 역할용 엑센트 + 다채로운 프로필 컬러. 라이트/다크 지원.</p>
+    </div>
+    <button class="theme-btn" id="themeBtn" title="테마 전환" aria-label="테마 전환">
+      <i data-lucide="moon" id="themeIcon"></i>
+    </button>
+  </div>
+
+  <!-- 01 Foundation -->
+  <section class="section">
+    <h2 class="section-title">01 · Foundation</h2>
+    <div class="swatch-grid">
+      <div class="swatch"><div class="swatch-color" style="background:var(--bg-page)"></div><div class="swatch-info"><div class="swatch-name">bg-page</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--surface-1)"></div><div class="swatch-info"><div class="swatch-name">surface-1</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--surface-2)"></div><div class="swatch-info"><div class="swatch-name">surface-2</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--surface-3)"></div><div class="swatch-info"><div class="swatch-name">surface-3</div></div></div>
+    </div>
+  </section>
+
+  <!-- 02 Accent -->
+  <section class="section">
+    <h2 class="section-title">02 · Accent Family</h2>
+    <p class="section-sub">Primary · Warning · Highlight · Soft · Success</p>
+    <div class="swatch-grid">
+      <div class="swatch"><div class="swatch-color" style="background:var(--terracotta)"></div><div class="swatch-info"><div class="swatch-name">Terracotta</div><div class="swatch-hex">Primary</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--rust)"></div><div class="swatch-info"><div class="swatch-name">Rust</div><div class="swatch-hex">Warning / Danger</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--ochre)"></div><div class="swatch-info"><div class="swatch-name">Ochre</div><div class="swatch-hex">Highlight</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--clay)"></div><div class="swatch-info"><div class="swatch-name">Clay</div><div class="swatch-hex">Soft</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--olive)"></div><div class="swatch-info"><div class="swatch-name">Olive</div><div class="swatch-hex">Success</div></div></div>
+    </div>
+  </section>
+
+  <!-- 03 Profile Colors -->
+  <section class="section">
+    <h2 class="section-title">03 · Profile Colors</h2>
+    <p class="section-sub">아바타·유저 구분용. 채도를 낮춰 톤 유지.</p>
+    <div class="row" style="gap:8px;">
+      <div class="avatar av-red">가</div>
+      <div class="avatar av-orange">나</div>
+      <div class="avatar av-amber">다</div>
+      <div class="avatar av-yellow">라</div>
+      <div class="avatar av-lime">마</div>
+      <div class="avatar av-green">바</div>
+      <div class="avatar av-teal">사</div>
+      <div class="avatar av-cyan">아</div>
+      <div class="avatar av-blue">자</div>
+      <div class="avatar av-indigo">차</div>
+      <div class="avatar av-violet">카</div>
+      <div class="avatar av-purple">타</div>
+      <div class="avatar av-pink">파</div>
+      <div class="avatar av-rose">하</div>
+      <div class="avatar av-brown">김</div>
+      <div class="avatar av-slate">이</div>
+    </div>
+    <div class="row" style="margin-top:14px;gap:8px;">
+      <div class="avatar avatar-sm av-blue">S</div>
+      <div class="avatar av-teal">M</div>
+      <div class="avatar avatar-lg av-pink">L</div>
+      <div class="avatar avatar-xl av-violet">XL</div>
+      <div class="avatar-group" style="margin-left:10px;">
+        <div class="avatar av-red">A</div>
+        <div class="avatar av-orange">B</div>
+        <div class="avatar av-green">C</div>
+        <div class="avatar av-blue">+3</div>
+      </div>
+      <div class="avatar av-green" style="margin-left:10px;">온<span class="status-dot"></span></div>
+    </div>
+  </section>
+
+  <!-- 04 Buttons -->
+  <section class="section">
+    <h2 class="section-title">04 · Buttons</h2>
+    <div class="row">
+      <button class="btn btn-primary">Primary</button>
+      <button class="btn btn-secondary">Secondary</button>
+      <button class="btn btn-ghost">Ghost</button>
+      <button class="btn btn-ochre">Ochre</button>
+      <button class="btn btn-olive">Olive</button>
+      <button class="btn btn-rust">Rust</button>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn btn-primary btn-sm">Small</button>
+      <button class="btn btn-primary">Default</button>
+      <button class="btn btn-primary btn-lg">Large</button>
+      <button class="btn btn-primary btn-icon"><i data-lucide="plus"></i></button>
+      <button class="btn btn-secondary btn-icon"><i data-lucide="ellipsis"></i></button>
+      <button class="btn btn-primary" disabled>Disabled</button>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn btn-primary loading" id="loadingBtn">저장 중...</button>
+      <button class="btn btn-secondary" onclick="toggleLoading()">로딩 토글</button>
+    </div>
+  </section>
+
+  <!-- 05 Badges & Tags -->
+  <section class="section">
+    <h2 class="section-title">05 · Badges & Tags</h2>
+    <div class="row">
+      <span class="badge badge-terracotta">진행중</span>
+      <span class="badge badge-rust">긴급</span>
+      <span class="badge badge-ochre">대기</span>
+      <span class="badge badge-clay">검토</span>
+      <span class="badge badge-olive">완료</span>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <span class="tag tag-terracotta">디자인</span>
+      <span class="tag tag-rust">마케팅</span>
+      <span class="tag tag-ochre">리서치</span>
+      <span class="tag tag-clay">기획</span>
+      <span class="tag tag-olive">완료됨</span>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <span class="tag tag-terracotta tag-removable">
+        필터링됨
+        <button class="tag-remove" aria-label="제거" onclick="this.parentElement.remove()">
+          <i data-lucide="x"></i>
+        </button>
+      </span>
+      <span class="tag tag-ochre tag-removable">
+        태그
+        <button class="tag-remove" aria-label="제거" onclick="this.parentElement.remove()">
+          <i data-lucide="x"></i>
+        </button>
+      </span>
+    </div>
+    <div class="row" style="margin-top:14px;">
+      <button class="chip active" onclick="this.classList.toggle('active')">전체</button>
+      <button class="chip" onclick="this.classList.toggle('active')">디자인</button>
+      <button class="chip" onclick="this.classList.toggle('active')">개발</button>
+      <button class="chip" onclick="this.classList.toggle('active')">마케팅</button>
+    </div>
+  </section>
+
+  <!-- 06 Inputs & Custom Select -->
+  <section class="section">
+    <h2 class="section-title">06 · Inputs & Custom Select</h2>
+    <div class="grid-2">
+      <div class="form-field">
+        <label class="form-label">이름</label>
+        <input class="input" type="text" placeholder="이름을 입력하세요">
+        <span class="form-hint">실명을 입력해 주세요.</span>
+      </div>
+      <div class="form-field">
+        <label class="form-label">검색</label>
+        <div class="input-icon-wrap">
+          <i data-lucide="search"></i>
+          <input class="input" type="text" placeholder="Search...">
+        </div>
+      </div>
+      <div class="form-field">
+        <label class="form-label">에러 상태</label>
+        <input class="input error" type="text" value="잘못된 값">
+        <span class="form-error">올바른 이메일 형식이 아닙니다.</span>
+      </div>
+      <div class="form-field">
+        <label class="form-label">성공 상태</label>
+        <input class="input success" type="text" value="사용 가능">
+        <span class="form-success">사용 가능한 이름입니다.</span>
+      </div>
+      <div class="form-field">
+        <label class="form-label">커스텀 셀렉트</label>
+        <div class="custom-select" id="demoSelect">
+          <button type="button" class="custom-select-trigger" onclick="toggleCustomSelect(this)">
+            <span class="custom-select-value">옵션을 선택하세요</span>
+            <i data-lucide="chevron-down"></i>
+          </button>
+          <div class="custom-select-menu">
+            <div class="custom-select-option" data-value="1" onclick="selectOption(this)">옵션 1</div>
+            <div class="custom-select-option" data-value="2" onclick="selectOption(this)">옵션 2</div>
+            <div class="custom-select-option selected" data-value="3" onclick="selectOption(this)">옵션 3 (선택됨)</div>
+            <div class="custom-select-option" data-value="4" onclick="selectOption(this)">긴 옵션 이름 예시입니다</div>
+          </div>
+        </div>
+      </div>
+      <div class="form-field">
+        <label class="form-label">텍스트에어리어</label>
+        <textarea class="input" placeholder="내용을 입력하세요"></textarea>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 Dropdown -->
+  <section class="section">
+    <h2 class="section-title">07 · Dropdown</h2>
+    <div class="dropdown" id="demoDropdown">
+      <button class="btn btn-secondary" onclick="this.parentElement.classList.toggle('open')" aria-haspopup="true">
+        메뉴 열기 <i data-lucide="chevron-down" style="width:13px;height:13px;"></i>
+      </button>
+      <div class="dropdown-menu" role="menu">
+        <div class="dropdown-item" role="menuitem"><i data-lucide="user"></i> 프로필</div>
+        <div class="dropdown-item" role="menuitem"><i data-lucide="settings"></i> 설정</div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-item" role="menuitem"><i data-lucide="log-out"></i> 로그아웃</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 08 Toggle / Check / Radio -->
+  <section class="section">
+    <h2 class="section-title">08 · Toggle · Checkbox · Radio</h2>
+    <div class="row" style="gap:18px;">
+      <div class="toggle" role="switch" tabindex="0" aria-checked="false"
+           onclick="this.classList.toggle('on'); this.setAttribute('aria-checked', this.classList.contains('on'))"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"></div>
+      <div class="toggle on" role="switch" tabindex="0" aria-checked="true"
+           onclick="this.classList.toggle('on'); this.setAttribute('aria-checked', this.classList.contains('on'))"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"></div>
+      <label class="check-wrap" onclick="this.querySelector('.check-box').classList.toggle('checked')">
+        <div class="check-box checked" role="checkbox" aria-checked="true"><i data-lucide="check"></i></div> 체크됨
+      </label>
+      <label class="check-wrap" onclick="this.querySelector('.check-box').classList.toggle('checked')">
+        <div class="check-box" role="checkbox" aria-checked="false"><i data-lucide="check"></i></div> 체크 안됨
+      </label>
+      <label class="radio-wrap" onclick="document.querySelectorAll('.radio-circle').forEach(r=>r.classList.remove('checked'));this.querySelector('.radio-circle').classList.add('checked')">
+        <div class="radio-circle checked" role="radio" aria-checked="true"></div> 옵션 A
+      </label>
+      <label class="radio-wrap" onclick="document.querySelectorAll('.radio-circle').forEach(r=>r.classList.remove('checked'));this.querySelector('.radio-circle').classList.add('checked')">
+        <div class="radio-circle" role="radio" aria-checked="false"></div> 옵션 B
+      </label>
+    </div>
+  </section>
+
+  <!-- 09 Tabs -->
+  <section class="section">
+    <h2 class="section-title">09 · Tabs</h2>
+    <div class="tabs" role="tablist">
+      <button class="tab active" role="tab" aria-selected="true" onclick="setTab(this)">전체</button>
+      <button class="tab" role="tab" aria-selected="false" onclick="setTab(this)">진행중</button>
+      <button class="tab" role="tab" aria-selected="false" onclick="setTab(this)">완료</button>
+      <button class="tab" role="tab" aria-selected="false" onclick="setTab(this)">보관</button>
+    </div>
+  </section>
+
+  <!-- 10 Progress & Loaders -->
+  <section class="section">
+    <h2 class="section-title">10 · Progress & Loaders</h2>
+    <div class="progress-wrap">
+      <div>
+        <div class="progress-label"><span>디자인</span><span>70%</span></div>
+        <div class="progress"><div class="progress-bar terracotta" style="width:70%"></div></div>
+      </div>
+      <div>
+        <div class="progress-label"><span>리뷰</span><span>45%</span></div>
+        <div class="progress"><div class="progress-bar ochre" style="width:45%"></div></div>
+      </div>
+      <div>
+        <div class="progress-label"><span>완료</span><span>90%</span></div>
+        <div class="progress"><div class="progress-bar olive" style="width:90%"></div></div>
+      </div>
+      <div>
+        <div class="progress-label"><span>로딩 중...</span></div>
+        <div class="progress"><div class="progress-bar terracotta indeterminate"></div></div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:22px;gap:16px;">
+      <div class="spinner spinner-sm"></div>
+      <div class="spinner"></div>
+      <div class="spinner spinner-lg"></div>
+      <div class="dots-loader"><span></span><span></span><span></span></div>
+    </div>
+    <div class="demo-box" style="margin-top:18px;max-width:280px;">
+      <div class="skeleton skeleton-avatar" style="margin-bottom:10px;"></div>
+      <div class="skeleton skeleton-title"></div>
+      <div class="skeleton skeleton-text"></div>
+      <div class="skeleton skeleton-text" style="width:75%"></div>
+    </div>
+  </section>
+
+  <!-- 11 Stat Cards -->
+  <section class="section">
+    <h2 class="section-title">11 · Stat Cards</h2>
+    <div class="grid-3">
+      <div class="stat-card stat-terracotta"><p class="stat-label">Active</p><p class="stat-value">128</p></div>
+      <div class="stat-card stat-ochre"><p class="stat-label">Pending</p><p class="stat-value">14</p></div>
+      <div class="stat-card stat-olive"><p class="stat-label">Completed</p><p class="stat-value">452</p></div>
+    </div>
+  </section>
+
+  <!-- 12 Cards & Lists -->
+  <section class="section">
+    <h2 class="section-title">12 · Cards & Lists</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3 class="card-title">디자인 시스템 문서</h3>
+        <p class="card-desc">컬러·타이포·컴포넌트 규칙을 정리한 문서입니다.</p>
+        <button class="btn btn-primary btn-sm">자세히 보기</button>
+      </div>
+      <div class="list">
+        <div class="list-item">
+          <div class="list-item-left">
+            <div class="icon-box rust"><i data-lucide="file-text"></i></div>
+            <div><p class="list-title">디자인 시스템 문서</p><p class="list-sub">2시간 전</p></div>
+          </div>
+          <span class="badge badge-rust">진행중</span>
+        </div>
+        <div class="list-item">
+          <div class="list-item-left">
+            <div class="icon-box ochre"><i data-lucide="image"></i></div>
+            <div><p class="list-title">캠페인 무드보드</p><p class="list-sub">어제</p></div>
+          </div>
+          <span class="badge badge-ochre">검토 대기</span>
+        </div>
+        <div class="list-item">
+          <div class="list-item-left">
+            <div class="icon-box olive"><i data-lucide="bar-chart-2"></i></div>
+            <div><p class="list-title">3분기 리포트</p><p class="list-sub">3일 전</p></div>
+          </div>
+          <span class="badge badge-olive">완료</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 Profile Cards -->
+  <section class="section">
+    <h2 class="section-title">13 · Profile Cards</h2>
+    <div class="grid-2" style="margin-bottom:14px;">
+      <div class="profile-card">
+        <div class="avatar av-blue">김</div>
+        <div class="profile-card-info">
+          <div class="profile-card-name">김민수</div>
+          <div class="profile-card-role">Product Designer</div>
+          <div class="profile-card-meta">
+            <span class="badge badge-olive">온라인</span>
+            <span class="tag tag-terracotta" style="font-size:11px;padding:2px 8px;">디자인</span>
+          </div>
+        </div>
+        <div class="profile-card-actions">
+          <button class="btn btn-secondary btn-sm">메시지</button>
+        </div>
+      </div>
+      <div class="profile-card">
+        <div class="avatar av-orange">이</div>
+        <div class="profile-card-info">
+          <div class="profile-card-name">이지은</div>
+          <div class="profile-card-role">Frontend Engineer</div>
+          <div class="profile-card-meta">
+            <span class="badge badge-ochre">자리비움</span>
+          </div>
+        </div>
+        <div class="profile-card-actions">
+          <button class="btn btn-ghost btn-icon"><i data-lucide="more-horizontal"></i></button>
+        </div>
+      </div>
+    </div>
+    <div class="profile-list">
+      <div class="profile-list-item">
+        <div class="avatar avatar-sm av-green">박</div>
+        <div class="profile-list-info">
+          <div class="profile-list-name">박서준</div>
+          <div class="profile-list-role">Backend · 3시간 전 활동</div>
+        </div>
+        <span class="badge badge-olive">온라인</span>
+      </div>
+      <div class="profile-list-item">
+        <div class="avatar avatar-sm av-violet">최</div>
+        <div class="profile-list-info">
+          <div class="profile-list-name">최유진</div>
+          <div class="profile-list-role">PM · 어제 활동</div>
+        </div>
+        <span class="badge badge-clay">오프라인</span>
+      </div>
+      <div class="profile-list-item">
+        <div class="avatar avatar-sm av-pink">정</div>
+        <div class="profile-list-info">
+          <div class="profile-list-name">정하은</div>
+          <div class="profile-list-role">Design · 방금 전</div>
+        </div>
+        <button class="btn btn-secondary btn-sm">팔로우</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 14 Table -->
+  <section class="section">
+    <h2 class="section-title">14 · Table</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>프로젝트</th>
+            <th>상태</th>
+            <th>담당자</th>
+            <th>마감일</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>디자인 시스템</td>
+            <td><span class="badge badge-terracotta">진행중</span></td>
+            <td>김민수</td>
+            <td>2026-09-15</td>
+          </tr>
+          <tr>
+            <td>캠페인 무드보드</td>
+            <td><span class="badge badge-ochre">검토</span></td>
+            <td>이지은</td>
+            <td>2026-09-08</td>
+          </tr>
+          <tr>
+            <td>3분기 리포트</td>
+            <td><span class="badge badge-olive">완료</span></td>
+            <td>박서준</td>
+            <td>2026-08-30</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 15 Alerts -->
+  <section class="section">
+    <h2 class="section-title">15 · Alerts</h2>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <div class="alert alert-info"><i data-lucide="info"></i><span>새로운 업데이트가 있습니다.</span></div>
+      <div class="alert alert-success"><i data-lucide="circle-check"></i><span>성공적으로 저장되었습니다.</span></div>
+      <div class="alert alert-warning"><i data-lucide="triangle-alert"></i><span>일부 항목이 아직 검토 대기 중입니다.</span></div>
+      <div class="alert alert-danger"><i data-lucide="circle-alert"></i><span>오류가 발생했습니다. 다시 시도해 주세요.</span></div>
+    </div>
+  </section>
+
+  <!-- 16 Accordion -->
+  <section class="section">
+    <h2 class="section-title">16 · Accordion</h2>
+    <div class="accordion">
+      <div class="acc-item open">
+        <button class="acc-trigger" onclick="this.parentElement.classList.toggle('open')" aria-expanded="true">
+          컬러 시스템 규칙 <i data-lucide="chevron-down"></i>
+        </button>
+        <div class="acc-content"><div class="acc-content-inner">엑센트는 역할별로 사용하고, 프로필 컬러는 아바타 구분용으로만 사용합니다.</div></div>
+      </div>
+      <div class="acc-item">
+        <button class="acc-trigger" onclick="this.parentElement.classList.toggle('open')" aria-expanded="false">
+          타이포그래피 <i data-lucide="chevron-down"></i>
+        </button>
+        <div class="acc-content"><div class="acc-content-inner">Pretendard 기본. 제목 500, 본문 400 웨이트 권장.</div></div>
+      </div>
+      <div class="acc-item">
+        <button class="acc-trigger" onclick="this.parentElement.classList.toggle('open')" aria-expanded="false">
+          다크모드 대응 <i data-lucide="chevron-down"></i>
+        </button>
+        <div class="acc-content"><div class="acc-content-inner">data-theme 속성으로 전환. prefers-color-scheme 연동 + localStorage 저장.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 17 Breadcrumb & Pagination -->
+  <section class="section">
+    <h2 class="section-title">17 · Breadcrumb & Pagination</h2>
+    <div class="breadcrumb" style="margin-bottom:16px;">
+      <a href="#">홈</a>
+      <i data-lucide="chevron-right"></i>
+      <a href="#">프로젝트</a>
+      <i data-lucide="chevron-right"></i>
+      <span>디자인 시스템</span>
+    </div>
+    <div class="pagination">
+      <button class="page-btn" disabled aria-label="이전"><i data-lucide="chevron-left"></i></button>
+      <button class="page-btn active">1</button>
+      <button class="page-btn">2</button>
+      <button class="page-btn">3</button>
+      <button class="page-btn">...</button>
+      <button class="page-btn">12</button>
+      <button class="page-btn" aria-label="다음"><i data-lucide="chevron-right"></i></button>
+    </div>
+  </section>
+
+  <!-- 18 Range -->
+  <section class="section">
+    <h2 class="section-title">18 · Range Slider</h2>
+    <input type="range" class="range" min="0" max="100" value="60">
+  </section>
+
+  <!-- 19 Messages + Chat Input -->
+  <section class="section">
+    <h2 class="section-title">19 · Messages & Chat Input</h2>
+    <div class="demo-box" style="display:flex;flex-direction:column; margin-bottom:14px;">
+      <div class="msg">
+        <div class="avatar avatar-sm av-blue">김</div>
+        <div class="bubble">안녕하세요! 디자인 시스템 문서 공유드려요.</div>
+      </div>
+      <div class="msg mine">
+        <div class="avatar avatar-sm av-orange">나</div>
+        <div class="bubble">네, 확인했습니다. 톤이 잘 맞네요.</div>
+      </div>
+      <div class="msg">
+        <div class="avatar avatar-sm av-blue">김</div>
+        <div class="bubble">버튼 쪽만 조금 수정해서 다시 공유드릴게요.</div>
+      </div>
+    </div>
+
+    <!-- Chat Composer -->
+    <div class="chat-composer">
+      <div class="chat-composer-reply" id="replyPreview" style="display:none;">
+        <i data-lucide="corner-up-left" style="width:14px;height:14px;color:var(--text-muted);"></i>
+        <div class="chat-composer-reply-content">김민수: 버튼 쪽만 조금 수정해서...</div>
+        <button class="chat-composer-reply-close" onclick="document.getElementById('replyPreview').style.display='none'">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="chat-composer-body">
+        <textarea class="chat-composer-input" placeholder="메시지를 입력하세요..." rows="1"
+          oninput="this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
+        <div class="chat-composer-toolbar">
+          <div class="chat-composer-actions">
+            <button class="btn btn-ghost btn-icon" title="파일 첨부"><i data-lucide="paperclip"></i></button>
+            <button class="btn btn-ghost btn-icon" title="이미지"><i data-lucide="image"></i></button>
+            <button class="btn btn-ghost btn-icon" title="이모지"><i data-lucide="smile"></i></button>
+            <button class="btn btn-ghost btn-icon" title="답장 미리보기" onclick="document.getElementById('replyPreview').style.display='flex'">
+              <i data-lucide="corner-up-left"></i>
+            </button>
+          </div>
+          <button class="btn btn-primary btn-sm">
+            전송 <i data-lucide="send" style="width:13px;height:13px;"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 20 Empty & Upload -->
+  <section class="section">
+    <h2 class="section-title">20 · Empty State & Upload</h2>
+    <div class="grid-2">
+      <div class="empty">
+        <i data-lucide="folder-x"></i>
+        <h3>아직 항목이 없습니다</h3>
+        <p>새 프로젝트를 만들어 시작해 보세요.</p>
+        <button class="btn btn-primary btn-sm">새로 만들기</button>
+      </div>
+      <div class="upload-zone" id="uploadZone"
+           ondragover="event.preventDefault(); this.classList.add('dragover')"
+           ondragleave="this.classList.remove('dragover')"
+           ondrop="event.preventDefault(); this.classList.remove('dragover')">
+        <i data-lucide="upload"></i>
+        <p>파일을 드래그하거나 클릭해서 업로드</p>
+        <span>PNG, JPG, PDF · 최대 10MB</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 21 Tooltip & Notif -->
+  <section class="section">
+    <h2 class="section-title">21 · Tooltip & Notification</h2>
+    <div class="row">
+      <div class="tooltip-wrap">
+        <button class="btn btn-secondary">호버해보세요</button>
+        <div class="tooltip">도움말 텍스트</div>
+      </div>
+      <div class="divider-v"></div>
+      <div class="notif-wrap">
+        <button class="btn btn-secondary btn-icon" aria-label="알림"><i data-lucide="bell"></i></button>
+        <span class="notif-dot"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 22 Modal & Toast -->
+  <section class="section">
+    <h2 class="section-title">22 · Modal & Toast</h2>
+    <div class="row">
+      <button class="btn btn-primary" onclick="openModal()">모달 열기</button>
+      <button class="btn btn-secondary" onclick="showToast('success')">성공 토스트</button>
+      <button class="btn btn-secondary" onclick="showToast('warning')">경고 토스트</button>
+      <button class="btn btn-secondary" onclick="showToast('error')">에러 토스트</button>
+    </div>
+  </section>
+
+  <!-- 23 Git Management -->
+  <section class="section">
+    <h2 class="section-title">23 · Git Management</h2>
+    <p class="section-sub">브랜치, 상태, 변경 파일, 커밋 리스트</p>
+
+    <!-- Git Bar -->
+    <div class="git-bar" style="margin-bottom:14px;">
+      <div class="git-branch">
+        <i data-lucide="git-branch"></i>
+        main
+        <i data-lucide="chevron-down" style="width:12px;height:12px;"></i>
+      </div>
+      <div class="git-status">
+        <span class="git-status-dot modified"></span>
+        3 changes
+      </div>
+      <div style="flex:1;"></div>
+      <button class="btn btn-secondary btn-sm"><i data-lucide="git-pull-request"></i> Pull</button>
+      <button class="btn btn-primary btn-sm"><i data-lucide="upload"></i> Push</button>
+    </div>
+
+    <!-- Changed Files -->
+    <div class="git-file-list" style="margin-bottom:14px;">
+      <div class="git-file-item">
+        <div class="git-file-status M">M</div>
+        <div class="git-file-name">src/components/Button.tsx</div>
+        <div class="git-file-path">+24 −8</div>
+      </div>
+      <div class="git-file-item">
+        <div class="git-file-status A">A</div>
+        <div class="git-file-name">src/styles/tokens.css</div>
+        <div class="git-file-path">+156</div>
+      </div>
+      <div class="git-file-item">
+        <div class="git-file-status D">D</div>
+        <div class="git-file-name">src/old/legacy.js</div>
+        <div class="git-file-path">−89</div>
+      </div>
+      <div class="git-file-item">
+        <div class="git-file-status U">U</div>
+        <div class="git-file-name">README.md</div>
+        <div class="git-file-path">untracked</div>
+      </div>
+    </div>
+
+    <!-- Commit List -->
+    <div class="list">
+      <div class="git-commit">
+        <div class="git-commit-hash">a3f2c1d</div>
+        <div class="git-commit-body">
+          <div class="git-commit-msg">feat: add custom select & chat composer</div>
+          <div class="git-commit-meta">김민수 · 2시간 전 · main</div>
+        </div>
+      </div>
+      <div class="git-commit">
+        <div class="git-commit-hash">9b8e4f2</div>
+        <div class="git-commit-body">
+          <div class="git-commit-msg">fix: improve focus-visible and theme toggle</div>
+          <div class="git-commit-meta">이지은 · 어제 · main</div>
+        </div>
+      </div>
+      <div class="git-commit">
+        <div class="git-commit-hash">c7d1a90</div>
+        <div class="git-commit-body">
+          <div class="git-commit-msg">chore: update design tokens for dark mode</div>
+          <div class="git-commit-meta">박서준 · 3일 전 · main</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider-label">END OF SYSTEM</div>
+</div>
+
+<!-- Modal -->
+<div class="modal-backdrop" id="demoModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"
+     onclick="if(event.target===this) closeModal()">
+  <div class="modal">
+    <h3 id="modalTitle">확인이 필요합니다</h3>
+    <p>이 작업을 진행하면 되돌릴 수 없습니다. 계속하시겠습니까?</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">취소</button>
+      <button class="btn btn-primary" onclick="closeModal()">확인</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+  lucide.createIcons();
+
+  // ========== Theme (수정됨) ==========
+  const themeBtn = document.getElementById('themeBtn');
+  const html = document.documentElement;
+
+  function getPreferredTheme() {
+    const saved = localStorage.getItem('warm-earth-theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+
+  function applyTheme(theme) {
+    html.setAttribute('data-theme', theme);
+    localStorage.setItem('warm-earth-theme', theme);
+    // 아이콘: 현재가 light면 moon(다크로 전환), dark면 sun(라이트로 전환)
+    themeBtn.innerHTML = theme === 'dark'
+      ? '<i data-lucide="sun"></i>'
+      : '<i data-lucide="moon"></i>';
+    lucide.createIcons();
+  }
+
+  // 초기 적용
+  applyTheme(getPreferredTheme());
+
+  themeBtn.addEventListener('click', () => {
+    const current = html.getAttribute('data-theme');
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+  });
+
+  // ========== Tabs ==========
+  function setTab(el) {
+    el.parentElement.querySelectorAll('.tab').forEach(t => {
+      t.classList.remove('active');
+      t.setAttribute('aria-selected', 'false');
+    });
+    el.classList.add('active');
+    el.setAttribute('aria-selected', 'true');
+  }
+
+  // ========== Custom Select ==========
+  function toggleCustomSelect(trigger) {
+    const select = trigger.closest('.custom-select');
+    // 다른 열린 셀렉트 닫기
+    document.querySelectorAll('.custom-select.open').forEach(s => {
+      if (s !== select) s.classList.remove('open');
+    });
+    select.classList.toggle('open');
+  }
+
+  function selectOption(option) {
+    const select = option.closest('.custom-select');
+    const valueEl = select.querySelector('.custom-select-value');
+    select.querySelectorAll('.custom-select-option').forEach(o => o.classList.remove('selected'));
+    option.classList.add('selected');
+    valueEl.textContent = option.textContent;
+    select.classList.remove('open');
+  }
+
+  // ========== Dropdown 외부 클릭 ==========
+  document.addEventListener('click', (e) => {
+    // Dropdown
+    const dd = document.getElementById('demoDropdown');
+    if (dd && !dd.contains(e.target)) dd.classList.remove('open');
+
+    // Custom Select
+    document.querySelectorAll('.custom-select.open').forEach(s => {
+      if (!s.contains(e.target)) s.classList.remove('open');
+    });
+  });
+
+  // ========== Modal ==========
+  function openModal() {
+    document.getElementById('demoModal').classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal() {
+    document.getElementById('demoModal').classList.remove('show');
+    document.body.style.overflow = '';
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeModal();
+      document.getElementById('demoDropdown')?.classList.remove('open');
+      document.querySelectorAll('.custom-select.open').forEach(s => s.classList.remove('open'));
+    }
+  });
+
+  // ========== Toast ==========
+  function showToast(type = 'success') {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    const icons = {
+      success: '<i data-lucide="circle-check" style="color:var(--olive)"></i>',
+      warning: '<i data-lucide="triangle-alert" style="color:var(--ochre)"></i>',
+      error: '<i data-lucide="circle-alert" style="color:var(--rust)"></i>'
+    };
+    const messages = {
+      success: '저장되었습니다',
+      warning: '주의가 필요합니다',
+      error: '오류가 발생했습니다'
+    };
+    toast.innerHTML = `${icons[type] || icons.success} ${messages[type] || messages.success}`;
+    container.appendChild(toast);
+    lucide.createIcons();
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(16px)';
+      toast.style.transition = 'all 0.25s';
+      setTimeout(() => toast.remove(), 250);
+    }, 2800);
+  }
+
+  // ========== Loading button ==========
+  function toggleLoading() {
+    document.getElementById('loadingBtn').classList.toggle('loading');
+  }
+</script>
+</body>
+</html>
