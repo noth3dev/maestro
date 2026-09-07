@@ -18,6 +18,7 @@ import { resolveConnection } from "./connection.js";
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection } from "./local-bootstrap.js";
 import { createCommandRegistry } from "./commands/registry.js";
+import { createCommandAutocompleteItems } from "./commands/autocomplete.js";
 import { createCommandPalette } from "./commands/palette.js";
 import { parseInput } from "./commands/parser.js";
 import {
@@ -245,7 +246,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const registry = createCommandRegistry();
     editor.setAutocompleteProvider(
       new CombinedAutocompleteProvider(
-        registry.all().map((command) => ({ name: command.name, description: command.description })),
+        createCommandAutocompleteItems(registry),
         workspace.cwd,
       ),
     );
@@ -794,6 +795,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       activityController?.abort();
       conversationTurnController?.abort();
       accountLoginController?.abort();
+      if (accountLoginId !== undefined && client !== undefined) void client.cancelAccountLogin(accountLoginId).catch(() => undefined);
       flashmobAnimationId += 1;
       tui.stop();
       resolve(0);

@@ -16,6 +16,11 @@ function modelsFromEnv(value: string | undefined, fallback: string): readonly st
   return models.length > 0 ? models : [fallback];
 }
 
+function positiveMilliseconds(value: string | undefined, fallback: number): number {
+  const parsed = Number(value ?? fallback);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 export function createGatewayFromEnv(env: NodeJS.ProcessEnv): ModelGatewayRuntime {
   const token = env.MAESTRO_MODEL_GATEWAY_TOKEN;
   if (!token) throw new Error("model gateway token is required");
@@ -28,7 +33,7 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv): ModelGatewayRuntim
   accountRefs.openai = openAiAccountRef;
   accountRefs.anthropic = anthropicAccountRef;
   const codexCommand = env.MAESTRO_CODEX_APP_SERVER_COMMAND?.trim();
-  const codex = codexCommand === undefined || codexCommand === "" ? undefined : new CodexAppServerClient({ command: codexCommand, args: ["app-server"], requestTimeoutMs: Number(env.MAESTRO_CODEX_APP_SERVER_TIMEOUT_MS ?? "30000") });
+  const codex = codexCommand === undefined || codexCommand === "" ? undefined : new CodexAppServerClient({ command: codexCommand, args: ["app-server"], requestTimeoutMs: positiveMilliseconds(env.MAESTRO_CODEX_APP_SERVER_TIMEOUT_MS, 30000) });
   if (codex !== undefined) {
     accountRefs["openai-codex"] = `openai-codex-${operatorId}`;
     registry.register(createCodexAppServerPlugin({ client: codex, models: modelsFromEnv(env.MAESTRO_CODEX_MODELS, "gpt-5.3-codex") }));
@@ -48,7 +53,7 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv): ModelGatewayRuntim
 export async function startModelGateway(env = process.env): Promise<{ close: () => Promise<void> }> {
   const runtime = createGatewayFromEnv(env);
   await runtime.app.listen({ host: env.MAESTRO_MODEL_GATEWAY_HOST ?? "127.0.0.1", port: Number(env.MAESTRO_MODEL_GATEWAY_PORT ?? "4321") });
-  return { close: () => runtime.app.close() };
+  return { close: async () => { await runtime.app.close(); await runtime.gateway.close(); } };
 }
 
 if (import.meta.url === new URL(process.argv[1]!, "file:").href) {

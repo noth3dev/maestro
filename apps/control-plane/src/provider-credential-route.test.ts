@@ -58,6 +58,17 @@ describe("provider account login routes", () => {
     await app.close();
   });
 
+  it("supports explicit OpenAI account logout without accepting a secret", async () => {
+    const logoutAccount = vi.fn(async () => {});
+    const service: ProviderCredentialService = { bind: vi.fn(), revoke: vi.fn(), logoutAccount };
+    const app = buildServer({ goalService, authenticator, providerCredentials: service });
+    const response = await app.inject({ method: "POST", url: "/v1/provider-account-logins/logout", headers: { authorization: "Bearer test-secret", "content-type": "application/json" }, payload: { providerId: "openai-codex" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ revoked: true });
+    expect(logoutAccount).toHaveBeenCalledWith({ operatorId: operator.operatorId, requestId: expect.any(String), providerId: "openai-codex" });
+    await app.close();
+  });
+
   it("does not offer an Anthropic subscription login", async () => {
     const service: ProviderCredentialService = { bind: vi.fn(), revoke: vi.fn(), startAccountLogin: vi.fn() };
     const app = buildServer({ goalService, authenticator, providerCredentials: service });

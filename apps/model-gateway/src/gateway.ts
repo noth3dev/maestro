@@ -25,6 +25,7 @@ interface InternalBinding {
 export class ModelGateway implements ModelGatewayPort {
   private readonly bindings = new Map<string, InternalBinding>();
   private readonly loginOperators = new Map<string, string>();
+  private readonly loginRequests = new Map<string, import("@maestro/agent-runtime").GatewayAccountLoginStartResult>();
   private closed = false;
 
   constructor(private readonly options: GatewayOptions) {}
@@ -43,8 +44,11 @@ export class ModelGateway implements ModelGatewayPort {
     await this.options.ready;
     if (request.operatorId !== this.options.operatorId) throw new Error("credential operator context mismatch");
     if (request.providerId !== "openai-codex" || this.options.codex === undefined) throw new Error("account login is unavailable");
+    const previous = this.loginRequests.get(request.requestId);
+    if (previous !== undefined) return previous;
     const login = await this.options.codex.startChatGptLogin();
     this.loginOperators.set(login.loginId, request.operatorId);
+    this.loginRequests.set(request.requestId, login);
     return login;
   }
 
@@ -171,6 +175,7 @@ export class ModelGateway implements ModelGatewayPort {
     await Promise.all([...this.bindings.values()].map(({ provider }) => provider.close().catch(() => undefined)));
     this.bindings.clear();
     this.loginOperators.clear();
+    this.loginRequests.clear();
     await this.options.codex?.close().catch(() => undefined);
   }
 }
