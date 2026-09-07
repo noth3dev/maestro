@@ -2341,3 +2341,12 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added durable login reservations with operator/request idempotency, per-process ownership, startup fencing of interrupted `starting` rows, and terminal `unknown` recovery after gateway loss.
 - Added append-only SQL identity/delete guards and an atomic status/cancel operation lease with per-operation fencing tokens.
 - Verification: full `npm run check` passed (635 tests, 366 environment-gated skips); account-login PostgreSQL integration passed 6/6 on `maestro-account-login-postgres` (port 55465).
+
+
+## 2026-09-07 — Durable account-login review fixes and documentation reconciliation
+
+- Merged durable account-login recovery into `main` as `e6cbc97`; removed the temporary worktree and branch.
+- Applied independent review fixes for operation-token fencing, provider identity append-only semantics, durable login ID route tests, and typed Codex unknown-session RPC mapping.
+- Added migration `0066_harden_provider_account_login_identity.sql`; verified the account-login integration suite against the dedicated PostgreSQL container: 8/8 passed. Targeted gateway/control-plane tests: 15/15 passed. Build: passed.
+- Reconciled root/English/Korean README, architecture, roadmap, developer guide, SVG, TUI plan/spec, and superseded provider-toggle design. Documentation now distinguishes pi-tui presentation from Prime runtime and records that worker Prime composition is still open.
+- Next: obtain explicit approval for the conversation-streaming TUI design, then implement durable delta events, SSE reconnect rendering, Markdown transcript output, cancel/unknown status handling, and focused TUI tests. Do not remove Prime until native worker parity and recovery gates pass.

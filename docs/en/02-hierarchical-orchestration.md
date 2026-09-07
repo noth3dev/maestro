@@ -100,7 +100,7 @@ To eliminate cognitive bias and bandwagon effects during planning, Department He
 
 ## 5. Scout & Execution Workers
 
-* Department Heads spawn workers using Prime Agent subagent APIs.
+* Department Heads dispatch workers through the provider-neutral `ExecutionKernelPort`. The current worker composition still uses the legacy Prime adapter; native worker cutover remains a separate, unaccepted migration gate.
 * Workers operate under **Mission Bundles** defined by least-privilege principles.
 * All code modification occurs within isolated Git worktrees (`.worktrees/`).
 * Upon completion, workers compile an **Evidence Bundle** containing test logs, diffs, and artifact SHA-256 hashes.

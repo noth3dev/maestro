@@ -1,5 +1,8 @@
 # Phase 6 — Encore Learning, Refinement, and Ten-Axis Adaptation
 
+> **Current status (2026-09-07):** Phase 6 Step 1 (immutable project-private Improvement Digest) is accepted. Later replay, mutation, rollout, and adaptation work remains deferred. Older Prime refinement references are historical and do not authorize new Prime coupling.
+
+
 ## Outcome
 
 Enable bounded, evidence-driven improvement after the execution, incident, and concurrency systems have produced real outcomes. Encore may curate evidence, propose changes, evaluate them in replay/synthetic/shadow modes, and automatically apply only pre-authorized low-risk adaptive changes with versioning and rollback.

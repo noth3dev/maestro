@@ -1,5 +1,8 @@
 # Phase 8 — Full-System Hardening and Release Certification
 
+> **Current status (2026-09-07):** Phase 8 is not accepted. Its Prime compatibility references are legacy acceptance criteria; the current native backend plan supersedes them for the runtime cutover, while required hardening/recovery gates remain.
+
+
 ## Outcome
 
 Prove the complete clean-slate Maestro under sustained operation, adversarial failure, security review, data lifecycle checks, recovery, and all representative live scenarios. Release is blocked by any failed required scenario or open critical finding.

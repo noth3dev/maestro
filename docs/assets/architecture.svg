@@ -111,7 +111,7 @@
   <g transform="translate(100, 590)">
     <rect width="330" height="100" class="card" />
     <text x="20" y="28" class="title-main">🛠️ Scout &amp; Execution Workers</text>
-    <text x="20" y="48" class="text-body">• Prime Agent Subagent Sessions</text>
+    <text x="20" y="48" class="text-body">• ExecutionKernelPort / native migration</text>
     <text x="20" y="64" class="text-body">• Isolated Git Worktrees (.worktrees/)</text>
     <text x="20" y="80" class="text-dim">• Generates SHA-256 Evidence Bundles</text>
   </g>
@@ -158,5 +158,5 @@
 
   <!-- FOOTER BOUNDARY -->
   <rect x="50" y="870" width="800" height="40" rx="8" fill="#121218" stroke="#252533" />
-  <text x="450" y="894" text-anchor="middle" class="text-dim">Prime Agent SDK Execution Kernel Boundaries (<tspan fill="#38bdf8">packages/prime-adapter</tspan>) • Linux Runtime Isolated</text>
+  <text x="450" y="894" text-anchor="middle" class="text-dim">Maestro native runtime + legacy worker bridge (<tspan fill="#38bdf8">packages/prime-adapter</tspan> pending removal)</text>
 </svg>

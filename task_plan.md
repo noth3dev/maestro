@@ -1019,3 +1019,12 @@ worker-device link and pause state against that concrete case rather than a hypo
 - [completed] Fence interrupted starts at Control Plane startup and map gateway loss to terminal `unknown`.
 - [completed] Protect login identity/delete semantics in PostgreSQL and serialize status/cancel with fenced operation tokens.
 - [remaining] Run acceptance against an installed Codex app-server; keep Claude subscription login blocked pending official Anthropic approval.
+
+
+## 2026-09-07 — Current execution pointer after durable account-login review
+
+- [completed] Integrated `679c8eb` into `main` as `e6cbc97`; removed `.worktrees/account-login-durable` and `patch/account-login-durable`.
+- [completed] Fixed blocking account-login review findings: exact operation-token fencing, guarded provider identity completion via migration `0066`, durable login ID test consistency, and typed Codex unknown-session mapping.
+- [completed] Reconciled current README/docs/plans. The docs now state that `MaestroAgentRuntime` serves conversations, pi-tui is presentation-only, and legacy Prime composition remains for workers.
+- [open] Native worker backend cutover: replace `createPrimeExecutionKernel`, migrate worker/Head/reviewer lifecycle parity, remove `@maestro/prime-adapter`, and pass no-Prime scan plus real-process recovery evidence.
+- [next] Conversation-centric TUI streaming slice: obtain approval for the design, then add durable `turn_delta` events, SSE reconnect/cursor rendering, Markdown transcript rendering, cancellation/unknown feedback, and interaction tests.

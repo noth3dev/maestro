@@ -8,7 +8,7 @@ Maestro follows a strict phased milestone roadmap. Code completion alone does no
 
 | Phase | Title | Code Status | Verification & Operational Exit Gate |
 | :--- | :--- | :---: | :--- |
-| **Phase 1** | Technical Foundation & Durable Control Plane | **Code Complete** | Fastify REST/SSE API, PostgreSQL 17 event sourcing, monotonic fencing leases, Prime Agent adapter isolation. |
+| **Phase 1** | Technical Foundation & Durable Control Plane | **Code Complete** | Fastify REST/SSE API, PostgreSQL 17 event sourcing, monotonic fencing leases, native runtime/provider-gateway boundary, and legacy worker bridge isolation. |
 | **Phase 2** | Concertmaster Office Core & Hierarchical Execution | **Code Complete** | Overture Crew intake flow, Task Contract identity, Head Council sealed deliberation, Department Plans, isolated Git execution. |
 | **Phase 3** | Encore, Certification & First Usable Release | **Code Complete** | Metronome live event monitoring, Encore Council adjudication, independent Quality certification, Concertmaster report generation, CLI/App API parity. |
 | **Phase 4** | Isolated Environments, Devices & Discord Incidents | **Code Complete** *(Self-verified)* | Declarative container recipes, Playwright browser isolation, enrolled device authorization, Discord out-of-band incident detection. |
@@ -16,6 +16,12 @@ Maestro follows a strict phased milestone roadmap. Code completion alone does no
 | **Phase 6** | Encore Learning & 10-Axis Adaptation | **Step 1 accepted** *(immutable digest)* | Step 1: project-private, source-bound Improvement Digests. Steps 2+ (replay, mutation, rollout, adaptation, promotion) remain deferred. |
 | **Phase 7** | Full Concertmaster Office & Radial Control Surface | Planned | Next.js 16 / React 19 web application, `@xyflow/react` radial portfolio visualization, real-time SSE interaction. |
 | **Phase 8** | Full-System Hardening & Release Certification | Planned | Adversarial stress testing, security penetration audit, recovery verification, release candidate freeze. |
+
+### Native agent backend migration — current boundary
+
+The Maestro native runtime and authenticated model gateway are implemented and serve the conversation path. Durable ChatGPT account-login recovery is integrated, including fenced status/cancel operations and metadata-only persistence. The migration is **not accepted as complete**: `apps/control-plane/src/main.ts` still composes `createPrimeExecutionKernel()` for worker execution, and `@maestro/prime-adapter` remains in the workspace. Prime removal requires native worker parity, recovery/process evidence, migration of Prime-specific tests, and a fresh no-Prime source/dependency scan.
+
+The CLI TUI uses `@earendil-works/pi-tui` terminal primitives. This is a presentation dependency, not the Prime Agent runtime, and it does not authorize provider access or bypass the Control Plane.
 
 ### Phase 6 Step 1 — Accepted Boundary
 
@@ -27,7 +33,7 @@ Phase 6 Step 1 is accepted as an immutable, project-private Improvement Digest s
 
 > [!IMPORTANT]
 > **Operational Usability Gate Disclaimer:**  
-> While domain and persistence unit test suites for Phases 1–4 are green, an independent operational usability audit (`task_plan.md`) established that Phase 1–3 control plane features remain gated behind operational usability requirements (e.g., end-to-end service API execution pathways, real effect executor wiring for Git, and continuous Metronome observation). Phase 4 device controls similarly await live device agent protocol wiring. Implementation of these operational usability tracks is tracked under the **Phase 5 Remediation Plan**.
+> While domain and persistence unit test suites for Phases 1–4 are green, an independent operational usability audit (`task_plan.md`) established that Phase 1–3 control plane features remain gated behind operational usability requirements (e.g., end-to-end service API execution pathways, real effect executor wiring for Git, and continuous Metronome observation). The native conversation path is available, but worker execution still depends on the legacy Prime adapter until the native backend migration passes its parity and recovery gates. Phase 4 device controls similarly await live device agent protocol wiring. Implementation of these operational usability tracks is tracked under the **Phase 5 Remediation Plan**.
 
 ---
 

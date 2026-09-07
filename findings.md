@@ -659,3 +659,12 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Account-login identity is now append-only at the database boundary; direct identity rewrites and deletes are rejected.
 - Status/cancel operations use an atomic, reclaimable lease with a unique operation token so a late request cannot overwrite or release a newer claim.
 - Gateway restart errors preserve a stable lost-session code, allowing Control Plane to persist terminal `unknown` truthfully.
+
+
+## 2026-09-07 — Durable account-login final review and remediation
+
+- Independent source review found three blocking defects: released/no-token operation updates could bypass per-operation fencing; migration `0065` allowed arbitrary NULL→provider identity injection; and one route test passed a provider login ID instead of the durable Maestro login ID.
+- A fourth boundary issue was found: Codex provider-side unknown errors used a different message and could map to generic HTTP 400. Typed `account_login_session_unknown` mapping now preserves the stable 409 contract.
+- Fixes are present but not yet committed: `updateState` now requires an exact live `(operation_owner, operation_token)` pair when fenced, or an explicitly unleased no-token update; migration `0066_harden_provider_account_login_identity.sql` provides the only provider-identity completion function and rejects direct identity transitions; tests cover stale-after-release, no-token-active, direct identity injection, durable route IDs, and typed Codex unknown errors.
+- Verification: targeted gateway/control-plane tests passed 15/15; durable PostgreSQL account-login integration passed 8/8 on `postgresql://maestro@127.0.0.1:55465/maestro_test`; `npm run build` passed. `npm install --ignore-scripts` repaired stale root workspace symlinks and reported the pre-existing 3 high-severity npm audit findings.
+- Current runtime/doc truth: native `MaestroAgentRuntime` serves conversations; `apps/control-plane/src/main.ts` still composes `createPrimeExecutionKernel()` for worker execution. Prime removal remains an open migration gate, not a completed phase.

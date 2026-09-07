@@ -11,6 +11,7 @@ Maestro uses **npm workspaces** to manage packages and applications:
 ```text
 ├── apps/
 │   ├── control-plane/     # Fastify 5 REST & SSE Backend Server
+│   ├── model-gateway/     # Separate provider SDK and credential process
 │   ├── cli/               # Maestro Command Line Interface (CLI)
 │   ├── secretary/         # Next.js Secretary Office Dashboard
 │   └── discord/           # Out-of-band Discord Incident Daemon
@@ -20,7 +21,12 @@ Maestro uses **npm workspaces** to manage packages and applications:
 │   ├── persistence/       # PostgreSQL 17 / Drizzle ORM layer & migrations
 │   ├── authority/         # Security matrix & AuthorizedEffectExecutor
 │   ├── evidence/          # SHA-256 evidence bundle generation & verification
-│   ├── prime-adapter/     # Prime Agent SDK wrapper & domain ports
+│   ├── agent-runtime/     # Maestro-owned provider-neutral runtime and tool loop
+│   ├── model-provider-openai/ # OpenAI API-key provider adapter
+│   ├── model-provider-anthropic/ # Anthropic API-key provider adapter
+│   ├── prime-adapter/     # Legacy worker bridge; scheduled for removal
+│   ├── model-provider-openai/ # OpenAI API-key and Codex app-server adapters
+│   ├── model-provider-anthropic/ # Anthropic API-key adapter
 │   ├── git-adapter/       # Git worktree, branch & commit executor
 │   └── api-client/        # Type-safe API client library
 ```
@@ -33,7 +39,7 @@ Maestro uses **npm workspaces** to manage packages and applications:
 * **npm**: `v10.x` or higher
 * **PostgreSQL**: `17.x` (required for persistence integration tests)
 * **Docker**: Required for running disposable PostgreSQL test containers (`Testcontainers`)
-* **OS**: Linux (recommended for Prime Agent security isolation primitives)
+* **OS**: Linux recommended for Docker/PostgreSQL and process-based integration tests; the native conversation runtime does not require Prime Agent isolation primitives.
 
 ---
 
@@ -63,11 +69,14 @@ To run real database integration suites, pass a disposable PostgreSQL URL via `M
 MAESTRO_TEST_DATABASE_URL=postgresql://maestro_test:maestro_test@127.0.0.1:55432/maestro_test npm test
 ```
 
-### 5) Live Prime Agent SDK Testing
-Execute tests against the live Prime Agent SDK runtime:
+### 5) Legacy Prime adapter compatibility testing
+The worker-execution bridge still has an environment-gated compatibility suite. This does not certify the native backend migration:
 ```bash
 MAESTRO_LIVE_PRIME=1 npm test -- packages/prime-adapter/src/sdk.live.test.ts
 ```
+
+### 6) Current TUI and runtime boundary
+The CLI TUI uses `@earendil-works/pi-tui` `0.85.1` for terminal rendering, input, overlays, and scrolling. It does not use Prime Agent as a runtime and never writes PostgreSQL or provider credentials. Conversation requests go through the authenticated Control Plane conversation API and `MaestroAgentRuntime`; worker execution still uses the legacy Prime adapter until native parity and restart-recovery evidence are accepted.
 
 ---
 
@@ -97,7 +106,71 @@ node apps/cli/dist/main.js report get <goalId>
 
 ---
 
-## 5. Operating Protocol Summary
+
+### Native model conversations
+
+Run the model gateway as a separate process. Provider SDKs and API keys belong only in that process:
+
+```bash
+MAESTRO_MODEL_GATEWAY_TOKEN=<random-secret> \
+OPENAI_API_KEY=<key> \
+npm --workspace @maestro/model-gateway start
+```
+
+Configure the Control Plane with the same gateway token and set an exact model in the CLI:
+
+```bash
+export MAESTRO_MODEL_GATEWAY_TOKEN=<random-secret>
+export MAESTRO_MODEL=openai/gpt-5
+maestro models list
+maestro conversation create --project-id <project-uuid> --goal-id <goal-uuid> --model openai/gpt-5
+maestro conversation turn --conversation-id <conversation-uuid> --project-id <project-uuid> --text "status?"
+```
+
+The TUI uses the selected project and Goal and sends free text to the same authenticated conversation API. It does not persist bearer tokens, provider keys, or gateway credentials in its workspace session.
+
+### ChatGPT account login (OAuth handled by the public Codex app-server)
+
+Maestro does not copy private ChatGPT or Anthropic OAuth endpoints. ChatGPT Plus/Pro account login is delegated to the public OpenAI Codex app-server protocol. The app-server owns its browser OAuth callback and refresh tokens; Maestro receives only a login URL and status metadata.
+
+Configure the gateway with a separately installed and trusted `codex` executable:
+
+```bash
+MAESTRO_MODEL_GATEWAY_TOKEN=<random-secret> \
+MAESTRO_CODEX_APP_SERVER_COMMAND=codex \
+MAESTRO_CODEX_MODELS=gpt-5.3-codex \
+npm --workspace @maestro/model-gateway start
+```
+
+Then sign in from the TUI with `/login`, choose `ChatGPT Plus / Pro`, and complete the browser flow. The non-interactive equivalent is:
+
+```bash
+maestro login openai-codex
+maestro models list
+```
+
+Use an exact model identity such as `openai-codex/gpt-5.3-codex`. Anthropic Pro/Max subscription login is intentionally unavailable until Anthropic publishes or approves a supported integration. API-key login remains a separate legacy path for providers that support it.
+
+## 5. Provisioning project access
+
+Project membership and roles are granted through the authenticated admin endpoint. Set `MAESTRO_OPERATOR_PROVISIONING_ADMIN_ID` to the UUID of an active operator during deployment. If it is not set, the endpoint stays unavailable; no authenticated operator can grant access.
+
+```bash
+# The token is the existing credential envelope: <credential-id>.<secret>.
+node apps/cli/dist/main.js admin project-access \
+  --operator-id <target-operator-uuid> \
+  --project-id <project-uuid> \
+  --roles-json '["concertmaster","head-product"]' \
+  --json
+```
+
+The endpoint is `POST /v1/admin/project-access` with the same JSON body. It requires a bearer token for the configured admin operator. The target operator must already exist and be active. Every requested role must be an exact standing role from `permanent_roles`; arbitrary capability strings, wildcard roles, inactive targets, duplicate roles, and partial grants are rejected. Membership and all roles commit in one transaction. Revocation remains one-way, so regranting creates new durable rows.
+
+The admin route is intentionally not covered by the ordinary project-membership hook. Its explicit admin identity check is the authorization boundary, and the target project ID is never taken from the caller identity or inferred from another project.
+
+---
+
+## 6. Operating Protocol Summary
 
 When working on the Maestro codebase, strictly adhere to the project operating protocol (`docs/OPERATING_PROTOCOL.md`):
 

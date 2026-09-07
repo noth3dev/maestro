@@ -1,13 +1,13 @@
 # Maestro Terminal TUI Design
 
-**Date:** 2026-09-06  
-**Status:** Approved for implementation  
-**Product name:** Maestro  
+**Date:** 2026-09-06
+**Status:** Approved for implementation; conversation streaming slice pending implementation
+**Product name:** Maestro
 **Conversational identity:** Concertmaster
 
 ## Goal
 
-`maestro` is the terminal-native operational surface for the complete Maestro system. Running it inside a project folder opens an interactive Prime Agent-style TUI with a Concertmaster conversation, durable Goal state, live execution activity, approvals, and access to every supported Maestro workflow. It is separate from the Electron desktop app but uses the same Control Plane and typed API contracts.
+`maestro` is the terminal-native operational surface for the complete Maestro system. Running it inside a project folder opens an interactive conversation-first TUI with a Concertmaster conversation, durable Goal state, live execution activity, approvals, and access to every supported Maestro workflow. It is separate from the Electron desktop app but uses the same Control Plane and typed API contracts. The TUI uses `@earendil-works/pi-tui` for presentation and does not use Prime Agent as its runtime.
 
 ## Product boundary
 
@@ -88,10 +88,10 @@ maestro TUI
   -> Maestro typed API client
   -> authenticated Control Plane HTTP/SSE
   -> durable PostgreSQL state and command/event records
-  -> Prime Agent adapter for execution
+  -> MaestroAgentRuntime for conversations; legacy Prime adapter for workers until native cutover
 ```
 
-The TUI owns presentation state only. It does not import persistence internals, call PostgreSQL directly, spawn Prime Agent sessions directly, or create a second scheduler/recovery protocol. Existing Control Plane authorization, command receipts, leases, fencing, evidence, and approval boundaries remain authoritative.
+The TUI owns presentation state only. It does not import persistence internals, call PostgreSQL directly, spawn providers or runtimes directly, or create a second scheduler/recovery protocol. Existing Control Plane authorization, command receipts, leases, fencing, evidence, and approval boundaries remain authoritative.
 
 The TUI may start/manage the local Control Plane through a bounded launcher, but server lifecycle and durable reconciliation remain server responsibilities. Long-running work survives TUI exit and is reattached from durable state.
 
@@ -110,11 +110,11 @@ The first implementation must establish a working interactive shell and truthful
 - Closing and reopening the TUI restores the workspace session and current durable Goal state while server work continues independently.
 - TUI, CLI, and Electron clients show the same durable state for representative Goal, hierarchy, budget, Git, evidence, incident, and certification workflows.
 - `Secretary` is absent from user-facing product title/copy; `Maestro` is the application name and `Concertmaster` is the conversational identity.
-- Focused unit, API/integration, and real-process E2E tests pass; PostgreSQL and Prime Agent verification is required before acceptance.
+- Focused unit, API/integration, and real-process E2E tests pass; PostgreSQL and provider-process verification is required before acceptance.
 
 ## Explicit non-goals
 
-- Do not replace Prime Agent with a second model/runtime.
+- Do not add a TUI-owned model/runtime. Conversation execution uses `MaestroAgentRuntime`; legacy Prime worker execution is removed only through the separate native-backend migration gate.
 - Do not put database state or authority decisions in the TUI.
 - Do not make the Electron app and TUI share renderer code merely for visual consistency.
 - Do not add a speculative provider-routing layer or a server-side queue solely for the TUI.

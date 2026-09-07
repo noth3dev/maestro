@@ -1,5 +1,8 @@
 # Phase 4 — Isolated Environments, Enrolled Devices, and Discord Incidents
 
+> **Current status (2026-09-07):** This phase remains operationally gated for live environments, devices, and incidents. Do not infer acceptance from code-level tests alone.
+
+
 ## Outcome
 
 Extend the certified single-Goal system beyond its local disposable project. Workers gain reproducible task environments and narrowly enrolled device access. Discord operates outside Maestro's primary failure domain and converts verified anomalies into bounded incident workflows.

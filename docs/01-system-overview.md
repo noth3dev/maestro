@@ -17,7 +17,7 @@ flowchart TD
     end
 
     subgraph ExecutionSecurityLayer [Execution & Security Containment]
-        WORKERS[🛠️ Scout & Execution Workers<br/>• Prime Agent Subagent Sessions<br/>• Isolated Git Worktrees .worktrees/ ]
+        WORKERS[🛠️ Scout & Execution Workers<br/>• ExecutionKernelPort<br/>• Native runtime migration in progress<br/>• Isolated Git Worktrees .worktrees/ ]
         EXECUTOR[🛡️ AuthorizedEffectExecutor<br/>• Default-Deny & Action Classification<br/>• Audit-Before-Effect DB Commit<br/>• Monotonic Fencing Lease Validation]
     end
 
@@ -48,21 +48,23 @@ flowchart TD
 2. **Separation of Powers**: Executing agents (Workers/Heads) are strictly prohibited from certifying their own work. Verification is handled independently by Quality and Encore (Metronome & Encore Council).
 3. **Fail-Closed & Default-Deny Security**: All tool calls and side effects must pass through `AuthorizedEffectExecutor`. Any unclassified, unauthorized, or out-of-scope effect is denied immediately.
 4. **Content-Addressed Auditability**: All inputs, plans, briefs, and deliverables are hashed using SHA-256 canonical serialization (`Sealed Submission`), ensuring cryptographically immutable record lineage.
-5. **No Speculative Re-invention**: Maestro builds on top of the native features of the **Prime Agent SDK** (session tracking, recursive subagent spawning, tool calling) while keeping domain authority within the control plane.
+5. **Native Runtime Ownership**: Maestro owns the provider-neutral agent runtime, model gateway boundary, conversation lifecycle, and authority checks. The worker path still uses the legacy Prime adapter until the native execution-kernel cutover is verified.
 6. **Evidence-Driven Self-Improvement (Shadow-First Evolution)**: Encore curates execution evidence into compact Improvement Digests to optimize persona axes, role guidance, and routing templates in replay/synthetic shadow runs—without permitting autonomous changes to security authority or safety boundaries.
 
 ---
 
-## 3. Prime Agent Boundary vs Control Plane
+## 3. Native Agent Runtime, Provider Gateway, and Legacy Worker Bridge
 
-Maestro maintains a clear boundary between the underlying execution kernel and the control plane:
+Maestro keeps model I/O, agent behavior, and durable authority in separate boundaries:
 
-| Responsibility Area | Prime Agent SDK (`packages/prime-adapter`) | Maestro Control Plane (`apps/control-plane`) |
+| Responsibility Area | Maestro native runtime / gateway | Maestro Control Plane (`apps/control-plane`) |
 | :--- | :--- | :--- |
-| **Model & Session Management** | Model session lifecycle, prompt submission, token usage, subagent delegation | Goal lifecycle state machine, department assignment, budget ceilings |
-| **Tool Execution** | Native skill loading, tool call dispatching, environment execution | Authority checks via `AuthorizedEffectExecutor`, audit pre-logging |
-| **Persistence & Truth** | Diagnostic logs, raw session transcripts | PostgreSQL 17 domain event log (`goal_events`), monotonic fencing leases |
-| **Oversight & Quality** | Raw agent outputs | Metronome integrity validation, Quality certification, Conductor reporting |
+| **Model & Conversation Management** | `packages/agent-runtime`, provider plugins, authenticated `apps/model-gateway` | Conversation/Goal lifecycle, model policy, project membership, budget ceilings |
+| **Worker execution bridge** | `ExecutionKernelPort`; legacy `packages/prime-adapter` remains until cutover | Worker admission, authority checks, leases, audit pre-logging |
+| **Persistence & Truth** | Provider/session process state is non-canonical | PostgreSQL 17 domain event log, durable conversations, turns, bindings, and leases |
+| **Oversight & Quality** | Normalized model/tool observations | Metronome integrity validation, Quality certification, Conductor reporting |
+
+The native runtime is the current production path for conversations. Prime Agent is not a provider-authentication boundary and must not receive Maestro credentials. Removing the legacy worker bridge is a separate migration gate.
 
 ---
 
@@ -79,6 +81,8 @@ Maestro is structured as an **npm workspace monorepo**:
 * **`packages/persistence`**: PostgreSQL 17 schema definitions, Drizzle ORM queries, and migration files.
 * **`packages/authority`**: Authorization engine, action classification matrix, and `AuthorizedEffectExecutor`.
 * **`packages/evidence`**: SHA-256 evidence bundle generator and cryptographic verification.
-* **`packages/prime-adapter`**: Abstraction layer and ports interfacing with the Prime Agent SDK.
+* **`packages/agent-runtime`**: Maestro-owned provider-neutral model/tool/child-agent runtime.
+* **`apps/model-gateway`**: Authenticated provider process that owns API keys and managed Codex login state.
+* **`packages/prime-adapter`**: Legacy worker-execution bridge scheduled for removal after native parity and recovery verification.
 * **`packages/git-adapter`**: Isolated Git worktree manager, branch executor, and diff collector.
 * **`packages/api-client`**: Type-safe HTTP and SSE client SDK.

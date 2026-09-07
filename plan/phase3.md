@@ -1,5 +1,8 @@
 # Phase 3 — Encore, Independent Certification, and First Usable Release
 
+> **Current status (2026-09-07):** This phase remains operationally gated. Conversation and account-login paths are implemented, but first-usable-release claims require live PostgreSQL, authority, provider-process, and recovery evidence.
+
+
 ## Outcome
 
 Complete the first usable Maestro by adding continuous Metronome observation, selective Council adjudication, independent Quality certification, and an evidence-backed CEO report. The complete Phase 1–3 system must pass one real Goal with forced restart and critical-action denial.

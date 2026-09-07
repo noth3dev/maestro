@@ -1,5 +1,8 @@
 # Phase 5 — Concurrent Goals and Portfolio Control
 
+> **Current status (2026-09-07):** Phase 5 is partially implemented. Capacity/remediation slices exist, while broader concurrent-goal/resource scheduling and the native worker backend cutover remain open.
+
+
 ## Outcome
 
 Allow multiple Goals and projects to run concurrently without mixing context, authority, budgets, workers, Git, evidence, or certification. When capacity conflicts, affected Heads and Encore make an evidence-backed portfolio decision while respecting CEO-pinned priority and safe pause points.
