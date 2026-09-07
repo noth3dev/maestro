@@ -31,6 +31,12 @@ describe("TUI write commands", () => {
     expect(client.pauseGoal).toHaveBeenCalledWith(goalId, { projectId, expectedVersion: 1 }, commandId);
   });
 
+  it("uses the selected session Goal when a Goal-scoped write omits --goal-id", async () => {
+    const client = api();
+    await executeWriteCommand({ client, projectId, goalId, confirm: vi.fn() }, { name: "goal", action: "pause", options: { "expected-version": "1", "command-id": commandId } });
+    expect(client.pauseGoal).toHaveBeenCalledWith(goalId, { projectId, expectedVersion: 1 }, commandId);
+  });
+
   it("requires explicit confirmation before the server-authorized fail-safe emergency stop", async () => {
     const client = api();
     const confirm = vi.fn().mockResolvedValue("cancelled" as const);

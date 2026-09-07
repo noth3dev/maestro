@@ -24,6 +24,10 @@ function required(command: ParsedCommand, name: string): string | WriteCommandRe
   return option(command, name) ?? unavailable(`Missing required option --${name}`);
 }
 
+function selectedGoal(command: ParsedCommand, context: WriteCommandContext): string | WriteCommandResult {
+  return option(command, "goal-id") ?? context.goalId ?? unavailable("No Goal is selected; use --goal-id or /goal select");
+}
+
 function integer(command: ParsedCommand, name: string): number | WriteCommandResult {
   const value = required(command, name);
   if (typeof value !== "string") return value;
@@ -109,7 +113,7 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
     return result("Goal", created);
   }
   if (command.name === "goal" && command.action === "transition") {
-    const goalId = required(command, "goal-id"); const expectedVersion = integer(command, "expected-version"); const to = required(command, "to");
+    const goalId = selectedGoal(command, context); const expectedVersion = integer(command, "expected-version"); const to = required(command, "to");
     if (typeof goalId !== "string") return goalId;
     if (typeof expectedVersion !== "number") return expectedVersion;
     if (typeof to !== "string") return to;
@@ -117,7 +121,7 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
     return result("Goal", updated);
   }
   if (command.name === "goal" && ["pause", "stop", "resume", "emergency-stop"].includes(command.action ?? "")) {
-    const goalId = required(command, "goal-id"); const expectedVersion = integer(command, "expected-version");
+    const goalId = selectedGoal(command, context); const expectedVersion = integer(command, "expected-version");
     if (typeof goalId !== "string") return goalId;
     if (typeof expectedVersion !== "number") return expectedVersion;
     const input = { projectId: context.projectId, expectedVersion };
@@ -128,7 +132,7 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
     return result("Goal", updated);
   }
   if (command.name === "metronome" && command.action === "safe-pause") {
-    const goalId = required(command, "goal-id"); const challengeId = required(command, "challenge-id");
+    const goalId = selectedGoal(command, context); const challengeId = required(command, "challenge-id");
     if (typeof goalId !== "string") return goalId;
     if (typeof challengeId !== "string") return challengeId;
     const updated = await context.client.requestMetronomeSafePause(goalId, challengeId, { projectId: context.projectId }, id);
@@ -136,7 +140,7 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
   }
 
   if (key === "critical-action:request") {
-    const goalId = required(command, "goal-id");
+    const goalId = selectedGoal(command, context);
     const actionName = required(command, "action");
     const target = required(command, "target");
     const policyVersion = integer(command, "policy-version");
@@ -185,13 +189,13 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
     const launched = await context.client.launchTaskContract(contractId, context.projectId, id); return { title: "Task Contract", lines: [`${launched.contractId} · ${launched.launchState}`] };
   }
   if (key === "head:activate") {
-    const goalId = required(command, "goal-id"); const activation = jsonObject(command, "activation-json");
+    const goalId = selectedGoal(command, context); const activation = jsonObject(command, "activation-json");
     if (typeof goalId !== "string") return goalId; if (isWriteError(activation)) return activation;
     const activated = await context.client.activateHead(goalId, { ...activation, projectId: context.projectId } as Parameters<ApiClient["activateHead"]>[1], id);
     return { title: "Head", lines: [`${activated.departmentId} · ${activated.status}`] };
   }
   if (key === "council:create") {
-    const goalId = required(command, "goal-id"); const council = jsonObject(command, "council-json");
+    const goalId = selectedGoal(command, context); const council = jsonObject(command, "council-json");
     if (typeof goalId !== "string") return goalId; if (isWriteError(council)) return council;
     const created = await context.client.createCouncil(goalId, { ...council, projectId: context.projectId } as Parameters<ApiClient["createCouncil"]>[1], id);
     return { title: "Council", lines: [`${created.councilId} · ${created.state}`] };
@@ -249,7 +253,7 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
     const certified = await context.client.certifyConditionalWorker(workerId, kind, { ...certification, projectId: context.projectId } as Parameters<ApiClient["certifyConditionalWorker"]>[2], id); return { title: "Certification", lines: [JSON.stringify(certified)] };
   }
   if (key === "git:goal-branch") {
-    const goalId = required(command, "goal-id"); const repositoryPath = required(command, "repository-path"); const branchName = required(command, "branch-name"); const baseRevision = required(command, "base-revision");
+    const goalId = selectedGoal(command, context); const repositoryPath = required(command, "repository-path"); const branchName = required(command, "branch-name"); const baseRevision = required(command, "base-revision");
     if (typeof goalId !== "string") return goalId; if (typeof repositoryPath !== "string") return repositoryPath; if (typeof branchName !== "string") return branchName; if (typeof baseRevision !== "string") return baseRevision;
     const branch = await context.client.createGoalIntegrationBranch(goalId, { projectId: context.projectId, repositoryPath, branchName, baseRevision }, id); return { title: "Git", lines: [`${branch.branchName} · ${branch.baseRevision}`] };
   }
@@ -262,15 +266,15 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
     const worktree = await context.client.createWorkerWorktree(workerId, { projectId: context.projectId, worktreePath }, id); return { title: "Git", lines: [worktree.worktreePath] };
   }
   if (key === "git:goal-revision") {
-    const goalId = required(command, "goal-id"); if (typeof goalId !== "string") return goalId;
+    const goalId = selectedGoal(command, context); if (typeof goalId !== "string") return goalId;
     const revision = await context.client.freezeGoalIntegrationRevision(goalId, { projectId: context.projectId }, id); return { title: "Git", lines: [revision.commitSha] };
   }
   if (key === "metronome:scan") {
-    const goalId = required(command, "goal-id"); if (typeof goalId !== "string") return goalId;
+    const goalId = selectedGoal(command, context); if (typeof goalId !== "string") return goalId;
     const findings = await context.client.scanMetronome(goalId, { projectId: context.projectId }, id); return { title: "Metronome", lines: [`findings: ${findings.findings.length}`] };
   }
   if (key === "metronome:challenge") {
-    const goalId = required(command, "goal-id"); const reason = required(command, "reason"); const findingIds = jsonValue(command, "finding-ids"); const evidence = jsonValue(command, "evidence-references");
+    const goalId = selectedGoal(command, context); const reason = required(command, "reason"); const findingIds = jsonValue(command, "finding-ids"); const evidence = jsonValue(command, "evidence-references");
     if (typeof goalId !== "string") return goalId; if (typeof reason !== "string") return reason; if (isWriteError(findingIds)) return findingIds as WriteCommandResult; if (isWriteError(evidence)) return evidence as WriteCommandResult;
     if (!Array.isArray(findingIds) || !findingIds.every((item) => typeof item === "string")) return unavailable("--finding-ids must contain a JSON array"); if (!Array.isArray(evidence) || !evidence.every((item) => typeof item === "string")) return unavailable("--evidence-references must contain a JSON array");
     const challenge = await context.client.raiseMetronomeChallenge(goalId, { projectId: context.projectId, reason, findingIds, evidenceReferences: evidence }, id); return { title: "Metronome", lines: [`${challenge.challengeId} · ${challenge.status}`] };
@@ -280,7 +284,7 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
     const corrected = await context.client.requestMetronomeCorrection(challengeId, { projectId: context.projectId, correctionRequest }, id); return { title: "Metronome", lines: [`${corrected.challengeId} · ${corrected.status}`] };
   }
   if (key === "metronome:safe-pause") {
-    const goalId = required(command, "goal-id"); const challengeId = required(command, "challenge-id"); if (typeof goalId !== "string") return goalId; if (typeof challengeId !== "string") return challengeId;
+    const goalId = selectedGoal(command, context); const challengeId = required(command, "challenge-id"); if (typeof goalId !== "string") return goalId; if (typeof challengeId !== "string") return challengeId;
     const paused = await context.client.requestMetronomeSafePause(goalId, challengeId, { projectId: context.projectId }, id); return { title: "Metronome", lines: [`${paused.challengeId} · ${paused.status}`] };
   }
   if (key === "metronome:resolve") {
@@ -288,11 +292,11 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
     const resolved = await context.client.resolveMetronomeChallenge(challengeId, { projectId: context.projectId, reason }, id); return { title: "Metronome", lines: [`${resolved.challengeId} · ${resolved.status}`] };
   }
   if (key === "encore:review") {
-    const goalId = required(command, "goal-id"); const review = jsonObject(command, "review-json"); if (typeof goalId !== "string") return goalId; if (isWriteError(review)) return review;
+    const goalId = selectedGoal(command, context); const review = jsonObject(command, "review-json"); if (typeof goalId !== "string") return goalId; if (isWriteError(review)) return review;
     const reviewed = await context.client.runEncoreReview(goalId, { ...(review as Record<string, unknown>), projectId: context.projectId } as Parameters<ApiClient["runEncoreReview"]>[1], id); return { title: "Encore", lines: [JSON.stringify(reviewed)] };
   }
   if (key === "approval:approve-and-run" || key === "critical-action:approve-and-run") {
-    const goalId = required(command, "goal-id"); const actionName = required(command, "action"); const targetName = required(command, "target"); const version = integer(command, "version"); const budgetEffectCents = integer(command, "budget-effect-cents"); const expiresAt = required(command, "expires-at");
+    const goalId = selectedGoal(command, context); const actionName = required(command, "action"); const targetName = required(command, "target"); const version = integer(command, "version"); const budgetEffectCents = integer(command, "budget-effect-cents"); const expiresAt = required(command, "expires-at");
     if (typeof goalId !== "string") return goalId; if (typeof actionName !== "string") return actionName; if (typeof targetName !== "string") return targetName; if (typeof version !== "number") return version; if (typeof budgetEffectCents !== "number") return budgetEffectCents; if (typeof expiresAt !== "string") return expiresAt;
     const decision = await context.client.approveAndRunCriticalAction(goalId, { projectId: context.projectId, action: actionName, target: targetName, policyVersion: version, budgetEffectCents, expiresAt }, id); return { title: "Critical action", lines: [`${decision.effect} · ${decision.reason}`] };
   }
