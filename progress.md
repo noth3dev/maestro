@@ -2361,3 +2361,26 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added a visible login URL and `Alt+C` clipboard action in the TUI. Clipboard writes use shell-free stdin to `wl-copy`, `xclip`, `xsel`, or WSL `clip.exe`; no URL is placed in argv.
 - Verification: `npm run build` passed; no-database `npm test` passed with 102 files / 665 tests and 53 skipped files / 374 skipped tests; focused PostgreSQL conversation and migration tests passed 8/8; real Codex app-server originator probe passed. The earlier full PostgreSQL run remains blocked by unrelated existing suites (6 files, 13 failures including device grant expiry, Git setup, Metronome rule constraint, and a worker test `projectId` reference); no full DB green claim is made.
 - Next: restart the built local gateway/control-plane processes, verify login/model listing through the real HTTP path, then push this coherent slice. Native worker Prime removal remains a separate Phase 5 gate.
+
+
+## 2026-09-07 — Act 1 sequential Phase 1 audit kickoff
+
+- Began the user-requested Act 1 build as a Phase 1-first operational audit rather than jumping to later feature work.
+- Read `plan/phase1.md` in full and reconciled it with the native backend/TUI plans and current `main` (`47c4aa0`).
+- Created `plan/act1-execution.md` as the sequential execution ledger. The first action is a complete Phase 1 requirements-to-code/test/real-process/real-PostgreSQL evidence matrix.
+- Recorded initial findings in `findings.md`: core Goal/lease/authority/evidence/reconciliation paths exist; outbox delivery, installation/notification records, and the legacy Prime Worker boundary require explicit gate verification or scoped follow-up.
+- Started disposable PostgreSQL container `maestro-phase1-audit-postgres` on `127.0.0.1:55471`; no code changes were made on `main`.
+
+
+## 2026-09-07 — Phase 1 no-database baseline verification
+
+- Fresh `npm run check` on `main` completed successfully: **102 test files passed, 53 skipped; 665 tests passed, 374 skipped; 0 failed**. Skips are the environment-gated PostgreSQL/live-Prime suites.
+- The run emitted three non-fatal `fatal: Needed a single revision` messages from the intentional negative `git rev-parse --verify` assertion in `packages/git-adapter/src/git-ops.test.ts:155-156`; the process still exited 0 and the assertion passed.
+- The no-database result is only a source/unit baseline. It does not close Phase 1 because the phase exit gate requires real PostgreSQL, process restart/reconciliation, app/CLI parity, stale-fence rejection, critical-action blocking, and live Prime compatibility evidence.
+
+
+## 2026-09-07 — Phase 1 live Prime compatibility gate
+
+- `MAESTRO_LIVE_PRIME=1 npm test -- packages/prime-adapter/src/sdk.live.test.ts` passed: **2 tests, 0 failed**.
+- The real pinned SDK completed a parent plus named direct child exchange and a disposable in-repository worker effect. The SDK reported model identity `{ provider: "openai-codex", id: "gpt-5.6-luna" }`.
+- The adapter honestly reported child answer text as unavailable for this SDK build rather than fabricating it; both live scenarios still completed with durable test assertions.
