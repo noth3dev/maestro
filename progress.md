@@ -2449,3 +2449,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - `npm run check` passed: **102 files / 665 tests passed**, **52 files / 375 PostgreSQL tests skipped**.
 - Fixed the final Team Lead Mission Bundle type import after the clean build exposed it.
+
+
+## 2026-09-08 — No implicit native model
+
+- Removed the implicit `openai/gpt-5` default. `MAESTRO_NATIVE_MODEL` is optional only so no-gateway/test configurations remain constructible; native Head/Encore admission throws if the host has not explicitly configured it.
+- Config suite passed **16/16** and native HTTP acceptance remained green.

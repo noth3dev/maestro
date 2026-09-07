@@ -58,7 +58,7 @@ const schema = z.object({
   MAESTRO_MODEL_GATEWAY_URL: z.string().url().default("http://127.0.0.1:4321"),
   MAESTRO_MODEL_GATEWAY_TOKEN: z.string().min(1).optional(),
   MAESTRO_MODEL_GATEWAY_OPERATOR_ID: z.string().min(1).default("local-operator"),
-  MAESTRO_NATIVE_MODEL: z.string().regex(/^[^/\s]+\/[^/\s]+$/).default("openai/gpt-5"),
+  MAESTRO_NATIVE_MODEL: z.string().regex(/^[^/\s]+\/[^/\s]+$/).optional(),
   MAESTRO_MODEL_ACCOUNT_REFS: z.string().optional(),
   MAESTRO_TLS_CERT_FILE: z.string().min(1).optional(),
   MAESTRO_TLS_KEY_FILE: z.string().min(1).optional(),
