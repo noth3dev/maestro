@@ -2408,3 +2408,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Confirmed the remaining cutover gap: `apps/control-plane/src/main.ts` still constructs `createPrimeExecutionKernel()`, while Worker/Head/semantic/Encore/team-lead paths do not pass the native runtime's required host context, grant, model policy, and idempotency key.
 - Wrote `plan/2026-09-08-native-prime-removal-cutover.md` with eight gated tasks. No native implementation code was changed during this planning pass.
 - The active full PostgreSQL rerun from `d0f14d3` remains a separate evidence process and must be preserved before Task H patch work.
+
+
+## 2026-09-08 — Native router Task B implemented
+
+- Followed TDD: the new router test first failed with the missing module; a second red test exposed three shared-gateway closes caused by each runtime owning gateway shutdown. Added the minimal `closeGateway: false` runtime option and router-owned single gateway close.
+- Verification: native router **4/4**, agent-runtime/model-provider/provider-registry/model-gateway focused suite **33/33**, and `npm run build` passed.
+- No Prime removal claim yet. Next task is explicit model/grant/context propagation through Worker, Head, semantic review, Encore, and team-lead helper paths.
