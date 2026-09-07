@@ -26,7 +26,8 @@ function kernel(): { kernel: ExecutionKernelPort; spawn: ReturnType<typeof vi.fn
     observe: async () => [],
     sendMessage: async () => {},
     cancel: async () => ({ cancelled: false }),
-    getModelIdentity: async () => ({ provider: "test", id: "test" }),
+    getModelIdentity: async () => ({ provider: "test", id: "model-a" }),
+     getExecutionBinding: async () => ({ model: { provider: "test", id: "model-a" }, accountRef: "head-account", gatewayInstanceId: "head-gateway", gatewayBindingId: "head-binding", dataPolicyHash: "head-policy" }),
     getToolEvents: async () => ({ state: "empty", events: [] }),
     getUsage: async () => ({ state: "unknown" }),
     getInvocationStatus: async () => "unknown",
@@ -84,6 +85,8 @@ describeDatabase("authenticated Head activation API", () => {
       const first = await fetch(`${baseUrl}/v1/goals/${goalId}/head-participations`, { method: "POST", headers: { ...auth, "idempotency-key": activationCommandId }, body: JSON.stringify(activation) });
       expect(first.status).toBe(200);
       expect(await first.json()).toMatchObject({ goalId, departmentId: "product", headRoleId: "head:product", status: "active", activeSessionRef: "execution-head-1" });
+      const nativeBinding = await pool.query("SELECT admission_kind, selected_model_provider, selected_model_id, actual_model_provider, actual_model_id, account_ref, gateway_instance_id, gateway_binding_id FROM native_execution_bindings WHERE admission_kind = 'head'");
+      expect(nativeBinding.rows).toEqual([{ admission_kind: "head", selected_model_provider: "test", selected_model_id: "model-a", actual_model_provider: "test", actual_model_id: "model-a", account_ref: "head-account", gateway_instance_id: "head-gateway", gateway_binding_id: "head-binding" }]);
       const second = await fetch(`${baseUrl}/v1/goals/${goalId}/head-participations`, { method: "POST", headers: { ...auth, "idempotency-key": activationCommandId }, body: JSON.stringify(activation) });
       expect(second.status).toBe(200);
       expect(spawn).toHaveBeenCalledTimes(1);

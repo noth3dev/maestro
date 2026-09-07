@@ -12,7 +12,7 @@ import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
 import { readMissionBundle } from "./mission-bundle.js";
-import { recordNativeExecutionBinding } from "./native-execution-binding.js";
+import { recordNativeExecutionBindingIfSupported } from "./native-execution-binding.js";
 
 export class WorkerError extends Error {}
 export class WorkerNotFoundError extends WorkerError {}
@@ -272,20 +272,15 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
       // identity-only so a successor can retain the opaque refs after turnover.
       await assertCurrentWorkerLease(pool, workerId, proof);
       spawned = await kernel.spawn(providerRequest);
-      if (kernel.getExecutionBinding !== undefined) {
-        const binding = await kernel.getExecutionBinding(spawned.execution);
-        await recordNativeExecutionBinding(pool, {
-          execution: spawned.execution,
-          invocation: spawned.invocation,
-          workerId,
-          goalId: council.goalId,
-          projectId: council.snapshot.projectId,
-          admissionKind: "worker",
-          admission: providerAdmission,
-          actualModel: await kernel.getModelIdentity(spawned.execution),
-          binding,
-        });
-      }
+      await recordNativeExecutionBindingIfSupported(pool, kernel, {
+        execution: spawned.execution,
+        invocation: spawned.invocation,
+        workerId,
+        goalId: council.goalId,
+        projectId: council.snapshot.projectId,
+        admissionKind: "worker",
+        admission: providerAdmission,
+      });
     } catch (error) {
       // A transport timeout does not prove that the provider created nothing.
       // Keep the durable reservation ambiguous and block automatic retries

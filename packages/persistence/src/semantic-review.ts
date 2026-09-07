@@ -12,6 +12,7 @@ import {
   type SemanticReviewVerdict,
 } from "@maestro/domain";
 import type { Pool } from "pg";
+import { recordNativeExecutionBindingIfSupported } from "./native-execution-binding.js";
 
 export class SemanticReviewError extends Error {}
 
@@ -103,6 +104,20 @@ export async function requestSemanticReview(
   const reviewId = randomUUID();
   const prompt = buildSemanticReviewPrompt({ claimText, criteria, availableEvidenceIds: [...durableIds] });
   const spawned = await kernel.spawn({ name: `semantic-review:${reviewId}`, cwd: process.cwd(), ...(resolvedAdmission ?? {}) });
+  try {
+    await recordNativeExecutionBindingIfSupported(pool, kernel, {
+      execution: spawned.execution,
+      invocation: spawned.invocation,
+      goalId,
+      projectId,
+      admissionKind: "semantic_review",
+      ...(resolvedAdmission === undefined ? {} : { admission: resolvedAdmission }),
+    });
+  } catch (error) {
+    await kernel.cancel(spawned.invocation).catch(() => ({ cancelled: false }));
+    await kernel.release?.(spawned.invocation).catch(() => {});
+    throw error;
+  }
   let observation: InvocationObservation | undefined;
   let promptError: unknown;
   try {
