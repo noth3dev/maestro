@@ -23,7 +23,7 @@ function accountLoginStart(value: unknown): GatewayAccountLoginStartResult {
 function accountLoginStatus(value: unknown): GatewayAccountLoginStatusResult {
   if (!value || typeof value !== "object") throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed account login status");
   const record = value as Record<string, unknown>;
-  if (record.providerId !== "openai-codex" || typeof record.loginId !== "string" || !["pending", "succeeded", "failed", "cancelled"].includes(String(record.state))) throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed account login status");
+  if (record.providerId !== "openai-codex" || typeof record.loginId !== "string" || !["pending", "succeeded", "failed", "cancelled", "unknown"].includes(String(record.state))) throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed account login status");
   return { providerId: "openai-codex", loginId: record.loginId, state: record.state as GatewayAccountLoginStatusResult["state"], ...(typeof record.message === "string" ? { message: record.message } : {}) };
 }
 

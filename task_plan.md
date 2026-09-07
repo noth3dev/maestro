@@ -1013,3 +1013,9 @@ worker-device link and pause state against that concrete case rather than a hypo
 - [completed_with_boundary] Keep Maestro tool authority separate; Codex account turns are text-only/read-only until the tool bridge is independently specified and tested.
 - [blocked] Claude Pro/Max account OAuth awaits an official public or written-approved Anthropic protocol. Private Prime OAuth and CLI credential bypasses remain prohibited.
 - [remaining] Durable login idempotency/restart ownership, PostgreSQL acceptance, real Codex app-server acceptance, and full streaming/tool parity.
+
+## 2026-09-07 — Durable account-login gate
+- [completed] Persist operator/request reservations and durable Maestro login IDs.
+- [completed] Fence interrupted starts at Control Plane startup and map gateway loss to terminal `unknown`.
+- [completed] Protect login identity/delete semantics in PostgreSQL and serialize status/cancel with fenced operation tokens.
+- [remaining] Run acceptance against an installed Codex app-server; keep Claude subscription login blocked pending official Anthropic approval.

@@ -43,6 +43,12 @@ describe("Control Plane model gateway client", () => {
 });
 
 
+it("preserves the gateway lost-login code for restart recovery", async () => {
+  const fetch = async () => response({ error: { code: "account_login_session_unknown", message: "account login session is unknown" } }, 409);
+  const client = createModelGatewayClient({ baseUrl: "http://127.0.0.1:4321", token: "gateway-secret", fetch });
+  await expect(client.accountLoginStatus?.({ requestId: "request-unknown", operatorId: "operator-1", providerId: "openai-codex", loginId: "login-1" })).rejects.toMatchObject({ code: "account_login_session_unknown", message: "account login session is unknown" });
+});
+
 it("starts and polls managed account login through the narrow gateway RPC", async () => {
   const paths: string[] = [];
   const fetch = async (input: RequestInfo | URL, init?: RequestInit) => {

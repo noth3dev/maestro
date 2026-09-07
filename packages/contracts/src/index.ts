@@ -128,7 +128,7 @@ export type ProviderAccountLoginStartResult = z.infer<typeof ProviderAccountLogi
 export const ProviderAccountLoginStatusSchema = z.object({
   providerId: z.literal("openai-codex"),
   loginId: z.string().min(1).max(256),
-  state: z.enum(["pending", "succeeded", "failed", "cancelled"]),
+  state: z.enum(["pending", "succeeded", "failed", "cancelled", "unknown"]),
   message: z.string().max(512).optional(),
 }).strict();
 export type ProviderAccountLoginStatus = z.infer<typeof ProviderAccountLoginStatusSchema>;
