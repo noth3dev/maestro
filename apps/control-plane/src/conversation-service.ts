@@ -62,21 +62,20 @@ export function createPostgresConversationService(options: {
   }
 
   return {
-    async listModels(_operator: OperatorContext) {
-      const models = await options.gateway.listModels({ operatorId: options.gatewayOperatorId });
+    async listModels(operator: OperatorContext) {
+      const models = await options.gateway.listModels({ operatorId: operator.operatorId });
       return models.map((model) => ({ ...model, capabilities: [...model.capabilities], authModes: [...model.authModes], dataPolicy: { ...model.dataPolicy, allowedDataClasses: [...model.dataPolicy.allowedDataClasses], regions: [...model.dataPolicy.regions] } }));
     },
     async create(input, operator) {
       const goal = await options.pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [input.goalId]);
       if (goal.rowCount !== 1 || goal.rows[0]!.project_id !== input.projectId) throw new ConversationConflictError("conversation Goal/project binding is invalid");
       const parsed = parseModelRef(input.model);
-      const models = await options.gateway.listModels({ operatorId: options.gatewayOperatorId });
+      const models = await options.gateway.listModels({ operatorId: operator.operatorId });
       const catalog = models.find((item) => item.identity.provider === parsed.provider && item.identity.id === parsed.id);
       if (catalog === undefined || !catalog.capabilities.has("text")) throw new ConversationModelNotAllowedError();
-      const accountRef = options.accountRefs[parsed.provider];
-      if (accountRef === undefined) throw new ConversationUnavailableError("no provider account is configured");
+      const accountRef = options.accountRefs[parsed.provider] ?? `${parsed.provider}-${operator.operatorId}`;
       const conversationId = randomUUID();
-      const binding = await options.gateway.admit({ requestId: `admit-${conversationId}`, operatorId: options.gatewayOperatorId, providerId: parsed.provider, model: parsed, accountRef, dataPolicyHash: policyHash });
+      const binding = await options.gateway.admit({ requestId: `admit-${conversationId}`, operatorId: operator.operatorId, providerId: parsed.provider, model: parsed, accountRef, dataPolicyHash: policyHash });
       const runtime = createMaestroAgentRuntime({ gateway: options.gateway, binding, tools });
       const grant = { grantId: `grant-${conversationId}`, allowedTools: [], allowedSkills: [], modelPolicy: [input.model], pathScope: [], outboundDataClasses: ["public", "workspace"], remaining: { modelTurns: 8, toolCalls: 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } };
       const client = await options.pool.connect();

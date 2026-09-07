@@ -37,6 +37,22 @@ export function parseInput(input: string): ParsedInput {
   const tokens = tokenize(text.slice(1));
   const [name = "", action, ...rest] = tokens;
   if ((name === "new" || name === "retry") && action === undefined && rest.length === 0) return { kind: "command", name: "session", action: name, options: {} };
+  // Read-only top-level commands are useful without a verb. Normalize them
+  // here so both the TUI and any future command consumers share one grammar.
+  const defaultActions: Record<string, string> = {
+    goals: "list",
+    projects: "list",
+    models: "list",
+    model: "list",
+    events: "list",
+    workers: "list",
+    "metronome-challenges": "list",
+    "encore-council": "list",
+    certifications: "list",
+    "concertmaster-report": "get",
+    "improvement-digests": "list",
+  };
+  if (action === undefined && rest.length === 0 && defaultActions[name] !== undefined) return { kind: "command", name, action: defaultActions[name], options: {} };
   const options: Record<string, string | boolean> = {};
   for (let index = 0; index < rest.length; index += 1) {
     const token = rest[index]!;

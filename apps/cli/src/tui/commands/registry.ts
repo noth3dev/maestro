@@ -12,6 +12,7 @@ export interface CommandDefinition {
 
 const definitions: CommandDefinition[] = (
   [
+    ["help", "show available commands", [["list", "read"]]],
     ["admin", "operator and project administration", [["project-access", "critical"]]],
     [
       "critical-action",
@@ -212,6 +213,22 @@ const definitions: CommandDefinition[] = (
       [
         ["list", "read"],
         ["stream", "read"],
+      ],
+    ],
+    [
+      "login",
+      "provider API-key authentication (input is hidden)",
+      [
+        ["openai", "write"],
+        ["anthropic", "write"],
+      ],
+    ],
+    [
+      "logout",
+      "revoke provider credentials",
+      [
+        ["openai", "write"],
+        ["anthropic", "write"],
       ],
     ],
     [

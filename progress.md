@@ -2284,3 +2284,14 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - User-approved direction: make Docker optional for local use. When an explicit Control Plane endpoint/token exists, the CLI connects directly. Otherwise, a future local bootstrap slice may reuse/start an available Docker-backed or native PostgreSQL runtime, run migrations, start/reuse the local Control Plane, and attach the TUI.
 - If no usable PostgreSQL runtime exists, the TUI must show actionable setup instructions rather than silently installing packages, falling back to SQLite/in-memory state, or claiming readiness.
 - Provider onboarding, Codex/Claude Code OAuth, and production deployment automation remain out of scope for this local convenience slice and will be planned separately.
+
+
+## 2026-09-07 — TUI command ergonomics, fixed dock, and API-key credential lifecycle
+
+- Corrected the fullscreen TUI composition: the transcript now lives in a primary `ScrollView`, while the composer and footer are a fixed `VStack` dock. Transcript growth no longer pushes the input off screen.
+- Moved the wide Maestro mark down one row and centered its ten artwork rows against the thirteen-row getting-started column. The logo height remains fixed across terminal heights.
+- Normalized bare read shortcuts (`/model`, `/models`, `/goals`, `/projects`, `/events`, and related collections) to their default read action. Added `/help` and clearer unknown/action-required messages.
+- Added strict API-key login/revoke contracts for `openai` and `anthropic`. TUI login uses a hidden editor path; non-interactive CLI login reads from hidden TTY input or stdin and never accepts a key in argv.
+- Added authenticated Control Plane credential routes, narrow gateway RPC bind/revoke routes, operator-context checks, replacement invalidation, and gateway-owned OS-keychain persistence via `@napi-rs/keyring`. Raw provider keys are excluded from response metadata, session files, and error messages.
+- Verification: `npm run check` passed with 98 files passed, 51 skipped; 606 tests passed, 360 skipped; 0 failed. Focused post-change verification passed 56 tests.
+- Remaining gates: a running model gateway with real provider credentials is still required for live model responses; PostgreSQL integration suites remain environment-gated; Codex subscription and Claude OAuth remain intentionally unsupported.

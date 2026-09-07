@@ -20,6 +20,8 @@ import {
   ConversationEventQuerySchema,
   ConversationEventSchema,
   ModelCatalogEntrySchema,
+  ProviderCredentialLoginInputSchema,
+  ProviderCredentialBindingSchema,
   GoalBudgetSummarySchema,
   GoalResultSchema,
   CriticalActionInputSchema,
@@ -91,6 +93,8 @@ import {
   type ConversationEvent,
   type ConversationEventQuery,
   type ModelCatalogEntry,
+  type ProviderCredentialLoginInput,
+  type ProviderCredentialBinding,
   type GoalBudgetSummary,
   type GoalResult,
   type CriticalActionInput,
@@ -160,6 +164,8 @@ export interface ApiClient {
   listGoals(projectId: string): Promise<GoalList>;
   listProjects(): Promise<ProjectList>;
   listModels(): Promise<readonly ModelCatalogEntry[]>;
+  loginProvider(input: ProviderCredentialLoginInput): Promise<ProviderCredentialBinding>;
+  logoutProvider(providerId: "openai" | "anthropic"): Promise<void>;
   createConversation(input: CreateConversationInput): Promise<Conversation>;
   getConversation(conversationId: string, query: GoalQuery): Promise<Conversation>;
   sendConversationTurn(conversationId: string, input: ConversationTurnInput, options?: { signal?: AbortSignal }): Promise<ConversationTurnResult>;
@@ -215,6 +221,12 @@ export interface ApiClient {
 }
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+function cryptoRandomUuid(): string {
+  const crypto = globalThis.crypto;
+  if (crypto?.randomUUID) return crypto.randomUUID();
+  throw new Error("Secure random UUID generation is unavailable");
+}
 
 async function* readEventStream(fetch: Fetch, base: URL, headers: Record<string, string>, query: EventQuery, signal?: AbortSignal): AsyncGenerator<GoalEvent> {
   const parsed = EventQuerySchema.parse(query);
@@ -374,6 +386,21 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
         if (!Array.isArray(body)) throw new Error("Control plane returned malformed model catalog");
         return body.map((item) => ModelCatalogEntrySchema.parse(item));
       } });
+    },
+    loginProvider(input) {
+      const parsed = ProviderCredentialLoginInputSchema.parse(input);
+      return request("v1/provider-credentials", {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json", "idempotency-key": cryptoRandomUuid() },
+        body: JSON.stringify(parsed),
+      }, ProviderCredentialBindingSchema);
+    },
+    logoutProvider(providerId) {
+      if (providerId !== "openai" && providerId !== "anthropic") throw new Error("Invalid provider");
+      return request(`v1/provider-credentials/${encodeURIComponent(providerId)}`, {
+        method: "DELETE",
+        headers: { ...headers, "idempotency-key": cryptoRandomUuid() },
+      }, { parse: () => undefined });
     },
     createConversation(input) {
       return request("v1/conversations", { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(CreateConversationInputSchema.parse(input)) }, ConversationSchema);

@@ -156,6 +156,28 @@ export interface GatewayAdmissionRequest {
   readonly dataPolicyHash: string;
 }
 
+export interface GatewayCredentialBinding {
+  readonly bindingId: string;
+  readonly providerId: string;
+  readonly accountRef: string;
+  readonly authMode: ProviderAuthMode;
+  readonly configuredAt: string;
+}
+
+export interface GatewayCredentialBindRequest {
+  readonly requestId: string;
+  readonly operatorId: string;
+  readonly providerId: string;
+  readonly authMode: ProviderAuthMode;
+  readonly secret: string;
+}
+
+export interface GatewayCredentialRevokeRequest {
+  readonly requestId: string;
+  readonly operatorId: string;
+  readonly providerId: string;
+}
+
 export interface GatewayBinding {
   readonly bindingId: string;
   readonly gatewayInstanceId: string;
@@ -171,6 +193,9 @@ export interface GatewayTurnRequest extends ModelTurnRequest {
 export interface ModelGatewayPort {
   listModels(request: GatewayModelListRequest): Promise<readonly ModelCatalogEntry[]>;
   admit(request: GatewayAdmissionRequest): Promise<GatewayBinding>;
+  /** Provider credential lifecycle is optional for test-only gateway doubles. */
+  bindCredential?(request: GatewayCredentialBindRequest): Promise<GatewayCredentialBinding>;
+  revokeCredential?(request: GatewayCredentialRevokeRequest): Promise<void>;
   turn(request: GatewayTurnRequest): Promise<ModelTurnResult>;
   cancel(requestId: string, signal?: AbortSignal): Promise<ProviderCancellationOutcome>;
   recover(binding: GatewayBinding): Promise<"reconnected" | "terminal" | "unknown">;

@@ -1,4 +1,4 @@
-import type { GatewayAdmissionRequest, GatewayBinding, GatewayModelListRequest, GatewayTurnRequest, ModelCatalogEntry, ModelGatewayPort, ModelProviderPort, ModelTurnResult, ProviderCancellationOutcome, ProviderCapability } from "@maestro/agent-runtime";
+import type { GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialBinding, GatewayCredentialRevokeRequest, GatewayModelListRequest, GatewayTurnRequest, ModelCatalogEntry, ModelGatewayPort, ModelProviderPort, ModelTurnResult, ProviderCancellationOutcome, ProviderCapability } from "@maestro/agent-runtime";
 
 export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -48,6 +48,15 @@ export function createModelGatewayClient(options: { baseUrl: string; token: stri
     if (typeof provider !== "string" || typeof id !== "string") throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed identity");
     return { provider, id };
   };
+  const credentialBinding = (value: unknown): GatewayCredentialBinding => {
+    if (!value || typeof value !== "object") throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed credential binding");
+    const record = value as Record<string, unknown>;
+    if (typeof record.bindingId !== "string" || typeof record.providerId !== "string" || record.authMode !== "api-key" || typeof record.accountRef !== "string" || typeof record.configuredAt !== "string") {
+      throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed credential binding");
+    }
+    return { bindingId: record.bindingId, providerId: record.providerId, authMode: "api-key", accountRef: record.accountRef, configuredAt: record.configuredAt };
+  };
+
   const binding = (value: unknown): GatewayBinding => {
     if (!value || typeof value !== "object") throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed binding");
     const record = value as Record<string, unknown>;
@@ -58,9 +67,10 @@ export function createModelGatewayClient(options: { baseUrl: string; token: stri
   };
 
   return {
-    async listModels(requestInput: GatewayModelListRequest) {
-      const query = new URLSearchParams({ operatorId: requestInput.operatorId });
-      return request(`v1/models?${query}`, { method: "GET" }, (body) => {
+    async listModels(_requestInput: GatewayModelListRequest) {
+      // Operator identity is established by the authenticated Control Plane
+      // request; it is not a query parameter accepted by the gateway.
+      return request("v1/models", { method: "GET" }, (body) => {
         if (!Array.isArray(body)) throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed models");
         return body.map((item) => {
           if (!item || typeof item !== "object") throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed model");
@@ -73,6 +83,14 @@ export function createModelGatewayClient(options: { baseUrl: string; token: stri
     },
     async admit(input: GatewayAdmissionRequest) {
       return request("v1/admit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) }, binding);
+    },
+    async bindCredential(input: GatewayCredentialBindRequest) {
+      return request("v1/credentials/bind", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) }, credentialBinding);
+    },
+    async revokeCredential(input: GatewayCredentialRevokeRequest) {
+      await request("v1/credentials/revoke", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) }, (value) => {
+        if (!value || typeof value !== "object" || (value as { revoked?: unknown }).revoked !== true) throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed credential revocation");
+      });
     },
     async turn(input: GatewayTurnRequest): Promise<ModelTurnResult> {
       const body = { binding: input.binding, requestId: input.requestId, sessionId: input.sessionId, turnId: input.turnId, messages: input.messages, tools: input.tools, limits: input.limits };

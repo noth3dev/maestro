@@ -98,6 +98,22 @@ export const ModelCatalogEntrySchema = z.object({
 }).strict();
 export type ModelCatalogEntry = z.infer<typeof ModelCatalogEntrySchema>;
 
+/** Provider login accepts only the two statically registered API-key adapters. */
+export const ProviderCredentialLoginInputSchema = z.object({
+  providerId: z.enum(["openai", "anthropic"]),
+  authMode: z.literal("api-key"),
+  secret: z.string().min(1).max(512),
+}).strict();
+export type ProviderCredentialLoginInput = z.infer<typeof ProviderCredentialLoginInputSchema>;
+export const ProviderCredentialBindingSchema = z.object({
+  bindingId: z.string().min(1).max(128),
+  providerId: z.enum(["openai", "anthropic"]),
+  authMode: z.literal("api-key"),
+  accountRef: z.string().min(1).max(256),
+  configuredAt: z.string().datetime(),
+}).strict();
+export type ProviderCredentialBinding = z.infer<typeof ProviderCredentialBindingSchema>;
+
 /** Project identities visible to the authenticated operator for workspace attachment. */
 export const ProjectListSchema = z.object({ projects: z.array(UuidSchema) }).strict();
 export type ProjectList = z.infer<typeof ProjectListSchema>;

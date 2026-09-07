@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { OperatorAuthentication, OperatorContext } from "@maestro/persistence";
 import { GitOperationError } from "@maestro/domain";
@@ -34,6 +35,8 @@ import {
   ConversationEventQuerySchema,
   ConversationEventSchema,
   ModelCatalogEntrySchema,
+  ProviderCredentialLoginInputSchema,
+  ProviderCredentialBindingSchema,
   ProjectListSchema,
   GoalBudgetSummarySchema,
   GoalResultSchema,
@@ -177,6 +180,11 @@ export interface ProjectDiscoveryService {
   listProjects(operatorId: string): Promise<readonly string[]>;
 }
 
+export interface ProviderCredentialService {
+  bind(input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic"; authMode: "api-key"; secret: string }): Promise<import("@maestro/agent-runtime").GatewayCredentialBinding>;
+  revoke(input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic" }): Promise<void>;
+}
+
 export interface OperatorAuthenticator {
   authenticateBearerSecret(secret: string): Promise<OperatorAuthentication>;
 }
@@ -203,7 +211,7 @@ const systemPollingScheduler: PollingScheduler = {
   clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
 };
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, readinessCheck, conversationService }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, providerCredentials, readinessCheck, conversationService }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
@@ -235,6 +243,8 @@ export function buildServer({ goalService, authenticator, eventService, critical
   projectMembership?: ProjectMembershipChecker;
   /** Authenticated project discovery used for first-run workspace attachment. */
   projectDiscovery?: ProjectDiscoveryService;
+  /** Provider credential lifecycle delegated to the separately authenticated gateway. */
+  providerCredentials?: ProviderCredentialService;
   /** Explicitly configured admin-only project membership and role provisioning. */
   projectAccess?: ProjectAccessProvisioner;
   /** Dependency probe used by /readyz. Liveness never calls this check. */
@@ -394,6 +404,35 @@ export function buildServer({ goalService, authenticator, eventService, critical
     if (!projectDiscovery) throw new DurableStoreUnavailableError();
     const projects = await projectDiscovery.listProjects(requestOperator(request as { operator?: OperatorContext }).operatorId);
     return reply.status(200).send(ProjectListSchema.parse({ projects }));
+  });
+
+  app.post("/v1/provider-credentials", async (request, reply) => {
+    if (!providerCredentials) throw new DurableStoreUnavailableError();
+    const input = parse(ProviderCredentialLoginInputSchema, request.body);
+    const header = request.headers["idempotency-key"];
+    const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
+    const result = await providerCredentials.bind({
+      operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId,
+      requestId,
+      providerId: input.providerId,
+      authMode: input.authMode,
+      secret: input.secret,
+    });
+    return reply.status(200).send(ProviderCredentialBindingSchema.parse(result));
+  });
+
+  app.delete("/v1/provider-credentials/:providerId", async (request, reply) => {
+    if (!providerCredentials) throw new DurableStoreUnavailableError();
+    const providerId = (request.params as { providerId?: unknown }).providerId;
+    if (providerId !== "openai" && providerId !== "anthropic") throw new RequestValidationError();
+    const header = request.headers["idempotency-key"];
+    const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
+    await providerCredentials.revoke({
+      operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId,
+      requestId,
+      providerId,
+    });
+    return reply.status(200).send({ revoked: true });
   });
 
   app.post("/v1/goals", async (request, reply) => {

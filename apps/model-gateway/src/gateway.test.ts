@@ -29,12 +29,24 @@ describe("model gateway", () => {
     await expect(store.resolve(binding.accountRef, "operator-1", "fake")).resolves.toBe("secret");
   });
 
+  it("exposes only models backed by an active operator credential", async () => {
+    const credentials = new InMemoryCredentialStore();
+    const registry = new ProviderRegistry();
+    registry.register(fakePlugin());
+    const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1" });
+
+    await expect(gateway.listModels({ operatorId: "operator-1" })).resolves.toEqual([]);
+    await credentials.bind({ operatorId: "operator-1", providerId: "fake", authMode: "api-key", accountRef: "account-1" }, "secret");
+    await expect(gateway.listModels({ operatorId: "operator-1" })).resolves.toHaveLength(1);
+    await expect(gateway.listModels({ operatorId: "operator-2" })).resolves.toEqual([]);
+  });
+
   it("admits an exact provider/model/account binding and delegates turns", async () => {
     const credentials = new InMemoryCredentialStore();
     const account = await credentials.bind({ operatorId: "operator-1", providerId: "fake", authMode: "api-key" }, "secret");
     const registry = new ProviderRegistry();
     registry.register(fakePlugin());
-    const gateway = createModelGateway({ registry, credentials, instanceId: "gateway-1" });
+    const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1" });
     const binding = await gateway.admit({ requestId: "admit-1", operatorId: "operator-1", providerId: "fake", model: { provider: "fake", id: "model-a" }, accountRef: account.accountRef, dataPolicyHash: "policy-1" });
     const result = await gateway.turn({
       binding, requestId: "request-1", sessionId: "session-1", turnId: "turn-1", messages: [], tools: [],

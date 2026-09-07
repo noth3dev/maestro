@@ -5,6 +5,11 @@ export type ConnectionState =
 export interface ConnectionEnvironment {
   MAESTRO_API_URL?: string;
   MAESTRO_API_TOKEN?: string;
+  MAESTRO_CONTROL_PLANE_ENTRY?: string;
+  MAESTRO_LOCAL_DATABASE_URL?: string;
+  MAESTRO_LOCAL_DATA_DIR?: string;
+  MAESTRO_LOCAL_OPERATOR_ID?: string;
+  MAESTRO_DISABLE_LOCAL_AUTOSTART?: string;
 }
 
 export async function resolveConnection(env: ConnectionEnvironment): Promise<ConnectionState> {
