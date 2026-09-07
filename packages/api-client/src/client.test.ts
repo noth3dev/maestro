@@ -49,6 +49,14 @@ describe("createApiClient", () => {
     }
   });
 
+  it("requests critical-action evaluation through the authenticated typed route", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ goalId, effect: "allow", reason: "policy allows", classification: "ordinary", recordId: commandId }), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+    const input = { projectId, action: "deploy", target: "staging", policyVersion: 2, budgetEffectCents: 0 };
+    await expect(client.requestCriticalAction(goalId, input, commandId)).resolves.toMatchObject({ effect: "allow" });
+    expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/critical-actions`, expect.objectContaining({ method: "POST", body: JSON.stringify(input), headers: expect.objectContaining({ "idempotency-key": commandId }) }));
+  });
+
   it("sends project-bound idempotent Goal control operations", async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ goalId, projectId, state: "pausing", version: 1 }), { status: 200 }))

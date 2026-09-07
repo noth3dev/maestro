@@ -17,6 +17,7 @@ describe("TUI command registry", () => {
     expect(registry.find("approval")?.actions.find((action) => action.name === "approve-and-run")?.kind).toBe("critical");
     expect(registry.find("goal")?.actions.find((action) => action.name === "emergency-stop")?.kind).toBe("critical");
     expect(registry.find("worker")?.actions.find((action) => action.name === "list")?.kind).toBe("read");
+    expect(registry.find("critical-action")?.actions.find((action) => action.name === "request")?.kind).toBe("write");
     expect(registry.find("critical-action")?.actions.find((action) => action.name === "approve-and-run")?.kind).toBe("critical");
     expect(registry.find("workers")?.actions.find((action) => action.name === "list")?.kind).toBe("read");
     expect(registry.find("metronome")?.actions.find((action) => action.name === "scan")?.kind).toBe("write");

@@ -4,7 +4,7 @@ export interface CommandDefinition { name: string; description: string; actions:
 
 const definitions: CommandDefinition[] = ([
   ["admin", "operator and project administration", [["project-access", "critical"]]],
-  ["critical-action", "durable critical action approval", [["approve-and-run", "critical"]]],
+  ["critical-action", "durable critical action approval", [["request", "write"], ["approve-and-run", "critical"]]],
   ["task-contract", "Overture task contract lifecycle", [["create", "write"], ["get", "read"], ["amend", "write"], ["select-roles", "write"], ["confirm", "write"], ["launch", "write"]]],
   ["goals", "Goal discovery", [["list", "read"]]],
   ["projects", "Authenticated project discovery", [["list", "read"]]],

@@ -2203,3 +2203,16 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added registry and dispatch regression coverage.
 - Verification: targeted command tests pass (16 tests), `npm run build` passes, and
   `git diff --check` passes.
+
+
+## 2026-09-06 — Maestro TUI critical-action request parity
+
+- Exposed the existing Control Plane critical-action request route through a typed
+  `ApiClient.requestCriticalAction()` method.
+- Added `/critical-action request` to the TUI. It validates the project/Goal-bound action,
+  target, policy version, and budget effect, then reports the server's durable decision.
+  Approval-and-run remains a separate critical command and still requires the durable approval
+  path plus local confirmation.
+- Corrected the missing request surface with API, registry, and write-router tests.
+- Verification: focused tests pass (30 tests), `npm run build` passes, and `git diff --check`
+  passes.
