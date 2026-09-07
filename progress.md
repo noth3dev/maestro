@@ -2520,3 +2520,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Fixed by overriding `operatorId` to `config.modelGatewayOperatorId` for all six gateway-facing calls, matching how native admission already does this correctly, while leaving Maestro's own durable per-operator store calls untouched.
 - Verified genuine reproduction (fails without the fix with the exact real error, passes with it) before committing. Full detail in `findings.md` same date.
 - Evidence: new test 1/1; regression sweep 15 files / 115 tests, 0 failed. Full clean single-worker real-PostgreSQL rerun in progress.
+
+
+## 2026-09-08 — Real Discord signal delivery acceptance test (genuine negative result)
+
+- Added `apps/control-plane/src/discord-signal-acceptance.integration.test.ts`, driving `createHttpDelivery`'s exact real request shape (operator Bearer auth + JSON body with an embedded HMAC signature) against a real Control Plane HTTP server and real PostgreSQL, plus a tamper-rejection case. This is the first real end-to-end test of the Discord ingestion boundary; every prior test used an in-memory `fetchStub`.
+- No product defect found -- both accept and tamper-rejection worked correctly on the first genuinely correct run. Two of my own test fixture mistakes were caught and fixed first (stale hardcoded timestamps failing real freshness verification; a PostgreSQL bigint column returned as a string, not a number). Full detail in `findings.md` same date.
+- Evidence: new test 1/1; regression sweep 9 files / 73 tests, 0 failed. Full clean single-worker real-PostgreSQL rerun in progress.
