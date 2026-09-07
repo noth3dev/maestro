@@ -16,6 +16,7 @@ function api(): ApiClient {
     scanMetronome: vi.fn().mockResolvedValue({ findings: [] }),
     raiseMetronomeChallenge: vi.fn(),
     provisionProjectAccess: vi.fn(),
+    requestCriticalAction: vi.fn().mockResolvedValue({ goalId, effect: "allow", reason: "approved by policy", classification: "ordinary" }),
     approveAndRunCriticalAction: vi.fn().mockResolvedValue({ effect: "allow", reason: "approved" }),
     certifyConditionalWorker: vi.fn().mockResolvedValue({ workerId: "worker-1", status: "certified" }),
     spawnWorker: vi.fn().mockResolvedValue({ workerId: "worker-1", status: "running" }),
@@ -55,6 +56,12 @@ describe("TUI write commands", () => {
     });
     expect(confirm).not.toHaveBeenCalled();
     expect(client.provisionProjectAccess).not.toHaveBeenCalled();
+  });
+
+  it("routes critical-action requests through the typed Control Plane client", async () => {
+    const client = api();
+    await expect(executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "critical-action", action: "request", options: { "goal-id": goalId, action: "deploy", target: "staging", "policy-version": "2", "budget-effect-cents": "0", "command-id": commandId } })).resolves.toEqual({ title: "Critical action", lines: ["allow · ordinary · approved by policy"] });
+    expect(client.requestCriticalAction).toHaveBeenCalledWith(goalId, { projectId, action: "deploy", target: "staging", policyVersion: 2, budgetEffectCents: 0 }, commandId);
   });
 
   it("accepts the existing critical-action CLI spelling and reaches the durable approval endpoint", async () => {

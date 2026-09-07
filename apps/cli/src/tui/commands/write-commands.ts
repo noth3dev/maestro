@@ -57,7 +57,7 @@ const supportedKeys = new Set([
   "goal:create", "goal:transition", "goal:pause", "goal:stop", "goal:resume", "goal:emergency-stop", "head:activate",
   "council:create", "council:submit-brief", "council:reveal", "council:decide", "department-plan:create", "department-plan:revise", "mission-bundle:create",
   "worker:spawn", "worker:observe", "worker:cancel", "worker:accept", "worker:certify", "worker:certify-conditional", "certification:certify", "git:goal-branch", "git:department-branch", "git:worker-worktree", "git:goal-revision",
-  "metronome:scan", "metronome:challenge", "metronome:correct", "metronome:safe-pause", "metronome:resolve", "encore:review", "approval:approve-and-run", "critical-action:approve-and-run",
+  "metronome:scan", "metronome:challenge", "metronome:correct", "metronome:safe-pause", "metronome:resolve", "encore:review", "approval:approve-and-run", "critical-action:request", "critical-action:approve-and-run",
 ]);
 
 function flag(command: ParsedCommand, name: string): boolean { return command.options[name] === true || option(command, name) === "true"; }
@@ -135,6 +135,20 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
     return { title: "Metronome", lines: [`${updated.challengeId} · ${updated.status}`] };
   }
 
+  if (key === "critical-action:request") {
+    const goalId = required(command, "goal-id");
+    const actionName = required(command, "action");
+    const target = required(command, "target");
+    const policyVersion = integer(command, "policy-version");
+    const budgetEffectCents = integer(command, "budget-effect-cents");
+    if (typeof goalId !== "string") return goalId;
+    if (typeof actionName !== "string") return actionName;
+    if (typeof target !== "string") return target;
+    if (typeof policyVersion !== "number") return policyVersion;
+    if (typeof budgetEffectCents !== "number") return budgetEffectCents;
+    const requested = await context.client.requestCriticalAction(goalId, { projectId: context.projectId, action: actionName, target, policyVersion, budgetEffectCents }, id);
+    return { title: "Critical action", lines: [`${requested.effect} · ${requested.classification} · ${requested.reason}`] };
+  }
   if (key === "admin:project-access") {
     const operatorId = required(command, "operator-id"); const roles = option(command, "roles-json");
     if (typeof operatorId !== "string") return operatorId;

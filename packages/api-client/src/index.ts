@@ -15,6 +15,7 @@ import {
   ProjectListSchema,
   GoalBudgetSummarySchema,
   GoalResultSchema,
+  CriticalActionInputSchema,
   CriticalActionApprovalInputSchema,
   CriticalActionResultSchema,
   HeadParticipationInputSchema,
@@ -78,6 +79,7 @@ import {
   type ProjectList,
   type GoalBudgetSummary,
   type GoalResult,
+  type CriticalActionInput,
   type CriticalActionApprovalInput,
   type CriticalActionResult,
   type HeadParticipationInput,
@@ -150,6 +152,7 @@ export interface ApiClient {
   stopGoal(goalId: string, input: GoalControlInput, commandId: string): Promise<GoalResult>;
   resumeGoal(goalId: string, input: GoalControlInput, commandId: string): Promise<GoalResult>;
   emergencyStopGoal(goalId: string, input: GoalControlInput, commandId: string): Promise<GoalResult>;
+  requestCriticalAction(goalId: string, input: CriticalActionInput, commandId: string): Promise<CriticalActionResult>;
   approveAndRunCriticalAction(goalId: string, input: CriticalActionApprovalInput, commandId: string): Promise<CriticalActionResult>;
   activateHead(goalId: string, input: HeadParticipationInput, commandId: string): Promise<HeadParticipation>;
   createCouncil(goalId: string, input: CreateHeadCouncilInput, commandId: string): Promise<HeadCouncil>;
@@ -351,6 +354,13 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
     },
     emergencyStopGoal(goalId, input, commandId) {
       return controlGoal(goalId, input, commandId, "emergency-stop");
+    },
+    requestCriticalAction(goalId, input, commandId) {
+      return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/critical-actions`, {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
+        body: JSON.stringify(CriticalActionInputSchema.parse(input)),
+      }, CriticalActionResultSchema);
     },
     approveAndRunCriticalAction(goalId, input, commandId) {
       return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/critical-actions/approve-and-run`, {
