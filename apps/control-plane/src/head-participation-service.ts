@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { HeadParticipationInput, HeadParticipation } from "@maestro/contracts";
-import type { ExecutionKernelPort, GoalHeadParticipation } from "@maestro/domain";
+import type { ExecutionAdmission, ExecutionKernelPort, GoalHeadParticipation } from "@maestro/domain";
 import {
   activateHeadParticipation,
   markHeadActivationSpawnStarted,
@@ -30,6 +30,8 @@ export interface HeadParticipationServiceDependencies {
   ) => Promise<T>;
   /** Heartbeat period while a provider call is in flight. */
   goalLeaseRenewalIntervalMs?: number;
+  /** Host-owned native admission for a new Head root session. */
+  createAdmission?: (input: { goalId: string; projectId: string; departmentId: string; actorId: string; sessionRef: string; commandId: string; fencingToken: string }) => ExecutionAdmission;
 }
 
 export class HeadGoalNotFoundError extends Error {
@@ -105,7 +107,8 @@ export function createHeadParticipationService(deps: HeadParticipationServiceDep
           // Keep the successful provider result if the post-call heartbeat
           // fails; the result is needed to bind opaque ownership before any
           // fail-closed cancellation attempt.
-          spawned = await runProviderCall(() => deps.kernel.spawn({ name: `head:${reserved.departmentId}:${randomUUID()}` }), false);
+          const admission = deps.createAdmission?.({ goalId, projectId: input.projectId, departmentId: reserved.departmentId, actorId: operator.operatorId, sessionRef: `operator:${operator.operatorId}`, commandId: _commandId, fencingToken: proof.fencingToken });
+           spawned = await runProviderCall(() => deps.kernel.spawn({ name: `head:${reserved.departmentId}:${randomUUID()}`, ...(admission ?? {}) }), false);
         } catch (error) {
           await resetHeadActivationAfterSpawnFailure(deps.pool, goalId, reserved.departmentId, _commandId, proof).catch(() => {});
           throw error;

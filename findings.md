@@ -731,3 +731,12 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Native router account resolution remains host-owned: an omitted request account uses the configured provider account; a caller-supplied mismatch is rejected before gateway admission.
 - Focused isolated PostgreSQL Worker lifecycle verification on `maestro-native-cutover-postgres:55473` passed **35/35**. Domain/contracts/native-router focused tests passed **30/30** and build passed.
 - Remaining Task C work: explicit admissions for Head, semantic review, Encore, and team-lead helper paths; no Prime production cutover yet.
+
+
+## 2026-09-08 — Native admission propagation and Prime composition removal
+
+- Added the shared `ExecutionAdmission` contract. Head activation, semantic review, Encore fan-out, and team-lead helper seams now preserve host-owned context, grant, exact model policy, and idempotency fields when supplied. Encore derives unique per-reviewer idempotency keys.
+- Control Plane composition now creates `createNativeExecutionKernel()` over the authenticated Model Gateway. When no gateway credential is configured it uses an explicit fail-closed unavailable kernel; it never creates or imports Prime. Host-created Head/Encore admissions require explicit `MAESTRO_NATIVE_MODEL`, provider account binding, lease fencing, and bounded read-only grants.
+- Removed `primeAgentVersion` from Maestro configuration and all source fixtures.
+- Evidence: Head HTTP PostgreSQL suite **2/2**, team-lead PostgreSQL suite **11/11** on disposable port `55475`, semantic review **3/3**, Encore **8/8**, config/native router **19/19**, forced TypeScript build passed.
+- Remaining: delete the Prime package/dependency and lockfile references; wire durable semantic/Encore admission callers where production surfaces exist; add real Model Gateway HTTP process evidence.

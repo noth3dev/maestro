@@ -1,9 +1,10 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { AuthorizedEffectExecutor, type ActionRequest } from "@maestro/authority";
 import { createLocalGitPort } from "@maestro/git-adapter";
-import type { ExecutionKernelPort, GitPort } from "@maestro/domain";
+import type { ExecutionAdmission, ExecutionKernelPort, GitPort } from "@maestro/domain";
+import { parseModelRef, ToolRegistry } from "@maestro/agent-runtime";
 import { assertProjectMembership, authenticateLocalOperator, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, reconcileOnStartup, recordDiscordSignal, runMigrations } from "@maestro/persistence";
 import { createPrimeExecutionKernel } from "@maestro/prime-adapter";
 import { parseConfig, type MaestroConfig } from "./config.js";
@@ -23,6 +24,7 @@ import { createEncoreService } from "./encore-service.js";
 import { buildServer, type OperatorAuthenticator } from "./server.js";
 import { createMetronomeLoop } from "./metronome-loop.js";
 import { createModelGatewayClient } from "./model-gateway-client.js";
+import { createNativeExecutionKernel, createUnavailableNativeExecutionKernel } from "./native-execution-kernel.js";
 import { createPostgresConversationService } from "./conversation-service.js";
 
 export interface ControlPlane {
@@ -51,11 +53,32 @@ async function drainWithTimeout(operation: Promise<void> | undefined, timeoutMs:
   }
 }
 
+export type NativeAdmissionInput =
+  | { purpose: "head"; goalId: string; projectId: string; departmentId: string; actorId: string; sessionRef: string; commandId: string; fencingToken: string }
+  | { purpose: "encore"; goalId: string; projectId: string; commandId: string; reviewerIndex: number; fencingToken: string };
+
+function createHostNativeAdmission(config: MaestroConfig, input: NativeAdmissionInput): ExecutionAdmission {
+  if (config.nativeModelRef === undefined) throw new Error("Native execution requires MAESTRO_NATIVE_MODEL");
+  const model = parseModelRef(config.nativeModelRef);
+  const accountRef = config.modelAccountRefs[model.provider];
+  if (accountRef === undefined) throw new Error(`Native execution has no account binding for provider: ${model.provider}`);
+  const suffix = input.purpose === "head" ? input.departmentId : `reviewer-${input.reviewerIndex}`;
+  const grantId = `native:${input.purpose}:${input.goalId}:${suffix}`;
+  return {
+    context: { operatorId: config.actorId, projectId: input.projectId, goalId: input.goalId, missionBundleId: `native-${input.purpose}`, policyVersion: "native-host-v1", accountRef, fencingToken: input.fencingToken },
+    grant: { grantId, allowedTools: [], allowedSkills: [], modelPolicy: [config.nativeModelRef], pathScope: [config.worktreeRoot], outboundDataClasses: ["repository files only"], remaining: { modelTurns: 8, toolCalls: 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } },
+    modelPolicy: [config.nativeModelRef],
+    idempotencyKey: input.commandId,
+  };
+}
+
 export interface ControlPlaneOverrides {
   /** Test-only injection point for the critical-action effect callback. Production fails closed until a real adapter is configured. */
   criticalActionEffect?: (request: ActionRequest) => Promise<void>;
-  /** Test-only kernel injection; production uses the pinned Prime Agent kernel. */
+  /** Test-only kernel injection; production uses the native Model Gateway kernel. */
   executionKernel?: ExecutionKernelPort;
+  /** Test seam for asserting host-owned admissions on root sessions. */
+  nativeAdmission?: (input: NativeAdmissionInput) => ExecutionAdmission;
   /** Test-only Git injection; production always uses the authority-backed local adapter. */
   gitPort?: GitPort;
 }
@@ -75,7 +98,10 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   const modelGateway = config.modelGatewayToken === undefined ? undefined : createModelGatewayClient({ baseUrl: config.modelGatewayUrl!, token: config.modelGatewayToken });
   const accountLoginStore = modelGateway === undefined ? undefined : createPostgresAccountLoginStore(pool);
   const accountLoginOwnerId = `${config.leaseOwnerId}:${randomUUID()}`;
-  const executionKernel = overrides.executionKernel ?? createPrimeExecutionKernel();
+  const executionKernel = overrides.executionKernel ?? (modelGateway === undefined
+    ? createUnavailableNativeExecutionKernel()
+    : createNativeExecutionKernel({ gateway: modelGateway, gatewayOperatorId: config.modelGatewayOperatorId, accountRefs: config.modelAccountRefs, dataPolicyHash: createHash("sha256").update("maestro-native-data-policy:v1").digest("hex"), tools: new ToolRegistry() }));
+  const nativeAdmission = overrides.nativeAdmission ?? (modelGateway === undefined ? undefined : (input: NativeAdmissionInput) => createHostNativeAdmission(config, input));
   const conversationService = modelGateway === undefined ? undefined : createPostgresConversationService({ pool, gateway: modelGateway, gatewayOperatorId: config.modelGatewayOperatorId, accountRefs: config.modelAccountRefs });
   const goalService = createDurableGoalService({
     pool,
@@ -106,6 +132,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     pool,
     kernel: executionKernel,
     withGoalLease: goalService.withGoalLease!,
+    ...(nativeAdmission === undefined ? {} : { createAdmission: (input) => nativeAdmission({ purpose: "head", ...input }) }),
   });
   const councilService = createCouncilService({ pool, withGoalLease: goalService.withGoalLease! });
   const departmentPlanService = createDepartmentPlanService({ pool, withGoalLease: goalService.withGoalLease! });
@@ -118,7 +145,10 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   });
   const certificationService = createCertificationService({ pool, withGoalLease: goalService.withGoalLease! });
   const metronomeService = createMetronomeService({ pool, withGoalLease: goalService.withGoalLease! });
-  const encoreService = createEncoreService({ pool, kernel: executionKernel, withGoalLease: goalService.withGoalLease! });
+  const encoreService = createEncoreService({
+    pool, kernel: executionKernel, withGoalLease: goalService.withGoalLease!,
+    ...(nativeAdmission === undefined ? {} : { createAdmission: (input) => nativeAdmission({ purpose: "encore", ...input }) }),
+  });
   const app = buildServer({
     goalService,
     headParticipationService,

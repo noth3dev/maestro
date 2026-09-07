@@ -4,6 +4,7 @@ import {
   InvalidSemanticReviewOutputError,
   parseSemanticReviewOutput,
   resolveSemanticReviewVerdict,
+  type ExecutionAdmission,
   type ExecutionKernelPort,
   type InvocationObservation,
   type InvocationStatus,
@@ -63,14 +64,14 @@ async function observeTerminal(
  * successfully parsed verdict is downgraded to `unsupported` if it cites no
  * durable evidence, exactly matching plan/phase3.md's stated rule.
  */
-export async function requestSemanticReview(pool: Pool, kernel: ExecutionKernelPort, goalId: string, claimText: string, criteria: readonly SemanticReviewCriterion[]): Promise<SemanticReview> {
+export async function requestSemanticReview(pool: Pool, kernel: ExecutionKernelPort, goalId: string, claimText: string, criteria: readonly SemanticReviewCriterion[], admission?: ExecutionAdmission): Promise<SemanticReview> {
   const project = await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId]);
   if (project.rowCount !== 1) throw new SemanticReviewError("Goal not found for semantic review");
   const durable = await pool.query<{ evidence_id: string; sha256: string }>("SELECT evidence_id, sha256 FROM evidence_records WHERE goal_id = $1 AND project_id = $2", [goalId, project.rows[0]!.project_id]);
   const durableIds = new Set(durable.rows.flatMap((row) => [row.evidence_id.trim(), row.sha256.trim()]));
 
   const prompt = buildSemanticReviewPrompt({ claimText, criteria, availableEvidenceIds: [...durableIds] });
-  const spawned = await kernel.spawn({ name: `semantic-review:${randomUUID()}`, cwd: process.cwd() });
+  const spawned = await kernel.spawn({ name: `semantic-review:${randomUUID()}`, cwd: process.cwd(), ...(admission ?? {}) });
   let observation: InvocationObservation | undefined;
   let promptError: unknown;
   try {

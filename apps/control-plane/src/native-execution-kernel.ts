@@ -61,6 +61,26 @@ function assertBindingMatches(binding: GatewayBinding, model: ModelIdentity, acc
   }
 }
 
+/** A fail-closed kernel used when the Model Gateway is not configured. */
+export function createUnavailableNativeExecutionKernel(reason = "Model Gateway is not configured"): ExecutionKernelPort & { close(): Promise<void> } {
+  const unavailable = async (_operation: string): Promise<never> => { throw new Error(`Native execution unavailable: ${reason}`); };
+  return {
+    spawn: () => unavailable("spawn"),
+    prompt: () => unavailable("prompt"),
+    observe: () => unavailable("observe"),
+    sendMessage: () => unavailable("sendMessage"),
+    cancel: () => unavailable("cancel"),
+    getModelIdentity: () => unavailable("getModelIdentity"),
+    getToolEvents: () => unavailable("getToolEvents"),
+    getUsage: () => unavailable("getUsage"),
+    getInvocationStatus: () => unavailable("getInvocationStatus"),
+    resume: () => unavailable("resume"),
+    reconnect: () => unavailable("reconnect"),
+    release: () => unavailable("release"),
+    close: async () => {},
+  };
+}
+
 /**
  * Control Plane adapter for the native runtime. A gateway binding is immutable
  * for one root execution; opaque execution/invocation refs are routed back to

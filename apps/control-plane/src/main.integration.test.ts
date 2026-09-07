@@ -50,8 +50,7 @@ if (!databaseUrl) {
       evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp",
       host: "127.0.0.1",
       port: 0,
-      primeAgentVersion: "0.8.0",
-      actorId: "maestro-control-plane",
+            actorId: "maestro-control-plane",
       leaseOwnerId: `test-${randomUUID()}`,
     });
     await controlPlane.listen();
@@ -107,7 +106,7 @@ if (!databaseUrl) {
     const projectId = randomUUID();
     const controlPlane = createControlPlane({
       databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0,
-      primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `provision-${randomUUID()}`,
+      actorId: "maestro-control-plane", leaseOwnerId: `provision-${randomUUID()}`,
       operatorProvisioningAdminId: admin.operatorId,
     });
     await controlPlane.listen();
@@ -146,7 +145,7 @@ if (!databaseUrl) {
   it("streams durable replay over loopback, resumes without duplicate IDs, and stops on disconnect", async () => {
     const secret = "sse-secret-not-configured";
     const { credentialId, operatorId } = await bootstrapLocalOperator(setupPool, { secret });
-    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `sse-${randomUUID()}` });
+    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, actorId: "maestro-control-plane", leaseOwnerId: `sse-${randomUUID()}` });
     await controlPlane.listen();
     const address = controlPlane.app.server.address();
     if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
@@ -213,7 +212,7 @@ if (!databaseUrl) {
   it("closes an open raw SSE response within a bounded interval", async () => {
     const secret = "sse-close-secret-not-configured";
     const { credentialId, operatorId } = await bootstrapLocalOperator(setupPool, { secret });
-    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `sse-close-${randomUUID()}` });
+    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, actorId: "maestro-control-plane", leaseOwnerId: `sse-close-${randomUUID()}` });
     await controlPlane.listen();
     const address = controlPlane.app.server.address();
     if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
@@ -254,8 +253,7 @@ if (!databaseUrl) {
       evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp",
       host: "127.0.0.1",
       port: 0,
-      primeAgentVersion: "0.8.0",
-      actorId: "maestro-control-plane",
+            actorId: "maestro-control-plane",
       leaseOwnerId: `startup-${randomUUID()}`,
       reconcilerLeaseDurationMs: 30_000,
     });
@@ -284,7 +282,7 @@ if (!databaseUrl) {
     };
     const controlPlane = createControlPlane({
       databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0,
-      primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `shutdown-${randomUUID()}`, shutdownDrainTimeoutMs: 50,
+      actorId: "maestro-control-plane", leaseOwnerId: `shutdown-${randomUUID()}`, shutdownDrainTimeoutMs: 50,
     }, { executionKernel: hangingKernel });
     await controlPlane.listen();
     const started = Date.now();
@@ -302,8 +300,7 @@ if (!databaseUrl) {
       evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp",
       host: "127.0.0.1",
       port: 0,
-      primeAgentVersion: "0.8.0",
-      actorId: "maestro-control-plane",
+            actorId: "maestro-control-plane",
       leaseOwnerId: `blocked-${randomUUID()}`,
       reconcilerLeaseDurationMs: 30_000,
     });
@@ -328,7 +325,7 @@ if (!databaseUrl) {
     const { credentialId, operatorId } = localOperator;
     const effect = vi.fn(async () => {});
     const controlPlane = createControlPlane(
-      { databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `critical-${randomUUID()}`, ceoOperatorId: operatorId },
+      { databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, actorId: "maestro-control-plane", leaseOwnerId: `critical-${randomUUID()}`, ceoOperatorId: operatorId },
       { criticalActionEffect: effect },
     );
     await controlPlane.listen();
@@ -428,7 +425,7 @@ if (!databaseUrl) {
       // composition boundary (createControlPlane), even bypassing parseConfig.
       expect(() => createControlPlane({
         databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "0.0.0.0", port: 0,
-        primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `tls-missing-${randomUUID()}`,
+        actorId: "maestro-control-plane", leaseOwnerId: `tls-missing-${randomUUID()}`,
         reconcilerLeaseDurationMs: 30_000,
       })).toThrow("Remote binding requires TLS certificate and key configuration");
 
@@ -438,7 +435,7 @@ if (!databaseUrl) {
       // plain HTTP.
       expect(() => createControlPlane({
         databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "0.0.0.0", port: 0,
-        primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `tls-partial-${randomUUID()}`,
+        actorId: "maestro-control-plane", leaseOwnerId: `tls-partial-${randomUUID()}`,
         reconcilerLeaseDurationMs: 30_000, tls: { certFile, keyFile: "/nonexistent/key.pem" },
       })).toThrow(/ENOENT/);
 
@@ -446,7 +443,7 @@ if (!databaseUrl) {
       const { credentialId, operatorId } = await bootstrapLocalOperator(setupPool, { secret });
       const controlPlane = createControlPlane({
         databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0,
-        primeAgentVersion: "0.8.0", actorId: "maestro-control-plane", leaseOwnerId: `tls-real-${randomUUID()}`,
+        actorId: "maestro-control-plane", leaseOwnerId: `tls-real-${randomUUID()}`,
         reconcilerLeaseDurationMs: 30_000, tls: { certFile, keyFile },
       });
       try {

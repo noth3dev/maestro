@@ -57,8 +57,7 @@ if (!databaseUrl) {
         evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp",
         host: "127.0.0.1",
         port: 0,
-        primeAgentVersion: "0.8.0",
-        actorId: "maestro-control-plane",
+                actorId: "maestro-control-plane",
         leaseOwnerId: `cli-secretary-parity-${randomUUID()}`,
         reconcilerLeaseDurationMs: 30_000,
       });
