@@ -2573,3 +2573,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Fresh `npm test` on pushed `eecb972` passed **105/162 files and 677/1058 tests**; 57 files and 381 tests were correctly skipped because no `MAESTRO_TEST_DATABASE_URL` was supplied.
 - This complements the earlier fresh disposable-PostgreSQL result of **162/162 files and 1066/1066 tests**, with the database-gated suites enabled.
+
+
+## 2026-09-08
+- Reorganized the planning tree into `roadmap/` with Act 1/2/3 entry points.
+- Moved the live Act 1 operations ledger to `roadmap/act-1-foundation/active/operations/`.
+- Updated current links and source/test citations; retained old paths inside append-only historical logs, archive provenance, and applied migration history.
+- Validation pending: broken-link scan, old-path scan, formatting check, and repository status review.
+- Verification complete: build, full no-database test suite, lint, link scans, and diff check passed; repository-wide format check remains a pre-existing 402-file baseline failure, while new index files were formatted separately.

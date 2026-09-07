@@ -4,7 +4,7 @@ export function Flashmob({ onOpenSession }: { onOpenSession: () => void }) {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div className="dash-head" style={{ padding: "20px 20px 0" }}><div className="dash-title">flashmob</div></div>
-      <div className="dash-sub" style={{ padding: "0 20px 14px" }}>fast lane for light tasks · deferred feature (plan/extra.md "Vanguard"), not wired to a real backend yet -- illustrative example sessions below</div>
+      <div className="dash-sub" style={{ padding: "0 20px 14px" }}>fast lane for light tasks · deferred feature (roadmap/_meta/naming-registry.md "Vanguard"), not wired to a real backend yet -- illustrative example sessions below</div>
       <div className="page-body" style={{ paddingTop: 0 }}>
         <div className="fm-session" onClick={onOpenSession}>
           <div className="fm-session-icon"><Icon name="message-square" /></div>

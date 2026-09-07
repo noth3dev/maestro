@@ -11,7 +11,7 @@ const substance = (): TaskContractSubstance => ({
   desiredOutcome: "A durable contract", userVisibleBehavior: ["CEO sees exact draft"], successCriteria: ["launch is bound"], liveEvidence: ["focused PostgreSQL test"],
   scope: ["contract confirmation"], nonGoals: ["agents"], priorities: ["safety"], acceptableTradeoffs: ["no UI"], constraints: ["local only"], knownEdgeCases: ["CEO edit"],
   project: { projectId: "project", repository: "repository", immutableBaseRevision: "2e8e5a5", dataBoundary: "repository files only" },
-  evidenceReferences: ["plan/phase2.md"], approvedPreviewReferences: [], expectedGroups: ["Product Group"], expectedDepartments: ["Product Department"],
+  evidenceReferences: ["roadmap/act-1-foundation/phase-02-hierarchical-execution.md"], approvedPreviewReferences: [], expectedGroups: ["Product Group"], expectedDepartments: ["Product Department"],
   criticalActionExpectations: ["exact confirmation"], forbiddenEffects: ["worker launch"], environmentAssumptions: ["PostgreSQL"], externalServiceAssumptions: ["none"],
   budget: { ceiling: "100 USD", reportingExpectations: ["launch"], stoppingConditions: ["ceiling"] },
 });

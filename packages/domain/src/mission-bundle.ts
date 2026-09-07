@@ -97,7 +97,7 @@ export function missionBundleSubstanceContentHash(substance: MissionBundleSubsta
 
 
 /**
- * Mission persona overlay -- plan/phase2.md "Ten-axis persona baseline":
+ * Mission persona overlay -- roadmap/act-1-foundation/phase-02-hierarchical-execution.md "Ten-axis persona baseline":
  * "Temporary workers receive a mission profile derived from Department
  * style, Head choice, task ambiguity, risk, collaboration demand, and
  * evidence burden. Worker overlays expire with the mission."

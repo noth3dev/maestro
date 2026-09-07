@@ -321,7 +321,7 @@ export async function linkDiscordIncidentToGoal(
  * Close an incident with its final resolution: `resolved` (remediation
  * completed and independently certified) or `false_positive` (no real
  * incident existed). Closure is final and durable, matching
- * plan/phase4.md's "Close with resolution, retained risk, false-positive
+ * roadmap/act-1-foundation/phase-04-environments-devices-incidents.md's "Close with resolution, retained risk, false-positive
  * result, and Discord feedback." A false positive may close directly from
  * `open` (for example a vulnerability feed naming an unaffected version);
  * a `resolved` close requires a linked Goal.

@@ -176,7 +176,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     const missionReservation = await reserveMissionBudget(pool, resolved.councilId, "product", plan.version, "exec-1", 10_000, "execution mission", proof, headContext("product"));
     expect(missionReservation.amountCents).toBe(10_000);
 
-    // 10. Stop at "awaiting certification" (certifying), not final succeeded/failed -- per plan/phase2.md work-sequence step 12.
+    // 10. Stop at "awaiting certification" (certifying), not final succeeded/failed -- per roadmap/act-1-foundation/phase-02-hierarchical-execution.md work-sequence step 12.
     // Phase 3 live gate: independently accept the worker output, freeze the
     // integrated revision, certify it from Quality, and persist a replayable
     // evidence bundle. These are real PostgreSQL rows and a real Git commit.

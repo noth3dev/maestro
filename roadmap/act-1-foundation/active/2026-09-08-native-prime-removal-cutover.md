@@ -1,6 +1,6 @@
 # Maestro Native Backend and Prime Removal Implementation Plan
 
-> **Status (2026-09-08): COMPLETED.** This document is the historical execution checklist for the native cutover. Its unchecked task lists and baseline findings describe the pre-cutover tree; they are not current work instructions. The current pointer is `plan/operations/task_plan.md`, and the current tree has no Prime package, import, lockfile entry, or fallback.
+> **Status (2026-09-08): COMPLETED.** This document is the historical execution checklist for the native cutover. Its unchecked task lists and baseline findings describe the pre-cutover tree; they are not current work instructions. The current pointer is `roadmap/act-1-foundation/active/operations/task_plan.md`, and the current tree has no Prime package, import, lockfile entry, or fallback.
 >
 > **For historical execution only:** the original workers used the repository's test-first and independent-review workflow. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -10,7 +10,7 @@
 
 **Tech Stack:** TypeScript, Node.js 24, Fastify 5, Zod 4, PostgreSQL/`pg`, native `fetch`/`AbortController`, Vitest, existing `@maestro/agent-runtime`, `@maestro/model-provider-openai`, `@maestro/model-provider-anthropic`, `@maestro/api-client`, and `@maestro/contracts`.
 
-**Spec:** `plan/2026-09-07-maestro-native-agent-backend.md`, `plan/specs/2026-09-07-maestro-native-agent-backend-design.md`, `plan/phase1.md` through `plan/phase8.md`.
+**Spec:** `roadmap/act-1-foundation/active/2026-09-07-maestro-native-agent-backend.md`, `roadmap/act-1-foundation/specs/2026-09-07-maestro-native-agent-backend-design.md`, `roadmap/act-1-foundation/phase-01-durable-control-plane.md` through `roadmap/act-1-foundation/phase-08-hardening-release-certification.md`.
 
 ## Global Constraints
 
@@ -23,7 +23,7 @@
 - Provider/model switches affect only new admissions. Existing execution bindings remain immutable.
 - Existing typed Control Plane, CLI, Secretary, and TUI authority boundaries remain authoritative. No UI may invent durable state or credentials.
 - Do not touch `.worktrees/device-grant-expiry` or `.worktrees/local-gateway-bootstrap`; neither is part of this plan's working tree.
-- Each implementation slice must have a focused red test, a green focused test, `npm run build`, an independent review, a Conventional Commit, a push to `origin/main`, and an evidence entry in `plan/operations/findings.md` and `plan/operations/progress.md`.
+- Each implementation slice must have a focused red test, a green focused test, `npm run build`, an independent review, a Conventional Commit, a push to `origin/main`, and an evidence entry in `roadmap/act-1-foundation/active/operations/findings.md` and `roadmap/act-1-foundation/active/operations/progress.md`.
 - Phase acceptance requires disposable PostgreSQL and real-process gates. Unit tests alone never close a phase.
 
 ## Historical baseline findings (pre-cutover; do not treat as current)
@@ -56,11 +56,11 @@ Tasks B, E, and the discovery part of F can be reviewed independently. C and D m
 
 ## Task A — Freeze the baseline and audit evidence
 
-**Status:** plan/audit in progress; no implementation code changes in this task.
+**Status:** roadmap audit in progress; no implementation code changes in this task.
 
 **Files:**
-- Read: `docs/OPERATING_PROTOCOL.md`, `plan/operations/task_plan.md`, `plan/operations/findings.md`, `plan/operations/progress.md`, `plan/phase1.md`–`plan/phase8.md`, native backend and TUI plans.
-- Maintain: `plan/act1-execution.md`, `plan/operations/findings.md`, `plan/operations/progress.md`.
+- Read: `docs/OPERATING_PROTOCOL.md`, `roadmap/act-1-foundation/active/operations/task_plan.md`, `roadmap/act-1-foundation/active/operations/findings.md`, `roadmap/act-1-foundation/active/operations/progress.md`, `roadmap/act-1-foundation/phase-01-durable-control-plane.md`–`roadmap/act-1-foundation/phase-08-hardening-release-certification.md`, native backend and TUI plans.
+- Maintain: `roadmap/act-1-foundation/active/act1-execution.md`, `roadmap/act-1-foundation/active/operations/findings.md`, `roadmap/act-1-foundation/active/operations/progress.md`.
 
 **Required evidence:**
 
@@ -350,7 +350,7 @@ MAESTRO_TEST_DATABASE_URL=postgresql://maestro@127.0.0.1:55471/maestro_test npm 
 npm test -- packages/agent-runtime/src/model-provider.test.ts packages/agent-runtime/src/provider-registry.test.ts
 ```
 
-Record exact file/test counts, PostgreSQL container identity, real-process timings, HTTP status/results, no-Prime scan output, and any provider environment limitation. Update `plan/act1-execution.md` to mark only evidence-backed items complete and leave later Phase 2–8 work blocked until Phase 1's exit gate is genuinely green.
+Record exact file/test counts, PostgreSQL container identity, real-process timings, HTTP status/results, no-Prime scan output, and any provider environment limitation. Update `roadmap/act-1-foundation/active/act1-execution.md` to mark only evidence-backed items complete and leave later Phase 2–8 work blocked until Phase 1's exit gate is genuinely green.
 
 Commit each patch separately using `fix(<scope>): ...`; push every commit immediately. Finish with a concise changelog and a clean `git status` on `main`.
 

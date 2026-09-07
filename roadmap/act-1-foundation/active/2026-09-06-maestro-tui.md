@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Node.js 24, npm workspaces, existing `@maestro/api-client`, Fastify Control Plane HTTP/SSE, `@earendil-works/pi-tui` `0.85.1`, Vitest, real PostgreSQL integration fixtures, and real-process tests where lifecycle behavior is involved.
 
-**Spec:** `plan/specs/2026-09-06-maestro-tui-design.md`
+**Spec:** `roadmap/act-1-foundation/specs/2026-09-06-maestro-tui-design.md`
 
 ## Global Constraints
 
@@ -231,9 +231,9 @@
 **Files:**
 - Create: `apps/cli/src/tui/acceptance/representative-goal.test.ts`
 - Create: `apps/cli/src/tui/acceptance/tui-cli-parity.test.ts`
-- Modify: `plan/operations/progress.md`
-- Modify: `plan/operations/findings.md`
-- Modify: `plan/operations/task_plan.md`
+- Modify: `roadmap/act-1-foundation/active/operations/progress.md`
+- Modify: `roadmap/act-1-foundation/active/operations/findings.md`
+- Modify: `roadmap/act-1-foundation/active/operations/task_plan.md`
 
 **Interfaces:**
 - Representative acceptance uses the same Goal identity and compares durable results from TUI, CLI, and Electron/API surfaces.

@@ -9,10 +9,10 @@ Raise Maestro from a code-complete phase baseline to an operationally usable Act
 
 ## Sources of truth
 
-- `plan/phase1.md` through `plan/phase8.md`: phase requirements and exit gates.
-- `plan/2026-09-07-maestro-native-agent-backend.md`: current native runtime/provider migration and Prime-removal boundary.
-- `plan/2026-09-06-maestro-tui.md` and `plan/specs/2026-09-06-maestro-tui-design.md`: terminal operator surface.
-- Root `plan/operations/task_plan.md`, `plan/operations/findings.md`, and `plan/operations/progress.md`: current evidence ledger. When historical status conflicts with the repository, trust the repository and record the reconciliation.
+- `roadmap/act-1-foundation/phase-01-durable-control-plane.md` through `roadmap/act-1-foundation/phase-08-hardening-release-certification.md`: phase requirements and exit gates.
+- `roadmap/act-1-foundation/active/2026-09-07-maestro-native-agent-backend.md`: current native runtime/provider migration and Prime-removal boundary.
+- `roadmap/act-1-foundation/active/2026-09-06-maestro-tui.md` and `roadmap/act-1-foundation/specs/2026-09-06-maestro-tui-design.md`: terminal operator surface.
+- Root `roadmap/act-1-foundation/active/operations/task_plan.md`, `roadmap/act-1-foundation/active/operations/findings.md`, and `roadmap/act-1-foundation/active/operations/progress.md`: current evidence ledger. When historical status conflicts with the repository, trust the repository and record the reconciliation.
 
 ## Non-negotiable execution rules
 
@@ -54,4 +54,4 @@ Phase 2–8 remain blocked behind the preceding phase exit gate. Their requireme
 
 ## Current next action
 
-Keep `plan/operations/task_plan.md` current, finish the documentation parity commit, then take the first remaining product-scoped host-tool decision or TUI/device acceptance item. Do not implement a host tool from assumptions.
+Keep `roadmap/act-1-foundation/active/operations/task_plan.md` current, finish the documentation parity commit, then take the first remaining product-scoped host-tool decision or TUI/device acceptance item. Do not implement a host tool from assumptions.

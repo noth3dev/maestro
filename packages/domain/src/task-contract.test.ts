@@ -6,7 +6,7 @@ const substance: TaskContractSubstance = {
   successCriteria: ["launch needs confirmation"], liveEvidence: ["integration test"], scope: ["contract slice"], nonGoals: ["workers"],
   priorities: ["safety"], acceptableTradeoffs: ["no UI"], constraints: ["PostgreSQL"], knownEdgeCases: ["edit during confirmation"],
   project: { projectId: "project", repository: "repo", immutableBaseRevision: "abc123", dataBoundary: "local repository only" },
-  evidenceReferences: ["plan/phase2.md"], approvedPreviewReferences: [], expectedGroups: ["Product Group"], expectedDepartments: ["Product Department"],
+  evidenceReferences: ["roadmap/act-1-foundation/phase-02-hierarchical-execution.md"], approvedPreviewReferences: [], expectedGroups: ["Product Group"], expectedDepartments: ["Product Department"],
   criticalActionExpectations: ["explicit launch"], forbiddenEffects: ["spawn workers"], environmentAssumptions: ["local PostgreSQL"], externalServiceAssumptions: ["none"],
   budget: { ceiling: "100 USD", reportingExpectations: ["on launch"], stoppingConditions: ["ceiling reached"] },
 };

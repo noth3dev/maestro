@@ -52,7 +52,7 @@ export function assessDiscordSilence(
 
 export type DiscordIncidentKind = "crash" | "vulnerability" | "regression";
 
-/** Initial routing per plan/phase4.md #41: crash/reliability evidence maps to
+/** Initial routing per roadmap/act-1-foundation/phase-04-environments-devices-incidents.md #41: crash/reliability evidence maps to
  * Operations and Engineering; vulnerability evidence maps to Security and
  * Engineering; a user-visible regression may map more broadly. This is the
  * smallest deterministic mapping and is not a substitute for a real Head's

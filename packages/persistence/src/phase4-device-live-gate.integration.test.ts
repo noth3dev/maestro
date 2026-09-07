@@ -36,7 +36,7 @@ describeDatabase("Phase 4 exit gate: a narrow Goal-scoped device grant completes
 
     // The CEO also sets the device's own local policy for this narrow scope
     // -- the same policy the real enrolled device would evaluate itself,
-    // before ever contacting the network, per plan/phase4.md step 7
+    // before ever contacting the network, per roadmap/act-1-foundation/phase-04-environments-devices-incidents.md step 7
     // ("Device validates identity, Goal, target, expiry, fencing token, and
     // policy locally before execution").
     const withPolicy = await setLocalDevicePolicy(

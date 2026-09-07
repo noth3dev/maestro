@@ -79,7 +79,7 @@ function fakeReviewKernel(): ExecutionKernelPort {
   };
 }
 
-describeDatabase("App/API and CLI durable read-state parity (plan/phase3.md Tests item 18)", () => {
+describeDatabase("App/API and CLI durable read-state parity (roadmap/act-1-foundation/phase-03-certification-release.md Tests item 18)", () => {
   const pool = new Pool({ connectionString: databaseUrl });
   let repositoryPath: string;
   let baseRevision: string;

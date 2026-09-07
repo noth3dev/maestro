@@ -37,7 +37,7 @@ Phase 6 Step 1은 불변·프로젝트 전용 Improvement Digest slice로 승인
 
 > [!IMPORTANT]
 > **운영 사용성 게이트 공지:**  
-> 코드 및 PostgreSQL 증거는 릴리스 승인을 뜻하지 않습니다. Native conversation과 Worker는 실제 Model Gateway/PostgreSQL acceptance 및 restart/fencing 증거를 갖추었습니다. 남은 게이트는 production host-tool 제품 승인·구현, TUI parity/reconnect 증거, 별도 실행 authenticated device-agent protocol의 독립 review/production 승인입니다(실제 process gate 자체는 구현됨). 상세 상태는 `plan/operations/task_plan.md`에 기록합니다.
+> 코드 및 PostgreSQL 증거는 릴리스 승인을 뜻하지 않습니다. Native conversation과 Worker는 실제 Model Gateway/PostgreSQL acceptance 및 restart/fencing 증거를 갖추었습니다. 남은 게이트는 production host-tool 제품 승인·구현, TUI parity/reconnect 증거, 별도 실행 authenticated device-agent protocol의 독립 review/production 승인입니다(실제 process gate 자체는 구현됨). 상세 상태는 `roadmap/act-1-foundation/active/operations/task_plan.md`에 기록합니다.
 
 ---
 
@@ -45,7 +45,7 @@ Phase 6 Step 1은 불변·프로젝트 전용 Improvement Digest slice로 승인
 
 ### 1) Luthiery (동적 MCP 공방)
 
-**Luthiery**(Phase 9 후보)는 작업 실행 중 필요한 전용 **Model Context Protocol (MCP)** 서버 및 도구를 런타임에 안전하게 생성, 감사, 실행, 재사용할 수 있는 공방 모듈입니다 ([`plan/post-phase8-ideas.md`](../../plan/post-phase8-ideas.md)).
+**Luthiery**(Phase 9 후보)는 작업 실행 중 필요한 전용 **Model Context Protocol (MCP)** 서버 및 도구를 런타임에 안전하게 생성, 감사, 실행, 재사용할 수 있는 공방 모듈입니다 ([`roadmap/act-1-foundation/phase-09-luthiery.md`](../../roadmap/act-1-foundation/phase-09-luthiery.md)).
 
 ```mermaid
 flowchart LR
@@ -67,7 +67,7 @@ flowchart LR
 
 ### 2) Autonomous Treasury & Real Capital Wallet (자율 재무부 지갑)
 
-**Autonomous Treasury**(Phase 9/10 후보)는 Maestro 시스템에 영속적인 자율 지갑을 내장하여, 외부 API, 클라우드 컴퓨팅 자원, Web3 스마트 컨트랙트 결제를 직접 집행할 수 있는 자산 자율성을 부여합니다 ([`plan/post-phase8-ideas.md`](../../plan/post-phase8-ideas.md)).
+**Autonomous Treasury**(Phase 9/10 후보)는 Maestro 시스템에 영속적인 자율 지갑을 내장하여, 외부 API, 클라우드 컴퓨팅 자원, Web3 스마트 컨트랙트 결제를 직접 집행할 수 있는 자산 자율성을 부여합니다 ([`roadmap/act-1-foundation/phase-10-autonomous-treasury.md`](../../roadmap/act-1-foundation/phase-10-autonomous-treasury.md)).
 
 #### Treasury 핵심 원칙
 1. **사용자 충전식 예치금 모델**: Conductor(사용자)가 미리 충전한 예치금(Web3 암호화폐 USDC/ETH/Solana 및 Stripe/Plaid 전통 금융 결제) 기반 작동.

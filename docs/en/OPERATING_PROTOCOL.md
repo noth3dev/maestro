@@ -1,7 +1,7 @@
 # Maestro — Operating Protocol
 
 Read this file at the start of every session, before doing anything else, whenever
-`plan/operations/task_plan.md`'s pointer sends you here. It exists so any session or subagent picking up this
+`roadmap/act-1-foundation/active/operations/task_plan.md`'s pointer sends you here. It exists so any session or subagent picking up this
 project mid-stream — after an interruption, a context reset, or a brand-new session days later —
 behaves identically to the session before it.
 
@@ -16,9 +16,9 @@ one-off tasks.
 
 ## A. Session resume checklist (in order)
 
-1. Read `plan/operations/task_plan.md` in full — phases, status markers, and "Next step".
-2. Read the tail of `plan/operations/progress.md` (last ~5 entries) for the most recent concrete actions/results.
-3. Read the tail of `plan/operations/findings.md` (last ~5 entries) for the most recent design/blocker findings.
+1. Read `roadmap/act-1-foundation/active/operations/task_plan.md` in full — phases, status markers, and "Next step".
+2. Read the tail of `roadmap/act-1-foundation/active/operations/progress.md` (last ~5 entries) for the most recent concrete actions/results.
+3. Read the tail of `roadmap/act-1-foundation/active/operations/findings.md` (last ~5 entries) for the most recent design/blocker findings.
 4. Run `git log --oneline -10` and `git status --short` to confirm the actual repo state matches
    what the docs claim. If they disagree, trust the repo and correct the docs, not the reverse.
 5. Do not re-run a subagent audit/slice that the docs already record as done; do not re-litigate
@@ -56,7 +56,7 @@ one-off tasks.
 - Every local commit stays local. Remote push/merge/release/branch-deletion on `origin` requires
   the user's explicit go-ahead in that session — do not assume a prior push authorization carries
   forward silently, but also do not re-ask if the user already said "push" in the current thread.
-- Doc-log merge conflicts (`plan/operations/progress.md`, `plan/operations/task_plan.md`, `plan/operations/findings.md`) are resolved by keeping
+- Doc-log merge conflicts (`roadmap/act-1-foundation/active/operations/progress.md`, `roadmap/act-1-foundation/active/operations/task_plan.md`, `roadmap/act-1-foundation/active/operations/findings.md`) are resolved by keeping
   both sides' entries (union), never by discarding either side's history.
 
 ## C. Disposable PostgreSQL containers
@@ -82,7 +82,7 @@ one-off tasks.
    errored out on every turn produced no work — delete it (`await
    rlm.delete_subagent(handle.name)`) and respawn the same task on the inherited default model
    (`anthropic/claude-sonnet-5` as of this writing) as the fallback, rather than waiting further
-   or treating its "completed without reply" notification as a real result. Note in `plan/operations/progress.md`
+   or treating its "completed without reply" notification as a real result. Note in `roadmap/act-1-foundation/active/operations/progress.md`
    which model actually did the work.
 3. **Thinking level scales with task difficulty — not fixed.** Routine/mechanical subtasks:
    `medium`. Standard hardening/audit/review work: `high`. An especially deep, critical, or
@@ -92,7 +92,7 @@ one-off tasks.
    State the worktree/branch it owns (if any), that it must not edit files if the task is an audit,
    and that it must ground every finding in exact file:line evidence.
 5. **Always tell an audit child what NOT to re-report.** Point it at the currently open findings
-   (e.g. this file's referenced remediation-plan section in `plan/operations/task_plan.md`) so parallel audits
+   (e.g. this file's referenced remediation-plan section in `roadmap/act-1-foundation/active/operations/task_plan.md`) so parallel audits
    don't waste a turn re-discovering the same known gaps under a different name.
 6. **No child may mark its own work "accepted."** Self-verified/self-reviewed is the ceiling for
    a child that wrote the code; only an independent (no-edit) reviewer — a different child, or the
@@ -101,10 +101,10 @@ one-off tasks.
 7. **Fan-in through files or explicit replies, not silence.** A child must `await
    agent_message.send(..., receiver_role='parent')` when it has an answer. If several children run
    in parallel, wait for each one's real reply (or the dead-child handling in #2) before folding
-   its findings into `plan/operations/task_plan.md`/`plan/operations/progress.md` — do not summarize a child's work from its title
+   its findings into `roadmap/act-1-foundation/active/operations/task_plan.md`/`roadmap/act-1-foundation/active/operations/progress.md` — do not summarize a child's work from its title
    alone.
 8. **Record every accepted finding immediately**, in the same turn it's confirmed, into
-   `plan/operations/task_plan.md`'s live remediation-plan section and `plan/operations/progress.md` — do not hold multiple
+   `roadmap/act-1-foundation/active/operations/task_plan.md`'s live remediation-plan section and `roadmap/act-1-foundation/active/operations/progress.md` — do not hold multiple
    children's results in conversation memory only, since that is exactly the state lost on an
    interruption.
 
@@ -124,6 +124,6 @@ one-off tasks.
   `graph.html` outside a commit. Do not reinstall the hook or re-run `graphify hook install`
   unless it is missing (`graphify hook status`).
 - Documentation lives in `docs/` (architecture/roadmap/guide, committed) with an explicit
-  correction note in `docs/roadmap/phases.md` that Phase 1-4 "complete" means code/test level
-  only — keep that note in sync with the remediation plan in `plan/operations/task_plan.md`; do not let the two
+  correction note in `docs/en/05-roadmap-and-phase-status.md` that Phase 1-4 "complete" means code/test level
+  only — keep that note in sync with the remediation plan in `roadmap/act-1-foundation/active/operations/task_plan.md`; do not let the two
   drift apart.

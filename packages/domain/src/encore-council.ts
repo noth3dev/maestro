@@ -9,7 +9,7 @@ export interface EncoreTriggerFacts {
   readonly ambiguousOrUnsupportedReviewCount: number;
 }
 
-/** Pure evaluator: the Encore Council is invoked only when one of the plan/phase3.md trigger conditions is actually true, never proactively. */
+/** Pure evaluator: the Encore Council is invoked only when one of the roadmap/act-1-foundation/phase-03-certification-release.md trigger conditions is actually true, never proactively. */
 export function evaluateEncoreTriggers(facts: EncoreTriggerFacts): readonly EncoreTriggerReason[] {
   const reasons: EncoreTriggerReason[] = [];
   if (facts.departmentOwnershipCount > 1) reasons.push("cross_department_material");

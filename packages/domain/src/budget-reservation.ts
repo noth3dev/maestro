@@ -4,7 +4,7 @@ export class InvalidBudgetReservationError extends Error {
 
 export type BudgetScope = "goal" | "department" | "mission";
 
-/** The quality/recovery reserve is a fixed fraction of every Goal-level reservation that Departments can never allocate away, per plan/phase2.md's Budget behavior. */
+/** The quality/recovery reserve is a fixed fraction of every Goal-level reservation that Departments can never allocate away, per roadmap/act-1-foundation/phase-02-hierarchical-execution.md's Budget behavior. */
 export const QUALITY_RECOVERY_RESERVE_BPS = 1000; // 10.00%
 
 export interface BudgetReservationSubstance {

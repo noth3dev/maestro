@@ -150,7 +150,7 @@ export async function assertCurrentWorkerLease(pool: Pool, workerId: string, pro
  * Spawn one attempt of a worker for a Mission Bundle's assigned mission,
  * through the injected provider-neutral ExecutionKernelPort -- no provider
  * identifier or type crosses this boundary. Only the Department's currently
- * active, captured Head may spawn workers for it (plan/phase2.md: "Only a
+ * active, captured Head may spawn workers for it (roadmap/act-1-foundation/phase-02-hierarchical-execution.md: "Only a
  * Department Head may create ordinary workers"). Bounded by the bundle's
  * retryCeiling: attempt N+1 is refused once N+1 exceeds retryCeiling + 1
  * (the ceiling is additional retries beyond the first attempt).
@@ -665,7 +665,7 @@ export async function listWorkersForGoal(pool: Pool, goalId: string): Promise<re
 /**
  * Counts workers currently occupying a worker slot (spawned or running -- not yet terminal) for
  * a project, across every Goal in it. This is Phase 5's first real capacity-model primitive
- * (plan/phase5.md "Capacity model": "worker slots by risk class" simplified to one project-wide
+ * (roadmap/act-1-foundation/phase-05-concurrent-goals-portfolio.md "Capacity model": "worker slots by risk class" simplified to one project-wide
  * slot count for this initial slice; risk-class partitioning is a later refinement, not
  * implemented here).
  */

@@ -883,3 +883,20 @@ Two independent read-only audits found documentation drift that could misroute f
 6. **Phase/status truth:** roadmap and plan pointers now distinguish code/test evidence from release acceptance. Phase 4 has real process evidence; independent review/production deployment acceptance remains. Phase 1's only product-scoped technical gap is host-tool registration/enforcement.
 
 No source behavior was changed in this documentation slice. The audit did not authorize adding a production host tool, permission, filesystem scope, or network scope.
+
+
+## 2026-09-08 — Roadmap directory reorganization
+- Renamed the tracked planning root from `plan/` to `roadmap/`.
+- Grouped Act 1 phases 1–10, active implementation plans, design specs, archive material, and live operations records under `roadmap/act-1-foundation/`.
+- Split the former combined post-Phase 8 architecture note into Act 1 Phase 9/10, Act 2 Flashmob, and Act 3 Arrangement entry documents.
+- Updated live source, test, documentation, and operating-protocol references to canonical `roadmap/` paths.
+- Preserved append-only historical logs, legacy archive text, and already-versioned SQL migration provenance without rewriting their old path strings.
+
+
+## 2026-09-08 — Roadmap reorganization verification
+- `npm run build` passed.
+- `npm test -- --reporter=dot` passed: 105 files passed, 57 skipped; 677 tests passed, 381 skipped.
+- `npm run lint` passed.
+- Markdown relative-link and canonical roadmap-target scans passed.
+- `git diff --check` passed.
+- Repository-wide `npm run format:check` remains red because the existing tree reports 402 formatted-file warnings; the six newly authored index/Act files were formatted separately.
