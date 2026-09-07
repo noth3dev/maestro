@@ -13,6 +13,7 @@ function api(): ApiClient {
     emergencyStopGoal: vi.fn().mockResolvedValue({ ...goal, state: "stopped" as const }),
     createGoal: vi.fn().mockResolvedValue({ ...goal, state: "draft" as const }),
     createTaskContract: vi.fn(),
+    scanMetronome: vi.fn().mockResolvedValue({ findings: [] }),
     raiseMetronomeChallenge: vi.fn(),
     provisionProjectAccess: vi.fn(),
     approveAndRunCriticalAction: vi.fn().mockResolvedValue({ effect: "allow", reason: "approved" }),
@@ -96,6 +97,12 @@ describe("TUI write commands", () => {
     const result = await executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "task-contract", action: "create", options: { "contract-id": commandId, "substance-json": JSON.stringify({ desiredOutcome: "Ship" }) } });
     expect(result.title).toBe("Task Contract");
     expect(client.createTaskContract).toHaveBeenCalledWith({ projectId, substance: { desiredOutcome: "Ship" } }, expect.any(String));
+  });
+
+  it("routes Metronome scan as an idempotent write command", async () => {
+    const client = api();
+    await expect(executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "metronome", action: "scan", options: { "goal-id": goalId, "command-id": commandId } })).resolves.toEqual({ title: "Metronome", lines: ["findings: 0"] });
+    expect(client.scanMetronome).toHaveBeenCalledWith(goalId, { projectId }, commandId);
   });
 
   it("accepts array JSON for Metronome challenge references", async () => {
