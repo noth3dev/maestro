@@ -48,7 +48,7 @@ describe("durable role catalog", () => {
       expect(role.charter.trim()).not.toBe("");
       expect(role.capabilityBoundary.allowed.length).toBeGreaterThan(0);
       expect(role.capabilityBoundary.forbidden.length).toBeGreaterThan(0);
-      expect(role.provenance.source).toContain("plan/phase2.md");
+      expect(role.provenance.source).toContain("roadmap/act-1-foundation/phase-02-hierarchical-execution.md");
       expect(role.provenance.reviewVersion).toBe(PHASE2_ROLE_REVIEW_VERSION);
       expect(parsePersonaProfile(role.persona)).toEqual(role.persona);
     }

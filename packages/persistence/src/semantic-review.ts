@@ -69,7 +69,7 @@ async function observeTerminal(
  * claimed verdict is never trusted directly: unparseable output is recorded
  * as `unsupported` with the parse failure as its reasoning, and even a
  * successfully parsed verdict is downgraded to `unsupported` if it cites no
- * durable evidence, exactly matching plan/phase3.md's stated rule.
+ * durable evidence, exactly matching roadmap/act-1-foundation/phase-03-certification-release.md's stated rule.
  */
 export async function requestSemanticReview(
   pool: Pool,

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { canonicalJson } from "./task-contract.js";
 
 /**
- * The durable evidence bundle for one Goal, per plan/phase3.md's
+ * The durable evidence bundle for one Goal, per roadmap/act-1-foundation/phase-03-certification-release.md's
  * "Evidence bundle" section. Every field is derived from already-durable
  * records; nothing here is computed or claimed independently -- this is an
  * aggregation and hashing layer, not a new source of truth.

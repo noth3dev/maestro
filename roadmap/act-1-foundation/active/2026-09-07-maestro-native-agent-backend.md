@@ -1,6 +1,6 @@
 # Maestro Native Agent Backend Implementation Plan
 
-> **Status (2026-09-08): COMPLETED MIGRATION RECORD.** The native backend and Prime removal tasks described here have landed. The checkboxes and pre-cutover task wording below are retained as design provenance; they do not override `plan/operations/task_plan.md` or current source evidence. Use this document for contracts and rationale, not for selecting the next task.
+> **Status (2026-09-08): COMPLETED MIGRATION RECORD.** The native backend and Prime removal tasks described here have landed. The checkboxes and pre-cutover task wording below are retained as design provenance; they do not override `roadmap/act-1-foundation/active/operations/task_plan.md` or current source evidence. Use this document for contracts and rationale, not for selecting the next task.
 >
 > **Historical implementation workflow:** Execute this plan task by task and keep the checkboxes updated. Use the repository's current agent workflow.
 >
@@ -12,7 +12,7 @@
 
 **Tech Stack:** TypeScript, Node.js, Fastify 5, Zod 4, PostgreSQL/`pg`, native `fetch`/`AbortController`, OpenAI Responses API, Anthropic Messages API, Vitest, existing `@maestro/api-client` and `@maestro/contracts` packages.
 
-**Spec:** `plan/specs/2026-09-07-maestro-native-agent-backend-design.md`
+**Spec:** `roadmap/act-1-foundation/specs/2026-09-07-maestro-native-agent-backend-design.md`
 
 ## Global Constraints
 
@@ -103,7 +103,7 @@ The following contract details are binding and override any earlier abbreviated 
 - `packages/prime-adapter/*` — delete after migration; migrate useful contract tests to native runtime tests.
 - `apps/control-plane/src/*.test.ts`, `apps/device-agent/src/*.test.ts`, and other config fixtures — remove `primeAgentVersion` and use native runtime test injection.
 - `apps/cli/src/main.ts` and TUI command files — add conversation/model/auth commands while preserving existing typed commands.
-- `plan/operations/findings.md`, `plan/operations/progress.md`, and `plan/operations/task_plan.md` — append implementation evidence after each verified slice.
+- `roadmap/act-1-foundation/active/operations/findings.md`, `roadmap/act-1-foundation/active/operations/progress.md`, and `roadmap/act-1-foundation/active/operations/task_plan.md` — append implementation evidence after each verified slice.
 
 ---
 
@@ -757,7 +757,7 @@ git add apps/cli docs
 
 **Files:**
 - Modify/add focused contract and integration tests across `packages/agent-runtime`, provider packages, `apps/control-plane`, `packages/persistence`, and CLI/TUI.
-- Modify: `plan/operations/findings.md`, `plan/operations/progress.md`, `plan/operations/task_plan.md` with evidence only after each gate.
+- Modify: `roadmap/act-1-foundation/active/operations/findings.md`, `roadmap/act-1-foundation/active/operations/progress.md`, `roadmap/act-1-foundation/active/operations/task_plan.md` with evidence only after each gate.
 
 **Interfaces:**
 - Consumes: Tasks 1–7 complete implementation.
@@ -793,7 +793,7 @@ Have a separate reviewer inspect the full diff and evidence against the spec. Th
 
 - [ ] **Step 7: Record final evidence and commit**
 
-Append exact command output and remaining environmental limitations to `plan/operations/findings.md`/`plan/operations/progress.md`. Only after verification:
+Append exact command output and remaining environmental limitations to `roadmap/act-1-foundation/active/operations/findings.md`/`roadmap/act-1-foundation/active/operations/progress.md`. Only after verification:
 
 ```bash
 git diff --check

@@ -4,7 +4,7 @@ export class GitOperationError extends Error {}
  * A minimal, provider-neutral local Git execution port. No remote push,
  * shared merge, history rewriting, release, or deployment operation is
  * exposed here by construction -- those remain blocked critical actions
- * per plan/phase2.md's Git execution model, point 9.
+ * per roadmap/act-1-foundation/phase-02-hierarchical-execution.md's Git execution model, point 9.
  */
 export interface GitPort {
   createBranch(repositoryPath: string, branchName: string, baseRevision: string): Promise<void>;

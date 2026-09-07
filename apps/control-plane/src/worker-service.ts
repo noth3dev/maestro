@@ -16,7 +16,7 @@ export interface WorkerServiceDependencies {
   /**
    * Phase 5 capacity-model first slice: a project-wide worker-slot ceiling. Absent by default
    * (unlimited, matching current behavior); set to enable admission control. A future revision
-   * may partition this by risk class per plan/phase5.md's capacity model instead of one flat cap.
+   * may partition this by risk class per roadmap/act-1-foundation/phase-05-concurrent-goals-portfolio.md's capacity model instead of one flat cap.
    */
   maxConcurrentWorkersPerProject?: number;
 }

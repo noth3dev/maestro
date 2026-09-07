@@ -1,6 +1,6 @@
 # Phase 5 Execution Slices — Runtime, Device, Operator
 
-> **Current status (2026-09-07):** The original `hardening/lifecycle` baseline is historical. Use `plan/operations/task_plan.md` and `plan/operations/progress.md` for the current `main` pointer; this slice plan does not override the native backend migration or current repository evidence.
+> **Current status (2026-09-07):** The original `hardening/lifecycle` baseline is historical. Use `roadmap/act-1-foundation/active/operations/task_plan.md` and `roadmap/act-1-foundation/active/operations/progress.md` for the current `main` pointer; this slice plan does not override the native backend migration or current repository evidence.
 
 
 **Decision date:** 2026-09-05  

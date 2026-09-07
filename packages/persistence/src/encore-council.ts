@@ -46,7 +46,7 @@ export interface EncoreCouncilResult {
   readonly synthesis: EncoreSynthesis;
 }
 
-/** Advisory: reports which plan/phase3.md trigger conditions are currently true for this Goal, from real durable state. Does not itself gate round creation -- Concertmaster/a Head decides whether to act on it. */
+/** Advisory: reports which roadmap/act-1-foundation/phase-03-certification-release.md trigger conditions are currently true for this Goal, from real durable state. Does not itself gate round creation -- Concertmaster/a Head decides whether to act on it. */
 async function evaluateEncoreCouncilTriggerWithClient(pool: Pick<Pool | PoolClient, "query">, goalId: string): Promise<readonly EncoreTriggerReason[]> {
   const council = await pool.query<{ decision_packet: { departmentOwnership?: readonly unknown[] } | null }>(
     "SELECT decision_packet FROM head_councils WHERE goal_id = $1 AND state = 'resolved' ORDER BY created_at DESC LIMIT 1",

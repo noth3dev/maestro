@@ -37,7 +37,7 @@ Phase 6 Step 1 is accepted as an immutable, project-private Improvement Digest s
 
 > [!IMPORTANT]
 > **Operational Usability Gate Disclaimer:**  
-> Code and PostgreSQL evidence are not the same as a release claim. The native conversation and Worker paths now have real Model Gateway and PostgreSQL acceptance coverage, including restart/fencing evidence. Remaining gates are explicit: product approval and implementation of production host tools; TUI parity/reconnect evidence; and independent review/production acceptance of the separately running authenticated device-agent protocol (the real-process gate itself is implemented). These items are tracked in `plan/operations/task_plan.md`, not hidden behind a generic “code complete” label.
+> Code and PostgreSQL evidence are not the same as a release claim. The native conversation and Worker paths now have real Model Gateway and PostgreSQL acceptance coverage, including restart/fencing evidence. Remaining gates are explicit: product approval and implementation of production host tools; TUI parity/reconnect evidence; and independent review/production acceptance of the separately running authenticated device-agent protocol (the real-process gate itself is implemented). These items are tracked in `roadmap/act-1-foundation/active/operations/task_plan.md`, not hidden behind a generic “code complete” label.
 
 ---
 
@@ -45,7 +45,7 @@ Phase 6 Step 1 is accepted as an immutable, project-private Improvement Digest s
 
 ### 1) Luthiery (Dynamic MCP Workshop)
 
-**Luthiery** (Phase 9 candidate) enables agents to generate, audit, run, and reuse specialized **Model Context Protocol (MCP)** servers dynamically during task execution without compromising core safety boundaries ([`plan/post-phase8-ideas.md`](../../plan/post-phase8-ideas.md)).
+**Luthiery** (Phase 9 candidate) enables agents to generate, audit, run, and reuse specialized **Model Context Protocol (MCP)** servers dynamically during task execution without compromising core safety boundaries ([`roadmap/act-1-foundation/phase-09-luthiery.md`](../../roadmap/act-1-foundation/phase-09-luthiery.md)).
 
 ```mermaid
 flowchart LR
@@ -67,7 +67,7 @@ flowchart LR
 
 ### 2) Autonomous Treasury & Real Capital Wallet
 
-**Autonomous Treasury** (Phase 9/10 candidate) embeds a durable, system-managed wallet into Maestro, granting the orchestration system real financial capability to autonomously pay for APIs, cloud computing resources, and Web3 smart contract interactions using pre-funded capital ([`plan/post-phase8-ideas.md`](../../plan/post-phase8-ideas.md)).
+**Autonomous Treasury** (Phase 9/10 candidate) embeds a durable, system-managed wallet into Maestro, granting the orchestration system real financial capability to autonomously pay for APIs, cloud computing resources, and Web3 smart contract interactions using pre-funded capital ([`roadmap/act-1-foundation/phase-10-autonomous-treasury.md`](../../roadmap/act-1-foundation/phase-10-autonomous-treasury.md)).
 
 #### Core Treasury Principles
 1. **Pre-funded Capital Model**: Orchestration operates on user-funded/pre-charged capital (Web3 crypto assets & traditional fiat payment rails like Stripe/Plaid).

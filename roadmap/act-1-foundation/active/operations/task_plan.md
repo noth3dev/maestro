@@ -25,13 +25,13 @@ Read `docs/OPERATING_PROTOCOL.md` first, every session, before doing anything el
 ## Historical assumptions and boundaries
 The original Phase 1/2 execution assumptions below are retained as history. They do not override the current canonical status above. Current work is on `main`; remote push is authorized by the user's current instruction, while deployment, external sends, credential changes, and destructive deletion remain separately gated.
 - Phase 1 and Phase 2 are implemented incrementally with test-first proof for each behavior.
-- Planning sources read in full before execution: `plan1.md`, `plan/phase1.md`, `plan/phase2.md`.
+- Planning sources read in full before execution: `plan1.md`, `roadmap/act-1-foundation/phase-01-durable-control-plane.md`, `roadmap/act-1-foundation/phase-02-hierarchical-execution.md`.
 
 ## Success criteria
 1. Phase 1 critical foundations have durable state, recovery-safe concurrency controls, and executable evidence.
 2. Phase 2 supports a bounded local Goal from Task Contract through hierarchical Head/worker execution and Git integration.
 3. Each slice has a focused failing test before implementation and full `npm run check` evidence after it.
-4. Every design or implementation decision is recorded in `plan/operations/findings.md` and `plan/operations/progress.md`.
+4. Every design or implementation decision is recorded in `roadmap/act-1-foundation/active/operations/findings.md` and `roadmap/act-1-foundation/active/operations/progress.md`.
 
 
 ## Historical cutover status — 2026-09-08 (superseded by canonical status above)
@@ -49,10 +49,10 @@ The original Phase 1/2 execution assumptions below are retained as history. They
 - [in_progress] 4. Implement Phase 2 Task Contract and Secretary intake vertical slice. Organization/personas (`2e8e5a5`), Overture Task Contract (`c653760`/`c89042d`), Head activation (`b835564`/`ac65c8d`) done on branches, not yet merged to `main`.
 - [complete] 5. Head Council sealed-submission slice (P2S5) accepted after independent review and real-PostgreSQL verification on `phase2/p2s5-integration` (7a627a2): 254 passed, 1 intentional skip, 0 failed. See "Phase 2 detailed status" below for accepted boundary. Department Plans (P2S6) and beyond not started; in_progress.
 - [complete_pending_independent_review] 6. Full Phase 2 work-sequence (steps 6-12) implemented and self-audited on `phase2/p2s5-integration` (fc79c6c): 331 passed, 0 failed. A cross-cutting Council departmentOwnership authorization gap (Department Plan/budget/Git-branch creation) was found and fixed in this final self-audit. P2S5/P2S6 independently reviewed; P2S7-P2S12 self-reviewed only (subagent independent review unavailable throughout this session's back half). Proceeding to Phase 3 per user direction.
-- [complete] 7. Phase 3 (plan/phase3.md) work-sequence steps 1-10 on `phase3/integration` (`699dee1`), real-PostgreSQL verified: 453 passed, 1 intentional provider live-gate skip, 0 failed.
+- [complete] 7. Phase 3 (roadmap/act-1-foundation/phase-03-certification-release.md) work-sequence steps 1-10 on `phase3/integration` (`699dee1`), real-PostgreSQL verified: 453 passed, 1 intentional provider live-gate skip, 0 failed.
 - [complete] 8. Phase 3 step 11 (complete live release scenario) fully closed: live Prime worker execution proven (`MAESTRO_LIVE_PRIME=1`), full unsupported-assertion Encore Council round proven, forced mid-flight restart/reconciliation proven, and Tests item 18 (CLI/app parity) proven with a real-PostgreSQL end-to-end fixture (`apps/control-plane/src/read-state-parity.integration.test.ts`) asserting the CLI and `@maestro/api-client` return identical Metronome challenge, Encore Council round, certification, and Concertmaster report state for the same real Goal through a live HTTP server. Final real-PostgreSQL `npm run check`: 459 passed, 2 provider live-gate cases skipped by default, 0 failed. **Phase 3 exit gate: all 13 live-gate steps and all 18 Tests items evidenced.** Secretary UI has no dedicated panel for these four record kinds yet (Goal/event loaders only) -- a UI-layer follow-up, not a gap in the API/CLI parity claim itself.
 - [pending] 7. Run Phase 1–2 acceptance scenarios, document gaps, and report.
-- [in_progress] 9. Phase 4 (plan/phase4.md) preparation: baseline branch `phase4/integration` created from accepted Phase 3 exit gate (`1effc49`), worktree `.worktrees/p4` added, build verified clean. Recommended two-track work-sequence split recorded in plan/operations/progress.md (Track A: environments+devices, steps 1-5; Track B: Discord, steps 6-9; step 10 integrates both). Playwright dependency not yet added (needed for step 3). Implementation not yet started.
+- [in_progress] 9. Phase 4 (roadmap/act-1-foundation/phase-04-environments-devices-incidents.md) preparation: baseline branch `phase4/integration` created from accepted Phase 3 exit gate (`1effc49`), worktree `.worktrees/p4` added, build verified clean. Recommended two-track work-sequence split recorded in roadmap/act-1-foundation/active/operations/progress.md (Track A: environments+devices, steps 1-5; Track B: Discord, steps 6-9; step 10 integrates both). Playwright dependency not yet added (needed for step 3). Implementation not yet started.
 
 ## Historical next-step note
 The former Phase 5 remediation pointer is retained for chronology. Use the canonical status block above and the latest progress/findings entries for the next action.
@@ -80,7 +80,7 @@ The native runtime boundary remains provider-neutral and supports future gateway
 
 ## Naming decision (deferred, for Phase 2+)
 - User confirmed: rename Initiator Crew to "Overture" when Phase 2 Initiator/intake work is implemented. Use "Overture" as the actual name at that time, not "Initiator Crew".
-- "Vanguard" (rapid-response taskforce from plan/extra.md in the main workspace) is explicitly deferred to a later phase; do not implement it in Phase 1/2.
+- "Vanguard" (rapid-response taskforce from roadmap/_meta/naming-registry.md in the main workspace) is explicitly deferred to a later phase; do not implement it in Phase 1/2.
 
 
 ## Phase 2 detailed status (as of 2026-09-01, this session)
@@ -91,7 +91,7 @@ The native runtime boundary remains provider-neutral and supports future gateway
 - `phase2/overture-task-contract` (`c653760`) -> merged into `phase2/head-activation`'s ancestor `c89042d`: Task Contract editor, content identity, amendment, confirmation. Work-sequence step 3.
 - `phase2/head-activation` (`b835564`) -> `phase2/head-activation-hardening` etc. all converge at `ac65c8d`: goal-scoped Head activation, duplicate/cycle prevention. Work-sequence step 4.
 - `phase2/overture-organization`, `phase2/persona-baseline`: also at `ac65c8d`, no further unmerged commits found this session.
-- `phase2/overture-role-refresh`: at `ac65c8d` with an uncommitted, uncomitted-but-inspected WIP diff (`packages/domain/src/task-contract.ts`/`.test.ts`, 2 files, +62/-9). It renames the placeholder Overture role IDs (`project-context-scout`, `requirements-analyst`) to the plan's actual canonical six-role pool (`conversation-lead`, `architecture-analyst`, `external-research-scout`, `security-evaluator`, `design-mock-specialist`, `task-editor` — see plan/phase2.md "Concertmaster and Task Contract flow") and adds `canonicalizeOvertureRoles` for legacy-value migration. This is a real, in-scope fix, not stale/junk. Not yet committed or test-run this session.
+- `phase2/overture-role-refresh`: at `ac65c8d` with an uncommitted, uncomitted-but-inspected WIP diff (`packages/domain/src/task-contract.ts`/`.test.ts`, 2 files, +62/-9). It renames the placeholder Overture role IDs (`project-context-scout`, `requirements-analyst`) to the plan's actual canonical six-role pool (`conversation-lead`, `architecture-analyst`, `external-research-scout`, `security-evaluator`, `design-mock-specialist`, `task-editor` — see roadmap/act-1-foundation/phase-02-hierarchical-execution.md "Concertmaster and Task Contract flow") and adds `canonicalizeOvertureRoles` for legacy-value migration. This is a real, in-scope fix, not stale/junk. Not yet committed or test-run this session.
 - `phase2/sealed-submissions`: `ac65c8d` -> `59bc408` (**new, this session**) — sealed-submission snapshot primitive (`packages/domain/src/sealed-submission.ts`), 4/4 unit tests pass.
 - `phase2/council-briefs`: `ac65c8d` -> merged `59bc408` -> `d86ba7f` (**new, this session**) — Head Council domain/persistence (independent briefs seal/reveal, deliberation rounds, stop-after-two-empty-rounds, decision packet with escalation-on-unresolved-conflict), now bound to a real frozen sealed-submission snapshot (`snapshot_hash` column, migration `0013_council_briefs.sql`) -> `f861c5b` (docs). This is work-sequence step 5.
 
@@ -101,7 +101,7 @@ The native runtime boundary remains provider-neutral and supports future gateway
 - NOT done: independent (no-edit) review of the sealed-submission/council slice. Per this project's own acceptance policy (see "Commit checkpoint policy" above), do not treat it as accepted until reviewed.
 - `phase2/overture-role-refresh` worktree has an unreviewed, uncommitted working-tree edit to `task-contract.ts`/`task-contract.test.ts` from a prior stalled session — needs inspection before use.
 
-### Work sequence remaining (plan/phase2.md "Work sequence", steps 6-12)
+### Work sequence remaining (roadmap/act-1-foundation/phase-02-hierarchical-execution.md "Work sequence", steps 6-12)
 6. Department Plan schema, reconciliation, revisions, worker linkage — only after a resolved Council packet bound to the exact frozen contract/evidence snapshot is durable. **Now unblocked** by this session's snapshot-hash binding. **Not started.**
 7. Mission bundles and least-privilege capability selection. **Not started.**
 8. Scout and Execution worker lifecycles through the native runtime hierarchy. **Not started.**
@@ -112,7 +112,7 @@ The native runtime boundary remains provider-neutral and supports future gateway
 
 ### Parallelization plan (dispatch target)
 - Worktrees `.worktrees/phase2-*` already exist per work item; each Sonnet subagent should work in exactly one worktree/branch, test-first (TDD), run `npm run build && npm test` before reporting, and never claim "accepted" — only "self-verified, pending independent review."
-- Steps 6-9 (Department Plans, mission bundles, worker lifecycle, request-for-help) are logically sequential per plan/phase2.md dependencies (each later step consumes durable state the prior step produces), so full step-level parallelism is NOT safe without careful interface staging. Recommended split for first parallel wave:
+- Steps 6-9 (Department Plans, mission bundles, worker lifecycle, request-for-help) are logically sequential per roadmap/act-1-foundation/phase-02-hierarchical-execution.md dependencies (each later step consumes durable state the prior step produces), so full step-level parallelism is NOT safe without careful interface staging. Recommended split for first parallel wave:
   - Agent A: Department Plan schema/persistence/domain validation (step 6) in a new `.worktrees/phase2-department-plans` worktree branched from `phase2/council-briefs` HEAD (`f861c5b`), since it directly consumes the Council decision packet.
   - Agent B: independent no-edit review of the sealed-submission/council slice already committed, so it can be marked accepted or sent back for repair.
   - Agent C: finish and verify the in-progress canonical Overture role rename in `phase2-overture-role-refresh` (`task-contract.ts`), run `npm run build && npm test`, then commit — this must land before Department Plans/mission bundles reference role IDs by name.
@@ -334,7 +334,7 @@ the re-patch execution order moves on to Phase 2's remaining items below.
    intentional live-Prime skips, 0 failed.
 
 4. **[RESOLVED 2026-09-04, commit `b294a95` (merge of `06fab8d`)]** Mission persona overlay
-   (plan/phase2.md "Ten-axis persona baseline") previously had zero implementation. Fixed:
+   (roadmap/act-1-foundation/phase-02-hierarchical-execution.md "Ten-axis persona baseline") previously had zero implementation. Fixed:
    `packages/domain/src/mission-bundle.ts` adds `deriveMissionPersonaOverlay` (Department style +
    Head choice ten-axis profiles averaged, then nudged per-axis by four [0,1] scalar factors —
    taskAmbiguity, risk, collaborationDemand, evidenceBurden — every axis explicitly clamped to
@@ -437,7 +437,7 @@ avoid duplicate item IDs.
 ### Feature-completeness (real-world usability) sweep — completed directly 2026-09-04
 The dispatched subagent aborted mid-run with no findings (see above); the parent session completed
 this sweep directly by reading `apps/cli/src/main.ts`, `apps/secretary/src/goal-page.tsx`,
-`apps/control-plane/src/server.ts`, `apps/discord/src/main.ts`, and plan/phase2.md's Concertmaster/Task
+`apps/control-plane/src/server.ts`, `apps/discord/src/main.ts`, and roadmap/act-1-foundation/phase-02-hierarchical-execution.md's Concertmaster/Task
 Contract flow. This is additional to (not a duplicate of) the known "no write-command API surface"
 P0 items already listed per-phase above; it grounds two of those gaps in their single sharpest
 concrete illustration each, plus two smaller cross-cutting gaps not previously called out.
@@ -451,7 +451,7 @@ concrete illustration each, plus two smaller cross-cutting gaps not previously c
 2. **[Phase 4, illustrates known Discord notification gap]** `apps/discord/src/main.ts:89`'s
    `main()` wires Discord's own delivery transport to a stub that immediately throws `"No delivery
    transport configured"` — there is no default delivery implementation at all, and no Discord/
-   desktop emergency-notification channel exists anywhere in the codebase despite plan/phase4.md
+   desktop emergency-notification channel exists anywhere in the codebase despite roadmap/act-1-foundation/phase-04-environments-devices-incidents.md
    #46 explicitly promising "one pre-approved out-of-band emergency channel ... a dedicated Discord
    emergency channel or enrolled-device desktop notification" for exactly the case (main control
    plane unavailable) Discord exists to handle.
@@ -544,8 +544,8 @@ Two independent read-only audits (P1-P3 usability audit, P4 enrolled-device audi
 ## Phase 4 step 6 — Discord foundation
 - Implemented Discord authenticated signal schema, freshness and replay rejection, independent append-only buffer, and PostgreSQL receiving primitive.
 - Self-verification currently: build passed; focused Discord tests **2 passed, 0 failed**. Real-Postgres integration remains pending.
-- [in_progress] 9. Phase 4 Track B (plan/phase4.md work-sequence steps 6-9): P4S6 Discord signal foundation is self-verified with real-PostgreSQL focused evidence pending independent review; steps 7-9 are next. Track A remains isolated in `.worktrees/p4-env`.
-- [in_progress] 9. Phase 4 Track B (plan/phase4.md work-sequence steps 6-9): P4S6 hardening and P4S7 fingerprint/dedup/severity-confidence/silence slices are self-verified with real-PostgreSQL evidence, pending independent review; step 8 Incident Brief/triage/remediation composition is next. Track A remains isolated in `.worktrees/p4-env`.
+- [in_progress] 9. Phase 4 Track B (roadmap/act-1-foundation/phase-04-environments-devices-incidents.md work-sequence steps 6-9): P4S6 Discord signal foundation is self-verified with real-PostgreSQL focused evidence pending independent review; steps 7-9 are next. Track A remains isolated in `.worktrees/p4-env`.
+- [in_progress] 9. Phase 4 Track B (roadmap/act-1-foundation/phase-04-environments-devices-incidents.md work-sequence steps 6-9): P4S6 hardening and P4S7 fingerprint/dedup/severity-confidence/silence slices are self-verified with real-PostgreSQL evidence, pending independent review; step 8 Incident Brief/triage/remediation composition is next. Track A remains isolated in `.worktrees/p4-env`.
 
 
 ## 2026-09-03 — Phase 4 integration merge landed
@@ -569,7 +569,7 @@ Two independent read-only audits (P1-P3 usability audit, P4 enrolled-device audi
 
 
 ## 2026-09-03 (continued) — P4S10 integrated; Phase 4 work-sequence complete at code level
-- [complete_pending_independent_review] 9. Phase 4 (plan/phase4.md) work-sequence steps 1-10 are implemented and integrated on `phase4/integration`, with real-PostgreSQL verification stable over repeated runs (582 passed, 2 intentional live-Prime skips, 0 failed). The exit gate (device/local-policy narrow-grant task plus Discord outage/recovery/dedupe/isolated-remediation) is evidenced by two composition tests. Self-reviewed only; independent (no-edit) review of the full Phase 4 surface is the recommended next step, and merge to `main` remains behind that review per this project's existing acceptance policy.
+- [complete_pending_independent_review] 9. Phase 4 (roadmap/act-1-foundation/phase-04-environments-devices-incidents.md) work-sequence steps 1-10 are implemented and integrated on `phase4/integration`, with real-PostgreSQL verification stable over repeated runs (582 passed, 2 intentional live-Prime skips, 0 failed). The exit gate (device/local-policy narrow-grant task plus Discord outage/recovery/dedupe/isolated-remediation) is evidenced by two composition tests. Self-reviewed only; independent (no-edit) review of the full Phase 4 surface is the recommended next step, and merge to `main` remains behind that review per this project's existing acceptance policy.
 - Branches merged into `phase4/integration`: `fix/shared-migration-runner`, `phase4/p4s1-environments` (S1+S2), `phase4/p4s4-devices` (S4), `phase4/p4s6-discord` (S6+S7), `phase4/p4s5-device-grants` (S3+S5), `phase4/p4s8-incident-workflow` (S8), `phase4/p4s9-improvement-evidence` (S9), `phase4/p4s10-live-gate` (S10).
 
 
@@ -849,9 +849,9 @@ actual repo state, verified directly against `git log`/file contents on `hardeni
 (`ce94c3d`):
 
 1. **Track A1 (runtime recovery) and Track B1-B2 (device authority) are both done and verified**,
-   not merely in-progress. See plan/operations/progress.md's 2026-09-05 "Track A1 final verification" (790 tests,
+   not merely in-progress. See roadmap/act-1-foundation/active/operations/progress.md's 2026-09-05 "Track A1 final verification" (790 tests,
    real-process kill/restart) and "Phase 5 Track B1-B2 device authority implementation and
-   verification" (793 tests, real mTLS/Ed25519 process acceptance) entries. `plan/operations/progress.md`'s
+   verification" (793 tests, real mTLS/Ed25519 process acceptance) entries. `roadmap/act-1-foundation/active/operations/progress.md`'s
    "Current slice: Phase 5 Track A1" line (under "Active execution plan — Phase 5 through Phase 6")
    is superseded by those later entries in the same file; not rewritten here per this project's
    doc-log union convention, but do not treat it as the current pointer.
@@ -1063,7 +1063,7 @@ worker-device link and pause state against that concrete case rather than a hypo
 - Split `apps/cli/src/tui/entry.ts` and `apps/control-plane/src/server.ts` into smaller focused modules (`components/editors.ts`, `components/conversation-viewport.ts`, `server-input.ts`) with no behavior change; build/lint/tests green throughout.
 - Added durable native-admission binding evidence (`native_execution_bindings`, migration `0070`) across every native call site (Worker, Head, semantic review, Encore reviewers, team-lead helper) via a shared `recordNativeExecutionBindingIfSupported` bridge that fails closed (cancels + releases the provider session) if durable recording fails.
 - Added `.github/workflows/ci.yml` (static gate + real-PostgreSQL-service gate). The workflow file itself could not be pushed with the current token (`workflow` scope missing); it is preserved on local branch `ci-workflow-pending` and every other change from that commit is already on `main` via cherry-pick.
-- Root-caused and fixed a real bug that a resource-exhausted host (12 stale disposable `maestro-*-postgres` containers) was masking as flaky `Connection terminated unexpectedly` failures: `device.integration.test.ts` used a stale hand-picked migration subset missing `0046_device_grants.sql`, so `revokeDevice`'s grant-revocation cascade failed once the suite actually got to run. Fixed to `applyAllMigrations`, matching every sibling device suite. See `plan/operations/findings.md` same date for full detail.
+- Root-caused and fixed a real bug that a resource-exhausted host (12 stale disposable `maestro-*-postgres` containers) was masking as flaky `Connection terminated unexpectedly` failures: `device.integration.test.ts` used a stale hand-picked migration subset missing `0046_device_grants.sql`, so `revokeDevice`'s grant-revocation cascade failed once the suite actually got to run. Fixed to `applyAllMigrations`, matching every sibling device suite. See `roadmap/act-1-foundation/active/operations/findings.md` same date for full detail.
 - Cleaned up all 12 stale Maestro disposable containers; one fresh, single, cleanly named container now runs the final full-suite rerun (`maestro-phase1-final-clean`, port 55480).
 - **Next:** confirm the final full clean single-worker PostgreSQL rerun passes end to end, then re-run build/lint/no-Prime-scan/HTTP-acceptance as the closing Phase 1 gate evidence and update the roadmap doc's Phase 1 status line accordingly.
 
@@ -1079,5 +1079,5 @@ worker-device link and pause state against that concrete case rather than a hypo
 ## 2026-09-08 — Second Phase 1 open item closed: real end-to-end native Worker acceptance
 
 - Added `apps/control-plane/src/native-worker-acceptance.integration.test.ts`, exercising the real production `createControlPlane` composition path (no injected kernel) against a real Model Gateway HTTP process and real PostgreSQL: Goal → real native Head activation → Council → Department Plan → Mission Bundle → real native Worker admission, with durable `native_execution_bindings` evidence for both admissions. This closes the previously-open "full Control Plane + PostgreSQL + Model Gateway Worker acceptance beyond the fake-provider HTTP test" item.
-- Building this test found and fixed a real production defect (see `plan/operations/findings.md`/`plan/operations/progress.md` same date): `limitsFor()` in `packages/agent-runtime/src/agent-runtime.ts` sent an unclamped `providerTimeoutMs`/`wallTimeMs` that failed the real Model Gateway wire schema for any Mission Bundle `timeCeiling` over 10 minutes -- i.e. effectively every realistic mission in this codebase's own fixtures. Fixed with a defensive clamp and a dedicated regression test; full clean single-worker real-PostgreSQL rerun after the fix: 155/155 files, 1051/1051 tests, 0 failed.
+- Building this test found and fixed a real production defect (see `roadmap/act-1-foundation/active/operations/findings.md`/`roadmap/act-1-foundation/active/operations/progress.md` same date): `limitsFor()` in `packages/agent-runtime/src/agent-runtime.ts` sent an unclamped `providerTimeoutMs`/`wallTimeMs` that failed the real Model Gateway wire schema for any Mission Bundle `timeCeiling` over 10 minutes -- i.e. effectively every realistic mission in this codebase's own fixtures. Fixed with a defensive clamp and a dedicated regression test; full clean single-worker real-PostgreSQL rerun after the fix: 155/155 files, 1051/1051 tests, 0 failed.
 - **Remaining open Phase 1 item:** production native host-tool registration/enforcement through the real gateway path. Current state (verified this session, not yet changed): `ToolRegistry` is fail-closed and correctly rejects any unregistered/out-of-grant tool call (`packages/agent-runtime/src/agent-runtime.ts`), but production composition (`apps/control-plane/src/main.ts`) always constructs an *empty* `ToolRegistry()` -- no Maestro-callback tool (e.g. a `read_goal`/`read_events`-style host tool) is registered anywhere yet. The OpenAI Codex provider adapter (`packages/model-provider-openai/src/codex-app-server.ts`) already explicitly rejects any turn request that carries tools (`"Codex app-server tool bridge is not enabled"`) and starts every underlying Codex session with `sandboxPolicy: { type: "readOnly" }` and `approvalPolicy: "never"`, so a real native Worker today is read-only text generation only -- it cannot write files, run commands, or call back into Maestro state during a turn. This is a safe, honestly-documented boundary, not a security gap, but it means "wire host tools" is a real, unscoped, product-level design task (which host tools, what data classes, what effects) rather than a small hardening fix, and should not be rushed without explicit product direction on the exact tool set.

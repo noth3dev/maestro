@@ -105,7 +105,7 @@ export const PERMANENT_DEPARTMENTS: readonly PermanentDepartment[] = Object.free
 ]);
 
 const REVIEWED_PROVENANCE: RoleProvenance = Object.freeze({
-  source: "plan/phase2.md §25–26",
+  source: "roadmap/act-1-foundation/phase-02-hierarchical-execution.md §25–26",
   sourceRevision: "ac65c8d",
   reviewedBy: "Phase 2 organization review",
   reviewedAt: "2026-09-01",

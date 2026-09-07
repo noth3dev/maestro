@@ -131,7 +131,7 @@ describeDatabase("Phase 4 exit gate: Discord detects a seeded incident while the
     expect((localGitPort as Record<string, unknown>).merge).toBeUndefined();
 
     // 6. Independent certification outcome closes the incident with
-    // retained-risk evidence, matching plan/phase4.md's "Close with
+    // retained-risk evidence, matching roadmap/act-1-foundation/phase-04-environments-devices-incidents.md's "Close with
     // resolution, retained risk, false-positive result, and Discord
     // feedback."
     const closed = await closeDiscordIncident(pool, incident.incidentId, "resolved", "Health endpoint capacity increased and independently certified.", "monitor for recurrence for 7 days", context("concertmaster"), proof);

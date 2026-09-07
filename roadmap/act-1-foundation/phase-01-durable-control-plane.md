@@ -59,7 +59,7 @@ packages/api-client
 
 ### Historical Prime Agent boundary (superseded)
 
-The following boundary describes the original design only. It is retained for migration history and is not an implementation or acceptance requirement. The current execution boundary is documented in `plan/2026-09-08-native-prime-removal-cutover.md`.
+The following boundary describes the original design only. It is retained for migration history and is not an implementation or acceptance requirement. The current execution boundary is documented in `roadmap/act-1-foundation/active/2026-09-08-native-prime-removal-cutover.md`.
 
 
 - Prime Agent owns model sessions, recursive subagents, parent/child messaging, observation, tool execution, skill loading, model availability, and continual refinement.

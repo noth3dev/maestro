@@ -1,6 +1,6 @@
 # Phase 2 — Secretary Office Core and Hierarchical Goal Execution
 
-> **Current status (2026-09-08):** The hierarchical execution surface is implemented and real PostgreSQL/native Model Gateway acceptance exists, including native Head and Worker admissions. Phase-level release acceptance remains governed by the host-tool, TUI, device, and independent-review gates in `plan/operations/task_plan.md`. Prime Agent is not part of the current implementation.
+> **Current status (2026-09-08):** The hierarchical execution surface is implemented and real PostgreSQL/native Model Gateway acceptance exists, including native Head and Worker admissions. Phase-level release acceptance remains governed by the host-tool, TUI, device, and independent-review gates in `roadmap/act-1-foundation/active/operations/task_plan.md`. Prime Agent is not part of the current implementation.
 
 
 ## Outcome

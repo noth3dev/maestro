@@ -23,7 +23,7 @@ function mapFinding(row: FindingRow): MetronomeFindingRecord {
 
 /**
  * Scans one Goal's durable state and records any newly detected findings.
- * Deterministic rules only (plan/phase3.md work-sequence step 1); model
+ * Deterministic rules only (roadmap/act-1-foundation/phase-03-certification-release.md work-sequence step 1); model
  * judgment for semantic ambiguity is a later step. Idempotent: re-scanning
  * an unchanged Goal records nothing new (unique identity per rule/evidence/
  * plan-version), matching the required "deduplicate by Goal, rule, evidence

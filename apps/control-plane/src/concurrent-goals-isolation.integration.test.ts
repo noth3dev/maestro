@@ -52,7 +52,7 @@ describeDatabase("Phase 5 readiness: concurrent Goals in one project stay isolat
     }
   });
 
-  it("keeps budget envelopes exactly per Goal (plan/phase5.md Test #2: cross-Goal budget access denial)", async () => {
+  it("keeps budget envelopes exactly per Goal (roadmap/act-1-foundation/phase-05-concurrent-goals-portfolio.md Test #2: cross-Goal budget access denial)", async () => {
     const proofA = await acquireGoalLease(pool, { goalId: goalA, ownerId: "isolation-test", leaseDurationMs: 60_000 });
     const proofB = await acquireGoalLease(pool, { goalId: goalB, ownerId: "isolation-test", leaseDurationMs: 60_000 });
     await reserveGoalBudget(pool, goalA, 10_000, "Goal A envelope", proofA, { actorId: "ceo", sessionRef: "session:ceo:a" });
@@ -67,7 +67,7 @@ describeDatabase("Phase 5 readiness: concurrent Goals in one project stay isolat
     expect(summaryA.budgetCents).not.toBe(summaryB.budgetCents);
   });
 
-  it("keeps device grants exactly per Goal even for the same enrolled device (plan/phase5.md Test #6: no overlapping device grants)", async () => {
+  it("keeps device grants exactly per Goal even for the same enrolled device (roadmap/act-1-foundation/phase-05-concurrent-goals-portfolio.md Test #6: no overlapping device grants)", async () => {
     const device = await enrollDevice(pool, { displayName: "shared laptop", deviceType: "computer", publicKey: `key-${randomUUID()}` }, { actorId: "ceo", sessionRef: "session:ceo:enroll", role: "ceo" });
     await setLocalDevicePolicy(pool, device.deviceId, { rules: [{ action: "project.file.read", targets: ["/tmp/project"] }], expiresAt: null }, { actorId: "ceo", sessionRef: "session:ceo:policy", role: "ceo" });
     const proofA = await acquireGoalLease(pool, { goalId: goalA, ownerId: "isolation-test", leaseDurationMs: 60_000 });
@@ -82,7 +82,7 @@ describeDatabase("Phase 5 readiness: concurrent Goals in one project stay isolat
     expect(grantA.capabilityToken).not.toBe(grantB.capabilityToken);
   });
 
-  it("keeps improvement digests exactly per Goal and rejects a reader without project membership (plan/phase5.md Test #2: cross-Goal evidence access denial)", async () => {
+  it("keeps improvement digests exactly per Goal and rejects a reader without project membership (roadmap/act-1-foundation/phase-05-concurrent-goals-portfolio.md Test #2: cross-Goal evidence access denial)", async () => {
     const proofA = await acquireGoalLease(pool, { goalId: goalA, ownerId: "isolation-test", leaseDurationMs: 60_000 });
     const proofB = await acquireGoalLease(pool, { goalId: goalB, ownerId: "isolation-test", leaseDurationMs: 60_000 });
     const digestInput = (goalId: string) => ({
