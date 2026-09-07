@@ -6,6 +6,15 @@ const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
 const commandId = "33333333-3333-4333-8333-333333333333";
 const goal = { goalId, projectId, state: "pausing" as const, version: 2 };
+const contractSubstance = {
+  desiredOutcome: "Ship",
+  userVisibleBehavior: ["Users can ship"], successCriteria: ["Tests pass"], liveEvidence: ["CI"], scope: ["CLI"], nonGoals: ["Unrelated work"],
+  priorities: ["Safety"], acceptableTradeoffs: ["Time"], constraints: ["Bounded"], knownEdgeCases: ["Empty input"],
+  project: { projectId, repository: "repo", immutableBaseRevision: "base", dataBoundary: "local" },
+  evidenceReferences: ["evidence-1"], approvedPreviewReferences: [], expectedGroups: ["product"], expectedDepartments: ["engineering"],
+  criticalActionExpectations: ["none"], forbiddenEffects: ["production"], environmentAssumptions: ["node"], externalServiceAssumptions: ["none"],
+  budget: { ceiling: "1", reportingExpectations: ["cost"], stoppingConditions: ["over budget"] },
+};
 
 function api(): ApiClient {
   return {
@@ -83,33 +92,41 @@ describe("TUI write commands", () => {
   it("keeps the workspace project binding when certifying a conditional Worker", async () => {
     const client = api();
     await executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "worker", action: "certify-conditional", options: {
-      "worker-id": "worker-1", kind: "security", "certification-json": JSON.stringify({ projectId: "other-project", verdict: "pass" }), "command-id": commandId,
+      "worker-id": "worker-1", kind: "security", "certification-json": JSON.stringify({ projectId: "other-project", certifyingDepartmentId: "security", substance: { verdict: "passed", findings: [], testEvidenceIds: [] } }), "command-id": commandId,
     } });
-    expect(client.certifyConditionalWorker).toHaveBeenCalledWith("worker-1", "security", { projectId, verdict: "pass" }, commandId);
+    expect(client.certifyConditionalWorker).toHaveBeenCalledWith("worker-1", "security", { projectId, certifyingDepartmentId: "security", substance: { verdict: "passed", findings: [], testEvidenceIds: [] } }, commandId);
   });
 
   it("keeps the workspace project binding when spawning a Worker", async () => {
     const client = api();
     await executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "worker", action: "spawn", options: {
-      "council-id": "council-1", "department-id": "product", "worker-json": JSON.stringify({ projectId: "other-project", workerRole: "scout" }), "command-id": commandId,
+      "council-id": "council-1", "department-id": "product", "worker-json": JSON.stringify({ projectId: "other-project", planVersion: 1, itemId: "scout-1" }), "command-id": commandId,
     } });
-    expect(client.spawnWorker).toHaveBeenCalledWith("council-1", "product", { projectId, workerRole: "scout" }, commandId);
+    expect(client.spawnWorker).toHaveBeenCalledWith("council-1", "product", { projectId, planVersion: 1, itemId: "scout-1" }, commandId);
   });
 
   it("keeps the workspace project binding when starting an Encore review", async () => {
     const client = api();
     await executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "encore", action: "review", options: {
-      "goal-id": goalId, "review-json": JSON.stringify({ projectId: "other-project", verdict: "inspect" }), "command-id": commandId,
+      "goal-id": goalId, "review-json": JSON.stringify({ projectId: "other-project", question: "Should we proceed?", criteria: [{ criterionId: "safety", description: "Preserve safety" }], evidenceIds: [], reviewerCount: 2 }), "command-id": commandId,
     } });
-    expect(client.runEncoreReview).toHaveBeenCalledWith(goalId, { projectId, verdict: "inspect" }, commandId);
+    expect(client.runEncoreReview).toHaveBeenCalledWith(goalId, { projectId, question: "Should we proceed?", criteria: [{ criterionId: "safety", description: "Preserve safety" }], evidenceIds: [], reviewerCount: 2 }, commandId);
   });
 
   it("routes Task Contract intake through the typed client", async () => {
     const client = api();
     vi.mocked(client.createTaskContract).mockResolvedValue({ contractId: "44444444-4444-4444-8444-444444444444", launchState: "awaiting_confirmation" } as never);
-    const result = await executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "task-contract", action: "create", options: { "contract-id": commandId, "substance-json": JSON.stringify({ desiredOutcome: "Ship" }) } });
+    const result = await executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "task-contract", action: "create", options: { "contract-id": commandId, "substance-json": JSON.stringify(contractSubstance) } });
     expect(result.title).toBe("Task Contract");
-    expect(client.createTaskContract).toHaveBeenCalledWith({ projectId, substance: { desiredOutcome: "Ship" } }, expect.any(String));
+    expect(client.createTaskContract).toHaveBeenCalledWith({ projectId, substance: contractSubstance }, expect.any(String));
+  });
+
+  it("rejects malformed structured JSON before invoking the typed client", async () => {
+    const client = api();
+    await expect(executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "worker", action: "spawn", options: {
+      "council-id": "council-1", "department-id": "product", "worker-json": JSON.stringify({ planVersion: "one", itemId: "scout-1" }), "command-id": commandId,
+    } })).resolves.toEqual({ title: "Unavailable", lines: ["--worker-json does not match the expected input shape"] });
+    expect(client.spawnWorker).not.toHaveBeenCalled();
   });
 
   it("routes Metronome scan as an idempotent write command", async () => {

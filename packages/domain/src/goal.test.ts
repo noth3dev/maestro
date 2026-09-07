@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InvalidGoalTransitionError, isTerminalGoalState, transitionGoal, type GoalState } from "./goal.js";
+import { InvalidGoalTransitionError, isGoalState, isTerminalGoalState, transitionGoal, type GoalState } from "./goal.js";
 
 describe("transitionGoal", () => {
   it("allows a draft goal to become ready for confirmation", () => {
@@ -71,5 +71,15 @@ describe("isTerminalGoalState", () => {
     for (const state of states) {
       expect(isTerminalGoalState(state), state).toBe(terminal.has(state));
     }
+  });
+});
+
+
+describe("isGoalState", () => {
+  it("narrows only the persisted Goal state vocabulary", () => {
+    expect(isGoalState("active")).toBe(true);
+    expect(isGoalState("recovering")).toBe(true);
+    expect(isGoalState("not-a-goal-state")).toBe(false);
+    expect(isGoalState(null)).toBe(false);
   });
 });

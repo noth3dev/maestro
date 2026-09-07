@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { isTerminalGoalState, type ExecutionKernelPort, type GoalState } from "@maestro/domain";
+import { isTerminalGoalState, toExecutionRef, toInvocationRef, type ExecutionKernelPort, type GoalState } from "@maestro/domain";
 import type { Pool } from "pg";
 import {
   LeaseUnavailableError,
@@ -379,17 +379,18 @@ async function reconcileHeadActivationCommands(
   try {
     for (const command of commands) {
       await renew();
-      const refsBound = command.providerExecutionRef !== null && command.providerInvocationRef !== null;
-      if (!refsBound) {
+      if (command.providerExecutionRef === null || command.providerInvocationRef === null) {
         // A one-sided or missing provider binding has no trustworthy cleanup
         // target. Keep it fenced and retain the command for audit/review.
         await markOrphaned(command);
         continue;
       }
+      const providerExecutionRef = command.providerExecutionRef;
+      const providerInvocationRef = command.providerInvocationRef;
       let observations: Awaited<ReturnType<ExecutionKernelPort["observe"]>>;
       try {
         observations = await withReconciliationLeaseHeartbeat(
-          () => kernel.observe(command.providerExecutionRef as never),
+          () => kernel.observe(toExecutionRef(providerExecutionRef)),
           renew,
           updateProof,
           heartbeatIntervalMs,
@@ -403,7 +404,7 @@ async function reconcileHeadActivationCommands(
         }
         continue;
       }
-      const observation = observations.find((candidate) => candidate.invocation === command.providerInvocationRef);
+      const observation = observations.find((candidate) => candidate.invocation === toInvocationRef(providerInvocationRef));
       if (observation === undefined || !["queued", "running"].includes(observation.status)) {
         await markOrphaned(command);
         continue;
@@ -411,7 +412,7 @@ async function reconcileHeadActivationCommands(
       let cancellation: { cancelled: boolean };
       try {
         cancellation = await withReconciliationLeaseHeartbeat(
-          () => kernel.cancel(command.providerInvocationRef as never),
+          () => kernel.cancel(toInvocationRef(providerInvocationRef)),
           renew,
           updateProof,
           heartbeatIntervalMs,

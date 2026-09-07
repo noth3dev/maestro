@@ -179,8 +179,8 @@ export async function createHeadCouncil(pool: Pool, request: CreateHeadCouncilRe
     if (contractRow.rowCount !== 1) throw new CouncilProtocolError("Task Contract not found for Head Council creation");
     const contract = contractRow.rows[0]!;
     const contractContent = assertLaunchedTaskContract(contract, request.contractId);
-    const contractProjectId = (contractContent as unknown as { project?: { projectId?: unknown } }).project?.projectId;
-    if (typeof contractProjectId !== "string" || contractProjectId.trim() !== goalRow.rows[0]!.project_id) {
+    const contractProjectId = contractContent.project.projectId;
+    if (contractProjectId.trim() !== goalRow.rows[0]!.project_id) {
       throw new CouncilProtocolError("Task Contract project identity does not match the Goal's project");
     }
     await assertDurableEvidenceReferences(client, request.goalId, goalRow.rows[0]!.project_id, request.evidence, "Frozen Council evidence");
@@ -196,7 +196,7 @@ export async function createHeadCouncil(pool: Pool, request: CreateHeadCouncilRe
     const snapshot = freezeSealedSubmissionSnapshot({
       projectId: goalRow.rows[0]!.project_id,
       goalId: request.goalId,
-      contract: { contractId: request.contractId, version: Number(contract.version), contentHash: contract.content_hash.trim(), content: contractContent as unknown as Readonly<Record<string, unknown>> },
+      contract: { contractId: request.contractId, version: Number(contract.version), contentHash: contract.content_hash.trim(), content: Object.fromEntries(Object.entries(contractContent)) },
       participants: participants.rows.map((row) => toHeadCouncilParticipant({
         headRoleId: row.head_role_id,
         departmentId: row.department_id,

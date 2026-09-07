@@ -1,6 +1,7 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import {
-  assertValidDeviceCommandResult, evaluateLocalDevicePolicy, isTerminalGoalState, type DeviceEnrollment, type DeviceGrantEnvelope, type DeviceGrantScope,
+  assertValidDeviceCommandResult, evaluateLocalDevicePolicy, isGoalState, isTerminalGoalState, type DeviceEnrollment, type DeviceGrantEnvelope, type DeviceGrantScope,
+  type GoalState,
   type LocalDevicePolicy, type DeviceGrantState,
 } from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
@@ -40,7 +41,7 @@ function tokenHash(token: string): string {
   if (!/^[0-9a-f]{64}$/.test(token)) throw new DeviceGrantAuthorizationError("Device capability token is malformed");
   return createHash("sha256").update(token, "utf8").digest("hex");
 }
-async function loadRuntime(client: PoolClient, input: DeviceAgentCommandInput, lockGrant: boolean): Promise<{ grant: GrantRuntimeRow; device: DeviceRuntimeRow; policy: PolicyRuntimeRow; goalProjectId: string; goalState: string; }> {
+async function loadRuntime(client: PoolClient, input: DeviceAgentCommandInput, lockGrant: boolean): Promise<{ grant: GrantRuntimeRow; device: DeviceRuntimeRow; policy: PolicyRuntimeRow; goalProjectId: string; goalState: GoalState; }> {
   const grantResult = await client.query<GrantRuntimeRow>(`SELECT grant_id, goal_id, device_id, action_types, project_paths, applications, data_scope, network_scope, issued_at, expires_at, state, capability_token_hash, highest_sequence FROM device_grants WHERE grant_id = $1${lockGrant ? " FOR UPDATE" : ""}`, [input.envelope.grantId]);
   if (grantResult.rowCount !== 1) throw new DeviceGrantAuthorizationError("Device grant is not found");
   const grant = grantResult.rows[0]!;
@@ -50,9 +51,11 @@ async function loadRuntime(client: PoolClient, input: DeviceAgentCommandInput, l
   const device = deviceResult.rows[0]!;
   const goal = await client.query<{ project_id: string; state: string }>("SELECT project_id, state FROM goals WHERE goal_id = $1", [grant.goal_id]);
   if (goal.rowCount !== 1) throw new DeviceGrantExpiredError("Device grant Goal is not found");
+  const goalState = goal.rows[0]!.state;
+  if (!isGoalState(goalState)) throw new DeviceGrantAuthorizationError("Device grant Goal state is invalid");
   const latestPolicy = await client.query<PolicyRuntimeRow>("SELECT device_id, policy_version, rules, expires_at FROM device_policies WHERE device_id = $1 ORDER BY policy_version DESC LIMIT 1", [grant.device_id]);
   if (latestPolicy.rowCount !== 1) throw new DeviceGrantAuthorizationError("Device has no local policy");
-  return { grant, device, policy: latestPolicy.rows[0]!, goalProjectId: goal.rows[0]!.project_id, goalState: goal.rows[0]!.state };
+  return { grant, device, policy: latestPolicy.rows[0]!, goalProjectId: goal.rows[0]!.project_id, goalState };
 }
 function checkEnvelopeMatches(envelope: DeviceGrantEnvelope, runtime: Awaited<ReturnType<typeof loadRuntime>>): void {
   if (runtime.grant.goal_id !== envelope.goalId || runtime.goalProjectId !== envelope.projectId || runtime.grant.device_id !== envelope.deviceId) throw new DeviceGrantAuthorizationError("Device command identity does not match its durable grant");
@@ -77,7 +80,7 @@ function checkScope(envelope: DeviceGrantEnvelope, runtime: Awaited<ReturnType<t
  */
 async function closeGrantIfLapsed(client: PoolClient, runtime: Awaited<ReturnType<typeof loadRuntime>>): Promise<"goal-closed" | "expired" | undefined> {
   if (runtime.grant.state !== "active") return undefined;
-  if (isTerminalGoalState(runtime.goalState as never)) {
+  if (isTerminalGoalState(runtime.goalState)) {
     await client.query("UPDATE device_grants SET state = 'closed' WHERE grant_id = $1 AND state = 'active'", [runtime.grant.grant_id]);
     runtime.grant.state = "closed" as DeviceGrantState;
     return "goal-closed";
@@ -94,7 +97,7 @@ function checkLive(runtime: Awaited<ReturnType<typeof loadRuntime>>, envelope: D
   if (runtime.device.state === "revoked") throw new DeviceGrantRevokedError(`Device is revoked: ${runtime.device.device_id}`);
   if (runtime.grant.state === "revoked") throw new DeviceGrantRevokedError(`Device grant is revoked: ${runtime.grant.grant_id}`);
   if (runtime.grant.state === "closed" || runtime.grant.state === "expired" || runtime.grant.expires_at.getTime() <= Date.now()) throw new DeviceGrantExpiredError(`Device grant is not active: ${runtime.grant.grant_id}`);
-  if (isTerminalGoalState(runtime.goalState as never)) throw new DeviceGrantExpiredError("Device grant Goal is closed");
+  if (isTerminalGoalState(runtime.goalState)) throw new DeviceGrantExpiredError("Device grant Goal is closed");
   if (Date.parse(envelope.expiresAt) <= Date.now()) throw new DeviceGrantExpiredError("Device command envelope is expired");
 }
 
