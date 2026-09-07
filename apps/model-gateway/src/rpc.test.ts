@@ -48,6 +48,29 @@ describe("model gateway error boundaries", () => {
     expect(response.json()).toEqual({ error: { code: "account_login_session_unknown", message: "account login session is unknown" } });
     await app.close();
   });
+
+  it("maps a real provider_unavailable code to 503, not the generic 400 (a genuine Codex process crash was previously misclassified as a client request error)", async () => {
+    const credentials = new InMemoryCredentialStore();
+    const crashingPort: ModelProviderPort = {
+      identity: { provider: "fake", id: "model-a" }, accountRef: "account-1", capabilities: new Set(["text"]),
+      async turn() { throw new CodexAppServerError("provider_unavailable", "Codex app-server is unavailable"); },
+      async cancel() { return { state: "confirmed" as const }; },
+      async close() {},
+    };
+    const dataPolicy = { allowedDataClasses: ["public"] as const, retention: "none" as const, trainsOnCustomerData: false, regions: ["us"] };
+    const registry = new ProviderRegistry();
+    registry.register({ id: "fake", authModes: ["api-key"], capabilities: new Set(["text"]), dataPolicy, listModels: () => [{ identity: crashingPort.identity, capabilities: crashingPort.capabilities, authModes: ["api-key"], dataPolicy }], create: async () => crashingPort });
+    const account = await credentials.bind({ operatorId: "operator-1", providerId: "fake", authMode: "api-key", accountRef: "account-1" }, "secret");
+    const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1" });
+    const app = buildModelGatewayServer({ gateway, token: "gateway-secret", operatorId: "operator-1" });
+    const headers = { authorization: "Bearer gateway-secret" };
+    const admit = await app.inject({ method: "POST", url: "/v1/admit", headers, payload: { requestId: "admit-crash", operatorId: "operator-1", providerId: "fake", model: { provider: "fake", id: "model-a" }, accountRef: account.accountRef, dataPolicyHash: "policy-1" } });
+    const binding = admit.json();
+    const turn = await app.inject({ method: "POST", url: "/v1/turn", headers, payload: { binding, requestId: "request-crash", sessionId: "session-1", turnId: "turn-crash", messages: [], tools: [], limits: { maxModelTurns: 1, maxToolCalls: 0, maxChildCalls: 0, maxOutputTokens: 8, maxInputBytes: 1024, maxResultBytes: 1024, providerTimeoutMs: 1000, wallTimeMs: 1000 } } });
+    expect(turn.statusCode).toBe(503);
+    expect(turn.json()).toEqual({ error: { code: "provider_unavailable", message: "provider is currently unavailable" } });
+    await app.close();
+  });
 });
 
 describe("model gateway RPC", () => {
