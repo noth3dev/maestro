@@ -167,6 +167,24 @@ import { EncoreProjectMismatchError, type EncoreService } from "./encore-service
 import { GitIntegrationError, GitIntegrationNotFoundError, CertificationError, CertificationNotFoundError, MetronomeChallengeError, MetronomeChallengeNotFoundError, MetronomeAuthorizationError, EncoreCouncilError, StaleGoalLeaseError, HeadActivationRequesterInactiveError, DiscordPersistenceError, type StoredDiscordSignal } from "@maestro/persistence";
 import { GitAuthorizationError } from "@maestro/git-adapter";
 import type { AuthenticatedDiscordSignal } from "@maestro/domain";
+import {
+  AuthenticationRequiredError,
+  AuthenticationUnavailableError,
+  CredentialForbiddenError,
+  CriticalActionDeniedError,
+  CriticalActionRequiresApprovalError,
+  RequestValidationError,
+  bearerSecret,
+  isMalformedJsonError,
+  isProjectAccessProvisioningRoute,
+  parse,
+  parseCertificationKind,
+  parseDepartmentId,
+  parseItemId,
+  parsePositiveInteger,
+  requestOperator,
+  requestProjectId,
+} from "./server-input.js";
 
 export interface DiscordSignalService {
   record(envelope: AuthenticatedDiscordSignal): Promise<StoredDiscordSignal>;
@@ -998,8 +1016,6 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const operator = requestOperator(request as { operator?: OperatorContext });
     let cursor = headerCursor ?? queryCursor ?? "0";
     let closed = false;
-    let pollTimer: unknown;
-    let heartbeatTimer: unknown;
     let polling = false;
     let backpressured = false;
     let drainListenerInstalled = false;
@@ -1046,7 +1062,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
         terminate();
       } finally { polling = false; }
     };
-    pollTimer = pollingScheduler.setInterval(() => { void poll(); }, 250);
+    const pollTimer = pollingScheduler.setInterval(() => { void poll(); }, 250);
     const writeHeartbeat = () => {
       if (closed || backpressured) return;
       const payload = ": heartbeat\n\n";
@@ -1059,7 +1075,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
         }
       }
     };
-    heartbeatTimer = pollingScheduler.setInterval(writeHeartbeat, 15_000);
+    const heartbeatTimer = pollingScheduler.setInterval(writeHeartbeat, 15_000);
     writeHeartbeat();
     return reply;
   });
@@ -1247,75 +1263,6 @@ export function buildServer({ goalService, authenticator, eventService, critical
   return app;
 }
 
-function parse<T>(schema: { safeParse(value: unknown): { success: true; data: T } | { success: false } }, value: unknown): T {
-  const parsed = schema.safeParse(value);
-  if (!parsed.success) throw new RequestValidationError();
-  return parsed.data;
-}
-function parseDepartmentId(value: unknown): string {
-  if (typeof value !== "string" || !/^[A-Za-z0-9:_-]+$/.test(value)) throw new RequestValidationError();
-  return value;
-}
-function parseItemId(value: unknown): string {
-  if (typeof value !== "string" || value.length === 0 || value.length > 200 || !/^[A-Za-z0-9._:-]+$/.test(value)) throw new RequestValidationError();
-  return value;
-}
-
-function parseCertificationKind(value: unknown): "security" | "safety_compliance" {
-  if (value !== "security" && value !== "safety_compliance") throw new RequestValidationError();
-  return value;
-}
-
-function parsePositiveInteger(value: unknown): number {
-  const parsed = typeof value === "string" ? Number(value) : value;
-  if (typeof parsed !== "number" || !Number.isSafeInteger(parsed) || parsed < 1) throw new RequestValidationError();
-  return parsed;
-}
-
-class RequestValidationError extends Error {}
-class AuthenticationRequiredError extends Error {}
-class CredentialForbiddenError extends Error {}
-class AuthenticationUnavailableError extends Error {}
-class CriticalActionDeniedError extends Error {
-  constructor(reason: string) { super(`Critical action denied: ${reason}`); }
-}
-class CriticalActionRequiresApprovalError extends Error {
-  constructor(reason: string) { super(`Critical action requires approval: ${reason}`); }
-}
-
-function bearerSecret(authorization: string | string[] | undefined): string | undefined {
-  if (typeof authorization !== "string") return undefined;
-  const match = /^Bearer ([^\s]+)$/.exec(authorization);
-  return match?.[1];
-}
-
-function requestOperator(request: { operator?: OperatorContext }): OperatorContext {
-  if (!request.operator) throw new AuthenticationRequiredError();
-  return request.operator;
-}
-
-/**
- * Reads a projectId the request itself already states, without trusting it
- * for anything beyond "which project to check membership for" -- the real
- * UUID/shape validation still happens later via the route's own zod schema.
- * Returns undefined for a route that carries no projectId at all (the four
- * read-state routes), never a fabricated value.
- */
-function isProjectAccessProvisioningRoute(url: string): boolean {
-  return url === "/v1/admin/project-access" || url.startsWith("/v1/admin/project-access?");
-}
-
-function requestProjectId(request: { query?: unknown; body?: unknown }): string | undefined {
-  const fromQuery = (request.query as { projectId?: unknown } | undefined)?.projectId;
-  const fromBody = (request.body as { projectId?: unknown } | undefined)?.projectId;
-  if (typeof fromQuery === "string" && typeof fromBody === "string" && fromQuery !== fromBody) {
-    throw new RequestValidationError();
-  }
-  if (typeof fromQuery === "string") return fromQuery;
-  if (typeof fromBody === "string") return fromBody;
-  return undefined;
-}
-
 function mapError(error: unknown): { status: number; body: StableApiError } {
   if (isMalformedJsonError(error) || error instanceof RequestValidationError) return apiError(400, "validation_error", "Invalid request");
   if (error instanceof AuthenticationRequiredError) return apiError(401, "authentication_required", "Authentication is required");
@@ -1392,8 +1339,4 @@ function mapError(error: unknown): { status: number; body: StableApiError } {
 
 function apiError(status: number, code: StableApiError["error"]["code"], message: string) {
   return { status, body: StableApiErrorSchema.parse({ error: { code, message } }) };
-}
-
-function isMalformedJsonError(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "FST_ERR_CTP_INVALID_JSON_BODY";
 }
