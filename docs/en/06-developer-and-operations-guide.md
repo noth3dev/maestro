@@ -69,8 +69,15 @@ To run real database integration suites, pass a disposable PostgreSQL URL via `M
 MAESTRO_TEST_DATABASE_URL=postgresql://maestro_test:maestro_test@127.0.0.1:55432/maestro_test npm test
 ```
 
+
+### 5) CI-equivalent PostgreSQL run
+GitHub Actions runs the static checks and a clean PostgreSQL 17 service job. To reproduce the database job locally without parallel schema races:
+```bash
+MAESTRO_TEST_DATABASE_URL=postgresql://maestro_test:maestro_test@127.0.0.1:55432/maestro_test npm test -- --pool forks --maxWorkers 1
+```
+
 ### 6) Current TUI and runtime boundary
-The CLI TUI uses `@earendil-works/pi-tui` `0.85.1` for terminal rendering, input, overlays, and scrolling. It has no execution authority and never writes PostgreSQL or provider credentials. All execution requests go through the authenticated Control Plane and native runtime.
+The CLI TUI uses `@earendil-works/pi-tui` `0.85.1` for terminal rendering, input, overlays, and scrolling. It has no execution authority and never writes PostgreSQL or provider credentials. All execution requests go through the authenticated Control Plane and native runtime. Phase 1 fixes this boundary; Phase 3 accepts the TUI as part of CLI/App parity, including cursor-safe reconnect and explicit failure states.
 
 ---
 

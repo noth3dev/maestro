@@ -23,6 +23,10 @@ Maestro 네이티브 런타임과 인증된 model gateway가 대화와 워커 �
 
 CLI TUI는 `@earendil-works/pi-tui` `0.85.1` 터미널 primitive를 사용합니다. 이는 provider나 실행 권한이 없는 표현 계층 의존성입니다.
 
+### TUI 단계 경계
+
+TUI는 두 번째 Control Plane이 아니라 운영자 표시·명령 클라이언트입니다. 권위 있는 상태 조회와 명령 전송은 `@maestro/api-client` 및 인증된 Control Plane route를 통해서만 수행합니다. PostgreSQL, Model Gateway, provider API, device transport에 직접 연결하지 않습니다. 단계 승인에는 동일한 실제 Goal에 대한 API/TUI parity, SSE cursor 보존 재연결, 명시적인 loading/error/stale 상태 표시, terminal state와 로그에 credential·prompt·raw gateway binding·secret-bearing output이 없다는 증거가 필요합니다. 터미널 입력은 lease, fencing, capability grant, approval, idempotency를 우회할 수 없습니다.
+
 ### Phase 6 Step 1 — 승인된 경계
 
 Phase 6 Step 1은 불변·프로젝트 전용 Improvement Digest slice로 승인되었습니다. 각 digest는 Goal과 프로젝트에 출처 바인딩되고, lease 권한과 멤버십 범위 조회로 보호되며, canonical content hash로 검증됩니다. 이 slice는 자동 변경, 리플레이, 롤아웃, persona 적응 또는 프로젝트 간 승격을 수행하지 않습니다. Phase 6 Step 2 이후는 별도 계획·구현·리뷰·승인 전까지 보류합니다.

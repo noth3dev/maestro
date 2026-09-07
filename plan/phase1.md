@@ -1,11 +1,11 @@
 # Phase 1 — Technical Foundation and Durable Control Plane
 
-> **Current status (2026-09-07):** This phase is a historical foundation baseline. The conversation path now uses `MaestroAgentRuntime` and `apps/model-gateway`; Prime-backed worker execution remains a legacy bridge tracked by the native backend migration plan. Phase acceptance still requires the documented operational gates.
+> **Current status (2026-09-08):** This phase is the durable foundation baseline. Conversation and worker execution use `MaestroAgentRuntime` through `apps/model-gateway`; Prime Agent has been removed completely. Phase acceptance still requires the documented operational gates and real PostgreSQL/process evidence.
 
 
 ## Outcome
 
-Create the clean-slate Maestro foundation with a provider-neutral execution seam. The original baseline used Prime Agent for execution, but the current conversation path is native; the remaining Prime-backed worker bridge is tracked by the native backend migration. At the end of this phase, one Goal can exist as durable state; the app shell and CLI can issue the same commands; authority is default-deny; pause, stop, resume, leases, events, evidence, and restart reconciliation work without any production agent hierarchy yet.
+Create the clean-slate Maestro foundation with a provider-neutral execution seam. The original baseline used Prime Agent for execution. That historical design was superseded by the native Model Gateway cutover; no Prime-backed worker bridge remains. At the end of this phase, one Goal can exist as durable state; the app shell and CLI can issue the same commands; authority is default-deny; pause, stop, resume, leases, events, evidence, and restart reconciliation work without any production agent hierarchy yet.
 
 This phase establishes the technical rules every later phase must use. Later phases may add behavior but may not create a second runtime, database, authority path, event truth, or UI-owned state.
 
@@ -15,7 +15,7 @@ This phase establishes the technical rules every later phase must use. Later pha
 
 - Node.js 24 LTS and strict TypeScript using ES modules.
 - npm workspaces. Do not add Nx or Turborepo until measured build time requires it.
-- Exact pinned Prime Agent 0.8.x release through its public TypeScript SDK.
+- Native `MaestroAgentRuntime` through the authenticated Model Gateway; provider adapters remain behind the gateway boundary.
 - Workspace layout:
 
 ```text
@@ -26,7 +26,7 @@ apps/discord                 # created in Phase 4
 packages/domain
 packages/contracts
 packages/persistence
-packages/prime-adapter
+packages/model-provider-openai / packages/model-provider-anthropic
 packages/authority
 packages/evidence
 packages/git-ops             # activated in Phase 2
@@ -55,11 +55,14 @@ packages/test-harness
 - PostgreSQL `LISTEN/NOTIFY` may reduce latency but polling the durable outbox preserves correctness.
 - No Redis, Kafka, or second job system in the first release.
 
-### Prime Agent boundary
+### Historical Prime Agent boundary (superseded)
+
+The following boundary describes the original design only. It is retained for migration history and is not an implementation or acceptance requirement. The current execution boundary is documented in `plan/2026-09-08-native-prime-removal-cutover.md`.
+
 
 - Prime Agent owns model sessions, recursive subagents, parent/child messaging, observation, tool execution, skill loading, model availability, and continual refinement.
 - Maestro owns Goal state, organization, assignment policy, authority, budgets, evidence, Department Plans, certification, and reporting.
-- Only `packages/prime-adapter` imports Prime Agent SDK types.
+- Only the historical adapter imported Prime Agent SDK types; that adapter and SDK dependency are deleted.
 - Domain ports expose spawn, resume, prompt, message, observe, cancel, model identity, tool event, usage, and invocation-status behavior.
 - Never reimplement provider routing or a Python runner.
 
@@ -178,12 +181,23 @@ On startup:
 8. Expire a grant and prove a previously allowed actor is denied.
 9. Corrupt one evidence hash and prove certification consumers reject it.
 10. Start two reconcilers and prove only one may mutate recovery state.
-11. Exercise a live Prime Agent parent/child exchange through the adapter.
+11. Exercise a live Control Plane → Model Gateway → native runtime parent/child exchange through supported HTTP/process surfaces.
 12. Verify local configuration contains no copied provider credential.
 
 ## Exit gate
 
-Phase 1 passes only when a real PostgreSQL-backed control plane can be killed and restarted while a test Goal is active, reconcile without duplicate transitions, show the same truth in app and CLI, enforce a stale lease rejection, and block an unauthorized critical action. The Prime Agent adapter must complete one live parent/child interaction using only public supported surfaces.
+Phase 1 passes only when a real PostgreSQL-backed control plane can be killed and restarted while a test Goal is active, reconcile without duplicate transitions, show the same truth in app and CLI, enforce a stale lease rejection, and block an unauthorized critical action. A real Model Gateway process must complete one native parent/child interaction using only public supported surfaces.
+
+### TUI scope and acceptance boundary
+
+The CLI TUI is a thin operator presentation surface. It uses `@earendil-works/pi-tui` for terminal rendering and `@maestro/api-client` for authenticated Control Plane reads and commands.
+
+- The TUI may render Goal state, event streams, worker/review/certification summaries, loading states, validation errors, stale-data indicators, and reconnect status.
+- The TUI must obtain all authoritative state through the Control Plane. It must not connect to PostgreSQL, the Model Gateway, provider APIs, or device transports directly.
+- The TUI must never hold, display, persist, or forward provider credentials, prompts, raw gateway bindings, or secret-bearing tool output.
+- TUI commands are ordinary authenticated Control Plane commands and remain subject to leases, fencing, capability grants, approvals, and idempotency. A terminal keypress is not authority.
+- For Phase 1 acceptance, the TUI and API client must show the same durable Goal state from a real PostgreSQL-backed server, preserve SSE cursor semantics across reconnect, and render gateway-unavailable or authorization failures without inventing local state.
+- `@earendil-works/pi-tui` remains a presentation dependency; replacing it or adding a second execution path is out of scope.
 
 ## Requirements preserved in this phase
 
@@ -239,7 +253,9 @@ Retention is a maximum, not a requirement to preserve noise. Data may be compact
 
 A CEO request to delete a project's records must also trace cross-project lessons derived from that project. Each derived lesson is then removed, re-sourced, or revalidated without the deleted evidence. Deletion remains a critical action and must produce an auditable scope and outcome report.
 
-### 27. Prime Agent is the execution kernel
+### 27. Historical execution-kernel decision (superseded)
+
+This section records the original Prime-based decision and is retained only to explain the migration. It must not be used to reintroduce Prime or a fallback.
 
 Maestro is designed to run **on top of Prime Agent**, not to replace Prime Agent with a second independent agent runtime.
 
@@ -280,7 +296,7 @@ Runtime mapping:
 ### 52. Durable restart and safe resume
 
 - A restart restores Concertmaster, launched Task Contracts, active Goals, Council decisions, participating Groups and Departments, budgets, authority grants, certification state, and the radial-tree view from durable records.
-- Recovery reconciles durable state with actual Prime Agent children, Git branches and worktrees, commits, environments, commands or processes, leases, device grants, and evidence before any write resumes.
+- Recovery reconciles durable state with actual native gateway invocations, Git branches and worktrees, commits, environments, commands or processes, leases, device grants, and evidence before any write resumes.
 - Work with valid completion evidence is not repeated.
 - Ambiguous or stale workers enter a no-write recovery state. The system checks whether their mission is still required and prevents duplicate execution before resuming or creating a successor identity.
 - Sleeping Heads restore durable identity, persona, Context Pack, and organizational memory without restoring an unnecessary execution process.
@@ -297,7 +313,7 @@ Runtime mapping:
 - Reopening the app restores current Concertmaster conversation, Goal portfolio, radial tree, incidents, Git, budget, evidence, and certification state from reconciled durable truth.
 - Severe incidents use the approved out-of-band Discord channel. Noncritical notifications may be grouped during CEO-configured quiet hours.
 
-### 57. Direct replacement with a Prime Agent-native Maestro
+### 57. Historical direct-replacement proposal (superseded)
 
 The target architecture may replace the current standalone Maestro execution model and existing Web UI rather than preserving backward compatibility with their internal design.
 
