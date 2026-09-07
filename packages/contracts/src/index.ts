@@ -107,12 +107,29 @@ export const ProviderCredentialLoginInputSchema = z.object({
 export type ProviderCredentialLoginInput = z.infer<typeof ProviderCredentialLoginInputSchema>;
 export const ProviderCredentialBindingSchema = z.object({
   bindingId: z.string().min(1).max(128),
-  providerId: z.enum(["openai", "anthropic"]),
-  authMode: z.literal("api-key"),
+  providerId: z.enum(["openai", "anthropic", "openai-codex"]),
+  authMode: z.enum(["api-key", "managed-subscription"]),
   accountRef: z.string().min(1).max(256),
   configuredAt: z.string().datetime(),
 }).strict();
 export type ProviderCredentialBinding = z.infer<typeof ProviderCredentialBindingSchema>;
+
+/** Browser-based account login is deliberately limited to the public Codex app-server boundary. */
+export const ProviderAccountLoginStartInputSchema = z.object({ providerId: z.literal("openai-codex") }).strict();
+export type ProviderAccountLoginStartInput = z.infer<typeof ProviderAccountLoginStartInputSchema>;
+export const ProviderAccountLoginStartResultSchema = z.object({
+  providerId: z.literal("openai-codex"),
+  loginId: z.string().min(1).max(256),
+  authUrl: z.string().url().max(2048),
+}).strict();
+export type ProviderAccountLoginStartResult = z.infer<typeof ProviderAccountLoginStartResultSchema>;
+export const ProviderAccountLoginStatusSchema = z.object({
+  providerId: z.literal("openai-codex"),
+  loginId: z.string().min(1).max(256),
+  state: z.enum(["pending", "succeeded", "failed", "cancelled"]),
+  message: z.string().max(512).optional(),
+}).strict();
+export type ProviderAccountLoginStatus = z.infer<typeof ProviderAccountLoginStatusSchema>;
 
 /** Project identities visible to the authenticated operator for workspace attachment. */
 export const ProjectListSchema = z.object({ projects: z.array(UuidSchema) }).strict();

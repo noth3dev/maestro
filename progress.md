@@ -2303,3 +2303,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added RPC regression coverage for auth, event forwarding, result completion, content type, and absence of provider secrets.
 - During verification, found the workspace incremental TypeScript build had stale `dist` output for newly added managed-login methods; forced compilation (`tsc -b --force`) exposed and validated the actual source. Fresh source builds remain the required CI behavior.
 - Verification: forced `tsc -b --force`, focused RPC and provider-login tests passed, full `npm test` passed with 99 files passed, 51 skipped, 0 failed (PostgreSQL-gated suites remain skipped because no test database is available).
+
+
+## 2026-09-07 — Codex app-server managed login boundary
+
+- Completed the next provider-auth slice: OpenAI Codex app-server browser login is now explicit and bounded. Control Plane routes derive operator identity from bearer auth, accept only `openai-codex`, validate the HTTPS allowlist (`chatgpt.com`/`auth.openai.com`), and expose start/status/cancel without provider secrets.
+- Model gateway owns the app-server login session, operator binding, successful managed account metadata, and cancellation. The credential store records managed-subscription metadata without inventing a gateway secret.
+- Added provider-neutral account-login contracts, API-client methods, route/RPC tests, and Codex JSON-RPC transport tests. Anthropic subscription login remains truthfully unavailable.
+- Verification after forced source compilation: full `npm test` passed with 99 files passed, 51 skipped, 0 failed; PostgreSQL-gated integration suites remain unavailable in this environment.

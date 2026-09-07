@@ -41,3 +41,18 @@ describe("Control Plane model gateway client", () => {
     expect(actual.text).toBe("ok");
   });
 });
+
+
+it("starts and polls managed account login through the narrow gateway RPC", async () => {
+  const paths: string[] = [];
+  const fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    paths.push(String(input));
+    expect(init?.headers).toMatchObject({ authorization: "Bearer gateway-secret" });
+    if (String(input).endsWith("/account-logins/start")) return response({ providerId: "openai-codex", loginId: "login-1", authUrl: "https://chatgpt.com/login" });
+    return response({ providerId: "openai-codex", loginId: "login-1", state: "succeeded" });
+  };
+  const client = createModelGatewayClient({ baseUrl: "http://127.0.0.1:4321", token: "gateway-secret", fetch });
+  await expect(client.startAccountLogin?.({ requestId: "request-1", operatorId: "operator-1", providerId: "openai-codex" })).resolves.toEqual({ providerId: "openai-codex", loginId: "login-1", authUrl: "https://chatgpt.com/login" });
+  await expect(client.accountLoginStatus?.({ requestId: "request-2", operatorId: "operator-1", providerId: "openai-codex", loginId: "login-1" })).resolves.toEqual({ providerId: "openai-codex", loginId: "login-1", state: "succeeded" });
+  expect(paths).toEqual(["http://127.0.0.1:4321/v1/account-logins/start", "http://127.0.0.1:4321/v1/account-logins/status"]);
+});

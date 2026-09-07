@@ -37,6 +37,9 @@ import {
   ModelCatalogEntrySchema,
   ProviderCredentialLoginInputSchema,
   ProviderCredentialBindingSchema,
+  ProviderAccountLoginStartInputSchema,
+  ProviderAccountLoginStartResultSchema,
+  ProviderAccountLoginStatusSchema,
   ProjectListSchema,
   GoalBudgetSummarySchema,
   GoalResultSchema,
@@ -183,6 +186,9 @@ export interface ProjectDiscoveryService {
 export interface ProviderCredentialService {
   bind(input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic"; authMode: "api-key"; secret: string }): Promise<import("@maestro/agent-runtime").GatewayCredentialBinding>;
   revoke(input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic" }): Promise<void>;
+  startAccountLogin?(input: { operatorId: string; requestId: string; providerId: "openai-codex" }): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStartResult>;
+  accountLoginStatus?(input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStatusResult>;
+  cancelAccountLogin?(input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }): Promise<void>;
 }
 
 export interface OperatorAuthenticator {
@@ -419,6 +425,34 @@ export function buildServer({ goalService, authenticator, eventService, critical
       secret: input.secret,
     });
     return reply.status(200).send(ProviderCredentialBindingSchema.parse(result));
+  });
+
+  app.post("/v1/provider-account-logins/start", async (request, reply) => {
+    if (!providerCredentials?.startAccountLogin) throw new DurableStoreUnavailableError();
+    const input = parse(ProviderAccountLoginStartInputSchema, request.body);
+    const header = request.headers["idempotency-key"];
+    const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
+    const result = await providerCredentials.startAccountLogin({ operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId, requestId, providerId: input.providerId });
+    return reply.status(200).send(ProviderAccountLoginStartResultSchema.parse(result));
+  });
+
+  app.post("/v1/provider-account-logins/status", async (request, reply) => {
+    if (!providerCredentials?.accountLoginStatus) throw new DurableStoreUnavailableError();
+    const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+    const input = parse(ProviderAccountLoginStatusSchema.pick({ providerId: true, loginId: true }), body);
+    const header = request.headers["idempotency-key"];
+    const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
+    const result = await providerCredentials.accountLoginStatus({ operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId, requestId, providerId: input.providerId, loginId: input.loginId });
+    return reply.status(200).send(ProviderAccountLoginStatusSchema.parse(result));
+  });
+
+  app.post("/v1/provider-account-logins/cancel", async (request, reply) => {
+    if (!providerCredentials?.cancelAccountLogin) throw new DurableStoreUnavailableError();
+    const input = parse(ProviderAccountLoginStatusSchema.pick({ providerId: true, loginId: true }), request.body);
+    const header = request.headers["idempotency-key"];
+    const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
+    await providerCredentials.cancelAccountLogin({ operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId, requestId, providerId: input.providerId, loginId: input.loginId });
+    return reply.status(200).send({ cancelled: true });
   });
 
   app.delete("/v1/provider-credentials/:providerId", async (request, reply) => {

@@ -57,3 +57,22 @@ describe("model gateway", () => {
     expect((await gateway.recover(binding))).toBe("reconnected");
   });
 });
+
+
+describe("managed account login", () => {
+  it("binds only metadata after the Codex app-server reports success", async () => {
+    const registry = new ProviderRegistry();
+    const credentials = new InMemoryCredentialStore();
+    const codex = {
+      startChatGptLogin: async () => ({ providerId: "openai-codex" as const, loginId: "login-1", authUrl: "https://chatgpt.com/login" }),
+      loginStatus: async () => ({ loginId: "login-1", state: "succeeded" as const }),
+      cancelLogin: async () => {},
+    };
+    const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1", codex });
+    await expect(gateway.startAccountLogin?.({ requestId: "r1", operatorId: "operator-1", providerId: "openai-codex" })).resolves.toEqual({ providerId: "openai-codex", loginId: "login-1", authUrl: "https://chatgpt.com/login" });
+    await expect(gateway.accountLoginStatus?.({ requestId: "r2", operatorId: "operator-1", providerId: "openai-codex", loginId: "login-1" })).resolves.toEqual({ providerId: "openai-codex", loginId: "login-1", state: "succeeded" });
+    const binding = await credentials.ensure("openai-codex-operator-1");
+    expect(binding).toMatchObject({ providerId: "openai-codex", authMode: "managed-subscription" });
+    await expect(credentials.resolveForGateway("openai-codex-operator-1")).rejects.toThrow("no gateway secret");
+  });
+});

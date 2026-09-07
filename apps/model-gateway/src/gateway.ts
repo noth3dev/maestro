@@ -2,8 +2,9 @@ import { randomUUID } from "node:crypto";
 import { ProviderRegistry, type ProviderReference } from "@maestro/agent-runtime";
 import type { GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialBinding, GatewayCredentialRevokeRequest, GatewayModelListRequest, GatewayTurnRequest, ModelCatalogEntry, ModelGatewayPort, ModelProviderPort, ProviderCancellationOutcome, ProviderPlugin } from "@maestro/agent-runtime";
 import type { CredentialStore } from "./credential-store.js";
+import type { CodexAppServerClient, CodexLoginStatus } from "@maestro/model-provider-openai";
 
-interface GatewayOptions {
+export interface GatewayOptions {
   readonly registry: ProviderRegistry;
   readonly credentials: CredentialStore;
   readonly instanceId: string;
@@ -11,6 +12,8 @@ interface GatewayOptions {
   readonly operatorId: string;
   /** Resolves after process-provided credentials have been registered. */
   readonly ready?: Promise<void>;
+  /** Optional public OpenAI Codex app-server account boundary. */
+  readonly codex?: Pick<CodexAppServerClient, "startChatGptLogin" | "loginStatus" | "cancelLogin" | "close">;
 }
 
 interface InternalBinding {
@@ -21,6 +24,7 @@ interface InternalBinding {
 
 export class ModelGateway implements ModelGatewayPort {
   private readonly bindings = new Map<string, InternalBinding>();
+  private readonly loginOperators = new Map<string, string>();
   private closed = false;
 
   constructor(private readonly options: GatewayOptions) {}
@@ -32,6 +36,46 @@ export class ModelGateway implements ModelGatewayPort {
     const bindings = await this.options.credentials.list(this.options.operatorId);
     const providers = new Set(bindings.map((binding) => binding.providerId));
     return (await this.options.registry.listModels()).filter((model) => providers.has(model.identity.provider));
+  }
+
+  async startAccountLogin(request: import("@maestro/agent-runtime").GatewayAccountLoginStartRequest): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStartResult> {
+    if (this.closed) throw new Error("model gateway is closed");
+    await this.options.ready;
+    if (request.operatorId !== this.options.operatorId) throw new Error("credential operator context mismatch");
+    if (request.providerId !== "openai-codex" || this.options.codex === undefined) throw new Error("account login is unavailable");
+    const login = await this.options.codex.startChatGptLogin();
+    this.loginOperators.set(login.loginId, request.operatorId);
+    return login;
+  }
+
+  async accountLoginStatus(request: import("@maestro/agent-runtime").GatewayAccountLoginStatusRequest): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStatusResult> {
+    if (this.closed) throw new Error("model gateway is closed");
+    await this.options.ready;
+    this.assertLoginOperator(request);
+    if (this.options.codex === undefined) throw new Error("account login is unavailable");
+    const status = await this.options.codex.loginStatus(request.loginId);
+    if (status.state === "succeeded") {
+      const accountRef = `openai-codex-${this.options.operatorId}`;
+      const existing = await this.options.credentials.ensure(accountRef);
+      if (existing === undefined) {
+        if (this.options.credentials.bindManaged === undefined) throw new Error("managed account binding is unavailable");
+        await this.options.credentials.bindManaged({ operatorId: this.options.operatorId, providerId: "openai-codex", accountRef });
+      }
+    }
+    return { providerId: "openai-codex", loginId: request.loginId, state: status.state, ...(status.state === "failed" ? { message: status.message } : {}) };
+  }
+
+  async cancelAccountLogin(request: import("@maestro/agent-runtime").GatewayAccountLoginStatusRequest): Promise<void> {
+    if (this.closed) throw new Error("model gateway is closed");
+    await this.options.ready;
+    this.assertLoginOperator(request);
+    if (this.options.codex === undefined) throw new Error("account login is unavailable");
+    await this.options.codex.cancelLogin(request.loginId);
+  }
+
+  private assertLoginOperator(request: { operatorId: string; loginId: string }): void {
+    if (request.operatorId !== this.options.operatorId) throw new Error("credential operator context mismatch");
+    if (this.loginOperators.get(request.loginId) !== request.operatorId) throw new Error("account login session is unknown");
   }
 
   async admit(request: GatewayAdmissionRequest): Promise<GatewayBinding> {
@@ -114,6 +158,8 @@ export class ModelGateway implements ModelGatewayPort {
     this.closed = true;
     await Promise.all([...this.bindings.values()].map(({ provider }) => provider.close().catch(() => undefined)));
     this.bindings.clear();
+    this.loginOperators.clear();
+    await this.options.codex?.close().catch(() => undefined);
   }
 }
 
