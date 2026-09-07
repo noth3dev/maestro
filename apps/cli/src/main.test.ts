@@ -145,6 +145,19 @@ it("drives the Task Contract intake lifecycle through CLI commands", async () =>
 });
 
 
+it("requests a critical action through the CLI", async () => {
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ goalId, effect: "allow", reason: "policy allows", classification: "ordinary", recordId: commandId }), { status: 200 }));
+  const stdout = output();
+  const exitCode = await executeCli([
+    "critical-action", "request", "--goal-id", goalId, "--project-id", projectId,
+    "--action", "deploy", "--target", "staging", "--version", "2",
+    "--budget-effect-cents", "0", "--command-id", commandId, "--json",
+  ], env, { fetch, stdout: stdout.write, stderr: output().write });
+  expect(exitCode).toBe(0);
+  expect(JSON.parse(stdout.lines[0]!)).toMatchObject({ effect: "allow", recordId: commandId });
+  expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/critical-actions`, expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "idempotency-key": commandId }) }));
+});
+
 it("approves and runs a critical action through the CLI", async () => {
   const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ goalId, effect: "allow", reason: "exact_approval", classification: "critical", recordId: commandId }), { status: 200 }));
   const stdout = output();
