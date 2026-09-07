@@ -111,6 +111,13 @@ const MAX_WIRE_CHILD_CALLS = 100;
 const MAX_WIRE_OUTPUT_TOKENS = 1_000_000;
 const MAX_WIRE_PROVIDER_TIMEOUT_MS = 600_000;
 const MAX_WIRE_WALL_TIME_MS = 3_600_000;
+// TurnSchema also caps the messages and tools arrays themselves at 128
+// entries each (independent of their combined byte size). A long-running
+// conversation (packages/persistence's conversation_turns has no row-count
+// limit) or a Mission Bundle with many allowedTools can realistically
+// exceed 128 items while staying well under the byte budget below.
+const MAX_WIRE_MESSAGE_COUNT = 128;
+const MAX_WIRE_TOOL_DEFINITIONS = 128;
 
 function limitsFor(grant: CapabilityGrant): TurnLimits {
   const wallTimeMs = Math.min(Math.max(1, grant.remaining.wallTimeMs), MAX_WIRE_WALL_TIME_MS);
@@ -134,7 +141,7 @@ function messageBytes(message: ModelMessage): number { return Buffer.byteLength(
 function boundedMessages(messages: readonly ModelMessage[], maxBytes: number): ModelMessage[] {
   const kept: ModelMessage[] = [];
   let bytes = 0;
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
+  for (let index = messages.length - 1; index >= 0 && kept.length < MAX_WIRE_MESSAGE_COUNT; index -= 1) {
     const message = messages[index]!;
     const size = messageBytes(message);
     if (bytes + size > maxBytes) continue;
@@ -192,7 +199,7 @@ export function createMaestroAgentRuntime(options: { gateway: ModelGatewayPort; 
       let streamExceeded = false;
       const turnLimits = limitsFor(record.grant);
       try {
-        result = await options.gateway.turn({ binding: options.binding, requestId, sessionId: record.sessionId, turnId: `${record.invocation}-turn-${record.turnCount}`, messages: boundedMessages(record.messages, turnLimits.maxInputBytes), tools: options.tools.definitions(record.grant.allowedTools), limits: turnLimits, signal: record.abort.signal, emit: (event: ModelStreamEvent) => {
+        result = await options.gateway.turn({ binding: options.binding, requestId, sessionId: record.sessionId, turnId: `${record.invocation}-turn-${record.turnCount}`, messages: boundedMessages(record.messages, turnLimits.maxInputBytes), tools: options.tools.definitions(record.grant.allowedTools).slice(0, MAX_WIRE_TOOL_DEFINITIONS), limits: turnLimits, signal: record.abort.signal, emit: (event: ModelStreamEvent) => {
           if (event.kind !== "text-delta" || event.text === "") { options.onModelEvent?.(event, `${record.invocation}-turn-${record.turnCount}`); return; }
           const remaining = turnLimits.maxResultBytes - streamedBytes;
           if (remaining <= 0) { streamExceeded = true; record.abort.abort(); return; }
