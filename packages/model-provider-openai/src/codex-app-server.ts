@@ -69,7 +69,9 @@ function validateAuthUrl(value: unknown): string {
 
 function redactChildEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const childEnv = { ...env };
-  for (const key of ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "MAESTRO_API_TOKEN", "MAESTRO_MODEL_GATEWAY_TOKEN"]) delete childEnv[key];
+  for (const key of Object.keys(childEnv)) {
+    if (/(?:API_KEY|ACCESS_TOKEN|REFRESH_TOKEN|CLIENT_SECRET|PRIVATE_KEY|PASSWORD|PASSWD|CODEX_TOKEN|MAESTRO_SECRET|MAESTRO_API_TOKEN|MAESTRO_MODEL_GATEWAY_TOKEN)$/i.test(key)) delete childEnv[key];
+  }
   return childEnv;
 }
 
@@ -93,7 +95,7 @@ class StdioTransport implements CodexAppServerTransport {
     // Drain stderr without forwarding provider/account details to logs.
     this.child.stderr.resume();
     this.child.once("error", (error) => { for (const listener of this.errorListeners) listener(error); });
-    this.child.once("exit", (code, signal) => { if (code !== 0 && !this.child.killed) { for (const listener of this.errorListeners) listener(new Error(`Codex app-server exited (${code ?? signal ?? "unknown"})`)); } });
+    this.child.once("exit", (code, signal) => { if (!this.child.killed) { for (const listener of this.errorListeners) listener(new Error(`Codex app-server exited (${code ?? signal ?? "unknown"})`)); } });
   }
 
   send(message: unknown): void {
@@ -127,15 +129,16 @@ export class CodexAppServerClient {
   private nextRequestId = 1;
   private initialized?: Promise<void>;
   private closed = false;
+  private transportError: Error | undefined;
   private readonly unsubscribe: () => void;
-  private readonly unsubscribeError?: () => void;
+  private readonly unsubscribeError: (() => void) | undefined;
 
   constructor(options: CodexAppServerOptions = {}) {
     this.transport = options.transport ?? new StdioTransport(options.command ?? "codex", options.args ?? ["app-server"], options.env ?? process.env);
     this.requestTimeoutMs = options.requestTimeoutMs ?? 15_000;
     this.clientInfo = options.clientInfo ?? { name: "maestro", title: "Maestro", version: "development" };
     this.unsubscribe = this.transport.onMessage((message) => this.handleMessage(message));
-    this.unsubscribeError = this.transport.onError?.((error) => this.failPending(error));
+    this.unsubscribeError = this.transport.onError?.((error) => { this.transportError = new Error("Codex app-server is unavailable"); this.failPending(error); });
   }
 
   onNotification(listener: (message: JsonRpcNotification) => void): () => void {
@@ -164,24 +167,30 @@ export class CodexAppServerClient {
       return `${message.role}: ${text}`;
     }).join("\n\n");
     let cleanup = () => {};
+    let activeTurnId: string | undefined;
     const notifications = new Promise<{ text: string; status: "completed" | "interrupted" }>((resolve, reject) => {
       let text = "";
       const unsubscribe = this.onNotification((notification) => {
         const params = notification.params;
-        if (!isRecord(params) || params.threadId !== threadId) return;
+        if (!isRecord(params) || (params.threadId !== threadId && (!isRecord(params.turn) || params.turn.id !== activeTurnId))) return;
         if (notification.method === "item/agentMessage/delta" && typeof params.delta === "string") {
           text += params.delta;
           input.emit?.({ kind: "text-delta", cursor: text.length, text: params.delta });
         }
         if (notification.method !== "turn/completed" || !isRecord(params.turn)) return;
         const status = params.turn.status;
-        if (status === "completed") resolve({ text, status });
-        else if (status === "interrupted") resolve({ text, status });
+        if (status === "completed") {
+          if (!text && Array.isArray(params.turn.items)) {
+            text = params.turn.items.filter((item): item is Record<string, unknown> => isRecord(item) && item.type === "agentMessage" && typeof item.text === "string").map((item) => item.text as string).join("");
+          }
+          resolve({ text, status });
+        } else if (status === "interrupted") resolve({ text, status });
         else if (status === "failed") reject(new CodexAppServerError("provider_unavailable", "Codex app-server turn failed"));
       });
       void this.requestRaw("turn/start", { threadId, input: [{ type: "text", text: transcript }], model: input.model, approvalPolicy: "never", sandboxPolicy: { type: "readOnly" }, maxOutputTokens: input.maxOutputTokens }).then((turnResult) => {
         const turn = isRecord(turnResult) && isRecord(turnResult.turn) ? turnResult.turn : undefined;
         const turnId = requiredString(turn?.id, "turn.id");
+        activeTurnId = turnId;
         this.activeTurns.set(input.requestId, { threadId, turnId });
         if (input.signal.aborted) void this.requestRaw("turn/interrupt", { threadId, turnId }).catch(() => undefined);
       }).catch((error: unknown) => reject(error instanceof Error ? error : new Error("Codex app-server turn failed")));
@@ -199,6 +208,12 @@ export class CodexAppServerClient {
     try {
       const deadline = new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new CodexAppServerError("provider_unavailable", "Codex app-server turn timed out")), this.requestTimeoutMs); });
       outcome = await Promise.race([notifications, deadline]);
+    } catch (error) {
+      if (error instanceof CodexAppServerError && error.message.includes("timed out")) {
+        const active = this.activeTurns.get(input.requestId);
+        if (active) void this.requestRaw("turn/interrupt", active).catch(() => undefined);
+      }
+      throw error;
     } finally { if (timeout !== undefined) clearTimeout(timeout); this.activeTurns.delete(input.requestId); }
     if (outcome.status === "interrupted") throw new CodexAppServerError("provider_cancelled", "Codex request cancelled");
     return { requestId: input.requestId, model: { provider: "openai-codex", id: input.model }, text: outcome.text, toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
@@ -277,6 +292,7 @@ export class CodexAppServerClient {
 
   private requestRaw(method: string, params?: unknown): Promise<unknown> {
     if (this.closed) return Promise.reject(new Error("Codex app-server is closed"));
+    if (this.transportError !== undefined) return Promise.reject(this.transportError);
     const id = this.nextRequestId++;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -294,6 +310,7 @@ export class CodexAppServerClient {
       pending.reject(error);
     }
     this.pending.clear();
+    for (const [loginId, status] of this.logins) if (status.state === "pending") this.logins.set(loginId, { loginId, state: "failed", message: "Codex app-server is unavailable" });
   }
 
   private handleMessage(message: unknown): void {

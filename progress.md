@@ -2319,3 +2319,20 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added `ConversationService.recover()` and startup invocation after migrations and worker reconciliation. Added a regression proving an active conversation can be rebuilt and accept a subsequent turn.
 - This is runtime-handle recovery, not a claim that an in-flight provider token stream survives a process crash; an interrupted turn remains subject to the existing unknown-outcome boundary.
 - Forced build and full test suite passed: 99 files passed, 51 skipped, 0 failed.
+
+
+## 2026-09-07 — Account login implementation and provider boundary
+
+- Added OpenAI ChatGPT Plus/Pro browser login through the public Codex app-server JSON-RPC boundary (`account/login/start`, completion notifications, status, cancel, logout). Maestro receives only the browser URL and status metadata; the app-server owns OAuth tokens and refresh.
+- Added gateway-owned managed-subscription metadata binding, operator checks, keychain persistence without a secret field, model catalog admission, and text-only Codex turns with read-only sandbox policy. Tool bridging remains disabled until the app-server authority mapping is separately reviewed.
+- Added Control Plane/API client/RPC routes, CLI commands, TUI provider selector, browser opener, cancellation, and exact-model discovery.
+- Claude Pro/Max account OAuth is intentionally not implemented: no public/approved Anthropic protocol is available in this repository, and Prime/private endpoints or a provider CLI bypass are prohibited. Claude API-key login remains available.
+- Verification: build and focused account-login tests passed (60 tests). Full `npm run check` is the next gate; PostgreSQL and live provider/app-server acceptance remain environment-gated.
+
+
+## 2026-09-07 — Durable conversation SSE live delivery and deduplication
+
+- Conversation event SSE previously sent only the initial durable batch and one heartbeat; it now polls the durable event store while connected using the shared injectable `PollingScheduler`.
+- The stream retains its last cursor, emits only events strictly newer than that cursor, serializes poll access to prevent overlapping reads, and clears both poll and heartbeat timers on disconnect/close.
+- Reconnect remains cursor-based and therefore resumes from the caller's last acknowledged event without replaying older events. Durable-store failure closes the stream rather than emitting synthetic success.
+- Forced TypeScript build and full tests passed: 99 files passed, 51 skipped, 0 failed.

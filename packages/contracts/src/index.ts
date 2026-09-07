@@ -105,13 +105,15 @@ export const ProviderCredentialLoginInputSchema = z.object({
   secret: z.string().min(1).max(512),
 }).strict();
 export type ProviderCredentialLoginInput = z.infer<typeof ProviderCredentialLoginInputSchema>;
-export const ProviderCredentialBindingSchema = z.object({
+const ProviderCredentialBindingCommonSchema = {
   bindingId: z.string().min(1).max(128),
-  providerId: z.enum(["openai", "anthropic", "openai-codex"]),
-  authMode: z.enum(["api-key", "managed-subscription"]),
   accountRef: z.string().min(1).max(256),
   configuredAt: z.string().datetime(),
-}).strict();
+} as const;
+export const ProviderCredentialBindingSchema = z.union([
+  z.object({ ...ProviderCredentialBindingCommonSchema, providerId: z.enum(["openai", "anthropic"]), authMode: z.literal("api-key") }).strict(),
+  z.object({ ...ProviderCredentialBindingCommonSchema, providerId: z.literal("openai-codex"), authMode: z.literal("managed-subscription") }).strict(),
+]);
 export type ProviderCredentialBinding = z.infer<typeof ProviderCredentialBindingSchema>;
 
 /** Browser-based account login is deliberately limited to the public Codex app-server boundary. */

@@ -1004,3 +1004,12 @@ worker-device link and pause state against that concrete case rather than a hypo
 - [completed] Verify full build/test suite and gateway process health smoke.
 - [completed] Add the first API-key credential lifecycle slice for OpenAI/Anthropic: strict contracts, hidden TUI/TTY input, authenticated Control Plane routes, gateway bind/revoke RPC, operator checks, replacement invalidation, and gateway-owned keychain persistence.
 - [remaining] Add provider token streaming, durable restart reattachment/recovery, tool registry persistence, Codex app-server pairing, PostgreSQL integration acceptance, dynamic signed gateway operator context, and remove legacy Prime composition after parity.
+
+
+## 2026-09-07 — Public account login slice
+
+- [completed] Implement OpenAI ChatGPT Plus/Pro browser login via public Codex app-server managed-login JSON-RPC.
+- [completed] Add selector, browser opener, Control Plane/gateway/API client routes, metadata-only managed binding, logout, and exact model catalog filtering.
+- [completed_with_boundary] Keep Maestro tool authority separate; Codex account turns are text-only/read-only until the tool bridge is independently specified and tested.
+- [blocked] Claude Pro/Max account OAuth awaits an official public or written-approved Anthropic protocol. Private Prime OAuth and CLI credential bypasses remain prohibited.
+- [remaining] Durable login idempotency/restart ownership, PostgreSQL acceptance, real Codex app-server acceptance, and full streaming/tool parity.

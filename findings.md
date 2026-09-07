@@ -646,3 +646,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - **Boundary:** provider API keys travel only from hidden TUI/TTY input to the authenticated Control Plane, then across the narrow authenticated gateway RPC. The gateway persists the encrypted/native keychain envelope and exposes only binding metadata. No API key is accepted as a command-line option.
 - **Boundary:** the gateway rejects credential bind/admit requests whose operator context does not match its configured local operator. Multi-operator dynamic gateway context and signed service assertions remain future work; local bootstrap aligns fresh local operators to `local-operator`.
 - **Open acceptance:** the keychain backend and live provider calls still need a host with an available OS keychain, configured gateway token, provider key, and real PostgreSQL process test.
+
+
+## 2026-09-07 — Account OAuth boundary review
+
+- **Accepted:** OpenAI account login is delegated to the documented public Codex app-server managed-login protocol. Maestro does not implement OAuth endpoints, exchange codes, handle refresh tokens, or persist provider tokens.
+- **Accepted:** Codex app-server starts as a shell-free child with provider credential-like environment variables removed. Maestro sends only validated provider/model/message data and uses a read-only sandbox; Maestro tool calls are rejected until a separate authority bridge exists.
+- **Blocked:** Claude Pro/Max subscription OAuth requires an official public or explicitly approved Anthropic protocol. Reusing Prime's private flow, undocumented endpoints/scopes, or the Claude CLI as a credential bridge would violate the project boundary.
+- **Open:** Login request idempotency and restart-safe login session ownership still need durable records before production release.

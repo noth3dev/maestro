@@ -897,7 +897,16 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const operator = requestOperator(request as { operator?: OperatorContext });
     let cursor = query.after;
     let closed = false;
-    const cleanup = () => { if (closed) return; closed = true; activeStreams.delete(terminate); };
+    let pollTimer: unknown;
+    let heartbeatTimer: unknown;
+    let polling = false;
+    const cleanup = () => {
+      if (closed) return;
+      closed = true;
+      if (pollTimer !== undefined) pollingScheduler.clearInterval(pollTimer);
+      if (heartbeatTimer !== undefined) pollingScheduler.clearInterval(heartbeatTimer);
+      activeStreams.delete(terminate);
+    };
     const terminate = () => { if (closed) return; if (!reply.raw.writableEnded) reply.raw.end(); cleanup(); };
     if (activeStreams.size >= maxActiveStreams) throw new Error("SSE stream capacity reached");
     request.raw.once("aborted", cleanup); reply.raw.once("close", cleanup); activeStreams.add(terminate);
@@ -909,6 +918,20 @@ export function buildServer({ goalService, authenticator, eventService, critical
     catch { cleanup(); throw new DurableStoreUnavailableError(); }
     if (closed) return reply;
     reply.hijack(); reply.raw.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" }); reply.raw.flushHeaders(); write([...initial]);
+    const poll = async () => {
+      if (closed || polling) return;
+      polling = true;
+      try {
+        const listed = await conversations.listEvents(conversationId, query.projectId, cursor, operator);
+        // The durable cursor is the deduplication key. A reconnect or a repeated
+        // poll can never emit an event that is not strictly newer than `cursor`.
+        write([...listed].filter((event) => BigInt(event.cursor) > BigInt(cursor)));
+      } catch {
+        terminate();
+      } finally { polling = false; }
+    };
+    pollTimer = pollingScheduler.setInterval(() => { void poll(); }, 250);
+    heartbeatTimer = pollingScheduler.setInterval(() => { if (!closed) reply.raw.write(": heartbeat\n\n"); }, 15_000);
     if (!closed) reply.raw.write(": heartbeat\n\n");
     return reply;
   });

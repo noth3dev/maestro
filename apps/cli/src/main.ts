@@ -140,8 +140,8 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     }
     if (resource === "login" && action === "openai-codex") {
       const login = await client.startAccountLogin();
-      io.stdout(`Opening ChatGPT account login in your browser: ${login.authUrl}\n`);
-      try { await (io.openExternalUrl ?? openExternalUrl)(login.authUrl); } catch { io.stdout(`If the browser did not open, visit: ${login.authUrl}\n`); }
+      if (!json) io.stdout(`Opening ChatGPT account login in your browser: ${login.authUrl}\n`);
+      try { await (io.openExternalUrl ?? openExternalUrl)(login.authUrl); } catch { if (!json) io.stdout(`If the browser did not open, visit: ${login.authUrl}\n`); }
       const timeoutMs = Number(env.MAESTRO_LOGIN_TIMEOUT_MS ?? "120000");
       const pollMs = Number(env.MAESTRO_LOGIN_POLL_MS ?? "500");
       const deadline = Date.now() + (Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 120_000);

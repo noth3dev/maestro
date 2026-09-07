@@ -66,3 +66,22 @@ it("runs a text turn through the managed app-server and supports cancellation", 
   await expect(resultPromise).resolves.toMatchObject({ requestId: "request-1", model: { provider: "openai-codex", id: "gpt-5.3-codex" }, text: "Hello from Codex" });
   await client.close();
 });
+
+
+it("creates a managed-subscription provider with a text-only catalog", async () => {
+  const transport = new FakeTransport();
+  const client = new CodexAppServerClient({ transport });
+  const plugin = (await import("./codex-app-server.js")).createCodexAppServerPlugin({ client, models: ["gpt-5.3-codex"] });
+  expect(plugin.listModels()).toEqual([expect.objectContaining({ identity: { provider: "openai-codex", id: "gpt-5.3-codex" }, authModes: ["managed-subscription"] })]);
+  const provider = await plugin.create({ model: { provider: "openai-codex", id: "gpt-5.3-codex" }, account: { providerId: "openai-codex", accountRef: "openai-codex-operator-1", authMode: "managed-subscription" }, dataPolicyHash: "policy" });
+  await expect(provider.turn({ requestId: "request-1", sessionId: "session-1", turnId: "turn-1", messages: [], tools: [], limits: { maxModelTurns: 1, maxToolCalls: 0, maxChildCalls: 0, maxOutputTokens: 100, maxInputBytes: 1000, maxResultBytes: 1000, providerTimeoutMs: 1000, wallTimeMs: 1000 }, signal: new AbortController().signal, emit: () => {} })).resolves.toMatchObject({ model: { provider: "openai-codex" } });
+  await client.close();
+});
+
+
+it("speaks JSONL to a real shell-free app-server child process", async () => {
+  const script = `if(process.env.TEST_API_KEY) process.exit(7); const rl=require("node:readline").createInterface({input:process.stdin}); rl.on("line", line => { const m=JSON.parse(line); if(m.method === "initialize") process.stdout.write(JSON.stringify({id:m.id,result:{}})+"\\n"); if(m.method === "account/login/start") process.stdout.write(JSON.stringify({id:m.id,result:{type:"chatgpt",loginId:"child-login",authUrl:"https://chatgpt.com/login"}})+"\\n"); });`;
+  const client = new CodexAppServerClient({ command: process.execPath, args: ["-e", script], env: { ...process.env, TEST_API_KEY: "must-not-cross" }, requestTimeoutMs: 2_000 });
+  await expect(client.startChatGptLogin()).resolves.toEqual({ providerId: "openai-codex", loginId: "child-login", authUrl: "https://chatgpt.com/login" });
+  await client.close();
+});
