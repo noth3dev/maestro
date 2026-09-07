@@ -12,7 +12,7 @@ import { PERSONA_AXES, CONCERTMASTER_PERSONA_BASELINE, type PersonaProfile } fro
 
 const substance = (overrides: Partial<MissionBundleSubstance> = {}): MissionBundleSubstance => ({
   role: "scout", profileRef: "profile-1", goalBrief: "assess risk before implementation",
-  approvedModels: ["model-a"], allowedSkills: ["research"], allowedTools: ["read"], allowedPaths: ["packages/x"],
+  approvedModels: ["test/model-a"], allowedSkills: ["research"], allowedTools: ["read"], allowedPaths: ["packages/x"],
   environment: ["node24"], authorityBoundary: ["read-only"], externalServiceBoundary: ["none"], dataBoundary: ["repository files only"],
   costCeiling: "5 USD", timeCeiling: "2 hours", retryCeiling: 1, workerCeiling: 0,
   deliverable: "a risk report", evidenceRequirements: ["citations"], validationCriteria: ["report reviewed"],
@@ -37,6 +37,10 @@ describe("Mission Bundle", () => {
 
   it("rejects an empty approvedModels list", () => {
     expect(() => assertValidMissionBundleSubstance(substance({ approvedModels: [] }))).toThrow(InvalidMissionBundleError);
+  });
+
+  it("rejects an approved model without a provider-qualified identity", () => {
+    expect(() => assertValidMissionBundleSubstance(substance({ approvedModels: ["model-a"] }))).toThrow(InvalidMissionBundleError);
   });
 
   it("rejects a nonzero workerCeiling for a scout or execution bundle", () => {

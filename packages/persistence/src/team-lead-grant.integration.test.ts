@@ -37,7 +37,7 @@ const planSubstance = (): DepartmentPlanSubstance => ({
 });
 const bundleSubstance = (): MissionBundleSubstance => ({
   role: "execution", profileRef: "profile-1", goalBrief: "implement a large change",
-  approvedModels: ["model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
+  approvedModels: ["test/model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
   environment: ["node24"], authorityBoundary: ["write-scoped"], externalServiceBoundary: ["none"], dataBoundary: ["repository files only"],
   costCeiling: "20 USD", timeCeiling: "1 day", retryCeiling: 1, workerCeiling: 0,
   deliverable: "an implemented change", evidenceRequirements: ["diff"], validationCriteria: ["tests pass"],

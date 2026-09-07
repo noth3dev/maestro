@@ -52,7 +52,7 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
       const participant = council.snapshot.participants.find((entry) => (entry.departmentId ?? entry.participantId) === departmentId);
       if (participant === undefined || participant.headRoleId === undefined || participant.departmentId === undefined) throw new Error("Department is not a captured Head Council participant");
       const context: CouncilActorContext = { actorId: participant.headRoleId, sessionRef: participant.sessionRef, commandId };
-      return deps.withGoalLease(council.goalId, (proof) => spawnWorker(deps.pool, deps.kernel, { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, commandId }, proof, context).then(toApiWorker));
+      return deps.withGoalLease(council.goalId, (proof) => spawnWorker(deps.pool, deps.kernel, { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, commandId, ...(input.model === undefined ? {} : { modelRef: input.model }) }, proof, context).then(toApiWorker));
     },
     async get(workerId, projectId) {
       const worker = await readWorker(deps.pool, workerId);

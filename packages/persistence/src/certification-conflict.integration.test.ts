@@ -97,7 +97,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
     const plan = await createDepartmentPlan(pool, { councilId: resolved.councilId, departmentId: "product", substance: planSubstance }, proof, headContext("product"));
     const bundleSubstance: MissionBundleSubstance = {
       role: "execution", profileRef: "profile-1", goalBrief: "implement",
-      approvedModels: ["model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
+      approvedModels: ["test/model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
       environment: ["node24"], authorityBoundary: ["write-scoped"], externalServiceBoundary: ["none"], dataBoundary: ["repository files only"],
       costCeiling: "5 USD", timeCeiling: "1 hour", retryCeiling: 1, workerCeiling: 0,
       deliverable: "a change", evidenceRequirements: ["diff"], validationCriteria: ["tests pass"], terminationConditions: ["deadline passed"],
@@ -118,7 +118,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
     await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
     await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, proof, headContext("product"));
     await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
-    return { goalId, council: resolved, worker, proof };
+    return { goalId, council: resolved, worker, evidenceIds, proof };
   }
 
   beforeAll(async () => {
@@ -129,7 +129,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
   afterAll(async () => { await pool.end(); });
 
   it("grants a waiver for a noncritical finding, recording authority/reason/consequence/expiry/follow-up, and is idempotent", async () => {
-    const { worker, proof } = await setupWorkerWithCommit();
+    const { worker, proof, evidenceIds } = await setupWorkerWithCommit();
     const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [{ findingId: "f1", severity: "noncritical", description: "minor style issue" }], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     const future = new Date(Date.now() + 86_400_000);
     const waiver = await grantCertificationWaiver(pool, "quality_certifications", certified.certificationId, "f1", { authority: "ceo", reason: "not blocking", consequence: "tracked as debt", followUp: "fix next sprint", expiresAt: future }, "concertmaster", proof);
@@ -146,7 +146,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
   });
 
   it("rejects duplicate certification finding identities at the database boundary", async () => {
-    const { worker, proof } = await setupWorkerWithCommit();
+    const { worker, proof, evidenceIds } = await setupWorkerWithCommit();
     const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     const lineage = await pool.query<{
       goal_id: string; contract_id: string; contract_version: string; contract_content_hash: string; integrated_commit_sha: string;
@@ -175,14 +175,14 @@ describeDatabase("Department acceptance and independent Quality certification wi
   });
 
   it("rejects direct tampering with an immutable waiver", async () => {
-    const { worker, proof } = await setupWorkerWithCommit();
+    const { worker, proof, evidenceIds } = await setupWorkerWithCommit();
     const certified = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [{ findingId: "f1", severity: "noncritical", description: "minor" }], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     const waiver = await grantCertificationWaiver(pool, "quality_certifications", certified.certificationId, "f1", { authority: "ceo", reason: "ok", consequence: "tracked", followUp: "later", expiresAt: new Date(Date.now() + 86_400_000) }, "concertmaster", proof);
     await expect(pool.query("UPDATE certification_waivers SET reason = 'tampered' WHERE waiver_id = $1", [waiver.waiverId])).rejects.toThrow();
   });
 
   it("detects no conflict when certifications agree, detects a conflict when they disagree, and routes the conflict to Encore Council", async () => {
-    const { goalId, worker, proof } = await setupWorkerWithCommit();
+    const { goalId, worker, proof, evidenceIds } = await setupWorkerWithCommit();
     await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     expect(await detectCertificationConflict(pool, goalId)).toBe(false);
     await certifyConditional(pool, "security", worker.workerId, { verdict: "failed", findings: [{ findingId: "f1", severity: "critical", description: "vulnerability" }], testEvidenceIds: [] }, "security", proof, headContext("security"));

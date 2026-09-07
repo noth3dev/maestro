@@ -42,7 +42,7 @@ const planSubstance = (): DepartmentPlanSubstance => ({
 });
 const bundleSubstance = (): MissionBundleSubstance => ({
   role: "execution", profileRef: "profile-1", goalBrief: "implement the fix",
-  approvedModels: ["model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
+  approvedModels: ["test/model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
   environment: ["node24"], authorityBoundary: ["write-scoped"], externalServiceBoundary: ["none"], dataBoundary: ["repository files only"],
   costCeiling: "5 USD", timeCeiling: "1 hour", retryCeiling: 1, workerCeiling: 0,
   deliverable: "an implemented change", evidenceRequirements: ["diff"], validationCriteria: ["tests pass"],

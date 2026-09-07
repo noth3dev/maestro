@@ -24,6 +24,8 @@ export interface SpawnWorkerRequest {
   readonly itemId: string;
   /** Validated owned worktree directory supplied by the orchestration layer. */
   readonly cwd?: string;
+  /** Exact provider-qualified model selected by the host and checked against the Mission Bundle. */
+  readonly modelRef?: string;
 }
 
 interface WorkerRow {
@@ -47,6 +49,25 @@ interface WorkerRow {
   status: WorkerStatus;
   answer_text: string | null;
   usage_total_tokens: number | null;
+}
+
+function selectWorkerModel(bundle: Awaited<ReturnType<typeof readMissionBundle>>, requested: string | undefined): string {
+  const model = requested ?? (bundle.substance.approvedModels.length === 1 ? bundle.substance.approvedModels[0] : undefined);
+  if (model === undefined) throw new WorkerError("Worker model selection is ambiguous; choose one approved model");
+  if (!bundle.substance.approvedModels.includes(model)) throw new WorkerError(`Worker model is not approved by the Mission Bundle: ${model}`);
+  if (!/^[^/\s]+\/[^/\s]+$/.test(model)) throw new WorkerError(`Worker model must use provider/model-id format: ${model}`);
+  return model;
+}
+
+function missionTimeLimitMs(value: string): number {
+  const match = /^(\d+)\s+(millisecond|second|minute|hour|day)s?$/.exec(value.trim().toLowerCase());
+  if (match === null) throw new WorkerError(`Mission Bundle timeCeiling is unsupported: ${value}`);
+  const amount = Number(match[1]);
+  const unit = match[2];
+  const multiplier = unit === "millisecond" ? 1 : unit === "second" ? 1_000 : unit === "minute" ? 60_000 : unit === "hour" ? 3_600_000 : 86_400_000;
+  const result = amount * multiplier;
+  if (!Number.isSafeInteger(result) || result <= 0) throw new WorkerError(`Mission Bundle timeCeiling is outside native limits: ${value}`);
+  return result;
 }
 
 function mapWorker(row: WorkerRow): Worker {
@@ -165,6 +186,7 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
     );
     if (active.rowCount !== 1) throw new WorkerError("Captured Head session is no longer authorized to spawn workers");
     const bundle = await readMissionBundle(pool, request.councilId, request.departmentId, request.planVersion, request.itemId);
+    const modelRef = selectWorkerModel(bundle, request.modelRef);
     const requestHash = request.commandId === undefined ? undefined : createHash("sha256").update(JSON.stringify({
       councilId: request.councilId, departmentId: request.departmentId, planVersion: request.planVersion,
       itemId: request.itemId, bundleContentHash: bundle.contentHash,
@@ -210,9 +232,35 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
         name: `${bundle.substance.role}:${request.itemId}:${nextAttempt}`,
         prompt: bundle.substance.goalBrief,
         ...(request.cwd === undefined ? {} : { cwd: request.cwd }),
-        // Every field is the exact least-privilege grant this Mission Bundle
-        // declared -- never widened, never inferred.
+        // Keep the legacy capability projection for injected kernels while the
+        // native fields carry the complete host-owned admission contract.
         capabilities: { allowedTools: bundle.substance.allowedTools, allowedSkills: bundle.substance.allowedSkills },
+        context: {
+          operatorId: context.actorId,
+          projectId: council.snapshot.projectId,
+          goalId: council.goalId,
+          missionBundleId: bundle.contentHash,
+          policyVersion: `${request.planVersion}:${bundle.contentHash}`,
+          fencingToken: proof.fencingToken,
+        },
+        grant: {
+          grantId: `worker:${workerId}`,
+          allowedTools: bundle.substance.allowedTools,
+          allowedSkills: bundle.substance.allowedSkills,
+          modelPolicy: [modelRef],
+          pathScope: bundle.substance.allowedPaths,
+          outboundDataClasses: bundle.substance.dataBoundary,
+          remaining: {
+            modelTurns: 8,
+            toolCalls: Math.max(1, bundle.substance.allowedTools.length * 8),
+            childCalls: bundle.substance.workerCeiling,
+            outputTokens: 8_192,
+            wallTimeMs: missionTimeLimitMs(bundle.substance.timeCeiling),
+            retryCount: bundle.substance.retryCeiling,
+          },
+        },
+        modelPolicy: [modelRef],
+        idempotencyKey: request.commandId ?? `worker:${workerId}`,
       };
       // The provider call cannot be made atomically with PostgreSQL. Check the
       // live claim immediately before admission; any response is then bound

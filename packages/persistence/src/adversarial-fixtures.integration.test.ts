@@ -145,7 +145,7 @@ async function setupWorkerWithRealCommit(pool: Pool, repositoryPath: string, bas
   };
   const plan = await createDepartmentPlan(pool, { councilId: resolvedCouncil.councilId, departmentId: "product", substance: planSubstance }, proof, headContext("product"));
   const bundleSubstance: MissionBundleSubstance = {
-    role: "execution", profileRef: "profile-1", goalBrief: "implement", approvedModels: ["model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
+    role: "execution", profileRef: "profile-1", goalBrief: "implement", approvedModels: ["test/model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
     environment: ["node24"], authorityBoundary: ["write-scoped"], externalServiceBoundary: ["none"], dataBoundary: ["repository files only"], costCeiling: "5 USD", timeCeiling: "1 hour", retryCeiling: 1, workerCeiling: 0,
     deliverable: "a change", evidenceRequirements: ["diff"], validationCriteria: ["tests pass"], terminationConditions: ["deadline passed"],
   };

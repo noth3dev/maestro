@@ -2415,3 +2415,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Followed TDD: the new router test first failed with the missing module; a second red test exposed three shared-gateway closes caused by each runtime owning gateway shutdown. Added the minimal `closeGateway: false` runtime option and router-owned single gateway close.
 - Verification: native router **4/4**, agent-runtime/model-provider/provider-registry/model-gateway focused suite **33/33**, and `npm run build` passed.
 - No Prime removal claim yet. Next task is explicit model/grant/context propagation through Worker, Head, semantic review, Encore, and team-lead helper paths.
+
+
+## 2026-09-08 — Native Worker model/grant propagation
+
+- TDD red test caught `SpawnRequest.modelPolicy` being undefined for Worker admissions. Implemented canonical Mission Bundle model validation, public optional model selection, and native host-owned request fields.
+- Focused evidence: isolated PostgreSQL Worker suite **35/35**, domain/contracts/router **30/30**, and `npm run build` passed. The first attempted focus against the shared Phase 1 DB hit a deadlock because the full suite was running concurrently; the successful rerun used a separate disposable PostgreSQL container on `127.0.0.1:55473`.
+- Next: make Head, semantic-review, Encore, and team-lead helper admissions explicit and native before replacing the production Prime composition.
