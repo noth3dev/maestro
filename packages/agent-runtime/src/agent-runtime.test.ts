@@ -214,4 +214,34 @@ describe("native Maestro agent runtime", () => {
     expect(received!.wallTimeMs).toBeLessThanOrEqual(3_600_000);
     expect(await runtime.getInvocationStatus(spawned.invocation)).toBe("succeeded");
   });
+
+  it("bounds the wire messages array to 128 entries for a long conversation well under the byte budget", async () => {
+    // apps/model-gateway/src/rpc.ts's TurnSchema caps `messages` at 128
+    // array entries independent of their combined byte size. A real
+    // conversation (apps/control-plane/src/conversation-service.ts replays
+    // every durable conversation_turns row with no row-count limit) can
+    // realistically accumulate more than 128 short exchanges while staying
+    // well under the 64_000-byte budget -- this is a real defect this test
+    // reproduces and pins closed.
+    let receivedMessageCount: number | undefined;
+    const modelGateway: ModelGatewayPort = {
+      async listModels() { return []; },
+      async admit() { return binding; },
+      async turn(request) {
+        receivedMessageCount = request.messages.length;
+        return { requestId: request.requestId, model: identity, text: "ok", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
+      },
+      async cancel() { return { state: "confirmed" as const }; },
+      async recover() { return "reconnected" as const; },
+      async close() {},
+    };
+    const longHistory = Array.from({ length: 200 }, (_, index) => ({ role: "user" as const, content: [{ kind: "text" as const, text: `message ${index}` }] }));
+    const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools: new ToolRegistry(), initialMessages: longHistory });
+    const spawned = await runtime.spawn({ name: "long-conversation", modelPolicy: ["fake/model-a"], idempotencyKey: "long-conversation-1", context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1" }, grant });
+    await runtime.prompt(spawned.execution, "continue the conversation");
+
+    expect(receivedMessageCount).toBeDefined();
+    expect(receivedMessageCount!).toBeLessThanOrEqual(128);
+    expect(await runtime.getInvocationStatus(spawned.invocation)).toBe("succeeded");
+  });
 });
