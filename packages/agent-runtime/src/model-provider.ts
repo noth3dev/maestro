@@ -204,6 +204,12 @@ export interface GatewayAccountLoginStatusResult {
   readonly message?: string;
 }
 
+export interface GatewayAccountLogoutRequest {
+  readonly requestId: string;
+  readonly operatorId: string;
+  readonly providerId: "openai-codex";
+}
+
 export interface GatewayBinding {
   readonly bindingId: string;
   readonly gatewayInstanceId: string;
@@ -225,6 +231,7 @@ export interface ModelGatewayPort {
   startAccountLogin?(request: GatewayAccountLoginStartRequest): Promise<GatewayAccountLoginStartResult>;
   accountLoginStatus?(request: GatewayAccountLoginStatusRequest): Promise<GatewayAccountLoginStatusResult>;
   cancelAccountLogin?(request: GatewayAccountLoginStatusRequest): Promise<void>;
+  logoutAccount?(request: GatewayAccountLogoutRequest): Promise<void>;
   turn(request: GatewayTurnRequest): Promise<ModelTurnResult>;
   cancel(requestId: string, signal?: AbortSignal): Promise<ProviderCancellationOutcome>;
   recover(binding: GatewayBinding): Promise<"reconnected" | "terminal" | "unknown">;

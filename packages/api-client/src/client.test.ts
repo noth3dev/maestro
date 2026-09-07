@@ -30,11 +30,13 @@ describe("createApiClient", () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ providerId: "openai-codex", loginId: "login-1", authUrl: "https://chatgpt.com/login" }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ providerId: "openai-codex", loginId: "login-1", state: "pending" }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ cancelled: true }), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ cancelled: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ revoked: true }), { status: 200 }));
     const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
     await expect(client.startAccountLogin()).resolves.toEqual({ providerId: "openai-codex", loginId: "login-1", authUrl: "https://chatgpt.com/login" });
     await expect(client.accountLoginStatus("login-1")).resolves.toEqual({ providerId: "openai-codex", loginId: "login-1", state: "pending" });
     await expect(client.cancelAccountLogin("login-1")).resolves.toBeUndefined();
+    await expect(client.logoutAccount()).resolves.toBeUndefined();
     expect(fetch).toHaveBeenNthCalledWith(1, "https://maestro.test/v1/provider-account-logins/start", expect.objectContaining({ method: "POST", body: JSON.stringify({ providerId: "openai-codex" }) }));
     expect(fetch).toHaveBeenNthCalledWith(2, "https://maestro.test/v1/provider-account-logins/status", expect.objectContaining({ method: "POST", body: JSON.stringify({ providerId: "openai-codex", loginId: "login-1" }) }));
   });

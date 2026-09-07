@@ -138,6 +138,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
           startAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex" }) => modelGateway.startAccountLogin!(input),
           accountLoginStatus: (input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }) => modelGateway.accountLoginStatus!(input),
           cancelAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }) => modelGateway.cancelAccountLogin!(input),
+          ...(modelGateway.logoutAccount === undefined ? {} : { logoutAccount: (input: { operatorId: string; requestId: string; providerId: "openai-codex" }) => modelGateway.logoutAccount!(input) }),
         }),
       },
     }),
@@ -204,6 +205,9 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
         leaderLeaseDurationMs: config.reconcilerLeaseDurationMs,
         kernel: executionKernel,
       });
+      // Rebuild native conversation runtime handles before accepting traffic.
+      // Failed rebuilds are durably marked unknown by the conversation service.
+      await conversationService?.recover?.();
       await app.listen({ host: config.host, port: config.port });
       metronomeLoop?.start();
     },

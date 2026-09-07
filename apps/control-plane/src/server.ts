@@ -189,6 +189,7 @@ export interface ProviderCredentialService {
   startAccountLogin?(input: { operatorId: string; requestId: string; providerId: "openai-codex" }): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStartResult>;
   accountLoginStatus?(input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStatusResult>;
   cancelAccountLogin?(input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }): Promise<void>;
+  logoutAccount?(input: { operatorId: string; requestId: string; providerId: "openai-codex" }): Promise<void>;
 }
 
 export interface OperatorAuthenticator {
@@ -434,6 +435,15 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
     const result = await providerCredentials.startAccountLogin({ operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId, requestId, providerId: input.providerId });
     return reply.status(200).send(ProviderAccountLoginStartResultSchema.parse(result));
+  });
+
+  app.post("/v1/provider-account-logins/logout", async (request, reply) => {
+    if (!providerCredentials?.logoutAccount) throw new DurableStoreUnavailableError();
+    const input = parse(ProviderAccountLoginStartInputSchema, request.body);
+    const header = request.headers["idempotency-key"];
+    const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
+    await providerCredentials.logoutAccount({ operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId, requestId, providerId: input.providerId });
+    return reply.status(200).send({ revoked: true });
   });
 
   app.post("/v1/provider-account-logins/status", async (request, reply) => {

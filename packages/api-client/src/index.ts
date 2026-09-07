@@ -174,6 +174,7 @@ export interface ApiClient {
   startAccountLogin(): Promise<ProviderAccountLoginStartResult>;
   accountLoginStatus(loginId: string): Promise<ProviderAccountLoginStatus>;
   cancelAccountLogin(loginId: string): Promise<void>;
+  logoutAccount(): Promise<void>;
   createConversation(input: CreateConversationInput): Promise<Conversation>;
   getConversation(conversationId: string, query: GoalQuery): Promise<Conversation>;
   sendConversationTurn(conversationId: string, input: ConversationTurnInput, options?: { signal?: AbortSignal }): Promise<ConversationTurnResult>;
@@ -427,6 +428,14 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
       return request("v1/provider-account-logins/cancel", {
         method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": cryptoRandomUuid() }, body: JSON.stringify({ providerId: "openai-codex", loginId }),
       }, { parse: () => undefined });
+    },
+    logoutAccount() {
+      return request("v1/provider-account-logins/logout", {
+        method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": cryptoRandomUuid() }, body: JSON.stringify({ providerId: "openai-codex" }),
+      }, { parse(value) {
+        if (!value || typeof value !== "object" || (value as { revoked?: unknown }).revoked !== true) throw new Error("Control Plane returned malformed account logout");
+        return undefined;
+      } });
     },
     createConversation(input) {
       return request("v1/conversations", { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(CreateConversationInputSchema.parse(input)) }, ConversationSchema);

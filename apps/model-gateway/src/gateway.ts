@@ -13,7 +13,7 @@ export interface GatewayOptions {
   /** Resolves after process-provided credentials have been registered. */
   readonly ready?: Promise<void>;
   /** Optional public OpenAI Codex app-server account boundary. */
-  readonly codex?: Pick<CodexAppServerClient, "startChatGptLogin" | "loginStatus" | "cancelLogin" | "close">;
+  readonly codex?: Pick<CodexAppServerClient, "startChatGptLogin" | "loginStatus" | "cancelLogin" | "close"> & Partial<Pick<CodexAppServerClient, "logout">>;
 }
 
 interface InternalBinding {
@@ -76,6 +76,18 @@ export class ModelGateway implements ModelGatewayPort {
   private assertLoginOperator(request: { operatorId: string; loginId: string }): void {
     if (request.operatorId !== this.options.operatorId) throw new Error("credential operator context mismatch");
     if (this.loginOperators.get(request.loginId) !== request.operatorId) throw new Error("account login session is unknown");
+  }
+
+  async logoutAccount(request: import("@maestro/agent-runtime").GatewayAccountLogoutRequest): Promise<void> {
+    if (this.closed) throw new Error("model gateway is closed");
+    await this.options.ready;
+    if (request.operatorId !== this.options.operatorId) throw new Error("credential operator context mismatch");
+    if (request.providerId !== "openai-codex" || this.options.codex?.logout === undefined) throw new Error("account logout is unavailable");
+    await this.options.codex.logout();
+    const accountRef = `openai-codex-${this.options.operatorId}`;
+    const binding = await this.options.credentials.ensure(accountRef);
+    if (binding !== undefined) await this.options.credentials.revoke(accountRef, this.options.operatorId);
+    await this.invalidateProviderBindings(this.options.operatorId, request.providerId);
   }
 
   async admit(request: GatewayAdmissionRequest): Promise<GatewayBinding> {

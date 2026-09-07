@@ -217,8 +217,9 @@ const definitions: CommandDefinition[] = (
     ],
     [
       "login",
-      "provider API-key authentication (input is hidden)",
+      "provider authentication (ChatGPT account login opens in a browser; API-key fallback remains hidden)",
       [
+        ["openai-codex", "write"],
         ["openai", "write"],
         ["anthropic", "write"],
       ],
@@ -227,6 +228,7 @@ const definitions: CommandDefinition[] = (
       "logout",
       "revoke provider credentials",
       [
+        ["openai-codex", "write"],
         ["openai", "write"],
         ["anthropic", "write"],
       ],
