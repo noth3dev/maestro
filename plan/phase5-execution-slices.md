@@ -24,11 +24,11 @@ The ordering prevents a UI from presenting process-local worker state as trustwo
 ## Slice 1 — Runtime provider ownership and recovery
 
 **Owner:** Runtime lane.  
-**Scope:** `packages/domain` runtime binding types; `packages/persistence` worker/recovery migration and services; `packages/prime-adapter` only for honest capability boundaries; `apps/control-plane/src/main.ts` lifecycle composition; focused integration/process tests.
+**Scope:** `packages/domain` runtime binding types; `packages/persistence` worker/recovery migration and services; `packages/agent-runtime` and the authenticated Model Gateway boundary; `apps/control-plane/src/main.ts` lifecycle composition; focused integration/process tests.
 
 Use the existing `workers.execution_ref`/`invocation_ref` as the authoritative identity unless a strict 1:1 projection is proven necessary. Do not create a competing mutable identity table. Add only the durable owner/heartbeat/state/recovery facts required to fence stale work, plus append-only recovery decisions. Reserve before provider effects, bind once, persist terminal state before release, and use two-phase cancellation intent. Never fabricate Prime resume/reconnect or success/cancellation when the provider is unavailable.
 
-Acceptance requires disposable PostgreSQL plus a separately-running process-backed provider harness through the same coordinator/HTTP path: kill the owner, wait for lease expiry, start a successor, prove no duplicate spawn, durable `unknown`/`fenced` or provider-confirmed cancellation, exactly one recovery decision, and retry blocking. A separate `MAESTRO_LIVE_PRIME=1` test may prove Prime compatibility but must not replace deterministic lifecycle evidence. SIGTERM drain must be bounded and SIGKILL must fence conservatively.
+Acceptance requires disposable PostgreSQL plus a separately-running process-backed provider harness through the same coordinator/HTTP path: kill the owner, wait for lease expiry, start a successor, prove no duplicate spawn, durable `unknown`/`fenced` or provider-confirmed cancellation, exactly one recovery decision, and retry blocking. A real Model Gateway/provider-process test may prove adapter compatibility but must not replace deterministic lifecycle evidence. SIGTERM drain must be bounded and SIGKILL must fence conservatively.
 
 ## Slice 2 — Device authority path
 

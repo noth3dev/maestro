@@ -10,7 +10,7 @@ Maestro는 **Default-Deny(기본 거부)**와 **최소 권한(Least Privilege)**
 
 | 분류 (Classification) | 해당 액션 목록 | 기본 처리 정책 |
 | :--- | :--- | :--- |
-| **`ordinary`** (일반 작업) | `project.file.edit`, `project.test.run`, `git.local.commit` | 승인된 Task Contract 및 Mission Bundle 범위 내에서 Worker가 자율 실행 가능 |
+| **`ordinary`** (일반 작업) | `project.file.edit`, `project.test.run`, `git.local.branch.create`, `git.local.branch.advance`, `git.local.commit`, `git.local.revision.read`, `git.local.worktree.create/remove`, `browser.navigate/click/fill/get_text/screenshot` | 일치하는 grant와 Mission Bundle이 있을 때만 허용됩니다. 분류만으로 production tool이 등록되지는 않습니다. |
 | **`critical`** (위험 작업) | `git.remote.push`, `deployment.release`, `external.send`, `permanent.delete`, `payment.spend`, `authority.change`, `external.connect` | 명시적인 Conductor / Authority의 사전 승인(Approval)이 반드시 필요 |
 | **`forbidden`** (금지 작업) | `system.policy.bypass`, 임의 권한 상승 시도 | 절대 허용되지 않으며 즉시 거부 및 보안 감사 로그 기록 |
 | **`ambiguous`** (모호한 작업) | 사전 정의되지 않은 모든 알 수 없는 액션 | 기본 거부(Deny) 및 추가 검토 요구 |
@@ -45,6 +45,14 @@ flowchart TD
 2. **Goal & Lease Binding**: 요청은 현재 유효한 `goalId`, `actorId`, 단조 펜싱 토큰과 일치해야 하며 만료된 권한은 즉시 무효화됩니다.
 3. **우회 차단**: 어떠한 어댑터도 도메인 보안 게이트웨이를 우회하여 직접 OS 명령이나 외부 네트워크를 호출할 수 없습니다.
 
+### 필수 권한 컨텍스트와 Capability 범위
+
+모든 effect request는 `commandId`, `projectId`, `actorId`, `goalId`, 정확한 `target`, `policyVersion`, `budgetEffectCents`, 현재 `controlEpoch`에 바인딩됩니다. grant 또는 critical approval은 모든 필드를 일치시켜야 하며 target이나 budget만 바뀌어도 다른 request입니다.
+
+Mission Bundle은 approved model, skill, tool, path, environment, authority action, external/data 경계, retry, worker/child 한도, time/budget을 별도로 제한합니다. 설치된 capability가 자동으로 할당되는 것은 아닙니다.
+
+현재 production Control Plane은 비어 있는 native `ToolRegistry`를 구성하므로 미등록 model tool은 거부됩니다. Git adapter는 명시적인 authority-backed Control Plane 서비스이며 숨겨진 worker callback이 아닙니다. 일반 critical-action route도 기본 effect adapter가 없으면 성공을 가장하지 않고 fail-closed합니다.
+
 ---
 
 ## 3. 봉인 제출 (Sealed Submissions) 및 증거 무결성
@@ -62,3 +70,10 @@ flowchart LR
 * **Canonical JSON 직렬화**: 키 정렬 및 공백 표준화를 통해 JSON 포맷 차이로 인한 해시 불일치를 제거합니다.
 * **불변 스냅샷 (Immutable Snapshot)**: 심의(Council) 및 인증(Certification)에 사용되는 모든 입력값은 스냅샷 해시(`snapshot_hash`)로 고정되어 사후 수정이 불가능합니다.
 * **프로토타입 오염 방지**: `__proto__`, `prototype` 등 위험한 JSON 키 인입 시 즉시 `InvalidSealedSubmissionSnapshotError`를 발생시킵니다.
+
+
+## 4. 프로젝트 액세스 프로비저닝
+
+프로젝트 액세스 변경은 `POST /v1/admin/project-access`를 사용합니다. 이 route는 bearer credential을 인증한 뒤 명시적인 `MAESTRO_OPERATOR_PROVISIONING_ADMIN_ID` 설정과 요청자를 비교합니다. 설정이 없으면 route는 사용할 수 없습니다. 일반 project membership 검사는 이 전역 작업을 승인하지 않습니다.
+
+대상은 활성 local operator여야 합니다. 요청 role ID는 불변 `permanent_roles`에 대해 검증되며 임의 capability와 wildcard는 거부됩니다. membership과 모든 role은 한 transaction으로 저장되어 검증 실패 시 부분 권한이 남지 않습니다.

@@ -31,7 +31,7 @@ Maestro is an open-source enterprise AI orchestration framework designed for rel
 
 - **Conversation path:** `MaestroAgentRuntime` in the Control Plane, using the authenticated `apps/model-gateway` process.
 - **Provider authentication:** API keys stay in the gateway credential store. OpenAI ChatGPT subscription login is delegated to the documented Codex app-server; Maestro persists only login metadata and state.
-- **Worker path:** `ExecutionKernelPort` is composed with the native Model Gateway router. Every admission carries host context, capability grant, model policy, account binding, and idempotency.
+- **Worker path:** `ExecutionKernelPort` is composed with the native Model Gateway router. Every admission carries host context, capability grant, model policy, account binding, and idempotency. Production host tools are not registered yet; unregistered tools fail closed and native Workers are text/evidence-only.
 - **Terminal UI:** `@earendil-works/pi-tui` is used for presentation only and has no execution authority.
 
 ## Core Architecture & Pillars
@@ -106,7 +106,7 @@ flowchart TD
 - **Node.js**: `v24.x LTS` or higher
 - **npm**: `v10.x` or higher
 - **PostgreSQL**: `17.x` (required for persistence & integration tests)
-- **Docker**: Required for running disposable test containers (`Testcontainers`)
+- **Docker**: Optional helper for starting a disposable PostgreSQL instance; tests consume `MAESTRO_TEST_DATABASE_URL` directly.
 - **OS**: Linux recommended
 
 ### Installation & Build
@@ -141,22 +141,20 @@ npm run check
 
 ## CLI Usage
 
-The Maestro CLI (`apps/cli`) provides operational parity with the control plane REST API:
+The Maestro CLI (`apps/cli`) is an authenticated command client for the implemented Control Plane REST API. Unsupported surfaces fail rather than being simulated:
 
 ```bash
 # Query details for a Goal
-node apps/cli/dist/main.js goal get <goalId>
+node apps/cli/dist/main.js goal get --project-id <projectId> --goal-id <goalId>
 
 # Stream append-only domain events
-node apps/cli/dist/main.js events list --goalId <goalId>
+node apps/cli/dist/main.js events list --project-id <projectId>
 
-# Query Metronome challenges & Encore Council rounds
-node apps/cli/dist/main.js metronome challenge <challengeId>
-node apps/cli/dist/main.js council round <roundId>
-
-# Retrieve Quality Certification & Certified Reports
-node apps/cli/dist/main.js certification get <certificationId>
-node apps/cli/dist/main.js report get <goalId>
+# List durable review state for a Goal (all require project/Goal context)
+node apps/cli/dist/main.js metronome-challenges list --project-id <projectId> --goal-id <goalId>
+node apps/cli/dist/main.js encore-council list --project-id <projectId> --goal-id <goalId>
+node apps/cli/dist/main.js certifications list --project-id <projectId> --goal-id <goalId>
+node apps/cli/dist/main.js concertmaster-report get --project-id <projectId> --goal-id <goalId>
 ```
 
 ---

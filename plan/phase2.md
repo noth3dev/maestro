@@ -1,11 +1,11 @@
 # Phase 2 — Secretary Office Core and Hierarchical Goal Execution
 
-> **Current status (2026-09-07):** This phase describes the hierarchical execution target. Its code-level surface exists, but worker/process usability and native-runtime parity are not accepted. The current worker composition still uses the legacy Prime adapter.
+> **Current status (2026-09-08):** The hierarchical execution surface is implemented and real PostgreSQL/native Model Gateway acceptance exists, including native Head and Worker admissions. Phase-level release acceptance remains governed by the host-tool, TUI, device, and independent-review gates in `plan/operations/task_plan.md`. Prime Agent is not part of the current implementation.
 
 
 ## Outcome
 
-Turn the durable foundation into the complete execution hierarchy for one local software Goal. Concertmaster conducts intake, the Overture Crew produces one Task Contract, the CEO confirms once, only required Heads wake, each Head writes a Department Plan, and bounded Scout and Execution workers deliver isolated Git results.
+Turn the durable foundation into the execution hierarchy for one local software Goal. Concertmaster conducts intake, the Overture Crew produces one Task Contract, the CEO confirms once, only required Heads wake, each Head writes a Department Plan, and bounded native workers produce text/evidence under Mission Bundles. The explicit Control Plane Git service can create isolated branches/worktrees and integrate revisions; worker-side file/tool effects remain pending the approved production host-tool contract.
 
 Encore certification is completed in Phase 3, so Phase 2 cannot yet report a Goal as fully successful.
 
@@ -205,7 +205,7 @@ Encore policy produces an initial range using task uncertainty, historical evide
 5. Implement the reusable sealed-submission primitive, then the Head Council consumer: immutable frozen participant/session/contract/evidence snapshot; idempotent sealed submission; deadline/absence policy; reveal; append-only events/audit; evidence-tagged complete discussion rounds; novelty and stopping; and a non-executable escalation outcome distinct from an executable resolved decision.
 6. Implement Department Plan schema, reconciliation, revisions, and worker linkage only after a resolved Council packet bound to the exact frozen contract/evidence snapshot is durable.
 7. Implement mission bundles and least-privilege capability selection.
-8. Implement Scout and Execution worker lifecycles through Prime Agent native hierarchy.
+8. Implement Scout and Execution worker lifecycles through the native `ExecutionKernelPort` hierarchy.
 9. Implement worker request-for-help and bounded team-lead exception.
 10. Implement Git repository, branch, worktree, commit, integration, diff, and cleanup evidence.
 11. Implement budget reservations and milestone forecasts.
@@ -248,7 +248,7 @@ Encore policy produces an initial range using task uncertainty, historical evide
 
 ## Exit gate
 
-A plain-language request must become one confirmed Task Contract. Only the necessary Heads activate, write independent briefs, deliberate, and own versioned Department Plans. Scouts gather evidence; Execution workers complete a real isolated local change; Heads integrate accepted commits into one Goal revision. No worker can create hidden workers, exceed authority, write another branch, or push remotely. The Goal remains `awaiting certification` until Phase 3.
+A plain-language request must become one confirmed Task Contract. Only the necessary Heads activate, write independent briefs, deliberate, and own versioned Department Plans. Scouts gather evidence; native Execution workers currently produce bounded text/evidence only. The explicit Control Plane Git service can create isolated branches/worktrees and integrate accepted revisions; worker-side file changes await a registered host tool. No worker can create hidden workers, exceed authority, write another branch, or push remotely. The Goal remains `awaiting certification` until Phase 3.
 
 ## Requirements preserved in this phase
 
@@ -448,7 +448,7 @@ Every spawned Head or worker receives a mission-specific assignment bundle:
 
 - Stable role and ten-axis persona.
 - Shared Goal Brief and the smallest relevant Department or Mission Context.
-- Required skills and approved plugins selected from the Prime Agent capability catalog.
+- Required skills and approved plugins selected from the approved native capability catalog.
 - Allowed tools, project paths, virtual environments, enrolled-device scope, and external-service boundaries.
 - Model selection or permitted model set appropriate to the mission.
 - Cost, time, worker, and retry bounds.
@@ -553,7 +553,7 @@ Once launched, the Task Contract becomes the stable source of intent for Concert
 - Metronome uses deterministic checks before model judgment and invokes a low-cost model only for ambiguity that rules cannot resolve.
 - The Encore Council uses genuinely distinct approved models when available. If only one provider or model family is available, it uses independently isolated contexts and diverse personas and reports the limitation honestly.
 - A creator does not evaluate its own candidate when an independent approved evaluator is available. At minimum, evaluation uses isolated context and criteria fixed before candidate execution.
-- Skills and plugins are selected per mission from the approved Prime Agent catalog. Installed availability does not imply assignment.
+- Skills and plugins are selected per mission from the approved native capability catalog. Installed availability does not imply assignment.
 - The assignment bundle includes only capabilities that contribute to the mission, reducing context, authority, and attack surface.
 - Outcome telemetry continuously measures role/model/skill combinations. Encore may refine routing under the staged-improvement authority without lowering the required quality floor.
 

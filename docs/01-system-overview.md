@@ -17,7 +17,7 @@ flowchart TD
     end
 
     subgraph ExecutionSecurityLayer [Execution & Security Containment]
-        WORKERS[🛠️ Scout & Execution Workers<br/>• ExecutionKernelPort<br/>• Native runtime migration in progress<br/>• Isolated Git Worktrees .worktrees/ ]
+        WORKERS[🛠️ Scout & Execution Workers<br/>• ExecutionKernelPort<br/>• Native runtime via authenticated Model Gateway<br/>• Isolated Git Worktrees .worktrees/ ]
         EXECUTOR[🛡️ AuthorizedEffectExecutor<br/>• Default-Deny & Action Classification<br/>• Audit-Before-Effect DB Commit<br/>• Monotonic Fencing Lease Validation]
     end
 
@@ -53,18 +53,18 @@ flowchart TD
 
 ---
 
-## 3. Native Agent Runtime, Provider Gateway, and Legacy Worker Bridge
+## 3. Native Agent Runtime and Provider Gateway
 
 Maestro keeps model I/O, agent behavior, and durable authority in separate boundaries:
 
-| Responsibility Area | Maestro native runtime / gateway | Maestro Control Plane (`apps/control-plane`) |
+| Responsibility Area | Native runtime / gateway | Maestro Control Plane (`apps/control-plane`) |
 | :--- | :--- | :--- |
 | **Model & Conversation Management** | `packages/agent-runtime`, provider plugins, authenticated `apps/model-gateway` | Conversation/Goal lifecycle, model policy, project membership, budget ceilings |
-| **Worker execution bridge** | `ExecutionKernelPort`; native Model Gateway router | Worker admission, authority checks, leases, audit pre-logging |
+| **Worker execution** | `ExecutionKernelPort`; native Model Gateway router | Worker admission, authority checks, leases, audit pre-logging |
 | **Persistence & Truth** | Provider/session process state is non-canonical | PostgreSQL 17 domain event log, durable conversations, turns, bindings, and leases |
 | **Oversight & Quality** | Normalized model/tool observations | Metronome integrity validation, Quality certification, Conductor reporting |
 
-The native runtime owns conversation and worker execution. Provider credentials remain gateway-owned and never enter Control Plane state, prompts, evidence, or logs.
+The native runtime owns conversation and worker execution. Provider credentials remain gateway-owned and never enter Control Plane state, prompts, evidence, or logs. The production tool registry is currently empty by design: native workers are read-only text generation until the product-approved host-tool contract is implemented and registered.
 
 ---
 
@@ -73,15 +73,21 @@ The native runtime owns conversation and worker execution. Provider credentials 
 Maestro is structured as an **npm workspace monorepo**:
 
 * **`apps/control-plane`**: Fastify 5 REST & Server-Sent Events (SSE) server for durable commands and real-time state streaming.
-* **`apps/cli`**: Command-line interface providing complete operational parity with the control plane API.
-* **`apps/secretary`**: Next.js 16 / React 19 web application (Concertmaster Office) featuring radial portfolio graphs.
+* **`apps/cli`**: Authenticated command-line client for the implemented Control Plane API; unsupported surfaces fail rather than being simulated.
+* **`apps/secretary`**: Electron + React desktop client for the Control Plane (Concertmaster Office).
 * **`apps/discord`** (Discord Daemon): Independent out-of-band Discord daemon for incident detection and system health probes.
+* **`apps/device-agent`**: Separately running mTLS device protocol process for enrolled, grant-scoped local operations.
+* **`apps/device-agent`**: Separately running mTLS device protocol process for enrolled, grant-scoped local operations.
 * **`packages/domain`**: Pure TypeScript domain aggregates (Goal, TaskContract, HeadCouncil, DepartmentPlan).
 * **`packages/contracts`**: Shared Zod schemas, HTTP REST contracts, and SSE event payloads.
-* **`packages/persistence`**: PostgreSQL 17 schema definitions, Drizzle ORM queries, and migration files.
+* **`packages/persistence`**: PostgreSQL 17 schema definitions, `pg` queries, and migration files.
 * **`packages/authority`**: Authorization engine, action classification matrix, and `AuthorizedEffectExecutor`.
 * **`packages/evidence`**: SHA-256 evidence bundle generator and cryptographic verification.
 * **`packages/agent-runtime`**: Maestro-owned provider-neutral model/tool/child-agent runtime.
+* **`packages/environment-adapter`**: Bounded environment and browser adapters.
+* **`packages/device-agent`**: Device grants, signed envelopes, fencing, and command protocol support.
+* **`packages/environment-adapter`**: Bounded environment and browser adapters.
+* **`packages/device-agent`**: Device grants, signed envelopes, fencing, and command protocol support.
 * **`apps/model-gateway`**: Authenticated provider process that owns API keys and managed Codex login state.
 * **Native execution kernel**: Routes every root and child admission through the authenticated Model Gateway with explicit grants and durable identity.
 * **`packages/git-adapter`**: Isolated Git worktree manager, branch executor, and diff collector.

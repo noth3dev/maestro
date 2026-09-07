@@ -468,7 +468,7 @@ A CEO edit changes the desired candidate but does not erase the need to explain 
 6. Implement shadow execution with zero live write authority.
 7. Implement Council review and same-model disclosure.
 8. Implement bounded rollout controller and automatic regression rollback.
-9. Implement Prime Agent `refine` adapter with project/global scope enforcement.
+9. Implement a native Maestro refinement adapter with project/global scope enforcement.
 10. Implement the persona schemas, initial rationale, mission overlays, measurements, candidate search, and UI-ready history projections described above.
 11. Run one routing improvement and one persona-axis improvement through the full chain.
 12. Run adversarial attempts to disguise authority weakening as optimization.
@@ -563,10 +563,10 @@ Raw logs remain evidence and are not rewritten into conclusions. A digest may be
 - Corrections preserve provenance: incorrect or stale knowledge is marked superseded or retired with a replacement reason rather than silently rewritten.
 - Confidence and freshness decay when evidence ages, conditions change, or new outcomes contradict the lesson.
 
-### 29. Encore improvement through Prime Agent refinement
+### 29. Encore improvement through the native refinement boundary
 
 - Improvement Digests feed the Encore Improvement Lab.
-- The Lab may propose focused changes to Prime Agent continual-harness components: prompt guidance, scoped memories, reusable skills, Department Head specifications, worker templates, and narrow behavioral policies.
+- The Lab may propose focused changes to native Maestro runtime guidance and continual-harness components: prompt guidance, scoped memories, reusable skills, Department Head specifications, worker templates, and narrow behavioral policies.
 - `refine` is the controlled persistence mechanism for these evidence-backed changes. Refinement is not a license to rewrite the whole harness or system prompt.
 - Every proposal names the observed problem, smallest relevant harness component, expected benefit, project/global scope, evaluation evidence, and rollback target.
 - Initial refinement candidates remain shadow-only under the agreed staged-application policy.
@@ -575,11 +575,11 @@ Raw logs remain evidence and are not rewritten into conclusions. A digest may be
 
 ### Current implementation gap
 
-This workspace contains the approved design artifacts but no Maestro application implementation. There is no legacy runtime, operational state, compatibility contract, or migration target to preserve. Implementation starts cleanly on Prime Agent's public programmatic SDK and native recursive-subagent surfaces. Existing project repositories may later be enrolled as independent source systems, but they are not Maestro legacy state.
+This section is an older design baseline. The current workspace contains the Phase 6 Step 1 application implementation; later adaptive runtime work remains deferred. There is no legacy runtime or compatibility target to preserve. Future implementation starts at the native Agent's public programmatic SDK and native recursive-subagent surfaces. Existing project repositories may later be enrolled as independent source systems, but they are not Maestro legacy state.
 
 ### 30. Encore authority for project and bounded global refinement — proposed boundary
 
-Encore should have meaningful authority to improve the Prime Agent continual harness without routing every refinement to the CEO.
+Encore should have meaningful authority to improve bounded native runtime guidance without routing every refinement to the CEO.
 
 - Validated project-scoped refinements may auto-apply under an enabled improvement class, with evidence, versioning, monitoring, and rollback.
 - Encore may also auto-apply a bounded class of low-risk global refinements when all of the following hold:

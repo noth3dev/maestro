@@ -33,7 +33,7 @@ Maestro는 신뢰할 수 있고 장시간 실행되는 다중 에이전트 목�
 
 - **대화 경로:** Control Plane의 `MaestroAgentRuntime`이 인증된 `apps/model-gateway` 프로세스를 사용합니다.
 - **Provider 인증:** API key는 gateway credential store에만 남습니다. OpenAI ChatGPT 구독 로그인은 공식 Codex app-server에 위임하며 Maestro는 로그인 metadata와 state만 저장합니다.
-- **워커 경로:** `ExecutionKernelPort`는 네이티브 Model Gateway 라우터로 구성됩니다. 모든 admission은 host context, capability grant, model policy, account binding 및 idempotency를 포함합니다.
+- **워커 경로:** `ExecutionKernelPort`는 네이티브 Model Gateway 라우터로 구성됩니다. 모든 admission은 host context, capability grant, model policy, account binding 및 idempotency를 포함합니다. Production host tool은 아직 등록되지 않았으며 미등록 tool은 fail-closed이고 native Worker는 text/evidence만 생성합니다.
 - **터미널 UI:** `@earendil-works/pi-tui`는 표현 계층에만 사용하며 실행 권한이 없습니다.
 
 ## 핵심 아키텍처 및 4대 기둥 (Core Architecture & Pillars)
@@ -108,7 +108,7 @@ flowchart TD
 - **Node.js**: `v24.x LTS` 이상
 - **npm**: `v10.x` 이상
 - **PostgreSQL**: `17.x` (영속성 및 통합 테스트에 필요)
-- **Docker**: 일회용 테스트 컨테이너(`Testcontainers`) 실행에 필요
+- **Docker**: disposable PostgreSQL 인스턴스를 시작할 때 선택적으로 사용합니다. 테스트는 `MAESTRO_TEST_DATABASE_URL`을 직접 사용합니다.
 - **OS**: Linux 권장
 
 ### 설치 및 빌드 (Installation & Build)
@@ -143,14 +143,14 @@ npm run check
 
 ## CLI 사용법 (CLI Usage)
 
-Maestro CLI (`apps/cli`)는 제어 평면 REST API와 동일한 운영 기능을 제공합니다:
+Maestro CLI (`apps/cli`)는 구현된 Control Plane REST API의 인증된 명령 클라이언트입니다. 지원되지 않는 surface는 시뮬레이션하지 않고 실패합니다:
 
 ```bash
 # Goal 상세 정보 조회
-node apps/cli/dist/main.js goal get <goalId>
+node apps/cli/dist/main.js goal get --project-id <projectId> --goal-id <goalId>
 
 # Append-Only 도메인 이벤트 스트리밍
-node apps/cli/dist/main.js events list --goalId <goalId>
+node apps/cli/dist/main.js events list --project-id <projectId>
 
 # Metronome 챌린지 및 Encore Council 라운드 조회
 node apps/cli/dist/main.js metronome challenge <challengeId>

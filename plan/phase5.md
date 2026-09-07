@@ -1,6 +1,6 @@
 # Phase 5 — Concurrent Goals and Portfolio Control
 
-> **Current status (2026-09-07):** Phase 5 is partially implemented. Capacity/remediation slices exist, while broader concurrent-goal/resource scheduling and the native worker backend cutover remain open.
+> **Current status (2026-09-08):** Phase 5 is partially implemented. The native Worker backend cutover is complete; the first capacity slice is a project-wide worker cap. Broader concurrent-goal/resource scheduling, reservations, protected floors, and Portfolio Council behavior remain open.
 
 
 ## Outcome
@@ -17,7 +17,7 @@ Every active Goal owns separate:
 - context packs and project-private evidence;
 - budgets, reservations, spend, and recovery reserve;
 - authority grants and critical approvals;
-- Prime Agent invocation bindings and workers;
+- Native runtime invocation bindings and workers;
 - environments and device grants;
 - Git base, branches, worktrees, and integration revision;
 - Metronome findings, Council judgments, certifications, and reports;
@@ -101,7 +101,7 @@ Use deterministic scheduling for hard constraints. Use Council judgment for valu
 
 1. Generalize single-Goal schedulers, leases, budgets, and projections by Goal identity.
 2. Add resource inventory, demand reservations, protected floors, and admission control.
-3. Implement per-Goal Prime Agent context and child binding isolation.
+3. Implement per-Goal native runtime context and child binding isolation.
 4. Implement repository and device exclusivity constraints.
 5. Implement safe pause-point declarations and preemption protocol.
 6. Implement Portfolio Council input packet, independent Head impact statements, decision, and dissent.

@@ -16,7 +16,7 @@ Certify that the already implemented selective, hierarchical organization withst
 Before certification:
 
 - freeze contract, event, database, authority-policy, and evidence-schema versions;
-- pin Node, PostgreSQL, Prime Agent, browser, and package versions;
+- pin Node, PostgreSQL, Model Gateway/provider adapters, browser, and package versions;
 - record configuration and migration identity;
 - disable experimental improvement classes not explicitly part of certification;
 - create an additive recovery checkpoint and database export;
@@ -40,7 +40,7 @@ Inject:
 
 - control-plane termination at every workflow boundary;
 - PostgreSQL reconnect and missed notification;
-- Prime Agent session loss or unavailable model;
+- native runtime session loss or unavailable model;
 - worker timeout, cancellation, late result, and duplicate reply;
 - partial Git operation and merge conflict;
 - environment or device disconnect;
@@ -149,7 +149,7 @@ If a required scenario fails:
 1. Full state-transition and authority branch coverage.
 2. Property-based idempotency, fencing, budget, and persona-bound tests.
 3. Database migration forward, backup, restore, and corrupt-input tests.
-4. Prime Agent compatibility matrix and live parent/child behavior.
+4. native runtime/provider capability matrix and live bounded parent/child behavior.
 5. Git isolation, conflict, cleanup, and remote denial.
 6. Device enrollment, expiry, revocation, and replay resistance.
 7. Discord independence, authentication, deduplication, and silence.
@@ -170,13 +170,13 @@ All required scenarios and audits pass on one frozen candidate. Backup and resto
 
 ### 59. Replacement acceptance scenarios
 
-The Prime Agent-native replacement is ready for cutover only when all ten representative live scenarios pass end to end:
+The native runtime replacement is ready for release certification only when all ten representative live scenarios pass end to end:
 
 1. **Overture:** Concertmaster activates only the needed Overture Crew roles, incorporates project context, external evidence or a design mock when required, produces one coherent `task.md`, and obtains the single CEO launch confirmation.
 2. **Hierarchical execution:** only relevant Heads wake; independent briefs, Head Council, Scout evidence, worker spawning, hierarchical Git integration, independent Quality validation, and Concertmaster reporting all complete.
 3. **Head-to-Head activation:** a Head directly calls another existing Head during a Goal; context, Council membership and budget update without duplicate activation.
 4. **Environment and enrolled device:** a worker safely uses a virtual environment, project CLI and browser or device access inside scope while a critical out-of-scope effect is blocked.
-5. **Restart recovery:** Maestro or Prime Agent restarts mid-Goal and reconciles durable state without duplicate workers, stale authority, lost accepted work, or false success.
+5. **Restart recovery:** Maestro or the Model Gateway restarts mid-Goal and reconciles durable state without duplicate workers, stale authority, lost accepted work, or false success.
 6. **Discord incident:** external detection wakes the correct Heads in triage mode, produces an Incident Task Contract, drives bounded remediation, and reaches independent certification.
 7. **Encore improvement:** milestone evidence becomes a curated Digest, an improvement candidate is shadow-evaluated, the multi-model Council judges it, and an allowed `refine` change applies or rolls back from measured evidence.
 8. **Portfolio Council:** competing Goals are prioritized by Encore and affected Heads, with safe pause, resource reallocation, and resume.

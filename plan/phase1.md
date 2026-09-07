@@ -20,20 +20,22 @@ This phase establishes the technical rules every later phase must use. Later pha
 
 ```text
 apps/control-plane
-apps/secretary-office
+apps/model-gateway
+apps/secretary                 # Electron + React client
 apps/cli
-apps/discord                 # created in Phase 4
+apps/discord                   # Phase 4 watchdog
+apps/device-agent              # Phase 4 device protocol
 packages/domain
 packages/contracts
-packages/persistence
+packages/persistence           # PostgreSQL/pg services and migrations
 packages/model-provider-openai / packages/model-provider-anthropic
+packages/agent-runtime
 packages/authority
 packages/evidence
-packages/git-ops             # activated in Phase 2
-packages/orchestration       # activated in Phase 2
-packages/persona             # activated in Phase 2 and expanded in Phase 6
-packages/observability
-packages/test-harness
+packages/environment-adapter
+packages/device-agent
+packages/git-adapter
+packages/api-client
 ```
 
 ### Server and contracts
@@ -48,7 +50,7 @@ packages/test-harness
 ### Durable truth
 
 - PostgreSQL 17 as the sole operational source of truth.
-- Drizzle ORM with explicit transactions and reviewed migrations.
+- PostgreSQL `pg` with explicit transactions and reviewed SQL migrations.
 - Append-only domain events plus current-state projections.
 - Transactional outbox for work, notifications, and integration events.
 - Lease rows with monotonic fencing tokens. Stale tokens cannot write.
@@ -68,8 +70,8 @@ The following boundary describes the original design only. It is retained for mi
 
 ### UI and CLI foundation
 
-- Next.js 16, React 19, Tailwind CSS 4, shadcn/ui, and TanStack Query.
-- The browser app is the preferred interface; the CLI has operational parity over the same server API.
+- Electron + React + Vite for the Secretary desktop client; `@earendil-works/pi-tui` for the terminal client.
+- Secretary and CLI are authenticated clients over the same server API; neither owns durable state.
 - The app stores presentation state only. Durable Goal state always returns from the control plane.
 - CLI uses Node's built-in `util.parseArgs`, human-readable output, and stable `--json` output.
 
@@ -77,9 +79,9 @@ The following boundary describes the original design only. It is retained for mi
 
 - Vitest for unit and integration tests.
 - fast-check for state-transition, idempotency, and fencing properties.
-- Testcontainers with real PostgreSQL.
-- Playwright and axe-core beginning with the app shell.
-- Pino structured logs and OpenTelemetry traces/metrics.
+- Real PostgreSQL through `MAESTRO_TEST_DATABASE_URL`; Docker is only an optional way to start a disposable database.
+- Playwright is used only by the bounded environment adapter; browser/UI acceptance is a later phase.
+- Structured evidence and PostgreSQL audit records are canonical; no Pino/OpenTelemetry dependency is required by the current Phase 1 runtime.
 - Logs are diagnostic; domain events and evidence records are the audit truth.
 - Large evidence artifacts use content-addressed storage with SHA-256 and database metadata.
 
@@ -137,7 +139,7 @@ On startup:
 
 1. Acquire the reconciliation leadership lease.
 2. Load nonterminal Goals and latest durable versions.
-3. Compare leases with actual Prime Agent sessions, processes, Git state, and later device grants.
+3. Compare leases with native runtime/provider sessions, processes, Git state, and later device grants.
 4. Fence expired owners before allowing writes.
 5. Preserve completed evidence; do not repeat proven work.
 6. Mark ambiguous work `no-write/recovery`.
@@ -146,7 +148,7 @@ On startup:
 ## Work sequence
 
 1. Scaffold workspaces, strict compiler settings, formatting, test commands, and configuration validation.
-2. Prove the pinned Prime Agent SDK can create, prompt, observe, and stop a session; create a direct child; receive an explicit reply; report the actual model; and reconnect or fail closed.
+2. Prove the native runtime and authenticated Model Gateway can create, prompt, observe, and stop a session; create a bounded child; receive an explicit reply; report the actual model; and reconnect or fail closed.
 3. Implement pure domain identifiers, errors, state transitions, and action classification.
 4. Implement PostgreSQL migrations, repositories, outbox, command receipts, optimistic versions, leases, and fencing.
 5. Implement the Fastify command/query API and SSE cursor resume.
@@ -165,7 +167,7 @@ On startup:
 - A stale lease holder receives a hard write rejection.
 - Corrupt or unknown event versions stop projection and surface an incident; they are not skipped.
 - Database loss blocks execution; agents never continue from memory as if durable state existed.
-- Prime Agent unavailability creates a bounded blocked state, not a fake successful session.
+- Model Gateway/runtime unavailability creates a bounded blocked state, not a fake successful session.
 - App disconnection does not cancel a launched Goal.
 - Emergency stop revokes new work and write authority before waiting for cooperative agent shutdown.
 

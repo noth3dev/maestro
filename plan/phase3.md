@@ -1,6 +1,6 @@
 # Phase 3 — Encore, Independent Certification, and First Usable Release
 
-> **Current status (2026-09-08):** This phase remains operationally gated. Conversation, account-login, and native runtime paths are implemented, but first-usable-release claims require live PostgreSQL, authority, provider-process, TUI parity, and recovery evidence.
+> **Current status (2026-09-08):** Conversation, account-login, oversight, and native runtime paths have live PostgreSQL/process evidence. First-usable-release acceptance still requires the approved production host-tool contract, dedicated TUI parity/reconnect evidence, and independent release review.
 
 
 ## Outcome
@@ -185,7 +185,7 @@ Run all steps in one clean scenario:
 3. Nothing executes before one exact launch confirmation.
 4. Only necessary Heads wake and independently brief.
 5. Head Council decides and every active Head writes a Department Plan.
-6. Workers modify and test a disposable isolated project through native Prime Agent hierarchy.
+6. Workers modify and test a disposable isolated project through the native `ExecutionKernelPort` hierarchy.
 7. Metronome observes all events.
 8. Inject one unsupported assertion or qualifying disagreement; Council handles it and records actual model diversity.
 9. Quality independently tests the integrated revision and catches a seeded defect in the negative run.

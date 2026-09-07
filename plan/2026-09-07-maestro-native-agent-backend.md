@@ -1,8 +1,10 @@
 # Maestro Native Agent Backend Implementation Plan
 
-> **Implementation workflow:** Execute this plan task by task and keep the checkboxes updated. Use the repository's current agent workflow; this document is the source of truth for scope and order.
+> **Status (2026-09-08): COMPLETED MIGRATION RECORD.** The native backend and Prime removal tasks described here have landed. The checkboxes and pre-cutover task wording below are retained as design provenance; they do not override `plan/operations/task_plan.md` or current source evidence. Use this document for contracts and rationale, not for selecting the next task.
 >
-> **Current status (2026-09-07):** Tasks 1–4 and the conversation/account-login portions of Tasks 6–7 are implemented in the repository. The native conversation path is usable behind the authenticated Control Plane/model gateway. Task 5 is **not accepted**: worker execution still composes `createPrimeExecutionKernel()` and `@maestro/prime-adapter` remains in the dependency graph. Durable account-login hardening added migration `0066_harden_provider_account_login_identity.sql`; PostgreSQL verification is required before closing that slice.
+> **Historical implementation workflow:** Execute this plan task by task and keep the checkboxes updated. Use the repository's current agent workflow.
+>
+> **Current status (2026-09-08):** The native runtime cutover is implemented. Prime Agent, `@maestro/prime-adapter`, and their configuration/dependency surfaces are removed. Conversation and Worker paths use the authenticated Model Gateway, with durable account-login hardening and real PostgreSQL/process acceptance. This document remains the migration design record; the remaining product gate is the exact production host-tool contract, not a Prime compatibility task.
 
 **Goal:** Remove Prime Agent from Maestro and replace it with a native provider-pluggable agent backend that supports natural-language control, common Tool/child-agent execution, OpenAI/Anthropic API-key authentication, and OpenAI subscription access only through the documented Codex app-server boundary. Claude Pro/Max subscription OAuth is blocked without written Anthropic approval.
 
