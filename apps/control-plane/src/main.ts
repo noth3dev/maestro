@@ -1,9 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { AuthorizedEffectExecutor, type ActionRequest } from "@maestro/authority";
 import { createLocalGitPort } from "@maestro/git-adapter";
 import type { ExecutionKernelPort, GitPort } from "@maestro/domain";
-import { assertProjectMembership, authenticateLocalOperator, bootstrapPermanentOrganization, listProjectMemberships, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, reconcileOnStartup, recordDiscordSignal, runMigrations } from "@maestro/persistence";
+import { assertProjectMembership, authenticateLocalOperator, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, reconcileOnStartup, recordDiscordSignal, runMigrations } from "@maestro/persistence";
 import { createPrimeExecutionKernel } from "@maestro/prime-adapter";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
@@ -72,6 +73,8 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   const https = config.tls ? { cert: readFileSync(config.tls.certFile), key: readFileSync(config.tls.keyFile) } : undefined;
   const pool = new Pool({ connectionString: config.databaseUrl });
   const modelGateway = config.modelGatewayToken === undefined ? undefined : createModelGatewayClient({ baseUrl: config.modelGatewayUrl!, token: config.modelGatewayToken });
+  const accountLoginStore = modelGateway === undefined ? undefined : createPostgresAccountLoginStore(pool);
+  const accountLoginOwnerId = `${config.leaseOwnerId}:${randomUUID()}`;
   const executionKernel = overrides.executionKernel ?? createPrimeExecutionKernel();
   const conversationService = modelGateway === undefined ? undefined : createPostgresConversationService({ pool, gateway: modelGateway, gatewayOperatorId: config.modelGatewayOperatorId, accountRefs: config.modelAccountRefs });
   const goalService = createDurableGoalService({
@@ -130,6 +133,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     authenticator,
     eventService: { listEvents: (projectId, after) => listGoalEvents(pool, { projectId, after }) },
     ...(conversationService === undefined ? {} : { conversationService }),
+    ...(accountLoginStore === undefined ? {} : { accountLoginStore, accountLoginOwnerId }),
     ...(modelGateway === undefined || modelGateway.bindCredential === undefined || modelGateway.revokeCredential === undefined ? {} : {
       providerCredentials: {
         bind: (input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic"; authMode: "api-key"; secret: string }) => modelGateway.bindCredential!(input),
@@ -186,6 +190,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       // ever queries goal/lease/control tables that a pending migration
       // might still be introducing.
       await runMigrations(pool);
+      if (accountLoginStore !== undefined) await accountLoginStore.recoverStarting(accountLoginOwnerId);
       // Seed the immutable canonical organization before provisioning can
       // validate requested roles. This is idempotent and creates no sessions.
       await bootstrapPermanentOrganization(pool);

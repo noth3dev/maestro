@@ -654,3 +654,8 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - **Accepted:** Codex app-server starts as a shell-free child with provider credential-like environment variables removed. Maestro sends only validated provider/model/message data and uses a read-only sandbox; Maestro tool calls are rejected until a separate authority bridge exists.
 - **Blocked:** Claude Pro/Max subscription OAuth requires an official public or explicitly approved Anthropic protocol. Reusing Prime's private flow, undocumented endpoints/scopes, or the Claude CLI as a credential bridge would violate the project boundary.
 - **Open:** Login request idempotency and restart-safe login session ownership still need durable records before production release.
+
+## 2026-09-07 — Durable account-login hardening
+- Account-login identity is now append-only at the database boundary; direct identity rewrites and deletes are rejected.
+- Status/cancel operations use an atomic, reclaimable lease with a unique operation token so a late request cannot overwrite or release a newer claim.
+- Gateway restart errors preserve a stable lost-session code, allowing Control Plane to persist terminal `unknown` truthfully.

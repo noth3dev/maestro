@@ -2336,3 +2336,8 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - The stream retains its last cursor, emits only events strictly newer than that cursor, serializes poll access to prevent overlapping reads, and clears both poll and heartbeat timers on disconnect/close.
 - Reconnect remains cursor-based and therefore resumes from the caller's last acknowledged event without replaying older events. Durable-store failure closes the stream rather than emitting synthetic success.
 - Forced TypeScript build and full tests passed: 99 files passed, 51 skipped, 0 failed.
+
+## 2026-09-07 — Durable account-login recovery hardening
+- Added durable login reservations with operator/request idempotency, per-process ownership, startup fencing of interrupted `starting` rows, and terminal `unknown` recovery after gateway loss.
+- Added append-only SQL identity/delete guards and an atomic status/cancel operation lease with per-operation fencing tokens.
+- Verification: full `npm run check` passed (635 tests, 366 environment-gated skips); account-login PostgreSQL integration passed 6/6 on `maestro-account-login-postgres` (port 55465).
