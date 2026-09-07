@@ -21,7 +21,7 @@
 - Provider/model switches affect only new admissions. Existing execution bindings remain immutable.
 - Existing typed Control Plane, CLI, Secretary, and TUI authority boundaries remain authoritative. No UI may invent durable state or credentials.
 - Do not touch `.worktrees/device-grant-expiry` or `.worktrees/local-gateway-bootstrap`; neither is part of this plan's working tree.
-- Each implementation slice must have a focused red test, a green focused test, `npm run build`, an independent review, a Conventional Commit, a push to `origin/main`, and an evidence entry in `findings.md` and `progress.md`.
+- Each implementation slice must have a focused red test, a green focused test, `npm run build`, an independent review, a Conventional Commit, a push to `origin/main`, and an evidence entry in `plan/operations/findings.md` and `plan/operations/progress.md`.
 - Phase acceptance requires disposable PostgreSQL and real-process gates. Unit tests alone never close a phase.
 
 ## Current Repository Findings
@@ -57,8 +57,8 @@ Tasks B, E, and the discovery part of F can be reviewed independently. C and D m
 **Status:** plan/audit in progress; no implementation code changes in this task.
 
 **Files:**
-- Read: `docs/OPERATING_PROTOCOL.md`, `task_plan.md`, `findings.md`, `progress.md`, `plan/phase1.md`–`plan/phase8.md`, native backend and TUI plans.
-- Maintain: `plan/act1-execution.md`, `findings.md`, `progress.md`.
+- Read: `docs/OPERATING_PROTOCOL.md`, `plan/operations/task_plan.md`, `plan/operations/findings.md`, `plan/operations/progress.md`, `plan/phase1.md`–`plan/phase8.md`, native backend and TUI plans.
+- Maintain: `plan/act1-execution.md`, `plan/operations/findings.md`, `plan/operations/progress.md`.
 
 **Required evidence:**
 

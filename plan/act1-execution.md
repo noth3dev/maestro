@@ -12,7 +12,7 @@ Raise Maestro from a code-complete phase baseline to an operationally usable Act
 - `plan/phase1.md` through `plan/phase8.md`: phase requirements and exit gates.
 - `plan/2026-09-07-maestro-native-agent-backend.md`: current native runtime/provider migration and Prime-removal boundary.
 - `plan/2026-09-06-maestro-tui.md` and `plan/specs/2026-09-06-maestro-tui-design.md`: terminal operator surface.
-- Root `task_plan.md`, `findings.md`, and `progress.md`: current evidence ledger. When historical status conflicts with the repository, trust the repository and record the reconciliation.
+- Root `plan/operations/task_plan.md`, `plan/operations/findings.md`, and `plan/operations/progress.md`: current evidence ledger. When historical status conflicts with the repository, trust the repository and record the reconciliation.
 
 ## Non-negotiable execution rules
 
@@ -50,7 +50,7 @@ Raise Maestro from a code-complete phase baseline to an operationally usable Act
 
 ## Later Act 1 phases
 
-Phase 2–8 remain blocked behind the preceding phase exit gate. Their requirements are not redefined here; this file tracks execution order and evidence only. Any new requirement or architecture decision must be added to the relevant phase plan and root findings ledger before implementation.
+Phase 2–8 remain blocked behind the preceding phase exit gate. Their requirements are not redefined here; this file tracks execution order and evidence only. Any new requirement or architecture decision must be added to the relevant phase plan and the findings ledger before implementation.
 
 ## Current next action
 
