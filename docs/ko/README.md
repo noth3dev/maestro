@@ -27,14 +27,14 @@ Maestro: 범용 작업을 위한 내구성 있는 자가개선 에이전트 오�
 
 > **언어 선택:** [**한국어 (ko)**](README.md) | [**English (en)**](../en/README.md)
 
-Maestro는 신뢰할 수 있고 장시간 실행되는 다중 에이전트 목표 실행을 위해 설계된 오픈 소스 엔터프라이즈 AI 오케스트레이션 프레임워크입니다. 현재 대화 경로는 **Maestro 네이티브 에이전트 런타임**과 인증된 provider gateway가 담당합니다. 레거시 Prime 어댑터는 네이티브 백엔드 마이그레이션이 완료될 때까지 워커 실행 경로에만 남아 있습니다. Maestro는 실제 인간 조직 구조를 모델링하며, 권력 분립, 영구 도메인 부서, 단조 펜싱 리스, 암호화적 감사 가능성을 결합하여 승인되지 않은 부작용(Side Effect)이 발생하지 않도록 보장합니다.
+Maestro는 신뢰할 수 있고 장시간 실행되는 다중 에이전트 목표 실행을 위해 설계된 오픈 소스 엔터프라이즈 AI 오케스트레이션 프레임워크입니다. 현재 대화 경로는 **Maestro 네이티브 에이전트 런타임**과 인증된 provider gateway가 담당합니다. 모든 실행 경로는 네이티브 Maestro 런타임과 인증된 model gateway가 담당합니다. Maestro는 실제 인간 조직 구조를 모델링하며, 권력 분립, 영구 도메인 부서, 단조 펜싱 리스, 암호화적 감사 가능성을 결합하여 승인되지 않은 부작용(Side Effect)이 발생하지 않도록 보장합니다.
 
 ## 현재 Runtime 경계
 
 - **대화 경로:** Control Plane의 `MaestroAgentRuntime`이 인증된 `apps/model-gateway` 프로세스를 사용합니다.
 - **Provider 인증:** API key는 gateway credential store에만 남습니다. OpenAI ChatGPT 구독 로그인은 공식 Codex app-server에 위임하며 Maestro는 로그인 metadata와 state만 저장합니다.
-- **워커 경로:** `ExecutionKernelPort`는 아직 레거시 `@maestro/prime-adapter`로 구성됩니다. 네이티브 워커 parity, 재시작 recovery 및 no-Prime 의존성 검사를 통과하기 전에는 Prime 제거를 승인하지 않습니다.
-- **터미널 UI:** `@earendil-works/pi-tui`는 표현 계층에만 사용합니다. Prime Agent runtime이 아닙니다.
+- **워커 경로:** `ExecutionKernelPort`는 네이티브 Model Gateway 라우터로 구성됩니다. 모든 admission은 host context, capability grant, model policy, account binding 및 idempotency를 포함합니다.
+- **터미널 UI:** `@earendil-works/pi-tui`는 표현 계층에만 사용하며 실행 권한이 없습니다.
 
 ## 핵심 아키텍처 및 4대 기둥 (Core Architecture & Pillars)
 

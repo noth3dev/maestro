@@ -165,7 +165,7 @@ const STOP_ACKNOWLEDGED_STATES: ReadonlySet<GoalState> = new Set(["stopped", "st
 
 /**
  * Purely structural consistency check between a Goal's persisted state and
- * its goal_leases/goal_controls rows. No actual Prime session reconciliation
+ * its goal_leases/goal_controls rows. No provider session reconciliation
  * happens here; this only flags shapes that must never be silently resumed.
  */
 function classifyGoalConsistency(input: {

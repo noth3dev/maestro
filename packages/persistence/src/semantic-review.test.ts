@@ -102,6 +102,17 @@ describe("semantic review execution", () => {
     idempotencyKey: "review-command-1",
   };
 
+  it("rejects a semantic admission bound to a different Goal before provider spawn", async () => {
+    const kernel = fakeKernel([
+      observation("succeeded", { state: "available", text: supported }),
+    ]);
+    const mismatched: ExecutionAdmission = { ...admission, context: { ...admission.context, goalId: "other-goal" } };
+
+    await expect(requestSemanticReview(fakePool(), kernel, "goal-1", "the claim", criteria, mismatched))
+      .rejects.toThrow("semantic review admission context");
+    expect(kernel.spawn).not.toHaveBeenCalled();
+  });
+
   it("creates a repository-rooted execution, prompts it after spawn, and waits for a terminal answer", async () => {
     const kernel = fakeKernel([
       observation("running", { state: "unavailable", reason: "provider-does-not-expose-answer-text" }),

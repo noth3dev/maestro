@@ -6,7 +6,6 @@ import { createLocalGitPort } from "@maestro/git-adapter";
 import type { ExecutionAdmission, ExecutionKernelPort, GitPort } from "@maestro/domain";
 import { parseModelRef, ToolRegistry } from "@maestro/agent-runtime";
 import { assertProjectMembership, authenticateLocalOperator, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, reconcileOnStartup, recordDiscordSignal, runMigrations } from "@maestro/persistence";
-import { createPrimeExecutionKernel } from "@maestro/prime-adapter";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
 import { createDurableGoalService } from "./goal-service.js";
@@ -65,10 +64,12 @@ function createHostNativeAdmission(config: MaestroConfig, input: NativeAdmission
   const suffix = input.purpose === "head" ? input.departmentId : `reviewer-${input.reviewerIndex}`;
   const grantId = `native:${input.purpose}:${input.goalId}:${suffix}`;
   return {
-    context: { operatorId: config.actorId, projectId: input.projectId, goalId: input.goalId, missionBundleId: `native-${input.purpose}`, policyVersion: "native-host-v1", accountRef, fencingToken: input.fencingToken },
+    context: { operatorId: input.purpose === "head" ? input.actorId : config.actorId, projectId: input.projectId, goalId: input.goalId, missionBundleId: `native-${input.purpose}`, policyVersion: "native-host-v1", accountRef, fencingToken: input.fencingToken },
     grant: { grantId, allowedTools: [], allowedSkills: [], modelPolicy: [config.nativeModelRef], pathScope: [config.worktreeRoot], outboundDataClasses: ["repository files only"], remaining: { modelTurns: 8, toolCalls: 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } },
     modelPolicy: [config.nativeModelRef],
-    idempotencyKey: input.commandId,
+    // A council command fans out into independent roots; their gateway
+    // admissions must not replay the same idempotency identity.
+    idempotencyKey: input.purpose === "encore" ? `${input.commandId}:reviewer:${input.reviewerIndex}` : input.commandId,
   };
 }
 

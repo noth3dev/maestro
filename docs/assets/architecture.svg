@@ -158,5 +158,5 @@
 
   <!-- FOOTER BOUNDARY -->
   <rect x="50" y="870" width="800" height="40" rx="8" fill="#121218" stroke="#252533" />
-  <text x="450" y="894" text-anchor="middle" class="text-dim">Maestro native runtime + legacy worker bridge (<tspan fill="#38bdf8">packages/prime-adapter</tspan> pending removal)</text>
+  <text x="450" y="894" text-anchor="middle" class="text-dim">Maestro native runtime + authenticated Model Gateway</text>
 </svg>

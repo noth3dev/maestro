@@ -11,6 +11,7 @@ import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
 import { assertCurrentWorkerLease, bindWorkerInvocation, cancelUnboundWorkerAfterBindingFailure, markUnboundWorkerUnknown, WorkerNotFoundError } from "./worker.js";
+import { readMissionBundle, type MissionBundle } from "./mission-bundle.js";
 
 export class TeamLeadGrantError extends Error {}
 export class TeamLeadGrantNotFoundError extends TeamLeadGrantError {}
@@ -101,6 +102,39 @@ function parseDurationMs(text: string): number | null {
   const unitMs = DURATION_UNIT_MS[match[2]!.toLowerCase()];
   if (!Number.isFinite(amount) || unitMs === undefined) return null;
   return amount * unitMs;
+}
+
+function isSubset(values: readonly string[], allowed: readonly string[]): boolean {
+  return values.every((value) => allowed.includes(value));
+}
+
+function assertNativeHelperAdmission(
+  admission: ExecutionAdmission,
+  bundle: MissionBundle,
+  projectId: string,
+  proof: GoalLeaseProof,
+  parentWorkerId: string,
+): void {
+  const model = admission.modelPolicy.length === 1 ? admission.modelPolicy[0] : undefined;
+  if (model === undefined || admission.grant.modelPolicy.length !== 1 || admission.grant.modelPolicy[0] !== model || !/^[^\s/]+\/[^\s/]+$/.test(model)) {
+    throw new TeamLeadGrantError("Helper admission model policy is invalid");
+  }
+  if (!bundle.substance.approvedModels.includes(model)) throw new TeamLeadGrantError("Helper admission model is not approved by the Mission Bundle");
+  if (admission.context.goalId !== proof.goalId || admission.context.projectId !== projectId || admission.context.missionBundleId !== bundle.contentHash || admission.context.fencingToken !== proof.fencingToken) {
+    throw new TeamLeadGrantError("Helper admission context does not match the bound Goal, Mission Bundle, or lease");
+  }
+  if (admission.idempotencyKey.trim() === "" || admission.grant.parentGrantId !== `worker:${parentWorkerId}`) {
+    throw new TeamLeadGrantError("Helper admission does not inherit the team-lead grant");
+  }
+  if (!isSubset(admission.grant.allowedTools, bundle.substance.allowedTools) || !isSubset(admission.grant.allowedSkills, bundle.substance.allowedSkills) || !isSubset(admission.grant.pathScope, bundle.substance.allowedPaths) || !isSubset(admission.grant.outboundDataClasses, bundle.substance.dataBoundary.split(",").map((value) => value.trim()).filter(Boolean))) {
+    throw new TeamLeadGrantError("Helper admission widens the Mission Bundle capability scope");
+  }
+  const remaining = admission.grant.remaining;
+  const maxToolCalls = Math.max(1, bundle.substance.allowedTools.length * 8);
+  const maxWallTimeMs = parseDurationMs(bundle.substance.timeCeiling);
+  if (remaining.modelTurns > 8 || remaining.toolCalls > maxToolCalls || remaining.childCalls > bundle.substance.workerCeiling || remaining.outputTokens > 8_192 || remaining.retryCount > bundle.substance.retryCeiling || (maxWallTimeMs !== null && remaining.wallTimeMs > maxWallTimeMs)) {
+    throw new TeamLeadGrantError("Helper admission exceeds the parent Mission Bundle ceilings");
+  }
 }
 
 async function lockGoalLease(client: PoolClient, proof: GoalLeaseProof): Promise<Date> {
@@ -194,8 +228,8 @@ export async function revokeTeamLeadGrant(pool: Pool, grantId: string, proof: Go
  * the grant's task scope (the exact Department Plan version it was issued
  * against -- a later plan revision supersedes the grant's scope). costCeiling
  * enforcement is deliberately out of scope (see parseDurationMs's doc
- * comment). The helper is parented to the team lead's own execution (Prime's
- * native hierarchy) and remains visible under the same Department Plan
+ * comment). The helper is parented to the team lead's own execution (the native
+ * runtime hierarchy) and remains visible under the same Department Plan
  * mission.
  */
 export async function spawnHelperWorker(pool: Pool, kernel: ExecutionKernelPort, grantId: string, proof: GoalLeaseProof, context: CouncilActorContext, admission?: ExecutionAdmission): Promise<Worker> {
@@ -213,6 +247,9 @@ export async function spawnHelperWorker(pool: Pool, kernel: ExecutionKernelPort,
     if (grant.revoked_at !== null) throw new TeamLeadGrantError("Team-lead grant is revoked");
     const ownerLeaseExpiresAt = await lockGoalLease(client, proof);
     await assertAuthorizedHeadForDepartment(pool, grant.council_id, grant.department_id, context, client);
+    const council = await readHeadCouncil(pool, grant.council_id);
+    const bundle = await readMissionBundle(pool, grant.council_id, grant.department_id, grant.plan_version, grant.item_id);
+    if (admission !== undefined) assertNativeHelperAdmission(admission, bundle, council.snapshot.projectId, proof, grant.worker_id);
     const teamLead = await client.query<WorkerIdentityRow & { worker_id: string }>(
       "SELECT worker_id, council_id, department_id, plan_version, item_id, execution_ref, status, parent_worker_id FROM workers WHERE worker_id = $1 FOR UPDATE",
       [grant.worker_id],
@@ -260,18 +297,9 @@ export async function spawnHelperWorker(pool: Pool, kernel: ExecutionKernelPort,
   let spawned: Awaited<ReturnType<ExecutionKernelPort["spawn"]>>;
   try {
     await assertCurrentWorkerLease(pool, workerId, proof);
-    // Native runtimes require an explicit child admission and prompt. Keep the
-    // optional argument for injected legacy test kernels, but never widen a
-    // host-created helper grant: its parent identity must be the durable root
-    // worker grant, and the selected model must match the root Mission Bundle.
-    if (admission !== undefined) {
-      if (admission.modelPolicy.length !== 1 || admission.grant.modelPolicy.length !== 1 || admission.grant.modelPolicy[0] !== admission.modelPolicy[0]) {
-        throw new TeamLeadGrantError("Helper admission model policy is invalid");
-      }
-      if (parentWorkerId === undefined || admission.grant.parentGrantId !== `worker:${parentWorkerId}`) {
-        throw new TeamLeadGrantError("Helper admission does not inherit the team-lead grant");
-      }
-    }
+    // Native runtimes require an explicit child admission and prompt. The
+    // admission was checked against the durable Mission Bundle before the
+    // reservation was committed; legacy injected kernels may still omit it.
     spawned = await kernel.spawn({
       name: helperName,
       parent: parentExecutionRef,

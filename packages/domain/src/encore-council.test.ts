@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { evaluateEncoreTriggers, InvalidEncoreJudgmentError, synthesizeEncoreJudgments, type EncoreJudgmentSubstance } from "./encore-council.js";
 
 const judgment = (overrides: Partial<EncoreJudgmentSubstance> = {}): EncoreJudgmentSubstance => ({
-  modelProvider: "prime", modelId: "kimi", verdict: "proceed", confidence: "high", reasoning: "evidence supports proceeding",
+  modelProvider: "test", modelId: "kimi", verdict: "proceed", confidence: "high", reasoning: "evidence supports proceeding",
   conditions: [], dissentNote: null, citedEvidenceIds: ["ev-1"],
   ...overrides,
 });

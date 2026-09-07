@@ -2430,3 +2430,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Root Head/Encore service paths and semantic/team-lead persistence paths carry the new `ExecutionAdmission` seam. Team-lead child admission validates parent grant inheritance before spawn.
 - Verified with real PostgreSQL: Head API 2/2 and team-lead 11/11 on isolated disposable databases.
 - Next: remove `@maestro/prime-adapter` and `prime-agent`, then run no-Prime dependency/source scans before native HTTP acceptance.
+
+
+## 2026-09-08 — Prime dependency removed
+
+- Deleted `packages/prime-adapter`; removed workspace/project refs and regenerated the lockfile. No source or dependency reference remains.
+- Focused post-deletion tests: **50/50**; forced build passed.
+- Next: exercise a real Control Plane + Model Gateway process with a fake provider, prove native Worker admission end to end, then return to remaining PostgreSQL Phase 1 failures.

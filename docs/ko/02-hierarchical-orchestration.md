@@ -100,7 +100,7 @@ Operations Group
 
 ## 5. Scout & Execution Workers
 
-* 부서장은 provider-neutral `ExecutionKernelPort`를 통해 작업자를 디스패치합니다. 현재 워커 구성은 레거시 Prime 어댑터를 사용하며, 네이티브 워커 전환은 별도의 미승인 마이그레이션 게이트입니다.
+* 부서장은 provider-neutral `ExecutionKernelPort`를 통해 작업자를 디스패치합니다. 워커 구성은 네이티브 execution-kernel router를 사용하며, 모든 worker admission은 immutable Mission Bundle과 gateway binding으로 검사됩니다.
 * 작업자는 최소 권한 원칙의 **Mission Bundle** 하에서 작동합니다.
 * 모든 코드 수정은 격리된 Git 워크트리(`.worktrees/`) 내에서 일어납니다.
 * 작업 완료 시 테스트 로그, 디프, 아티팩트 SHA-256 해시를 포함한 **Evidence Bundle**을 생성합니다.

@@ -26,9 +26,6 @@
       "path": "packages/authority"
     },
     {
-      "path": "packages/prime-adapter"
-    },
-    {
       "path": "packages/git-adapter"
     },
     {

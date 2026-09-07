@@ -15,7 +15,8 @@ describe("parseConfig", () => {
       worktreeRoot: required.MAESTRO_WORKTREE_ROOT,
       host: "127.0.0.1",
       port: 4310,
-            actorId: "maestro-control-plane",
+      nativeModelRef: "openai/gpt-5",
+      actorId: "maestro-control-plane",
       leaseOwnerId: "local-control-plane",
       reconcilerLeaseDurationMs: 30_000,
       shutdownDrainTimeoutMs: 5_000,
@@ -23,6 +24,11 @@ describe("parseConfig", () => {
       modelGatewayOperatorId: "local-operator",
       modelAccountRefs: { openai: "openai-local-operator", anthropic: "anthropic-local-operator" },
     });
+  });
+
+  it("rejects an unqualified native model and defaults bare internal paths to a qualified model", () => {
+    expect(parseConfig(required).nativeModelRef).toBe("openai/gpt-5");
+    expect(() => parseConfig({ ...required, MAESTRO_NATIVE_MODEL: "gpt-5" })).toThrow("Invalid Maestro configuration");
   });
 
   it("accepts an explicit CEO operator identity for critical-action approvals", () => {
@@ -114,7 +120,7 @@ describe("parseConfig", () => {
     // never leak into the returned config, regardless of its value.
     expect(withCredentials).toEqual(withoutCredentials);
     expect(Object.keys(withCredentials).sort()).toEqual([
-      "actorId", "databaseUrl", "evidenceDir", "host", "leaseOwnerId", "modelAccountRefs", "modelGatewayOperatorId", "modelGatewayUrl", "port", "reconcilerLeaseDurationMs", "shutdownDrainTimeoutMs", "worktreeRoot",
+      "actorId", "databaseUrl", "evidenceDir", "host", "leaseOwnerId", "modelAccountRefs", "modelGatewayOperatorId", "modelGatewayUrl", "nativeModelRef", "port", "reconcilerLeaseDurationMs", "shutdownDrainTimeoutMs", "worktreeRoot",
     ]);
     const serialized = JSON.stringify(withCredentials);
     for (const secret of Object.values(providerCredentialMetronomes)) {
