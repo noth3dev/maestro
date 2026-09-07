@@ -61,7 +61,7 @@ describe("provider account login routes", () => {
     expect(start.statusCode).toBe(200);
     expect(start.json()).toEqual({ providerId: "openai-codex", loginId: "durable-login-1", authUrl: "https://chatgpt.com/login" });
     expect(startAccountLogin).toHaveBeenCalledWith({ operatorId: operator.operatorId, requestId: expect.any(String), providerId: "openai-codex" });
-    const status = await app.inject({ method: "POST", url: "/v1/provider-account-logins/status", headers, payload: { providerId: "openai-codex", loginId: "login-1" } });
+    const status = await app.inject({ method: "POST", url: "/v1/provider-account-logins/status", headers, payload: { providerId: "openai-codex", loginId: "durable-login-1" } });
     expect(status.statusCode).toBe(200);
     expect(status.json()).toEqual({ providerId: "openai-codex", loginId: "durable-login-1", state: "pending" });
     await app.close();
