@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { InvalidDeviceInventoryError, deviceIdentityFingerprint, type DeviceInventory, type LocalDevicePolicyInput } from "@maestro/domain";
+import { applyAllMigrations } from "./test-migrations.js";
 import {
   DeviceAuthorizationError,
   DeviceError,
@@ -20,7 +21,6 @@ import {
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
-const migrations = ["0001_phase1_core.sql", "0040_devices.sql", "0041_device_policy_hardening.sql"];
 
 const inventory = (overrides: Partial<DeviceInventory> = {}): DeviceInventory => ({
   observedAt: "2030-01-01T00:00:00.000Z",
@@ -47,9 +47,12 @@ const context = (role: "ceo" | "device_agent", deviceId?: string, identityFinger
  describeDatabase("device enrollment and local policy persistence", () => {
   const pool = new Pool({ connectionString: databaseUrl });
 
+  // Full migration replay -- not a hand-picked subset -- so this suite tracks
+  // every later cross-table dependency device.ts legitimately grows (e.g.
+  // revokeDevice's cascade into device_grants added by 0046), the same way
+  // every sibling device/device-grant integration suite already does.
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS device_policies, devices CASCADE");
-    for (const name of migrations) await pool.query(await readFile(fileURLToPath(new URL(`../migrations/${name}`, import.meta.url)), "utf8"));
+    await applyAllMigrations(pool);
   });
   beforeEach(async () => {
     await pool.query("TRUNCATE device_policies, devices RESTART IDENTITY CASCADE");
