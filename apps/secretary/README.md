@@ -19,3 +19,8 @@ The bearer token lives only in the Electron **main** process. The renderer (the 
 ## What's real vs. not connected yet
 
 Every screen from the design is present, but only the ones with a real control-plane read/write model behind them are wired up: Goal state, budget, event history, and certifications (Dashboard, Evidence log), and the connection/appearance/danger-zone settings. Screens whose backend doesn't exist yet (Channel, Git diff, Floor, Inbox, Billing, Luthiery, Arrangements, Flashmob) show an honest "not connected yet" state instead of fake data — see each file under `src/views/` for exactly what's missing.
+
+
+## Native runtime boundary
+
+Secretary calls the Control Plane only. It never starts the Model Gateway, stores provider credentials, or creates execution admissions.
