@@ -706,3 +706,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - The first isolated PostgreSQL failure was a `ReferenceError: projectId is not defined` in `packages/persistence/src/worker.integration.test.ts:272`, not a reconciliation implementation failure. The test called `setupBundle()` but omitted its returned `projectId` from destructuring before asserting the durable recovery report.
 - Fixed the test to capture `projectId`. Focused PostgreSQL verification now passes **33/33 tests**, including the live-lease `lease_contended` restart case. `npm run build` also passes.
 - The broader PostgreSQL run must be repeated after this fix; prior observed failures in Concertmaster/Git/Metronome/certification/device-agent suites remain open until independently reproduced and closed.
+
+
+## 2026-09-08 — Native Prime-removal cutover plan
+
+- The user explicitly reprioritized the work: remove Prime Agent completely and move every production execution path to the native Maestro backend before resuming the remaining Phase 1 patches.
+- Current native conversation execution already uses `createMaestroAgentRuntime` and the authenticated Model Gateway. The missing production seam is the Control Plane execution-kernel composition: Worker, Head activation, semantic review, Encore reviewers, and team-lead helpers still issue Prime-era or bare `ExecutionKernelPort` requests.
+- Created `plan/2026-09-08-native-prime-removal-cutover.md`. It sequences native kernel routing, explicit model/grant propagation, durable execution-binding evidence, fixed host tools, real HTTP acceptance, complete Prime deletion, then the Phase 1 PostgreSQL patch queue.
+- The plan requires zero production/test dependency references to `prime-agent`, `@maestro/prime-adapter`, `createPrimeExecutionKernel`, or `primeAgentVersion`; Prime is not allowed as fallback.

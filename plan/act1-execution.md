@@ -54,4 +54,4 @@ Phase 2–8 remain blocked behind the preceding phase exit gate. Their requireme
 
 ## Current next action
 
-Finish the Phase 1 evidence audit, then select exactly one missing or environment-gated blocker to close.
+Execute `plan/2026-09-08-native-prime-removal-cutover.md` through the no-Prime native composition gate before resuming the remaining Phase 1 patch queue.
