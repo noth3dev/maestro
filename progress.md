@@ -2277,3 +2277,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - TUI free text now uses the selected project and Goal, an exact `MAESTRO_MODEL`, and the authenticated conversation API. Session files persist only non-secret conversation/model metadata.
 - Added gateway configuration documentation and redaction coverage. The gateway remains a separately started process; provider keys stay there.
 - Fresh verification: `npm run check` passed with 95 files passed, 51 skipped; 587 tests passed, 360 skipped; 0 failed. Gateway `/healthz` process smoke returned HTTP 200. PostgreSQL integration and real provider calls remain environment-gated.
+
+
+## 2026-09-07 — Local first-run bootstrap decision
+
+- User-approved direction: make Docker optional for local use. When an explicit Control Plane endpoint/token exists, the CLI connects directly. Otherwise, a future local bootstrap slice may reuse/start an available Docker-backed or native PostgreSQL runtime, run migrations, start/reuse the local Control Plane, and attach the TUI.
+- If no usable PostgreSQL runtime exists, the TUI must show actionable setup instructions rather than silently installing packages, falling back to SQLite/in-memory state, or claiming readiness.
+- Provider onboarding, Codex/Claude Code OAuth, and production deployment automation remain out of scope for this local convenience slice and will be planned separately.
