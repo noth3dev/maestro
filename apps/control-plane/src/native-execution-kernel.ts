@@ -3,6 +3,7 @@ import {
   type ExecutionKernelPort,
   type ExecutionRef,
   type InvocationRef,
+  type ExecutionBindingEvidence,
   type ModelIdentity,
   type SpawnRequest,
   type SpawnedInvocation,
@@ -170,6 +171,18 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
       const record = executions.get(execution);
       if (record === undefined) throw new ExecutionKernelUnavailableError("getModelIdentity");
       return record.binding.provider;
+    },
+
+    async getExecutionBinding(execution): Promise<ExecutionBindingEvidence> {
+      const record = executions.get(execution);
+      if (record === undefined) throw new ExecutionKernelUnavailableError("getModelIdentity");
+      return {
+        model: record.binding.provider,
+        accountRef: record.binding.account.accountRef,
+        gatewayInstanceId: record.binding.gatewayInstanceId,
+        gatewayBindingId: record.binding.bindingId,
+        dataPolicyHash: record.binding.dataPolicyHash,
+      };
     },
 
     async getToolEvents(invocation): Promise<ToolEvents> {

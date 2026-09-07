@@ -135,6 +135,14 @@ export class ExecutionKernelUnavailableError extends Error {
   }
 }
 
+export interface ExecutionBindingEvidence {
+  readonly model: ModelIdentity;
+  readonly accountRef?: string;
+  readonly gatewayInstanceId?: string;
+  readonly gatewayBindingId?: string;
+  readonly dataPolicyHash?: string;
+}
+
 export interface ExecutionKernelPort {
   spawn(request: SpawnRequest): Promise<SpawnedInvocation>;
   prompt(execution: ExecutionRef, text: string): Promise<void>;
@@ -142,6 +150,8 @@ export interface ExecutionKernelPort {
   sendMessage(execution: ExecutionRef, invocation: InvocationRef, message: string): Promise<void>;
   cancel(invocation: InvocationRef): Promise<{ cancelled: boolean }>;
   getModelIdentity(execution: ExecutionRef): Promise<ModelIdentity>;
+  /** Optional immutable gateway metadata used for durable native binding evidence. */
+  getExecutionBinding?(execution: ExecutionRef): Promise<ExecutionBindingEvidence>;
   getToolEvents(invocation: InvocationRef): Promise<ToolEvents>;
   getUsage(invocation: InvocationRef): Promise<InvocationUsage>;
   getInvocationStatus(invocation: InvocationRef): Promise<InvocationStatus>;

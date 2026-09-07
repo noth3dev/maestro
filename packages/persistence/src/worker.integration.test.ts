@@ -74,7 +74,8 @@ function fakeKernel(finalStatus: InvocationObservation["status"] = "succeeded"):
     },
     async sendMessage() { /* no-op */ },
     async cancel(invocation) { (this as { cancelledInvocations: string[] }).cancelledInvocations.push(invocation as unknown as string); return { cancelled: true }; },
-    async getModelIdentity() { return { provider: "fake", id: "fake" }; },
+    async getModelIdentity() { return { provider: "test", id: "model-a" }; },
+    async getExecutionBinding() { return { model: { provider: "test", id: "model-a" }, accountRef: "test-account", gatewayInstanceId: "gateway-test", gatewayBindingId: "binding-test", dataPolicyHash: "policy-test" }; },
     async getToolEvents() { return { state: "empty", events: [] }; },
     async getUsage() { return { state: "available", totalTokens: 42 }; },
     async getInvocationStatus() { return finalStatus; },
@@ -220,6 +221,12 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     expect(request.context).toMatchObject({ projectId, goalId: proof.goalId, missionBundleId: bundle.contentHash, fencingToken: proof.fencingToken });
     expect(request.idempotencyKey).toBe(commandId);
     expect(worker.status).toBe("spawned");
+    const binding = await pool.query<{ worker_id: string; goal_id: string; project_id: string; selected_model_provider: string; selected_model_id: string; actual_model_provider: string; actual_model_id: string; account_ref: string; gateway_instance_id: string; gateway_binding_id: string }>(
+      "SELECT worker_id, goal_id, project_id, selected_model_provider, selected_model_id, actual_model_provider, actual_model_id, account_ref, gateway_instance_id, gateway_binding_id FROM native_execution_bindings WHERE worker_id = $1",
+      [worker.workerId],
+    );
+    expect(binding.rows).toEqual([{ worker_id: worker.workerId, goal_id: proof.goalId, project_id: projectId, selected_model_provider: "test", selected_model_id: "model-a", actual_model_provider: "test", actual_model_id: "model-a", account_ref: "test-account", gateway_instance_id: "gateway-test", gateway_binding_id: "binding-test" }]);
+    expect(JSON.stringify(binding.rows)).not.toContain("secret");
   });
 
   it("releases the kernel's in-process invocation record exactly once, only after the terminal status is durably committed (Phase 1 re-patch item 2)", async () => {

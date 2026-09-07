@@ -50,3 +50,4 @@ export * from "./device-agent-runtime.js";
 export * from "./improvement-digest.js";
 
 export * from "./account-login.js";
+export * from "./native-execution-binding.js";
