@@ -89,7 +89,7 @@ export function createPostgresConversationService(options: {
     return result.rows[0]!.cursor;
   }
 
-  function grantFor(row: ConversationRow, accountRef: string) {
+  function grantFor(row: ConversationRow, _accountRef: string) {
     return { grantId: `grant-${row.conversation_id}`, allowedTools: [], allowedSkills: [], modelPolicy: [formatModelRef({ provider: row.model_provider, id: row.model_id })], pathScope: [], outboundDataClasses: ["public", "workspace"], remaining: { modelTurns: 8, toolCalls: 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } };
   }
   function createStreamState(): RuntimeStreamState { return { turnId: undefined, requestId: undefined, pending: Promise.resolve(), error: undefined }; }
@@ -132,7 +132,7 @@ export function createPostgresConversationService(options: {
   }
 
   return {
-    async listModels(operator: OperatorContext) {
+    async listModels(_operator: OperatorContext) {
       const models = await options.gateway.listModels({ operatorId: options.gatewayOperatorId });
       return models.map((model) => ({ ...model, capabilities: [...model.capabilities], authModes: [...model.authModes], dataPolicy: { ...model.dataPolicy, allowedDataClasses: [...model.dataPolicy.allowedDataClasses], regions: [...model.dataPolicy.regions] } }));
     },

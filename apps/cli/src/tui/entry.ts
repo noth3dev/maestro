@@ -2,17 +2,12 @@ import { randomUUID } from "node:crypto";
 import {
   Box,
   CombinedAutocompleteProvider,
-  Container,
-  Editor,
-  Markdown,
   ProcessTerminal,
   ScrollView,
   Text,
   TuiAltScreen,
   VStack,
   matchesKey,
-  type EditorTheme,
-  type MarkdownTheme,
 } from "@earendil-works/pi-tui";
 import { createApiClient, type ApiClient, type GoalEvent } from "@maestro/api-client";
 import type { ConversationEvent } from "@maestro/contracts";
@@ -53,126 +48,13 @@ import { renderShell, renderTuiFooter, type TuiShellState } from "./components/s
 import { getModeAccentProgress, setModeAccentProgress, tuiTheme } from "./theme.js";
 import type { CliIo } from "../main.js";
 import { copyToClipboard, openExternalUrl } from "../external-url.js";
+import { editorTheme, SecretEditor } from "./components/editors.js";
+import { ConversationViewport, FramedComposer } from "./components/conversation-viewport.js";
 
 export interface InteractiveTuiOptions {
   cwd: string;
   env: Record<string, string | undefined>;
   io: CliIo;
-}
-
-const editorTheme: EditorTheme = {
-  borderColor: tuiTheme.primary,
-  selectList: {
-    selectedPrefix: tuiTheme.primary,
-    selectedText: tuiTheme.text,
-    description: tuiTheme.muted,
-    scrollInfo: tuiTheme.dim,
-    noMatch: tuiTheme.warning,
-  },
-};
-
-class MaestroEditor extends Editor {
-  override render(width: number): string[] {
-    const lines = super.render(width);
-    // pi-tui 0.85 has no prompt-prefix option. Reserve two padding columns
-    // and paint the prompt into them without moving the hardware cursor.
-    if (lines.length > 2 && lines[1]!.startsWith("  ")) lines[1] = `${tuiTheme.primary("› ")}${lines[1]!.slice(2)}`;
-    return lines;
-  }
-}
-
-class SecretEditor extends MaestroEditor {
-  hidden = false;
-
-  override render(width: number): string[] {
-    const lines = super.render(width);
-    if (!this.hidden) return lines;
-    // Keep the editor frame and ANSI control sequences intact while replacing
-    // only the content rows. The raw key remains in Editor state only until
-    // submit and is never added to the normal prompt history.
-    return lines.map((line, index) => index === 0 || index === lines.length - 1 ? line : maskVisibleText(line));
-  }
-}
-
-function maskVisibleText(line: string): string {
-  let masked = "";
-  for (let index = 0; index < line.length;) {
-    if (line[index] !== "\u001b") {
-      const codePoint = line.codePointAt(index)!;
-      masked += "•";
-      index += codePoint > 0xffff ? 2 : 1;
-      continue;
-    }
-    const start = index;
-    index += 1;
-    if (line[index] === "[" || line[index] === "]" || line[index] === "_") {
-      index += 1;
-      if (line[start + 1] === "[") {
-        while (index < line.length && (line.charCodeAt(index) < 0x40 || line.charCodeAt(index) > 0x7e)) index += 1;
-        if (index < line.length) index += 1;
-      } else {
-        while (index < line.length && line[index] !== "\u0007") index += 1;
-        if (index < line.length) index += 1;
-      }
-    } else if (index < line.length) index += 1;
-    masked += line.slice(start, index);
-  }
-  return masked;
-}
-
-const markdownTheme: MarkdownTheme = {
-  heading: (text) => tuiTheme.primary(text),
-  link: (text) => tuiTheme.teal(text),
-  linkUrl: (text) => tuiTheme.muted(text),
-  code: (text) => tuiTheme.olive(text),
-  codeBlock: (text) => tuiTheme.olive(text),
-  codeBlockBorder: (text) => tuiTheme.border(text),
-  quote: (text) => tuiTheme.secondary(text),
-  quoteBorder: (text) => tuiTheme.borderStrong(text),
-  hr: (text) => tuiTheme.border(text),
-  listBullet: (text) => tuiTheme.primary(text),
-  bold: (text) => tuiTheme.text(text),
-  italic: (text) => tuiTheme.secondary(text),
-  strikethrough: (text) => tuiTheme.muted(text),
-  underline: (text) => tuiTheme.text(text),
-};
-
-/** Keeps the conversation area pinned above the input dock and footer. */
-class ConversationViewport {
-  private readonly markdown = new Markdown("", 0, 0, markdownTheme);
-  private statusRenderer: () => string[] = () => [];
-  private transcriptRenderer: () => string = () => "";
-
-  setStatusRenderer(renderer: () => string[]): void { this.statusRenderer = renderer; }
-  setTranscriptRenderer(renderer: () => string): void { this.transcriptRenderer = renderer; }
-
-  render(width: number): string[] {
-    const status = this.statusRenderer();
-    const transcript = this.transcriptRenderer();
-    if (transcript === "") return status;
-    this.markdown.setText(transcript);
-    return [...status, "", ...this.markdown.render(width)];
-  }
-
-  invalidate(): void { this.markdown.invalidate(); }
-}
-
-/** A quiet, terminal-native composer. It uses borders, not a forced surface colour. */
-class FramedComposer {
-  constructor(private readonly content: { render(width: number): string[]; invalidate(): void }) {}
-
-  render(width: number): string[] {
-    if (width < 2) return this.content.render(width);
-    const innerWidth = width - 2;
-    const lines = this.content.render(innerWidth);
-    const top = tuiTheme.border(`╭${"─".repeat(Math.max(0, innerWidth - 2))}╮`);
-    const bottom = tuiTheme.border(`╰${"─".repeat(Math.max(0, innerWidth - 2))}╯`);
-    return [top, ...lines.map((line) => `${tuiTheme.border("│")}${line}${tuiTheme.border("│")}`), bottom];
-  }
-
-  invalidate(): void {
-    this.content.invalidate();
-  }
 }
 
 function shouldAutoBootstrapLocal(env: Record<string, string | undefined>): boolean {

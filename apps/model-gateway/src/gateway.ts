@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { ProviderRegistry, type ProviderReference } from "@maestro/agent-runtime";
 import type { GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialBinding, GatewayCredentialRevokeRequest, GatewayModelListRequest, GatewayTurnRequest, ModelCatalogEntry, ModelGatewayPort, ModelProviderPort, ProviderCancellationOutcome, ProviderPlugin } from "@maestro/agent-runtime";
 import type { CredentialStore } from "./credential-store.js";
-import type { CodexAppServerClient, CodexLoginStatus } from "@maestro/model-provider-openai";
+import type { CodexAppServerClient } from "@maestro/model-provider-openai";
 
 export interface GatewayOptions {
   readonly registry: ProviderRegistry;
