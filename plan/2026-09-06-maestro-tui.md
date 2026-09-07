@@ -255,3 +255,39 @@ Every task ends with focused RED/GREEN evidence, build evidence, and a Conventio
 ## Current execution note
 
 Task 3 is constrained by the existing Control Plane boundary: it requires `DATABASE_URL` and an authenticated token, while no local database manager or first-run credential bootstrap exists. Implement the truthful resolver and setup-required UX first. Do not add an embedded database, plaintext token file, or fake local connection. A later server/bootstrap task must define and verify the local PostgreSQL and credential lifecycle before transparent auto-start can be claimed.
+
+
+## Approved follow-up: provider-agnostic local first-run bootstrap
+
+**Decision (2026-09-07):** A first-time local user must be able to launch `maestro` without manually assembling the local stack when the required local runtime is already available. Docker is optional, not a product requirement. PostgreSQL remains required by the current durable Control Plane architecture.
+
+### Local startup policy
+
+1. If `MAESTRO_API_URL` and `MAESTRO_API_TOKEN` are configured, connect to that existing Control Plane and do not start local services.
+2. If no explicit endpoint is configured, detect the local runtime:
+   - reuse a healthy local Control Plane when one is already running;
+   - if the repository-approved local PostgreSQL runtime is available through Docker, start/reuse the disposable development database and run migrations;
+   - if a native local PostgreSQL service is available, use it without Docker;
+   - start/reuse the local Control Plane with bounded health/readiness checks and attach the TUI.
+3. If neither Docker nor a usable native PostgreSQL service is available, do not install silently or fall back to SQLite/in-memory state. Show an actionable setup message explaining the missing dependency and the supported choices.
+4. Local bootstrap may create only non-production local state and a local operator credential through an approved secure storage path. Provider credentials must not be persisted in PostgreSQL, workspace sessions, prompts, events, logs, or tool results.
+5. Model-provider onboarding is explicitly out of scope for this bootstrap slice. An empty/unavailable model catalog must remain truthful until a provider is configured.
+
+### Production boundary
+
+This local convenience flow must not be presented as a production deployment mechanism. Production remains a separate operational path using an existing Control Plane, managed or self-operated PostgreSQL, and an external secret manager/service manager. Docker may be used in production, but is not required.
+
+### Explicit non-goals
+
+- Do not automate Codex or Claude Code login/OAuth.
+- Do not invoke provider CLIs directly from the TUI as a bypass around the Control Plane and Model Gateway.
+- Do not add SQLite, an embedded fake database, or plaintext bearer-token fallback.
+- Do not silently install system packages or claim that a fresh machine is fully self-hosting until an installer/deployment slice is separately designed and verified.
+
+### Acceptance criteria for the future bootstrap slice
+
+- `maestro` with no endpoint configuration reuses or starts a usable local Control Plane when Docker or native PostgreSQL prerequisites are already present.
+- A machine with neither supported PostgreSQL runtime receives a concrete, copyable setup instruction instead of `setup required` alone.
+- An explicitly configured endpoint is never overridden by local auto-start.
+- Startup, migration, credential creation, readiness, failure, and cleanup are bounded and observable without exposing secrets.
+- TUI, non-interactive CLI, and provider onboarding remain separate concerns and retain their existing safety boundaries.
