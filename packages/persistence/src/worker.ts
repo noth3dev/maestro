@@ -197,7 +197,7 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
     // of being an unowned external session.
     const workerId = randomUUID();
     const pendingExecution = `pending:${workerId}`;
-    const inserted = await client.query<WorkerRow>(
+    await client.query<WorkerRow>(
       `INSERT INTO workers (worker_id, council_id, department_id, plan_version, item_id, bundle_content_hash, attempt, execution_ref, invocation_ref, owner_id, owner_fencing_token, owner_lease_expires_at, heartbeat_at, recovery_state, status, spawn_command_id, spawn_request_hash)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::bigint, $12, transaction_timestamp(), 'none', 'spawned', $13, $14)
        RETURNING worker_id, council_id, department_id, plan_version, item_id, bundle_content_hash, attempt, execution_ref, invocation_ref, owner_id, owner_fencing_token, owner_lease_expires_at, heartbeat_at, recovery_state, cancellation_requested_at, cancellation_owner_id, cancellation_fencing_token, status, answer_text, usage_total_tokens`,

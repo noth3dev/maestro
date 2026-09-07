@@ -345,7 +345,7 @@ function createHandle(
   let outputLimitExceeded = false;
   let settled = false;
   let terminationTimer: ReturnType<typeof setTimeout> | undefined;
-  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutTimer: { value?: ReturnType<typeof setTimeout> } = {};
   let capturedBytes = 0;
   const stdout: Buffer[] = [];
   const stderr: Buffer[] = [];
@@ -378,7 +378,7 @@ function createHandle(
     settled = true;
     exitCode = code;
     signal = closeSignal;
-    if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
+    if (timeoutTimer.value !== undefined) clearTimeout(timeoutTimer.value);
     if (terminationTimer !== undefined) clearTimeout(terminationTimer);
     status = cancelled
       ? "cancelled"
@@ -400,7 +400,7 @@ function createHandle(
     finish(null, null);
   });
   process.on("close", (code, closeSignal) => finish(code, closeSignal));
-  timeoutTimer = setTimeout(() => {
+  timeoutTimer.value = setTimeout(() => {
     if (!settled) terminate("timeout");
   }, timeoutMs);
 
@@ -448,7 +448,7 @@ function createAdapter(
     async start(request): Promise<EnvironmentProcessHandle> {
       validateRequestShape(request);
       const initial = await readBoundEnvironment();
-      const limits = validateEnvironment(initial, expectedType, request, clock(), defaultOutputCapBytes);
+      validateEnvironment(initial, expectedType, request, clock(), defaultOutputCapBytes);
       // Build the provider plan before authority so malformed container recipes
       // cannot produce an audited allow decision without any possible effect.
       plan(initial, request);

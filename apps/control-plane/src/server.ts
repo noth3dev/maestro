@@ -27,6 +27,13 @@ import {
   CriticalActionResultSchema,
   GoalQuerySchema,
   GoalListSchema,
+  ConversationSchema,
+  CreateConversationInputSchema,
+  ConversationTurnInputSchema,
+  ConversationTurnResultSchema,
+  ConversationEventQuerySchema,
+  ConversationEventSchema,
+  ModelCatalogEntrySchema,
   ProjectListSchema,
   GoalBudgetSummarySchema,
   GoalResultSchema,
@@ -144,6 +151,8 @@ export type { CouncilService } from "./council-service.js";
 import { DepartmentPlanProjectMismatchError, type DepartmentPlanService } from "./department-plan-service.js";
 import { MissionBundleProjectMismatchError, type MissionBundleService } from "./mission-bundle-service.js";
 import { WorkerProjectMismatchError, WorkerCapacityExceededError, type WorkerService } from "./worker-service.js";
+import { ConversationConflictError, ConversationModelNotAllowedError, ConversationNotFoundError, ConversationUnavailableError, type ConversationService } from "./conversation-service.js";
+import { ModelGatewayClientError } from "./model-gateway-client.js";
 import { WorkerError, WorkerNotFoundError } from "@maestro/persistence";
 import { GitProjectMismatchError, type GitIntegrationService } from "./git-integration-service.js";
 import type { CertificationService } from "./certification-service.js";
@@ -157,7 +166,7 @@ export interface DiscordSignalService {
   record(envelope: AuthenticatedDiscordSignal): Promise<StoredDiscordSignal>;
 }
 
-export interface ReadStateUnavailableService extends ReadStateService {}
+export type ReadStateUnavailableService = ReadStateService;
 
 export interface EventService {
   listEvents(projectId: string, after: EventCursor): Promise<import("@maestro/contracts").GoalEvent[]>;
@@ -194,7 +203,7 @@ const systemPollingScheduler: PollingScheduler = {
   clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
 };
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, readinessCheck }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, readinessCheck, conversationService }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
@@ -230,6 +239,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
   projectAccess?: ProjectAccessProvisioner;
   /** Dependency probe used by /readyz. Liveness never calls this check. */
   readinessCheck?: () => Promise<void>;
+  conversationService?: ConversationService;
 }): FastifyInstance {
   const app: FastifyInstance = https
     ? (Fastify({ https }) as unknown as FastifyInstance)
@@ -305,6 +315,14 @@ export function buildServer({ goalService, authenticator, eventService, critical
   } satisfies MetronomeService;
   const encore = encoreService ?? { review: async () => { throw new DurableStoreUnavailableError(); } } satisfies EncoreService;
   const discordSignal = discordSignalService ?? { record: async () => { throw new DurableStoreUnavailableError(); } } satisfies DiscordSignalService;
+  const conversations = conversationService ?? {
+    listModels: async () => { throw new DurableStoreUnavailableError(); },
+    create: async () => { throw new DurableStoreUnavailableError(); },
+    get: async () => { throw new DurableStoreUnavailableError(); },
+    turn: async () => { throw new DurableStoreUnavailableError(); },
+    cancel: async () => { throw new DurableStoreUnavailableError(); },
+    listEvents: async () => { throw new DurableStoreUnavailableError(); },
+  } satisfies ConversationService;
   // preClose runs while Fastify can still release open HTTP responses. onClose is too late:
   // Fastify waits for those connections before it invokes onClose.
   app.addHook("preClose", async () => {
@@ -758,6 +776,60 @@ export function buildServer({ goalService, authenticator, eventService, critical
     return reply.status(200).send(TaskContractSchema.parse(result));
   });
 
+  app.get("/v1/models", async (request, reply) => {
+    const models = await conversations.listModels(requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(models.map((model) => ModelCatalogEntrySchema.parse(model)));
+  });
+
+  app.post("/v1/conversations", async (request, reply) => {
+    const input = parse(CreateConversationInputSchema, request.body);
+    const conversation = await conversations.create(input, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(201).send(ConversationSchema.parse(conversation));
+  });
+
+  app.get("/v1/conversations/:conversationId", async (request, reply) => {
+    const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
+    const query = parse(GoalQuerySchema, request.query);
+    const conversation = await conversations.get(conversationId, query.projectId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(ConversationSchema.parse(conversation));
+  });
+
+  app.post("/v1/conversations/:conversationId/turns", async (request, reply) => {
+    const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
+    const input = parse(ConversationTurnInputSchema, request.body);
+    const result = await conversations.turn(conversationId, input, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(ConversationTurnResultSchema.parse(result));
+  });
+
+  app.post("/v1/conversations/:conversationId/cancel", async (request, reply) => {
+    const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
+    const query = parse(GoalQuerySchema, request.body);
+    const result = await conversations.cancel(conversationId, query.projectId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(ConversationSchema.parse(result));
+  });
+
+  app.get("/v1/conversations/:conversationId/events/stream", async (request, reply) => {
+    const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
+    const query = parse(ConversationEventQuerySchema, request.query);
+    const operator = requestOperator(request as { operator?: OperatorContext });
+    let cursor = query.after;
+    let closed = false;
+    const cleanup = () => { if (closed) return; closed = true; activeStreams.delete(terminate); };
+    const terminate = () => { if (closed) return; if (!reply.raw.writableEnded) reply.raw.end(); cleanup(); };
+    if (activeStreams.size >= maxActiveStreams) throw new Error("SSE stream capacity reached");
+    request.raw.once("aborted", cleanup); reply.raw.once("close", cleanup); activeStreams.add(terminate);
+    const write = (listed: import("@maestro/contracts").ConversationEvent[]) => {
+      for (const event of listed) { if (closed) return; cursor = event.cursor; reply.raw.write(`id: ${event.cursor}\nevent: conversation-event\ndata: ${JSON.stringify(ConversationEventSchema.parse(event))}\n\n`); }
+    };
+    let initial: readonly import("@maestro/contracts").ConversationEvent[];
+    try { initial = await conversations.listEvents(conversationId, query.projectId, cursor, operator); }
+    catch { cleanup(); throw new DurableStoreUnavailableError(); }
+    if (closed) return reply;
+    reply.hijack(); reply.raw.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" }); reply.raw.flushHeaders(); write([...initial]);
+    if (!closed) reply.raw.write(": heartbeat\n\n");
+    return reply;
+  });
+
   app.get("/v1/goals", async (request, reply) => {
     const query = parse(GoalQuerySchema, request.query);
     return reply.send(GoalListSchema.parse({ goals: await readState.listGoals(query.projectId) }));
@@ -1034,6 +1106,14 @@ function mapError(error: unknown): { status: number; body: StableApiError } {
   if (error instanceof EncoreCouncilError) return apiError(409, "encore_conflict", error.message);
   if (error instanceof DiscordPersistenceError) return apiError(400, "discord_signal_rejected", error.message);
 
+  if (error instanceof ModelGatewayClientError) {
+    if (error.code === "model_not_allowed") return apiError(400, "model_not_allowed", error.message);
+    return apiError(503, "provider_unavailable", error.message);
+  }
+  if (error instanceof ConversationNotFoundError) return apiError(404, "conversation_not_found", "Conversation was not found");
+  if (error instanceof ConversationConflictError) return apiError(409, "conversation_conflict", error.message);
+  if (error instanceof ConversationModelNotAllowedError) return apiError(400, "model_not_allowed", "Requested model is not allowed");
+  if (error instanceof ConversationUnavailableError) return apiError(503, "conversation_unavailable", error.message);
   if (error instanceof TaskContractIntegrityError || error instanceof GoalTaskContractIntegrityError) return apiError(503, "task_contract_integrity_error", error.message);
   if (error instanceof TaskContractNotFoundError) return apiError(404, "task_contract_not_found", "Task Contract was not found");
   if (error instanceof TaskContractConflictError) return apiError(409, "task_contract_conflict", error.message);

@@ -68,7 +68,7 @@ function fakeKernel(sequences: readonly (readonly InvocationObservation[])[]): E
   }));
   const observationIndexes = sequences.map(() => 0);
   return {
-    spawn: vi.fn(async (request: SpawnRequest) => {
+    spawn: vi.fn(async (_request: SpawnRequest) => {
       const index = calls.filter((call) => call.startsWith("spawn")).length;
       calls.push(`spawn-${index}`);
       return spawned[index]!;
@@ -221,12 +221,12 @@ describe("Encore Council execution", () => {
     const kernel = fakeKernel([[
       observation(0, "succeeded", { state: "available", text: proceed }),
     ]]);
-    kernel.spawn.mockImplementation(async (request: SpawnRequest) => {
+    kernel.spawn.mockImplementation(async (_request: SpawnRequest) => {
       providerTransactionStates.push(transactionOpen);
       return { execution: "encore-execution-0" as never, invocation: "encore-invocation-0" as never };
     });
     kernel.prompt.mockImplementation(async () => { providerTransactionStates.push(transactionOpen); });
-    kernel.observe.mockImplementation(async (execution: SpawnedInvocation["execution"]) => {
+    kernel.observe.mockImplementation(async (_execution: SpawnedInvocation["execution"]) => {
       providerTransactionStates.push(transactionOpen);
       return [observation(0, "succeeded", { state: "available", text: proceed })];
     });

@@ -3,7 +3,6 @@ import type {
   OvertureSelectionInput,
   TaskContract,
   TaskContractConfirmationInput,
-  TaskContractQuery,
   UpdateTaskContractInput,
 } from "@maestro/contracts";
 import {

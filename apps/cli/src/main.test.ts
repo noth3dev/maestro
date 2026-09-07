@@ -212,3 +212,19 @@ describe("CLI entrypoint detection", () => {
     expect(shouldRunAsMain(`file://${modulePath}`, "/work/node_modules/.bin/maestro", () => modulePath)).toBe(true);
   });
 });
+
+
+describe("native conversation commands", () => {
+  it("lists models and runs a conversation turn through the API", async () => {
+    const conversationId = "44444444-4444-4444-8444-444444444444";
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ identity: { provider: "openai", id: "gpt-5" }, capabilities: ["text"], authModes: ["api-key"], dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy", trainsOnCustomerData: false, regions: ["US"] } }]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ conversationId, projectId, goalId, model: "openai/gpt-5", status: "active", version: 1 }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ conversation: { conversationId, projectId, goalId, model: "openai/gpt-5", status: "succeeded", version: 2 }, turn: { turnId: "55555555-5555-4555-8555-555555555555", conversationId, role: "assistant", content: "hello", status: "completed", cursor: "2", createdAt: "2030-01-01T00:00:00.000Z" } }), { status: 200 }));
+    const stdout = output(); const stderr = output();
+    expect(await executeCli(["models", "list", "--json"], env, { fetch, stdout: stdout.write, stderr: stderr.write })).toBe(0);
+    expect(await executeCli(["conversation", "create", "--project-id", projectId, "--goal-id", goalId, "--model", "openai/gpt-5", "--json"], env, { fetch, stdout: stdout.write, stderr: stderr.write })).toBe(0);
+    expect(await executeCli(["conversation", "turn", "--conversation-id", conversationId, "--project-id", projectId, "--text", "hi", "--json"], env, { fetch, stdout: stdout.write, stderr: stderr.write })).toBe(0);
+    expect(stderr.lines).toEqual([]);
+  });
+});

@@ -19,8 +19,13 @@ describe("subscribeToEvents", () => {
   it("bounds failed reconnects and reports retry state", async () => {
     const calls: string[] = [];
     const retries: number[] = [];
-    const client = { streamEvents: async function* (query: { projectId: string; after: string }) { calls.push(query.after); throw new Error("offline"); } };
-    for await (const _event of subscribeToEvents({ client, projectId: "project-1", signal: new AbortController().signal, reconnectDelayMs: 0, maxReconnectAttempts: 2, onReconnect: (attempt) => retries.push(attempt) })) {}
+    const offlineStream: AsyncIterable<never> = {
+      [Symbol.asyncIterator]: () => ({ next: async () => { throw new Error("offline"); } }),
+    };
+    const client = { streamEvents: (query: { projectId: string; after: string }, _options: { signal: AbortSignal }) => { calls.push(query.after); return offlineStream; } };
+    for await (const event of subscribeToEvents({ client, projectId: "project-1", signal: new AbortController().signal, reconnectDelayMs: 0, maxReconnectAttempts: 2, onReconnect: (attempt) => retries.push(attempt) })) {
+      void event;
+    }
     expect(calls).toHaveLength(3);
     expect(retries).toEqual([1, 2]);
   });

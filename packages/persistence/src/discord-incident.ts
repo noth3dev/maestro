@@ -12,7 +12,6 @@ import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { requestPauseGoalInTransaction } from "./authority.js";
 import { assertGoalControlOpen, type CouncilActorContext } from "./council.js";
-import type { StoredDiscordSignal } from "./discord.js";
 
 export class DiscordIncidentError extends Error {}
 export class DiscordIncidentNotFoundError extends DiscordIncidentError {}
@@ -276,7 +275,7 @@ export async function linkDiscordIncidentToGoal(
   incidentId: string,
   goalId: string,
   proof: GoalLeaseProof,
-  context: CouncilActorContext,
+  _context: CouncilActorContext,
 ): Promise<DiscordIncidentRecord> {
   if (incidentId.trim() === "") throw new DiscordIncidentError("incidentId is required");
   if (goalId !== proof.goalId || proof.goalId === "" || proof.ownerId === "" || !isValidFencingToken(proof.fencingToken)) {
@@ -333,7 +332,7 @@ export async function closeDiscordIncident(
   outcome: "resolved" | "false_positive",
   resolutionSummary: string,
   retainedRisk: string,
-  context: CouncilActorContext,
+  _context: CouncilActorContext,
   proof?: GoalLeaseProof,
 ): Promise<DiscordIncidentRecord> {
   if (incidentId.trim() === "") throw new DiscordIncidentError("incidentId is required");
@@ -420,7 +419,7 @@ export async function requestDiscordImmediateSafePause(
   incidentId: string,
   projectId: string,
   proof: GoalLeaseProof,
-  context: CouncilActorContext,
+  _context: CouncilActorContext,
 ): Promise<DiscordIncidentRecord> {
   if (incidentId.trim() === "") throw new DiscordIncidentError("incidentId is required");
   const client = await pool.connect();

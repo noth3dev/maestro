@@ -5,7 +5,7 @@ import { advanceWorkspaceSession, attachWorkspaceSession, loadWorkspaceSession, 
 describe("workspace session", () => {
   it("round trips non-secret workspace session metadata", async () => {
     const baseDir = "/tmp/maestro-session-test";
-    const session = { workspacePath: "/work/acme", projectId: "project-1", goalId: "goal-1", lastEventCursor: "42" };
+    const session = { workspacePath: "/work/acme", projectId: "project-1", goalId: "goal-1", lastEventCursor: "42", conversationId: "conversation-1", model: "openai/gpt-5" };
     await saveWorkspaceSession(session, baseDir);
     await expect(loadWorkspaceSession(session.workspacePath, baseDir)).resolves.toEqual(session);
     const sessionFile = sessionFileFor(session.workspacePath, baseDir);
@@ -30,7 +30,7 @@ describe("workspace session", () => {
   });
 
   it("selects a Goal without changing the project or event cursor", () => {
-    expect(selectWorkspaceGoal("/work/acme", { workspacePath: "/work/acme", projectId: "project-1", lastEventCursor: "42" }, "goal-2")).toEqual({ workspacePath: "/work/acme", projectId: "project-1", goalId: "goal-2", lastEventCursor: "42" });
+    expect(selectWorkspaceGoal("/work/acme", { workspacePath: "/work/acme", projectId: "project-1", lastEventCursor: "42", conversationId: "conversation-1", model: "openai/gpt-5" }, "goal-2")).toEqual({ workspacePath: "/work/acme", projectId: "project-1", goalId: "goal-2", lastEventCursor: "42" });
   });
 
   it("requires an attached project before selecting a Goal", () => {

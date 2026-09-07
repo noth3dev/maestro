@@ -21,6 +21,8 @@ import { createMetronomeService } from "./metronome-service.js";
 import { createEncoreService } from "./encore-service.js";
 import { buildServer, type OperatorAuthenticator } from "./server.js";
 import { createMetronomeLoop } from "./metronome-loop.js";
+import { createModelGatewayClient } from "./model-gateway-client.js";
+import { createPostgresConversationService } from "./conversation-service.js";
 
 export interface ControlPlane {
   app: ReturnType<typeof buildServer>;
@@ -69,7 +71,9 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   }
   const https = config.tls ? { cert: readFileSync(config.tls.certFile), key: readFileSync(config.tls.keyFile) } : undefined;
   const pool = new Pool({ connectionString: config.databaseUrl });
+  const modelGateway = config.modelGatewayToken === undefined ? undefined : createModelGatewayClient({ baseUrl: config.modelGatewayUrl!, token: config.modelGatewayToken });
   const executionKernel = overrides.executionKernel ?? createPrimeExecutionKernel();
+  const conversationService = modelGateway === undefined ? undefined : createPostgresConversationService({ pool, gateway: modelGateway, gatewayOperatorId: config.modelGatewayOperatorId, accountRefs: config.modelAccountRefs });
   const goalService = createDurableGoalService({
     pool,
     actorId: config.actorId,
@@ -125,6 +129,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     encoreService,
     authenticator,
     eventService: { listEvents: (projectId, after) => listGoalEvents(pool, { projectId, after }) },
+    ...(conversationService === undefined ? {} : { conversationService }),
     criticalActionService,
     readStateService: createReadStateService(pool),
     taskContractService: createDurableTaskContractService(pool),
@@ -202,6 +207,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
         // sessions, while the bound keeps SIGTERM from hanging forever on a
         // provider that is already unavailable. SIGKILL remains covered by
         // the durable lease/fence reconciliation path.
+        await drainWithTimeout(Promise.resolve(conversationService?.close?.()), timeoutMs);
         await drainWithTimeout(Promise.resolve(executionKernel.close?.()), timeoutMs);
       } finally {
         try {

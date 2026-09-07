@@ -28,6 +28,11 @@ export interface MaestroConfig {
   reconcilerLeaseDurationMs: number;
   /** Maximum time allowed for provider/application shutdown drains. */
   shutdownDrainTimeoutMs?: number;
+  /** Optional authenticated model gateway; conversation routes are unavailable when absent. */
+  modelGatewayUrl?: string;
+  modelGatewayToken?: string;
+  modelGatewayOperatorId: string;
+  modelAccountRefs: Readonly<Record<string, string>>;
   /**
    * Only ever set for a non-loopback bind; a remote bind without it is
    * rejected below before this config is ever returned. File paths only --
@@ -49,6 +54,10 @@ const schema = z.object({
   MAESTRO_INSTANCE_ID: z.string().min(1).default("local-control-plane"),
   MAESTRO_RECONCILER_LEASE_MS: z.coerce.number().int().positive().default(30_000),
   MAESTRO_SHUTDOWN_DRAIN_MS: z.coerce.number().int().positive().default(5_000),
+  MAESTRO_MODEL_GATEWAY_URL: z.string().url().default("http://127.0.0.1:4321"),
+  MAESTRO_MODEL_GATEWAY_TOKEN: z.string().min(1).optional(),
+  MAESTRO_MODEL_GATEWAY_OPERATOR_ID: z.string().min(1).default("local-operator"),
+  MAESTRO_MODEL_ACCOUNT_REFS: z.string().optional(),
   MAESTRO_TLS_CERT_FILE: z.string().min(1).optional(),
   MAESTRO_TLS_KEY_FILE: z.string().min(1).optional(),
   MAESTRO_DISCORD_SIGNAL_CREDENTIAL: z.string().min(1).optional(),
@@ -77,6 +86,10 @@ export function parseConfig(
     MAESTRO_INSTANCE_ID: leaseOwnerId,
     MAESTRO_RECONCILER_LEASE_MS: reconcilerLeaseDurationMs,
     MAESTRO_SHUTDOWN_DRAIN_MS: shutdownDrainTimeoutMs,
+    MAESTRO_MODEL_GATEWAY_URL: modelGatewayUrl,
+    MAESTRO_MODEL_GATEWAY_TOKEN: modelGatewayToken,
+    MAESTRO_MODEL_GATEWAY_OPERATOR_ID: modelGatewayOperatorId,
+    MAESTRO_MODEL_ACCOUNT_REFS: modelAccountRefsRaw,
     MAESTRO_TLS_CERT_FILE: certFile,
     MAESTRO_TLS_KEY_FILE: keyFile,
     MAESTRO_DISCORD_SIGNAL_CREDENTIAL: discordSignalCredential,
@@ -94,8 +107,21 @@ export function parseConfig(
     throw new Error("Remote binding requires TLS certificate and key configuration");
   }
 
+  const accountRefs: Record<string, string> = {};
+  for (const entry of (modelAccountRefsRaw ?? "").split(",").map((part) => part.trim()).filter(Boolean)) {
+    const separator = entry.indexOf("=");
+    if (separator <= 0 || separator === entry.length - 1) throw new Error("Invalid MAESTRO_MODEL_ACCOUNT_REFS");
+    const provider = entry.slice(0, separator).trim(); const accountRef = entry.slice(separator + 1).trim();
+    if (!/^[A-Za-z0-9._-]+$/.test(provider) || !/^[A-Za-z0-9._:-]+$/.test(accountRef)) throw new Error("Invalid MAESTRO_MODEL_ACCOUNT_REFS");
+    accountRefs[provider] = accountRef;
+  }
+  for (const provider of ["openai", "anthropic"]) accountRefs[provider] ??= `${provider}-${modelGatewayOperatorId}`;
+
   return {
     databaseUrl, evidenceDir, worktreeRoot, host, port, primeAgentVersion: "0.8.0", actorId, leaseOwnerId, reconcilerLeaseDurationMs, shutdownDrainTimeoutMs,
+    modelGatewayOperatorId, modelAccountRefs: accountRefs,
+    modelGatewayUrl,
+    ...(modelGatewayToken === undefined ? {} : { modelGatewayToken }),
     ...(ceoOperatorId === undefined ? {} : { ceoOperatorId }),
     ...(operatorProvisioningAdminId === undefined ? {} : { operatorProvisioningAdminId }),
     ...(discordSignalCredential === undefined ? {} : { discordSignalCredential }),
@@ -107,8 +133,9 @@ export function parseConfig(
 
 
 /** Safe for operational logs; it intentionally omits all database user info and query parameters. */
-export function redactConfig(config: MaestroConfig): MaestroConfig {
-  return { ...config, databaseUrl: redactDatabaseUrl(config.databaseUrl) };
+export function redactConfig(config: MaestroConfig): Omit<MaestroConfig, "modelGatewayToken"> {
+  const { modelGatewayToken: _modelGatewayToken, ...safe } = config;
+  return { ...safe, databaseUrl: redactDatabaseUrl(config.databaseUrl) };
 }
 
 function redactDatabaseUrl(databaseUrl: string): string {

@@ -254,7 +254,7 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
   });
 
   it("reconciles a genuinely mid-flight worker after a fresh control-plane restart without duplicate effects or stale authority reuse", async () => {
-    const { council, plan, proof, goalId, projectId } = await setupBundle();
+    const { council, plan, proof, goalId } = await setupBundle();
     const preRestartKernel = fakeKernel("running");
     const worker = await spawnWorker(pool, preRestartKernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
     const captured = await observeWorker(pool, preRestartKernel, worker.workerId, proof, headContext("product"));
@@ -265,7 +265,6 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     // Reconciliation must report lease_contended rather than racing recovery:
     // protecting the active execution is the correct outcome, not a failure.
     const restartedPool = new Pool({ connectionString: databaseUrl });
-    const postRestartKernel = fakeKernel("running");
     try {
       const recovery = await reconcileOnStartup(restartedPool, { ownerId: "restarted-control-plane", leaderLeaseDurationMs: 60_000, goalLeaseDurationMs: 60_000 });
       expect(recovery.results).toEqual([{
@@ -293,7 +292,7 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
   });
 
   it("forces a genuinely orphaned running worker to unknown at startup once its Goal's lease has actually expired (Phase 1 re-patch item 8 part 2/2)", async () => {
-    const { council, plan, proof, goalId, projectId } = await setupBundle();
+    const { council, plan, proof, goalId } = await setupBundle();
     const preRestartKernel = fakeKernel("running");
     const worker = await spawnWorker(pool, preRestartKernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
     const captured = await observeWorker(pool, preRestartKernel, worker.workerId, proof, headContext("product"));

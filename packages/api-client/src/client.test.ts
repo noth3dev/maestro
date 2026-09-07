@@ -191,3 +191,32 @@ it("streams authenticated durable events from the reconnect cursor", async () =>
   expect(received).toEqual([event]);
   expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/events/stream?projectId=${projectId}&after=7`, expect.objectContaining({ headers: { authorization: "Bearer secret" }, redirect: "error" }));
 });
+
+
+describe("native conversation client", () => {
+  const conversation = { conversationId: "44444444-4444-4444-8444-444444444444", projectId, goalId, model: "openai/gpt-5", status: "active", version: 1 };
+  it("lists models and sends a real authenticated conversation turn", async () => {
+    const turn = { conversation: { ...conversation, status: "succeeded", version: 2 }, turn: { turnId: "55555555-5555-4555-8555-555555555555", conversationId: conversation.conversationId, role: "assistant", content: "hello", status: "completed", cursor: "2", createdAt: "2030-01-01T00:00:00.000Z" } };
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ identity: { provider: "openai", id: "gpt-5" }, capabilities: ["text"], authModes: ["api-key"], dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy", trainsOnCustomerData: false, regions: ["US"] } }]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(conversation), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(turn), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+    await expect(client.listModels()).resolves.toHaveLength(1);
+    await expect(client.createConversation({ projectId, goalId, model: "openai/gpt-5" })).resolves.toEqual(conversation);
+    await expect(client.sendConversationTurn(conversation.conversationId, { projectId, text: "hi" })).resolves.toEqual(turn);
+    expect(fetch.mock.calls[2]![0]).toBe(`https://maestro.test/v1/conversations/${conversation.conversationId}/turns`);
+  });
+});
+
+
+it("streams conversation events from a durable reconnect cursor", async () => {
+  const conversationId = "44444444-4444-4444-8444-444444444444";
+  const event = { cursor: "2", eventId: "55555555-5555-4555-8555-555555555555", conversationId, projectId, eventType: "turn_completed", payload: { status: "succeeded" }, occurredAt: "2030-01-01T00:00:00.000Z" };
+  const fetch = vi.fn().mockResolvedValue(new Response(`id: 2\nevent: conversation-event\ndata: ${JSON.stringify(event)}\n\n`));
+  const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+  const received = [];
+  for await (const item of client.streamConversationEvents(conversationId, { projectId, after: "1" })) received.push(item);
+  expect(received).toEqual([event]);
+  expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/conversations/${conversationId}/events/stream?projectId=${projectId}&after=1`, expect.objectContaining({ headers: { authorization: "Bearer secret" }, redirect: "error" }));
+});
