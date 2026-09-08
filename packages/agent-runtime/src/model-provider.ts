@@ -263,7 +263,8 @@ export function parseModelRef(ref: string): ModelIdentity {
   if (separator <= 0) throw new Error("Model reference must be provider-qualified");
   const provider = ref.slice(0, separator);
   const id = ref.slice(separator + 1);
-  if (!id || provider.trim() !== provider || id.trim() !== id) throw new Error("Model reference must include a non-empty model id");
+  if (id.includes("/")) throw new Error("Model reference must be provider-qualified");
+  if (!id || provider.trim() !== provider || id.trim() !== id || /\s/.test(provider) || /\s/.test(id)) throw new Error("Model reference must include a non-empty model id");
   return { provider, id };
 }
 

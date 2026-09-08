@@ -2962,3 +2962,18 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Fresh real-PostgreSQL `npm run check` passed: 172 test files and 1128 tests passed, 0 failed.
 - The focused bootstrap/keyring suite passed 17/17; `npm run build`, `npm run lint`, and `git diff --check` passed.
 - Independent no-edit review returned ACCEPT after separating gateway operator strings from database UUID identities and narrowing UUID acceptance to the persistence contract.
+
+
+## 2026-09-08 — Native model-policy enforcement tests
+
+- Added focused Control Plane kernel regressions for multi-model policy rejection, grant/model-policy mismatch before gateway admission, and gateway binding identity mismatch.
+- Existing Worker integration evidence confirms an unapproved Mission Bundle model is rejected before `kernel.spawn`, while an approved model carries exact `modelPolicy`, grant, authority context, idempotency, and durable selected/actual model binding evidence.
+- The native runtime's existing admission path keeps child sessions bound to the root gateway model and rejects child grant widening; no provider fallback or Prime adapter is involved.
+
+
+## 2026-09-08 — Model-policy child inheritance hardening complete
+
+- Independent review initially found that child runtime admissions could keep the root model while widening skills, paths, outbound data classes, budgets, or Goal identity. A regression was added first and reproduced the defect.
+- The runtime now requires immutable parent context, exact model-policy inheritance, subset capabilities, and non-increasing child budgets before creating a child record.
+- Provider-qualified model parsing now rejects extra separators and whitespace before gateway admission.
+- Verification completed with focused 22/22, full PostgreSQL 172 files / 1131 tests, build, lint, diff check, and independent ACCEPT review.

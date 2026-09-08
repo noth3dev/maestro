@@ -1090,3 +1090,15 @@ The login message was caused by a truthful downstream symptom, not by the ChatGP
 The fix keeps the identities separate. `MAESTRO_MODEL_GATEWAY_OPERATOR_ID` remains an arbitrary gateway binding identity. `MAESTRO_LOCAL_OPERATOR_ID` and `MAESTRO_LOCAL_CREDENTIAL_ID` are canonical UUIDs; an explicit local operator override is validated, while a first-run UUID is reused through the credential envelope on later launches. The keyring adapter maps only absent `null`/`undefined` values to no credential; it does not weaken authorization or treat malformed stored metadata as valid.
 
 The next login gate is environmental: the detected `codex` command is the Windows npm installation and reports a missing `@openai/codex-linux-x64` dependency under Ubuntu. Account login must remain unavailable until a Linux-capable Codex app-server executable is installed and passed through `MAESTRO_CODEX_APP_SERVER_COMMAND`.
+
+
+## 2026-09-08 — Model-policy boundary clarification
+
+Model authorization has two deliberate checks. Persistence selects only a provider-qualified model present in the immutable Mission Bundle `approvedModels` list and passes exactly one model policy into the native admission. The provider-neutral native kernel then independently binds that policy to the admitted gateway identity before any runtime is created; the runtime repeats the binding check for root and child sessions and rejects provider-result identity drift. Durable native binding evidence records both selected and actual identity, account, gateway, and data-policy identity. The old audit wording about a Prime adapter is not an open implementation target because the Prime runtime was removed; the native gateway is the only production execution seam.
+
+
+## 2026-09-08 — Child admission boundary closed
+
+The first model-policy review exposed a concrete contract gap: `agent-runtime` checked child model/tool fields but accepted attacker-supplied Goal/project context and widened skills, path scopes, outbound classes, and non-tool budgets. The fix is fail-closed and provider-neutral: stable context fields are immutable, budget effect cannot increase, model policy must match exactly, each capability list must be a parent subset, and model/tool/output/wall/retry budgets cannot increase. Child-call capacity remains reserved from the parent before record creation.
+
+A second review noted that native `parseModelRef` accepted an extra slash in the model id. Canonical provider/model references now reject extra separators and whitespace. The native model-policy slice is accepted; Prime remains structural reference only and is not a production runtime dependency.

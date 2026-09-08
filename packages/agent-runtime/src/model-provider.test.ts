@@ -33,6 +33,7 @@ describe("provider-neutral model contracts", () => {
     expect(parseModelRef("openai/gpt-5")).toEqual({ provider: "openai", id: "gpt-5" });
     expect(() => parseModelRef("gpt-5")).toThrow("provider-qualified");
     expect(() => parseModelRef("openai/")).toThrow("model id");
+    expect(() => parseModelRef("openai/gpt-5/extra")).toThrow("provider-qualified");
   });
 
   it("models bounded, correlated messages and stream events", () => {

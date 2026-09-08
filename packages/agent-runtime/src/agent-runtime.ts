@@ -183,6 +183,24 @@ export function createMaestroAgentRuntime(options: { gateway: ModelGatewayPort; 
     return { context: request.context, grant: request.grant, modelPolicy: request.modelPolicy, idempotencyKey: request.idempotencyKey };
   }
 
+  function assertChildAdmission(parent: RuntimeRecord, child: { context: InvocationContext; grant: CapabilityGrant; modelPolicy: readonly string[] }): void {
+    const parentContext = parent.context;
+    const childContext = child.context;
+    const stableContextKeys = ["operatorId", "projectId", "goalId", "missionBundleId", "policyVersion", "authorityPolicyVersion", "controlEpoch", "accountRef", "leaseRef", "fencingToken"] as const;
+    if (stableContextKeys.some((key) => childContext[key] !== parentContext[key])) throw new Error("child grant widens parent capability");
+    if (childContext.budgetEffectCents === undefined || parentContext.budgetEffectCents === undefined
+      ? childContext.budgetEffectCents !== parentContext.budgetEffectCents
+      : childContext.budgetEffectCents > parentContext.budgetEffectCents) throw new Error("child grant widens parent capability");
+    if (child.modelPolicy.length !== parent.modelPolicy.length || child.modelPolicy.some((model, index) => model !== parent.modelPolicy[index])) throw new Error("child grant widens parent capability");
+    if (child.grant.allowedTools.some((tool) => !parent.grant.allowedTools.includes(tool))) throw new Error("child grant widens parent capability");
+    if (child.grant.allowedSkills.some((skill) => !parent.grant.allowedSkills.includes(skill))) throw new Error("child grant widens parent capability");
+    if (child.grant.pathScope.some((path) => !parent.grant.pathScope.includes(path))) throw new Error("child grant widens parent capability");
+    if (child.grant.outboundDataClasses.some((dataClass) => !parent.grant.outboundDataClasses.includes(dataClass))) throw new Error("child grant widens parent capability");
+    const parentRemaining = parent.grant.remaining;
+    const childRemaining = child.grant.remaining;
+    if (childRemaining.modelTurns > parentRemaining.modelTurns || childRemaining.toolCalls > parentRemaining.toolCalls || childRemaining.outputTokens > parentRemaining.outputTokens || childRemaining.wallTimeMs > parentRemaining.wallTimeMs || childRemaining.retryCount > parentRemaining.retryCount) throw new Error("child grant widens parent capability");
+  }
+
   async function executeTurn(record: RuntimeRecord, text?: string): Promise<void> {
     if (record.abort.signal.aborted || (record.phase === "terminal" && record.status !== "succeeded")) return;
     if (text !== undefined) record.messages.push(textMessage(text));
@@ -276,7 +294,8 @@ export function createMaestroAgentRuntime(options: { gateway: ModelGatewayPort; 
         if (!request.prompt) throw new Error("child invocation requires a prompt");
         if (parent.grant.remaining.childCalls <= 0) throw new Error("child call limit exceeded");
         const childGrant = admission.grant;
-        if (childGrant.parentGrantId !== parent.grant.grantId || childGrant.remaining.childCalls > parent.grant.remaining.childCalls - 1 || childGrant.remaining.toolCalls > parent.grant.remaining.toolCalls || childGrant.allowedTools.some((tool) => !parent.grant.allowedTools.includes(tool))) throw new Error("child grant widens parent capability");
+        if (childGrant.parentGrantId !== parent.grant.grantId || childGrant.remaining.childCalls > parent.grant.remaining.childCalls - 1) throw new Error("child grant widens parent capability");
+        assertChildAdmission(parent, admission);
         parent.grant.remaining.childCalls -= 1;
         const invocation = asInvocation(`invocation-${randomUUID()}`);
         const record: RuntimeRecord = { execution: parent.execution, invocation, name: request.name, context: admission.context, grant: childGrant, modelPolicy: admission.modelPolicy, idempotencyKey: admission.idempotencyKey, parent: parent.invocation, sessionId: parent.sessionId, messages: [], toolEvents: [], abort: new AbortController(), status: "queued", phase: "queued", activeRequestId: undefined, usage: defaultUsage, answer: defaultAnswer, turnCount: 0, toolCount: 0, sessionVersion: 0, lastCursor: 0 };

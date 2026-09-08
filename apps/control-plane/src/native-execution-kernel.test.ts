@@ -108,6 +108,21 @@ describe("native Control Plane execution kernel", () => {
     expect(gateway.admit).not.toHaveBeenCalled();
   });
 
+  it("rejects multiple or grant-mismatched model policies before gateway admission", async () => {
+    const { gateway, kernel } = createKernel();
+    await expect(kernel.spawn({ ...rootRequest(), modelPolicy: ["test/model-a", "test/model-b"] })).rejects.toThrow("exactly one model policy");
+    await expect(kernel.spawn({ ...rootRequest(), grant: { ...rootRequest().grant!, modelPolicy: ["test/model-b"] } })).rejects.toThrow("grant model policy mismatch");
+    expect(gateway.admit).not.toHaveBeenCalled();
+  });
+
+  it("rejects a gateway binding whose selected identity differs from the approved model", async () => {
+    const gateway = fakeGateway();
+    gateway.admit.mockResolvedValueOnce({ ...binding, provider: { provider: "test", id: "model-b" } });
+    const { kernel } = createKernel(gateway);
+    await expect(kernel.spawn(rootRequest())).rejects.toThrow("unexpected model identity");
+    expect(gateway.admit).toHaveBeenCalledOnce();
+  });
+
   it("closes a shared gateway once after multiple native runtimes are admitted", async () => {
     const { gateway, kernel } = createKernel();
     await kernel.spawn(rootRequest());

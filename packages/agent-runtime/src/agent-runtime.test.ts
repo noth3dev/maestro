@@ -164,6 +164,31 @@ describe("native Maestro agent runtime", () => {
     expect(observation?.answer.state === "available" && Buffer.byteLength(observation.answer.text, "utf8")).toBeLessThanOrEqual(64_000);
   });
 
+  it("fails closed when a child widens any non-tool grant or changes Goal identity", async () => {
+    const runtime = createMaestroAgentRuntime({ gateway: gateway(), binding, tools: new ToolRegistry() });
+    const parentContext = { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1", accountRef: "account-1", authorityPolicyVersion: 2, controlEpoch: "epoch-1", budgetEffectCents: 0 };
+    const parentGrant = { ...grant, grantId: "parent-grant", allowedSkills: ["skill-a"], pathScope: ["repo"], outboundDataClasses: ["public", "workspace"], remaining: { ...grant.remaining, childCalls: 2, modelTurns: 3, toolCalls: 2, outputTokens: 128, wallTimeMs: 10_000, retryCount: 1 } };
+    const root = await runtime.spawn({ name: "parent", modelPolicy: ["fake/model-a"], idempotencyKey: "parent-1", context: parentContext, grant: parentGrant });
+
+    await expect(runtime.spawn({
+      name: "child",
+      parent: root.execution,
+      prompt: "child prompt",
+      modelPolicy: ["fake/model-a"],
+      idempotencyKey: "child-1",
+      context: { ...parentContext, goalId: "goal-2" },
+      grant: {
+        ...parentGrant,
+        grantId: "child-grant",
+        parentGrantId: parentGrant.grantId,
+        allowedSkills: ["skill-a", "skill-b"],
+        pathScope: ["repo", "outside-repo"],
+        outboundDataClasses: ["public", "workspace", "secret"],
+        remaining: { ...parentGrant.remaining, modelTurns: 4, toolCalls: 2, childCalls: 1, outputTokens: 129, wallTimeMs: 10_001, retryCount: 2 },
+      },
+    })).rejects.toThrow("child grant widens parent capability");
+  });
+
   it("rejects an invalid or out-of-scope tool without invoking its executor", async () => {
     const modelGateway = gateway();
     const execute = vi.fn();
