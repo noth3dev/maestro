@@ -17,11 +17,12 @@ The following slices are present on the current main line and are contracts only
 | D demand | [`packages/domain/src/task-demand.ts`](../../../packages/domain/src/task-demand.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts) | Domain and wire `TaskDemand`; Head-declared levels and provenance. |
 | E work character/pressure | [`packages/domain/src/work-character.ts`](../../../packages/domain/src/work-character.ts) | Domain contract and continuous pressure calculation; no selection. |
 | B provider facts | [`packages/domain/src/provider-facts.ts`](../../../packages/domain/src/provider-facts.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts) | Domain and wire schema. |
-| C operational overlay | [`packages/domain/src/operational-overlay.ts`](../../../packages/domain/src/operational-overlay.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts) | Domain and wire schema plus pure per-Goal snapshot helper; no durable storage. |
+| C operational overlay | [`packages/domain/src/operational-overlay.ts`](../../../packages/domain/src/operational-overlay.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts), [`packages/persistence/src/ensemble-router-artifacts.ts`](../../../packages/persistence/src/ensemble-router-artifacts.ts) | Domain/wire schema, pure per-Goal snapshot helper, and durable overlay/snapshot persistence. |
 | Four pressure bands | [`packages/domain/src/pressure-band.ts`](../../../packages/domain/src/pressure-band.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts) | Domain projection and wire schema; labels only. |
 | Human-owned baseline | [`packages/domain/src/model-map.ts`](../../../packages/domain/src/model-map.ts), [`config/model_map.json`](../../../config/model_map.json) | Domain validator plus empty baseline. |
+| Routing evidence | [`packages/domain/src/routing-evidence.ts`](../../../packages/domain/src/routing-evidence.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts), [`packages/persistence/src/ensemble-router-artifacts.ts`](../../../packages/persistence/src/ensemble-router-artifacts.ts) | Domain/wire validation and append-only durable persistence; no selector. |
 
-Still missing: persistence migrations; durable C overlay/Goal snapshot storage; routing evidence; router selection; fixed-model pin migration; host-tool writes/effects; and live host-tool acceptance. Current native admission remains one exact `modelPolicy` identity, and `MAESTRO_NATIVE_MODEL` remains an explicit fixed-model pin/routing-off input where required. No production routing claim is made.
+Migration [`0072_ensemble_router_artifacts.sql`](../../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql) provides the durable C overlay, Goal snapshot, and routing-evidence tables. Still missing: router selection; fixed-model pin migration; host-tool writes/effects; and live host-tool acceptance. Current native admission remains one exact `modelPolicy` identity, and `MAESTRO_NATIVE_MODEL` remains an explicit fixed-model pin/routing-off input where required. No production routing claim is made.
 
 ## 1. Objective
 
@@ -306,7 +307,7 @@ Per the interview contract, these are settled structural choices; numeric rubric
 - **Task-kind recipes describe axis roles over those eight axes only.** Runtime TaskDemand records the Head's numeric D requirements and provenance; E work-character inputs remain separate.
 - **Pressure is continuous and computed from E risk, reversibility, and verification attachment.** Material scale, time pressure, and budget headroom constrain B/C. The Head may uplift but never lower the computed floor.
 - **Four pressure bands are organizational projections** for automatic, Department Head, Encore Council, and user decisions. They do not participate in matching.
-- **Routing evidence needs its own store.** It cannot extend `native_execution_bindings`: that table is append-only, deliberately identity-only, and carries a database-level `CHECK` that selected equals actual. Routing rationale — A/D requirements, E inputs, pressure, band, candidate set, hard-filter rejections, profile versions, and selection rationale — belongs beside it.
+- **Routing evidence has its own store.** Migration [`0072_ensemble_router_artifacts.sql`](../../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql) and [`ensemble-router-artifacts.ts`](../../../packages/persistence/src/ensemble-router-artifacts.ts) keep it separate from `native_execution_bindings`: that table is append-only, deliberately identity-only, and carries a database-level `CHECK` that selected equals actual. Routing rationale — A/D requirements, E inputs, pressure, band, candidate set, hard-filter rejections, profile versions, and selection rationale — belongs in the routing-evidence record.
 - **Migration intersects `approvedModels`.** The router does not materialize the entire pool into every Mission Bundle. It chooses one identity from the authorized intersection, then native admission re-verifies it.
 - **How routing is surfaced in the UI** is a presentation decision, taken later during implementation.
 
@@ -324,17 +325,15 @@ Phase 1 now has the stable artifact contracts listed below, but not automatic mo
 6. **Four pressure-band domain and wire schemas** ([`packages/domain/src/pressure-band.ts`](../../../packages/domain/src/pressure-band.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts)).
 7. **Human-owned `model_map` validator and empty baseline** ([`packages/domain/src/model-map.ts`](../../../packages/domain/src/model-map.ts), [`config/model_map.json`](../../../config/model_map.json)).
 
-These schemas are not persistence. Routing evidence, durable overlay/Goal snapshots, router selection, fixed-model migration, host-tool writes/effects, and live acceptance remain open. Native admission remains authoritative and still requires one exact provider-qualified identity.
+The schemas are backed by migration [`0072_ensemble_router_artifacts.sql`](../../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql) and [`ensemble-router-artifacts.ts`](../../../packages/persistence/src/ensemble-router-artifacts.ts) for overlay, Goal snapshot, and routing evidence. These stores do not select a model. Router selection, fixed-model migration, host-tool writes/effects, and live acceptance remain open. Native admission remains authoritative and still requires one exact provider-qualified identity.
 
 ## 15. Remaining implementation artifacts
 
 The remaining concrete artifacts are:
 
-1. Persistence migrations and durable storage for the C overlay and immutable Goal snapshot.
-2. A separate append-only routing-evidence schema and persistence path.
-3. The Ensemble Router selection implementation and native-admission integration.
-4. The migration from explicit `MAESTRO_NATIVE_MODEL`/existing singleton `modelPolicy` inputs to routed identities, with routing-off evidence.
-5. Production host-tool writes/effects and live acceptance through the real process/gateway boundary.
+1. The Ensemble Router selection implementation and native-admission integration.
+2. The migration from explicit `MAESTRO_NATIVE_MODEL`/existing singleton `modelPolicy` inputs to routed identities, with routing-off evidence.
+3. Production host-tool writes/effects and live acceptance through the real process/gateway boundary.
 
 No implementation should treat a pressure band as a matching tier, silently downgrade a requirement, or claim production routing from the presence of these artifact contracts.
 

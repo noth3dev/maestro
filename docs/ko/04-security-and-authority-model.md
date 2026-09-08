@@ -59,7 +59,7 @@ Mission Bundle은 approved model, skill, tool, path, environment, authority acti
 
 ## Router 및 host-tool 현황
 
-Authority/effect/evidence 경계는 구현되어 있지만 production host-tool enablement를 의미하지 않습니다. Native `ToolRegistry`는 비어 있고 host-tool write/effect와 live acceptance는 구현되지 않았으며 Ensemble Router selection/routing evidence도 저장되지 않습니다. 정확한 `modelPolicy` admission이 계속 권위 있는 경계입니다.
+Authority/effect/evidence 경계는 구현되어 있지만 production host-tool enablement를 의미하지 않습니다. Native `ToolRegistry`는 비어 있고 host-tool write/effect와 live acceptance는 구현되지 않았습니다. Ensemble Router routing evidence는 별도로 저장되지만 selection은 활성화되지 않았습니다. 정확한 `modelPolicy` admission이 계속 권위 있는 경계입니다.
 ## 3. 봉인 제출 (Sealed Submissions) 및 증거 무결성
 
 에이전트 간 담합 및 데이터 위·변조를 방지하기 위한 암호화적 무결성 검증 체계입니다.
