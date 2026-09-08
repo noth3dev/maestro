@@ -5,9 +5,19 @@ const MAX_CODE_BYTES = 64_000;
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5_000;
 const MAX_RESULT_BYTES = 64_000;
 
+export interface IpPythonSessionBinding {
+  readonly sessionId: string;
+  readonly operatorId: string;
+  readonly projectId: string;
+  readonly goalId: string;
+  readonly pathScope: readonly string[];
+  readonly outboundDataClasses: readonly string[];
+}
+
 export interface IpPythonExecutionRequest {
   readonly sessionId: string;
   readonly code: string;
+  readonly binding?: IpPythonSessionBinding;
 }
 
 export type IpPythonExecutionState = "ok" | "error" | "cancelled" | "unknown";
@@ -34,7 +44,7 @@ export interface IpPythonSessionManager {
 
 export interface IpPythonSessionManagerOptions {
   /** A new kernel is required for every Goal-bound session. */
-  readonly createKernel: (sessionId: string) => IpPythonKernel | Promise<IpPythonKernel>;
+  readonly createKernel: (sessionId: string, binding?: IpPythonSessionBinding) => IpPythonKernel | Promise<IpPythonKernel>;
   readonly shutdownTimeoutMs?: number;
 }
 
@@ -103,14 +113,18 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | und
 }
 
 export function createIpPythonSessionManager(options: IpPythonSessionManagerOptions): IpPythonSessionManager {
-  const sessions = new Map<string, { readonly kernel: Promise<IpPythonKernel>; queue: Promise<void> }>();
+  const sessions = new Map<string, { readonly kernel: Promise<IpPythonKernel>; readonly binding?: IpPythonSessionBinding; queue: Promise<void> }>();
   let closed = false;
 
-  function sessionFor(sessionId: string): { readonly kernel: Promise<IpPythonKernel>; queue: Promise<void> } {
+  function sessionFor(sessionId: string, binding?: IpPythonSessionBinding): { readonly kernel: Promise<IpPythonKernel>; readonly binding?: IpPythonSessionBinding; queue: Promise<void> } {
     assertSessionId(sessionId);
+    if (binding !== undefined && binding.sessionId !== sessionId) throw new Error("IPython session binding identity mismatch");
     const existing = sessions.get(sessionId);
-    if (existing !== undefined) return existing;
-    const session = { kernel: Promise.resolve(options.createKernel(sessionId)), queue: Promise.resolve() };
+    if (existing !== undefined) {
+      if (JSON.stringify(existing.binding) !== JSON.stringify(binding)) throw new Error("IPython session binding changed");
+      return existing;
+    }
+    const session = { kernel: Promise.resolve(options.createKernel(sessionId, binding)), ...(binding === undefined ? {} : { binding }), queue: Promise.resolve() };
     sessions.set(sessionId, session);
     return session;
   }
@@ -118,7 +132,7 @@ export function createIpPythonSessionManager(options: IpPythonSessionManagerOpti
   return {
     execute(request) {
       if (closed) return Promise.reject(new Error("IPython session manager is closed"));
-      const session = sessionFor(request.sessionId);
+      const session = sessionFor(request.sessionId, request.binding);
       const run = session.queue.then(async () => (await session.kernel).execute(request));
       session.queue = run.then(() => undefined, () => undefined);
       return run;
@@ -165,7 +179,8 @@ export function createIpPythonTool(options: { sessions: IpPythonSessionManager }
     outboundDataClass: "workspace",
     async execute(args, context) {
       const { code } = parseCode(args);
-      return toolResult(await options.sessions.execute({ sessionId: sessionIdFor(context), code }), context);
+      const sessionId = sessionIdFor(context);
+      return toolResult(await options.sessions.execute({ sessionId, code, binding: { sessionId, operatorId: context.operatorId, projectId: context.projectId, goalId: context.goalId, pathScope: context.capabilityGrant.pathScope, outboundDataClasses: context.capabilityGrant.outboundDataClasses } }), context);
     },
   };
 }
