@@ -2799,3 +2799,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Fresh `npm run check` passed: 111 files passed and 57 database-gated files skipped; 703 tests passed and 381 skipped.
 - `npm run lint` and `git diff --check` must be rerun after this documentation append before commit.
+
+
+## 2026-09-08 — canonical commit pointer reconciliation
+
+- Updated `task_plan.md` to point at the latest local host-tool commit `989dd50`; no implementation state changed.
+- The local branch remains ahead of `origin/main`; only the user-owned `.gitignore` is uncommitted.

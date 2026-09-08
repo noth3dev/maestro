@@ -15,7 +15,7 @@ This block is the authoritative status for the current `main` tree. Older phase 
 - **Phase 8:** planned; hardening must prove IPython authority enforcement, approval binding, mixed-risk blocking, full-access isolation, and forbidden-action denial.
 - **Phase 9:** future Luthiery MCP manufacture; it is not part of the Phase 2 IPython implementation.
 - **Phase 10:** future Treasury capability; payment remains separately activated and critically governed.
-- **Documentation checkpoint:** the prior roadmap reorganization and CI fix are pushed on `origin/main`; the host-tool slices are committed locally through `314f9bc` and are not yet pushed. The only uncommitted file is the user-owned `.gitignore` change.
+- **Documentation checkpoint:** the prior roadmap reorganization and CI fix are pushed on `origin/main`; the host-tool slices are committed locally through `989dd50` and are not yet pushed. The only uncommitted file is the user-owned `.gitignore` change.
 - **Immediate work:** implement the approved Phase 2 host-tool contract and its tests. Do not claim Phase 1–3 acceptance or code completion until the new host-tool gates pass.
 
 ## Phase 1A–1D host-tool execution plan — approved 2026-09-08
