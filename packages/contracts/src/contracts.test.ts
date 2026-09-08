@@ -8,6 +8,10 @@ import {
   TransitionGoalInputSchema,
   MissionBundleSubstanceSchema,
   TaskDemandSchema,
+  ProviderFactsSchema,
+  OperationalOverlaySchema,
+  OperationalOverlaySnapshotSchema,
+  PressureBandProjectionSchema,
 } from "./index.js";
 
 const projectId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01";
@@ -16,7 +20,9 @@ describe("goal HTTP contracts", () => {
   it("accepts public create and transition inputs", () => {
     expect(CreateGoalInputSchema.parse({ projectId })).toEqual({ projectId });
     expect(TransitionGoalInputSchema.parse({ projectId, expectedVersion: 1, to: "ready_for_confirmation" })).toEqual({
-      projectId, expectedVersion: 1, to: "ready_for_confirmation",
+      projectId,
+      expectedVersion: 1,
+      to: "ready_for_confirmation",
     });
   });
 
@@ -41,7 +47,6 @@ describe("goal HTTP contracts", () => {
   });
 });
 
-
 describe("project access provisioning contracts", () => {
   it("requires a canonical operator/project pair and exact non-empty roles", () => {
     const input = { operatorId: projectId, projectId, roles: ["concertmaster", "head-product"] };
@@ -51,32 +56,38 @@ describe("project access provisioning contracts", () => {
   });
 
   it("rejects attempts to smuggle actor or capability fields into provisioning", () => {
-    expect(ProjectAccessProvisionInputSchema.safeParse({ operatorId: projectId, projectId, roles: ["concertmaster"], actorId: projectId }).success).toBe(false);
+    expect(
+      ProjectAccessProvisionInputSchema.safeParse({ operatorId: projectId, projectId, roles: ["concertmaster"], actorId: projectId })
+        .success,
+    ).toBe(false);
     expect(ProjectAccessProvisionInputSchema.safeParse({ operatorId: projectId, projectId, roles: ["*"] }).success).toBe(false);
   });
 });
 
-
 describe("conversation streaming contracts", () => {
   it("accepts the stable unknown account-login error code", async () => {
     const { StableApiErrorSchema } = await import("./index.js");
-    expect(StableApiErrorSchema.parse({ error: { code: "account_login_session_unknown", message: "Account login session is unknown" } }).error.code).toBe("account_login_session_unknown");
+    expect(
+      StableApiErrorSchema.parse({ error: { code: "account_login_session_unknown", message: "Account login session is unknown" } }).error
+        .code,
+    ).toBe("account_login_session_unknown");
   });
 
   it("accepts durable turn delta events", async () => {
     const { ConversationEventSchema } = await import("./index.js");
-    expect(ConversationEventSchema.parse({
-      cursor: "3",
-      eventId: projectId,
-      conversationId: projectId,
-      projectId,
-      eventType: "turn_delta",
-      payload: { turnId: projectId, text: "chunk" },
-      occurredAt: "2030-01-01T00:00:00.000Z",
-    }).eventType).toBe("turn_delta");
+    expect(
+      ConversationEventSchema.parse({
+        cursor: "3",
+        eventId: projectId,
+        conversationId: projectId,
+        projectId,
+        eventType: "turn_delta",
+        payload: { turnId: projectId, text: "chunk" },
+        occurredAt: "2030-01-01T00:00:00.000Z",
+      }).eventType,
+    ).toBe("turn_delta");
   });
 });
-
 
 describe("TaskDemand and Mission Bundle routing contracts", () => {
   const requirement = { level: 80, rationale: "The Head set this level from the Task Contract." };
@@ -84,19 +95,40 @@ describe("TaskDemand and Mission Bundle routing contracts", () => {
     schemaVersion: 1,
     taskKinds: ["coding"],
     requirements: {
-      reasoning: requirement, coding: requirement, verification: requirement, "instruction-fidelity": requirement,
-      "tool-use": requirement, "long-context": requirement, knowledge: requirement, "refusal-calibration": requirement,
+      reasoning: requirement,
+      coding: requirement,
+      verification: requirement,
+      "instruction-fidelity": requirement,
+      "tool-use": requirement,
+      "long-context": requirement,
+      knowledge: requirement,
+      "refusal-calibration": requirement,
     },
     provenance: { taskContractRef: "task-contract:1", headDecisionRef: "head-decision:1" },
   };
 
   it("requires the complete eight-axis demand on a Mission Bundle", () => {
     const substance = {
-      role: "execution", profileRef: "profile-1", goalBrief: "implement safely", taskDemand,
-      approvedModels: ["test/model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
-      environment: ["node24"], authorityBoundary: ["bounded"], externalServiceBoundary: ["none"], dataBoundary: ["repository"],
-      costCeiling: "1 USD", timeCeiling: "1 hour", retryCeiling: 1, workerCeiling: 0,
-      deliverable: "a patch", evidenceRequirements: ["tests"], validationCriteria: ["tests pass"], terminationConditions: ["complete"],
+      role: "execution",
+      profileRef: "profile-1",
+      goalBrief: "implement safely",
+      taskDemand,
+      approvedModels: ["test/model-a"],
+      allowedSkills: ["implementation"],
+      allowedTools: ["write"],
+      allowedPaths: ["packages/product"],
+      environment: ["node24"],
+      authorityBoundary: ["bounded"],
+      externalServiceBoundary: ["none"],
+      dataBoundary: ["repository"],
+      costCeiling: "1 USD",
+      timeCeiling: "1 hour",
+      retryCeiling: 1,
+      workerCeiling: 0,
+      deliverable: "a patch",
+      evidenceRequirements: ["tests"],
+      validationCriteria: ["tests pass"],
+      terminationConditions: ["complete"],
     };
     const parsedDemand = TaskDemandSchema.parse(taskDemand);
     const readonlyKinds: readonly string[] = parsedDemand.taskKinds;
@@ -107,8 +139,91 @@ describe("TaskDemand and Mission Bundle routing contracts", () => {
     expect(MissionBundleSubstanceSchema.parse(substance)).toEqual(substance);
     expect(MissionBundleSubstanceSchema.safeParse({ ...substance, taskDemand: { ...taskDemand, provider: "openai" } }).success).toBe(false);
     expect(TaskDemandSchema.safeParse({ ...taskDemand, taskKinds: ["coding", "coding"] }).success).toBe(false);
-    expect(TaskDemandSchema.safeParse({ ...taskDemand, requirements: { ...taskDemand.requirements, knowledge: undefined } }).success).toBe(false);
-    expect(TaskDemandSchema.safeParse({ ...taskDemand, provenance: { taskContractRef: " ", headDecisionRef: "head-decision:1" } }).success).toBe(false);
-    expect(TaskDemandSchema.safeParse({ ...taskDemand, requirements: { ...taskDemand.requirements, coding: { ...requirement, rationale: "line\nnext" } } }).success).toBe(false);
+    expect(TaskDemandSchema.safeParse({ ...taskDemand, requirements: { ...taskDemand.requirements, knowledge: undefined } }).success).toBe(
+      false,
+    );
+    expect(
+      TaskDemandSchema.safeParse({ ...taskDemand, provenance: { taskContractRef: " ", headDecisionRef: "head-decision:1" } }).success,
+    ).toBe(false);
+    expect(
+      TaskDemandSchema.safeParse({
+        ...taskDemand,
+        requirements: { ...taskDemand.requirements, coding: { ...requirement, rationale: "line\nnext" } },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("Ensemble Router artifact wire contracts", () => {
+  const facts = {
+    schemaVersion: 1 as const,
+    contextCapacity: 128_000,
+    pricing: { inputPerMillionTokens: 2, outputPerMillionTokens: 8 },
+    authentication: { modes: ["api-key"] },
+    dataPolicy: { allowedDataClasses: ["public"], retention: "transient" as const, trainingUse: "never" as const, regions: ["us"] },
+    modalities: ["text"],
+    toolCalls: { supported: true },
+    provenance: { source: "provider-docs:model", observedAt: "2026-09-08" },
+  };
+  const observation = {
+    candidateRef: "candidate-1",
+    measuredLatencyMs: 10,
+    measuredCost: 0.01,
+    failureRate: 0,
+    timeoutRate: 0,
+    providerErrorRate: 0,
+    currentAvailability: true,
+    accountBinding: "account-1",
+    observedAt: "2026-09-08T12:00:00Z",
+  };
+
+  it("accepts B facts, C overlay/snapshot, and pressure projection wire shapes", () => {
+    expect(ProviderFactsSchema.parse(facts)).toEqual(facts);
+    const overlay = {
+      schemaVersion: 1 as const,
+      installationRef: "installation-1",
+      projectRef: "project-1",
+      version: 1,
+      observations: [observation],
+    };
+    expect(OperationalOverlaySchema.parse(overlay)).toEqual(overlay);
+    const snapshot = {
+      schemaVersion: 1 as const,
+      installationRef: "installation-1",
+      projectRef: "project-1",
+      goalRef: "goal-1",
+      overlayVersion: 1,
+      observations: [observation],
+    };
+    expect(OperationalOverlaySnapshotSchema.parse(snapshot)).toEqual(snapshot);
+    expect(PressureBandProjectionSchema.parse({ pressure: 150, band: "critical", decisionLayer: "user" })).toEqual({
+      pressure: 150,
+      band: "critical",
+      decisionLayer: "user",
+    });
+  });
+
+  it("fails closed on missing facts, forbidden identity fields, and unavailable bindings", () => {
+    expect(ProviderFactsSchema.safeParse({ ...facts, contextCapacity: undefined }).success).toBe(false);
+    expect(ProviderFactsSchema.safeParse({ ...facts, reasoning: 200 }).success).toBe(false);
+    expect(
+      OperationalOverlaySchema.safeParse({
+        schemaVersion: 1,
+        installationRef: "i",
+        projectRef: "p",
+        version: 1,
+        observations: [{ ...observation, currentAvailability: true, accountBinding: null }],
+      }).success,
+    ).toBe(false);
+    expect(
+      OperationalOverlaySchema.safeParse({
+        schemaVersion: 1,
+        installationRef: "i",
+        projectRef: "p",
+        version: 1,
+        observations: [{ ...observation, model: "provider/model" }],
+      }).success,
+    ).toBe(false);
+    expect(PressureBandProjectionSchema.safeParse({ pressure: 201, band: "critical", decisionLayer: "user" }).success).toBe(false);
   });
 });
