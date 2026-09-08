@@ -55,5 +55,8 @@ describe("human-owned model_map", () => {
     const hostile = modelMap() as Record<string, unknown>;
     Object.defineProperty(hostile, "overlay", { value: {}, enumerable: false });
     expect(() => assertValidModelMap(hostile)).toThrow(ModelMapValidationError);
+    const entries = [...modelMap().entries] as unknown[];
+    Object.defineProperty(entries, "map", { value: () => [], enumerable: false });
+    expect(() => assertValidModelMap({ ...modelMap(), entries: entries as never })).toThrow(ModelMapValidationError);
   });
 });
