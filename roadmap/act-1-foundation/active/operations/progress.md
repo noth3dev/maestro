@@ -3114,4 +3114,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Main now includes migration [`packages/persistence/migrations/0072_ensemble_router_artifacts.sql`](../../../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql) and the exported [`packages/persistence/src/ensemble-router-artifacts.ts`](../../../../packages/persistence/src/ensemble-router-artifacts.ts) adapter.
 - C operational overlays and immutable per-Goal snapshots are durably stored and integrity-checked. Routing evidence has a domain validator, wire schema, append-only durable persistence, and a real PostgreSQL integration gate.
-- Pure `selectRoutedModel` now enforces A↔D weakest-link matching and B/C hard filters. Remaining gates are production selector/native-admission wiring, fixed-model pin/evidence migration, host-tool writes/effects, and live host-tool acceptance. Exact native `modelPolicy` admission remains authoritative.
+- Pure `selectRoutedModel` now enforces A↔D weakest-link matching and B/C hard filters, rejects accessor-backed request and TaskDemand inputs, and rejects hostile model-map array properties. Remaining gates are production selector/native-admission wiring, fixed-model pin/evidence migration, host-tool writes/effects, and live host-tool acceptance. Exact native `modelPolicy` admission remains authoritative.
+
+## 2026-09-08 — Ensemble Router persistence and selector hardening
+
+- Added migrations 0073 and 0074 for structured routing rejection reasons and database-enforced Goal snapshot immutability. Migration 0073 adds its `NOT NULL DEFAULT` array without UPDATE, preserving the 0072 append-only trigger for non-empty upgrades.
+- Persistence now writes and verifies relational `rejections` against the JSON evidence envelope and reads legacy 0072 evidence with an in-memory empty-list compatibility value only. Direct SQL drift is rejected.
+- Added regression coverage for a non-empty 0072-to-0073 migration, snapshot UPDATE/DELETE rejection, JSON/column rejection drift, provider-fact hard filters, hostile array properties, and accessor-backed requests/TaskDemand values.
+- Verification: `npm run build`, `npm run lint`, and focused PostgreSQL routing coverage pass: 7 files / 45 tests. Independent routing review: ACCEPT.
