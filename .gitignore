@@ -12,3 +12,4 @@ docs/OPERATING_PROTOCOL.md
 *.log
 tmp/
 docs/audit/
+execution/
