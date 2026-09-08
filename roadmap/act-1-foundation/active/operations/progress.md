@@ -3012,5 +3012,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Added the provider-neutral domain contract for the agreed eight A axes: `reasoning`, `coding`, `verification`, `instruction-fidelity`, `tool-use`, `long-context`, `knowledge`, and `refusal-calibration`.
 - Validation is fail-closed: unknown/missing axes, non-integer or out-of-range scores, multiline/empty rationales, missing evidence, and inconsistent `scored`/`unproven` states are rejected.
-- The focused TDD cycle observed the missing-module RED failure, then passed 8/8 tests after the minimal implementation. Domain-only TypeScript build passed; the root build still has the known unrelated CLI `@earendil-works/pi-tui` baseline failure.
+- The focused TDD cycle observed the missing-module RED failure, then passed 11/11 tests after the minimal implementation and own-property/sparse-evidence hardening. Domain-only TypeScript build passed; the root build still has the known unrelated CLI `@earendil-works/pi-tui` baseline failure.
 - This is only the A schema boundary. Human scoring criteria, B facts, C overlay, D recipes, E pressure function, band thresholds, and `model_map` contents remain open.

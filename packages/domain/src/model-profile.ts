@@ -47,6 +47,12 @@ function onlyKeys(value: Record<string, unknown>, allowed: readonly string[], na
   }
 }
 
+function requiredKeys(value: Record<string, unknown>, required: readonly string[], name: string): void {
+  for (const key of required) {
+    if (!Object.hasOwn(value, key)) throw new ModelCapabilityValidationError(`${name} field ${key} is required`);
+  }
+}
+
 function nonemptyLine(value: unknown, field: string): asserts value is string {
   if (typeof value !== "string" || value.trim() === "" || /[\r\n]/.test(value)) {
     throw new ModelCapabilityValidationError(`${field} must be a non-empty single line`);
@@ -54,14 +60,21 @@ function nonemptyLine(value: unknown, field: string): asserts value is string {
 }
 
 function evidence(value: unknown, field: string): asserts value is readonly string[] {
-  if (!Array.isArray(value) || value.length === 0 || !value.every((item) => typeof item === "string" && item.trim() !== "" && !/[\r\n]/.test(item))) {
+  if (!Array.isArray(value) || value.length === 0) {
     throw new ModelCapabilityValidationError(`${field} must contain at least one single-line reference`);
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    const item = value[index];
+    if (!Object.hasOwn(value, index) || typeof item !== "string" || item.trim() === "" || /[\r\n]/.test(item)) {
+      throw new ModelCapabilityValidationError(`${field} must contain at least one single-line reference`);
+    }
   }
 }
 
 function assertValidScore(value: unknown, axis: ModelCapabilityAxis): asserts value is ModelCapabilityScore {
   object(value, `Model capability ${axis}`);
   onlyKeys(value, ["status", "score", "rationale", "evidence"], `Model capability ${axis}`);
+  requiredKeys(value, ["status", "score", "rationale", "evidence"], `Model capability ${axis}`);
   nonemptyLine(value.rationale, `Model capability ${axis} rationale`);
   evidence(value.evidence, `Model capability ${axis} evidence`);
 
@@ -83,6 +96,7 @@ function assertValidScore(value: unknown, axis: ModelCapabilityAxis): asserts va
 export function assertValidModelCapabilityVector(value: unknown): asserts value is ModelCapabilityVector {
   object(value, "Model capability vector");
   onlyKeys(value, ["schemaVersion", "axes"], "Model capability vector");
+  requiredKeys(value, ["schemaVersion", "axes"], "Model capability vector");
   if (value.schemaVersion !== MODEL_CAPABILITY_SCHEMA_VERSION) {
     throw new ModelCapabilityValidationError(`Model capability schemaVersion must be ${MODEL_CAPABILITY_SCHEMA_VERSION}`);
   }
@@ -90,7 +104,7 @@ export function assertValidModelCapabilityVector(value: unknown): asserts value 
   object(value.axes, "Model capability axes");
   onlyKeys(value.axes, MODEL_CAPABILITY_AXES, "Model capability axes");
   for (const axis of MODEL_CAPABILITY_AXES) {
-    if (!(axis in value.axes)) throw new ModelCapabilityValidationError(`Model capability axis ${axis} is required`);
+    if (!Object.hasOwn(value.axes, axis)) throw new ModelCapabilityValidationError(`Model capability axis ${axis} is required`);
     assertValidScore(value.axes[axis], axis);
   }
 }

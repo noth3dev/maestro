@@ -312,7 +312,7 @@ Phase 1 is reopened for the stable routing substrate, not for automatic model se
 10. **Routing evidence:** a separate append-only record containing A/D requirements, E inputs, pressure, band, candidates, hard-filter rejections, C observations used, profile versions, selected route, and escalation/switch links. It never replaces `native_execution_bindings`.
 11. **Fixed-model migration:** explicit `MAESTRO_NATIVE_MODEL` pin/routing-off behavior, `approvedModels` intersection, singleton `modelPolicy` projection, and exact native admission tests.
 
-The first schema slice now exists at `packages/domain/src/model-profile.ts` with focused tests in `packages/domain/src/model-profile.test.ts`. It validates the closed eight-axis vector, `0..100` scored values, one-line rationale, evidence references, and explicit `unproven` entries. This does not complete the human scoring rubric or create production routing.
+The first schema slice now exists at `packages/domain/src/model-profile.ts` with focused tests in `packages/domain/src/model-profile.test.ts`. It validates the closed eight-axis vector, `0..100` scored values, one-line rationale, evidence references, explicit `unproven` entries, and own-property/sparse-input boundaries. This does not complete the human scoring rubric or create production routing.
 
 Phase 1 does not claim a production router until each artifact has a schema/validator, focused RED/GREEN tests, and a native admission test proving routing evidence cannot widen authority, account, data-policy, context, or exact model identity.
 
