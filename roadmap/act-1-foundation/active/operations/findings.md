@@ -1259,3 +1259,9 @@ All downstream routing documentation must use this contract and must not restore
 - v2 blockers are closed: migration compatibility is additive and checksum-safe; stale live PID generations with absent persisted PGIDs remain `unknown` and are never signaled.
 - Independent re-review is **PASS**. Full PostgreSQL verification is green at 188/188 files and 1,251/1,251 tests with exit code 0.
 - S2 remains operationally open until the required merge, main revalidation, worktree/branch cleanup, push, and post-push CI confirmation complete.
+
+
+## 2026-09-09 — S2 main revalidation
+
+- Main revalidation is green: exit code 0, 188/188 files, 1,251/1,251 tests. No new failure was introduced by the merge.
+- The latest CI before push remains historical failure `34245438906`; post-push CI is the remaining external gate.
