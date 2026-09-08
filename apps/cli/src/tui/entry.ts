@@ -41,7 +41,7 @@ import {
   selectWorkspaceModel,
   startNewConversationSession,
 } from "./session.js";
-import { mergeEvents, subscribeToEvents } from "./activity-stream.js";
+import { mergeEvents, runActivityStream, subscribeToEvents } from "./activity-stream.js";
 import { addConversationMessage, applyConversationEvent, createConversationTranscript, renderConversationMarkdown, type ConversationTranscriptState } from "./conversation-transcript.js";
 import { renderActivityTimeline } from "./components/activity-timeline.js";
 import { renderShell, renderTuiFooter, type TuiShellState } from "./components/shell.js";
@@ -244,27 +244,25 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const streamActivity = async (signal: AbortSignal) => {
       const streamProject = project;
       if (client === undefined || streamProject.kind !== "attached") return;
-      try {
-        for await (const event of subscribeToEvents({
-          client,
-          projectId: streamProject.projectId,
-          cursor: session?.lastEventCursor ?? "0",
-          signal,
-          maxReconnectAttempts: 5,
-          onReconnect: (attempt, maxAttempts) => append(`Activity stream reconnecting (${attempt}/${maxAttempts})`),
-        })) {
-          if (signal.aborted) return;
+      await runActivityStream({
+        client,
+        projectId: streamProject.projectId,
+        cursor: session?.lastEventCursor ?? "0",
+        signal,
+        maxReconnectAttempts: 5,
+        onReconnect: (attempt, maxAttempts) => append(`Activity stream reconnecting (${attempt}/${maxAttempts})`),
+        onEvent: async (event) => {
           activity = mergeEvents(activity, [event]);
           const nextSession = advanceWorkspaceSession(workspace.cwd, session, event);
           session = nextSession;
           await saveWorkspaceSession(nextSession);
           render();
-        }
-        if (!signal.aborted) append("Activity stream unavailable: reconnect attempts exhausted");
-      } catch (error) {
-        if (!signal.aborted) append(`Activity stream unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
-      }
+        },
+        onUnavailable: (message) => append(message),
+        onFailure: (message) => append(message),
+      });
     };
+
     let conversationStreamController: AbortController | undefined;
     let conversationHydration: Promise<void> = Promise.resolve();
     let conversationHydrationGeneration = 0;

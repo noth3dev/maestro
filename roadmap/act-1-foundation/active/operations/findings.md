@@ -1265,3 +1265,31 @@ All downstream routing documentation must use this contract and must not restore
 
 - Main revalidation is green: exit code 0, 188/188 files, 1,251/1,251 tests. No new failure was introduced by the merge.
 - The latest CI before push remains historical failure `34245438906`; post-push CI is the remaining external gate.
+
+
+## 2026-09-09 — S3 review blockers and remediation
+
+- Initial S3 review found a deterministic DB-less regression: `new URL(undefined)` ran during `describe.skip` registration. The suite now constructs PostgreSQL resources only when `MAESTRO_TEST_DATABASE_URL` exists; no-DB invocation exits 0 with one skipped file.
+- The initial integration test manually projected `listGoals` into a shell state and drove `subscribeToEvents` directly. It now calls the actual `readDashboard` path and the shared `runActivityStream` path used by `entry.ts`.
+- The reconnect test previously used an in-memory cursor after disconnect. It now saves the first event, reloads `lastEventCursor` from the workspace session, starts a fresh subscription, and proves exact durable event IDs with no duplicates.
+- The failure-path test previously rendered helper-created errors. It now runs real API-client 401/403/503 streams through `runActivityStream`, asserting explicit authorization/unavailable messages, no events, and no saved cursors.
+- One remediation test attempt timed out because the forbidden client was accidentally pointed at the original authorized project. Passing a distinct project ID fixed the test; the corrected PostgreSQL suite is 2/2 green.
+
+
+## 2026-09-09 — S3 remediation full-verification blocker
+
+- The post-review serialized PostgreSQL run exited 1 with **188/189 files and 1,256/1,258 tests**. Only `apps/control-plane/src/worker.kill-restart.integration.test.ts` failed: its first process-backed test timed out at 30 seconds, and its second observed an unfenced `spawned` reservation instead of the expected `unknown`/`fenced` recovery state.
+- The S3 integration itself passed 2/2. Running `worker.kill-restart.integration.test.ts` alone passed 2/2 in 9.50s, so the failure is currently environment/order-dependent and not yet attributed to S3 code.
+- A focused sequence containing `main.integration`, `concertmaster-report.integration`, then `worker.kill-restart` is running to test the observed full-suite predecessor order. S3 remains open until the sequence and a subsequent full run are green.
+
+
+## 2026-09-09 — Worker recovery failure isolated as order-dependent
+
+- The remediation full run exited 1 only because `worker.kill-restart.integration.test.ts` timed out and then observed stale spawned state.
+- The same file passes alone and after the full-run predecessor sequence, so no code change is justified yet. A second full run will distinguish transient load from persistent suite interference.
+
+
+## 2026-09-09 — S3 full verification blocker resolved
+
+- The second post-review serialized full run passed **189/189 files and 1,258/1,258 tests**, exit code 0. The worker recovery failure was transient/order-dependent and did not reproduce in the full rerun.
+- No S3 code change was made for the worker failure; isolated, predecessor-sequence, and final full verification are all green.

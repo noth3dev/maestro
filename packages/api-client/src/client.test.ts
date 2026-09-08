@@ -244,6 +244,39 @@ it("streams authenticated durable events from the reconnect cursor", async () =>
 });
 
 
+it("preserves a durable authorization error from the goal event stream", async () => {
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: "credential_forbidden", message: "Credential is not active" } }), {
+    status: 403,
+    headers: { "content-type": "application/json" },
+  }));
+  const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+  const stream = client.streamEvents({ projectId, after: "7" });
+
+  await expect(stream[Symbol.asyncIterator]().next()).rejects.toMatchObject({
+    name: "ApiError",
+    status: 403,
+    code: "credential_forbidden",
+    message: "Credential is not active",
+  });
+});
+
+it("preserves an explicit unavailable error from the goal event stream", async () => {
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: "provider_unavailable", message: "Gateway unavailable" } }), {
+    status: 503,
+    headers: { "content-type": "application/json" },
+  }));
+  const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+  const stream = client.streamEvents({ projectId, after: "7" });
+
+  await expect(stream[Symbol.asyncIterator]().next()).rejects.toMatchObject({
+    name: "ApiError",
+    status: 503,
+    code: "provider_unavailable",
+    message: "Gateway unavailable",
+  });
+});
+
+
 describe("native conversation client", () => {
   const conversation = { conversationId: "44444444-4444-4444-8444-444444444444", projectId, goalId, model: "openai/gpt-5", status: "active", version: 1 };
   it("lists models and sends a real authenticated conversation turn", async () => {
