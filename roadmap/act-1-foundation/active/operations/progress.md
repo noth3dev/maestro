@@ -3029,3 +3029,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added domain validation for runtime TaskDemand: Head-declared `0..200` requirements, per-axis rationale, unique task kinds, Task Contract/Head decision provenance, and rejection of model/provider/pressure fields.
 - Combining kinds takes the strongest role per axis and intentionally produces no numeric level.
 - Verification: focused task-demand tests passed 8/8. The next slice is the runtime D-level declaration/review policy.
+
+
+## 2026-09-08 — D validator hidden-field hardening
+
+- Independent review found that `Object.keys` alone allowed unknown fields on custom prototypes or hidden non-enumerable/symbol properties. This was a fail-closed gap in the new D validator and the existing A validator.
+- Added RED regressions for outer and nested prototype fields, non-enumerable fields, and symbol fields. Validators now require plain objects (`Object.prototype` or `null`) and inspect `Reflect.ownKeys`.
+- Focused task-demand tests pass 9/9 and model-profile tests pass 14/14 after remediation.
