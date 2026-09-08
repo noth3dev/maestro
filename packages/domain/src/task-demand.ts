@@ -112,7 +112,8 @@ function object(value: unknown, name: string): asserts value is Record<string, u
 function onlyKeys(value: Record<string, unknown>, allowed: readonly string[], name: string): void {
   for (const key of Reflect.ownKeys(value)) {
     if (typeof key !== "string" || !allowed.includes(key)) throw new TaskDemandValidationError(`${name} has unknown field ${String(key)}`);
-    if (!Object.getOwnPropertyDescriptor(value, key)?.enumerable) throw new TaskDemandValidationError(`${name} field ${key} must be enumerable`);
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor?.enumerable || !("value" in descriptor)) throw new TaskDemandValidationError(`${name} field ${key} must be an enumerable data property`);
   }
 }
 
@@ -136,6 +137,8 @@ function assertTaskKinds(value: unknown, field: string): asserts value is readon
   for (const key of Reflect.ownKeys(value)) {
     if (key === "length") continue;
     if (typeof key !== "string") throw new TaskDemandValidationError(`${field} has an unknown symbol field`);
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor?.enumerable || !("value" in descriptor)) throw new TaskDemandValidationError(`${field} entries must be enumerable data properties`);
     const index = Number(key);
     if (!Number.isSafeInteger(index) || index < 0 || index >= 2 ** 32 - 1 || String(index) !== key) {
       throw new TaskDemandValidationError(`${field} has unknown field ${key}`);

@@ -6,6 +6,11 @@ export type RoutingMode = (typeof ROUTING_MODES)[number];
 export const ROUTING_EVIDENCE_BANDS = Object.freeze(["low", "medium", "high", "critical"] as const);
 export type RoutingEvidenceBand = (typeof ROUTING_EVIDENCE_BANDS)[number];
 
+export interface RoutingEvidenceRejection {
+  readonly candidateRef: string;
+  readonly reason: string;
+}
+
 export interface RoutingEvidence {
   readonly schemaVersion: typeof ROUTING_EVIDENCE_SCHEMA_VERSION;
   readonly evidenceId: string;
@@ -16,6 +21,7 @@ export interface RoutingEvidence {
   readonly selectedModelRef: string;
   readonly accountBinding: string;
   readonly candidateRefs: readonly string[];
+  readonly rejections: readonly RoutingEvidenceRejection[];
   readonly taskDemandHash: string;
   readonly pressure: number;
   readonly pressureBand: RoutingEvidenceBand;
@@ -79,6 +85,35 @@ function list(value: unknown, field: string): asserts value is readonly string[]
     seen.add(value[i]);
   }
 }
+function rejectionList(value: unknown, field: string): asserts value is readonly RoutingEvidenceRejection[] {
+  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype)
+    throw new RoutingEvidenceValidationError(`${field} must be a standard Array`);
+  for (let index = 0; index < value.length; index += 1) {
+    if (!Object.hasOwn(value, index)) throw new RoutingEvidenceValidationError(`${field} must not be sparse`);
+    const item = value[index];
+    if (
+      !item ||
+      typeof item !== "object" ||
+      Array.isArray(item) ||
+      (Object.getPrototypeOf(item) !== Object.prototype && Object.getPrototypeOf(item) !== null)
+    )
+      throw new RoutingEvidenceValidationError(`${field}[${index}] must be a plain object`);
+    const allowed = ["candidateRef", "reason"] as const;
+    for (const key of Reflect.ownKeys(item)) {
+      if (typeof key !== "string" || !allowed.includes(key as (typeof allowed)[number]))
+        throw new RoutingEvidenceValidationError(`${field}[${index}] has an unknown field`);
+      const descriptor = Object.getOwnPropertyDescriptor(item, key);
+      if (!descriptor?.enumerable || !("value" in descriptor))
+        throw new RoutingEvidenceValidationError(`${field}[${index}] contains an accessor or hidden field`);
+    }
+    const record = item as Record<string, unknown>;
+    if (!Object.hasOwn(record, "candidateRef") || !Object.hasOwn(record, "reason"))
+      throw new RoutingEvidenceValidationError(`${field}[${index}] is incomplete`);
+    line(record.candidateRef, `${field}[${index}].candidateRef`);
+    line(record.reason, `${field}[${index}].reason`);
+  }
+}
+
 function timestamp(value: unknown, field: string): asserts value is string {
   line(value, field);
   if (!Number.isFinite(Date.parse(value))) throw new RoutingEvidenceValidationError(`${field} must be a valid timestamp`);
@@ -103,6 +138,7 @@ export function assertValidRoutingEvidence(value: unknown): asserts value is Rou
       "selectedModelRef",
       "accountBinding",
       "candidateRefs",
+      "rejections",
       "taskDemandHash",
       "pressure",
       "pressureBand",
@@ -126,6 +162,7 @@ export function assertValidRoutingEvidence(value: unknown): asserts value is Rou
       "selectedModelRef",
       "accountBinding",
       "candidateRefs",
+      "rejections",
       "taskDemandHash",
       "pressure",
       "pressureBand",
@@ -152,6 +189,7 @@ export function assertValidRoutingEvidence(value: unknown): asserts value is Rou
   if (record.mode !== "ensemble" && record.mode !== "pin") throw new RoutingEvidenceValidationError("Routing evidence mode is invalid");
   modelRef(record.selectedModelRef);
   list(record.candidateRefs, "candidateRefs");
+  rejectionList(record.rejections, "rejections");
   sha(record.taskDemandHash, "taskDemandHash");
   if (typeof record.pressure !== "number" || !Number.isFinite(record.pressure) || record.pressure < 0 || record.pressure > 200)
     throw new RoutingEvidenceValidationError("Routing evidence pressure is invalid");

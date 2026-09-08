@@ -212,6 +212,7 @@ describe("Ensemble Router artifact wire contracts", () => {
       selectedModelRef: "provider/model",
       accountBinding: "account-1",
       candidateRefs: ["candidate-1"],
+      rejections: [],
       taskDemandHash: "a".repeat(64),
       pressure: 100,
       pressureBand: "high" as const,

@@ -121,6 +121,29 @@ describe("A/B/C routing selection", () => {
       ),
     ).toThrow(RoutingSelectionError);
   });
+  it("applies every B provider-fact hard filter without treating facts as A capability", () => {
+    expect(() => selectRoutedModel(request({ requiredAuthenticationMode: "oauth" }))).toThrow(RoutingSelectionError);
+    expect(() => selectRoutedModel(request({ requiredRegion: "eu" }))).toThrow(RoutingSelectionError);
+    expect(() => selectRoutedModel(request({ maxInputPricePerMillionTokens: 0.5 }))).toThrow(RoutingSelectionError);
+    expect(() => selectRoutedModel(request({ maxOutputPricePerMillionTokens: 1 }))).toThrow(RoutingSelectionError);
+    expect(
+      selectRoutedModel(
+        request({
+          requiredAuthenticationMode: "api-key",
+          requiredRegion: "us",
+          maxInputPricePerMillionTokens: 1,
+          maxOutputPricePerMillionTokens: 2,
+        }),
+      ).selectedModelRef,
+    ).toBe("provider/strong");
+  });
+
+  it("rejects accessor-backed request fields before mode or hard-filter checks", () => {
+    const hostile = request() as unknown as Record<string, unknown>;
+    Object.defineProperty(hostile, "mode", { get: () => "ensemble", enumerable: true });
+    expect(() => selectRoutedModel(hostile as never)).toThrow(RoutingSelectionError);
+  });
+
   it("uses D requirements as a weakest-link hard filter against every A axis", () => {
     const demanding = {
       ...request().taskDemand,
