@@ -44,6 +44,22 @@ describe("Mission Bundle", () => {
     expect(() => assertValidMissionBundleSubstance({ ...value, taskDemand: { ...value.taskDemand, provider: "openai" } })).toThrow(InvalidMissionBundleError);
   });
 
+  it("rejects hidden or inherited demand fields before hashing", () => {
+    const value = substance();
+    const hidden = { ...value } as Record<string, unknown>;
+    Object.defineProperty(hidden, "taskDemand", { value: value.taskDemand, enumerable: false });
+    expect(() => assertValidMissionBundleSubstance(hidden)).toThrow(InvalidMissionBundleError);
+    expect(() => missionBundleSubstanceContentHash(hidden as never)).toThrow(InvalidMissionBundleError);
+
+    const nested = { ...value.taskDemand } as Record<string, unknown>;
+    Object.defineProperty(nested, "requirements", { value: value.taskDemand.requirements, enumerable: false });
+    expect(() => assertValidMissionBundleSubstance({ ...value, taskDemand: nested })).toThrow(InvalidMissionBundleError);
+
+    const inherited = Object.assign(Object.create({ taskDemand: value.taskDemand }), value) as Record<string, unknown>;
+    delete inherited.taskDemand;
+    expect(() => assertValidMissionBundleSubstance(inherited)).toThrow(InvalidMissionBundleError);
+  });
+
   it("rejects an invalid role", () => {
     expect(() => assertValidMissionBundleSubstance(substance({ role: "manager" as never }))).toThrow(InvalidMissionBundleError);
   });

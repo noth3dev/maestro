@@ -112,6 +112,7 @@ function object(value: unknown, name: string): asserts value is Record<string, u
 function onlyKeys(value: Record<string, unknown>, allowed: readonly string[], name: string): void {
   for (const key of Reflect.ownKeys(value)) {
     if (typeof key !== "string" || !allowed.includes(key)) throw new TaskDemandValidationError(`${name} has unknown field ${String(key)}`);
+    if (!Object.getOwnPropertyDescriptor(value, key)?.enumerable) throw new TaskDemandValidationError(`${name} field ${key} must be enumerable`);
   }
 }
 
