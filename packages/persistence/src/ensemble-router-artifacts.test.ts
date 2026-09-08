@@ -45,6 +45,7 @@ const evidence: RoutingEvidence = {
   selectedModelRef: "provider/model",
   accountBinding: "account-1",
   candidateRefs: ["candidate-1"],
+  rejections: [],
   taskDemandHash: "a".repeat(64),
   pressure: 100,
   pressureBand: "high",
@@ -126,6 +127,7 @@ describe("Ensemble Router artifact persistence", () => {
       selected_model_ref: evidence.selectedModelRef,
       account_binding: evidence.accountBinding,
       candidate_refs: evidence.candidateRefs,
+      rejections: evidence.rejections,
       task_demand_hash: evidence.taskDemandHash,
       pressure_band: evidence.pressureBand,
       decision_layer: evidence.decisionLayer,
@@ -140,5 +142,9 @@ describe("Ensemble Router artifact persistence", () => {
     await expect(listRoutingEvidenceForGoal(list, evidence.goalRef)).resolves.toEqual([evidence]);
     const drift = new FakePool([[{ ...row, selected_model_ref: "other/model" }]]);
     await expect(readRoutingEvidence(drift, evidence.evidenceId)).rejects.toBeInstanceOf(EnsembleRouterArtifactIntegrityError);
+    const rejectionDrift = new FakePool([
+      [{ ...row, evidence: { ...evidence, rejections: [{ candidateRef: "candidate-1", reason: "drift" }] }, rejections: [] }],
+    ]);
+    await expect(readRoutingEvidence(rejectionDrift, evidence.evidenceId)).rejects.toBeInstanceOf(EnsembleRouterArtifactIntegrityError);
   });
 });

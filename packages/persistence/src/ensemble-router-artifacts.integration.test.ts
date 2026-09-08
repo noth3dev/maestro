@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { type OperationalOverlay, type RoutingEvidence } from "@maestro/domain";
@@ -53,6 +55,7 @@ describeDatabase("Ensemble Router artifacts with PostgreSQL", () => {
     selectedModelRef: "provider/model",
     accountBinding: "account-1",
     candidateRefs: ["candidate-1"],
+    rejections: [],
     taskDemandHash: "a".repeat(64),
     pressure: 100,
     pressureBand: "high",
@@ -107,6 +110,66 @@ describeDatabase("Ensemble Router artifacts with PostgreSQL", () => {
     ).rejects.toMatchObject({ code: "23514" });
     const rows = await pool.query<{ count: string }>("SELECT count(*)::text AS count FROM ensemble_router_goal_overlay_snapshots");
     expect(rows.rows[0]!.count).toBe("2");
+    await expect(
+      pool.query("UPDATE ensemble_router_goal_overlay_snapshots SET project_ref = $1 WHERE goal_ref = $2", ["tampered-project", "goal-1"]),
+    ).rejects.toThrow("immutable");
+    await expect(pool.query("DELETE FROM ensemble_router_goal_overlay_snapshots WHERE goal_ref = $1", ["goal-1"])).rejects.toThrow(
+      "immutable",
+    );
+  });
+
+  it("upgrades a non-empty 0072 evidence table without mutating its append-only rows", async () => {
+    const legacySchema = `ensemble_router_legacy_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    await basePool.query(`CREATE SCHEMA "${legacySchema}"`);
+    const url = new URL(databaseUrl!);
+    url.searchParams.set("options", `-c search_path=${legacySchema}`);
+    const legacyPool = new Pool({ connectionString: url.toString() });
+    try {
+      const migrationDir = fileURLToPath(new URL("../migrations/", import.meta.url));
+      for (const name of readdirSync(migrationDir)
+        .filter((entry) => entry <= "0072_ensemble_router_artifacts.sql")
+        .sort()) {
+        await legacyPool.query(readFileSync(`${migrationDir}${name}`, "utf8"));
+      }
+      const legacyEvidence = evidence("legacy-goal", "legacy-evidence");
+      const { rejections: _rejections, ...legacyJson } = legacyEvidence;
+      await legacyPool.query(
+        "INSERT INTO ensemble_router_routing_evidence (evidence_id, goal_ref, project_ref, route_ref, mode, selected_model_ref, account_binding, candidate_refs, task_demand_hash, pressure, pressure_band, decision_layer, overlay_version, admission_binding_ref, rationale, evidence) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13, $14, $15, $16::jsonb)",
+        [
+          legacyEvidence.evidenceId,
+          legacyEvidence.goalRef,
+          legacyEvidence.projectRef,
+          legacyEvidence.routeRef,
+          legacyEvidence.mode,
+          legacyEvidence.selectedModelRef,
+          legacyEvidence.accountBinding,
+          JSON.stringify(legacyEvidence.candidateRefs),
+          legacyEvidence.taskDemandHash,
+          legacyEvidence.pressure,
+          legacyEvidence.pressureBand,
+          legacyEvidence.decisionLayer,
+          legacyEvidence.overlayVersion,
+          legacyEvidence.admissionBindingRef,
+          legacyEvidence.rationale,
+          JSON.stringify(legacyJson),
+        ],
+      );
+      await legacyPool.query(readFileSync(`${migrationDir}0073_routing_evidence_rejections.sql`, "utf8"));
+      const upgraded = await legacyPool.query<{ rejections: unknown; evidence: Record<string, unknown> }>(
+        "SELECT rejections, evidence FROM ensemble_router_routing_evidence WHERE evidence_id = $1",
+        [legacyEvidence.evidenceId],
+      );
+      expect(upgraded.rows[0]!.rejections).toEqual([]);
+      expect(upgraded.rows[0]!.evidence).not.toHaveProperty("rejections");
+      await expect(
+        legacyPool.query("UPDATE ensemble_router_routing_evidence SET rationale = 'tampered' WHERE evidence_id = $1", [
+          legacyEvidence.evidenceId,
+        ]),
+      ).rejects.toThrow("append-only");
+    } finally {
+      await legacyPool.end();
+      await basePool.query(`DROP SCHEMA "${legacySchema}" CASCADE`);
+    }
   });
 
   it("uses the database append-only trigger for routing evidence and supports real reads", async () => {
