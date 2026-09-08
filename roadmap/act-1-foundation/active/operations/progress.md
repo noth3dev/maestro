@@ -3095,3 +3095,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Independent review found that a Proxy could return one value during validation and another during pressure calculation.
 - Refactored validation to snapshot enumerable data-descriptor values once; `calculatePressure` now calculates only from that validated snapshot. Added a finite-output Proxy regression.
 - Focused E tests pass 8/8; full domain verification remains the merge gate.
+
+
+## 2026-09-08 — TaskDemand wire-type readonly parity
+
+- CI exposed a type drift after Mission Bundle binding: domain `TaskDemand.taskKinds` is readonly while the contracts Zod inference remained mutable at the control-plane service boundary.
+- Added explicit immutable exported wire types for `TaskDemand`, `MissionBundleSubstance`, `MissionBundle`, and `CreateMissionBundleInput`, plus a compile-time readonly regression.
+- Control-plane package typecheck now passes when workspace package links resolve to the current worktree.
