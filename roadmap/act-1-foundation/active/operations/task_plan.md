@@ -1293,3 +1293,11 @@ Before production router code, create and review: the eight A-axis scoring rubri
 - An independent design review found and resolved documentation contradictions: public `model_map` changes require a human commit; agent registration is a private proposal; local overlays are installation/project-private while each Goal receives an immutable snapshot; qualifying mid-run switches require a new native admission/binding; `approvedModels` remains an authorization intersection rather than a full pool materialization; and `MAESTRO_NATIVE_MODEL` is explicit pin/routing-off mode, not fallback. The model/task metric split now follows the agreed A eight-axis, B facts, C operations, D paired requirements, E pressure/constraint contract; retired `50/100/200` grade lookup language is not used for routing.
 - Prime references remain limited to persistent-kernel, protocol, and lifecycle structure. No Prime source, runtime, dependency, or authority behavior is copied.
 - **Next:** write the Phase 1 primitive-trait/model-profile contract and RED tests. Do not begin Phase 2 router or approval/effect code until the Phase 1 artifact set and documentation review are complete.
+
+
+## 2026-09-08 — First A-axis schema slice
+
+- Added `packages/domain/src/model-profile.ts` and exported it from `@maestro/domain`. The validator fixes the initial eight A capability axes, accepts only integer scores in `0..100`, requires a one-line rationale and evidence reference for each axis, and represents unproven capability with `score: null`.
+- TDD evidence: the new focused test was observed RED because the module did not exist, then GREEN with 8/8 tests passing. `npx tsc -b packages/domain` passes.
+- Root `npm run build` remains blocked by the known pre-existing CLI `@earendil-works/pi-tui` import/type failures; this slice does not touch those files.
+- **Next:** document and test the human scoring rubric itself before adding task-kind recipes, pressure calculation, or a `model_map` file.
