@@ -42,7 +42,7 @@ interface WorkCharacter {
 }
 ```
 
-The validator rejects unknown, inherited, non-enumerable, accessor, symbol, missing, non-plain, non-integer, and out-of-range fields. The six-axis runtime tuple is frozen so validation cannot be weakened by mutating the exported axis list. Provenance references are non-empty single-line values.
+The validator rejects unknown, inherited, non-enumerable, accessor, symbol, missing, non-plain, non-integer, and out-of-range fields. It snapshots validated enumerable data-property values before calculation, so a Proxy cannot change the pressure inputs between validation and calculation. The six-axis runtime tuple is frozen so validation cannot be weakened by mutating the exported axis list. Provenance references are non-empty single-line values.
 
 ## 4. Continuous pressure function
 
