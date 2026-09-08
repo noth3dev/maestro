@@ -1,4 +1,5 @@
-export type ActionClassification = "ordinary" | "critical" | "forbidden" | "ambiguous";
+import { classifyAction, type ActionClassification } from "./action-classification.js";
+export type { ActionClassification } from "./action-classification.js";
 
 export interface ActionRequest {
   commandId: string;
@@ -37,38 +38,6 @@ export type AuthorityDecision = {
   recordId?: string;
   expiresAt?: Date;
 };
-
-function classifyAction(action: string): ActionClassification {
-  switch (action) {
-    case "project.file.read":
-    case "project.file.edit":
-    case "project.test.run":
-    case "git.local.branch.create":
-    case "git.local.branch.advance":
-    case "git.local.commit":
-    case "git.local.revision.read":
-    case "git.local.worktree.create":
-    case "git.local.worktree.remove":
-    case "browser.navigate":
-    case "browser.click":
-    case "browser.fill":
-    case "browser.get_text":
-    case "browser.screenshot":
-      return "ordinary";
-    case "git.remote.push":
-    case "deployment.release":
-    case "external.send":
-    case "permanent.delete":
-    case "payment.spend":
-    case "authority.change":
-    case "external.connect":
-      return "critical";
-    case "system.policy.bypass":
-      return "forbidden";
-    default:
-      return "ambiguous";
-  }
-}
 
 function hasMatchingScope(
   request: ActionRequest,
