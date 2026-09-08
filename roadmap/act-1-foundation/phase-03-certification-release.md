@@ -245,17 +245,17 @@ The Encore Council adjudicates conflicting certifications or material unresolved
 
 ## Routing evidence and certification — adopted design
 
-Phase 3 certifies not only the result but whether the work was performed by a model that met its declared bar. Routing remains advisory; certification and admission remain authoritative.
+Phase 3 certifies not only the result but whether the work was performed by a model that met its declared A↔D requirement under the recorded pressure. Routing remains advisory; certification and admission remain authoritative.
 
-- The evidence bundle includes task kinds, grade, demand/profile versions, routed model, candidate set, hard-filter rejections, selection rationale, profile provenance, actual model, provider, cost, latency, and result.
-- A model below the declared bar may run only after the documented Head → Encore → user escalation path permits it. The approving actor, approval tier, repetition scope, reason, and consequence appear on certification.
+- The evidence bundle includes task-kind recipe versions, the eight-axis D requirements, E work-character inputs, calculated pressure and band, profile versions, routed model, candidate set, B/C hard-filter rejections and observations, selection rationale, profile provenance, actual model, provider, cost, latency, and result.
+- A model below the declared A↔D requirement may run only after the pressure-band authority permits it. The approving actor, approval tier, repetition scope, reason, and consequence appear on certification.
 - Encore reviewers use distinct qualifying models when available. Same-model independent review is labeled honestly and high-consequence low-diversity cases escalate.
-- Provider-result identity mismatch, routing-evidence mismatch, missing routing evidence, or an unrecorded downgrade blocks certification.
+- Provider-result identity mismatch, routing-evidence mismatch, missing routing evidence, or an unrecorded below-requirement decision blocks certification.
 - Quality, Security, Safety, Metronome, and final reporting retain their independent responsibilities; model fitness cannot compensate for a failed hard certification floor.
 
 ### Additional Phase 3 tests and exit evidence
 
 - Replay a routed task and reconstruct the single selected identity from durable evidence.
-- Approve a sub-bar execution and prove its scope is visible on the certification.
+- Approve a below-requirement execution and prove its scope is visible on the certification.
 - Force same-model and insufficient-diversity cases and verify the required labels/escalation.
 - Force a provider identity drift or missing routing record and prove final reporting remains blocked.

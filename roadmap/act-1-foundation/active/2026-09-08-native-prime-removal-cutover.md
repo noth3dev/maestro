@@ -264,7 +264,7 @@ Commit: `feat(runtime): add bounded native control-plane tools`.
 **Configuration contract:**
 
 - Delete `primeAgentVersion` from `MaestroConfig` and every fixture.
-- Add `MAESTRO_NATIVE_MODEL` as a provider-qualified default for bare internal paths that cannot derive a Mission Bundle model. Reject an unqualified value during config parsing.
+- Support `MAESTRO_NATIVE_MODEL` as an explicit provider-qualified fixed-model pin/routing-off setting for bare internal paths that cannot derive a Mission Bundle model. Reject an unqualified value during config parsing; do not supply an implicit default.
 - Require `MAESTRO_MODEL_GATEWAY_TOKEN` for production native execution. Test-only injected kernels may omit it.
 - Keep `MAESTRO_MODEL_ACCOUNT_REFS` opaque and redacted; never put credential values in config logs.
 

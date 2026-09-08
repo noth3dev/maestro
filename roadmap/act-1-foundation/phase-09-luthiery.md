@@ -52,8 +52,8 @@
 
 Luthiery-generated MCP servers and tools participate in model routing without owning the model pool or authority policy.
 
-- Each certified tool declares the primitive capabilities it requires from a model, including tool-use, context, data handling, reliability, and any safety floor.
-- The router may use those declarations when composing a task demand vector, but generated tools cannot lower grade, bypass hard filters, mutate `model_map`, or select an unapproved provider.
+- Each certified tool declares the D requirements it needs from the eight A axes, especially `tool-use`, `instruction-fidelity`, `verification`, and `refusal-calibration`; context, data handling, and safety remain B/authority constraints.
+- The router may use those declarations when composing D, but generated tools cannot lower pressure or D requirements, bypass B/authority hard filters, mutate `model_map`, or select an unapproved provider.
 - Tool manufacture remains owned by Infrastructure / Operations; Encore audits the generated tool and Phase 6 evaluates token inflation and observed outcomes.
 - A generated tool failure or model-tool mismatch becomes routing evidence and normal Goal evidence, not an automatic capability judgment.
 

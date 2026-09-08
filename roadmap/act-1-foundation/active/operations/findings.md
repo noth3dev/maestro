@@ -1122,3 +1122,30 @@ Current implementation facts that the migration must preserve:
 - Historical Prime ownership/model-selection sections remain provenance only and must not be rewritten into production dependencies.
 
 The design deliberately separates public `model_map` from project-private local overlays. Operational facts may affect current eligibility, while capability judgments require Improvement Digest evidence and the declared Encore authority.
+
+
+## 2026-09-08 — Phase 1 model-pool design reconciliation
+
+An independent read-only review of the model-pool design found several contract contradictions before implementation. The canonical design now resolves them as follows:
+
+- `model_map` is a public human-commit-owned baseline. Concertmaster may create a private registration/score proposal, but cannot write or promote the baseline. A new model remains `unproven` and cannot satisfy any A↔D requirement lacking demonstrated evidence.
+- Local overlays are installation/project-private. A Goal receives an immutable routing snapshot; Phase 5 must not treat the overlay itself as Goal-scoped.
+- A qualifying mid-run model switch is a new routing decision and native admission with a new invocation/binding identity linked to the original attempt. It is never an in-place mutation or silent downgrade.
+- `approvedModels` remains the Mission Bundle authorization intersection during migration; the router does not materialize the entire pool into every bundle. The selected routed identity is projected into the existing exact singleton `modelPolicy` before native admission.
+- `MAESTRO_NATIVE_MODEL` is an explicit fixed-model pin/routing-off mode. Missing configuration, provider/account mismatch, or an unapproved identity fails before admission; it is not a fallback.
+
+The review also identified a later Phase 2 authority gap: unknown/unregistered action strings must remain denied, while only a registered action with an explicit policy outcome may escalate to user approval. This is deferred to the Phase 2 1C contract and does not block the Phase 1 artifact substrate.
+
+
+## 2026-09-08 — User-approved model/task metric split
+
+The model-pool contract was updated from the prior `50/100/200` grade model to the agreed metric split:
+
+- **A capability:** exactly eight human-scored `0..100` axes in `model_map`: `reasoning`, `coding`, `verification`, `instruction-fidelity`, `tool-use`, `long-context`, `knowledge`, and `refusal-calibration`. Every score needs a one-line reason and evidence. `creativity` and `long-horizon` are future append-only axes, not current substitutes.
+- **B facts:** provider-declared context capacity, input/output price, auth, data policy, modalities, and tool support are hard filters, not scores.
+- **C operations:** local measurements of latency, cost, failures/timeouts, provider errors, and availability/account binding update the private overlay only.
+- **D requirements:** one requirement per A axis; matching is only A↔D and weakest-link.
+- **E work character:** risk, reversibility, and verification attachment produce continuous pressure; material scale, time pressure, and budget headroom constrain B/C. The Head may uplift but cannot lower the computed floor.
+- **Bands:** low/medium/high/critical are organizational labels for automatic/Head/Encore/user authority. They do not participate in matching; thresholds remain a Phase 1 artifact.
+
+All downstream routing documentation must use this contract and must not restore grade buckets as matching tiers.

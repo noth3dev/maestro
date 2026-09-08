@@ -238,10 +238,10 @@ Notification paths:
 
 External capabilities reuse the common model-pool contract but never let model fitness replace capability authority.
 
-- Browser, device, external API, deployment, and incident tasks declare task kinds and grade in their Goal/Task Contract or Incident Brief.
+- Browser, device, external API, deployment, and incident tasks declare task-kind recipes, D requirements, and E work-character inputs in their Goal/Task Contract or Incident Brief.
 - Provider/account binding, data policy, endpoint/device scope, expiry, fencing, and approval are hard gates before model fitness.
-- Tool-use, reliability, safety, and data-boundary traits become required primitive traits when a model is allowed to plan or operate an external capability.
-- High-risk incident work must not silently fall to a cheaper model; a lower grade or below-bar model requires the same recorded escalation path.
+- `tool-use`, `instruction-fidelity`, `verification`, and `refusal-calibration` requirements become explicit D axes when a model is allowed to plan or operate an external capability; data-boundary and safety constraints remain B/authority gates.
+- High-risk incident work must not silently fall to a cheaper model; a below-requirement model requires the same pressure-band escalation path and durable record.
 - Incident outcomes, false positives, provider outages, and routing failures become evidence for Phase 6, but Phase 4 does not change model judgments automatically.
 
 ### Additional Phase 4 tests and exit evidence

@@ -38,16 +38,16 @@
 
 Treasury work uses the common model-pool contract, but model fitness never creates or expands financial authority.
 
-- Treasury planning and payment-related tasks declare task kinds and grade in the Goal/Head Council record.
+- Treasury planning and payment-related tasks declare task-kind recipes, D requirements, and E work-character inputs in the Goal/Head Council record.
 - Spend policy, exact amount/target, account binding, approval scope, fencing, and Audit-Before-Spend remain hard gates above model selection.
-- A model must meet the declared reliability, reasoning, tool-use, and safety bar; cost savings cannot compensate for a hard shortfall.
-- Provider failure may retry the same model or switch only to another model that still clears the bar. Automatic downgrade is forbidden.
+- A model must meet the declared `reasoning`, `instruction-fidelity`, `tool-use`, `verification`, and `refusal-calibration` requirements; cost savings cannot compensate for a B/authority hard-fact or A↔D shortfall.
+- Provider failure may retry the same model or switch only to another model that still meets B/C and A↔D requirements. Automatic below-requirement routing is forbidden.
 - Routing evidence, actual model identity, approval repetition scope, and signed `PaymentReceipt` remain linked for later certification and Phase 6 analysis.
 
 ### Additional Phase 10 tests and exit evidence
 
 - A high-scoring but unbound or unauthorized model cannot initiate `payment.spend`.
-- A lower-grade or below-bar model cannot be introduced by a provider outage or cost optimization.
+- A below-requirement model cannot be introduced by a provider outage or cost optimization; the applicable pressure-band authority must make and record that decision.
 - Payment, routing, authority, and receipt evidence reconstruct the exact model and approval path used for each spend.
 
 ---

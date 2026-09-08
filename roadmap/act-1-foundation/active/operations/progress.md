@@ -2990,4 +2990,19 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Read and accepted the canonical `2026-09-08-model-pool-routing-design.md` as the source for model-pool behavior.
 - Updated the Act 1 index, operations index, Phase 1–10 documents, and the active task plan with phase-owned routing responsibilities, tests, and exit evidence.
-- No production routing implementation was performed in this documentation slice. The next implementation gate is the Phase 1 artifact set: primitive traits, task-kind recipes, grade tables, model-map format, local overlay, routing-evidence schema, and fixed-model migration contract.
+- No production routing implementation was performed in this documentation slice. This earlier checkpoint used the then-current artifact names; it is superseded by the metric-contract update below. The active gate is now the A/B/C model metrics, D/E task metrics, continuous pressure function, pressure bands, model-map format, local overlay, routing-evidence schema, and fixed-model migration contract.
+
+
+## 2026-09-08 — Phase 1 model-pool reopening checkpoint
+
+- Reopened Phase 1 as the bottom-up implementation boundary after the model-pool design update. No production router code was added in this documentation pass.
+- Reconciled the canonical model-pool design, Phase 1, Phase 2, Phase 5, and Phase 8 wording around baseline ownership, overlay scope, qualifying switches, `approvedModels`, and fixed-model migration.
+- Prime remains a structural benchmark only: persistent session/protocol/lifecycle shapes may inform the design, but Maestro authority, native admission, and evidence remain independent.
+- **Next:** add the first failing tests for the closed eight-axis A capability vector, A/profile schema, unproven status, and human-owned baseline validation.
+
+
+## 2026-09-08 — Metric contract update applied
+
+- Replaced the Phase 1 model-pool artifact target from direct `50/100/200` grade bars to the user-approved A/B/C model metrics, D/E task metrics, continuous pressure function, and four non-matching pressure bands.
+- Canonical design and Phase 1/task-plan pointers now explicitly preserve the eight fixed A axes, provider hard facts, local operational corrections, weakest-link A↔D matching, and Head-only pressure uplift.
+- **Next:** write the A-axis scoring criteria and first task-kind/pressure schemas as RED tests. The formula and initial entries remain intentionally open until their criteria are documented.

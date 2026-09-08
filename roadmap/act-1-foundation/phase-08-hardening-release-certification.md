@@ -209,15 +209,15 @@ Phase 8 must certify the cross-phase routing contract under failure, adversarial
 
 ### Required routing hardening
 
-- Fuzz primitive vectors, task-kind recipes, grade bars, profile versions, pins, and candidate metadata.
+- Fuzz the eight-axis A vector, B facts, C observations, D recipes, E inputs, continuous pressure, band projection, profile versions, pins, and candidate metadata.
 - Prove weakest-link behavior: strength in one required trait cannot compensate for a disqualifying shortfall in another.
 - Prove hard authority/data/account/context gates run before fitness scoring.
 - Prove exactly one routed identity crosses into admission and admitted identity equals provider-result identity.
-- Prove no candidate, provider outage, logout, rate limit, or stale overlay causes an arbitrary substitute or automatic downgrade.
+- Prove no candidate, provider outage, logout, rate limit, or stale overlay causes an arbitrary substitute or below-requirement downgrade. A qualifying mid-run switch must be a new route decision and native admission with a linked invocation/binding identity, never an in-place model mutation.
 - Prove routing evidence is append-only, redacted, replayable, and separate from native identity binding evidence.
 - Prove local overlays cannot mutate the public model baseline and score increases require the declared Encore authority.
 - Prove conversations remain model-fixed and heavy work promotes to a Goal rather than silently upgrading.
 
 ### Release evidence
 
-The release bundle must include representative 50/100/200 tasks, no-candidate escalation, qualifying mid-run switch, blocked downgrade, routing-off disclosure, provider unavailability, multi-Goal isolation, and a Phase 6 rollback scenario. Routing claims are not accepted from prose alone; each is backed by live tests and durable evidence.
+The release bundle must include representative low/medium/high/critical pressure cases, no-candidate escalation, qualifying mid-run switch, blocked below-requirement routing, routing-off disclosure, provider unavailability, multi-Goal isolation, and a Phase 6 rollback scenario. Routing claims are not accepted from prose alone; each is backed by live tests and durable evidence.

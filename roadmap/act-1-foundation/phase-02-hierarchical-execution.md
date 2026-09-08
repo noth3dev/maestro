@@ -68,7 +68,7 @@ Nothing may spawn an execution worker before step 9.
 
 ### Activation
 
-Concertmaster activates the smallest likely set. An active Head may request another existing Head by supplying Goal, reason, evidence, requested contribution, urgency, context scope, and budget effect. The control plane prevents duplicate and cyclic activation. Each Head participation and Prime session binding is keyed by `(HeadRoleId, GoalId)`; a persistent Head never receives two Goals in one runtime context. New Departments remain outside this phase and require later Council approval.
+Concertmaster activates the smallest likely set. An active Head may request another existing Head by supplying Goal, reason, evidence, requested contribution, urgency, context scope, and budget effect. The control plane prevents duplicate and cyclic activation. Each Head participation and native runtime session binding is keyed by `(HeadRoleId, GoalId)`; a persistent Head never receives two Goals in one runtime context. New Departments remain outside this phase and require later Council approval.
 
 ### Independent briefs
 
@@ -631,26 +631,26 @@ Budget allocation is adaptive rather than a fixed percentage template.
 
 ## Model pool routing contract — adopted design
 
-The Department Head Council declares demand; the native router selects one qualifying model; admission remains authoritative. The full rules live in [Model Pool & Automatic Routing](active/2026-09-08-model-pool-routing-design.md).
+The Department Head Council declares D requirements and E work-character inputs; the native router selects one qualifying model; admission remains authoritative. The full rules live in [Model Pool & Automatic Routing](active/2026-09-08-model-pool-routing-design.md).
 
-- During decomposition, each Mission Bundle receives one or more recipe-based task kinds and one grade: `50`, `100`, or `200`. Kinds describe the work; grade describes the consequence of failure.
-- Task kinds are recipes over the closed primitive trait vector. Adding a kind must not require rescoring every model.
-- Grade `200` uses weakest-link matching with no required-trait shortfall; grade `100` permits only the defined tolerance band; grade `50` may trade capability margin for cost, latency, and availability.
-- Authority, data policy, account binding, context capacity, and required capability are hard filters before fitness scoring. Averages cannot hide a missing required trait.
-- Among survivors, the router uses grade-specific selection pressure and chooses exactly one model before admission. Candidate lists never cross into execution.
-- A pin is considered first but never bypasses the bar. Explicit routing-off mode is development-only and leaves a certification marker.
-- If no model qualifies, escalation is Department Head → Encore Council → user. Raising a grade is free; lowering a grade is explicit, recorded, and never inferred silently.
-- Connection, rate-limit, and provider-outage failures retry the same model. A switch is automatic only when the replacement still clears the bar. Automatic downgrade is forbidden.
+- During decomposition, each Mission Bundle receives versioned task-kind recipes over exactly eight D axes paired to A: `reasoning`, `coding`, `verification`, `instruction-fidelity`, `tool-use`, `long-context`, `knowledge`, and `refusal-calibration`.
+- Provider facts B are hard filters: context capacity, input/output pricing, authentication, data policy, modalities, and tool support. Operational measurements C are local corrections for latency, cost, failures/timeouts, provider errors, and availability/account binding.
+- The Head records E risk, reversibility, verification attachment, material scale, time pressure, and budget headroom. The first three compute continuous pressure; the last three constrain B/C. The Head may uplift pressure, never lower the computed floor.
+- A↔D matching is weakest-link. Strength on one required capability cannot hide a shortfall on another. Matching strictness is a smooth function of pressure, not a `50/100/200` lookup.
+- Four pressure bands — low, medium, high, critical — project automatic, Department Head, Encore Council, and user decision authority. Bands are for approval, escalation, recording, and reporting only; they do not change matching.
+- A pin is considered first but never bypasses B/C or A↔D checks. Explicit routing-off mode is development-only and leaves a routing/certification marker.
+- If no model qualifies, the system records the exact hard-filter or paired-axis shortfall and escalates through the pressure-band authority. No provider outage or budget optimization silently lowers requirements.
+- Connection, rate-limit, and provider-outage failures retry the same model. A switch is automatic only when the replacement still matches, and it always creates a new native admission/binding identity. Automatic below-requirement downgrade is forbidden.
 - Conversations keep one model for their lifetime. Heavy work is promoted to a Goal instead of silently upgrading a long conversation.
 
 ### Mission Bundle and migration boundary
 
-The current `approvedModels` list and exact `modelPolicy` path remain a transition guard while the router is introduced. The target contract adds task kinds, grade, pin/routing mode, and profile version; the selected routed identity is then projected into the existing exact admission policy. `MAESTRO_NATIVE_MODEL` becomes a pin/fallback migration input, never an implicit bypass.
+The current `approvedModels` list and exact `modelPolicy` path remain a transition guard while the router is introduced. The target contract adds versioned D recipes, E work-character inputs, continuous pressure, pressure-band projection, pin/routing mode, and profile version; the selected routed identity is then projected into the existing exact admission policy. `MAESTRO_NATIVE_MODEL` is an explicit fixed-model pin/routing-off migration mode, never an implicit fallback or bypass. The router intersects candidates with `approvedModels`; native admission still receives exactly one selected model.
 
 ### Phase 2 routing work order and tests
 
-1. Draft primitive traits, task-kind recipes, grade bars/weights, and the Mission Bundle fields.
-2. Write RED tests for weakest-link matching, hard-filter precedence, grade strictness, pin-as-preference, no-candidate escalation, and no automatic downgrade.
+1. Draft the A eight-axis scoring rubric, B fact schema, C operational overlay, D recipes, E work-character schema, continuous pressure function, four band thresholds, and Mission Bundle fields.
+2. Write RED tests for weakest-link A↔D matching, B/C hard-filter precedence, smooth pressure strictness, band-only authority projection, pin-as-preference, no-candidate escalation, and no automatic below-requirement downgrade.
 3. Implement the smallest provider-neutral router and project its single result into the existing native admission contract.
-4. Record routed model, candidate set, rejected reasons, grade, task kinds, and profile version in the separate routing evidence store.
+4. Record A/D requirements, E inputs, pressure, band, routed model, candidate set, rejected reasons, B/C observations, and profile version in the separate routing evidence store.
 5. Verify Head, Overture, Worker, Scout, Helper, Semantic Review, Encore reviewer, and Metronome callers use the common contract rather than ad-hoc model selection.
