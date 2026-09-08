@@ -15,7 +15,7 @@ This block is the authoritative status for the current `main` tree. Older phase 
 - **Phase 8:** planned; hardening must prove IPython authority enforcement, approval binding, mixed-risk blocking, full-access isolation, and forbidden-action denial.
 - **Phase 9:** future Luthiery MCP manufacture; it is not part of the Phase 2 IPython implementation.
 - **Phase 10:** future Treasury capability; payment remains separately activated and critically governed.
-- **Documentation checkpoint:** the prior roadmap reorganization was committed and pushed as `9d3a4ec`; this host-tool boundary update is the current uncommitted documentation slice.
+- **Documentation checkpoint:** the prior roadmap reorganization and this host-tool boundary update are committed and pushed on `origin/main`; the current tree is clean after the documented verification run.
 - **Immediate work:** implement the approved Phase 2 host-tool contract and its tests. Do not claim Phase 1–3 acceptance or code completion until the new host-tool gates pass.
 
 ## Goal
