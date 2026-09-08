@@ -9,7 +9,7 @@
 
 ## Verified artifact implementation status
 
-The following slices are present on the current main line and are contracts only; they do not enable automatic production selection:
+The following slices are present on the current main line. They provide pure artifact/selection logic and persistence, but do not enable production native-admission routing:
 
 | Slice | Current source | Status |
 | --- | --- | --- |
@@ -20,9 +20,10 @@ The following slices are present on the current main line and are contracts only
 | C operational overlay | [`packages/domain/src/operational-overlay.ts`](../../../packages/domain/src/operational-overlay.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts), [`packages/persistence/src/ensemble-router-artifacts.ts`](../../../packages/persistence/src/ensemble-router-artifacts.ts) | Domain/wire schema, pure per-Goal snapshot helper, and durable overlay/snapshot persistence. |
 | Four pressure bands | [`packages/domain/src/pressure-band.ts`](../../../packages/domain/src/pressure-band.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts) | Domain projection and wire schema; labels only. |
 | Human-owned baseline | [`packages/domain/src/model-map.ts`](../../../packages/domain/src/model-map.ts), [`config/model_map.json`](../../../config/model_map.json) | Domain validator plus empty baseline. |
+| Pure selector | [`packages/domain/src/routing-selector.ts`](../../../packages/domain/src/routing-selector.ts) | A↔D weakest-link matching with B/C hard filters; no native-admission wiring. |
 | Routing evidence | [`packages/domain/src/routing-evidence.ts`](../../../packages/domain/src/routing-evidence.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts), [`packages/persistence/src/ensemble-router-artifacts.ts`](../../../packages/persistence/src/ensemble-router-artifacts.ts) | Domain/wire validation and append-only durable persistence; no selector. |
 
-Migration [`0072_ensemble_router_artifacts.sql`](../../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql) provides the durable C overlay, Goal snapshot, and routing-evidence tables. Still missing: router selection; fixed-model pin migration; host-tool writes/effects; and live host-tool acceptance. Current native admission remains one exact `modelPolicy` identity, and `MAESTRO_NATIVE_MODEL` remains an explicit fixed-model pin/routing-off input where required. No production routing claim is made.
+Migration [`0072_ensemble_router_artifacts.sql`](../../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql) and [`ensemble-router-artifacts.integration.test.ts`](../../../packages/persistence/src/ensemble-router-artifacts.integration.test.ts) cover durable overlay/snapshot/evidence storage, content hashes, isolation/conflicts, and append-only triggers. Still missing: production selector/native-admission wiring; fixed-model pin migration/evidence; host-tool writes/effects; and live host-tool acceptance. Current native admission remains one exact `modelPolicy` identity, and `MAESTRO_NATIVE_MODEL` remains an explicit fixed-model pin/routing-off input where required. No production routing claim is made.
 
 ## 1. Objective
 
@@ -325,14 +326,14 @@ Phase 1 now has the stable artifact contracts listed below, but not automatic mo
 6. **Four pressure-band domain and wire schemas** ([`packages/domain/src/pressure-band.ts`](../../../packages/domain/src/pressure-band.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts)).
 7. **Human-owned `model_map` validator and empty baseline** ([`packages/domain/src/model-map.ts`](../../../packages/domain/src/model-map.ts), [`config/model_map.json`](../../../config/model_map.json)).
 
-The schemas are backed by migration [`0072_ensemble_router_artifacts.sql`](../../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql) and [`ensemble-router-artifacts.ts`](../../../packages/persistence/src/ensemble-router-artifacts.ts) for overlay, Goal snapshot, and routing evidence. These stores do not select a model. Router selection, fixed-model migration, host-tool writes/effects, and live acceptance remain open. Native admission remains authoritative and still requires one exact provider-qualified identity.
+The schemas and pure selector are backed by migration [`0072_ensemble_router_artifacts.sql`](../../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql) and [`ensemble-router-artifacts.ts`](../../../packages/persistence/src/ensemble-router-artifacts.ts) for overlay, Goal snapshot, and routing evidence. The PostgreSQL gate is [`ensemble-router-artifacts.integration.test.ts`](../../../packages/persistence/src/ensemble-router-artifacts.integration.test.ts). These artifacts do not wire selection into native admission. Production selector/native-admission wiring, fixed-model migration/evidence, host-tool writes/effects, and live acceptance remain open. Native admission remains authoritative and still requires one exact provider-qualified identity.
 
 ## 15. Remaining implementation artifacts
 
 The remaining concrete artifacts are:
 
-1. The Ensemble Router selection implementation and native-admission integration.
-2. The migration from explicit `MAESTRO_NATIVE_MODEL`/existing singleton `modelPolicy` inputs to routed identities, with routing-off evidence.
+1. Production selector/native-admission integration, including durable routing evidence at the admission boundary.
+2. The migration from explicit `MAESTRO_NATIVE_MODEL`/existing singleton `modelPolicy` inputs to routed identities, with fixed-model evidence.
 3. Production host-tool writes/effects and live acceptance through the real process/gateway boundary.
 
 No implementation should treat a pressure band as a matching tier, silently downgrade a requirement, or claim production routing from the presence of these artifact contracts.
