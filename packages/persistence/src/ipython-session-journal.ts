@@ -167,7 +167,7 @@ async function listUnresolvedOrphans(pool: Pick<Pool, "query">): Promise<readonl
            FROM ipython_session_journal
           ORDER BY process_ref, journal_position DESC
        ) latest
-      WHERE latest.event = 'orphaned'
+      WHERE latest.event IN ('started', 'orphaned')
       ORDER BY latest.journal_position`,
   );
   return result.rows.map(map);
@@ -185,7 +185,26 @@ export async function reconcileIpPythonOrphans(
 ): Promise<readonly IpPythonSessionJournalEntry[]> {
   const determineOutcome = options.determineOutcome ?? (() => "unknown" as const);
   const reconciled: IpPythonSessionJournalEntry[] = [];
-  for (const orphan of await listUnresolvedOrphans(pool)) {
+  for (const candidate of await listUnresolvedOrphans(pool)) {
+    let orphan = candidate;
+    if (orphan.event === "started") {
+      try {
+        orphan = await appendIpPythonSessionJournal(pool, {
+          sessionId: orphan.sessionId,
+          processRef: orphan.processRef,
+          projectId: orphan.projectId,
+          goalId: orphan.goalId,
+          event: "orphaned",
+          reason: "control_plane_restart_without_terminal_session_evidence",
+          ...(orphan.processPid === null ? {} : { processPid: orphan.processPid }),
+          ...(orphan.parentPid === null ? {} : { parentPid: orphan.parentPid }),
+          details: orphan.details,
+        });
+      } catch (error) {
+        if (error instanceof IpPythonSessionJournalConflictError) continue;
+        throw error;
+      }
+    }
     const outcome = await determineOutcome(orphan);
     if (!(outcome === "reaped" || outcome === "unknown")) throw new IpPythonSessionJournalError("IPython orphan reconciliation outcome must be reaped or unknown");
     const reason = outcome === "reaped"

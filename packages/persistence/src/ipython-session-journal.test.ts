@@ -83,6 +83,15 @@ describeDatabase("IPython session journal", () => {
     expect(events.filter((event) => event.event === "reaped")).toHaveLength(1);
   });
 
+  it("treats a started process with no terminal record as an orphan on restart", async () => {
+    const started = input("started");
+    await appendIpPythonSessionJournal(pool, started);
+
+    await expect(reconcileIpPythonOrphans(pool, { determineOutcome: () => "reaped" })).resolves.toHaveLength(1);
+    const events = await listIpPythonSessionJournal(pool, started.sessionId);
+    expect(events.map((event) => event.event)).toEqual(["started", "orphaned", "reaped"]);
+  });
+
   it("records unknown when restart cannot prove the process outcome", async () => {
     const started = input("started");
     await appendIpPythonSessionJournal(pool, started);
