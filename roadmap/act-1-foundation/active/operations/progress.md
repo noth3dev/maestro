@@ -3014,3 +3014,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Validation is fail-closed: unknown/missing axes, non-integer or out-of-range scores, multiline/empty rationales, missing evidence, and inconsistent `scored`/`unproven` states are rejected.
 - The focused TDD cycle observed the missing-module RED failure, then passed 11/11 tests after the minimal implementation and own-property/sparse-evidence hardening. Domain-only TypeScript build passed; the root build still has the known unrelated CLI `@earendil-works/pi-tui` baseline failure.
 - This is only the A schema boundary. Human scoring criteria, B facts, C overlay, D recipes, E pressure function, band thresholds, and `model_map` contents remain open.
+
+
+## 2026-09-08 — A-axis scoring rubric and max-200 calibration
+
+- Changed the A capability score range to inclusive `0..200` and bumped the profile schema to version `2`. The focused validator tests now cover the `200` upper boundary and reject `201`.
+- Added the human scoring rubric at `roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md`. It keeps broad reference ranges rather than hard anchor gates, defines all eight axis-specific evidence questions, and separates `unproven` (`null`) from a scored `0`.
+- The rubric does not define D requirements, E pressure, band thresholds, provider facts, or initial model entries. Those remain the next Phase 1 slices.

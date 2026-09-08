@@ -43,7 +43,7 @@ Model metrics and task metrics are different objects. Only paired axes match dir
 
 ```
 MODEL SIDE
-A  Capability       human-scored in model_map, 0..100, evidence required
+A  Capability       human-scored in model_map, 0..200, evidence required
 B  Provider facts   provider-declared hard facts, not scores
 C  Operations       automatically measured local corrections, model_map unchanged
 
@@ -65,7 +65,7 @@ The tag recipes combine only the eight A capability axes. `creativity` and `long
 
 ### 4.1 A. Capability — human-scored `model_map` vector
 
-Every model has the following eight capability axes. Each score is an integer from `0` through `100`, and every score carries a one-line reason plus supporting evidence. A benchmark can be cited, but the final number is a Maestro judgment. A score without a reason is invalid.
+Every model has the following eight capability axes. Each score is an integer from `0` through `200`, and every score carries a one-line reason plus supporting evidence. A benchmark can be cited, but the final number is a Maestro judgment. A score without a reason is invalid.
 
 | Axis | Definition | Maestro split |
 | --- | --- | --- |
@@ -80,7 +80,7 @@ Every model has the following eight capability axes. Each score is an integer fr
 
 `creativity` and `long-horizon` are not part of the initial vector. The former has no current model-selection case; the latter is represented by `long-context` plus `instruction-fidelity`. Future additions are append-only to the schema history and cannot remove or reinterpret these eight axes.
 
-The initial scoring rubric for these eight axes is still a Phase 1 artifact to be written. Until a score and its evidence exist, the capability is `unproven`; an unproven model cannot satisfy a requirement merely because it is cheap or available.
+The initial scoring rubric for these eight axes is [the Phase 1 scoring-rubric artifact](../specs/2026-09-08-model-capability-scoring-rubric.md). Until a score and its evidence exist, the capability is `unproven`; an unproven model cannot satisfy a requirement merely because it is cheap or available.
 
 ### 4.2 B. Provider facts — hard filters, not scores
 
@@ -132,7 +132,7 @@ Concertmaster may propose a model entry in a private proposal artifact, includin
 
 ### 5.1 D. Required ability — paired with A
 
-A task demand contains one required level from `0` through `100` for each of the eight A axes. Task-kind recipes compose these requirements. No recipe introduces a ninth capability axis.
+A task demand contains one required level from `0` through `200` for each of the eight A axes. Task-kind recipes compose these requirements. No recipe introduces a ninth capability axis.
 
 Only A↔D pairs are matched:
 
@@ -300,7 +300,7 @@ Per the interview contract, these are settled structural choices; numeric rubric
 
 Phase 1 is reopened for the stable routing substrate, not for automatic model selection in production yet. The first implementation must produce and independently test these artifacts in order:
 
-1. **A-axis scoring rubric:** definitions, `0..100` scoring guidance, one-line reason requirement, evidence references, and explicit unproven semantics for the eight fixed axes.
+1. **A-axis scoring rubric:** definitions, `0..200` scoring guidance, one-line reason requirement, evidence references, and explicit unproven semantics for the eight fixed axes.
 2. **B fact schema:** context capacity, input/output pricing, authentication, data policy, modalities, and tool-call support as provider-declared hard facts.
 3. **C operational overlay:** local measurements for latency, cost, failures/timeouts, provider errors, and availability/account binding without mutating `model_map`.
 4. **D requirement schema and recipes:** one required level per A axis; initial task-kind recipes compose only these eight axes.
@@ -312,7 +312,7 @@ Phase 1 is reopened for the stable routing substrate, not for automatic model se
 10. **Routing evidence:** a separate append-only record containing A/D requirements, E inputs, pressure, band, candidates, hard-filter rejections, C observations used, profile versions, selected route, and escalation/switch links. It never replaces `native_execution_bindings`.
 11. **Fixed-model migration:** explicit `MAESTRO_NATIVE_MODEL` pin/routing-off behavior, `approvedModels` intersection, singleton `modelPolicy` projection, and exact native admission tests.
 
-The first schema slice now exists at `packages/domain/src/model-profile.ts` with focused tests in `packages/domain/src/model-profile.test.ts`. It validates the closed eight-axis vector, `0..100` scored values, one-line rationale, evidence references, explicit `unproven` entries, and own-property/sparse-input boundaries. This does not complete the human scoring rubric or create production routing.
+The first schema slice now exists at `packages/domain/src/model-profile.ts` (profile schema version `2`) with focused tests in `packages/domain/src/model-profile.test.ts`. It validates the closed eight-axis vector, `0..200` scored values, one-line rationale, evidence references, explicit `unproven` entries, and own-property/sparse-input boundaries. The human calibration guidance now exists in [the scoring-rubric artifact](../specs/2026-09-08-model-capability-scoring-rubric.md); initial model scores and production routing are still absent.
 
 Phase 1 does not claim a production router until each artifact has a schema/validator, focused RED/GREEN tests, and a native admission test proving routing evidence cannot widen authority, account, data-policy, context, or exact model identity.
 
@@ -320,14 +320,13 @@ Phase 1 does not claim a production router until each artifact has a schema/vali
 
 The following concrete artifacts are intentionally still open for the Phase 1 slices:
 
-1. A-axis scoring criteria for all eight capabilities.
-2. The initial task-kind recipe list and D requirement levels.
-3. The continuous pressure calculation function.
-4. The four pressure-band threshold values.
-5. The `model_map` file format and initial entries.
-6. The local C overlay and Goal snapshot format.
-7. The routing evidence schema and append-only persistence path.
-8. The migration adapter from `approvedModels` / `MAESTRO_NATIVE_MODEL` to one exact native `modelPolicy`.
+1. The initial task-kind recipe list and D requirement levels.
+2. The continuous pressure calculation function.
+3. The four pressure-band threshold values.
+4. The `model_map` file format and initial entries.
+5. The local C overlay and Goal snapshot format.
+6. The routing evidence schema and append-only persistence path.
+7. The migration adapter from `approvedModels` / `MAESTRO_NATIVE_MODEL` to one exact native `modelPolicy`.
 
 No implementation should fill these gaps by restoring the retired `50/100/200` grade lookup or by treating a pressure band as a matching tier.
 
