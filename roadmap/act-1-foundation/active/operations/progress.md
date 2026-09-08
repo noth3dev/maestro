@@ -3162,3 +3162,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Final no-edit review returned `REVIEW: PASS`. Full real-PG verification passed with `--no-file-parallelism --maxWorkers=1`: 185/185 files and 1,231/1,231 tests. The default-parallel failures were isolated to the pre-existing shared-schema migration fixture race; focused S1 real-PG tests remained green.
 - Merged `plan1-routing-snapshot-validator` into `main` as merge commit `22b5266`; main post-merge build, lint, and non-DB suite passed (127/127 files, 837/837 tests). Main post-merge focused real-PG S1 suite passed 8/8.
 - Removed the S1 worktree and branch. S1 exit evidence is complete; ready for the documented `⏫ PUSH` and the next ordered work item.
+
+
+## 2026-09-09 — Direct refactor R1 action classification registry
+
+- Replaced the hard-coded `classifyAction` string switch with a static `ACTION_CLASSIFICATIONS` registry in `packages/authority/src/action-classification.ts`; `authority.ts` retains the existing type export and default-deny behavior.
+- Added RED coverage for ordinary, critical, forbidden, and unknown actions. Focused authority tests pass 19/19; full non-DB suite passes 128/128 files and 838/838 tests. Build, lint, and diff checks pass.
+- Implementation commit: `55aabfe`. Awaiting independent no-edit review before merge.
