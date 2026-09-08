@@ -153,6 +153,13 @@ describeDatabase("Ensemble Router artifacts with PostgreSQL", () => {
     expect(snapshot.observations).toEqual(stored.observations);
     expect(sameVersion.overlayVersion).toBe(snapshot.overlayVersion);
     expect(sameVersion.goalRef).not.toBe(snapshot.goalRef);
+    const persistedSnapshots = await pool.query<{ goal_ref: string; snapshot: unknown; content_hash: string }>(
+      "SELECT goal_ref, snapshot, content_hash FROM ensemble_router_goal_overlay_snapshots WHERE goal_ref IN ($1, $2) ORDER BY goal_ref",
+      [snapshot.goalRef, sameVersion.goalRef],
+    );
+    expect(persistedSnapshots.rows).toHaveLength(2);
+    expect(persistedSnapshots.rows.map(({ goal_ref }) => goal_ref)).toEqual(["goal-bound", "goal-bound-2"]);
+    expect(persistedSnapshots.rows.map(({ snapshot: persisted }) => persisted)).toEqual([snapshot, sameVersion]);
     const after = await pool.query<{ overlay: unknown; content_hash: string }>(
       "SELECT overlay, content_hash FROM ensemble_router_operational_overlays WHERE installation_ref = $1 AND project_ref = $2 AND version = $3",
       [stored.installationRef, stored.projectRef, stored.version],
