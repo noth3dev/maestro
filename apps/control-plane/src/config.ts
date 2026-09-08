@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export type ModelRoutingMode = "ensemble" | "pin";
+
 export interface MaestroTlsConfig {
   certFile: string;
   keyFile: string;
@@ -31,7 +33,9 @@ export interface MaestroConfig {
   ipythonPythonExecutable?: string;
   /** Optional authenticated model gateway; native execution is unavailable when absent. */
   modelGatewayUrl?: string;
-  /** Explicit provider-qualified model used for host-created Head/Encore sessions. */
+  /** Explicit routing mode. `pin` is the fail-closed MAESTRO_NATIVE_MODEL mode; `ensemble` is the future Ensemble Router mode. */
+  modelRoutingMode: ModelRoutingMode;
+  /** Explicit provider-qualified model used only when routing mode is `pin`. */
   nativeModelRef?: string;
   modelGatewayToken?: string;
   modelGatewayOperatorId: string;
@@ -60,7 +64,11 @@ const schema = z.object({
   MAESTRO_MODEL_GATEWAY_URL: z.string().url().default("http://127.0.0.1:4321"),
   MAESTRO_MODEL_GATEWAY_TOKEN: z.string().min(1).optional(),
   MAESTRO_MODEL_GATEWAY_OPERATOR_ID: z.string().min(1).default("local-operator"),
-  MAESTRO_NATIVE_MODEL: z.string().regex(/^[^/\s]+\/[^/\s]+$/).optional(),
+  MAESTRO_NATIVE_MODEL: z
+    .string()
+    .regex(/^[^/\s]+\/[^/\s]+$/)
+    .optional(),
+  MAESTRO_MODEL_ROUTING_MODE: z.enum(["ensemble", "pin"]).optional(),
   MAESTRO_MODEL_ACCOUNT_REFS: z.string().optional(),
   MAESTRO_TLS_CERT_FILE: z.string().min(1).optional(),
   MAESTRO_TLS_KEY_FILE: z.string().min(1).optional(),
@@ -70,9 +78,7 @@ const schema = z.object({
   MAESTRO_IPYTHON_PYTHON: z.string().regex(/^\/.+/).optional(),
 });
 
-export function parseConfig(
-  env: Record<string, string | undefined>,
-): MaestroConfig {
+export function parseConfig(env: Record<string, string | undefined>): MaestroConfig {
   const parsed = schema.safeParse(env);
   if (!parsed.success) {
     throw new Error("Invalid Maestro configuration", { cause: parsed.error });
@@ -95,6 +101,7 @@ export function parseConfig(
     MAESTRO_MODEL_GATEWAY_TOKEN: modelGatewayToken,
     MAESTRO_MODEL_GATEWAY_OPERATOR_ID: modelGatewayOperatorId,
     MAESTRO_NATIVE_MODEL: nativeModelRef,
+    MAESTRO_MODEL_ROUTING_MODE: configuredRoutingMode,
     MAESTRO_MODEL_ACCOUNT_REFS: modelAccountRefsRaw,
     MAESTRO_TLS_CERT_FILE: certFile,
     MAESTRO_TLS_KEY_FILE: keyFile,
@@ -114,19 +121,40 @@ export function parseConfig(
     throw new Error("Remote binding requires TLS certificate and key configuration");
   }
 
+  const modelRoutingMode: ModelRoutingMode = configuredRoutingMode ?? (nativeModelRef === undefined ? "ensemble" : "pin");
+  if (modelRoutingMode === "pin" && nativeModelRef === undefined)
+    throw new Error("MAESTRO_MODEL_ROUTING_MODE=pin requires MAESTRO_NATIVE_MODEL");
+  if (modelRoutingMode === "ensemble" && nativeModelRef !== undefined)
+    throw new Error("MAESTRO_NATIVE_MODEL requires MAESTRO_MODEL_ROUTING_MODE=pin");
+
   const accountRefs: Record<string, string> = {};
-  for (const entry of (modelAccountRefsRaw ?? "").split(",").map((part) => part.trim()).filter(Boolean)) {
+  for (const entry of (modelAccountRefsRaw ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)) {
     const separator = entry.indexOf("=");
     if (separator <= 0 || separator === entry.length - 1) throw new Error("Invalid MAESTRO_MODEL_ACCOUNT_REFS");
-    const provider = entry.slice(0, separator).trim(); const accountRef = entry.slice(separator + 1).trim();
-    if (!/^[A-Za-z0-9._-]+$/.test(provider) || !/^[A-Za-z0-9._:-]+$/.test(accountRef)) throw new Error("Invalid MAESTRO_MODEL_ACCOUNT_REFS");
+    const provider = entry.slice(0, separator).trim();
+    const accountRef = entry.slice(separator + 1).trim();
+    if (!/^[A-Za-z0-9._-]+$/.test(provider) || !/^[A-Za-z0-9._:-]+$/.test(accountRef))
+      throw new Error("Invalid MAESTRO_MODEL_ACCOUNT_REFS");
     accountRefs[provider] = accountRef;
   }
   for (const provider of ["openai", "anthropic"]) accountRefs[provider] ??= `${provider}-${modelGatewayOperatorId}`;
 
   return {
-    databaseUrl, evidenceDir, worktreeRoot, host, port, actorId, leaseOwnerId, reconcilerLeaseDurationMs, shutdownDrainTimeoutMs,
-    modelGatewayOperatorId, modelAccountRefs: accountRefs,
+    databaseUrl,
+    evidenceDir,
+    worktreeRoot,
+    host,
+    port,
+    actorId,
+    leaseOwnerId,
+    reconcilerLeaseDurationMs,
+    shutdownDrainTimeoutMs,
+    modelRoutingMode,
+    modelGatewayOperatorId,
+    modelAccountRefs: accountRefs,
     modelGatewayUrl,
     ...(modelGatewayToken === undefined ? {} : { modelGatewayToken }),
     ...(nativeModelRef === undefined ? {} : { nativeModelRef }),
@@ -139,7 +167,6 @@ export function parseConfig(
     ...(isRemoteBind ? { tls: { certFile: certFile!, keyFile: keyFile! } } : {}),
   };
 }
-
 
 /** Safe for operational logs; it intentionally omits all database user info and query parameters. */
 export function redactConfig(config: MaestroConfig): Omit<MaestroConfig, "modelGatewayToken"> {

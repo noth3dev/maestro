@@ -19,6 +19,7 @@ describe("parseConfig", () => {
       leaseOwnerId: "local-control-plane",
       reconcilerLeaseDurationMs: 30_000,
       shutdownDrainTimeoutMs: 5_000,
+      modelRoutingMode: "ensemble",
       modelGatewayUrl: "http://127.0.0.1:4321",
       modelGatewayOperatorId: "local-operator",
       modelAccountRefs: { openai: "openai-local-operator", anthropic: "anthropic-local-operator" },
@@ -26,7 +27,9 @@ describe("parseConfig", () => {
   });
 
   it("accepts an explicit trusted IPython Python executable", () => {
-    expect(parseConfig({ ...required, MAESTRO_IPYTHON_PYTHON: "/opt/python/bin/python3" }).ipythonPythonExecutable).toBe("/opt/python/bin/python3");
+    expect(parseConfig({ ...required, MAESTRO_IPYTHON_PYTHON: "/opt/python/bin/python3" }).ipythonPythonExecutable).toBe(
+      "/opt/python/bin/python3",
+    );
   });
 
   it("requires an explicit provider-qualified native model", () => {
@@ -34,12 +37,26 @@ describe("parseConfig", () => {
     expect(() => parseConfig({ ...required, MAESTRO_NATIVE_MODEL: "gpt-5" })).toThrow("Invalid Maestro configuration");
   });
 
+  it("derives pin mode only from an explicit native model and rejects contradictory mode", () => {
+    expect(parseConfig({ ...required, MAESTRO_NATIVE_MODEL: "openai/model" }).modelRoutingMode).toBe("pin");
+    expect(parseConfig({ ...required, MAESTRO_MODEL_ROUTING_MODE: "ensemble" }).modelRoutingMode).toBe("ensemble");
+    expect(() => parseConfig({ ...required, MAESTRO_MODEL_ROUTING_MODE: "pin" })).toThrow(
+      "MAESTRO_MODEL_ROUTING_MODE=pin requires MAESTRO_NATIVE_MODEL",
+    );
+    expect(() => parseConfig({ ...required, MAESTRO_MODEL_ROUTING_MODE: "ensemble", MAESTRO_NATIVE_MODEL: "openai/model" })).toThrow(
+      "MAESTRO_NATIVE_MODEL requires MAESTRO_MODEL_ROUTING_MODE=pin",
+    );
+  });
+
   it("accepts an explicit CEO operator identity for critical-action approvals", () => {
     expect(parseConfig({ ...required, MAESTRO_CEO_OPERATOR_ID: "ceo-operator" }).ceoOperatorId).toBe("ceo-operator");
   });
 
   it("accepts an explicit project-access provisioning admin identity", () => {
-    expect(parseConfig({ ...required, MAESTRO_OPERATOR_PROVISIONING_ADMIN_ID: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05" }).operatorProvisioningAdminId).toBe("018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05");
+    expect(
+      parseConfig({ ...required, MAESTRO_OPERATOR_PROVISIONING_ADMIN_ID: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05" })
+        .operatorProvisioningAdminId,
+    ).toBe("018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05");
   });
 
   it("accepts an explicit startup reconciler leader-lease duration override", () => {
@@ -66,14 +83,14 @@ describe("parseConfig", () => {
     );
   });
 
-  it.each([
-    { MAESTRO_TLS_CERT_FILE: "/tmp/cert.pem" },
-    { MAESTRO_TLS_KEY_FILE: "/tmp/key.pem" },
-  ])("rejects a remote binding with only one half of the TLS cert/key pair configured: %j", (partial) => {
-    expect(() => parseConfig({ ...required, MAESTRO_HOST: "0.0.0.0", MAESTRO_ALLOW_REMOTE: "true", ...partial })).toThrow(
-      "Remote binding requires TLS certificate and key configuration",
-    );
-  });
+  it.each([{ MAESTRO_TLS_CERT_FILE: "/tmp/cert.pem" }, { MAESTRO_TLS_KEY_FILE: "/tmp/key.pem" }])(
+    "rejects a remote binding with only one half of the TLS cert/key pair configured: %j",
+    (partial) => {
+      expect(() => parseConfig({ ...required, MAESTRO_HOST: "0.0.0.0", MAESTRO_ALLOW_REMOTE: "true", ...partial })).toThrow(
+        "Remote binding requires TLS certificate and key configuration",
+      );
+    },
+  );
 
   it("allows an explicit remote binding once both TLS certificate and key are configured", () => {
     const config = parseConfig({
@@ -123,7 +140,19 @@ describe("parseConfig", () => {
     // never leak into the returned config, regardless of its value.
     expect(withCredentials).toEqual(withoutCredentials);
     expect(Object.keys(withCredentials).sort()).toEqual([
-      "actorId", "databaseUrl", "evidenceDir", "host", "leaseOwnerId", "modelAccountRefs", "modelGatewayOperatorId", "modelGatewayUrl", "port", "reconcilerLeaseDurationMs", "shutdownDrainTimeoutMs", "worktreeRoot",
+      "actorId",
+      "databaseUrl",
+      "evidenceDir",
+      "host",
+      "leaseOwnerId",
+      "modelAccountRefs",
+      "modelGatewayOperatorId",
+      "modelGatewayUrl",
+      "modelRoutingMode",
+      "port",
+      "reconcilerLeaseDurationMs",
+      "shutdownDrainTimeoutMs",
+      "worktreeRoot",
     ]);
     const serialized = JSON.stringify(withCredentials);
     for (const secret of Object.values(providerCredentialMetronomes)) {
@@ -132,11 +161,15 @@ describe("parseConfig", () => {
   });
 
   it("configures opaque gateway bindings without returning the gateway token in redacted output", () => {
-    const config = parseConfig({ ...required, MAESTRO_MODEL_GATEWAY_TOKEN: "gateway-secret", MAESTRO_MODEL_GATEWAY_OPERATOR_ID: "operator-a", MAESTRO_MODEL_ACCOUNT_REFS: "openai=acct-openai,anthropic=acct-anthropic" });
+    const config = parseConfig({
+      ...required,
+      MAESTRO_MODEL_GATEWAY_TOKEN: "gateway-secret",
+      MAESTRO_MODEL_GATEWAY_OPERATOR_ID: "operator-a",
+      MAESTRO_MODEL_ACCOUNT_REFS: "openai=acct-openai,anthropic=acct-anthropic",
+    });
     expect(config.modelGatewayToken).toBe("gateway-secret");
     expect(config.modelAccountRefs).toEqual({ openai: "acct-openai", anthropic: "acct-anthropic" });
     expect(redactConfig(config)).not.toHaveProperty("modelGatewayToken");
     expect(JSON.stringify(redactConfig(config))).not.toContain("gateway-secret");
   });
-
 });

@@ -22,30 +22,70 @@ function fakeOpenAiPlugin(): ProviderPlugin {
   const identity = { provider: "openai" as const, id: "model-a" };
   const dataPolicy = { allowedDataClasses: ["public"] as const, retention: "none" as const, trainsOnCustomerData: false, regions: ["us"] };
   const port: ModelProviderPort = {
-    identity, accountRef: "account-1", capabilities: new Set(["text"]),
-    async turn(request) { return { requestId: request.requestId, model: identity, text: "ok", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } }; },
-    async cancel() { return { state: "confirmed" as const }; },
+    identity,
+    accountRef: "account-1",
+    capabilities: new Set(["text"]),
+    async turn(request) {
+      return {
+        requestId: request.requestId,
+        model: identity,
+        text: "ok",
+        toolCalls: [],
+        stopReason: "end_turn",
+        usage: { state: "unknown" },
+      };
+    },
+    async cancel() {
+      return { state: "confirmed" as const };
+    },
     async close() {},
   };
-  return { id: "openai", authModes: ["api-key"], capabilities: new Set(["text"]), dataPolicy, listModels: () => [{ identity, capabilities: new Set(["text"]), authModes: ["api-key"], dataPolicy }], create: async (request) => ({ ...port, accountRef: request.account.accountRef }) };
+  return {
+    id: "openai",
+    authModes: ["api-key"],
+    capabilities: new Set(["text"]),
+    dataPolicy,
+    listModels: () => [{ identity, capabilities: new Set(["text"]), authModes: ["api-key"], dataPolicy }],
+    create: async (request) => ({ ...port, accountRef: request.account.accountRef }),
+  };
 }
 
 class FakeCodexTransport implements CodexAppServerTransport {
   private listener?: (message: unknown) => void;
-  onMessage(listener: (message: unknown) => void): () => void { this.listener = listener; return () => { this.listener = undefined; }; }
+  onMessage(listener: (message: unknown) => void): () => void {
+    this.listener = listener;
+    return () => {
+      this.listener = undefined;
+    };
+  }
   send(message: unknown): void {
     const request = message as { id?: number; method?: string };
     if (request.method === "initialize") queueMicrotask(() => this.listener?.({ id: request.id, result: {} }));
-    if (request.method === "account/login/start") queueMicrotask(() => this.listener?.({ id: request.id, result: { type: "chatgpt", loginId: "provider-login-1", authUrl: "https://chatgpt.com/oauth?state=opaque" } }));
+    if (request.method === "account/login/start")
+      queueMicrotask(() =>
+        this.listener?.({
+          id: request.id,
+          result: { type: "chatgpt", loginId: "provider-login-1", authUrl: "https://chatgpt.com/oauth?state=opaque" },
+        }),
+      );
   }
-  notify(message: unknown): void { this.listener?.(message); }
+  notify(message: unknown): void {
+    this.listener?.(message);
+  }
   async close(): Promise<void> {}
 }
 
 describeDatabase("real account-login acceptance: authenticated HTTP + real Model Gateway + real PostgreSQL", () => {
   const basePool = new Pool({ connectionString: databaseUrl });
   const schema = `account_login_acceptance_${randomUUID().replaceAll("-", "")}`;
-  const scopedUrl = databaseUrl === undefined ? "" : (() => { const url = new URL(databaseUrl); url.searchParams.set("options", `-c search_path=${schema}`); return url.toString(); })();
+  const scopedUrl =
+    databaseUrl === undefined
+      ? ""
+      : (() => {
+          const url = new URL(databaseUrl);
+          url.searchParams.set("options", `-c search_path=${schema}`);
+          return url.toString();
+        })();
   let pool: Pool;
   let gatewayApp: Awaited<ReturnType<typeof buildModelGatewayServer>>;
   let gatewayUrl: string;
@@ -82,10 +122,18 @@ describeDatabase("real account-login acceptance: authenticated HTTP + real Model
     const { credentialId } = await bootstrapLocalOperator(pool, { secret });
 
     const config: MaestroConfig = {
-      databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp",
-      host: "127.0.0.1", port: 0, actorId: "maestro-control-plane", leaseOwnerId: `account-login-acceptance-${randomUUID()}`,
+      databaseUrl: scopedUrl,
+      evidenceDir: "/tmp/maestro-evidence",
+      worktreeRoot: "/tmp",
+      host: "127.0.0.1",
+      port: 0,
+      actorId: "maestro-control-plane",
+      leaseOwnerId: `account-login-acceptance-${randomUUID()}`,
       reconcilerLeaseDurationMs: 30_000,
-      modelGatewayUrl: gatewayUrl, modelGatewayToken: "gateway-acceptance-token", modelGatewayOperatorId: GATEWAY_OPERATOR_ID,
+      modelRoutingMode: "ensemble",
+      modelGatewayUrl: gatewayUrl,
+      modelGatewayToken: "gateway-acceptance-token",
+      modelGatewayOperatorId: GATEWAY_OPERATOR_ID,
       modelAccountRefs: {},
     };
     const controlPlane = createControlPlane(config);
@@ -99,7 +147,7 @@ describeDatabase("real account-login acceptance: authenticated HTTP + real Model
     try {
       const started = await send("/v1/provider-account-logins/start", { providerId: "openai-codex" });
       expect(started.status).toBe(200);
-      const startedBody = await started.json() as { providerId: string; loginId: string; authUrl: string };
+      const startedBody = (await started.json()) as { providerId: string; loginId: string; authUrl: string };
       expect(startedBody).toMatchObject({ providerId: "openai-codex", authUrl: "https://chatgpt.com/oauth?state=opaque" });
       // The client-facing loginId is Maestro's own durable identity, never
       // the raw provider session id the fake transport assigned above.
@@ -111,23 +159,33 @@ describeDatabase("real account-login acceptance: authenticated HTTP + real Model
       expect(firstStatusBody).toEqual({ providerId: "openai-codex", loginId: startedBody.loginId, state: "pending" });
 
       const pendingRow = await pool.query<{ state: string; provider_login_id: string; auth_url: string }>(
-        "SELECT state, provider_login_id, auth_url FROM provider_account_login_sessions WHERE login_id = $1", [startedBody.loginId],
+        "SELECT state, provider_login_id, auth_url FROM provider_account_login_sessions WHERE login_id = $1",
+        [startedBody.loginId],
       );
-      expect(pendingRow.rows).toEqual([{ state: "pending", provider_login_id: "provider-login-1", auth_url: "https://chatgpt.com/oauth?state=opaque" }]);
+      expect(pendingRow.rows).toEqual([
+        { state: "pending", provider_login_id: "provider-login-1", auth_url: "https://chatgpt.com/oauth?state=opaque" },
+      ]);
 
       // Simulate the real browser OAuth completion the user would perform
       // out-of-band; the Codex app-server (or here, its wire-compatible fake)
       // reports it as a notification, never as returned token material.
       transport.notify({ method: "account/login/completed", params: { loginId: "provider-login-1", success: true, error: null } });
 
-      const succeededStatus = await send("/v1/provider-account-logins/status", { providerId: "openai-codex", loginId: startedBody.loginId });
+      const succeededStatus = await send("/v1/provider-account-logins/status", {
+        providerId: "openai-codex",
+        loginId: startedBody.loginId,
+      });
       expect(succeededStatus.status).toBe(200);
       expect(await succeededStatus.json()).toEqual({ providerId: "openai-codex", loginId: startedBody.loginId, state: "succeeded" });
 
-      const succeededRow = await pool.query<{ state: string }>("SELECT state FROM provider_account_login_sessions WHERE login_id = $1", [startedBody.loginId]);
+      const succeededRow = await pool.query<{ state: string }>("SELECT state FROM provider_account_login_sessions WHERE login_id = $1", [
+        startedBody.loginId,
+      ]);
       expect(succeededRow.rows).toEqual([{ state: "succeeded" }]);
 
-      const bindingRow = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'provider_account_login_sessions'");
+      const bindingRow = await pool.query(
+        "SELECT column_name FROM information_schema.columns WHERE table_name = 'provider_account_login_sessions'",
+      );
       const columns = bindingRow.rows.map((row) => (row as { column_name: string }).column_name);
       expect(columns).not.toContain("secret");
       expect(columns).not.toContain("token");
@@ -141,7 +199,7 @@ describeDatabase("real account-login acceptance: authenticated HTTP + real Model
       // account-login alone.
       const bound = await send("/v1/provider-credentials", { providerId: "openai", authMode: "api-key", secret: "sk-real-not-logged" });
       expect(bound.status).toBe(200);
-      const boundBody = await bound.json() as { providerId: string; accountRef: string };
+      const boundBody = (await bound.json()) as { providerId: string; accountRef: string };
       expect(boundBody.providerId).toBe("openai");
       expect(JSON.stringify(boundBody)).not.toContain("sk-real-not-logged");
     } finally {

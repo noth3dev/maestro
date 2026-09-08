@@ -112,6 +112,7 @@ describeDatabase("real Encore Council acceptance: multiple real reviewer admissi
       actorId: "maestro-control-plane",
       leaseOwnerId: `encore-acceptance-${randomUUID()}`,
       reconcilerLeaseDurationMs: 30_000,
+      modelRoutingMode: "pin",
       modelGatewayUrl: gatewayUrl,
       modelGatewayToken: "gateway-acceptance-token",
       modelGatewayOperatorId: GATEWAY_OPERATOR_ID,
