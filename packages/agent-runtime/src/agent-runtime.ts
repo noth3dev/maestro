@@ -3,6 +3,9 @@ import { ExecutionKernelUnavailableError, type CapabilityGrant, type ExecutionKe
 import { formatModelRef, type GatewayBinding, type ModelGatewayPort, type ModelMessage, type ModelStreamEvent, type ModelToolCall, type ModelToolDefinition, type ToolResultStatus, type TurnLimits } from "./model-provider.js";
 
 export interface ToolContext extends InvocationContext {
+  readonly commandId: string;
+  readonly toolCallId: string;
+  readonly sessionId: string;
   readonly conversationId: string;
   readonly turnId: string;
   readonly sessionVersion: number;
@@ -252,7 +255,7 @@ export function createMaestroAgentRuntime(options: { gateway: ModelGatewayPort; 
         const tool = options.tools.get(call.name);
         if (tool === undefined || !record.grant.allowedTools.includes(call.name)) { appendToolEvent(record, { state: "waiting", toolName: call.name }); record.status = "failed"; record.error = "tool is outside the invocation grant"; record.phase = "terminal"; return; }
         record.phase = "tool_executing"; appendToolEvent(record, { state: "executing", toolName: call.name });
-        const context: ToolContext = { ...record.context, conversationId: record.sessionId, turnId: `${record.invocation}-turn-${record.turnCount}`, sessionVersion: record.sessionVersion, controllerPolicyHash: record.context.policyVersion, capabilityGrant: record.grant, outboundDataPolicyHash: options.binding.dataPolicyHash };
+        const context: ToolContext = { ...record.context, commandId: record.idempotencyKey, toolCallId: call.id, sessionId: record.sessionId, conversationId: record.sessionId, turnId: `${record.invocation}-turn-${record.turnCount}`, sessionVersion: record.sessionVersion, controllerPolicyHash: record.context.policyVersion, capabilityGrant: record.grant, outboundDataPolicyHash: options.binding.dataPolicyHash };
         let toolResult: ToolExecutionResult;
         try { toolResult = await options.tools.execute(call, context); }
         catch (error) { record.status = "failed"; record.error = error instanceof Error ? error.message : "tool execution failed"; record.phase = "terminal"; return; }
