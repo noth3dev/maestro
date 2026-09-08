@@ -290,6 +290,38 @@ describe("resolveLocalConnection", () => {
     expect(controlPlaneStop).toHaveBeenCalledOnce();
   });
 
+  it("yields between zero-delay gateway startup probes", async () => {
+    let childStarted = false;
+    let controlPlaneStarted = false;
+    const gatewayUrl = "http://127.0.0.1:46201";
+    const startModelGateway = vi.fn(async () => {
+      setImmediate(() => { childStarted = true; });
+      return { stop: vi.fn(async () => undefined) };
+    });
+    const fetch = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).startsWith(gatewayUrl)) {
+        if (!childStarted) throw new Error("gateway is not listening");
+        if (String(input).endsWith("/healthz")) return response({ status: "ok" });
+        return response([]);
+      }
+      if (!controlPlaneStarted) throw new Error("Control Plane is down");
+      return response({ status: "ok" });
+    });
+    const result = await resolveLocalConnection({
+      env: { MAESTRO_API_URL: "http://127.0.0.1:46202", MAESTRO_MODEL_GATEWAY_URL: gatewayUrl, MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro" },
+      fetch,
+      secretStore: secretStore(),
+      runCommand: vi.fn(async () => ({ code: 1, stdout: "", stderr: "bootstrap failed" })),
+      startModelGateway,
+      startControlPlane: vi.fn(async () => {
+        controlPlaneStarted = true;
+      }),
+      retryDelayMs: 0,
+    });
+    expect(result).toEqual({ kind: "setup-required", reason: "Local operator bootstrap failed; check PostgreSQL and Control Plane logs" });
+    expect(childStarted).toBe(true);
+  });
+
   it("propagates gateway settings into the real detached child environment", async () => {
     const directory = await mkdtemp(`${tmpdir()}/maestro-gateway-test-`);
     const outputPath = `${directory}/environment.json`;
