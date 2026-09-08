@@ -1,4 +1,386 @@
 {
   "schemaVersion": 1,
-  "entries": []
+  "entries": [
+    {
+      "modelRef": "openai/gpt-5.6-sol",
+      "capability": {
+        "schemaVersion": 2,
+        "axes": {
+          "reasoning": {
+            "status": "scored",
+            "score": 140,
+            "rationale": "Frontier-tier third-party reasoning results place it alongside the strongest current models, but no Maestro deliberation evidence exists yet to justify the top band.",
+            "evidence": [
+              "LM Council cross-model benchmark board, retrieved 2026-09-09: https://lmcouncil.ai/benchmarks",
+              "BenchLM head-to-head Claude Opus 5 vs GPT-5.6 Sol, retrieved 2026-09-09: https://benchlm.ai/compare/claude-opus-5-vs-gpt-5-6-sol"
+            ]
+          },
+          "coding": {
+            "status": "scored",
+            "score": 150,
+            "rationale": "Highest published SWE-bench Verified result of the surveyed models at 96.2 percent, which is reproducible third-party evidence for code production specifically.",
+            "evidence": [
+              "SWE-bench Verified 96.2 percent reported by morphllm coding comparison, retrieved 2026-09-09: https://www.morphllm.com/best-ai-model-for-coding"
+            ]
+          },
+          "verification": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No surveyed public benchmark measures finding defects in another agent's output, which is what this axis means in Maestro.",
+            "evidence": [
+              "Rubric section 3.3 defines verification as review of existing work, distinct from production: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"
+            ]
+          },
+          "instruction-fidelity": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No reproducible public measurement of exact Task Contract and Grant adherence was found; provider claims are not admissible under the rubric.",
+            "evidence": [
+              "Rubric section 1 excludes marketing claims from scores: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"
+            ]
+          },
+          "tool-use": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "The available MCP-Atlas and OSWorld figures cover the prior generation (GPT-5.5), not this model, so there is no current evidence for this axis.",
+            "evidence": [
+              "MCP-Atlas and OSWorld results reported for GPT-5.5 and Opus 4.8 only, retrieved 2026-09-09: https://www.datacamp.com/blog/claude-opus-4-8-vs-gpt-5-5"
+            ]
+          },
+          "long-context": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "Declared window size is a provider fact, not evidence of quality of use across that window; no retrieval-degradation measurement was found.",
+            "evidence": [
+              "Rubric section 1 excludes context-window size from A scores: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"
+            ]
+          },
+          "knowledge": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "The available graduate-science figures were used to support the reasoning axis; no separate factual-breadth evidence was surveyed for this model.",
+            "evidence": [
+              "GPQA Diamond figures surveyed for Opus 5 and Gemini 3.1 Pro only, retrieved 2026-09-09: https://benchlm.ai/compare/claude-opus-5-vs-gpt-5-6-sol"
+            ]
+          },
+          "refusal-calibration": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No public benchmark measures over-refusal of ordinary in-scope shell, file, and Git work, which is the Maestro-specific failure this axis targets.",
+            "evidence": [
+              "Axis defined by Maestro host-tool stalling risk, not by a public suite: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"
+            ]
+          }
+        }
+      },
+      "providerFacts": {
+        "schemaVersion": 1,
+        "contextCapacity": 922000,
+        "pricing": { "inputPerMillionTokens": 5.0, "outputPerMillionTokens": 30.0 },
+        "authentication": { "modes": ["api-key", "managed-subscription"] },
+        "dataPolicy": {
+          "allowedDataClasses": ["public", "workspace"],
+          "retention": "transient",
+          "trainingUse": "opt-in",
+          "regions": ["us"]
+        },
+        "modalities": ["text"],
+        "toolCalls": { "supported": true },
+        "provenance": {
+          "source": "OpenAI API pricing and GPT-5.6 launch notes, retrieved 2026-09-09: https://developers.openai.com/api/docs/pricing",
+          "observedAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "provenance": {
+        "owner": "human",
+        "sourceRefs": [
+          "https://openai.com/index/gpt-5-6/",
+          "https://developers.openai.com/api/docs/pricing",
+          "https://www.morphllm.com/best-ai-model-for-coding"
+        ],
+        "reviewedAt": "2026-09-09T00:00:00.000Z"
+      }
+    },
+    {
+      "modelRef": "openai/gpt-5.6-terra",
+      "capability": {
+        "schemaVersion": 2,
+        "axes": {
+          "reasoning": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "Published tier comparisons describe Terra as a balanced tier but no per-axis third-party result was surveyed for it.",
+            "evidence": [
+              "Tier comparison without per-axis figures, retrieved 2026-09-09: https://www.vellum.ai/blog/gpt-5-6-benchmarks-explained"
+            ]
+          },
+          "coding": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No separate SWE-bench result for the Terra tier was surveyed; the Sol figure must not be inherited across tiers.",
+            "evidence": [
+              "SWE-bench figures published per model, not per family, retrieved 2026-09-09: https://www.morphllm.com/best-ai-model-for-coding"
+            ]
+          },
+          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark matches the Maestro definition of reviewing another agent's output.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "instruction-fidelity": { "status": "unproven", "score": null, "rationale": "No reproducible measurement of exact contract adherence was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "tool-use": { "status": "unproven", "score": null, "rationale": "No current-generation agentic tool benchmark for this tier was surveyed.", "evidence": ["Prior-generation figures only, retrieved 2026-09-09: https://www.datacamp.com/blog/claude-opus-4-8-vs-gpt-5-5"] },
+          "long-context": { "status": "unproven", "score": null, "rationale": "Window size is a provider fact; no quality-of-use measurement was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "knowledge": { "status": "unproven", "score": null, "rationale": "No factual-breadth measurement for this tier was surveyed.", "evidence": ["Tier comparison without per-axis figures, retrieved 2026-09-09: https://www.vellum.ai/blog/gpt-5-6-benchmarks-explained"] },
+          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary local host work.", "evidence": ["Axis is Maestro-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
+        }
+      },
+      "providerFacts": {
+        "schemaVersion": 1,
+        "contextCapacity": 922000,
+        "pricing": { "inputPerMillionTokens": 2.0, "outputPerMillionTokens": 12.0 },
+        "authentication": { "modes": ["api-key", "managed-subscription"] },
+        "dataPolicy": {
+          "allowedDataClasses": ["public", "workspace"],
+          "retention": "transient",
+          "trainingUse": "opt-in",
+          "regions": ["us"]
+        },
+        "modalities": ["text"],
+        "toolCalls": { "supported": true },
+        "provenance": {
+          "source": "OpenAI API pricing after the 2026-07-30 reduction, retrieved 2026-09-09: https://developers.openai.com/api/docs/pricing",
+          "observedAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "provenance": {
+        "owner": "human",
+        "sourceRefs": ["https://openai.com/index/gpt-5-6/", "https://developers.openai.com/api/docs/pricing"],
+        "reviewedAt": "2026-09-09T00:00:00.000Z"
+      }
+    },
+    {
+      "modelRef": "openai/gpt-5.6-luna",
+      "capability": {
+        "schemaVersion": 2,
+        "axes": {
+          "reasoning": { "status": "unproven", "score": null, "rationale": "Described as the cost-efficient tier; no per-axis third-party result was surveyed.", "evidence": ["Tier comparison, retrieved 2026-09-09: https://www.vellum.ai/blog/gpt-5-6-benchmarks-explained"] },
+          "coding": { "status": "unproven", "score": null, "rationale": "No separate SWE-bench result for this tier; family figures must not be inherited.", "evidence": ["Per-model publication only, retrieved 2026-09-09: https://www.morphllm.com/best-ai-model-for-coding"] },
+          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark matches the Maestro definition of this axis.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "instruction-fidelity": { "status": "unproven", "score": null, "rationale": "No reproducible measurement of exact contract adherence was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "tool-use": { "status": "unproven", "score": null, "rationale": "No current-generation agentic tool benchmark for this tier was surveyed.", "evidence": ["Prior-generation figures only, retrieved 2026-09-09: https://www.datacamp.com/blog/claude-opus-4-8-vs-gpt-5-5"] },
+          "long-context": { "status": "unproven", "score": null, "rationale": "Window size is a provider fact; no quality-of-use measurement was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "knowledge": { "status": "unproven", "score": null, "rationale": "No factual-breadth measurement for this tier was surveyed.", "evidence": ["Tier comparison, retrieved 2026-09-09: https://www.vellum.ai/blog/gpt-5-6-benchmarks-explained"] },
+          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary local host work.", "evidence": ["Axis is Maestro-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
+        }
+      },
+      "providerFacts": {
+        "schemaVersion": 1,
+        "contextCapacity": 922000,
+        "pricing": { "inputPerMillionTokens": 0.2, "outputPerMillionTokens": 1.2 },
+        "authentication": { "modes": ["api-key", "managed-subscription"] },
+        "dataPolicy": {
+          "allowedDataClasses": ["public", "workspace"],
+          "retention": "transient",
+          "trainingUse": "opt-in",
+          "regions": ["us"]
+        },
+        "modalities": ["text"],
+        "toolCalls": { "supported": true },
+        "provenance": {
+          "source": "OpenAI API pricing after the 2026-07-30 reduction, retrieved 2026-09-09: https://developers.openai.com/api/docs/pricing",
+          "observedAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "provenance": {
+        "owner": "human",
+        "sourceRefs": ["https://openai.com/index/gpt-5-6/", "https://developers.openai.com/api/docs/pricing"],
+        "reviewedAt": "2026-09-09T00:00:00.000Z"
+      }
+    },
+    {
+      "modelRef": "anthropic/claude-opus-5",
+      "capability": {
+        "schemaVersion": 2,
+        "axes": {
+          "reasoning": {
+            "status": "scored",
+            "score": 145,
+            "rationale": "GPQA Diamond at 94.2 percent is reproducible third-party evidence of graduate-level reasoning, and it leads the surveyed public agentic lane, but no Maestro deliberation evidence exists yet.",
+            "evidence": [
+              "GPQA Diamond 94.2 percent and public agentic lane 77.4 vs 70.1, retrieved 2026-09-09: https://benchlm.ai/compare/claude-opus-5-vs-gpt-5-6-sol"
+            ]
+          },
+          "coding": {
+            "status": "scored",
+            "score": 135,
+            "rationale": "Leads the surveyed public coding lane at 75.6 and scores 89.1 percent on Terminal-Bench 2.1, but Anthropic published no SWE-bench figure, so the evidence is thinner than for the highest-scored model on this axis.",
+            "evidence": [
+              "Public coding lane 75.6 vs 74.4, retrieved 2026-09-09: https://benchlm.ai/compare/claude-opus-5-vs-gpt-5-6-sol",
+              "Terminal-Bench 2.1 at 89.1 percent, no published SWE-bench, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"
+            ]
+          },
+          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark measures finding defects in another agent's output, which is what this axis means in Maestro.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "instruction-fidelity": { "status": "unproven", "score": null, "rationale": "No reproducible measurement of exact Task Contract and Grant adherence was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "tool-use": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "The strong MCP-Atlas and OSWorld figures belong to Opus 4.8, not Opus 5; a prior model's result is not evidence for this one.",
+            "evidence": [
+              "OSWorld-Verified 83.4 percent and MCP-Atlas 82.2 percent reported for Opus 4.8, retrieved 2026-09-09: https://www.datacamp.com/blog/claude-opus-4-8-vs-gpt-5-5"
+            ]
+          },
+          "long-context": { "status": "unproven", "score": null, "rationale": "A 1M window at standard pricing is a provider fact; no retrieval-degradation measurement across that window was found.", "evidence": ["Rubric section 1 excludes window size: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "knowledge": { "status": "unproven", "score": null, "rationale": "The GPQA figure was used to support reasoning; no separate factual-breadth evidence was surveyed.", "evidence": ["GPQA used for reasoning, retrieved 2026-09-09: https://benchlm.ai/compare/claude-opus-5-vs-gpt-5-6-sol"] },
+          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary in-scope shell, file, and Git work.", "evidence": ["Axis is Maestro-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
+        }
+      },
+      "providerFacts": {
+        "schemaVersion": 1,
+        "contextCapacity": 1000000,
+        "pricing": { "inputPerMillionTokens": 5.0, "outputPerMillionTokens": 25.0 },
+        "authentication": { "modes": ["api-key"] },
+        "dataPolicy": {
+          "allowedDataClasses": ["public", "workspace"],
+          "retention": "transient",
+          "trainingUse": "never",
+          "regions": ["us"]
+        },
+        "modalities": ["text"],
+        "toolCalls": { "supported": true },
+        "provenance": {
+          "source": "Anthropic API pricing survey, retrieved 2026-09-09: https://benchlm.ai/anthropic/api-pricing",
+          "observedAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "provenance": {
+        "owner": "human",
+        "sourceRefs": [
+          "https://benchlm.ai/anthropic/api-pricing",
+          "https://www.morphllm.com/claude-benchmarks",
+          "https://benchlm.ai/compare/claude-opus-5-vs-gpt-5-6-sol"
+        ],
+        "reviewedAt": "2026-09-09T00:00:00.000Z"
+      }
+    },
+    {
+      "modelRef": "anthropic/claude-sonnet-5",
+      "capability": {
+        "schemaVersion": 2,
+        "axes": {
+          "reasoning": { "status": "unproven", "score": null, "rationale": "No per-axis third-party result for Sonnet 5 was surveyed; Opus 5 figures must not be inherited across the family.", "evidence": ["Claude benchmark board lists results per model, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"] },
+          "coding": { "status": "unproven", "score": null, "rationale": "No separate SWE-bench Verified figure for Sonnet 5 was surveyed.", "evidence": ["Per-model publication, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"] },
+          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark matches the Maestro definition of this axis.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "instruction-fidelity": { "status": "unproven", "score": null, "rationale": "No reproducible measurement of exact contract adherence was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "tool-use": { "status": "unproven", "score": null, "rationale": "No current-generation agentic tool benchmark for this model was surveyed.", "evidence": ["Prior-generation figures only, retrieved 2026-09-09: https://www.datacamp.com/blog/claude-opus-4-8-vs-gpt-5-5"] },
+          "long-context": { "status": "unproven", "score": null, "rationale": "A 1M window is a provider fact; no quality-of-use measurement was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "knowledge": { "status": "unproven", "score": null, "rationale": "No factual-breadth measurement for this model was surveyed.", "evidence": ["Per-model publication, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"] },
+          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary local host work.", "evidence": ["Axis is Maestro-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
+        }
+      },
+      "providerFacts": {
+        "schemaVersion": 1,
+        "contextCapacity": 1000000,
+        "pricing": { "inputPerMillionTokens": 3.0, "outputPerMillionTokens": 15.0 },
+        "authentication": { "modes": ["api-key"] },
+        "dataPolicy": {
+          "allowedDataClasses": ["public", "workspace"],
+          "retention": "transient",
+          "trainingUse": "never",
+          "regions": ["us"]
+        },
+        "modalities": ["text"],
+        "toolCalls": { "supported": true },
+        "provenance": {
+          "source": "Anthropic API pricing after the introductory 2 dollar rate ended 2026-08-31, retrieved 2026-09-09: https://benchlm.ai/anthropic/api-pricing",
+          "observedAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "provenance": {
+        "owner": "human",
+        "sourceRefs": ["https://benchlm.ai/anthropic/api-pricing", "https://www.morphllm.com/claude-benchmarks"],
+        "reviewedAt": "2026-09-09T00:00:00.000Z"
+      }
+    },
+    {
+      "modelRef": "anthropic/claude-haiku-4-5",
+      "capability": {
+        "schemaVersion": 2,
+        "axes": {
+          "reasoning": { "status": "unproven", "score": null, "rationale": "No per-axis third-party result for this model was surveyed.", "evidence": ["Per-model publication, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"] },
+          "coding": { "status": "unproven", "score": null, "rationale": "No separate SWE-bench Verified figure for this model was surveyed.", "evidence": ["Per-model publication, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"] },
+          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark matches the Maestro definition of this axis.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "instruction-fidelity": { "status": "unproven", "score": null, "rationale": "No reproducible measurement of exact contract adherence was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "tool-use": { "status": "unproven", "score": null, "rationale": "No agentic tool benchmark for this model was surveyed.", "evidence": ["Prior-generation figures only, retrieved 2026-09-09: https://www.datacamp.com/blog/claude-opus-4-8-vs-gpt-5-5"] },
+          "long-context": { "status": "unproven", "score": null, "rationale": "Declared window is a provider fact; no quality-of-use measurement was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "knowledge": { "status": "unproven", "score": null, "rationale": "No factual-breadth measurement for this model was surveyed.", "evidence": ["Per-model publication, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"] },
+          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary local host work.", "evidence": ["Axis is Maestro-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
+        }
+      },
+      "providerFacts": {
+        "schemaVersion": 1,
+        "contextCapacity": 200000,
+        "pricing": { "inputPerMillionTokens": 1.0, "outputPerMillionTokens": 5.0 },
+        "authentication": { "modes": ["api-key"] },
+        "dataPolicy": {
+          "allowedDataClasses": ["public", "workspace"],
+          "retention": "transient",
+          "trainingUse": "never",
+          "regions": ["us"]
+        },
+        "modalities": ["text"],
+        "toolCalls": { "supported": true },
+        "provenance": {
+          "source": "Anthropic API pricing survey, retrieved 2026-09-09: https://benchlm.ai/anthropic/api-pricing",
+          "observedAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "provenance": {
+        "owner": "human",
+        "sourceRefs": ["https://benchlm.ai/anthropic/api-pricing"],
+        "reviewedAt": "2026-09-09T00:00:00.000Z"
+      }
+    },
+    {
+      "modelRef": "anthropic/claude-fable-5-1",
+      "capability": {
+        "schemaVersion": 2,
+        "axes": {
+          "reasoning": { "status": "unproven", "score": null, "rationale": "Published figures cover Fable 5; no separate Fable 5.1 reasoning result was surveyed and a point release must not inherit them silently.", "evidence": ["Fable 5 figures only, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"] },
+          "coding": {
+            "status": "scored",
+            "score": 130,
+            "rationale": "Its immediate predecessor Fable 5 reports SWE-bench Verified 95.0 percent and SWE-bench Pro 80.0 percent; scored conservatively below the models with results published for the exact version under review.",
+            "evidence": [
+              "Fable 5 SWE-bench Verified 95.0 percent and SWE-bench Pro 80.0 percent, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"
+            ]
+          },
+          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark matches the Maestro definition of this axis.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "instruction-fidelity": { "status": "unproven", "score": null, "rationale": "No reproducible measurement of exact contract adherence was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "tool-use": { "status": "unproven", "score": null, "rationale": "No current-generation agentic tool benchmark for this model was surveyed.", "evidence": ["Prior-generation figures only, retrieved 2026-09-09: https://www.datacamp.com/blog/claude-opus-4-8-vs-gpt-5-5"] },
+          "long-context": { "status": "unproven", "score": null, "rationale": "A 1M window is a provider fact; no quality-of-use measurement was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "knowledge": { "status": "unproven", "score": null, "rationale": "No factual-breadth measurement for this model was surveyed.", "evidence": ["Per-model publication, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"] },
+          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary local host work.", "evidence": ["Axis is Maestro-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
+        }
+      },
+      "providerFacts": {
+        "schemaVersion": 1,
+        "contextCapacity": 1000000,
+        "pricing": { "inputPerMillionTokens": 10.0, "outputPerMillionTokens": 50.0 },
+        "authentication": { "modes": ["api-key"] },
+        "dataPolicy": {
+          "allowedDataClasses": ["public", "workspace"],
+          "retention": "transient",
+          "trainingUse": "never",
+          "regions": ["us"]
+        },
+        "modalities": ["text"],
+        "toolCalls": { "supported": true },
+        "provenance": {
+          "source": "Anthropic API pricing survey, retrieved 2026-09-09: https://benchlm.ai/anthropic/api-pricing",
+          "observedAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "provenance": {
+        "owner": "human",
+        "sourceRefs": ["https://benchlm.ai/anthropic/api-pricing", "https://www.morphllm.com/claude-benchmarks"],
+        "reviewedAt": "2026-09-09T00:00:00.000Z"
+      }
+    }
+  ]
 }
