@@ -1187,3 +1187,9 @@ All downstream routing documentation must use this contract and must not restore
 
 - Serialized full-PG verification passed 185/185 files and 1,231/1,231 tests. Main re-verification passed build, lint, 127/127 non-DB test files, and the focused 8/8 real-PG S1 tests.
 - S1 is merged and cleaned up. The 1-minute test heartbeat was disabled after each completed run, as required.
+
+
+## 2026-09-09 — Direct refactor R1 findings
+
+- Initial registry implementation exposed a TypeScript index-signature error for `action: string`; fixed by explicitly typing the static table as `Readonly<Record<string, ActionClassification>>`. Focused tests, build, lint, and full non-DB tests then passed.
+- R1 remains behavior-preserving and has no persistence/DB surface. Independent review is still required.
