@@ -154,6 +154,12 @@ describe("runtime task demand", () => {
     expect(() => assertValidTaskDemand(demand({ taskKinds: inheritedKinds as never }))).toThrow(TaskDemandValidationError);
   });
 
+  it("rejects accessors so validated requirements cannot change during routing", () => {
+    const hostile = demand();
+    Object.defineProperty(hostile.requirements.coding, "level", { get: () => MODEL_CAPABILITY_SCORE_MAX, enumerable: true });
+    expect(() => assertValidTaskDemand(hostile)).toThrow(TaskDemandValidationError);
+  });
+
   it("rejects known fields when hidden as non-enumerable properties", () => {
     const outer = demand() as Record<string, unknown>;
     Object.defineProperty(outer, "provenance", { value: demand().provenance, enumerable: false });

@@ -23,6 +23,10 @@ export interface RoutingSelectionRequest {
   readonly candidates: readonly RouterCandidate[];
   readonly pressure: number;
   readonly requiredContextCapacity?: number;
+  readonly maxInputPricePerMillionTokens?: number;
+  readonly maxOutputPricePerMillionTokens?: number;
+  readonly requiredAuthenticationMode?: string;
+  readonly requiredRegion?: string;
   readonly requiredToolCalls?: boolean;
   readonly requiredDataClass?: string;
   readonly requiredModality?: string;
@@ -68,6 +72,10 @@ function modelRef(value: unknown, field: string): asserts value is string {
 function requiredNumber(value: unknown, field: string): void {
   if (value !== undefined && (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0))
     throw new RoutingSelectionError(`${field} must be a non-negative safe integer`);
+}
+function nonnegativeNumber(value: unknown, field: string): void {
+  if (value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value < 0))
+    throw new RoutingSelectionError(`${field} must be a finite non-negative number`);
 }
 function uniqueStrings(value: readonly string[], field: string): void {
   const seen = new Set<string>();
@@ -124,7 +132,45 @@ function axisRequirement(taskDemand: TaskDemand, axis: ModelCapabilityAxis): num
   return taskDemand.requirements[axis].level;
 }
 
+function assertSelectionRequest(value: unknown): asserts value is RoutingSelectionRequest {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)
+  )
+    throw new RoutingSelectionError("routing selection request must be a plain object");
+  const allowed = new Set([
+    "mode",
+    "goalRef",
+    "approvedModels",
+    "pinModelRef",
+    "taskDemand",
+    "modelMap",
+    "operationalOverlay",
+    "candidates",
+    "pressure",
+    "requiredContextCapacity",
+    "maxInputPricePerMillionTokens",
+    "maxOutputPricePerMillionTokens",
+    "requiredAuthenticationMode",
+    "requiredRegion",
+    "requiredToolCalls",
+    "requiredDataClass",
+    "requiredModality",
+  ]);
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string" || !allowed.has(key)) throw new RoutingSelectionError("routing selection request has an unknown field");
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor?.enumerable || !("value" in descriptor))
+      throw new RoutingSelectionError("routing selection request contains an accessor or hidden field");
+  }
+  for (const key of ["mode", "goalRef", "approvedModels", "taskDemand", "modelMap", "operationalOverlay", "candidates", "pressure"])
+    if (!Object.hasOwn(value, key)) throw new RoutingSelectionError(`routing selection request field ${key} is required`);
+}
+
 export function selectRoutedModel(input: RoutingSelectionRequest): RoutingSelection {
+  assertSelectionRequest(input);
   line(input.goalRef, "goalRef");
   if (input.mode !== "ensemble" && input.mode !== "pin") throw new RoutingSelectionError("mode must be ensemble or pin");
   const approvedModelValues = standardArray(input.approvedModels, "approvedModels");
@@ -141,6 +187,10 @@ export function selectRoutedModel(input: RoutingSelectionRequest): RoutingSelect
   if (input.requiredToolCalls !== undefined && typeof input.requiredToolCalls !== "boolean")
     throw new RoutingSelectionError("requiredToolCalls must be boolean");
   requiredNumber(input.requiredContextCapacity, "requiredContextCapacity");
+  nonnegativeNumber(input.maxInputPricePerMillionTokens, "maxInputPricePerMillionTokens");
+  nonnegativeNumber(input.maxOutputPricePerMillionTokens, "maxOutputPricePerMillionTokens");
+  if (input.requiredAuthenticationMode !== undefined) line(input.requiredAuthenticationMode, "requiredAuthenticationMode");
+  if (input.requiredRegion !== undefined) line(input.requiredRegion, "requiredRegion");
   if (input.requiredDataClass !== undefined) line(input.requiredDataClass, "requiredDataClass");
   if (input.requiredModality !== undefined) line(input.requiredModality, "requiredModality");
   assertValidTaskDemand(input.taskDemand);
@@ -203,6 +253,31 @@ export function selectRoutedModel(input: RoutingSelectionRequest): RoutingSelect
     }
     if (input.requiredContextCapacity !== undefined && entry.providerFacts.contextCapacity < input.requiredContextCapacity) {
       rejected.push({ candidateRef: candidate.candidateRef, reason: "provider context capacity is below the requirement" });
+      continue;
+    }
+    if (
+      input.maxInputPricePerMillionTokens !== undefined &&
+      entry.providerFacts.pricing.inputPerMillionTokens > input.maxInputPricePerMillionTokens
+    ) {
+      rejected.push({ candidateRef: candidate.candidateRef, reason: "provider input pricing exceeds the requirement" });
+      continue;
+    }
+    if (
+      input.maxOutputPricePerMillionTokens !== undefined &&
+      entry.providerFacts.pricing.outputPerMillionTokens > input.maxOutputPricePerMillionTokens
+    ) {
+      rejected.push({ candidateRef: candidate.candidateRef, reason: "provider output pricing exceeds the requirement" });
+      continue;
+    }
+    if (
+      input.requiredAuthenticationMode !== undefined &&
+      !entry.providerFacts.authentication.modes.includes(input.requiredAuthenticationMode)
+    ) {
+      rejected.push({ candidateRef: candidate.candidateRef, reason: "provider does not support the required authentication mode" });
+      continue;
+    }
+    if (input.requiredRegion !== undefined && !entry.providerFacts.dataPolicy.regions.includes(input.requiredRegion)) {
+      rejected.push({ candidateRef: candidate.candidateRef, reason: "provider data policy does not cover the required region" });
       continue;
     }
     if (input.requiredToolCalls === true && !entry.providerFacts.toolCalls.supported) {

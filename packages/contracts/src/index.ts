@@ -485,6 +485,7 @@ export const RoutingEvidenceSchema = z
       .array(NonEmptyLineSchema)
       .min(1)
       .refine((values) => new Set(values).size === values.length, "candidateRefs must not contain duplicates"),
+    rejections: z.array(z.object({ candidateRef: NonEmptyLineSchema, reason: NonEmptyLineSchema }).strict()),
     taskDemandHash: z.string().regex(/^[a-f0-9]{64}$/),
     pressure: z.number().finite().min(0).max(200),
     pressureBand: z.enum(["low", "medium", "high", "critical"]),
