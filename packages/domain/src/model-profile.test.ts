@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MODEL_CAPABILITY_AXES,
+  MODEL_CAPABILITY_SCHEMA_VERSION,
   ModelCapabilityValidationError,
   assertValidModelCapabilityVector,
   type ModelCapabilityScore,
@@ -15,12 +16,16 @@ function scored(score = 70) {
 
 function vector(overrides: Partial<Record<(typeof MODEL_CAPABILITY_AXES)[number], ModelCapabilityScore>> = {}): ModelCapabilityVector {
   return {
-    schemaVersion: 1,
+    schemaVersion: MODEL_CAPABILITY_SCHEMA_VERSION,
     axes: Object.fromEntries(MODEL_CAPABILITY_AXES.map((axis) => [axis, overrides[axis] ?? scored()])) as ModelCapabilityVector["axes"],
   };
 }
 
 describe("model capability vector", () => {
+  it("uses a new profile schema version for the max-200 score contract", () => {
+    expect(MODEL_CAPABILITY_SCHEMA_VERSION).toBe(2);
+  });
+
   it("defines the agreed closed eight-axis capability vector", () => {
     expect(MODEL_CAPABILITY_AXES).toEqual([
       "reasoning", "coding", "verification", "instruction-fidelity",
@@ -61,8 +66,12 @@ describe("model capability vector", () => {
     expect(() => assertValidModelCapabilityVector(value)).toThrow(ModelCapabilityValidationError);
   });
 
-  it("requires scored values to be integers from 0 through 100", () => {
-    expect(() => assertValidModelCapabilityVector(vector({ reasoning: scored(101) }))).toThrow(ModelCapabilityValidationError);
+  it("accepts scored values through the inclusive 200 maximum", () => {
+    expect(() => assertValidModelCapabilityVector(vector({ reasoning: scored(200) }))).not.toThrow();
+  });
+
+  it("requires scored values to be integers from 0 through 200", () => {
+    expect(() => assertValidModelCapabilityVector(vector({ reasoning: scored(201) }))).toThrow(ModelCapabilityValidationError);
     expect(() => assertValidModelCapabilityVector(vector({ reasoning: scored(12.5) }))).toThrow(ModelCapabilityValidationError);
     expect(() => assertValidModelCapabilityVector(vector({ reasoning: scored(-1) }))).toThrow(ModelCapabilityValidationError);
   });
@@ -74,7 +83,7 @@ describe("model capability vector", () => {
   });
 
   it("rejects malformed outer shapes, versions, and statuses", () => {
-    expect(() => assertValidModelCapabilityVector({ ...vector(), schemaVersion: 2 })).toThrow(ModelCapabilityValidationError);
+    expect(() => assertValidModelCapabilityVector({ ...vector(), schemaVersion: 99 })).toThrow(ModelCapabilityValidationError);
     expect(() => assertValidModelCapabilityVector({ ...vector(), extra: true })).toThrow(ModelCapabilityValidationError);
     expect(() => assertValidModelCapabilityVector({ ...vector(), axes: [] })).toThrow(ModelCapabilityValidationError);
     expect(() => assertValidModelCapabilityVector(vector({ reasoning: { ...scored(), status: "unknown" as never } }))).toThrow(ModelCapabilityValidationError);

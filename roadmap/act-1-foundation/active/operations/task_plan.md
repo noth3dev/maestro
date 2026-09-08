@@ -1297,7 +1297,14 @@ Before production router code, create and review: the eight A-axis scoring rubri
 
 ## 2026-09-08 — First A-axis schema slice
 
-- Added `packages/domain/src/model-profile.ts` and exported it from `@maestro/domain`. The validator fixes the initial eight A capability axes, accepts only integer scores in `0..100`, requires a one-line rationale and evidence reference for each axis, and represents unproven capability with `score: null`.
+- Added `packages/domain/src/model-profile.ts` and exported it from `@maestro/domain`. The validator fixes the initial eight A capability axes, accepts only integer scores in `0..200`, requires a one-line rationale and evidence reference for each axis, and represents unproven capability with `score: null`.
 - TDD evidence: the new focused test was observed RED because the module did not exist, then GREEN with 11/11 tests passing. `npx tsc -b packages/domain` passes.
 - Root `npm run build` remains blocked by the known pre-existing CLI `@earendil-works/pi-tui` import/type failures; this slice does not touch those files.
 - **Next:** document and test the human scoring rubric itself before adding task-kind recipes, pressure calculation, or a `model_map` file.
+
+
+## 2026-09-08 — A-axis scoring rubric and max-200 calibration
+
+- Expanded the human-scored A capability range from `0..100` to `0..200`; bumped the profile schema to version `2`; `MODEL_CAPABILITY_SCORE_MAX` is now `200`, with inclusive `200` acceptance and `201` rejection tests.
+- Added [the Model Capability Scoring Rubric](../../specs/2026-09-08-model-capability-scoring-rubric.md) with broad calibration anchors (`0–40`, `41–80`, `81–120`, `121–160`, `161–200`), axis-specific observable signals for all eight axes, evidence guidance, and explicit `unproven`/`null` semantics. The anchors are guidance, not routing gates.
+- **Next:** define the initial D task-kind recipes and their required levels. E work-character inputs, continuous pressure, and four band thresholds remain separate artifacts.

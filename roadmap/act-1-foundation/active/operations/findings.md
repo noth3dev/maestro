@@ -1141,7 +1141,7 @@ The review also identified a later Phase 2 authority gap: unknown/unregistered a
 
 The model-pool contract was updated from the prior `50/100/200` grade model to the agreed metric split:
 
-- **A capability:** exactly eight human-scored `0..100` axes in `model_map`: `reasoning`, `coding`, `verification`, `instruction-fidelity`, `tool-use`, `long-context`, `knowledge`, and `refusal-calibration`. Every score needs a one-line reason and evidence. `creativity` and `long-horizon` are future append-only axes, not current substitutes.
+- **A capability:** exactly eight human-scored `0..200` axes in `model_map`: `reasoning`, `coding`, `verification`, `instruction-fidelity`, `tool-use`, `long-context`, `knowledge`, and `refusal-calibration`. Every score needs a one-line reason and evidence. `creativity` and `long-horizon` are future append-only axes, not current substitutes.
 - **B facts:** provider-declared context capacity, input/output price, auth, data policy, modalities, and tool support are hard filters, not scores.
 - **C operations:** local measurements of latency, cost, failures/timeouts, provider errors, and availability/account binding update the private overlay only.
 - **D requirements:** one requirement per A axis; matching is only A↔D and weakest-link.

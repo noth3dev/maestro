@@ -1,4 +1,6 @@
-export const MODEL_CAPABILITY_SCHEMA_VERSION = 1 as const;
+export const MODEL_CAPABILITY_SCHEMA_VERSION = 2 as const;
+export const MODEL_CAPABILITY_SCORE_MIN = 0 as const;
+export const MODEL_CAPABILITY_SCORE_MAX = 200 as const;
 
 export const MODEL_CAPABILITY_AXES = [
   "reasoning",
@@ -79,8 +81,8 @@ function assertValidScore(value: unknown, axis: ModelCapabilityAxis): asserts va
   evidence(value.evidence, `Model capability ${axis} evidence`);
 
   if (value.status === "scored") {
-    if (typeof value.score !== "number" || !Number.isSafeInteger(value.score) || value.score < 0 || value.score > 100) {
-      throw new ModelCapabilityValidationError(`Model capability ${axis} score must be an integer in [0,100]`);
+    if (typeof value.score !== "number" || !Number.isSafeInteger(value.score) || value.score < MODEL_CAPABILITY_SCORE_MIN || value.score > MODEL_CAPABILITY_SCORE_MAX) {
+      throw new ModelCapabilityValidationError(`Model capability ${axis} score must be an integer in [${MODEL_CAPABILITY_SCORE_MIN},${MODEL_CAPABILITY_SCORE_MAX}]`);
     }
     return;
   }
