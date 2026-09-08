@@ -3066,3 +3066,18 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - `listMissionBundlesForPlan` now validates stored substance and recomputes content hash before returning rows. Added a persistence unit regression proving legacy rows without `taskDemand` fail closed.
 - The contract-layer Zod schema remains the serialized HTTP shape validator; the domain validator remains authoritative for hostile in-process object/prototype boundaries.
 - Focused hash/list regressions pass; full domain/contracts/persistence checks remain required before merge.
+
+
+## 2026-09-08 — E work-character and continuous pressure contract
+
+- Added `roadmap/act-1-foundation/specs/2026-09-08-work-character-and-pressure.md` before implementation. It fixes the six E axes, directions, provenance, and exclusions.
+- The initial continuous function is transparent and equally weighted: `(risk + (200 - reversibility) + verificationAttachment) / 3`; Head uplift is applied with `max` and cannot lower the floor. Material scale, time pressure, and budget headroom remain B/C constraints only.
+- **Next:** implement the E validator and pressure calculation with RED/GREEN tests. Pressure bands remain a separate later artifact.
+
+
+## 2026-09-08 — E validator and pressure function
+
+- Implemented `packages/domain/src/work-character.ts` and exported it from `@maestro/domain`. The validator covers six `0..200` axes, provenance, routing-field rejection, plain/own/enumerable boundaries, and fail-closed malformed input.
+- Implemented continuous pressure: `(risk + (200 - reversibility) + verificationAttachment) / 3`, with `max(floor, explicitHeadUplift)`. Constraint-only axes do not affect pressure.
+- TDD evidence: missing-module RED was observed, then the focused E suite passed 5/5; the full domain suite passed 31 files / 245 tests.
+- **Next:** independently review and integrate E, then define the separate pressure-band threshold artifact.
