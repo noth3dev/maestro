@@ -2721,3 +2721,17 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Fresh `npm run check` passed: 110 files passed and 57 database-gated files skipped; 697 tests passed and 381 skipped.
 - The authority classifier and read-only file adapter tests are included in the passing set.
 - `project.file.read` remains unexposed to production IPython until a complete binding supplies numeric policy version/control epoch and the Git read gateway is composed.
+
+
+## 2026-09-08 — constrained Python bootstrap implemented
+
+- Added `packages/agent-runtime/src/ipython-bootstrap.ts` with versioned ready handshake, persistent namespace, bounded stdout/stderr events, host helper calls, cancellation checks, and restricted session builtins.
+- Added a real child-process test using `python3 -I -S` covering namespace persistence, out-of-band host bridging, direct import rejection, direct `open` rejection, and shutdown.
+- This does not enable production execution. The process factory remains injected and the Control Plane still selects the unavailable kernel until authority-backed file/Git composition and process ownership are complete.
+
+
+## 2026-09-08 — constrained bootstrap verification checkpoint
+
+- Fresh `npm run check` passed: 111 files passed and 57 database-gated files skipped; 698 tests passed and 381 skipped.
+- `npm run lint` passed before the full check; the bootstrap was syntax-checked by Python and exercised in a real `python3 -I -S` child test.
+- The only uncommitted file remains the user-owned `.gitignore` change.

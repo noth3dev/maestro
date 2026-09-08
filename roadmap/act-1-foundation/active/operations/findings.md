@@ -989,3 +989,8 @@ The runtime now exposes `createIpPythonProcessKernel` as a dependency-injected c
 Added `createAuthorizedReadOnlyFilePort` in `packages/environment-adapter`. It resolves existing paths before the boundary check, rejects traversal/absolute paths, symlink escapes, Git metadata, and secret-like files, applies a UTF-8 byte cap, and invokes `project.file.read` only through the injected `AuthorizedEffectExecutor`-compatible gateway. The authority classifier now treats `project.file.read` as an ordinary action. The adapter is not yet composed into the production IPython session; that remains blocked on complete numeric policy/control-epoch binding and the Git host gateway.
 
 A test-first symlink case exposed an ordering issue where a sensitive filename behind an escaping symlink masked the more important scope violation. The boundary check now resolves and rejects the escape before sensitive-path classification.
+
+
+## 2026-09-08 — constrained Python bootstrap
+
+Added a versioned Python bootstrap as a source artifact, tested in a real `python3 -I -S` child. The bootstrap keeps namespace state across cells, emits stdout/stderr as protocol events, performs read-only access through out-of-band `host_request`/`host_response`, caps input/output, and exposes a deliberately small builtin set without `import`, `open`, `exec`, `eval`, `compile`, or subprocess/network helpers to session code. This is a defense-in-depth restriction, not a substitute for Maestro authority; the child still receives no credentials and production composition remains fail-closed.

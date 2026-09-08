@@ -210,7 +210,7 @@ The detailed test-first execution plan is canonical in `roadmap/act-1-foundation
 Implementation is deliberately incremental:
 
 1. Register `ipython` with a typed schema and prove grant filtering, session serialization, identity propagation, and fail-closed lifecycle behavior.
-2. Add the Node-owned JSON-lines bridge and a constrained Python bootstrap. Read-only file/Git evidence is the only initial host allowlist. The current implementation has the versioned bridge, injected process seam, read-only host router, and authority-backed workspace-file adapter; Python bootstrap and Git gateway composition remain open.
+2. Add the Node-owned JSON-lines bridge and a constrained Python bootstrap. Read-only file/Git evidence is the only initial host allowlist. The current implementation has the versioned bridge, injected process seam, real-child-tested constrained Python bootstrap, read-only host router, and authority-backed workspace-file adapter; Git gateway composition and production process ownership remain open.
 3. Add whole-block classification, exact approval scope, repetition limits, two full-access modes, durable audit, idempotency, interruption, stale-fence, and forbidden-action enforcement.
 4. Compose the registry through Control Plane → native kernel → worker Mission Bundle, then verify the real PostgreSQL/API/Gateway path and independent review.
 
