@@ -9,12 +9,17 @@ import {
   createReadOnlyHostRequestHandler,
   type IpPythonHostBinding,
   type IpPythonKernel,
+  type IpPythonProcessOrphanedEvent,
+  type IpPythonProcessStartedEvent,
 } from "@maestro/agent-runtime";
 
 export interface IpPythonProductionCompositionOptions {
   readonly authority: ReadOnlyFileAuthorityGateway;
   readonly workspaceRoot: string;
   readonly pythonExecutable: string;
+  readonly processRef?: string;
+  readonly onStarted?: (event: IpPythonProcessStartedEvent) => void | Promise<void>;
+  readonly onLifecycle?: (event: IpPythonProcessOrphanedEvent) => void | Promise<void>;
 }
 
 function authorityContext(binding: IpPythonHostBinding): Omit<ActionRequest, "action" | "target"> {
@@ -54,6 +59,15 @@ export function createIpPythonProductionKernel(
     })(currentBinding, ref),
   });
   const hostRequest = createReadOnlyHostRequestHandler({ binding, gateway });
-  const channel = createIpPythonOwnedProcessChannel({ pythonExecutable: options.pythonExecutable, cwd: options.workspaceRoot });
+  const channel = createIpPythonOwnedProcessChannel({
+    pythonExecutable: options.pythonExecutable,
+    cwd: options.workspaceRoot,
+    sessionId,
+    projectId: binding.projectId,
+    goalId: binding.goalId,
+    ...(options.processRef === undefined ? {} : { processRef: options.processRef }),
+    ...(options.onStarted === undefined ? {} : { onStarted: options.onStarted }),
+    ...(options.onLifecycle === undefined ? {} : { onLifecycle: options.onLifecycle }),
+  });
   return createIpPythonProcessKernel({ createProcess: () => channel, hostRequest }, sessionId, binding);
 }

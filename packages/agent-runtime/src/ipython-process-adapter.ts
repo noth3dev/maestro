@@ -1,10 +1,46 @@
+import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams, type SpawnOptions } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { IPYTHON_PYTHON_BOOTSTRAP } from "./ipython-bootstrap.js";
 import { readIpPythonParentIdentity } from "./ipython-host.js";
 import type { IpPythonLineChannel } from "./ipython-host.js";
 
+export interface IpPythonProcessStartedEvent {
+  readonly event: "started";
+  readonly sessionId?: string;
+  readonly processRef: string;
+  readonly processPid: number;
+  readonly parentPid: number;
+  /** Captured `/proc` identity for the detached process group. */
+  readonly processGroupId?: string;
+  readonly processSessionId?: string;
+  readonly processStartTime?: string;
+  readonly projectId?: string;
+  readonly goalId?: string;
+}
+
+export interface IpPythonProcessOrphanedEvent {
+  readonly event: "orphaned";
+  readonly sessionId?: string;
+  readonly processRef: string;
+  readonly processPid: number;
+  readonly parentPid: number;
+  readonly reason: string;
+  /** The same captured group identity as the durable `started` event. */
+  readonly processGroupId?: string;
+  readonly processSessionId?: string;
+  readonly processStartTime?: string;
+  readonly projectId?: string;
+  readonly goalId?: string;
+}
+
+export type IpPythonProcessLifecycleEvent = IpPythonProcessStartedEvent | IpPythonProcessOrphanedEvent
+
 export interface IpPythonOwnedProcessChannel extends IpPythonLineChannel {
+  readonly processRef: string;
+  readonly processPid: number;
+  /** Resolves after the durable start callback has completed. */
+  readonly ready: Promise<void>;
   onStderr(listener: (text: string) => void): () => void;
 }
 
@@ -14,6 +50,15 @@ export interface IpPythonOwnedProcessChannelOptions {
   readonly parentPid?: number;
   readonly parentIdentity?: string;
   readonly cwd?: string;
+  /** Stable process generation identity persisted for restart reconciliation. */
+  readonly processRef?: string;
+  readonly sessionId?: string;
+  readonly projectId?: string;
+  readonly goalId?: string;
+  /** Called after the child identity is available, before the first cell. */
+  readonly onStarted?: (event: IpPythonProcessStartedEvent) => void | Promise<void>;
+  /** Called when the child closes without an intentional channel close. */
+  readonly onLifecycle?: (event: IpPythonProcessOrphanedEvent) => void | Promise<void>;
   readonly terminationGraceMs?: number;
   readonly maxStderrBytes?: number;
   readonly spawnProcess?: (command: string, args: string[], options: SpawnOptions) => ChildProcessWithoutNullStreams;
@@ -51,7 +96,15 @@ function boundedUtf8(chunk: Buffer, maxBytes: number): string {
   return "";
 }
 
+export interface IpPythonProcessGroupIdentity {
+  readonly processPid: number;
+  readonly processGroupId: string;
+  readonly processSessionId: string;
+  readonly processStartTime: string;
+}
+
 interface ProcessGroupIdentity {
+  readonly processGroupId: string;
   readonly sessionId: string;
   readonly leaderStartTime: string;
 }
@@ -71,26 +124,77 @@ function readProcessStat(pid: number): { readonly processGroupId: string; readon
 function readProcessGroupIdentity(pid: number): ProcessGroupIdentity | undefined {
   try {
     const stat = readProcessStat(pid);
-    return { sessionId: stat.sessionId, leaderStartTime: stat.startTime };
+    return { processGroupId: stat.processGroupId, sessionId: stat.sessionId, leaderStartTime: stat.startTime };
   } catch { return undefined; }
 }
 
-/** Guard group signalling against killing a reused PID's unrelated session. */
-function ownedProcessGroupExists(pid: number, identity: ProcessGroupIdentity | undefined): boolean {
-  if (identity === undefined) return false;
+type ProcessGroupOwnership = "owned" | "leader-exited" | "not-owned" | "absent" | "unknown";
+
+/**
+ * Inspect ownership without treating a live PID with a mismatched generation
+ * as a reason to scan or signal a reused process group. Once the leader has
+ * exited, descendants cannot prove ancestry from the persisted leader start
+ * time alone; callers must therefore fail closed rather than signal the group.
+ */
+function inspectProcessGroupOwnership(pid: number, identity: ProcessGroupIdentity | undefined): ProcessGroupOwnership {
+  if (identity === undefined) return "unknown";
   try {
     const leader = readProcessStat(pid);
-    if (leader.processGroupId === String(pid) && leader.startTime === identity.leaderStartTime && leader.sessionId === identity.sessionId) return true;
+    if (leader.processGroupId !== identity.processGroupId || leader.startTime !== identity.leaderStartTime || leader.sessionId !== identity.sessionId) return "not-owned";
+    return "owned";
   } catch { /* the leader may have exited while descendants retain the group */ }
   try {
-    return readdirSync("/proc", { withFileTypes: true }).some((entry) => {
+    const descendantExists = readdirSync("/proc", { withFileTypes: true }).some((entry) => {
       if (!entry.isDirectory() || !/^\d+$/.test(entry.name)) return false;
       try {
         const member = readProcessStat(Number(entry.name));
-        return member.processGroupId === String(pid) && member.sessionId === identity.sessionId;
+        return member.processGroupId === identity.processGroupId && member.sessionId === identity.sessionId;
       } catch { return false; }
     });
-  } catch { return false; }
+    return descendantExists ? "leader-exited" : "absent";
+  } catch { return "unknown"; }
+}
+
+function validProcessGroupId(value: string): number | undefined {
+  if (!/^\d+$/.test(value)) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 1 ? parsed : undefined;
+}
+
+function processGroupExists(groupId: number): boolean | undefined {
+  try { process.kill(-groupId, 0); return true; }
+  catch (error) {
+    if (isErrorCode(error, "ESRCH")) return false;
+    return undefined;
+  }
+}
+
+/**
+ * Reap a persisted detached process group only when its `/proc` session and
+ * group identity still match. A reused group ID or an uninspectable process
+ * is `unknown`, never `reaped`.
+ */
+export async function reapIpPythonProcessGroup(
+  identity: IpPythonProcessGroupIdentity,
+  options: { readonly terminationGraceMs?: number } = {},
+): Promise<"reaped" | "unknown"> {
+  if (typeof identity.processGroupId !== "string" || typeof identity.processSessionId !== "string" || typeof identity.processStartTime !== "string") return "unknown";
+  const groupId = validProcessGroupId(identity.processGroupId);
+  if (groupId === undefined || !Number.isSafeInteger(identity.processPid) || identity.processPid <= 1) return "unknown";
+  const groupIdentity: ProcessGroupIdentity = { processGroupId: identity.processGroupId, sessionId: identity.processSessionId, leaderStartTime: identity.processStartTime };
+  const graceMs = options.terminationGraceMs ?? DEFAULT_TERMINATION_GRACE_MS;
+  if (!Number.isSafeInteger(graceMs) || graceMs <= 0) return "unknown";
+  const initialOwnership = inspectProcessGroupOwnership(identity.processPid, groupIdentity);
+  if (initialOwnership === "absent") return processGroupExists(groupId) === false ? "reaped" : "unknown";
+  if (initialOwnership !== "owned") return "unknown";
+  try {
+    killProcessGroup(groupId, "SIGTERM");
+    await delay(graceMs);
+    if (inspectProcessGroupOwnership(identity.processPid, groupIdentity) === "owned") killProcessGroup(groupId, "SIGKILL");
+    await delay(graceMs);
+  } catch { return "unknown"; }
+  if (inspectProcessGroupOwnership(identity.processPid, groupIdentity) !== "absent") return "unknown";
+  return processGroupExists(groupId) === false ? "reaped" : "unknown";
 }
 
 /**
@@ -109,6 +213,8 @@ export function createIpPythonOwnedProcessChannel(options: IpPythonOwnedProcessC
   const terminationGraceMs = boundedPositive(options.terminationGraceMs, DEFAULT_TERMINATION_GRACE_MS, "IPython termination grace");
   const maxStderrBytes = boundedPositive(options.maxStderrBytes, DEFAULT_MAX_STDERR_BYTES, "IPython stderr limit");
   if (maxStderrBytes > MAX_ALLOWED_STDERR_BYTES) throw new Error("IPython stderr limit is invalid");
+  const processRef = options.processRef ?? `ipython:${randomUUID()}`;
+  if (processRef.trim() === "") throw new Error("IPython process reference is invalid");
   const spawnProcess = options.spawnProcess ?? ((command, args, spawnOptions) => spawn(command, args, spawnOptions));
   const child = spawnProcess(options.pythonExecutable, ["-I", "-S", "-c", IPYTHON_PYTHON_BOOTSTRAP], {
     ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
@@ -131,7 +237,23 @@ export function createIpPythonOwnedProcessChannel(options: IpPythonOwnedProcessC
   }
   const pid = rawPid as number;
   const groupIdentity = readProcessGroupIdentity(pid);
+  let startedReady: Promise<void>;
+  try {
+    startedReady = Promise.resolve(options.onStarted?.({
+      event: "started",
+      processRef,
+      processPid: pid,
+      parentPid,
+      ...(groupIdentity === undefined ? {} : { processGroupId: groupIdentity.processGroupId, processSessionId: groupIdentity.sessionId, processStartTime: groupIdentity.leaderStartTime }),
+      ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+      ...(options.projectId === undefined ? {} : { projectId: options.projectId }),
+      ...(options.goalId === undefined ? {} : { goalId: options.goalId }),
+    }));
+  } catch (error) {
+    startedReady = Promise.reject(error);
+  }
   let closed = false;
+  let orphanNotified = false;
   let childClosedObserved = false;
   let closeNotified = false;
   let stderrBytes = 0;
@@ -165,14 +287,14 @@ export function createIpPythonOwnedProcessChannel(options: IpPythonOwnedProcessC
       try {
         closed = true;
         try { stdin.end(); } catch { /* the child may already be gone */ }
-        if (groupIdentity !== undefined && ownedProcessGroupExists(pid, groupIdentity)) killProcessGroup(pid, "SIGTERM");
+        if (groupIdentity !== undefined && inspectProcessGroupOwnership(pid, groupIdentity) === "owned") killProcessGroup(pid, "SIGTERM");
         else if (!closeNotified) { try { child.kill("SIGTERM"); } catch { /* the leader may already be gone */ } }
         await Promise.race([childClosed, delay(terminationGraceMs)]);
-        if (groupIdentity !== undefined && ownedProcessGroupExists(pid, groupIdentity)) killProcessGroup(pid, "SIGKILL");
+        if (groupIdentity !== undefined && inspectProcessGroupOwnership(pid, groupIdentity) === "owned") killProcessGroup(pid, "SIGKILL");
         else if (!closeNotified) { try { child.kill("SIGKILL"); } catch { /* the leader may already be gone */ } }
         await Promise.race([childClosed, delay(terminationGraceMs)]);
         if (!closeNotified) {
-          const groupStillOwned = groupIdentity !== undefined && ownedProcessGroupExists(pid, groupIdentity);
+          const groupStillOwned = groupIdentity !== undefined && ["owned", "leader-exited"].includes(inspectProcessGroupOwnership(pid, groupIdentity));
           notifyClose(childClosedObserved && !groupStillOwned ? "child_closed" : "child_kill_timeout");
         }
         resolveTeardown();
@@ -182,9 +304,35 @@ export function createIpPythonOwnedProcessChannel(options: IpPythonOwnedProcessC
   };
   child.on("error", () => { void teardown(); });
   child.on("exit", () => { /* retain group identity for teardown; close may follow later */ });
-  child.on("close", () => { childClosedObserved = true; resolveClose(); void teardown(); });
+  child.on("close", () => {
+    childClosedObserved = true;
+    // A child that closes before the owner intentionally closes its channel is
+    // an orphan/unknown boundary. The persistence layer decides whether it
+    // can later prove reaping; this adapter never infers success or cancel.
+    if (!closed && !orphanNotified) {
+      orphanNotified = true;
+      try {
+        void Promise.resolve(options.onLifecycle?.({
+          event: "orphaned",
+          processRef,
+          processPid: pid,
+          parentPid,
+          reason: "child_closed_without_owner_shutdown",
+          ...(groupIdentity === undefined ? {} : { processGroupId: groupIdentity.processGroupId, processSessionId: groupIdentity.sessionId, processStartTime: groupIdentity.leaderStartTime }),
+          ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+          ...(options.projectId === undefined ? {} : { projectId: options.projectId }),
+          ...(options.goalId === undefined ? {} : { goalId: options.goalId }),
+        })).catch(() => undefined);
+      } catch { /* lifecycle journaling cannot weaken fail-closed teardown */ }
+    }
+    resolveClose();
+    void teardown();
+  });
 
   return {
+    processRef,
+    processPid: pid,
+    ready: startedReady,
     write(data) { if (closed) throw new Error("IPython process channel is closed"); stdin.write(data); },
     onData(listener) { dataListeners.add(listener); return () => dataListeners.delete(listener); },
     onStderr(listener) { stderrListeners.add(listener); return () => stderrListeners.delete(listener); },
