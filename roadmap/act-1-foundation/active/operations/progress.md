@@ -3185,3 +3185,51 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - RED checkpoint `7c12747`; migration `604f3fc`; persistence adapter `78644c7`; implementation `ee44068` (`fix(agent-runtime): reject inferred ipython terminal outcomes`).
 - Focused runtime/persistence tests pass 23/23; journal adapter tests pass 11/11. Build, lint, and `git diff --check` pass. Required live kill/restart coverage passes 2/2.
 - Full real-PostgreSQL `npm run check` passes **187/187 test files and 1,239/1,239 tests** (duration 816.73s). Independent no-edit review remains the final gate before merge.
+
+
+## 2026-09-09 — S2 independent review gate (FAIL)
+
+- Reviewer verdict: `REVIEW: FAIL`.
+- Blocking findings: missing database `BEFORE TRUNCATE` protection; no real control-plane + production IPython + PostgreSQL SIGKILL/restart integration evidence; startup reconciliation checks only leader PID and cannot prove/reap the owned process group; and the journal test throws `Invalid URL` during module evaluation when `MAESTRO_TEST_DATABASE_URL` is unset.
+- Additional integrity finding: the journal schema does not enforce process-generation identity consistency or lifecycle ordering. A caller can append cross-bound Goal/session identity or out-of-order events despite the terminal fence.
+- Merge remains blocked. These findings will be fixed with regression tests before re-review.
+
+
+## 2026-09-09 — S2 post-review hardening and CI timing regression
+
+- Removed the Goal-to-journal foreign key cascade so `TRUNCATE goals CASCADE` cannot erase append-only IPython lifecycle evidence; added a regression assertion that the journal survives Goal cleanup.
+- Added production composed SIGKILL/restart coverage through `createControlPlane`, the production IPython channel, and PostgreSQL. Persisted process-group/session/start identity is now required for group-aware reconciliation.
+- Added a deterministic zero-delay detached-gateway scheduling regression test and changed local bootstrap retry polling to yield at least 1 ms even when `retryDelayMs` is zero. This addresses CI run `34245438906` (`ENOENT` for the child environment file).
+- Focused local-bootstrap coverage passes 16/16; S2 full PostgreSQL verification is running before the final review gate.
+
+
+## 2026-09-09 — Plan 1 S2 final verification
+
+- Final serialized real-PostgreSQL verification passed with `npm test -- --pool forks --maxWorkers 1 --no-file-parallelism`: **188/188 test files and 1,247/1,247 tests**, exit code 0, duration 809.97s.
+- Final focused S2 regression verification passed: production `createControlPlane` + production IPython + PostgreSQL SIGKILL/restart, append-only journal, zero-delay local bootstrap, and process adapter suites passed **4/4 files and 39/39 tests**, exit code 0.
+- `git diff --check` passed after the final changes. The detached gateway timing regression remains covered by the local-bootstrap test; the prior CI run `34245438906` is still historical failure evidence pending a new CI run.
+
+
+## 2026-09-09 — Plan 1 S2 remediation final verification
+
+- Added RED/GREEN regressions for stale live-leader generation identity, duplicate/concurrent lifecycle appends, and reconciliation after Goal cleanup.
+- Final focused remediation verification passed: **2/2 files and 24/24 tests**, exit code 0.
+- Re-ran build and lint after remediation: both exit code 0.
+- Final serialized real-PostgreSQL verification after remediation passed: **188/188 test files and 1,249/1,249 tests**, exit code 0, duration 612.83s.
+- `git diff --check` must remain green before the review gate; CI run `34245438906` remains historical evidence until a new CI run is available.
+
+
+## 2026-09-09 — S2 review remediation v2
+
+- Independent re-review returned `REVIEW: FAIL` with two blockers: editing already-applied migration `0075` left legacy Goal foreign keys/cascade behavior and caused production checksum rejection; a live mismatched PID with an absent persisted PGID could be reported as `reaped`.
+- Added RED regressions for both blockers. The process-generation regression failed with `reaped` before the fix; the migration-upgrade regression failed because no additive hardening migration existed.
+- Restored `0075_ipython_session_journal.sql` to its immutable original content and added additive `0075_ipython_session_journal_hardening.sql`, including explicit legacy-FK removal and the journal fences. Added a production migration-runner upgrade test.
+- Changed reaping so only an explicitly inspected `absent` group can produce `reaped`; `not-owned`, `leader-exited`, and `unknown` now remain `unknown`.
+- Focused remediation verification is green: process adapter **16/16 tests**, production migration runner **7/7 tests**, both exit code 0. A fresh independent review is required.
+
+
+## 2026-09-09 — S2 v3 final gate
+
+- Fresh independent no-edit re-review returned **`REVIEW: PASS`** after v2 remediation. It explicitly verified immutable 0075 plus additive hardening, absent-PGID stale-generation fencing, original S2 lifecycle boundaries, and focused tests.
+- Fresh serialized PostgreSQL verification completed with **exit code 0: 188/188 test files and 1,251/1,251 tests**, duration 614.75s.
+- The historical CI failure was the detached local-bootstrap `environment.json` startup race; the current green suite includes its regression. New CI is still pending the merge/push gate.

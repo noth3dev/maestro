@@ -1207,3 +1207,55 @@ All downstream routing documentation must use this contract and must not restore
 - Durable start ordering is required to avoid a prompt racing ahead of the journal. The adapter now waits for the `started` callback before allowing the first cell.
 - The append-only journal and `process_ref` terminal uniqueness fence prevent duplicate reconciliation across restart and reject direct UPDATE/DELETE mutation at the database boundary.
 - Full real-PostgreSQL verification passed 187 files / 1,239 tests, including the required kill/restart tests; no new S2 verification blocker remains. Independent no-edit review is still required.
+
+
+## 2026-09-09 — S2 independent review findings
+
+- Independent reviewer returned `REVIEW: FAIL`: `0075_ipython_session_journal.sql` blocks UPDATE/DELETE but not TRUNCATE, so privileged table owners can erase lifecycle evidence.
+- The claimed live kill/restart acceptance is not independently demonstrated by a test that composes `createControlPlane`, the production IPython channel, and PostgreSQL.
+- Startup reconciliation checks only leader PID absence. It does not persist or verify process-group identity or reap surviving same-group descendants, so it can record `reaped` while an owned descendant remains alive.
+- `ipython-session-journal.test.ts` evaluates `new URL(databaseUrl!)` even when the suite is skipped, breaking the normal no-database focused test path.
+- The reviewer also identified a durability-boundary integrity gap: rows for one `process_ref` are not constrained to one session/project/Goal/process identity, and the schema accepts terminal-before-started or events after terminal. The unique terminal index alone does not enforce the lifecycle state machine.
+- Fix strategy: add no-truncate and process-generation constraints/triggers, make the no-DB suite skip safely, persist a verifiable group identity, add group-aware restart reaping, and add real integration coverage with a killable parent harness.
+
+
+## 2026-09-09 — S2 post-review hardening and CI root cause
+
+- The independent review blockers were confirmed by regression tests. `0075` now rejects journal UPDATE/DELETE/TRUNCATE, preserves process-generation and lifecycle ordering, and leaves journal evidence after Goal cleanup. No-DB journal evaluation is safe.
+- The required real `createControlPlane` + production IPython + PostgreSQL SIGKILL/restart evidence passes; group-aware reaping remains fail-closed when identity or descendant termination is unproven.
+- CI run `34245438906` failed at `apps/cli/src/tui/local-bootstrap.test.ts:325` because zero-delay polling exhausted before a detached gateway child wrote `environment.json`; a 20-run reproduction was green before the deterministic scheduler regression was added. The fix is now covered by a RED/GREEN test.
+- Final full PostgreSQL verification after these changes is pending.
+
+
+## 2026-09-09 — Plan 1 S2 final verification
+
+- Final serialized real-PostgreSQL verification passed: **188/188 files and 1,247/1,247 tests**, exit code 0.
+- Final focused S2 verification passed: **4/4 files and 39/39 tests**, including the real control-plane + production IPython + PostgreSQL SIGKILL/restart acceptance path.
+- `git diff --check` passed. No unresolved S2 implementation or verification blocker remains; independent no-edit review is the remaining merge gate.
+
+
+## 2026-09-09 — Plan 1 S2 review remediation
+
+- Independent review found two blocking issues: a mismatched live leader identity could fall through to PGID/SID scanning and signal a reused group, and lifecycle trigger checks could preempt the application's idempotent `ON CONFLICT` path for duplicate/concurrent appends.
+- Remediation now fails closed on a live generation mismatch and does not signal a persisted group after the leader exits when ancestry cannot be proven. The journal trigger returns `NULL` for existing same-event rows, defers Goal binding validation to `started`, and routes competing terminal decisions to typed conflict handling.
+- Added regressions covering stale identity/no signal, duplicate and concurrent append convergence, and startup reconciliation after Goal cleanup. Focused and full PostgreSQL verification are green; independent no-edit re-review remains required.
+
+
+## 2026-09-09 — historical CI failure diagnosis
+
+- `gh run view 34245438906 --log-failed` identified the prior red run's sole failure as `apps/cli/src/tui/local-bootstrap.test.ts > resolveLocalConnection > propagates gateway settings into the real detached child environment`, with `ENOENT` for the detached child `environment.json`.
+- The current S2 remediation includes the scheduler/startup ordering fix and the test passes in the final real-PostgreSQL run; no new CI run exists yet because the remediation is not merged/pushed.
+
+
+## 2026-09-09 — S2 review blockers and v2 fix
+
+- `REVIEW: FAIL` found that changing a committed `0075` file was not deployable: production `runMigrations` rejects checksum drift, and `CREATE TABLE IF NOT EXISTS` cannot remove an existing `goal_id` FK. The fix preserves 0075 and applies an additive hardening migration that drops legacy Goal FKs explicitly.
+- `REVIEW: FAIL` also verified that a mismatched live PID plus absent persisted PGID returned `reaped`. The fix restricts `reaped` to the inspected `absent` ownership state and adds a regression proving the live process remains alive while the result is `unknown`.
+- Focused tests now pass, but S2 remains open pending fresh independent no-edit `REVIEW: PASS`, full verification, merge, main revalidation, worktree deletion, push, and new CI.
+
+
+## 2026-09-09 — S2 v3 closure evidence
+
+- v2 blockers are closed: migration compatibility is additive and checksum-safe; stale live PID generations with absent persisted PGIDs remain `unknown` and are never signaled.
+- Independent re-review is **PASS**. Full PostgreSQL verification is green at 188/188 files and 1,251/1,251 tests with exit code 0.
+- S2 remains operationally open until the required merge, main revalidation, worktree/branch cleanup, push, and post-push CI confirmation complete.
