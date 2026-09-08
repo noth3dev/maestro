@@ -3155,3 +3155,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 
 - The first worker-limited PG rerun still failed because Vitest file parallelism remained enabled (4 files/33 tests). The migration race diagnosis is confirmed; rerunning with `--no-file-parallelism --maxWorkers=1`.
+
+
+## 2026-09-09 — Plan 1 S1 closed
+
+- Final no-edit review returned `REVIEW: PASS`. Full real-PG verification passed with `--no-file-parallelism --maxWorkers=1`: 185/185 files and 1,231/1,231 tests. The default-parallel failures were isolated to the pre-existing shared-schema migration fixture race; focused S1 real-PG tests remained green.
+- Merged `plan1-routing-snapshot-validator` into `main` as merge commit `22b5266`; main post-merge build, lint, and non-DB suite passed (127/127 files, 837/837 tests). Main post-merge focused real-PG S1 suite passed 8/8.
+- Removed the S1 worktree and branch. S1 exit evidence is complete; ready for the documented `⏫ PUSH` and the next ordered work item.
