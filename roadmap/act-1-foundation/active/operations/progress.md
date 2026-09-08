@@ -2706,3 +2706,18 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Fresh `npm run check` passed: 109 files passed and 57 database-gated files skipped; 693 tests passed and 381 skipped.
 - The new process-kernel composition test is included in the passing set.
 - No production process factory was selected, so the registered production tool remains explicitly unavailable.
+
+
+## 2026-09-08 — authority-backed read-only file adapter
+
+- Added `project.file.read` to the ordinary authority action classification.
+- Added `packages/environment-adapter/src/read-only-file-adapter.ts` and focused tests for exact authority invocation, denied grants, traversal/absolute paths, symlink escapes, Git metadata, sensitive filenames, and byte limits.
+- The adapter reads only after the authority effect callback is entered and never inherits process credentials.
+- Documentation now marks 1A/1B as `in_progress`, records the local commit boundary, and distinguishes this adapter from the still-open production IPython composition.
+
+
+## 2026-09-08 — authority-backed file adapter verification checkpoint
+
+- Fresh `npm run check` passed: 110 files passed and 57 database-gated files skipped; 697 tests passed and 381 skipped.
+- The authority classifier and read-only file adapter tests are included in the passing set.
+- `project.file.read` remains unexposed to production IPython until a complete binding supplies numeric policy version/control epoch and the Git read gateway is composed.
