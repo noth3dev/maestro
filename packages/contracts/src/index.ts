@@ -421,6 +421,56 @@ export type TaskDemand = Omit<TaskDemandSchemaOutput, "taskKinds"> & {
 type AssertFalse<T extends false> = T;
 type _TaskDemandTaskKindsMustBeReadonly = AssertFalse<TaskDemand["taskKinds"] extends unknown[] ? true : false>;
 
+const ProviderFactLineListSchema = z.array(NonEmptyLineSchema).min(1).refine((values) => new Set(values).size === values.length, "values must not contain duplicates");
+const ProviderFactRetentionSchema = z.enum(["none", "transient", "persistent"]);
+const ProviderFactTrainingUseSchema = z.enum(["never", "opt-in", "always"]);
+export const ProviderFactsSchema = z.object({
+  schemaVersion: z.literal(1),
+  contextCapacity: z.number().int().positive(),
+  pricing: z.object({ inputPerMillionTokens: z.number().finite().nonnegative(), outputPerMillionTokens: z.number().finite().nonnegative() }).strict(),
+  authentication: z.object({ modes: ProviderFactLineListSchema }).strict(),
+  dataPolicy: z.object({
+    allowedDataClasses: ProviderFactLineListSchema,
+    retention: ProviderFactRetentionSchema,
+    trainingUse: ProviderFactTrainingUseSchema,
+    regions: ProviderFactLineListSchema,
+  }).strict(),
+  modalities: ProviderFactLineListSchema,
+  toolCalls: z.object({ supported: z.boolean() }).strict(),
+  provenance: z.object({ source: NonEmptyLineSchema, observedAt: NonEmptyLineSchema }).strict(),
+}).strict();
+export type ProviderFacts = z.infer<typeof ProviderFactsSchema>;
+
+const OperationalObservationSchema = z.object({
+  candidateRef: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/),
+  measuredLatencyMs: z.number().finite().nonnegative(),
+  measuredCost: z.number().finite().nonnegative(),
+  failureRate: z.number().finite().min(0).max(1),
+  timeoutRate: z.number().finite().min(0).max(1),
+  providerErrorRate: z.number().finite().min(0).max(1),
+  currentAvailability: z.boolean(),
+  accountBinding: z.string().min(1).nullable(),
+  observedAt: NonEmptyLineSchema,
+}).strict().superRefine((value, context) => {
+  if (value.currentAvailability && value.accountBinding === null) context.addIssue({ code: "custom", path: ["accountBinding"], message: "available observations require an account binding" });
+});
+const OperationalObservationListSchema = z.array(OperationalObservationSchema).refine((values) => new Set(values.map((value) => value.candidateRef)).size === values.length, "observations must not duplicate candidateRef");
+export const OperationalOverlaySchema = z.object({
+  schemaVersion: z.literal(1), installationRef: NonEmptyLineSchema, projectRef: NonEmptyLineSchema, version: z.number().int().positive(), observations: OperationalObservationListSchema,
+}).strict();
+export type OperationalOverlay = z.infer<typeof OperationalOverlaySchema>;
+export const OperationalOverlaySnapshotSchema = z.object({
+  schemaVersion: z.literal(1), installationRef: NonEmptyLineSchema, projectRef: NonEmptyLineSchema, goalRef: NonEmptyLineSchema, overlayVersion: z.number().int().positive(), observations: OperationalObservationListSchema,
+}).strict();
+export type OperationalOverlaySnapshot = z.infer<typeof OperationalOverlaySnapshotSchema>;
+
+export const PressureBandProjectionSchema = z.object({
+  pressure: z.number().finite().min(0).max(200),
+  band: z.enum(["low", "medium", "high", "critical"]),
+  decisionLayer: z.enum(["automatic progress", "Department Head", "Encore Council", "user"]),
+}).strict();
+export type PressureBandProjection = z.infer<typeof PressureBandProjectionSchema>;
+
 export const MissionBundleSubstanceSchema = z.object({
   role: z.enum(["head", "scout", "execution"]), profileRef: z.string().min(1), goalBrief: z.string().min(1),
   taskDemand: TaskDemandSchema, approvedModels: NonEmptyStringListSchema, allowedSkills: NonEmptyStringListSchema, allowedTools: NonEmptyStringListSchema,
