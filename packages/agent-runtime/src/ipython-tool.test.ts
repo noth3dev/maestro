@@ -134,6 +134,13 @@ describe("persistent ipython tool boundary", () => {
     expect(kernels.get("project-1:goal-1:conversation-1")).not.toBe(kernels.get("project-1:goal-2:conversation-2"));
   });
 
+  it("fails closed when host-owned command or tool-call identity is missing", async () => {
+    const manager = createIpPythonSessionManager({ createKernel: () => ({ async execute() { return { state: "ok", dataClass: "public", content: "should not run" }; } }) });
+    const tool = createIpPythonTool({ sessions: manager });
+    await expect(tool.execute({ code: "print('x')" }, { ...context, commandId: "" })).rejects.toThrow("command identity");
+    await expect(tool.execute({ code: "print('x')" }, { ...context, toolCallId: "" })).rejects.toThrow("tool-call identity");
+  });
+
   it("uses collision-safe session identity encoding", async () => {
     const seen: string[] = [];
     const manager = createIpPythonSessionManager({
