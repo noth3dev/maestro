@@ -102,6 +102,15 @@ describe("Ensemble Router artifact persistence", () => {
       ],
       [
         {
+          installation_ref: overlay.installationRef,
+          project_ref: overlay.projectRef,
+          version: overlay.version,
+          overlay,
+          content_hash: hash(overlay),
+        },
+      ],
+      [
+        {
           goal_ref: snapshot.goalRef,
           installation_ref: snapshot.installationRef,
           project_ref: snapshot.projectRef,
