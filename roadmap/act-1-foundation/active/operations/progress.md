@@ -2944,3 +2944,21 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Final focused boundary suite passed: 6 files and 35 tests.
 - Final `npm run build`, `npm run lint`, and `git diff --check` passed.
 - Parent-crash group cleanup and same-group descendant acceptance passed with no matching `python3 -I -S` or `sleep 30` orphan remaining.
+
+
+## 2026-09-08 — Ubuntu local bootstrap hardening
+
+- Reproduced the user-facing `Account login is unavailable until the Control Plane is connected` state on Ubuntu. The TUI was truthful: no authenticated Control Plane client existed because local auto-bootstrap failed before the listener became available.
+- Added a RED regression for `@napi-rs/keyring` returning runtime `null` for an empty index/account, then fixed `KeychainCredentialStore` to treat `null` like `undefined` without changing secret stripping, operator filtering, or fail-closed missing-credential behavior.
+- Added a RED regression for the default gateway operator string (`local-operator`) crossing into PostgreSQL UUID fields. The bootstrap now keeps gateway operator identity separate, generates/reuses a canonical local UUID, passes it as both local operator and credential identity, and rejects invalid explicit local UUID overrides.
+- Focused verification: 17 tests passed; `npm run build`, `npm run lint`, and `git diff --check` passed.
+- A real local bootstrap using the worktree build started the Model Gateway and Control Plane on loopback and returned a configured authenticated connection. The processes were stopped after the acceptance probe; no bearer token was retained in the repository.
+- The current environment's `codex` command is a Windows installation whose Linux binary dependency is missing. This is a separate provider-login prerequisite, not a Control Plane connectivity failure.
+- Final review also required lowercase-only canonical UUID handling to match the persistence auth contract; uppercase override rejection is now covered by a focused regression.
+
+
+## 2026-09-08 — Ubuntu bootstrap final verification
+
+- Fresh real-PostgreSQL `npm run check` passed: 172 test files and 1128 tests passed, 0 failed.
+- The focused bootstrap/keyring suite passed 17/17; `npm run build`, `npm run lint`, and `git diff --check` passed.
+- Independent no-edit review returned ACCEPT after separating gateway operator strings from database UUID identities and narrowing UUID acceptance to the persistence contract.

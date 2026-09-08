@@ -155,7 +155,7 @@ export class KeychainCredentialStore implements CredentialStore {
     } catch {
       throw new Error("gateway credential store is unavailable");
     }
-    if (value === undefined || value.trim() === "") return undefined;
+    if (value === undefined || value === null || value.trim() === "") return undefined;
     const stored = parseStoredCredential(value);
     this.credentials.set(accountRef, stored);
     return publicBinding(stored);
@@ -225,7 +225,7 @@ export class KeychainCredentialStore implements CredentialStore {
     } catch {
       throw new Error("gateway credential store is unavailable");
     }
-    if (value === undefined || value.trim() === "") return [];
+    if (value === undefined || value === null || value.trim() === "") return [];
     try {
       const parsed: unknown = JSON.parse(value);
       if (!Array.isArray(parsed)) throw new Error("invalid index");

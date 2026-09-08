@@ -1221,3 +1221,10 @@ The first full-check attempt stopped in `tsc -b` because Node's `ChildProcess` t
 ### Current review gate — corrected before checkpoint
 
 The production read-only path is not considered verified until Goal path scopes, canonical symlink sensitivity, relative Git scopes, canonical outbound data classes, and same-process-group descendant teardown all pass. These review gates are now covered by focused tests. `setsid`/double-fork descendants remain outside group-only ownership and are recorded as a later OS-sandbox hardening item; production grants and live PostgreSQL acceptance remain fail-closed/open.
+
+
+## 2026-09-08 — Phase 2 Ubuntu local-bootstrap acceptance addendum
+
+- **[resolved in current slice]** The local CLI bootstrap now treats OS-keyring `null` values as absent metadata instead of calling `.trim()` on `null`.
+- **[resolved in current slice]** PostgreSQL local operator/credential IDs are now canonical UUIDs. The gateway operator binding remains an independent, provider-facing string and is never reused as a database UUID. A generated local UUID is reused from the credential envelope on later launches; explicit `MAESTRO_LOCAL_OPERATOR_ID` values are validated before services start.
+- **Acceptance evidence:** focused keyring/bootstrap tests (17/17), build/lint/diff checks, full real-PostgreSQL check (172 files / 1128 tests), and a real local Control Plane + Model Gateway bootstrap. Account login still requires a Linux-capable Codex app-server command when `openai-codex` is selected.

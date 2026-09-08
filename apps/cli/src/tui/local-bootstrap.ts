@@ -143,6 +143,11 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
   const retryDelayMs = options.retryDelayMs ?? 500;
   let storedToken = secretStore.read();
   let bootstrapSecret: string | undefined;
+  const configuredOperatorId = options.env.MAESTRO_LOCAL_OPERATOR_ID?.trim();
+  if (configuredOperatorId !== undefined && !isCanonicalUuid(configuredOperatorId)) {
+    return { kind: "setup-required", reason: "MAESTRO_LOCAL_OPERATOR_ID must be a canonical UUID" };
+  }
+  const localOperatorId = configuredOperatorId || extractUuidCredentialId(storedToken) || randomUUID();
   let gatewayReady = false;
   let ownedGateway: LocalProcessHandle | undefined;
   let ownedControlPlane: LocalProcessHandle | undefined;
@@ -165,6 +170,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
       } else {
         const gateway = await ensureLocalModelGatewayForBootstrap({
           env: options.env,
+          operatorId: localOperatorId,
           apiUrl: modelGatewayUrl,
           token: options.env.MAESTRO_MODEL_GATEWAY_TOKEN?.trim() || deriveModelGatewayToken(localSecret),
           fetch,
@@ -207,6 +213,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
     const modelGatewayToken = options.env.MAESTRO_MODEL_GATEWAY_TOKEN?.trim() || deriveModelGatewayToken(bootstrapSecret);
     const gateway = await ensureLocalModelGatewayForBootstrap({
       env: options.env,
+      operatorId: localOperatorId,
       apiUrl: modelGatewayUrl,
       token: modelGatewayToken,
       fetch,
@@ -215,7 +222,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
     });
     if (gateway.kind !== "ready") return { kind: "setup-required", reason: gateway.reason };
     ownedGateway = gateway.process;
-    const modelGatewayOperatorId = options.env.MAESTRO_MODEL_GATEWAY_OPERATOR_ID?.trim() || options.env.MAESTRO_LOCAL_OPERATOR_ID?.trim() || "local-operator";
+    const modelGatewayOperatorId = options.env.MAESTRO_MODEL_GATEWAY_OPERATOR_ID?.trim() || localOperatorId;
     const dataDir = options.env.MAESTRO_LOCAL_DATA_DIR?.trim() || join(homedir(), ".local", "share", "maestro");
     try {
       await makeLocalDataDirectories(dataDir);
@@ -239,6 +246,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
     const modelGatewayToken = options.env.MAESTRO_MODEL_GATEWAY_TOKEN?.trim() || deriveModelGatewayToken(bootstrapSecret);
     const gateway = await ensureLocalModelGatewayForBootstrap({
       env: options.env,
+      operatorId: localOperatorId,
       apiUrl: modelGatewayUrl,
       token: modelGatewayToken,
       fetch,
@@ -267,7 +275,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
 
   const secret = bootstrapSecret ?? randomBytes(32).toString("base64url");
   const projectId = randomUUID();
-  const bootstrap = await runBootstrapHelper({ env: options.env, databaseUrl, secret, projectId, runCommand });
+  const bootstrap = await runBootstrapHelper({ env: options.env, databaseUrl, secret, projectId, operatorId: localOperatorId, runCommand });
   if (bootstrap.kind === "unavailable") {
     await stopOwnedProcesses();
     return { kind: "setup-required", reason: bootstrap.reason };
@@ -368,6 +376,7 @@ async function probeLocalModelGateway(options: {
 
 async function ensureLocalModelGatewayForBootstrap(options: {
   env: ConnectionEnvironment;
+  operatorId: string;
   apiUrl: string;
   token: string;
   fetch: typeof globalThis.fetch;
@@ -385,7 +394,7 @@ async function ensureLocalModelGatewayForBootstrap(options: {
   }
   const entry = resolveModelGatewayEntry(options.env);
   if (entry === undefined) return { kind: "setup-required", reason: "Local model gateway is not running and its executable was not found; set MAESTRO_MODEL_GATEWAY_ENTRY or configure the gateway separately" };
-  const operatorId = options.env.MAESTRO_MODEL_GATEWAY_OPERATOR_ID?.trim() || options.env.MAESTRO_LOCAL_OPERATOR_ID?.trim() || "local-operator";
+  const operatorId = options.env.MAESTRO_MODEL_GATEWAY_OPERATOR_ID?.trim() || options.env.MAESTRO_LOCAL_OPERATOR_ID?.trim() || options.operatorId;
   let startedProcess: LocalProcessHandle | undefined;
   try {
     startedProcess = await (options.startModelGateway ?? defaultStartModelGateway)({
@@ -438,6 +447,7 @@ async function runBootstrapHelper(options: {
   databaseUrl: string;
   secret: string;
   projectId: string;
+  operatorId: string;
   runCommand: LocalCommandRunner;
 }): Promise<{ kind: "ready"; credentialId: string } | { kind: "unavailable"; reason: string }> {
   const entry = resolveControlPlaneEntry(options.env);
@@ -448,7 +458,7 @@ async function runBootstrapHelper(options: {
   if (result.code !== 0) return { kind: "unavailable", reason: "Local operator bootstrap failed; check PostgreSQL and Control Plane logs" };
   try {
     const parsed = JSON.parse(result.stdout) as { credentialId?: unknown };
-    if (typeof parsed.credentialId !== "string" || parsed.credentialId.trim() === "") throw new Error("missing credential");
+    if (typeof parsed.credentialId !== "string" || !isCanonicalUuid(parsed.credentialId)) throw new Error("invalid credential");
     return { kind: "ready", credentialId: parsed.credentialId };
   } catch {
     return { kind: "unavailable", reason: "Local operator bootstrap returned an invalid result" };
@@ -516,15 +526,17 @@ async function makeLocalDataDirectories(dataDir: string): Promise<void> {
   await mkdir(join(dataDir, "workspaces"), { recursive: true, mode: 0o700 });
 }
 
-function localHelperEnvironment(options: { env: ConnectionEnvironment; databaseUrl: string; secret: string; projectId: string }): Record<string, string | undefined> {
+function localHelperEnvironment(options: { env: ConnectionEnvironment; databaseUrl: string; secret: string; projectId: string; operatorId: string }): Record<string, string | undefined> {
   const entry = options.env.MAESTRO_CONTROL_PLANE_ENTRY;
   return cleanEnvironment({
     ...(entry === undefined ? {} : { MAESTRO_CONTROL_PLANE_ENTRY: entry }),
     DATABASE_URL: options.databaseUrl,
     MAESTRO_LOCAL_BOOTSTRAP_SECRET: options.secret,
-    // Keep the first-run operator identity aligned with the local gateway's
-    // default internal binding. It is a server-side identity, not a secret.
-    MAESTRO_LOCAL_OPERATOR_ID: options.env.MAESTRO_LOCAL_OPERATOR_ID ?? "local-operator",
+    // PostgreSQL stores operator and credential identities as UUIDs. Reuse the
+    // same generated identity for both so a later launch can derive it from the
+    // credential envelope and keep gateway bindings stable without a secret file.
+    MAESTRO_LOCAL_OPERATOR_ID: options.operatorId,
+    MAESTRO_LOCAL_CREDENTIAL_ID: options.operatorId,
     MAESTRO_LOCAL_PROJECT_ID: options.projectId,
   });
 }
@@ -573,6 +585,16 @@ function extractLocalSecret(token: string | undefined): string | undefined {
   const separator = token.indexOf(".");
   if (separator <= 0 || separator === token.length - 1) return undefined;
   return token.slice(separator + 1);
+}
+
+function extractUuidCredentialId(token: string | undefined): string | undefined {
+  if (token === undefined) return undefined;
+  const credentialId = token.slice(0, token.indexOf("."));
+  return isCanonicalUuid(credentialId) ? credentialId : undefined;
+}
+
+function isCanonicalUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
 }
 
 function deriveModelGatewayToken(secret: string): string {

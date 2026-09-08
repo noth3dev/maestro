@@ -12,11 +12,27 @@ function secretStore(initial?: string): LocalSecretStore {
   };
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
 describe("resolveLocalConnection", () => {
+  it("rejects a non-UUID local operator override before starting services", async () => {
+    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_OPERATOR_ID: "local-operator" }, fetch: vi.fn(), secretStore: secretStore(), runCommand: vi.fn() })).resolves.toEqual({
+      kind: "setup-required",
+      reason: "MAESTRO_LOCAL_OPERATOR_ID must be a canonical UUID",
+    });
+  });
+
+  it("rejects uppercase local UUID overrides to match the persistence contract", async () => {
+    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_OPERATOR_ID: "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA" }, fetch: vi.fn(), secretStore: secretStore(), runCommand: vi.fn() })).resolves.toEqual({
+      kind: "setup-required",
+      reason: "MAESTRO_LOCAL_OPERATOR_ID must be a canonical UUID",
+    });
+  });
+
   it("reuses a keychain token and repairs a missing default Goal", async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(response({ status: "ok" }))
@@ -86,14 +102,14 @@ describe("resolveLocalConnection", () => {
     const runCommand = vi.fn(async (file: string, args: readonly string[], options?: { env?: Record<string, string | undefined> }) => {
       if (file === process.execPath && args.some((arg) => arg.endsWith("local-bootstrap.js"))) {
         expect(options?.env?.MAESTRO_LOCAL_BOOTSTRAP_SECRET).toBe("stable-secret");
-        return { code: 0, stdout: JSON.stringify({ credentialId: "new-credential" }), stderr: "" };
+        return { code: 0, stdout: JSON.stringify({ credentialId: "55555555-5555-4555-8555-555555555555" }), stderr: "" };
       }
       throw new Error(`unexpected command: ${file} ${args.join(" ")}`);
     });
     const startModelGateway = vi.fn(async () => undefined);
-    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro" }, fetch, secretStore: store, runCommand, startModelGateway, retryDelayMs: 0 })).resolves.toEqual({ kind: "configured", apiUrl: "http://127.0.0.1:4310", token: "new-credential.stable-secret" });
+    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro" }, fetch, secretStore: store, runCommand, startModelGateway, retryDelayMs: 0 })).resolves.toEqual({ kind: "configured", apiUrl: "http://127.0.0.1:4310", token: "55555555-5555-4555-8555-555555555555.stable-secret" });
     expect(startModelGateway).not.toHaveBeenCalled();
-    expect(store.read()).toBe("new-credential.stable-secret");
+    expect(store.read()).toBe("55555555-5555-4555-8555-555555555555.stable-secret");
   });
 
   it("reuses a keychain token after restarting the local Control Plane", async () => {
@@ -143,6 +159,8 @@ describe("resolveLocalConnection", () => {
       if (file === "docker" && args[0] === "exec") return { code: 0, stdout: "accepting connections", stderr: "" };
       if (file === process.execPath && args.some((arg) => arg.endsWith("local-bootstrap.js"))) {
         expect(options?.env?.MAESTRO_LOCAL_BOOTSTRAP_SECRET).toBeTruthy();
+        expect(options?.env?.MAESTRO_LOCAL_OPERATOR_ID).toMatch(UUID_PATTERN);
+        expect(options?.env?.MAESTRO_LOCAL_CREDENTIAL_ID).toBe(options?.env?.MAESTRO_LOCAL_OPERATOR_ID);
         return { code: 0, stdout: JSON.stringify({ operatorId: "33333333-3333-4333-8333-333333333333", credentialId: "44444444-4444-4444-8444-444444444444", projectId }), stderr: "" };
       }
       throw new Error(`unexpected command: ${file} ${args.join(" ")}`);
@@ -181,6 +199,8 @@ describe("resolveLocalConnection", () => {
       if (file === "docker" && args[0] === "exec") return { code: 0, stdout: "accepting connections", stderr: "" };
       if (file === process.execPath && args.some((arg) => arg.endsWith("local-bootstrap.js"))) {
         expect(options?.env?.MAESTRO_LOCAL_BOOTSTRAP_SECRET).toBeTruthy();
+        expect(options?.env?.MAESTRO_LOCAL_OPERATOR_ID).toMatch(UUID_PATTERN);
+        expect(options?.env?.MAESTRO_LOCAL_CREDENTIAL_ID).toBe(options?.env?.MAESTRO_LOCAL_OPERATOR_ID);
         return { code: 0, stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444", projectId }), stderr: "" };
       }
       throw new Error(`unexpected command: ${file} ${args.join(" ")}`);
@@ -193,6 +213,7 @@ describe("resolveLocalConnection", () => {
       env: {
         MAESTRO_CODEX_APP_SERVER_COMMAND: "/tmp/codex/app-server",
         MAESTRO_CODEX_MODELS: "gpt-5.3-codex",
+        MAESTRO_MODEL_GATEWAY_OPERATOR_ID: "local-operator",
       },
       fetch,
       secretStore: secretStore(),
@@ -214,6 +235,7 @@ describe("resolveLocalConnection", () => {
       modelGatewayToken: expect.any(String),
       modelGatewayOperatorId: "local-operator",
     });
+    expect(controlPlaneOptions?.modelGatewayOperatorId).toBe((startModelGateway.mock.calls[0]?.[0] as { operatorId: string }).operatorId);
     expect(controlPlaneOptions?.modelGatewayToken).toBe((startModelGateway.mock.calls[0]?.[0] as { token: string }).token);
   });
 
@@ -301,7 +323,7 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
       });
       expect(result.kind).toBe("setup-required");
       const childEnvironment = JSON.parse(await readFile(outputPath, "utf8")) as Record<string, string | undefined>;
-      expect(childEnvironment).toEqual({ token: expect.any(String), host: "127.0.0.1", port: String(port), operator: "local-operator", pid: expect.any(Number), codexCommand: "/tmp/codex", codexModels: "gpt-5.3-codex" });
+      expect(childEnvironment).toEqual({ token: expect.any(String), host: "127.0.0.1", port: String(port), operator: expect.stringMatching(UUID_PATTERN), pid: expect.any(Number), codexCommand: "/tmp/codex", codexModels: "gpt-5.3-codex" });
       await new Promise((resolveDelay) => setTimeout(resolveDelay, 25));
       let childAlive = false;
       try { process.kill(Number(childEnvironment.pid), 0); childAlive = true; } catch { /* The cleanup handle terminated the child. */ }
