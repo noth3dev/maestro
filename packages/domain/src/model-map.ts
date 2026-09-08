@@ -62,15 +62,35 @@ function lines(value: unknown, field: string): asserts value is readonly string[
   if (!Array.isArray(value) || value.length === 0 || Object.getPrototypeOf(value) !== Array.prototype)
     throw new ModelMapValidationError(`${field} must be a non-empty array`);
   const seen = new Set<string>();
-  for (let index = 0; index < value.length; index += 1) {
-    if (!Object.hasOwn(value, index)) throw new ModelMapValidationError(`${field} must not be sparse`);
-    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+  for (const key of Reflect.ownKeys(value)) {
+    if (key === "length") continue;
+    if (typeof key !== "string" || !/^(0|[1-9]\d*)$/.test(key) || Number(key) >= value.length)
+      throw new ModelMapValidationError(`${field} has an unknown property`);
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (!descriptor?.enumerable || !("value" in descriptor))
       throw new ModelMapValidationError(`${field} entries must be enumerable data properties`);
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    if (!Object.hasOwn(value, index)) throw new ModelMapValidationError(`${field} must not be sparse`);
     line(value[index], `${field}[${index}]`);
     if (seen.has(value[index])) throw new ModelMapValidationError(`${field} must not contain duplicates`);
     seen.add(value[index]);
   }
+}
+
+function modelMapEntries(value: unknown): asserts value is readonly unknown[] {
+  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype)
+    throw new ModelMapValidationError("Model map entries must be a standard Array");
+  for (const key of Reflect.ownKeys(value)) {
+    if (key === "length") continue;
+    if (typeof key !== "string" || !/^(0|[1-9]\d*)$/.test(key) || Number(key) >= value.length)
+      throw new ModelMapValidationError(`Model map entries has an unknown property ${String(key)}`);
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor?.enumerable || !("value" in descriptor))
+      throw new ModelMapValidationError("Model map entries contain an accessor or hidden property");
+  }
+  for (let index = 0; index < value.length; index += 1)
+    if (!Object.hasOwn(value, index)) throw new ModelMapValidationError("Model map entries must not be sparse");
 }
 
 function validateModelRef(value: unknown): asserts value is string {
@@ -106,8 +126,7 @@ export function assertValidModelMap(value: unknown): asserts value is ModelMap {
   required(map, ["schemaVersion", "entries"], "Model map");
   if (map.schemaVersion !== MODEL_MAP_SCHEMA_VERSION)
     throw new ModelMapValidationError(`Model map schemaVersion must be ${MODEL_MAP_SCHEMA_VERSION}`);
-  if (!Array.isArray(map.entries) || Object.getPrototypeOf(map.entries) !== Array.prototype)
-    throw new ModelMapValidationError("Model map entries must be a standard Array");
+  modelMapEntries(map.entries);
   const refs = new Set<string>();
   for (let index = 0; index < map.entries.length; index += 1) {
     if (!Object.hasOwn(map.entries, index)) throw new ModelMapValidationError("Model map entries must not be sparse");
