@@ -6,7 +6,7 @@ This block is the authoritative status for the current `main` tree. Older phase 
 
 - **Branch:** `main`; protected worktrees remain untouched. This documentation slice is being applied on top of the synchronized native-runtime baseline.
 - **Phase 1:** native-only composition, no-Prime scan, Model Gateway HTTP acceptance, Control Plane + PostgreSQL + native Worker acceptance, and the clean single-worker PostgreSQL run (**162/162 files, 1066/1066 tests**) are evidenced. Phase acceptance remains open until the Phase 2 host-tool contract is implemented and the shared boundary is independently verified.
-- **Phase 2:** hierarchical building blocks and PostgreSQL evidence exist, but phase acceptance is reopened. The approved next slice is a Prime-style persistent IPython host tool for local files, Git, tests, shell, and local environment changes, with independent → Department Head → Encore Council → user approval tiers, selectable repetition scope, two full-access modes, live stop, and whole-block highest-risk handling. Production `ToolRegistry` is currently empty and workers remain text/evidence-only.
+- **Phase 2:** hierarchical building blocks and PostgreSQL evidence exist, but phase acceptance is reopened. The approved next slice is a Prime-style persistent IPython host tool for local files, Git, tests, shell, and local environment changes, with independent → Department Head → Encore Council → user approval tiers, selectable repetition scope, two full-access modes, live stop, and whole-block highest-risk handling. Production `ToolRegistry` now contains one typed `ipython` definition, but native admissions still default to `allowedTools: []` and the composed kernel is fail-closed until the real persistent host bridge and authority enforcement land; workers remain text/evidence-only.
 - **Phase 3:** Metronome, Encore, certification/reporting, CLI/API parity, conversation, and restart/fencing evidence exist. First usable release remains unaccepted until the Phase 2 host-tool live flow, TUI parity/reconnect, and independent release review pass together.
 - **Phase 4:** external capabilities are a separate boundary. Browser, device, external-service, and deployment access must be individually activated with Goal-scoped grants and selectable expiry/repetition scope; independent review and production deployment acceptance remain open.
 - **Phase 5:** the project-wide worker cap is implemented. Resource inventory, demand reservations, protected floors, and Portfolio Council scheduling remain open.
@@ -17,6 +17,128 @@ This block is the authoritative status for the current `main` tree. Older phase 
 - **Phase 10:** future Treasury capability; payment remains separately activated and critically governed.
 - **Documentation checkpoint:** the prior roadmap reorganization and this host-tool boundary update are committed and pushed on `origin/main`; the current tree is clean after the documented verification run.
 - **Immediate work:** implement the approved Phase 2 host-tool contract and its tests. Do not claim Phase 1–3 acceptance or code completion until the new host-tool gates pass.
+
+## Phase 1A–1D host-tool execution plan — approved 2026-09-08
+
+This is the active implementation plan for the approved Phase 2 host-tool boundary. The plan is deliberately split into small, test-first slices. Items remain `planned` until source, focused tests, and the required acceptance evidence exist. The Prime Agent repository is a structural benchmark only; no Prime source, runtime, or dependency is copied.
+
+**Current execution status:** 1A is partially implemented: the typed tool, per-session kernel factory/queue, collision-safe Goal session identity, bounded result envelope, and fail-closed production registration exist with focused tests. The real child-process protocol, host bridge, authority effects, and live acceptance remain open. The 1B protocol slice now also has a versioned frame parser, out-of-band host responses, JSON-lines framing, busy/interrupt/child-close handling, and focused transport tests; real process/adaptor composition and strict host-effect allowlists remain open.
+
+### Architecture boundary confirmed by the benchmark
+
+- TypeScript/Node remains the owner of session identity, persistent-kernel lifecycle, serialized execution, host-request dispatch, budgets, interruption, audit correlation, and shutdown.
+- Python remains a model-facing session runtime. It can request host effects only through a narrow JSON-lines bridge; it never receives Maestro authority or provider credentials.
+- Maestro keeps its existing `ExecutionKernelPort`, `ToolRegistry`, `CapabilityGrant`, `AuthorizedEffectExecutor`, Goal lease/fencing, and provider-neutral Model Gateway boundaries.
+- `ipython` is one registered model tool. It is not a second general-purpose execution kernel and it does not make direct filesystem, shell, Git, network, provider, or external-service calls.
+- The first executable slice is strict read-only. Write, process, network, dangerous-import, unregistered-tool, out-of-scope, and malformed host requests fail closed. Full local effects and the approval hierarchy land only in later slices.
+
+### Prime benchmark addendum — structural references, not imported behavior
+
+The independent read-only comparison against Prime Agent commit `9c8230df67b378aaedc032f90e1ae8ba687cfe4` adds these concrete requirements:
+
+- Copy the split between a TypeScript `ReplKernelManager` and a child Python runtime (`packages/coding-agent/docs/rlm-runtime.md:8-21,62-72`; `packages/coding-agent/src/core/kernel/repl-manager.ts:1-40`).
+- Define a versioned JSON-lines protocol with handshake, typed request/event IDs, stdout/stderr separation, ordered cells, out-of-band host replies, and EOF shutdown (`prime-agent-runtime/src/rlm/repl.md:1-41,87-123`; `repl-manager.ts:106-135,363-393,1215-1274`).
+- Treat cancellation, busy-kernel behavior, bounded shutdown, child death, output attribution, and byte limits as first-class lifecycle states (`repl-manager.ts:991-1035,1194-1212,1328-1437`; `repl.md:47-85`).
+- Keep process continuity separate from namespace continuity. If Maestro later persists session state, it must use canonical, schema-validated, hash-bound JSON/records; it must not copy Prime's `dill`/pickle restore as a trust boundary (`state-snapshot.ts:1-8`; `repl.py:629-680,804-840`).
+- Add real child-process tests for state persistence, host bridging, abort, teardown, and restart/lost-state reporting, modeled on Prime's `repl-kernel-execute.test.ts`, `repl-kernel-state-roundtrip.test.ts`, and `repl-kernel-abort.test.ts`.
+
+The following Prime behavior is explicitly not copied: arbitrary Python evaluation as authority, `bash()` as a permission model, child-process isolation as a security boundary, generic string host handlers, detached background-task effects, or best-effort executable snapshots. Maestro's Control Plane derives immutable context, rechecks Goal lease/fencing/approval/idempotency, and invokes only registered authority-backed adapters.
+
+The benchmark also identifies three plan obligations: define the explicit project-skill manifest/hash/save/revocation contract; add IPython-specific crash/restart cases distinct from provider recovery; and add Phase 3/8 release and security cases for prompt injection, protocol fuzzing, snapshot non-executability, mixed-risk atomicity, and full-access isolation.
+
+For project-skill persistence, Prime’s harness separates session-local from explicit global scope and validates Python references before saving (`prime-agent-runtime/src/rlm/harness.py:1-8,131-141,607-631`). Maestro may copy scope separation, schema/version identity, content hashes, atomic temp-and-replace writes, and restrictive file modes (`harness.py:287-319`), but every save remains explicit user action plus Mission Bundle allowlisting; no automatic executable promotion is allowed.
+
+It also identifies a process-ownership obligation: pass a parent identity to the Python child, detect parent/control-plane death, terminate the owned process group, journal/reap orphans, and prove no shell/test child survives a control-plane crash. This is a Phase 2 lifecycle requirement and a Phase 8 termination-injection gate.
+
+### 1A — Contract, identity, and strict read-only registration (`planned`)
+
+**Purpose:** make one bounded `ipython` tool visible to the existing runtime without enabling effects.
+
+**Source changes:**
+
+- Extend the host-owned invocation context with the exact command/session identity and control epoch required to correlate tool calls, idempotency, audit, stop, and fencing decisions. Missing identity must fail closed for host effects.
+- Add a typed `IpPythonInput`/result contract and register exactly one `ipython` definition in `ToolRegistry`; duplicate registration and calls outside `CapabilityGrant.allowedTools` remain errors.
+- Add a persistent session manager interface keyed by Goal-bound session identity. The manager owns one serialized queue per session, bounded output, timeout, interruption, terminal state, and shutdown. Tests use a deterministic fake kernel before a real Python process is composed.
+- Keep conversation admissions and Head/Encore admissions unchanged (`allowedTools: []`) until their explicit host-tool contract is enabled. Worker/Mission Bundle tests opt in with `allowedTools: ["ipython"]` only where the Goal contract permits it.
+
+**Focused tests before implementation:**
+
+- `packages/agent-runtime/src/agent-runtime.test.ts`: tool definition, grant filtering, invalid arguments, duplicate call identity, tool output validation, and command/session context propagation.
+- New host-session unit tests beside the session manager: FIFO execution, one active block per session, concurrent-session isolation, output/timeout bounds, cancellation, and shutdown.
+- `apps/control-plane/src/native-execution-kernel.test.ts`: the composed registry is present but an empty grant still cannot call `ipython`.
+
+**Exit evidence:** a deterministic read-only tool call completes through `ExecutionKernelPort` → `MaestroAgentRuntime` → `ToolRegistry` → session manager, with no filesystem/process/network effect.
+
+### 1B — JSON-lines host bridge and read-only host effects (`planned`)
+
+**Purpose:** reproduce Prime's useful persistent-kernel shape while preserving Maestro authority.
+
+**Source changes:**
+
+- Add a Node-owned versioned JSON-lines protocol with handshake, request IDs, `execute`, `result`, `error`, `host_request`, `host_response`, `interrupt`, and `shutdown` messages. Parse one frame at a time, reject malformed/oversized frames, keep diagnostics separate from protocol output, and handle host replies out-of-band so a host request cannot deadlock the cell queue.
+- Add the minimal Python session bootstrap with session-local state and safe host helpers. Bootstrap is versioned and manifest-bound; project skills are not executable merely because they are installed. The bootstrap rejects direct imports, `open`, `exec`, `eval`, `compile`, subprocess/network/file modules, dunder escape paths, and any host method not in the read-only allowlist.
+- Add a host-effect interface injected from Control Plane composition. The first allowlist contains bounded project-file reads and read-only Git revision/status evidence. It does not expose raw `fs`, `child_process`, environment credentials, arbitrary shell, remote Git, browser, device, provider, or network access.
+- Route every host request through the existing path-scope and authority boundary. Read-only actions use explicit ordinary action identities; unknown/ambiguous actions deny rather than being inferred.
+- Enforce Goal/worktree path scope after symlink resolution, result-size caps, UTF-8 validity, and secret-like output redaction/denial before data returns to the model.
+
+**Focused tests before implementation:**
+
+- Protocol tests for framing/handshake, malformed messages, request correlation, queue serialization, out-of-band host replies, interrupt/busy-kernel behavior, shutdown, late responses, child death, output attribution, and byte limits.
+- Security regression tests for write attempts, subprocess/network attempts, dangerous imports, dunder escapes, unknown methods, path traversal, symlink escape, out-of-scope Git targets, and oversized output.
+- Adapter tests proving no unauthorised effect callback runs and every decision is audited.
+
+**Exit evidence:** a real persistent read-only session can read only declared Goal-scoped evidence; all listed escape attempts fail closed and leave no effect.
+
+### 1C — Authority, approvals, audit, repetition, and stop (`planned`)
+
+**Purpose:** add local effects without allowing the Python runtime to bypass policy.
+
+**Source changes:**
+
+- Define one block classification before execution. A block containing multiple effects receives the highest required risk/approval tier; it is never partially executed.
+- Build exact `ActionRequest` identities from command ID, project, actor, Goal, action, target, numeric policy version, control epoch, budget effect, and selected repetition scope.
+- Use `AuthorizedEffectExecutor` and existing Git/environment adapters for file edits, tests, shell commands, local environment changes, and local Git mutations. Do not call raw Node/Python I/O from the host tool.
+- Add the independent → Department Head → Encore Council → user approval adapter. Approval is exact and bounded by code identity, targets, Goal, expiry, budget, and one of: one execution, bounded count/time/budget, or session duration.
+- Add two user-selected full-access modes: retain intermediate Head/Encore approvals or skip those intermediate approvals. `forbidden`, external capabilities, budgets, audit, stop, fencing, and session isolation remain enforced in both modes.
+- Persist approval, rejection, safer alternative, interruption, effect result, failure, and replay/idempotency evidence. A stop takes effect at the queue boundary and during active effects where the adapter supports cancellation.
+
+**Focused tests before implementation:**
+
+- Whole-block highest-risk classification and no-partial-execution tests.
+- Exact approval scope, expiry, repetition, revocation, full-access mode, forbidden action, ambiguous action, stale epoch, emergency stop, and budget tests.
+- Git/environment adapter tests for command-array execution, no inherited secrets, path/process/network limits, cancellation, and audit records.
+- Idempotent retry tests proving the same command identity cannot invoke a provider effect twice.
+
+**Exit evidence:** local file/test/shell/Git effects execute only through authority-backed adapters and are durably auditable; rejection, stop, stale fencing, and forbidden actions prevent effects.
+
+### 1D — Gateway/runtime/worker integration and live acceptance (`planned`)
+
+**Purpose:** prove the complete production path for one local software Goal.
+
+**Source changes:**
+
+- Compose the single `ipython` definition and session manager at `apps/control-plane/src/main.ts`, pass the same registry through `createNativeExecutionKernel`, and keep missing Model Gateway configuration fail-closed.
+- Bind worker Mission Bundles to the exact `ipython` tool, Goal path scope, local environment, approval mode, and effect budgets. Preserve Head/Encore/Conversation boundaries until their admissions explicitly opt in.
+- Expose observations, tool events, approval state, stop state, and audit references through existing API/CLI surfaces without exposing provider credentials or raw host protocol frames.
+- Add recovery behavior for process restart, abandoned sessions, unknown provider/process outcome, stale leases, and safe release after durable terminal evidence. IPython crash/restart is tested separately from provider recovery: no partial effect, stale approval reuse, namespace overwrite, or silent state loss is allowed.
+- Run one real PostgreSQL Goal scenario through API/Control Plane → native kernel → gateway → `ipython` → read-only host bridge, then the smallest approved local effect scenario. Verify CLI/API parity and independent review before acceptance.
+
+**Focused/live tests:**
+
+- Native runtime and model-gateway HTTP integration with a fake provider emitting an `ipython` call.
+- PostgreSQL worker acceptance with a Mission Bundle granting only `ipython` and a declared Goal worktree.
+- Kill/restart/reconciliation, parent-death/orphan-reaping, cancellation/stop, audit, stale-lease, idempotency, skill-manifest/save/revocation, and namespace-lost-state scenarios.
+- Full no-database and bounded single-worker PostgreSQL verification, build, lint, diff check, and documentation-link/consistency scans.
+
+**Acceptance rule:** do not mark Phase 1, Phase 2, or Phase 3 accepted from unit tests alone. Acceptance requires the live path, authority/approval evidence, independent review, and reconciled documentation.
+
+### Documentation update rule for this plan
+
+- `phase-01-durable-control-plane.md` records only the minimum boundary and Phase 1 gate.
+- `phase-02-hierarchical-execution.md` records the local IPython contract and Phase 2 implementation ownership.
+- `findings.md` receives append-only architecture decisions and benchmark evidence.
+- `progress.md` receives append-only implementation and verification results.
+- `roadmap/README.md` remains a short status summary and changes only when the canonical status changes.
 
 ## Goal
 Complete the remaining Phase 1 boundary evidence, then implement the approved Phase 2 local IPython host-tool and four-level approval flow for one local software Goal.

@@ -203,6 +203,19 @@ Approval is exact and bounded to the code/action identity, target, Goal, expiry,
 
 An agent may create a temporary Python function in the current session. It is not a durable capability until the user explicitly saves it as a project skill. Automatic skill promotion and cross-project sharing are outside the Phase 2 implementation; Phase 6 may consume milestone evidence later through its Improvement Digest boundary.
 
+### Implementation sequence and ownership
+
+The detailed test-first execution plan is canonical in `roadmap/act-1-foundation/active/operations/task_plan.md` under **Phase 1A–1D host-tool execution plan**. Phase 2 owns the persistent session, host-request protocol, local authority-backed effects, approval/repetition/full-access state, audit/stop behavior, and the live Goal acceptance scenario. Phase 1 owns only the minimum registry/runtime boundary and strict read-only gate.
+
+Implementation is deliberately incremental:
+
+1. Register `ipython` with a typed schema and prove grant filtering, session serialization, identity propagation, and fail-closed lifecycle behavior.
+2. Add the Node-owned JSON-lines bridge and a constrained Python bootstrap. Read-only file/Git evidence is the only initial host allowlist.
+3. Add whole-block classification, exact approval scope, repetition limits, two full-access modes, durable audit, idempotency, interruption, stale-fence, and forbidden-action enforcement.
+4. Compose the registry through Control Plane → native kernel → worker Mission Bundle, then verify the real PostgreSQL/API/Gateway path and independent review.
+
+No Phase 2 acceptance is claimed from a unit-only run. Historical completion markers remain provenance until this live boundary is proven.
+
 ## Git execution model
 
 1. Record repository and immutable base revision in the Task Contract.

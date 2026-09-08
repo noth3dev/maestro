@@ -4,7 +4,7 @@ import { Pool } from "pg";
 import { AuthorizedEffectExecutor, type ActionRequest } from "@maestro/authority";
 import { createLocalGitPort } from "@maestro/git-adapter";
 import type { ExecutionAdmission, ExecutionKernelPort, GitPort } from "@maestro/domain";
-import { parseModelRef, ToolRegistry } from "@maestro/agent-runtime";
+import { createIpPythonSessionManager, createIpPythonTool, createUnavailableIpPythonKernel, parseModelRef, ToolRegistry, type IpPythonKernel } from "@maestro/agent-runtime";
 import { assertProjectMembership, authenticateLocalOperator, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, reconcileOnStartup, recordDiscordSignal, runMigrations } from "@maestro/persistence";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
@@ -82,6 +82,8 @@ export interface ControlPlaneOverrides {
   nativeAdmission?: (input: NativeAdmissionInput) => ExecutionAdmission;
   /** Test-only Git injection; production always uses the authority-backed local adapter. */
   gitPort?: GitPort;
+  /** Test-only IPython kernel injection; production remains fail-closed until the 1B bridge is composed. */
+  ipythonKernel?: IpPythonKernel;
 }
 
 /** Compose the local Goal API and expose only authority-backed effect gateways. Credential setup remains controlled; project access uses the explicit admin gateway. */
@@ -99,9 +101,12 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   const modelGateway = config.modelGatewayToken === undefined ? undefined : createModelGatewayClient({ baseUrl: config.modelGatewayUrl!, token: config.modelGatewayToken });
   const accountLoginStore = modelGateway === undefined ? undefined : createPostgresAccountLoginStore(pool);
   const accountLoginOwnerId = `${config.leaseOwnerId}:${randomUUID()}`;
+  const ipythonSessions = createIpPythonSessionManager({ createKernel: () => overrides.ipythonKernel ?? createUnavailableIpPythonKernel() });
+  const tools = new ToolRegistry();
+  tools.register(createIpPythonTool({ sessions: ipythonSessions }));
   const executionKernel = overrides.executionKernel ?? (modelGateway === undefined
     ? createUnavailableNativeExecutionKernel()
-    : createNativeExecutionKernel({ gateway: modelGateway, gatewayOperatorId: config.modelGatewayOperatorId, accountRefs: config.modelAccountRefs, dataPolicyHash: createHash("sha256").update("maestro-native-data-policy:v1").digest("hex"), tools: new ToolRegistry() }));
+    : createNativeExecutionKernel({ gateway: modelGateway, gatewayOperatorId: config.modelGatewayOperatorId, accountRefs: config.modelAccountRefs, dataPolicyHash: createHash("sha256").update("maestro-native-data-policy:v1").digest("hex"), tools }));
   const nativeAdmission = overrides.nativeAdmission ?? (modelGateway === undefined ? undefined : (input: NativeAdmissionInput) => createHostNativeAdmission(config, input));
   const conversationService = modelGateway === undefined ? undefined : createPostgresConversationService({ pool, gateway: modelGateway, gatewayOperatorId: config.modelGatewayOperatorId, accountRefs: config.modelAccountRefs });
   const goalService = createDurableGoalService({
@@ -275,6 +280,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
         // provider that is already unavailable. SIGKILL remains covered by
         // the durable lease/fence reconciliation path.
         await drainWithTimeout(Promise.resolve(conversationService?.close?.()), timeoutMs);
+        await drainWithTimeout(Promise.resolve(ipythonSessions.close()), timeoutMs);
         await drainWithTimeout(Promise.resolve(executionKernel.close?.()), timeoutMs);
       } finally {
         try {
