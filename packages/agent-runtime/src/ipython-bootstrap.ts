@@ -3,13 +3,12 @@
  * The child has no Maestro credentials and receives no raw host I/O capability.
  * All useful project access goes through the versioned host-request bridge.
  */
-export const IPYTHON_PYTHON_BOOTSTRAP = String.raw`import contextlib
+export const IPYTHON_PYTHON_BOOTSTRAP = String.raw`import ast
+import contextlib
 import io
 import json
-import queue
 import sys
 import threading
-import traceback
 
 VERSION = 1
 MAX_FRAME_BYTES = 1_048_576
@@ -23,6 +22,7 @@ _active_request = None
 _interrupt = threading.Event()
 _shutdown = threading.Event()
 _namespace = {}
+_session_id = None
 
 
 def send(frame):
@@ -41,6 +41,8 @@ def required_string(value, name):
 
 def host_call(request_id, method, payload):
     global _host_counter
+    if request_id != _active_request:
+        raise RuntimeError("IPython host helper expired")
     with _host_lock:
         _host_counter += 1
         host_request_id = "host-" + str(_host_counter)
@@ -57,6 +59,19 @@ def host_call(request_id, method, payload):
     if not isinstance(result, dict) or not isinstance(result.get("content"), str):
         raise RuntimeError("IPython host response is invalid")
     return result.get("content")
+
+
+def validate_code(code):
+    tree = ast.parse(code, filename="<ipython>", mode="exec")
+    forbidden_names = {"__builtins__", "__import__", "open", "exec", "eval", "compile", "breakpoint", "help", "input"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id in forbidden_names:
+            raise ValueError("direct I/O or dynamic execution is not allowed")
+        if isinstance(node, ast.Attribute) and node.attr.startswith("_"):
+            raise ValueError("dunder escape paths are not allowed")
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            raise ValueError("direct imports are not allowed")
+    return tree
 
 
 class Host:
@@ -132,8 +147,9 @@ def execute(frame):
         code = required_string(frame.get("code"), "code")
         if len(code.encode("utf-8")) > MAX_OUTPUT_BYTES:
             raise ValueError("code exceeds the input limit")
+        tree = validate_code(code)
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            exec(compile(code, "<ipython>", "exec"), local_namespace, local_namespace)
+            exec(compile(tree, "<ipython>", "exec"), local_namespace, local_namespace)
         state = "cancelled" if _interrupt.is_set() else "ok"
         content = stdout.content()
         if stderr.content():
@@ -151,13 +167,18 @@ def execute(frame):
 
 
 def handle(frame):
-    global _active_request
+    global _active_request, _session_id
     if not isinstance(frame, dict) or frame.get("version") != VERSION:
         raise ValueError("unsupported IPython protocol frame")
     frame_type = frame.get("type")
     if frame_type == "execute":
         request_id = required_string(frame.get("requestId"), "requestId")
-        required_string(frame.get("sessionId"), "sessionId")
+        session_id = required_string(frame.get("sessionId"), "sessionId")
+        if _session_id is None:
+            _session_id = session_id
+        elif _session_id != session_id:
+            send({"type": "done", "requestId": request_id, "state": "error", "dataClass": "workspace", "content": "IPython session identity changed", "reason": "session_identity_changed"})
+            return
         with _host_lock:
             if _active_request is not None:
                 send({"type": "done", "requestId": request_id, "state": "error", "dataClass": "workspace", "content": "IPython kernel is busy", "reason": "busy"})
@@ -195,7 +216,9 @@ for raw_line in sys.stdin:
     try:
         handle(json.loads(raw_line))
     except Exception as error:
-        send({"type": "error", "requestId": "protocol", "reason": str(error)})
+        with _host_lock:
+            request_id = _active_request or "protocol"
+        send({"type": "error", "requestId": request_id, "reason": str(error)})
     if _shutdown.is_set():
         break
 `;
