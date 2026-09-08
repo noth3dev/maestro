@@ -1307,4 +1307,13 @@ Before production router code, create and review: the eight A-axis scoring rubri
 
 - Expanded the human-scored A capability range from `0..100` to `0..200`; bumped the profile schema to version `2`; `MODEL_CAPABILITY_SCORE_MAX` is now `200`, with inclusive `200` acceptance and `201` rejection tests.
 - Added [the Model Capability Scoring Rubric](../../specs/2026-09-08-model-capability-scoring-rubric.md) with broad calibration anchors (`0–40`, `41–80`, `81–120`, `121–160`, `161–200`), axis-specific observable signals for all eight axes, evidence guidance, and explicit `unproven`/`null` semantics. The anchors are guidance, not routing gates.
-- **Next:** define the initial D task-kind recipes and their required levels. E work-character inputs, continuous pressure, and four band thresholds remain separate artifacts.
+- **Next:** define and review the runtime policy by which Heads set D levels from concrete Task Contracts. The static task-kind axis-role recipes and TaskDemand schema are now present; E work-character inputs, continuous pressure, and four band thresholds remain separate artifacts.
+
+
+## 2026-09-08 — Static task-kind recipes and runtime TaskDemand boundary
+
+- Added `packages/domain/src/task-demand.ts` and exported it from `@maestro/domain`. Static recipes now contain only `primary` / `supporting` / `unused` roles over the eight A axes; they do not contain fixed capability levels.
+- Added the runtime `TaskDemand` contract. A Head records one explicit `0..200` D level and one-line rationale per axis, with Task Contract and Head decision provenance. Provider/model selection, pressure, bands, B facts, and C operations are rejected fields at this boundary.
+- Combining multiple task kinds takes the strongest axis role only. It never synthesizes numeric demand levels.
+- TDD evidence: missing-module RED was observed, then the focused task-demand suite passed 8/8.
+- **Next:** define the runtime Head policy for choosing D levels from concrete Task Contracts; do not derive those levels from the static recipe alone.

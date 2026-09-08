@@ -633,7 +633,7 @@ Budget allocation is adaptive rather than a fixed percentage template.
 
 The Department Head Council declares D requirements and E work-character inputs; the native router selects one qualifying model; admission remains authoritative. The full rules live in [Model Pool & Automatic Routing](active/2026-09-08-model-pool-routing-design.md).
 
-- During decomposition, each Mission Bundle receives versioned task-kind recipes over exactly eight D axes paired to A: `reasoning`, `coding`, `verification`, `instruction-fidelity`, `tool-use`, `long-context`, `knowledge`, and `refusal-calibration`.
+- During decomposition, each Mission Bundle receives versioned task-kind axis-role recipes over exactly eight D axes paired to A. The Head then records a runtime TaskDemand with one explicit `0..200` level and rationale per axis.
 - Provider facts B are hard filters: context capacity, input/output pricing, authentication, data policy, modalities, and tool support. Operational measurements C are local corrections for latency, cost, failures/timeouts, provider errors, and availability/account binding.
 - The Head records E risk, reversibility, verification attachment, material scale, time pressure, and budget headroom. The first three compute continuous pressure; the last three constrain B/C. The Head may uplift pressure, never lower the computed floor.
 - A↔D matching is weakest-link. Strength on one required capability cannot hide a shortfall on another. Matching strictness is a smooth function of pressure, not a `50/100/200` lookup.
@@ -649,7 +649,7 @@ The current `approvedModels` list and exact `modelPolicy` path remain a transiti
 
 ### Phase 2 routing work order and tests
 
-1. Draft the A eight-axis scoring rubric, B fact schema, C operational overlay, D recipes, E work-character schema, continuous pressure function, four band thresholds, and Mission Bundle fields.
+1. Draft the A eight-axis scoring rubric, B fact schema, C operational overlay, static D recipes, runtime TaskDemand declaration policy, E work-character schema, continuous pressure function, four band thresholds, and Mission Bundle fields.
 2. Write RED tests for weakest-link A↔D matching, B/C hard-filter precedence, smooth pressure strictness, band-only authority projection, pin-as-preference, no-candidate escalation, and no automatic below-requirement downgrade.
 3. Implement the smallest provider-neutral router and project its single result into the existing native admission contract.
 4. Record A/D requirements, E inputs, pressure, band, routed model, candidate set, rejected reasons, B/C observations, and profile version in the separate routing evidence store.

@@ -3021,3 +3021,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Changed the A capability score range to inclusive `0..200` and bumped the profile schema to version `2`. The focused validator tests now cover the `200` upper boundary and reject `201`.
 - Added the human scoring rubric at `roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md`. It keeps broad reference ranges rather than hard anchor gates, defines all eight axis-specific evidence questions, and separates `unproven` (`null`) from a scored `0`.
 - The rubric does not define D requirements, E pressure, band thresholds, provider facts, or initial model entries. Those remain the next Phase 1 slices.
+
+
+## 2026-09-08 — Static task-kind recipes and runtime TaskDemand boundary
+
+- Corrected the D interpretation: task-kind recipes do not preassign numeric capability levels. They define only axis emphasis roles for planning, coding, verification, research, debugging, and tool operation.
+- Added domain validation for runtime TaskDemand: Head-declared `0..200` requirements, per-axis rationale, unique task kinds, Task Contract/Head decision provenance, and rejection of model/provider/pressure fields.
+- Combining kinds takes the strongest role per axis and intentionally produces no numeric level.
+- Verification: focused task-demand tests passed 8/8. The next slice is the runtime D-level declaration/review policy.

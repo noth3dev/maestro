@@ -31,3 +31,4 @@ export * from "./discord-incident.js";
 export * from "./device-agent.js";
 export * from "./improvement-digest.js";
 export * from "./model-profile.js";
+export * from "./task-demand.js";
