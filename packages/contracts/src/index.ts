@@ -414,7 +414,12 @@ export const TaskDemandSchema = z.object({
   }).strict(),
   provenance: z.object({ taskContractRef: NonEmptyLineSchema, headDecisionRef: NonEmptyLineSchema }).strict(),
 }).strict();
-export type TaskDemand = z.infer<typeof TaskDemandSchema>;
+type TaskDemandSchemaOutput = z.infer<typeof TaskDemandSchema>;
+export type TaskDemand = Omit<TaskDemandSchemaOutput, "taskKinds"> & {
+  readonly taskKinds: ReadonlyArray<z.infer<typeof TaskKindSchema>>;
+};
+type AssertFalse<T extends false> = T;
+type _TaskDemandTaskKindsMustBeReadonly = AssertFalse<TaskDemand["taskKinds"] extends unknown[] ? true : false>;
 
 export const MissionBundleSubstanceSchema = z.object({
   role: z.enum(["head", "scout", "execution"]), profileRef: z.string().min(1), goalBrief: z.string().min(1),
@@ -425,14 +430,17 @@ export const MissionBundleSubstanceSchema = z.object({
   deliverable: z.string().min(1), evidenceRequirements: NonEmptyStringListSchema, validationCriteria: NonEmptyStringListSchema,
   terminationConditions: NonEmptyStringListSchema,
 }).strict();
-export type MissionBundleSubstance = z.infer<typeof MissionBundleSubstanceSchema>;
+type MissionBundleSubstanceSchemaOutput = z.infer<typeof MissionBundleSubstanceSchema>;
+export type MissionBundleSubstance = Omit<MissionBundleSubstanceSchemaOutput, "taskDemand"> & { readonly taskDemand: TaskDemand };
 export const MissionBundleSchema = z.object({
   councilId: UuidSchema, departmentId: z.string().min(1), planVersion: z.number().int().positive(), planContentHash: z.string().regex(/^[a-f0-9]{64}$/),
   itemId: z.string().min(1), parentRef: z.string().min(1), substance: MissionBundleSubstanceSchema, contentHash: z.string().regex(/^[a-f0-9]{64}$/),
 }).strict();
-export type MissionBundle = z.infer<typeof MissionBundleSchema>;
+type MissionBundleSchemaOutput = z.infer<typeof MissionBundleSchema>;
+export type MissionBundle = Omit<MissionBundleSchemaOutput, "substance"> & { readonly substance: MissionBundleSubstance };
 export const CreateMissionBundleInputSchema = z.object({ projectId: UuidSchema, substance: MissionBundleSubstanceSchema }).strict();
-export type CreateMissionBundleInput = z.infer<typeof CreateMissionBundleInputSchema>;
+type CreateMissionBundleInputSchemaOutput = z.infer<typeof CreateMissionBundleInputSchema>;
+export type CreateMissionBundleInput = Omit<CreateMissionBundleInputSchemaOutput, "substance"> & { readonly substance: MissionBundleSubstance };
 
 export const WorkerSchema = z.object({
   workerId: UuidSchema, councilId: UuidSchema, departmentId: z.string().min(1), planVersion: z.number().int().positive(), itemId: z.string().min(1),
