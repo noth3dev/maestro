@@ -8,10 +8,10 @@ Maestro는 각 단계의 검증 증거가 완료되어야 다음 단계로 진�
 
 | 단계 | 명칭 | 코드 상태 | 검증 기준 및 운영 승인 게이트 |
 | :--- | :--- | :---: | :--- |
-| **Phase 1** | Technical Foundation & Durable Control Plane | **운영 게이트 1개(제품 결정) 대기** | REST/SSE, PostgreSQL 17 durability, fencing, 네이티브 runtime/provider gateway 경계, 실제 Worker acceptance 및 전체 suite 증거 완료. Production host-tool 계약은 제품 승인 대기 |
-| **Phase 2** | Concertmaster Office Core & Hierarchical Execution | **구현 및 PostgreSQL 검증 완료** | Overture 접수, Task Contract, Head Council, Department Plans, Mission Bundle, native Worker admission 및 Git 격리 실행 |
-| **Phase 3** | Encore, Certification & First Usable Release | **구현; 릴리스 게이트 대기** | Metronome loop, Encore, Quality 인증, 보고서, CLI/API parity 및 native process 증거 구현. TUI parity/reconnect와 host-tool 범위는 별도 게이트 |
-| **Phase 4** | Isolated Environments, Devices & Discord Incidents | **구현; 독립 승인 대기** | Environment/browser/Discord 및 별도 실행 authenticated device-agent live gate 증거가 있음. 독립 review와 production deployment 승인은 남음 |
+| **Phase 1** | Technical Foundation & Durable Control Plane | **재개방: host-tool 제품 게이트 대기** | 네이티브 runtime, PostgreSQL durability, fencing 및 process 증거는 있음. Production host-tool 등록/집행은 Phase 2 IPython 로컬 host-tool·승인 계약 승인 전까지 의도적으로 구현하지 않음. 코드 증거만으로 단계 승인을 주장하지 않음 |
+| **Phase 2** | Concertmaster Office Core & Hierarchical Execution | **재개방: host-tool 구현 대기** | 계층 실행 building block과 PostgreSQL 증거는 있으나, persistent IPython 로컬 host-tool, 4단계 승인 계층, full-access 모드 및 live acceptance가 구현·리뷰되기 전까지 Worker는 text/evidence-only임. 과거 code-level 완료 표시는 현재 승인으로 보지 않음 |
+| **Phase 3** | Encore, Certification & First Usable Release | **릴리스 게이트 대기; host-tool 의존성 명시** | Metronome, Encore, 인증, 보고서 및 native process 증거는 있음. Phase 2 host-tool 동작, TUI parity/reconnect, release-level recovery 증거가 함께 통과하기 전까지 first usable release는 승인하지 않음 |
+| **Phase 4** | Isolated Environments, Devices & Discord Incidents | **외부 capability 경계; 승인 대기** | Browser, device, external-service, deployment 및 Discord capability는 각각 별도 활성화하며 만료·반복 범위를 선택함. 독립 review와 production deployment 승인은 남음 |
 | **Phase 5** | Concurrent Goals & Portfolio Control | **활성 remediation/capacity 작업** | 프로젝트별 worker cap은 구현됨. Resource inventory, demand reservation 및 portfolio scheduling은 향후 작업 |
 | **Phase 6** | Encore Learning & 10-Axis Adaptation | **Step 1 승인 완료** *(불변 다이제스트)* | Step 1: 프로젝트 전용·출처 바인딩 Improvement Digest. Step 2 이후(리플레이, 변경, 롤아웃, 적응, 프로젝트 간 승격)는 보류 |
 | **Phase 7** | Full Concertmaster Office & Radial Control Surface | 예정 | Next.js 16 / React 19 웹 UI(Concertmaster Office), `@xyflow/react` 방사형 포트폴리오 대시보드 |
@@ -26,6 +26,16 @@ CLI TUI는 `@earendil-works/pi-tui` `0.85.1` 터미널 primitive를 사용합니
 ### TUI 단계 경계
 
 TUI는 두 번째 Control Plane이 아니라 운영자 표시·명령 클라이언트입니다. 권위 있는 상태 조회와 명령 전송은 `@maestro/api-client` 및 인증된 Control Plane route를 통해서만 수행합니다. PostgreSQL, Model Gateway, provider API, device transport에 직접 연결하지 않습니다. 단계 승인에는 동일한 실제 Goal에 대한 API/TUI parity, SSE cursor 보존 재연결, 명시적인 loading/error/stale 상태 표시, terminal state와 로그에 credential·prompt·raw gateway binding·secret-bearing output이 없다는 증거가 필요합니다. 터미널 입력은 lease, fencing, capability grant, approval, idempotency를 우회할 수 없습니다.
+
+### Production IPython host-tool 경계 — 2026-09-08
+
+첫 production host-tool slice는 Phase 2에 속하며 Prime Agent를 다시 도입하지 않고 Prime Agent식 실행 형태를 사용합니다. 하나의 persistent `ipython` surface, 세션 전용 Python 함수, 명시적 프로젝트 skill 저장, 안정적인 권한 계약이 필요한 경우에만 직접 구조화 tool을 사용합니다.
+
+- Phase 2 범위는 프로젝트 파일, 로컬 Git, 테스트, 로컬 shell 명령 및 로컬 환경 변경입니다.
+- 기본 세션은 Goal worktree와 선언된 임시 디렉터리로 제한합니다. 사용자는 세션별 full local access를 켜고 Head·Encore 중간 승인을 유지할지 생략할지 선택할 수 있습니다.
+- 승인 계층은 단독 실행 → 활성 Department Head → Encore Council → 사용자입니다. 애매한 작업과 Encore 불일치는 사용자에게 상승합니다. 혼합 위험 IPython 블록은 가장 높은 단계를 적용하며 부분 실행하지 않습니다.
+- 승인 범위는 1회 실행, 횟수·시간·예산 제한, 세션 기간 중에서 선택합니다. 모든 결정과 효과를 기록하고 사용자는 실행 중 중단할 수 있습니다. `forbidden` 작업은 항상 차단합니다.
+- Phase 4는 외부 capability를 하나씩 별도 활성화합니다. Phase 6은 이후 자가개선 경계이며, Phase 9 Luthiery는 미래의 동적 MCP 공방입니다.
 
 ### Phase 6 Step 1 — 승인된 경계
 

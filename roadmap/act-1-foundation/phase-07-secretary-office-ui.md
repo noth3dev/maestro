@@ -1,5 +1,7 @@
 # Phase 7 — Full Secretary Office and Radial Control Surface
 
+> **Current status (2026-09-08):** Phase 7 is planned and not accepted. Its UI contract now includes IPython session scope, pending Head/Encore/user approvals, repetition budgets, full-access mode, individually activated external capabilities, live stop, and durable audit evidence. No UI surface may imply host-tool or external capability availability before the server grants it.
+
 ## Outcome
 
 Deliver the complete CEO-facing application after the control plane, hierarchy, oversight, operations, portfolio, and learning behaviors are proven. The app is the preferred experience; the CLI retains operational parity. The interface displays and commands durable truth rather than simulating agents or maintaining a parallel state model.
@@ -130,6 +132,10 @@ On authorized nodes the CEO can:
 - inspect incidents and device grants.
 
 A UI action cannot expand authority beyond the server command. Critical confirmation displays exact action, target, Goal, expiry, expected effect, and rollback feasibility.
+
+### IPython approval and access controls
+
+The Secretary Office must display the current IPython session scope, temporary tools, active approval tier, pending Department Head or Encore decision, user approval request, repetition budget, full-access mode, individually activated external capabilities, and live stop control. A user can select one execution, bounded count/time/budget, or session duration for an approval. Full access is a per-session user action with separate choices to retain or skip intermediate approvals; the UI must show the choice before execution. The UI cannot approve `forbidden` actions or silently turn a declined request into a narrower execution.
 
 ## Progressive disclosure
 

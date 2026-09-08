@@ -1,6 +1,6 @@
 # Phase 1 — Technical Foundation and Durable Control Plane
 
-> **Current status (2026-09-08):** This phase is the durable foundation baseline. Conversation and worker execution use `MaestroAgentRuntime` through `apps/model-gateway`; Prime Agent has been removed completely. Phase acceptance still requires the documented operational gates and real PostgreSQL/process evidence.
+> **Current status (2026-09-08):** This phase remains open at the product boundary. Conversation and worker execution use `MaestroAgentRuntime` through `apps/model-gateway`; Prime Agent has been removed completely. Native runtime and PostgreSQL/process evidence exist, but production host-tool registration and enforcement are not implemented. The Phase 2 IPython host-tool contract and approval hierarchy are now an explicit prerequisite; historical code-level completion markers do not constitute Phase 1 acceptance.
 
 
 ## Outcome
@@ -131,7 +131,17 @@ Every action request is classified as:
 - expired or outside scope;
 - ambiguous and therefore denied until clarified.
 
-The decision result names actor, action type, exact target, Goal, expiry, budget effect, reason, and policy version. Enforcement occurs in adapters before Git, process, device, network, provider, or refinement effects.
+The decision result names actor, action type, exact target, Goal, expiry, budget effect, reason, and policy version. Enforcement occurs in adapters before Git, process, device, network, provider, or refinement effects. For the Phase 2 host-tool contract, ordinary work may run independently; Department Head approval, Encore Council approval, and user approval are progressively higher tiers. Ambiguous work and Encore disagreement rise to the user. A mixed-risk IPython block uses the highest tier for the whole block.
+
+### Native IPython host-tool boundary (reopened product gate)
+
+The native runtime exposes a Prime Agent-style `ipython` surface only after the host-tool contract is approved. The persistent Python session is a runtime surface, not an authority bypass.
+
+- Phase 2 owns the local host-tool contract: project files, local Git, tests, local shell commands, and local environment changes.
+- The default session scope is the Goal worktree plus declared temporary directories. A user may activate full local access for the current session.
+- A full-access session may either retain the approval hierarchy or explicitly skip intermediate Head and Encore approvals for local work; the user selects the mode at session start. `forbidden` actions remain blocked.
+- Every effect is classified before execution and enforced through the existing authority-backed adapters and `AuthorizedEffectExecutor`. Unknown or ambiguous work rises to user approval.
+- Phase 4 owns separately activated browser, device, external-service, and deployment capabilities. Phase 6 owns later evidence-driven refinement; it does not authorize automatic tool promotion in this phase.
 
 ### Recovery
 
@@ -188,7 +198,7 @@ On startup:
 
 ## Exit gate
 
-Phase 1 passes only when a real PostgreSQL-backed control plane can be killed and restarted while a test Goal is active, reconcile without duplicate transitions, show the same truth in app and CLI, enforce a stale lease rejection, and block an unauthorized critical action. A real Model Gateway process must complete one native parent/child interaction using only public supported surfaces.
+Phase 1 passes only when a real PostgreSQL-backed control plane can be killed and restarted while a test Goal is active, reconcile without duplicate transitions, show the same truth in app and CLI, enforce a stale lease rejection, and block an unauthorized critical action. A real Model Gateway process must complete one native parent/child interaction using only public supported surfaces. Production host-tool registration remains a separately tracked Phase 2 product gate; Phase 1 does not claim tool execution acceptance until that contract is approved and implemented.
 
 ### TUI scope and acceptance boundary
 

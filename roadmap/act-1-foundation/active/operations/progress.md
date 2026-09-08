@@ -2581,3 +2581,15 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Updated current links and source/test citations; retained old paths inside append-only historical logs, archive provenance, and applied migration history.
 - Validation pending: broken-link scan, old-path scan, formatting check, and repository status review.
 - Verification complete: build, full no-database test suite, lint, link scans, and diff check passed; repository-wide format check remains a pre-existing 402-file baseline failure, while new index files were formatted separately.
+
+## 2026-09-08 — Phase status and host-tool boundary reopened
+
+- Reconciled every Act 1 Phase document and the three roadmap status copies with the approved Prime-style IPython plan.
+- Current architecture decision: Phase 2 owns one persistent `ipython` surface for local files, Git, tests, shell, and local environment changes. Python functions are session-local unless the user explicitly saves a project skill; direct `ToolDefinition` registrations remain for stable contracts and authority gates.
+- Applied the four-level approval hierarchy: independent execution → Department Head → Encore Council → user. Mixed-risk IPython blocks use the highest required tier and never partially execute. Ambiguity and Encore disagreement escalate to the user.
+- Added bounded approval lifecycle: one execution, count/time/budget bounded repetition, or session duration; user stop, audit evidence, and rejection-to-safer-alternative behavior are required.
+- Added full-access modes: the user activates full local access per session and chooses approval-preserving or intermediate-approval-skipping mode. `forbidden` actions remain denied. Phase 4 external capabilities require separate per-capability activation.
+- Withdrew current operational/code-level acceptance claims from Phases 1–3 where the host-tool gate, release evidence, or independent review is still open. Preserved append-only historical claims as provenance and explicitly marked them as superseded.
+- Phase 6 Step 1 remains the only accepted learning boundary: immutable project-private Improvement Digest. Automatic tool promotion, replay, mutation, rollout, and cross-project refinement remain deferred.
+- No source implementation was changed in this documentation slice. Next implementation gate: register the strict/read-only IPython bridge, then add local authority-backed write/test effects and approval/audit tests.
+- Verification after the documentation edits: `npm run check` passed (105 files, 677 tests passed; 57 files, 381 tests skipped by environment gates), `npm run lint` passed, `git diff --check` passed, and the repository-wide relative-link scan found no broken links. `npm run format:check` remains red on the repository's existing 394-file formatting baseline; no source implementation was formatted or changed.

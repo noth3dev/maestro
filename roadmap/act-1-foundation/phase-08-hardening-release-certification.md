@@ -1,6 +1,6 @@
 # Phase 8 — Full-System Hardening and Release Certification
 
-> **Current status (2026-09-07):** Phase 8 is not accepted. Its Prime compatibility references are legacy acceptance criteria; the current native backend plan supersedes them for the runtime cutover, while required hardening/recovery gates remain.
+> **Current status (2026-09-08):** Phase 8 is not accepted. Its Prime compatibility references are legacy acceptance criteria; the current native backend plan supersedes them for the runtime cutover. Required hardening/recovery gates now include IPython authority enforcement, whole-block approval, full-access isolation, external-capability activation, interruption, and forbidden-action denial.
 
 
 ## Outcome
@@ -30,7 +30,10 @@ Before certification:
 
 - Threat-model prompt injection, malicious repository content, compromised worker, stale session, forged Discord signal, stolen device token, approval replay, evidence tampering, path escape, shell injection, and provider credential leakage.
 - Verify every effectful adapter enforces authority and fencing below prompts.
-- Verify critical approvals bind exact action, target, artifact, Goal, expiry, and policy version.
+- Verify the persistent IPython host tool cannot bypass the registry, Mission Bundle, path scope, data boundary, or `AuthorizedEffectExecutor`.
+- Verify critical approvals bind exact action, code/effect identity, target, artifact, Goal, expiry, repetition scope, full-access mode, and policy version.
+- Verify mixed-risk IPython blocks are held at the highest required tier and never partially execute; rejected work produces only a safer proposal.
+- Verify session full-access selection is user-bound, auditable, revocable, and isolated per Goal; `forbidden` actions remain denied.
 - Verify remote push, deployment, external send, payment, deletion, permission change, and provider enrollment fail closed.
 - Verify secrets never enter prompts, logs, evidence, Git, or browser payloads.
 
@@ -170,18 +173,19 @@ All required scenarios and audits pass on one frozen candidate. Backup and resto
 
 ### 59. Replacement acceptance scenarios
 
-The native runtime replacement is ready for release certification only when all ten representative live scenarios pass end to end:
+The native runtime replacement is ready for release certification only when all eleven representative live scenarios pass end to end:
 
 1. **Overture:** Concertmaster activates only the needed Overture Crew roles, incorporates project context, external evidence or a design mock when required, produces one coherent `task.md`, and obtains the single CEO launch confirmation.
-2. **Hierarchical execution:** only relevant Heads wake; independent briefs, Head Council, Scout evidence, worker spawning, hierarchical Git integration, independent Quality validation, and Concertmaster reporting all complete.
+2. **Hierarchical execution:** only relevant Heads wake; independent briefs, Head Council, Scout evidence, worker spawning, the registered IPython host-tool path, hierarchical Git integration, independent Quality validation, and Concertmaster reporting all complete.
 3. **Head-to-Head activation:** a Head directly calls another existing Head during a Goal; context, Council membership and budget update without duplicate activation.
 4. **Environment and enrolled device:** a worker safely uses a virtual environment, project CLI and browser or device access inside scope while a critical out-of-scope effect is blocked.
 5. **Restart recovery:** Maestro or the Model Gateway restarts mid-Goal and reconciles durable state without duplicate workers, stale authority, lost accepted work, or false success.
 6. **Discord incident:** external detection wakes the correct Heads in triage mode, produces an Incident Task Contract, drives bounded remediation, and reaches independent certification.
 7. **Encore improvement:** milestone evidence becomes a curated Digest, an improvement candidate is shadow-evaluated, the multi-model Council judges it, and an allowed `refine` change applies or rolls back from measured evidence.
 8. **Portfolio Council:** competing Goals are prioritized by Encore and affected Heads, with safe pause, resource reallocation, and resume.
-9. **Critical gate:** remote push or external sending remains blocked until the exact CEO approval and cannot expand beyond the approved action.
-10. **Radial app:** Concertmaster is central; Goal, Group, Head, worker, Git, context, Encore and incident lineage expand radially; interactive node actions, avatars, persona, diff, pause and evidence remain legible in the approved restrained shadcn direction.
+9. **IPython approval gate:** a low-risk local block runs in scope; Head approval, Encore approval, user approval, disagreement escalation, selected repetition scope, full-access modes, live stop, and audit evidence all behave as declared.
+10. **Critical gate:** remote push or external sending remains blocked until the exact CEO approval and cannot expand beyond the approved action.
+11. **Radial app:** Concertmaster is central; Goal, Group, Head, worker, Git, context, Encore and incident lineage expand radially; interactive node actions, avatars, persona, diff, pause and evidence remain legible in the approved restrained shadcn direction.
 
 Passing requires exercising real behavior, not only parsing, unit tests, static screenshots, or mocked success. Failure of any required scenario blocks cutover.
 

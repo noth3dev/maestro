@@ -1,5 +1,7 @@
 # Act 1 — Phase 10: Autonomous Treasury
 
+> **Current status (2026-09-08):** Phase 10 remains future work. Treasury actions are Phase 4+ external capabilities and are never enabled by the Phase 2 local IPython full-access mode alone.
+
 ### 2. Autonomous Treasury & Real Capital Wallet (Phase 10)
 
 #### Overview
@@ -22,8 +24,9 @@
 
 **Authority & Spending Policy**
 
-- In-budget spend executes autonomously via `payment.spend`.
-- Optional 2-step Conductor confirmation for high-value thresholds.
+- In-budget spend executes autonomously via `payment.spend` only after Treasury is individually activated for the Goal and the approved spending policy covers the exact action.
+- Full-access mode does not silently grant payment authority. The user may explicitly choose the approval scope for an activated Treasury capability; critical or ambiguous spend still escalates to user approval unless that explicit user choice authorizes the exact bounded spend class.
+- Optional 2-step Conductor confirmation remains available for high-value thresholds.
 - Audit-Before-Spend: intent + amount recorded in PostgreSQL before any network transaction.
 
 **Audit & Ledger**

@@ -1,6 +1,6 @@
 # Phase 4 — Isolated Environments, Enrolled Devices, and Discord Incidents
 
-> **Current status (2026-09-08):** Environment, Discord, and separately running device-agent live-gate evidence exists on `main`. Phase acceptance remains pending independent no-edit review and production deployment/operations evidence; do not infer release acceptance from self-verified tests alone.
+> **Current status (2026-09-08):** Environment, Discord, and separately running device-agent live-gate evidence exists on `main`. Phase 4 remains the separate external-capability boundary for browser, device, external-service, and deployment access. Each capability must be activated individually with a Goal-scoped grant and selectable expiry/repetition scope; independent no-edit review and production deployment/operations evidence remain open.
 
 
 ## Outcome
@@ -33,7 +33,11 @@ Environment types:
 
 Use the least complex type that meets isolation and reproducibility. Containers do not replace authority checks.
 
-## Device enrollment and Goal grants
+## External capability activation and Goal grants
+
+Phase 4 capabilities are separate from the Phase 2 local IPython surface. Browser, device, external API, deployment, and other external capabilities are activated one at a time; installing a tool or starting a session never grants access by itself. Full access can apply to an external capability only after that capability has been individually enabled.
+
+Every activation records the capability, Goal, exact targets, paths or endpoints, actor, approval tier, selected mode, expiry, repetition scope, budget, fencing token, and rollback or stop behavior. The operator may choose one execution, bounded count/time/budget, or session duration. The default is one execution. An active user stop revokes the capability and prevents further work.
 
 Enrollment establishes device identity and a revocable trust relationship. It does not authorize a Goal.
 
@@ -158,8 +162,8 @@ A worker completes one representative browser or enrolled-device task inside a n
 - A worker's environment and access authority are distinct: having a tool installed does not grant access to the user's computer, credentials, or external services.
 - Access to the user's computer or CLI should use an explicitly enrolled device and a bounded, auditable Goal-scoped authority grant.
 - The preferred operating model is one-time device enrollment, least-privilege access for each Goal, full command and result audit, and automatic expiry when the Goal ends.
-- Noncritical actions within the granted scope may follow execute-then-report. Critical actions remain behind the agreed CEO approval boundary.
-- Metronome observes device access, command scope, unexpected side effects, and authority expiry. It may pause execution when the observed behavior escapes the approved Goal scope.
+- Noncritical actions within the granted scope may follow execute-then-report. Critical actions remain behind the agreed CEO approval boundary unless the user explicitly selected the full-access mode that skips intermediate approvals for this activated capability; `forbidden` actions remain denied.
+- Metronome observes device access, command scope, approval mode, unexpected side effects, and authority expiry. It may pause execution when the observed behavior escapes the approved Goal scope.
 
 ### 11. Enrolled-device automation level
 
