@@ -1293,3 +1293,9 @@ All downstream routing documentation must use this contract and must not restore
 
 - The second post-review serialized full run passed **189/189 files and 1,258/1,258 tests**, exit code 0. The worker recovery failure was transient/order-dependent and did not reproduce in the full rerun.
 - No S3 code change was made for the worker failure; isolated, predecessor-sequence, and final full verification are all green.
+
+
+## 2026-09-09 — S3 main revalidation closure
+
+- Clean main full PostgreSQL revalidation is green at **189/189 files and 1,258/1,258 tests**, exit code 0. The transient worker recovery failure did not recur.
+- No unresolved S3 findings remain before the push gate.
