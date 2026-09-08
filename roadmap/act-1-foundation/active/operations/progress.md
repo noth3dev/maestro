@@ -3233,3 +3233,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Fresh independent no-edit re-review returned **`REVIEW: PASS`** after v2 remediation. It explicitly verified immutable 0075 plus additive hardening, absent-PGID stale-generation fencing, original S2 lifecycle boundaries, and focused tests.
 - Fresh serialized PostgreSQL verification completed with **exit code 0: 188/188 test files and 1,251/1,251 tests**, duration 614.75s.
 - The historical CI failure was the detached local-bootstrap `environment.json` startup race; the current green suite includes its regression. New CI is still pending the merge/push gate.
+
+
+## 2026-09-09 — S2 main merge revalidation
+
+- Merged S2 to `main` as merge commit `245c8e1` after `REVIEW: PASS`.
+- On clean `main`, `npm run build` and `npm run lint` both exited 0.
+- Main serialized PostgreSQL revalidation completed with **exit code 0: 188/188 files and 1,251/1,251 tests**, duration 534.12s.
+- S2 implementation and verification are complete; remaining operational steps are worktree/branch cleanup, push, and post-push CI confirmation.
