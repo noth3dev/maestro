@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  WORK_CHARACTER_AXES,
   WORK_CHARACTER_SCHEMA_VERSION,
   WorkCharacterValidationError,
   assertValidWorkCharacter,
@@ -26,7 +27,9 @@ describe("E work character", () => {
     const result = calculatePressure(value, 0);
     expect(result.pressureFloor).toBe((90 + (200 - 120) + 60) / 3);
     expect(result.pressure).toBe(result.pressureFloor);
-    expect(calculatePressure({ ...value, materialScale: 200, timePressure: 200, budgetHeadroom: 0 }, 0).pressureFloor).toBe(result.pressureFloor);
+    expect(calculatePressure({ ...value, materialScale: 200, timePressure: 200, budgetHeadroom: 0 }, 0).pressureFloor).toBe(
+      result.pressureFloor,
+    );
   });
 
   it("applies Head uplift only as a non-lowering floor", () => {
@@ -41,16 +44,34 @@ describe("E work character", () => {
     const base = character();
     expect(calculatePressure({ ...base, risk: 91 }, 0).pressureFloor).toBeGreaterThan(calculatePressure(base, 0).pressureFloor);
     expect(calculatePressure({ ...base, reversibility: 119 }, 0).pressureFloor).toBeGreaterThan(calculatePressure(base, 0).pressureFloor);
-    expect(calculatePressure({ ...base, verificationAttachment: 61 }, 0).pressureFloor).toBeGreaterThan(calculatePressure(base, 0).pressureFloor);
+    expect(calculatePressure({ ...base, verificationAttachment: 61 }, 0).pressureFloor).toBeGreaterThan(
+      calculatePressure(base, 0).pressureFloor,
+    );
+  });
+
+  it("keeps the six-axis contract immutable", () => {
+    expect(Object.isFrozen(WORK_CHARACTER_AXES)).toBe(true);
+    expect(() => (WORK_CHARACTER_AXES as unknown as string[]).splice(3)).toThrow(TypeError);
+    expect(() => assertValidWorkCharacter(character())).not.toThrow();
   });
 
   it("rejects malformed values, provenance, and routing fields", () => {
     expect(() => assertValidWorkCharacter(character({ risk: 201 }))).toThrow(WorkCharacterValidationError);
     expect(() => assertValidWorkCharacter(character({ risk: 1.5 }))).toThrow(WorkCharacterValidationError);
-    expect(() => assertValidWorkCharacter(character({ provenance: { taskContractRef: "", headDecisionRef: "head-decision:1" } }))).toThrow(WorkCharacterValidationError);
+    expect(() => assertValidWorkCharacter(character({ provenance: { taskContractRef: "", headDecisionRef: "head-decision:1" } }))).toThrow(
+      WorkCharacterValidationError,
+    );
     expect(() => assertValidWorkCharacter({ ...character(), selectedModel: "openai/model" })).toThrow(WorkCharacterValidationError);
     expect(() => calculatePressure(character(), 201)).toThrow(WorkCharacterValidationError);
     expect(() => calculatePressure(character(), Number.NaN)).toThrow(WorkCharacterValidationError);
+  });
+
+  it("rejects enumerable accessor fields", () => {
+    const accessor = character() as Record<string, unknown>;
+    let reads = 0;
+    Object.defineProperty(accessor, "risk", { enumerable: true, get: () => (reads++ === 0 ? 90 : Number.NaN) });
+    expect(() => assertValidWorkCharacter(accessor)).toThrow(WorkCharacterValidationError);
+    expect(() => calculatePressure(accessor as never, 0)).toThrow(WorkCharacterValidationError);
   });
 
   it("rejects hidden and inherited fields at the object boundary", () => {

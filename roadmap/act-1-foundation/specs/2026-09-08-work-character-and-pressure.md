@@ -13,14 +13,14 @@ The first implementation uses the same human-readable `0..200` scale as A/D. The
 
 ## 2. Work-character axes
 
-| Axis | `0` means | `200` means | Used by pressure? |
-| --- | --- | --- | --- |
-| `risk` | negligible damage if wrong | severe damage if wrong | yes |
-| `reversibility` | hard or impossible to undo | easy to undo | transformed, as `200 - reversibility` |
-| `verificationAttachment` | no attached verification | strong Metronome/Encore verification burden | yes |
-| `materialScale` | small bounded context/change | large context/change | no; B/C constraint |
-| `timePressure` | no urgency | extreme urgency | no; B/C constraint |
-| `budgetHeadroom` | no available cost headroom | ample available cost headroom | no; B/C constraint |
+| Axis                     | `0` means                    | `200` means                                 | Used by pressure?                     |
+| ------------------------ | ---------------------------- | ------------------------------------------- | ------------------------------------- |
+| `risk`                   | negligible damage if wrong   | severe damage if wrong                      | yes                                   |
+| `reversibility`          | hard or impossible to undo   | easy to undo                                | transformed, as `200 - reversibility` |
+| `verificationAttachment` | no attached verification     | strong Metronome/Encore verification burden | yes                                   |
+| `materialScale`          | small bounded context/change | large context/change                        | no; B/C constraint                    |
+| `timePressure`           | no urgency                   | extreme urgency                             | no; B/C constraint                    |
+| `budgetHeadroom`         | no available cost headroom   | ample available cost headroom               | no; B/C constraint                    |
 
 Every value is an integer in `0..200`. The object carries Task Contract and Head decision references. It contains no provider, model, account, authority, or selected route.
 
@@ -42,7 +42,7 @@ interface WorkCharacter {
 }
 ```
 
-The validator rejects unknown, inherited, non-enumerable, symbol, missing, non-plain, non-integer, and out-of-range fields. Provenance references are non-empty single-line values.
+The validator rejects unknown, inherited, non-enumerable, accessor, symbol, missing, non-plain, non-integer, and out-of-range fields. The six-axis runtime tuple is frozen so validation cannot be weakened by mutating the exported axis list. Provenance references are non-empty single-line values.
 
 ## 4. Continuous pressure function
 

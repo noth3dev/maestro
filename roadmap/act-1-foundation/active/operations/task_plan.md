@@ -1367,5 +1367,12 @@ Before production router code, create and review: the eight A-axis scoring rubri
 
 - Implemented `packages/domain/src/work-character.ts` and exported it from `@maestro/domain`. The validator covers six `0..200` axes, provenance, routing-field rejection, plain/own/enumerable boundaries, and fail-closed malformed input.
 - Implemented continuous pressure: `(risk + (200 - reversibility) + verificationAttachment) / 3`, with `max(floor, explicitHeadUplift)`. Constraint-only axes do not affect pressure.
-- TDD evidence: missing-module RED was observed, then the focused E suite passed 5/5; the full domain suite passed 31 files / 245 tests.
+- TDD evidence: missing-module RED was observed, then the focused E suite passed 7/7; the full domain suite passed 31 files / 245 tests.
 - **Next:** independently review and integrate E, then define the separate pressure-band threshold artifact.
+
+
+## 2026-09-08 — E fixed-axis and accessor hardening
+
+- Independent review found that the exported E axis list could be mutated, weakening the required six-axis validator, and that enumerable accessors could return different values during validation and calculation.
+- Froze `WORK_CHARACTER_AXES`, rejected accessor descriptors, and added regressions for mutation and validation/calculation drift.
+- Focused E tests now pass 7/7; full domain verification remains the merge gate.
