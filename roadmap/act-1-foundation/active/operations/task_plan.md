@@ -1298,6 +1298,6 @@ Before production router code, create and review: the eight A-axis scoring rubri
 ## 2026-09-08 — First A-axis schema slice
 
 - Added `packages/domain/src/model-profile.ts` and exported it from `@maestro/domain`. The validator fixes the initial eight A capability axes, accepts only integer scores in `0..100`, requires a one-line rationale and evidence reference for each axis, and represents unproven capability with `score: null`.
-- TDD evidence: the new focused test was observed RED because the module did not exist, then GREEN with 8/8 tests passing. `npx tsc -b packages/domain` passes.
+- TDD evidence: the new focused test was observed RED because the module did not exist, then GREEN with 11/11 tests passing. `npx tsc -b packages/domain` passes.
 - Root `npm run build` remains blocked by the known pre-existing CLI `@earendil-works/pi-tui` import/type failures; this slice does not touch those files.
 - **Next:** document and test the human scoring rubric itself before adding task-kind recipes, pressure calculation, or a `model_map` file.

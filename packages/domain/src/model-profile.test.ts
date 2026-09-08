@@ -45,6 +45,16 @@ describe("model capability vector", () => {
     expect(() => assertValidModelCapabilityVector(value)).toThrow(ModelCapabilityValidationError);
   });
 
+  it("does not accept required axes or fields inherited from a prototype", () => {
+    const value = vector();
+    delete (value.axes as Record<string, unknown>).knowledge;
+    Object.setPrototypeOf(value.axes, { knowledge: scored() });
+    expect(() => assertValidModelCapabilityVector(value)).toThrow(ModelCapabilityValidationError);
+
+    const inherited = Object.create({ schemaVersion: 1, axes: value.axes }) as Record<string, unknown>;
+    expect(() => assertValidModelCapabilityVector(inherited)).toThrow(ModelCapabilityValidationError);
+  });
+
   it("rejects capability axes outside the closed first-version set", () => {
     const value = vector();
     (value.axes as Record<string, unknown>).creativity = scored();
@@ -61,6 +71,21 @@ describe("model capability vector", () => {
     expect(() => assertValidModelCapabilityVector(vector({ coding: { ...scored(), rationale: "two\nlines" } }))).toThrow(ModelCapabilityValidationError);
     expect(() => assertValidModelCapabilityVector(vector({ coding: { ...scored(), rationale: "" } }))).toThrow(ModelCapabilityValidationError);
     expect(() => assertValidModelCapabilityVector(vector({ coding: { ...scored(), evidence: [] } }))).toThrow(ModelCapabilityValidationError);
+  });
+
+  it("rejects malformed outer shapes, versions, and statuses", () => {
+    expect(() => assertValidModelCapabilityVector({ ...vector(), schemaVersion: 2 })).toThrow(ModelCapabilityValidationError);
+    expect(() => assertValidModelCapabilityVector({ ...vector(), extra: true })).toThrow(ModelCapabilityValidationError);
+    expect(() => assertValidModelCapabilityVector({ ...vector(), axes: [] })).toThrow(ModelCapabilityValidationError);
+    expect(() => assertValidModelCapabilityVector(vector({ reasoning: { ...scored(), status: "unknown" as never } }))).toThrow(ModelCapabilityValidationError);
+  });
+
+  it("rejects malformed evidence references, including sparse entries", () => {
+    expect(() => assertValidModelCapabilityVector(vector({ coding: { ...scored(), evidence: ["", "source"] } }))).toThrow(ModelCapabilityValidationError);
+    expect(() => assertValidModelCapabilityVector(vector({ coding: { ...scored(), evidence: ["two\nlines"] } }))).toThrow(ModelCapabilityValidationError);
+    const sparse = [...evidence];
+    delete (sparse as string[])[0];
+    expect(() => assertValidModelCapabilityVector(vector({ coding: { ...scored(), evidence: sparse } }))).toThrow(ModelCapabilityValidationError);
   });
 
   it("rejects a scored axis with a null score or an unproven axis with a score", () => {
