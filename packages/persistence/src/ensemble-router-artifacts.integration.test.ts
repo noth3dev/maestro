@@ -7,6 +7,7 @@ import { type OperationalOverlay, type RoutingEvidence } from "@maestro/domain";
 import { applyAllMigrations } from "./test-migrations.js";
 import {
   EnsembleRouterArtifactConflictError,
+  EnsembleRouterArtifactIntegrityError,
   listRoutingEvidenceForGoal,
   readGoalOperationalOverlaySnapshot,
   readLatestOperationalOverlay,
@@ -90,12 +91,14 @@ describeDatabase("Ensemble Router artifacts with PostgreSQL", () => {
     const first = overlay(1);
     const second = overlay(2);
     await expect(recordOperationalOverlay(pool, first)).resolves.toEqual(first);
+    const goalOne = await snapshotOperationalOverlayForGoalDurably(pool, first, "goal-1");
+    expect(goalOne.overlayVersion).toBe(1);
+    await expect(readGoalOperationalOverlaySnapshot(pool, "goal-1")).resolves.toEqual(goalOne);
+
     await expect(recordOperationalOverlay(pool, second)).resolves.toEqual(second);
     await expect(readLatestOperationalOverlay(pool, installationRef, projectRef)).resolves.toEqual(second);
 
-    const goalOne = await snapshotOperationalOverlayForGoalDurably(pool, first, "goal-1");
     const goalTwo = await snapshotOperationalOverlayForGoalDurably(pool, second, "goal-2");
-    expect(goalOne.overlayVersion).toBe(1);
     expect(goalTwo.overlayVersion).toBe(2);
     await expect(readGoalOperationalOverlaySnapshot(pool, "goal-1")).resolves.toEqual(goalOne);
     await expect(snapshotOperationalOverlayForGoalDurably(pool, second, "goal-1")).rejects.toBeInstanceOf(
@@ -110,12 +113,76 @@ describeDatabase("Ensemble Router artifacts with PostgreSQL", () => {
     ).rejects.toMatchObject({ code: "23514" });
     const rows = await pool.query<{ count: string }>("SELECT count(*)::text AS count FROM ensemble_router_goal_overlay_snapshots");
     expect(rows.rows[0]!.count).toBe("2");
+    const beforeMutation = await pool.query<{ snapshot: unknown; content_hash: string }>(
+      "SELECT snapshot, content_hash FROM ensemble_router_goal_overlay_snapshots WHERE goal_ref = $1",
+      ["goal-1"],
+    );
     await expect(
       pool.query("UPDATE ensemble_router_goal_overlay_snapshots SET project_ref = $1 WHERE goal_ref = $2", ["tampered-project", "goal-1"]),
-    ).rejects.toThrow("immutable");
-    await expect(pool.query("DELETE FROM ensemble_router_goal_overlay_snapshots WHERE goal_ref = $1", ["goal-1"])).rejects.toThrow(
-      "immutable",
+    ).rejects.toThrow();
+    await expect(pool.query("DELETE FROM ensemble_router_goal_overlay_snapshots WHERE goal_ref = $1", ["goal-1"])).rejects.toThrow();
+    const afterMutation = await pool.query<{ snapshot: unknown; content_hash: string }>(
+      "SELECT snapshot, content_hash FROM ensemble_router_goal_overlay_snapshots WHERE goal_ref = $1",
+      ["goal-1"],
     );
+    expect(afterMutation.rows).toEqual(beforeMutation.rows);
+  });
+
+  it("binds each Goal snapshot to the exact durable overlay version", async () => {
+    const stored = overlay(1);
+    await recordOperationalOverlay(pool, stored);
+
+    const forged = {
+      ...stored,
+      observations: [{ ...stored.observations[0]!, measuredLatencyMs: 999 }],
+    };
+    await expect(snapshotOperationalOverlayForGoalDurably(pool, forged, "goal-forged")).rejects.toBeInstanceOf(
+      EnsembleRouterArtifactConflictError,
+    );
+    await expect(snapshotOperationalOverlayForGoalDurably(pool, { ...stored, version: 2 }, "goal-missing")).rejects.toBeInstanceOf(
+      EnsembleRouterArtifactConflictError,
+    );
+
+    const before = await pool.query<{ overlay: unknown; content_hash: string }>(
+      "SELECT overlay, content_hash FROM ensemble_router_operational_overlays WHERE installation_ref = $1 AND project_ref = $2 AND version = $3",
+      [stored.installationRef, stored.projectRef, stored.version],
+    );
+    const snapshot = await snapshotOperationalOverlayForGoalDurably(pool, stored, "goal-bound");
+    const sameVersion = await snapshotOperationalOverlayForGoalDurably(pool, stored, "goal-bound-2");
+    expect(snapshot.overlayVersion).toBe(stored.version);
+    expect(snapshot.observations).toEqual(stored.observations);
+    expect(sameVersion.overlayVersion).toBe(snapshot.overlayVersion);
+    expect(sameVersion.goalRef).not.toBe(snapshot.goalRef);
+    const persistedSnapshots = await pool.query<{ goal_ref: string; snapshot: unknown; content_hash: string }>(
+      "SELECT goal_ref, snapshot, content_hash FROM ensemble_router_goal_overlay_snapshots WHERE goal_ref IN ($1, $2) ORDER BY goal_ref",
+      [snapshot.goalRef, sameVersion.goalRef],
+    );
+    expect(persistedSnapshots.rows).toHaveLength(2);
+    expect(persistedSnapshots.rows.map(({ goal_ref }) => goal_ref)).toEqual(["goal-bound", "goal-bound-2"]);
+    expect(persistedSnapshots.rows.map(({ snapshot: persisted }) => persisted)).toEqual([snapshot, sameVersion]);
+    const after = await pool.query<{ overlay: unknown; content_hash: string }>(
+      "SELECT overlay, content_hash FROM ensemble_router_operational_overlays WHERE installation_ref = $1 AND project_ref = $2 AND version = $3",
+      [stored.installationRef, stored.projectRef, stored.version],
+    );
+    expect(after.rows).toEqual(before.rows);
+  });
+
+  it("rejects a stored Goal snapshot whose payload hash was tampered", async () => {
+    const stored = overlay(1);
+    await recordOperationalOverlay(pool, stored);
+    const payload = {
+      schemaVersion: 1,
+      installationRef: stored.installationRef,
+      projectRef: stored.projectRef,
+      goalRef: "goal-tampered",
+      overlayVersion: stored.version,
+      observations: stored.observations,
+    };
+    await pool.query(
+      "INSERT INTO ensemble_router_goal_overlay_snapshots (goal_ref, installation_ref, project_ref, overlay_version, snapshot, content_hash) VALUES ($1, $2, $3, $4, $5::jsonb, $6)",
+      [payload.goalRef, payload.installationRef, payload.projectRef, payload.overlayVersion, JSON.stringify(payload), "f".repeat(64)],
+    );
+    await expect(readGoalOperationalOverlaySnapshot(pool, payload.goalRef)).rejects.toBeInstanceOf(EnsembleRouterArtifactIntegrityError);
   });
 
   it("upgrades a non-empty 0072 evidence table without mutating its append-only rows", async () => {
