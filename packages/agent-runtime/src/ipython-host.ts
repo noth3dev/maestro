@@ -151,6 +151,9 @@ export interface IpPythonKernelOptions {
   readonly onEvent?: (event: Pick<IpPythonEventFrame, "requestId" | "stream" | "text">) => void;
   /** Maximum time allowed for a cooperative interrupt before the child is closed. */
   readonly interruptGraceMs?: number;
+  /** Require a version-checked child ready frame before the first cell. */
+  readonly requireReady?: boolean;
+  readonly readyTimeoutMs?: number;
 }
 
 export type IpPythonHostBinding = IpPythonSessionBinding;
@@ -158,6 +161,19 @@ export type IpPythonHostBinding = IpPythonSessionBinding;
 export interface IpPythonReadOnlyGateway {
   readFile(binding: IpPythonHostBinding, relativePath: string): IpPythonExecutionResult | Promise<IpPythonExecutionResult>;
   gitRevision(binding: IpPythonHostBinding, ref: string): IpPythonExecutionResult | Promise<IpPythonExecutionResult>;
+}
+
+export interface IpPythonReadOnlyValueAdapters {
+  readFile(binding: IpPythonHostBinding, relativePath: string): string | Promise<string>;
+  gitRevision(binding: IpPythonHostBinding, ref: string): string | Promise<string>;
+}
+
+/** Adapt already-authorized file/Git ports into the host protocol result envelope. */
+export function createIpPythonReadOnlyGateway(adapters: IpPythonReadOnlyValueAdapters): IpPythonReadOnlyGateway {
+  return {
+    async readFile(_binding, relativePath) { return { state: "ok", dataClass: "workspace", content: await adapters.readFile(_binding, relativePath) }; },
+    async gitRevision(_binding, ref) { return { state: "ok", dataClass: "workspace", content: await adapters.gitRevision(_binding, ref) }; },
+  };
 }
 
 export class IpPythonProtocolError extends Error {
@@ -267,7 +283,7 @@ export interface IpPythonProcessKernelOptions extends Omit<IpPythonKernelOptions
 }
 
 export function createIpPythonProcessKernel(options: IpPythonProcessKernelOptions, sessionId: string, binding?: IpPythonSessionBinding): IpPythonKernel {
-  return createIpPythonKernel({ transport: createIpPythonJsonLinesTransport(options.createProcess(sessionId, binding)), hostRequest: options.hostRequest, ...(options.onEvent === undefined ? {} : { onEvent: options.onEvent }) });
+  return createIpPythonKernel({ transport: createIpPythonJsonLinesTransport(options.createProcess(sessionId, binding)), hostRequest: options.hostRequest, requireReady: true, ...(options.readyTimeoutMs === undefined ? {} : { readyTimeoutMs: options.readyTimeoutMs }), ...(options.onEvent === undefined ? {} : { onEvent: options.onEvent }) });
 }
 
 interface PendingCell {
@@ -281,13 +297,25 @@ export function createIpPythonKernel(options: IpPythonKernelOptions): IpPythonKe
   let active: PendingCell | undefined;
   let interruptTimer: ReturnType<typeof setTimeout> | undefined;
   let closed = false;
+  let ready = options.requireReady !== true;
+  let resolveReady: (() => void) | undefined;
+  let rejectReady: ((error: unknown) => void) | undefined;
+  const readyPromise = ready ? Promise.resolve() : new Promise<void>((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
   const clearInterruptTimer = () => { if (interruptTimer !== undefined) { clearTimeout(interruptTimer); interruptTimer = undefined; } };
   const takeActive = () => { const pending = active; active = undefined; clearInterruptTimer(); return pending; };
   const removeFrameListener = options.transport.onFrame((raw) => {
     let frame: IpPythonFrame;
     try { frame = parseIpPythonFrame(raw); } catch (error) {
+      if (!ready) { rejectReady?.(error); rejectReady = undefined; resolveReady = undefined; }
       const pending = takeActive();
       pending?.reject(error);
+      return;
+    }
+    if (frame.type === "ready") {
+      ready = true;
+      resolveReady?.();
+      resolveReady = undefined;
+      rejectReady = undefined;
       return;
     }
     if (frame.type === "host_request") {
@@ -302,6 +330,7 @@ export function createIpPythonKernel(options: IpPythonKernelOptions): IpPythonKe
     if (frame.type === "error") { const pending = takeActive(); pending?.resolve({ state: "unknown", dataClass: "workspace", content: frame.reason, reason: frame.reason }); }
   });
   const removeCloseListener = options.transport.onClose((reason) => {
+    if (!ready) { rejectReady?.(new Error(reason ?? "IPython child closed before ready")); rejectReady = undefined; resolveReady = undefined; }
     if (active === undefined) return;
     const pending = takeActive();
     pending?.resolve({ state: "unknown", dataClass: "workspace", content: reason ?? "IPython child closed", reason: "child_closed" });
@@ -310,6 +339,14 @@ export function createIpPythonKernel(options: IpPythonKernelOptions): IpPythonKe
   return {
     async execute(request: IpPythonExecutionRequest): Promise<IpPythonExecutionResult> {
       if (closed) throw new Error("IPython kernel is closed");
+      if (!ready) {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await Promise.race([readyPromise, new Promise<void>((_, reject) => { timer = setTimeout(() => reject(new Error("handshake_timeout")), options.readyTimeoutMs ?? 5_000); })]);
+        } catch {
+          return { state: "unknown", dataClass: "workspace", content: "IPython child did not complete the ready handshake", reason: "handshake_timeout" };
+        } finally { if (timer !== undefined) clearTimeout(timer); }
+      }
       if (active !== undefined) throw new IpPythonKernelBusyError();
       const requestId = `cell-${randomUUID()}`;
       const result = new Promise<IpPythonExecutionResult>((resolve, reject) => { active = { requestId, sessionId: request.sessionId, resolve, reject }; });

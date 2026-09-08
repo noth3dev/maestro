@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { IPYTHON_PYTHON_BOOTSTRAP } from "./ipython-bootstrap.js";
-import { createIpPythonProcessKernel, createReadOnlyHostRequestHandler, type IpPythonLineChannel } from "./ipython-host.js";
+import { createIpPythonProcessKernel, createIpPythonReadOnlyGateway, createReadOnlyHostRequestHandler, type IpPythonLineChannel } from "./ipython-host.js";
 
 class FakeProcessChannel implements IpPythonLineChannel {
   readonly writes: string[] = [];
@@ -33,22 +33,31 @@ describe("IPython process kernel composition", () => {
       createProcess: (sessionId) => { const channel = new FakeProcessChannel(); channels.set(sessionId, channel); return channel; },
       hostRequest: async () => ({ state: "error", dataClass: "workspace", content: "not used" }),
     }, sessionId);
-    const pending = kernel.execute({ sessionId, code: "print('hello')" });
     const channel = channels.get(sessionId)!;
+    channel.emit({ version: 1, type: "ready", runtime: "python" });
+    const pending = kernel.execute({ sessionId, code: "print('hello')" });
     const execute = JSON.parse(channel.writes[0]);
     expect(execute).toMatchObject({ version: 1, type: "execute", sessionId, code: "print('hello')" });
     channel.emit({ version: 1, type: "done", requestId: execute.requestId, state: "ok", dataClass: "workspace", content: "hello" });
     await expect(pending).resolves.toEqual({ state: "ok", dataClass: "workspace", content: "hello" });
   });
 
+  it("fails closed when the child never completes the ready handshake", async () => {
+    const channel = new FakeProcessChannel();
+    const kernel = createIpPythonProcessKernel({ createProcess: () => channel, hostRequest: async () => ({ state: "error", dataClass: "workspace", content: "not used" }), readyTimeoutMs: 1 }, "session-timeout");
+    await expect(kernel.execute({ sessionId: "session-timeout", code: "print('never')" })).resolves.toMatchObject({ state: "unknown", reason: "handshake_timeout" });
+    expect(channel.writes).toEqual([]);
+    await kernel.close();
+  });
+
   it("composes the real constrained child with the read-only host router", async () => {
     const binding = { sessionId: "session-2", commandId: "command-2", toolCallId: "tool-2", operatorId: "operator-2", projectId: "project-2", goalId: "goal-2", pathScope: ["/workspace/project-2"], outboundDataClasses: ["workspace"] } as const;
     const hostRequest = createReadOnlyHostRequestHandler({
       binding,
-      gateway: {
-        readFile: async (_binding, path) => ({ state: "ok" as const, dataClass: "workspace" as const, content: `evidence:${path}` }),
-        gitRevision: async () => ({ state: "ok" as const, dataClass: "workspace" as const, content: "abc123" }),
-      },
+      gateway: createIpPythonReadOnlyGateway({
+        readFile: async (_binding, path) => `evidence:${path}`,
+        gitRevision: async () => "abc123",
+      }),
     });
     const kernel = createIpPythonProcessKernel({ createProcess: () => new PythonChildChannel(), hostRequest }, binding.sessionId, binding);
     try {

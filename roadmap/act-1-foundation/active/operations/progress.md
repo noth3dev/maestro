@@ -2750,3 +2750,24 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Fresh `npm run check` passed: 111 files passed and 57 database-gated files skipped; 700 tests passed and 381 skipped.
 - `npm run lint` and `git diff --check` passed before this documentation-only verification append.
 - The real-child bootstrap and TypeScript kernel now cover cooperative interruption plus bounded close fallback; production process ownership is still not selected.
+
+
+## 2026-09-08 — handshake-gated kernel hardening
+
+- Added `ready` handshake gating to the injected process-kernel composition.
+- Added timeout behavior that fails closed as `unknown` without sending a cell when the child never proves readiness.
+- Added real-child composition coverage for the constrained bootstrap plus read-only host router.
+- Added bootstrap AST/dunder enforcement and stale-helper/session-identity regression coverage.
+
+
+## 2026-09-08 — handshake/interrupt hardening verification checkpoint
+
+- Fresh `npm run check` passed: 111 files passed and 57 database-gated files skipped; 701 tests passed and 381 skipped.
+- `npm run build`, `npm run lint`, and the focused real-child tests passed.
+- The exact-optional-property TypeScript failure in the handshake composition was fixed with conditional option spreading; no undefined option is passed across the strict boundary.
+
+
+## 2026-09-08 — handshake checkpoint correction
+
+- A post-check lint run caught an unused `createIpPythonReadOnlyGateway` import in the integration test; the test now uses the helper and a fresh `npm run lint` passes.
+- `git diff --check` passes after the correction.

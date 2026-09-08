@@ -999,3 +999,8 @@ Added a versioned Python bootstrap as a source artifact, tested in a real `pytho
 ## 2026-09-08 — bootstrap AST guard and bounded interrupt
 
 The Python bootstrap now parses each cell with `ast` before execution and rejects imports, dynamic-I/O names, and any underscore-prefixed attribute (including dunder escape paths). Persistent helper references also carry the originating request ID and fail closed instead of sending a stale host request into a later cell. The TypeScript kernel now uses a bounded interrupt grace timer and closes the transport when cooperative cancellation does not settle, so an injected process adapter has a deterministic teardown obligation.
+
+
+## 2026-09-08 — handshake-gated process kernel
+
+`createIpPythonProcessKernel` now requires the versioned `ready` frame before sending the first cell. A missing/failed handshake returns an explicit `unknown` (`handshake_timeout`) result and sends no execute frame. This prevents a process that has not proved protocol compatibility from receiving session code.
