@@ -3169,3 +3169,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Replaced the hard-coded `classifyAction` string switch with a static `ACTION_CLASSIFICATIONS` registry in `packages/authority/src/action-classification.ts`; `authority.ts` retains the existing type export and default-deny behavior.
 - Added RED coverage for ordinary, critical, forbidden, and unknown actions. Focused authority tests pass 19/19; full non-DB suite passes 128/128 files and 838/838 tests. Build, lint, and diff checks pass.
 - Implementation commit: `55aabfe`. Awaiting independent no-edit review before merge.
+
+
+## 2026-09-09 — Direct refactor R1 closed
+
+- Independent no-edit review returned `REVIEW: PASS`. Merged R1 as `df180c9` after implementation `55aabfe` and records `56dd686`; main build, lint, diff check, and focused authority/classification tests passed 19/19. The R1 worktree and branch were removed.
+- `classifyAction` now uses a static central registry with all 22 prior mappings preserved; unknown actions remain `ambiguous` and default-denied. Ready for the next ordered work item.
