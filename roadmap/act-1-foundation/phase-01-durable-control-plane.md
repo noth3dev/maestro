@@ -349,3 +349,24 @@ The target architecture may replace the current standalone Maestro execution mod
 - The approved hierarchical design, Concertmaster identity and trait seed, organizational taxonomy, safety boundaries, and app direction are new-system requirements, not migrated runtime records.
 - Existing project Git repositories remain independent source systems and may be enrolled into the new Maestro as fresh projects. They are not deleted as part of clearing Maestro state.
 - Historical legacy data is not required for new-system behavior or evaluation. Removal at cutover follows the agreed critical deletion and reversible Git or backup process, but no compatibility or import path is required.
+
+
+## Model pool and routing foundation — adopted design
+
+The canonical design is [Model Pool & Automatic Routing](active/2026-09-08-model-pool-routing-design.md). Phase 1 owns the stable substrate; it does not yet own Head task-demand assignment or adaptive score changes.
+
+- Define the versioned `model_map` baseline: exact provider/model identity, primitive trait vector, hard facts, data policy, account/auth facts, and score provenance. The baseline is human-owned and is never rewritten automatically by routing, Encore, or the Improvement Lab.
+- Define the private local-overlay boundary for project-specific corrections without merging those corrections into the public baseline.
+- Keep provider/account binding, authority, data policy, context capacity, and availability above model fitness. A high-scoring but unbound model is not a candidate.
+- Add the separate routing-evidence boundary. It must not extend `native_execution_bindings`, whose selected and actual model identities remain the admission binding.
+- Treat `MAESTRO_NATIVE_MODEL` as an explicit pin or development routing-off control during migration, not as the long-term primary selection path.
+- Preserve the native invariant: routing proposes one identity; admission independently verifies and fixes exactly one provider-qualified model; provider-result identity must match it.
+
+### Phase 1 routing work order and tests
+
+1. Draft the primitive-trait definitions, profile version, baseline/overlay format, routing-evidence schema, and migration contract before implementation.
+2. Add provider/account/catalog checks and routing/admission contract tests without reintroducing Prime runtime or adapter code.
+3. Prove that unavailable accounts, forbidden data policies, insufficient context, malformed identities, and missing candidates fail closed.
+4. Prove that a routing record cannot weaken the exact native admission grant or overwrite selected/actual identity evidence.
+
+Phase 1 exits this routing slice only when the model catalog, identity boundary, evidence ownership, and fixed-model migration contract are documented and independently testable.

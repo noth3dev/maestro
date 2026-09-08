@@ -170,3 +170,20 @@ Goal priority, resource contention, and preemption are decided by a selective **
 - A credible immediate safety, security, or data-loss signal may trigger an automatic safe pause before deliberation. The Portfolio Council then decides the sustained response and resource plan.
 - Only affected Heads are awakened. Routine Encore improvement work yields to active CEO Goals unless the improvement is itself required to restore safe operation.
 - Concertmaster executes the portfolio decision and reports material schedule effects to the CEO.
+
+
+## Model routing capacity and Goal isolation — adopted design
+
+Phase 5 treats model/provider capacity as a portfolio resource without allowing contention to lower a Goal's declared quality bar.
+
+- Reserve provider rate, spend, latency, validation capacity, and recovery reserve per Goal and grade.
+- A routing snapshot, local overlay, pin, grade, routing evidence, and selected identity are Goal-scoped; concurrent Goals cannot share them accidentally.
+- When capacity is exhausted, queue or pause at a safe point. Do not degrade active Goals or silently lower their grade to fit the portfolio.
+- Portfolio Council may reorder, pause, or reallocate within the approved ceilings. It cannot authorize a model below a Goal's bar unless the explicit lower-grade escalation is recorded.
+- Forecasts use observed model cost, latency, reliability, retries, and completion probability, while capability judgments remain Phase 6 proposals.
+
+### Additional Phase 5 tests and exit evidence
+
+- Two Goals using the same provider/model pool retain separate routing snapshots, overlays, evidence, and model bindings.
+- Provider throttling queues work without consuming protected validation reserve or silently switching below the bar.
+- Reallocation after pause fences the old execution and never reuses the prior Goal's routing or approval state.

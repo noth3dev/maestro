@@ -232,3 +232,20 @@ Notification paths:
 - If Maestro runtime or the Control Plane is unavailable, Discord may use one pre-approved out-of-band emergency channel, such as a dedicated Discord emergency channel or enrolled-device desktop notification.
 - The emergency message contains only the incident identity, affected system, severity and confidence, first observation, concise evidence, and safe next action.
 - This pre-approval permits bounded emergency notification only. It does not grant Discord remediation, shell execution, broader external messaging, or new-service authority.
+
+
+## Model routing for environments, devices, and incidents — adopted design
+
+External capabilities reuse the common model-pool contract but never let model fitness replace capability authority.
+
+- Browser, device, external API, deployment, and incident tasks declare task kinds and grade in their Goal/Task Contract or Incident Brief.
+- Provider/account binding, data policy, endpoint/device scope, expiry, fencing, and approval are hard gates before model fitness.
+- Tool-use, reliability, safety, and data-boundary traits become required primitive traits when a model is allowed to plan or operate an external capability.
+- High-risk incident work must not silently fall to a cheaper model; a lower grade or below-bar model requires the same recorded escalation path.
+- Incident outcomes, false positives, provider outages, and routing failures become evidence for Phase 6, but Phase 4 does not change model judgments automatically.
+
+### Additional Phase 4 tests and exit evidence
+
+- An otherwise high-scoring model without the correct account, data policy, device grant, or endpoint scope is rejected.
+- Provider unavailability removes the model from candidates without widening another capability grant.
+- A late device result, stale fencing token, or expired external grant cannot be rescued by a model-routing decision.

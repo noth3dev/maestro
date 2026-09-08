@@ -2984,3 +2984,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Fixed the flaky late-brief PostgreSQL integration fixture without changing production Council behavior.
 - Focused live regression passed; independent review returned `ACCEPT`.
 - Fresh `npm run check` passed: 172 test files and 1131 tests, 0 failures. `npm run lint` and `git diff --check` also passed.
+
+
+## 2026-09-08 — Model pool routing design distributed across Act 1
+
+- Read and accepted the canonical `2026-09-08-model-pool-routing-design.md` as the source for model-pool behavior.
+- Updated the Act 1 index, operations index, Phase 1–10 documents, and the active task plan with phase-owned routing responsibilities, tests, and exit evidence.
+- No production routing implementation was performed in this documentation slice. The next implementation gate is the Phase 1 artifact set: primitive traits, task-kind recipes, grade tables, model-map format, local overlay, routing-evidence schema, and fixed-model migration contract.

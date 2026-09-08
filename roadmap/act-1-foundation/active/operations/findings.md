@@ -1107,3 +1107,18 @@ A second review noted that native `parseModelRef` accepted an extra slash in the
 ## 2026-09-08 — Council deadline fixture root cause
 
 The failing `packages/persistence/src/council.integration.test.ts` case was timing-sensitive rather than a production deadline defect. Its `+500ms` deadline was computed before multiple PostgreSQL setup writes and Goal lease acquisition, while `createHeadCouncil` intentionally checks the supplied deadline with the database clock after those operations. Under the full 172-file run, that valid server-side check observed the deadline as expired. The test now resolves a deadline factory immediately before creation and waits until the persisted snapshot deadline with `clock_timestamp()` plus 100ms. This preserves the intended late-brief assertion without fixed wall-clock assumptions.
+
+
+## 2026-09-08 — Model pool routing phase integration findings
+
+The model-pool design crosses every model-consuming surface, but the authority boundary remains concentrated: Phase 1 owns catalog/identity/evidence contracts, Phase 2 owns demand declaration and selection, Phase 3 owns certification disclosure, Phase 5 owns capacity, and Phase 6 owns evidence-driven judgment changes. This prevents each later phase from inventing a second router.
+
+Current implementation facts that the migration must preserve:
+
+- Native admission requires exactly one provider-qualified model and exact grant-policy equality.
+- Provider-result identity and native binding evidence must continue to match the admitted model.
+- Worker `approvedModels` and `MAESTRO_NATIVE_MODEL` are transitional exact-model inputs, not the final user-facing routing contract.
+- `native_execution_bindings` remains identity evidence; routing rationale requires a separate append-only store.
+- Historical Prime ownership/model-selection sections remain provenance only and must not be rewritten into production dependencies.
+
+The design deliberately separates public `model_map` from project-private local overlays. Operational facts may affect current eligibility, while capability judgments require Improvement Digest evidence and the declared Encore authority.

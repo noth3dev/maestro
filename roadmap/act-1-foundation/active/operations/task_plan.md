@@ -1252,3 +1252,36 @@ The production read-only path is not considered verified until Goal path scopes,
 - The full PostgreSQL check exposed a flaky Council integration fixture: the late-brief regression supplied a `Date.now() + 500ms` deadline before fixture inserts and lease acquisition completed. `createHeadCouncil` correctly validates against PostgreSQL `clock_timestamp()`, so the production guard was not weakened.
 - The fixture now resolves deadline factories immediately before Council creation, gives the creation path a bounded 5-second margin, and waits against the persisted deadline using PostgreSQL time plus a small margin before submitting the late brief.
 - Scope is test-only; Council production semantics and the late-brief/absence-settlement contract are unchanged.
+
+
+## 2026-09-08 — Model pool routing cross-phase integration
+
+Canonical design: `roadmap/act-1-foundation/active/2026-09-08-model-pool-routing-design.md`. The design is now distributed into every Act 1 phase without duplicating its full rule set. Prime remains structural reference only; the native Model Gateway and Control Plane remain the production boundary.
+
+### Ownership matrix
+
+| Phase | Routing responsibility |
+| --- | --- |
+| 1 | Versioned `model_map`, primitive traits, local-overlay boundary, routing-evidence ownership, admission identity, and `MAESTRO_NATIVE_MODEL` migration. |
+| 2 | Head-declared task kinds and grades, Mission Bundle demand, weakest-link matching, no-candidate escalation, pins, fixed conversations, and native router execution. |
+| 3 | Routing evidence in certification, below-bar approval disclosure, model diversity, and identity/replay checks. |
+| 4 | External-capability and incident routing under account, data, device, endpoint, expiry, and fencing hard gates. |
+| 5 | Per-Goal model/provider capacity, routing snapshot isolation, protected validation reserve, and queue/pause instead of degradation. |
+| 6 | Public baseline versus local overlay, observation versus judgment, Improvement Digest proposals, approval for score increases, and rollback. |
+| 7 | Explainable routing UI, pin/routing-off disclosure, escalation state, and no UI bypass of admission. |
+| 8 | Adversarial, property, outage, downgrade, evidence, overlay, conversation, and release acceptance. |
+| 9 | Generated-tool capability declarations consumed by routing without tool-owned policy or authority. |
+| 10 | Treasury routing under financial authority, exact spend policy, approval, receipt, and no model-created payment authority. |
+
+### Pre-implementation artifacts
+
+Before production router code, create and review: primitive trait definitions; task-kind recipes; 50/100/200 grade bars and allocation tables; `model_map` format and initial entries; local-overlay layering rules; routing-evidence schema; and the migration contract for native fixed-model configuration.
+
+### Sequencing constraints
+
+1. Phase 1 contracts and evidence ownership precede Phase 2 router implementation.
+2. Phase 2 must continue projecting one routed identity into the existing exact native `modelPolicy` admission boundary.
+3. Phase 3 certification and Phase 8 release gates must consume durable routing evidence rather than infer it from prompts or logs.
+4. Phase 6 cannot mutate the public baseline or lower hard safety/authority floors.
+5. Phase 7 exposes state only; it never becomes a second routing or admission authority.
+6. Phases 4, 5, 9, and 10 consume the common contract and do not create alternate model-selection paths.
