@@ -131,7 +131,7 @@ OPENAI_API_KEY=<key> \
 npm --workspace @maestro/model-gateway start
 ```
 
-Configure the Control Plane with the same gateway token. Set `MAESTRO_NATIVE_MODEL` only when host-created Head/Encore sessions need a default; conversation turns select an exact model through the CLI/API:
+Configure the Control Plane with the same gateway token. Set `MAESTRO_NATIVE_MODEL` only as an explicit fixed-model pin/routing-off setting when host-created Head/Encore sessions cannot derive a Mission Bundle model; there is no implicit default. Conversation turns select an exact model through the CLI/API:
 
 ```bash
 export MAESTRO_MODEL_GATEWAY_TOKEN=<random-secret>

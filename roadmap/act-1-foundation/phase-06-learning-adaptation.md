@@ -669,9 +669,9 @@ Phase 6 owns evidence-driven changes to routing judgments. It does not own the a
 
 - `model_map` remains the public, versioned, human-owned baseline. Project-specific corrections live in a private local overlay and never merge into the baseline.
 - Availability, timeout, measured latency, and measured cost are observations. They may update operational eligibility automatically when the current provider state requires it.
-- Capability judgments such as reasoning, coding, tool-use, or reliability produce proposals, not immediate score changes.
-- The Improvement Digest is the existing proposal container. It records the task kind, grade, model/profile versions, evidence pattern, confidence, protected metrics, and rollback target.
-- Lowering a local capability score is the safe direction and may be applied by the Lab under the enabled class. Raising a score grants eligibility for higher-grade work and requires Encore Council approval.
+- A capability judgment on any of the eight A axes produces a proposal, not an immediate score change.
+- The Improvement Digest is the existing proposal container. It records task-kind recipe and D/E versions, pressure/band, model/profile versions, evidence pattern, confidence, protected metrics, and rollback target.
+- C operational observations may update local eligibility automatically. Any A score change requires evidence and a human-owned `model_map` commit; the Lab and router cannot write capability scores or turn project-local observations into universal judgments.
 - Replay, synthetic, shadow, bounded rollout, diversity checks, and rollback apply to routing candidates just as they apply to other improvement candidates.
 - A successful execution never becomes a model-map truth by itself; sparse or project-private evidence stays scoped and visible.
 

@@ -15,8 +15,8 @@ This block is the authoritative status for the current `main` tree. Older phase 
 - **Phase 8:** planned; hardening must prove IPython authority enforcement, approval binding, mixed-risk blocking, full-access isolation, and forbidden-action denial.
 - **Phase 9:** future Luthiery MCP manufacture; it is not part of the Phase 2 IPython implementation.
 - **Phase 10:** future Treasury capability; payment remains separately activated and critically governed.
-- **Documentation checkpoint:** the prior roadmap reorganization and CI fix are pushed on `origin/main`; the latest committed host-tool hardening slice is `c76b57e` and is not yet pushed. The user-owned `.gitignore` change remains untouched.
-- **Immediate work:** implement the approved Phase 2 host-tool contract and its tests. Do not claim Phase 1–3 acceptance or code completion until the new host-tool gates pass.
+- **Documentation checkpoint:** the native host-tool hardening, native model-policy enforcement, Council timing correction, and Carnegie GUI branding commits are on synchronized `main`/`origin/main`. Prime remains structural reference only; no Prime runtime or adapter is production code.
+- **Immediate work:** complete the reopened Phase 1 model-pool artifact set before Phase 2 router or approval/effect implementation: A–E metric schemas, eight-axis scoring rubric, recipes, continuous pressure function, four bands, baseline/overlay, routing evidence, and fixed-model migration contract. Do not claim Phase 1–3 acceptance until the artifact, admission, and live gates pass.
 
 ## Phase 1A–1D host-tool execution plan — approved 2026-09-08
 
@@ -1262,20 +1262,20 @@ Canonical design: `roadmap/act-1-foundation/active/2026-09-08-model-pool-routing
 
 | Phase | Routing responsibility |
 | --- | --- |
-| 1 | Versioned `model_map`, primitive traits, local-overlay boundary, routing-evidence ownership, admission identity, and `MAESTRO_NATIVE_MODEL` migration. |
-| 2 | Head-declared task kinds and grades, Mission Bundle demand, weakest-link matching, no-candidate escalation, pins, fixed conversations, and native router execution. |
-| 3 | Routing evidence in certification, below-bar approval disclosure, model diversity, and identity/replay checks. |
+| 1 | Versioned `model_map`, eight A-axis scores, B/C facts, D/E demand, pressure/bands, local-overlay boundary, routing-evidence ownership, admission identity, and `MAESTRO_NATIVE_MODEL` migration. |
+| 2 | Head-declared task-kind recipes and D requirements, continuous pressure/E demand, weakest-link matching, pressure-band escalation, pins, fixed conversations, and native router execution. |
+| 3 | Routing evidence in certification, below-requirement approval/decision disclosure, model diversity, and identity/replay checks. |
 | 4 | External-capability and incident routing under account, data, device, endpoint, expiry, and fencing hard gates. |
 | 5 | Per-Goal model/provider capacity, routing snapshot isolation, protected validation reserve, and queue/pause instead of degradation. |
 | 6 | Public baseline versus local overlay, observation versus judgment, Improvement Digest proposals, approval for score increases, and rollback. |
 | 7 | Explainable routing UI, pin/routing-off disclosure, escalation state, and no UI bypass of admission. |
-| 8 | Adversarial, property, outage, downgrade, evidence, overlay, conversation, and release acceptance. |
+| 8 | Adversarial, property, outage, below-requirement, evidence, overlay, conversation, and release acceptance. |
 | 9 | Generated-tool capability declarations consumed by routing without tool-owned policy or authority. |
 | 10 | Treasury routing under financial authority, exact spend policy, approval, receipt, and no model-created payment authority. |
 
 ### Pre-implementation artifacts
 
-Before production router code, create and review: primitive trait definitions; task-kind recipes; 50/100/200 grade bars and allocation tables; `model_map` format and initial entries; local-overlay layering rules; routing-evidence schema; and the migration contract for native fixed-model configuration.
+Before production router code, create and review: the eight A-axis scoring rubric; B fact schema; C operational overlay; D requirement and task-kind recipes; E work-character schema; continuous pressure function; four pressure-band thresholds; `model_map` format and initial entries; local-overlay layering rules; routing-evidence schema; and the migration contract for native fixed-model configuration.
 
 ### Sequencing constraints
 
@@ -1285,3 +1285,11 @@ Before production router code, create and review: primitive trait definitions; t
 4. Phase 6 cannot mutate the public baseline or lower hard safety/authority floors.
 5. Phase 7 exposes state only; it never becomes a second routing or admission authority.
 6. Phases 4, 5, 9, and 10 consume the common contract and do not create alternate model-selection paths.
+
+
+## 2026-09-08 — Phase 1 model-pool reopening and bottom-up execution pointer
+
+- The model-pool design is now the active Phase 1 boundary. Production routing remains unimplemented; this phase first delivers independently testable artifacts and admission contracts.
+- An independent design review found and resolved documentation contradictions: public `model_map` changes require a human commit; agent registration is a private proposal; local overlays are installation/project-private while each Goal receives an immutable snapshot; qualifying mid-run switches require a new native admission/binding; `approvedModels` remains an authorization intersection rather than a full pool materialization; and `MAESTRO_NATIVE_MODEL` is explicit pin/routing-off mode, not fallback. The model/task metric split now follows the agreed A eight-axis, B facts, C operations, D paired requirements, E pressure/constraint contract; retired `50/100/200` grade lookup language is not used for routing.
+- Prime references remain limited to persistent-kernel, protocol, and lifecycle structure. No Prime source, runtime, dependency, or authority behavior is copied.
+- **Next:** write the Phase 1 primitive-trait/model-profile contract and RED tests. Do not begin Phase 2 router or approval/effect code until the Phase 1 artifact set and documentation review are complete.

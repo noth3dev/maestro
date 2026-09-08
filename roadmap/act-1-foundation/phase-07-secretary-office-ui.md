@@ -325,15 +325,15 @@ All tree views support collapse, zoom, filtering, search, focus on current Goal 
 
 The Secretary Office exposes routing as explainable state, not as a second authority path.
 
-- Show task kinds, grade, demand vector, model/profile version, selected model, and current provider binding.
+- Show task-kind recipes, eight-axis D requirements, E inputs, calculated pressure and band, model/profile version, selected model, and current provider binding.
 - Show candidate count, hard-filter rejection reasons, weakest-link shortfall, cost/latency trade-offs, and routing evidence.
 - Show pins as preferences, not exemptions. Show routing-off mode as an explicit development state with its certification marker.
-- Show Head → Encore → user escalation, grade-lowering decisions, approval repetition scope, and below-bar consequences.
-- Show mid-run switches only when the replacement still clears the bar; show blocked downgrades and provider outages as explicit states.
+- Show automatic/Head/Encore/user pressure-band escalation, pressure-uplift decisions, approval repetition scope, and below-requirement consequences.
+- Show mid-run switches only when the replacement still meets the A↔D requirement; show blocked below-requirement routes and provider outages as explicit states.
 - The UI may request a route preference or approval, but it cannot bypass native admission, change a model identity after binding, or write routing evidence directly.
 
 ### Additional Phase 7 tests and exit evidence
 
 - App and CLI render the same durable routing decision and selected identity.
-- A pinned model that fails the bar displays escalation rather than silently running.
-- Routing-off and below-bar approval markers survive reconnect, projection rebuild, and final certification views.
+- A pinned model that fails B/C or A↔D displays pressure-band escalation rather than silently running.
+- Routing-off and below-requirement approval markers survive reconnect, projection rebuild, and final certification views.

@@ -353,20 +353,24 @@ The target architecture may replace the current standalone Maestro execution mod
 
 ## Model pool and routing foundation — adopted design
 
-The canonical design is [Model Pool & Automatic Routing](active/2026-09-08-model-pool-routing-design.md). Phase 1 owns the stable substrate; it does not yet own Head task-demand assignment or adaptive score changes.
+The canonical design is [Model Pool & Automatic Routing](active/2026-09-08-model-pool-routing-design.md). Phase 1 owns the stable substrate; production routing is not enabled until the artifact contracts and native admission tests pass.
 
-- Define the versioned `model_map` baseline: exact provider/model identity, primitive trait vector, hard facts, data policy, account/auth facts, and score provenance. The baseline is human-owned and is never rewritten automatically by routing, Encore, or the Improvement Lab.
-- Define the private local-overlay boundary for project-specific corrections without merging those corrections into the public baseline.
-- Keep provider/account binding, authority, data policy, context capacity, and availability above model fitness. A high-scoring but unbound model is not a candidate.
-- Add the separate routing-evidence boundary. It must not extend `native_execution_bindings`, whose selected and actual model identities remain the admission binding.
-- Treat `MAESTRO_NATIVE_MODEL` as an explicit pin or development routing-off control during migration, not as the long-term primary selection path.
-- Preserve the native invariant: routing proposes one identity; admission independently verifies and fixes exactly one provider-qualified model; provider-result identity must match it.
+- Separate model metrics from task metrics. Model capability `A` is the fixed eight-axis human-scored vector (`0..100`, reason and evidence required): `reasoning`, `coding`, `verification`, `instruction-fidelity`, `tool-use`, `long-context`, `knowledge`, and `refusal-calibration`.
+- Keep provider facts `B` as hard filters: context capacity, input/output pricing, authentication, data policy, modalities, and tool-call support. Keep operational measurements `C` local: latency, cost, failures/timeouts, provider errors, and availability/account binding.
+- Match task requirements `D` only against the paired A axes using weakest-link behavior. Keep work-character `E` separate: risk, reversibility, and verification attachment compute continuous pressure; material scale, time pressure, and budget headroom constrain B/C.
+- The Department Head may uplift calculated pressure but may not lower its floor. Four pressure bands are approval/escalation/reporting labels only: automatic, Department Head, Encore Council, and user. Bands do not participate in matching.
+- Define the human-owned, versioned `model_map` baseline with per-score one-line reasons/evidence, provider facts, exact identity, profile version, and unproven status. Machine proposals and local C observations cannot rewrite it.
+- Define the project-private overlay and immutable per-Goal routing snapshot. Concurrent Goals may read the same overlay version but cannot mutate it or each other's snapshots.
+- Add the separate routing-evidence boundary. It must record A/D/E inputs, pressure, band, candidates, hard-filter rejections, C observations, profile versions, selection, and escalations; it must not extend `native_execution_bindings`, whose selected and actual identities remain the admission binding.
+- Treat `MAESTRO_NATIVE_MODEL` as an explicit fixed-model pin/routing-off control during migration, not as fallback. The router intersects candidates with Mission Bundle `approvedModels`, projects exactly one `modelPolicy`, and native admission independently verifies it.
 
 ### Phase 1 routing work order and tests
 
-1. Draft the primitive-trait definitions, profile version, baseline/overlay format, routing-evidence schema, and migration contract before implementation.
-2. Add provider/account/catalog checks and routing/admission contract tests without reintroducing Prime runtime or adapter code.
-3. Prove that unavailable accounts, forbidden data policies, insufficient context, malformed identities, and missing candidates fail closed.
-4. Prove that a routing record cannot weaken the exact native admission grant or overwrite selected/actual identity evidence.
+1. Define the eight A-axis scoring rubrics, B fact schema, C operational overlay, D requirement/recipe schema, and E work-character schema before production router code.
+2. Define the continuous pressure function, Head-only uplift rule, and four band thresholds. Do not restore a `50/100/200` grade lookup.
+3. Define the versioned `model_map` format and provenance ownership. The public baseline changes only through a human commit; machine registration is a private proposal.
+4. Add provider/account/catalog checks and routing/admission contract tests without reintroducing Prime runtime or adapter code.
+5. Prove unavailable accounts, forbidden data policies, insufficient context, malformed identities, unproven profiles, and missing candidates fail closed.
+6. Prove routing evidence cannot weaken the exact native admission grant or overwrite selected/actual identity evidence. A qualifying model switch must create a new admission and binding identity.
 
-Phase 1 exits this routing slice only when the model catalog, identity boundary, evidence ownership, and fixed-model migration contract are documented and independently testable.
+Phase 1 exits this routing slice only when the A–E schemas, model catalog, pressure/band projection, identity boundary, evidence ownership, overlay isolation, and fixed-model migration contract are documented and independently testable.

@@ -174,16 +174,16 @@ Goal priority, resource contention, and preemption are decided by a selective **
 
 ## Model routing capacity and Goal isolation — adopted design
 
-Phase 5 treats model/provider capacity as a portfolio resource without allowing contention to lower a Goal's declared quality bar.
+Phase 5 treats model/provider capacity as a portfolio resource without allowing contention to lower a Goal's declared A↔D requirement or calculated pressure floor.
 
-- Reserve provider rate, spend, latency, validation capacity, and recovery reserve per Goal and grade.
-- A routing snapshot, local overlay, pin, grade, routing evidence, and selected identity are Goal-scoped; concurrent Goals cannot share them accidentally.
-- When capacity is exhausted, queue or pause at a safe point. Do not degrade active Goals or silently lower their grade to fit the portfolio.
-- Portfolio Council may reorder, pause, or reallocate within the approved ceilings. It cannot authorize a model below a Goal's bar unless the explicit lower-grade escalation is recorded.
+- Reserve provider rate, spend, latency, validation capacity, and recovery reserve per Goal and pressure/band decision.
+- The public baseline and project-private local overlay are installation/project-scoped. Each Goal receives an immutable routing snapshot, pin, D/E requirements, pressure/band evidence link, and selected identity; concurrent Goals cannot mutate or share those Goal snapshots accidentally.
+- When capacity is exhausted, queue or pause at a safe point. Do not degrade active Goals or silently lower pressure or A↔D requirements to fit the portfolio.
+- Portfolio Council may reorder, pause, or reallocate within the approved ceilings. It cannot authorize a model below a Goal's A↔D requirement unless the applicable pressure-band escalation is recorded.
 - Forecasts use observed model cost, latency, reliability, retries, and completion probability, while capability judgments remain Phase 6 proposals.
 
 ### Additional Phase 5 tests and exit evidence
 
-- Two Goals using the same provider/model pool retain separate routing snapshots, overlays, evidence, and model bindings.
-- Provider throttling queues work without consuming protected validation reserve or silently switching below the bar.
+- Two Goals using the same provider/model pool retain separate immutable routing snapshots, routing-evidence records, and model bindings while reading the same project-private overlay version; concurrent Goals cannot mutate that overlay or each other’s snapshots.
+- Provider throttling queues work without consuming protected validation reserve or silently switching below the A↔D requirement.
 - Reallocation after pause fences the old execution and never reuses the prior Goal's routing or approval state.
