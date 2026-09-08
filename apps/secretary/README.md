@@ -1,6 +1,10 @@
-# Secretary
+# Carnegie
 
 A desktop app (Electron + React) that talks to a Maestro control plane you already have running. It is a client only — it never starts, owns, or manages the control-plane server or PostgreSQL.
+
+## Branding boundary
+
+The desktop UI is branded **Carnegie**. This is a user-facing app name only. The `apps/secretary` path, `@maestro/secretary` workspace package, `MAESTRO_SECRETARY_*` environment variables, internal Secretary domain terminology, database migrations, and architecture documentation remain unchanged.
 
 ## Running it
 
@@ -23,4 +27,4 @@ Every screen from the design is present, but only the ones with a real control-p
 
 ## Native runtime boundary
 
-Secretary calls the Control Plane only. It never starts the Model Gateway, stores provider credentials, or creates execution admissions.
+Carnegie calls the Control Plane only. It never starts the Model Gateway, stores provider credentials, or creates execution admissions.
