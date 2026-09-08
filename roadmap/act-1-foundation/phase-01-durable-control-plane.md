@@ -366,7 +366,7 @@ The canonical design is [Model Pool & Automatic Routing](active/2026-09-08-model
 
 ### Phase 1 routing work order and tests
 
-1. Define the eight A-axis scoring rubrics, B fact schema, C operational overlay, D requirement/recipe schema, and E work-character schema before production router code.
+1. Define the eight A-axis scoring rubrics, B fact schema, C operational overlay, static D task-kind axis-role recipes, runtime TaskDemand provenance, and E work-character schema before production router code.
 2. Define the continuous pressure function, Head-only uplift rule, and four band thresholds. Do not restore a `50/100/200` grade lookup.
 3. Define the versioned `model_map` format and provenance ownership. The public baseline changes only through a human commit; machine registration is a private proposal.
 4. Add provider/account/catalog checks and routing/admission contract tests without reintroducing Prime runtime or adapter code.

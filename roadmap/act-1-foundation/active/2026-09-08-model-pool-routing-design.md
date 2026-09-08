@@ -140,7 +140,7 @@ Only A↔D pairs are matched:
 - required `tool-use` is matched against model `tool-use`;
 - and so on for all eight axes.
 
-The initial recipe list and each recipe's required levels are Phase 1 artifacts. They are versioned and can change through a normal PR without re-scoring the model pool.
+The initial recipe list and axis-role contract are [the Phase 1 recipe artifact](../specs/2026-09-08-task-kind-recipes-and-runtime-demand.md). The numeric D requirements are runtime Head decisions grounded in the concrete Task Contract and recorded with provenance; they are not fixed properties of a task kind.
 
 ### 5.2 E. Work character — pressure and constraints
 
@@ -287,7 +287,7 @@ Per the interview contract, these are settled structural choices; numeric rubric
 
 - **Demand rides on the Mission Bundle**, reusing the existing per-unit durable record rather than adding a parallel one.
 - **Eight A axes are closed for the first version:** reasoning, coding, verification, instruction-fidelity, tool-use, long-context, knowledge, and refusal-calibration. Creativity and long-horizon remain future append-only extensions.
-- **Task-kind recipes compose D requirements over those eight axes only.** E work-character inputs remain separate.
+- **Task-kind recipes describe axis roles over those eight axes only.** Runtime TaskDemand records the Head's numeric D requirements and provenance; E work-character inputs remain separate.
 - **Pressure is continuous and computed from E risk, reversibility, and verification attachment.** Material scale, time pressure, and budget headroom constrain B/C. The Head may uplift but never lower the computed floor.
 - **Four pressure bands are organizational projections** for automatic, Department Head, Encore Council, and user decisions. They do not participate in matching.
 - **Routing evidence needs its own store.** It cannot extend `native_execution_bindings`: that table is append-only, deliberately identity-only, and carries a database-level `CHECK` that selected equals actual. Routing rationale — A/D requirements, E inputs, pressure, band, candidate set, hard-filter rejections, profile versions, and selection rationale — belongs beside it.
@@ -303,7 +303,7 @@ Phase 1 is reopened for the stable routing substrate, not for automatic model se
 1. **A-axis scoring rubric:** definitions, `0..200` scoring guidance, one-line reason requirement, evidence references, and explicit unproven semantics for the eight fixed axes.
 2. **B fact schema:** context capacity, input/output pricing, authentication, data policy, modalities, and tool-call support as provider-declared hard facts.
 3. **C operational overlay:** local measurements for latency, cost, failures/timeouts, provider errors, and availability/account binding without mutating `model_map`.
-4. **D requirement schema and recipes:** one required level per A axis; initial task-kind recipes compose only these eight axes.
+4. **D requirement schema and recipes:** static task-kind axis roles over these eight axes, plus a runtime TaskDemand with one Head-declared level per A axis.
 5. **E work-character schema:** risk, reversibility, verification attachment, material scale, time pressure, and budget headroom; only the first three feed pressure.
 6. **Pressure function:** a continuous calculation with a Head uplift that cannot lower the calculated floor. No direct tier assignment.
 7. **Pressure bands:** four labels and numeric thresholds for approval/escalation/recording/reporting only; no matching behavior.
@@ -314,13 +314,15 @@ Phase 1 is reopened for the stable routing substrate, not for automatic model se
 
 The first schema slice now exists at `packages/domain/src/model-profile.ts` (profile schema version `2`) with focused tests in `packages/domain/src/model-profile.test.ts`. It validates the closed eight-axis vector, `0..200` scored values, one-line rationale, evidence references, explicit `unproven` entries, and own-property/sparse-input boundaries. The human calibration guidance now exists in [the scoring-rubric artifact](../specs/2026-09-08-model-capability-scoring-rubric.md); initial model scores and production routing are still absent.
 
+The D slice now exists at `packages/domain/src/task-demand.ts` with [the recipe and runtime-demand artifact](../specs/2026-09-08-task-kind-recipes-and-runtime-demand.md). Static recipes define only axis roles. Runtime `TaskDemand` stores Head-declared numeric levels and provenance. The policy for choosing those levels from a concrete Task Contract remains open.
+
 Phase 1 does not claim a production router until each artifact has a schema/validator, focused RED/GREEN tests, and a native admission test proving routing evidence cannot widen authority, account, data-policy, context, or exact model identity.
 
 ## 15. Remaining implementation artifacts
 
 The following concrete artifacts are intentionally still open for the Phase 1 slices:
 
-1. The initial task-kind recipe list and D requirement levels.
+1. The runtime policy for deriving and reviewing D levels from concrete Task Contracts and Head decisions.
 2. The continuous pressure calculation function.
 3. The four pressure-band threshold values.
 4. The `model_map` file format and initial entries.
