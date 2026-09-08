@@ -8,6 +8,7 @@ import {
   assertValidTaskDemand,
   assertValidTaskKindRecipe,
   composeTaskKindEmphasis,
+  declareTaskDemand,
   getTaskKindRecipe,
   type TaskCapabilityRequirement,
   type TaskDemand,
@@ -70,6 +71,36 @@ describe("task-kind recipes", () => {
 });
 
 describe("runtime task demand", () => {
+  it("seals explicit Head levels without deriving them from the static recipe", () => {
+    const low = declareTaskDemand({
+      taskKinds: ["coding"],
+      requirements: { ...demand().requirements, coding: requirement(40) },
+      taskContractRef: "task-contract:low-risk-formatting",
+      headDecisionRef: "head-decision:low-risk-formatting",
+    });
+    const high = declareTaskDemand({
+      taskKinds: ["coding"],
+      requirements: { ...demand().requirements, coding: requirement(180) },
+      taskContractRef: "task-contract:authority-migration",
+      headDecisionRef: "head-decision:authority-migration",
+    });
+    expect(low.requirements.coding.level).toBe(40);
+    expect(high.requirements.coding.level).toBe(180);
+    expect(low.taskKinds).toEqual(high.taskKinds);
+  });
+
+  it("rejects extra routing or incomplete declaration fields before sealing", () => {
+    const valid = {
+      taskKinds: ["coding"],
+      requirements: demand().requirements,
+      taskContractRef: "task-contract:1",
+      headDecisionRef: "head-decision:1",
+    };
+    expect(() => declareTaskDemand({ ...valid, selectedModel: "openai/model" })).toThrow(TaskDemandValidationError);
+    expect(() => declareTaskDemand({ ...valid, headDecisionRef: "" })).toThrow(TaskDemandValidationError);
+    expect(() => declareTaskDemand({ ...valid, requirements: { ...valid.requirements, coding: undefined } })).toThrow(TaskDemandValidationError);
+  });
+
   it("accepts a Head-declared 0..200 requirement vector with provenance", () => {
     expect(() => assertValidTaskDemand(demand({ requirements: {
       ...demand().requirements,

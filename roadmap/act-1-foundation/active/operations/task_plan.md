@@ -1324,3 +1324,11 @@ Before production router code, create and review: the eight A-axis scoring rubri
 - Independent review found that `Object.keys` alone allowed unknown fields on custom prototypes or hidden non-enumerable/symbol properties. This was a fail-closed gap in the new D validator and the existing A validator.
 - Added RED regressions for outer and nested prototype fields, non-enumerable fields, and symbol fields. Validators now require plain objects (`Object.prototype` or `null`) and inspect `Reflect.ownKeys`.
 - Focused task-demand tests pass 9/9 and model-profile tests pass 14/14 after remediation.
+
+
+## 2026-09-08 — Explicit Head TaskDemand declaration policy
+
+- Added `declareTaskDemand` as the runtime D boundary. It accepts only selected task kinds, a complete eight-axis `0..200` requirement vector, and Task Contract/Head decision references.
+- The function adds schema version, validates before crossing the boundary, rejects extra routing fields and incomplete vectors, and returns copied values. It never derives numbers from static recipes or chooses a provider/model.
+- TDD evidence: declaration tests pass 12/12 after the missing entrypoint was observed RED.
+- **Next:** decide and document durable Mission Bundle/persistence placement for the declared demand before implementing E pressure or routing.
