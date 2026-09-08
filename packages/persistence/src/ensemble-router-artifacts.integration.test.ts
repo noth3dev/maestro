@@ -133,9 +133,39 @@ describeDatabase("Ensemble Router artifacts with PostgreSQL", () => {
       EnsembleRouterArtifactConflictError,
     );
 
+    const before = await pool.query<{ overlay: unknown; content_hash: string }>(
+      "SELECT overlay, content_hash FROM ensemble_router_operational_overlays WHERE installation_ref = $1 AND project_ref = $2 AND version = $3",
+      [stored.installationRef, stored.projectRef, stored.version],
+    );
     const snapshot = await snapshotOperationalOverlayForGoalDurably(pool, stored, "goal-bound");
+    const sameVersion = await snapshotOperationalOverlayForGoalDurably(pool, stored, "goal-bound-2");
     expect(snapshot.overlayVersion).toBe(stored.version);
     expect(snapshot.observations).toEqual(stored.observations);
+    expect(sameVersion.overlayVersion).toBe(snapshot.overlayVersion);
+    expect(sameVersion.goalRef).not.toBe(snapshot.goalRef);
+    const after = await pool.query<{ overlay: unknown; content_hash: string }>(
+      "SELECT overlay, content_hash FROM ensemble_router_operational_overlays WHERE installation_ref = $1 AND project_ref = $2 AND version = $3",
+      [stored.installationRef, stored.projectRef, stored.version],
+    );
+    expect(after.rows).toEqual(before.rows);
+  });
+
+  it("rejects a stored Goal snapshot whose payload hash was tampered", async () => {
+    const stored = overlay(1);
+    await recordOperationalOverlay(pool, stored);
+    const payload = {
+      schemaVersion: 1,
+      installationRef: stored.installationRef,
+      projectRef: stored.projectRef,
+      goalRef: "goal-tampered",
+      overlayVersion: stored.version,
+      observations: stored.observations,
+    };
+    await pool.query(
+      "INSERT INTO ensemble_router_goal_overlay_snapshots (goal_ref, installation_ref, project_ref, overlay_version, snapshot, content_hash) VALUES ($1, $2, $3, $4, $5::jsonb, $6)",
+      [payload.goalRef, payload.installationRef, payload.projectRef, payload.overlayVersion, JSON.stringify(payload), "f".repeat(64)],
+    );
+    await expect(readGoalOperationalOverlaySnapshot(pool, payload.goalRef)).rejects.toThrow("content hash");
   });
 
   it("upgrades a non-empty 0072 evidence table without mutating its append-only rows", async () => {
