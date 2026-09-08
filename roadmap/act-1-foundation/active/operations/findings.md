@@ -1181,3 +1181,9 @@ All downstream routing documentation must use this contract and must not restore
 
 
 - `--maxWorkers=1` alone did not remove Vitest file-level parallelism: the serialized-worker run still failed 4 files/33 tests, with `retention_class` type collision, migration deadlock, and missing tables. Vitest reports `--fileParallelism` defaults to true; the next diagnostic run disables both file parallelism and workers.
+
+
+## 2026-09-09 — Plan 1 S1 closure evidence
+
+- Serialized full-PG verification passed 185/185 files and 1,231/1,231 tests. Main re-verification passed build, lint, 127/127 non-DB test files, and the focused 8/8 real-PG S1 tests.
+- S1 is merged and cleaned up. The 1-minute test heartbeat was disabled after each completed run, as required.
