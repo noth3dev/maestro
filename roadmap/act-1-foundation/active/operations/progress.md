@@ -2977,3 +2977,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - The runtime now requires immutable parent context, exact model-policy inheritance, subset capabilities, and non-increasing child budgets before creating a child record.
 - Provider-qualified model parsing now rejects extra separators and whitespace before gateway admission.
 - Verification completed with focused 22/22, full PostgreSQL 172 files / 1131 tests, build, lint, diff check, and independent ACCEPT review.
+
+
+## 2026-09-08 — Council deadline fixture correction
+
+- Fixed the flaky late-brief PostgreSQL integration fixture without changing production Council behavior.
+- Focused live regression passed; independent review returned `ACCEPT`.
+- Fresh `npm run check` passed: 172 test files and 1131 tests, 0 failures. `npm run lint` and `git diff --check` also passed.
