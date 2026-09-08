@@ -3113,5 +3113,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 ## 2026-09-08 — Ensemble Router artifact persistence checkpoint
 
 - Main now includes migration [`packages/persistence/migrations/0072_ensemble_router_artifacts.sql`](../../../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql) and the exported [`packages/persistence/src/ensemble-router-artifacts.ts`](../../../../packages/persistence/src/ensemble-router-artifacts.ts) adapter.
-- C operational overlays and immutable per-Goal snapshots are durably stored and integrity-checked. Routing evidence has a domain validator, wire schema, and append-only durable persistence.
-- Remaining Ensemble Router gates are router selection, fixed-model pin migration, host-tool writes/effects, and live host-tool acceptance. Exact native `modelPolicy` admission remains authoritative; no production selector is claimed.
+- C operational overlays and immutable per-Goal snapshots are durably stored and integrity-checked. Routing evidence has a domain validator, wire schema, append-only durable persistence, and a real PostgreSQL integration gate.
+- Pure `selectRoutedModel` now enforces A↔D weakest-link matching and B/C hard filters. Remaining gates are production selector/native-admission wiring, fixed-model pin/evidence migration, host-tool writes/effects, and live host-tool acceptance. Exact native `modelPolicy` admission remains authoritative.

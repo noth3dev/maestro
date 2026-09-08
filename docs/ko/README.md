@@ -33,7 +33,7 @@ Maestro는 신뢰할 수 있고 장시간 실행되는 다중 에이전트 목�
 
 - **대화 경로:** Control Plane의 `MaestroAgentRuntime`이 인증된 `apps/model-gateway` 프로세스를 사용합니다.
 - **Provider 인증:** API key는 gateway credential store에만 남습니다. OpenAI ChatGPT 구독 로그인은 공식 Codex app-server에 위임하며 Maestro는 로그인 metadata와 state만 저장합니다.
-- **워커 경로:** `ExecutionKernelPort`는 인증된 Model Gateway transport를 사용하며 Ensemble Router selection은 아직 구현되지 않았습니다. 모든 admission은 host context, capability grant, model policy, account binding 및 idempotency를 포함합니다. Production host tool은 아직 등록되지 않았으며 미등록 tool은 fail-closed이고 native Worker는 text/evidence만 생성합니다.
+- **워커 경로:** `ExecutionKernelPort`는 인증된 Model Gateway transport를 사용합니다. Pure Ensemble Router selector는 있으나 production selector/native-admission wiring은 아직 구현되지 않았습니다. 모든 admission은 host context, capability grant, model policy, account binding 및 idempotency를 포함합니다. Production host tool은 아직 등록되지 않았으며 미등록 tool은 fail-closed이고 native Worker는 text/evidence만 생성합니다.
 - **터미널 UI:** `@earendil-works/pi-tui`는 표현 계층에만 사용하며 실행 권한이 없습니다.
 
 ## Ensemble Router 구현 현황
@@ -48,7 +48,7 @@ Maestro는 신뢰할 수 있고 장시간 실행되는 다중 에이전트 목�
 - **4개 pressure band:** domain/wire schema ([`packages/domain/src/pressure-band.ts`](../../packages/domain/src/pressure-band.ts), [`packages/contracts/src/index.ts`](../../packages/contracts/src/index.ts)).
 - **Human-owned baseline:** `model_map` domain validator와 비어 있는 [`config/model_map.json`](../../config/model_map.json).
 
-[`0072_ensemble_router_artifacts.sql`](../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql)과 [`ensemble-router-artifacts.ts`](../../packages/persistence/src/ensemble-router-artifacts.ts)가 durable C overlay/Goal snapshot storage 및 append-only routing-evidence storage를 구현합니다. Router selection, fixed-model pin migration, host-tool write/effect 및 live host-tool acceptance는 **아직 구현되지 않았습니다**. 현재 native admission은 정확히 하나의 `modelPolicy` identity를 사용하며, 필요한 host-created 경로에서는 `MAESTRO_NATIVE_MODEL`이 명시적 fixed-model pin/routing-off 입력으로 남아 있습니다. Production host-tool registry가 비어 있으므로 native Worker는 text/evidence-only입니다. 자세한 내용은 [canonical registry](../../roadmap/_meta/naming-registry.md)와 [Ensemble Router 설계](../../roadmap/act-1-foundation/active/2026-09-08-ensemble-router-routing-design.md)를 참조하세요.
+[`routing-selector.ts`](../../packages/domain/src/routing-selector.ts)가 명시적 A↔D weakest-link 검사와 B/C hard filter를 갖는 pure selector를 구현합니다. [`0072_ensemble_router_artifacts.sql`](../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql)과 [`ensemble-router-artifacts.ts`](../../packages/persistence/src/ensemble-router-artifacts.ts)가 durable C overlay/Goal snapshot 및 append-only routing-evidence storage를 제공하며, 실제 PostgreSQL gate는 [`ensemble-router-artifacts.integration.test.ts`](../../packages/persistence/src/ensemble-router-artifacts.integration.test.ts)입니다. Production selector/native-admission wiring, fixed-model evidence migration, host-tool write/effect 및 live host-tool acceptance는 **아직 구현되지 않았습니다**. 현재 native admission은 정확히 하나의 `modelPolicy` identity를 사용하며, 필요한 host-created 경로에서는 `MAESTRO_NATIVE_MODEL`이 명시적 fixed-model pin/routing-off 입력으로 남아 있습니다. Production host-tool registry가 비어 있으므로 native Worker는 text/evidence-only입니다. 자세한 내용은 [canonical registry](../../roadmap/_meta/naming-registry.md)와 [Ensemble Router 설계](../../roadmap/act-1-foundation/active/2026-09-08-ensemble-router-routing-design.md)를 참조하세요.
 
 ## 핵심 아키텍처 및 4대 기둥 (Core Architecture & Pillars)
 
