@@ -94,4 +94,4 @@ flowchart TD
 
 ## Ensemble Router persistence boundary
 
-The PostgreSQL Control Plane persists Goal lifecycle, leases, events, outbox records, and native execution bindings. It does **not** yet have persistence migrations for the C operational overlay or immutable per-Goal overlay snapshots, and it does not persist routing evidence. These missing stores are separate from the existing native identity bindings and must not be implied by the current durability model.
+The PostgreSQL Control Plane persists Goal lifecycle, leases, events, outbox records, and native execution bindings. Migration [`0072_ensemble_router_artifacts.sql`](../packages/persistence/migrations/0072_ensemble_router_artifacts.sql) and [`ensemble-router-artifacts.ts`](../packages/persistence/src/ensemble-router-artifacts.ts) now persist the C operational overlay, immutable per-Goal overlay snapshots, and append-only routing evidence. These artifacts remain separate from native identity bindings; persistence does not imply that a router selector is enabled.

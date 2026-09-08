@@ -94,4 +94,4 @@ flowchart TD
 
 ## Ensemble Router 영속성 경계
 
-PostgreSQL Control Plane은 Goal lifecycle, lease, event, outbox 및 native execution binding을 저장합니다. 하지만 C operational overlay와 불변 Goal overlay snapshot을 위한 persistence migration 및 durable storage는 아직 없고 routing evidence도 저장하지 않습니다. 이 누락된 저장소는 기존 native identity binding과 별개입니다.
+PostgreSQL Control Plane은 Goal lifecycle, lease, event, outbox 및 native execution binding을 저장합니다. Migration [`0072_ensemble_router_artifacts.sql`](../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql) 및 [`ensemble-router-artifacts.ts`](../../packages/persistence/src/ensemble-router-artifacts.ts)가 C operational overlay, 불변 Goal overlay snapshot 및 append-only routing evidence를 저장합니다. 이 artifact persistence는 기존 native identity binding과 별개이며 router selector enablement를 의미하지 않습니다.
