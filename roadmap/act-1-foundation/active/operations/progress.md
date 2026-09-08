@@ -3265,3 +3265,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - The prior worker recovery red did not reproduce; `worker.kill-restart.integration.test.ts` passed in the green full run.
 - S3 exit evidence is now complete: real PostgreSQL/API/TUI parity, persisted-cursor reload across a fresh subscription, exact event IDs with no duplicates, explicit 401/403/503 failure states, DB-less skip safety, independent `REVIEW: PASS`, focused tests, build, lint, diff check, and serialized full verification.
 - Remaining S3 lifecycle steps: commit, merge to current main, main revalidation, worktree/branch deletion, push, and post-push CI.
+
+
+## 2026-09-09 — Plan 1 S3 main revalidation
+
+- Revalidated clean main after merge commit `c5fe042`: build, lint, and diff check exited 0.
+- Serialized PostgreSQL full revalidation passed with exit code 0: **189/189 test files and 1,258/1,258 tests**, duration 567.93s.
+- S3 implementation, review, merge, main revalidation, and exit evidence are complete. Remaining operational steps are worktree/branch cleanup, push, and post-push CI.
