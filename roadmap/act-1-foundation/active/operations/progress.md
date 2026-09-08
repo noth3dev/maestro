@@ -2805,3 +2805,52 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Updated `task_plan.md` to point at the latest local host-tool commit `989dd50`; no implementation state changed.
 - The local branch remains ahead of `origin/main`; only the user-owned `.gitignore` is uncommitted.
+
+
+## 2026-09-08 — parent-death watchdog
+
+- Added `createIpPythonParentWatchdog` with deterministic `checkNow`, periodic polling, one-shot termination, and fail-closed liveness-error handling.
+- Process-kernel composition now starts/stops the watchdog with the child channel.
+- Added tests for parent death, liveness-check failure, and lifecycle start/stop.
+- Production still needs to supply a process-group termination callback and durable orphan/restart evidence.
+
+
+## 2026-09-08 — Git read gateway slice
+
+- Added `packages/agent-runtime/src/ipython-git-gateway.ts` and exported it from the package entrypoint.
+- Added focused tests for fixed repository targeting, Goal path-scope rejection, ref validation, and transparent GitPort failures.
+- RED evidence: the focused test initially failed because the gateway module did not exist.
+- GREEN evidence: focused tests passed (3/3); `npm run build` passed.
+- This is a composition adapter over an already-authorized `GitPort`; production Control Plane wiring and complete authority context propagation are still not enabled.
+
+
+## 2026-09-08 — review-driven Git/watchdog hardening
+
+- Fixed persistent-session reuse so changing host-generated `commandId`/`toolCallId` does not create a false session rebinding failure; Goal/session-stable fields remain immutable.
+- Host request dispatch now receives the current per-call binding, while rejecting stable binding changes.
+- Fixed overlapping async parent checks with an in-flight guard; termination is one-shot.
+- Added required parent identity and PID-reuse detection, with fail-closed identity lookup errors.
+- Hardened Git repository scope checks with canonical path/ancestor resolution and added symlink escape and invalid-ref tests.
+- Independent review initially returned NOT READY; all Important findings were corrected. A fresh full check is required before commit.
+
+
+## 2026-09-08 — post-review binding regression coverage
+
+- Added protocol-level coverage proving successive cells in one persistent session receive their current per-call binding, not the first call's command/tool-call identity.
+- Focused host tests now cover 12 protocol cases, including dynamic binding delivery, overlapping watchdog checks, PID reuse, and liveness failure.
+
+
+## 2026-09-08 — interrupt teardown verification
+
+- Added and initially failed a process-kernel test for `interruptGraceMs` forwarding; the test timed out because transport close did not settle the active cell.
+- Forwarded `interruptGraceMs` into the inner JSON-lines kernel.
+- Made transport-initiated close notify registered close listeners so active cells resolve `unknown` with `child_closed`.
+- Focused process suite now passes 6/6 after the correction.
+- A fresh full check and final reviewer confirmation remain required before commit.
+
+
+## 2026-09-08 — flaky lifecycle test correction
+
+- The verification run failed one real-child test because a fixed 100 ms kill delay sometimes raced the Python ready handshake (`handshake_timeout` observed instead of `child_closed`).
+- Replaced the timing guess with a deterministic wait for the outbound `execute` frame, then terminate the child.
+- Focused process suite passes 6/6 after the correction; full check must be rerun.
