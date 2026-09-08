@@ -118,6 +118,26 @@ describeDatabase("Ensemble Router artifacts with PostgreSQL", () => {
     );
   });
 
+  it("binds each Goal snapshot to the exact durable overlay version", async () => {
+    const stored = overlay(1);
+    await recordOperationalOverlay(pool, stored);
+
+    const forged = {
+      ...stored,
+      observations: [{ ...stored.observations[0]!, measuredLatencyMs: 999 }],
+    };
+    await expect(snapshotOperationalOverlayForGoalDurably(pool, forged, "goal-forged")).rejects.toBeInstanceOf(
+      EnsembleRouterArtifactConflictError,
+    );
+    await expect(snapshotOperationalOverlayForGoalDurably(pool, { ...stored, version: 2 }, "goal-missing")).rejects.toBeInstanceOf(
+      EnsembleRouterArtifactConflictError,
+    );
+
+    const snapshot = await snapshotOperationalOverlayForGoalDurably(pool, stored, "goal-bound");
+    expect(snapshot.overlayVersion).toBe(stored.version);
+    expect(snapshot.observations).toEqual(stored.observations);
+  });
+
   it("upgrades a non-empty 0072 evidence table without mutating its append-only rows", async () => {
     const legacySchema = `ensemble_router_legacy_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     await basePool.query(`CREATE SCHEMA "${legacySchema}"`);
