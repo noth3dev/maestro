@@ -1228,3 +1228,20 @@ The production read-only path is not considered verified until Goal path scopes,
 - **[resolved in current slice]** The local CLI bootstrap now treats OS-keyring `null` values as absent metadata instead of calling `.trim()` on `null`.
 - **[resolved in current slice]** PostgreSQL local operator/credential IDs are now canonical UUIDs. The gateway operator binding remains an independent, provider-facing string and is never reused as a database UUID. A generated local UUID is reused from the credential envelope on later launches; explicit `MAESTRO_LOCAL_OPERATOR_ID` values are validated before services start.
 - **Acceptance evidence:** focused keyring/bootstrap tests (17/17), build/lint/diff checks, full real-PostgreSQL check (172 files / 1128 tests), and a real local Control Plane + Model Gateway bootstrap. Account login still requires a Linux-capable Codex app-server command when `openai-codex` is selected.
+
+
+## 2026-09-08 — Native model-policy enforcement slice
+
+- **[implemented]** Mission Bundle `approvedModels` selection is enforced before provider admission, and the selected provider-qualified model is carried through `SpawnRequest.modelPolicy` and the exact `CapabilityGrant.modelPolicy`.
+- **[implemented]** Native Control Plane admission rejects missing, multi-model, malformed, or grant-mismatched policies before the Model Gateway is called. The runtime also rejects child policy widening and provider-result identity mismatch.
+- **[implemented]** Native execution binding evidence persists selected and actual `ModelIdentity` plus gateway/account binding identity.
+- The former Prime-adapter wording is superseded by the native-only architecture; no Prime runtime or adapter is reintroduced.
+
+
+## 2026-09-08 — Native model-policy slice final verification
+
+- **[verified]** Focused native-kernel, runtime-inheritance, and model-reference suites pass: 22 tests.
+- **[verified]** `npm run build`, `npm run lint`, and `git diff --check` pass.
+- **[verified]** Fresh PostgreSQL full check passes: 172 test files and 1131 tests, 0 failures.
+- **[verified]** Independent re-review returned `ACCEPT` after the child inheritance hardening.
+- This closes the native model-policy slice only. Durable effect journaling, restart/orphan reconciliation, approvals, writes, stop/fencing, recovery, and remaining Phase 2 tools remain separate roadmap items.
