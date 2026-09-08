@@ -25,6 +25,10 @@ describe("parseConfig", () => {
     });
   });
 
+  it("accepts an explicit trusted IPython Python executable", () => {
+    expect(parseConfig({ ...required, MAESTRO_IPYTHON_PYTHON: "/opt/python/bin/python3" }).ipythonPythonExecutable).toBe("/opt/python/bin/python3");
+  });
+
   it("requires an explicit provider-qualified native model", () => {
     expect(parseConfig(required).nativeModelRef).toBeUndefined();
     expect(() => parseConfig({ ...required, MAESTRO_NATIVE_MODEL: "gpt-5" })).toThrow("Invalid Maestro configuration");

@@ -20,6 +20,9 @@ const context = {
   turnId: "turn-1",
   sessionVersion: 0,
   controllerPolicyHash: "policy-1",
+  authorityPolicyVersion: 1,
+  controlEpoch: "1",
+  budgetEffectCents: 0,
   capabilityGrant: {
     grantId: "grant-1",
     allowedTools: ["ipython"],
@@ -98,19 +101,26 @@ describe("persistent ipython tool boundary", () => {
     const tool = createIpPythonTool({ sessions: manager });
 
     await expect(tool.execute({ code: "show_lines('README.md')" }, context)).resolves.toEqual({ status: "ok", content: "read-only result" });
-    expect(requests).toEqual([{ sessionId: '["project-1","goal-1","conversation-1"]', code: "show_lines('README.md')", binding: { sessionId: '["project-1","goal-1","conversation-1"]', commandId: "command-1", toolCallId: "tool-call-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["public", "workspace"] } }]);
+    expect(requests).toEqual([{ sessionId: '["project-1","goal-1","conversation-1"]', code: "show_lines('README.md')", binding: { sessionId: '["project-1","goal-1","conversation-1"]', commandId: "command-1", toolCallId: "tool-call-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["public", "workspace"], authorityPolicyVersion: 1, controlEpoch: "1", budgetEffectCents: 0 } }]);
     await expect(tool.execute({ code: "show_lines('package.json')" }, { ...context, commandId: "command-2", toolCallId: "tool-call-2" })).resolves.toEqual({ status: "ok", content: "read-only result" });
     expect(requests).toHaveLength(2);
     expect(requests[1]).toMatchObject({ sessionId: '["project-1","goal-1","conversation-1"]', binding: { commandId: "command-2", toolCallId: "tool-call-2" } });
   });
 
 
+  it("fails closed when the host-owned authority context is missing", async () => {
+    const { authorityPolicyVersion: _policy, controlEpoch: _epoch, budgetEffectCents: _budget, ...withoutAuthority } = context;
+    const manager = createIpPythonSessionManager({ createKernel: () => ({ async execute() { return { state: "ok", dataClass: "workspace", content: "must-not-run" }; } }) });
+    const tool = createIpPythonTool({ sessions: manager });
+    await expect(tool.execute({ code: "print('x')" }, withoutAuthority)).rejects.toThrow("authority context");
+  });
+
   it("passes the immutable session binding to kernel provisioning and rejects rebinding", async () => {
     const bindings: unknown[] = [];
     const manager = createIpPythonSessionManager({
       createKernel: (_sessionId, binding) => { bindings.push(binding); return { async execute() { return { state: "ok", dataClass: "public", content: "ok" }; } }; },
     });
-    const bound = { sessionId: "session-1", commandId: "command-1", toolCallId: "tool-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: [], outboundDataClasses: ["public"] } as const;
+    const bound = { sessionId: "session-1", commandId: "command-1", toolCallId: "tool-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: [], outboundDataClasses: ["public"], authorityPolicyVersion: 1, controlEpoch: "1", budgetEffectCents: 0 } as const;
     await expect(manager.execute({ sessionId: bound.sessionId, code: "one", binding: bound })).resolves.toMatchObject({ state: "ok" });
     expect(bindings).toEqual([bound]);
     await expect(manager.execute({ sessionId: bound.sessionId, code: "two", binding: { ...bound, goalId: "goal-2" } })).rejects.toThrow("binding changed");

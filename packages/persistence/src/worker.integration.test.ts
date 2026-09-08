@@ -200,6 +200,7 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     // The exact grant, not a widened or narrowed copy.
     expect(kernel.spawnRequests[0]!.capabilities!.allowedTools).toEqual(["read"]);
     expect(kernel.spawnRequests[0]!.capabilities!.allowedSkills).toEqual(["research"]);
+    expect(kernel.spawnRequests[0]!.grant?.outboundDataClasses).toEqual(["workspace"]);
   });
 
   it("rejects a selected model outside the immutable Mission Bundle allowlist before provider admission", async () => {
@@ -218,7 +219,7 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     expect(request.modelPolicy).toEqual(["test/model-a"]);
     expect(request.grant?.allowedTools).toEqual(bundle.substance.allowedTools);
     expect(request.grant?.allowedSkills).toEqual(bundle.substance.allowedSkills);
-    expect(request.context).toMatchObject({ projectId, goalId: proof.goalId, missionBundleId: bundle.contentHash, fencingToken: proof.fencingToken });
+    expect(request.context).toMatchObject({ projectId, goalId: proof.goalId, missionBundleId: bundle.contentHash, fencingToken: proof.fencingToken, authorityPolicyVersion: plan.version, controlEpoch: "1", budgetEffectCents: 0 });
     expect(request.idempotencyKey).toBe(commandId);
     expect(worker.status).toBe("spawned");
     const binding = await pool.query<{ worker_id: string; goal_id: string; project_id: string; selected_model_provider: string; selected_model_id: string; actual_model_provider: string; actual_model_id: string; account_ref: string; gateway_instance_id: string; gateway_binding_id: string }>(

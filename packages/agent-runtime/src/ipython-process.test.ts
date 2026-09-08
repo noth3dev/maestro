@@ -80,20 +80,21 @@ describe("IPython process kernel composition", () => {
 
   it("reports an unknown outcome when the real child dies mid-cell", async () => {
     let channel: PythonChildChannel | undefined;
-    const binding = { sessionId: "session-death", commandId: "command-death", toolCallId: "tool-death", operatorId: "operator-death", projectId: "project-death", goalId: "goal-death", pathScope: ["/workspace/project-death"], outboundDataClasses: ["workspace"] } as const;
+    const binding = { sessionId: "session-death", commandId: "command-death", toolCallId: "tool-death", operatorId: "operator-death", projectId: "project-death", goalId: "goal-death", pathScope: ["/workspace/project-death"], outboundDataClasses: ["workspace"], authorityPolicyVersion: 1, controlEpoch: "1", budgetEffectCents: 0 } as const;
     const kernel = createIpPythonProcessKernel({
       createProcess: () => { channel = new PythonChildChannel(); return channel; },
       hostRequest: async () => ({ state: "ok" as const, dataClass: "workspace" as const, content: "unused" }),
     }, binding.sessionId, binding);
-    const pending = kernel.execute({ sessionId: binding.sessionId, code: "while True: pass", binding });
-    await vi.waitFor(() => expect(channel?.writes.some((data) => JSON.parse(data).type === "execute")).toBe(true), { timeout: 3_000 });
-    channel?.terminate();
-    await expect(pending).resolves.toMatchObject({ state: "unknown", reason: "child_closed" });
-    await kernel.close();
+    try {
+      const pending = kernel.execute({ sessionId: binding.sessionId, code: "while True: pass", binding });
+      await vi.waitFor(() => expect(channel?.writes.some((data) => JSON.parse(data).type === "execute")).toBe(true), { timeout: 3_000 });
+      channel?.terminate();
+      await expect(pending).resolves.toMatchObject({ state: "unknown", reason: "child_closed" });
+    } finally { await kernel.close(); }
   });
 
   it("composes the real constrained child with the read-only host router", async () => {
-    const binding = { sessionId: "session-2", commandId: "command-2", toolCallId: "tool-2", operatorId: "operator-2", projectId: "project-2", goalId: "goal-2", pathScope: ["/workspace/project-2"], outboundDataClasses: ["workspace"] } as const;
+    const binding = { sessionId: "session-2", commandId: "command-2", toolCallId: "tool-2", operatorId: "operator-2", projectId: "project-2", goalId: "goal-2", pathScope: ["/workspace/project-2"], outboundDataClasses: ["workspace"], authorityPolicyVersion: 1, controlEpoch: "1", budgetEffectCents: 0 } as const;
     const hostRequest = createReadOnlyHostRequestHandler({
       binding,
       gateway: createIpPythonReadOnlyGateway({

@@ -35,6 +35,18 @@ describe("authorized read-only file adapter", () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
+  it("enforces the Goal path scope inside the configured workspace", async () => {
+    const root = await mkdtemp(join(tmpdir(), "maestro-read-"));
+    try {
+      await mkdir(join(root, "scoped"));
+      await writeFile(join(root, "README.md"), "root", "utf8");
+      await writeFile(join(root, "scoped", "README.md"), "scoped", "utf8");
+      const port = createAuthorizedReadOnlyFilePort({ authority: gateway(), context, workspaceRoot: root, pathScope: ["scoped"] });
+      await expect(port.readFile("scoped/README.md")).resolves.toBe("scoped");
+      await expect(port.readFile("README.md")).rejects.toThrow("outside");
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   it("rejects a symlink that escapes the workspace and Git metadata paths", async () => {
     const root = await mkdtemp(join(tmpdir(), "maestro-read-"));
     const outside = await mkdtemp(join(tmpdir(), "maestro-outside-"));
@@ -45,6 +57,25 @@ describe("authorized read-only file adapter", () => {
       await expect(port.readFile("link/secret.txt")).rejects.toThrow("outside");
       await expect(port.readFile(".git/config")).rejects.toThrow("sensitive");
     } finally { await rm(root, { recursive: true, force: true }); await rm(outside, { recursive: true, force: true }); }
+  });
+
+  it("rejects invalid UTF-8 instead of returning replacement characters", async () => {
+    const root = await mkdtemp(join(tmpdir(), "maestro-read-"));
+    try {
+      await writeFile(join(root, "binary.bin"), Buffer.from([0xff, 0xfe]));
+      const port = createAuthorizedReadOnlyFilePort({ authority: gateway(), context, workspaceRoot: root });
+      await expect(port.readFile("binary.bin")).rejects.toThrow("UTF-8");
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  it("rejects a non-sensitive symlink name that resolves to a sensitive file", async () => {
+    const root = await mkdtemp(join(tmpdir(), "maestro-read-"));
+    try {
+      await writeFile(join(root, ".env"), "SECRET=bad", "utf8");
+      await symlink(join(root, ".env"), join(root, "public-link"), "file");
+      const port = createAuthorizedReadOnlyFilePort({ authority: gateway(), context, workspaceRoot: root });
+      await expect(port.readFile("public-link")).rejects.toThrow("sensitive");
+    } finally { await rm(root, { recursive: true, force: true }); }
   });
 
   it("fails closed for denied authority, traversal, sensitive paths, and oversized files", async () => {

@@ -2863,3 +2863,84 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Independent final read-only review returned READY after the forwarding and close-settlement corrections.
 - Committed locally as `c76b57e feat(agent-runtime): harden git gateway lifecycle`.
 - Only the pre-existing user-owned `.gitignore` change remains uncommitted; no remote push was performed.
+
+
+## 2026-09-08 — production-owned child channel
+
+- Added `createIpPythonOwnedProcessChannel` and exported it from `@maestro/agent-runtime`.
+- Added tests for detached spawn/minimal environment, stdout-vs-stderr separation, process-group SIGTERM/SIGKILL teardown, and a real `/usr/bin/python3 -I -S` execution.
+- Passed `MAESTRO_PARENT_PID` and `MAESTRO_PARENT_IDENTITY` to the child without inheriting caller credentials.
+- Added an internal Python parent watchdog that exits on parent disappearance or identity mismatch; user code still cannot access raw `os`, imports, or file I/O through the restricted namespace.
+- Added failure cleanup guards so test failures do not leave Python children orphaned; cleanup was verified with no matching `python3 -I -S` process remaining.
+- Production Control Plane wiring, durable orphan state, and crash-survival acceptance remain open.
+
+
+## 2026-09-08 — process adapter strict typing correction
+
+- Full check initially stopped at build with nullable `ChildProcess` PID/stdio errors in the new adapter.
+- Added explicit fail-closed handle narrowing for PID, stdin, stdout, and stderr.
+- Focused adapter/bootstrap tests pass: 6/6.
+- Full check must be rerun after this correction.
+
+
+## 2026-09-08 — authority context and Control Plane composition
+
+- Added optional provider-neutral authority fields: numeric `authorityPolicyVersion`, exact `controlEpoch`, and `budgetEffectCents`.
+- Made the IPython session binding carry all three fields and reject missing/invalid values before a tool call reaches a kernel.
+- Worker spawn now reads and locks the Goal control epoch, then forwards plan version, control epoch, and zero read-only budget effect into the native admission.
+- Added `apps/control-plane/src/ipython-composition.ts`, composing the production child channel, authority-backed workspace file adapter, fixed-target Git revision adapter, and read-only host request router.
+- Added an end-to-end focused test using a real temporary Git repository and real `/usr/bin/python3 -I -S`: both host effects pass through the observable authority gateway.
+- Added `MAESTRO_IPYTHON_PYTHON` as an optional absolute executable configuration; production defaults to `/usr/bin/python3` when omitted.
+- Focused composition/context/config verification passes: 57/57 tests.
+
+
+## 2026-09-08 — scope and lifecycle review corrections
+
+- Added Goal `pathScope` enforcement to the authority-backed file adapter, including canonical scope resolution against the configured workspace root and cross-scope production composition coverage.
+- Added canonical-target sensitivity checks so symlink aliases to `.env`, private keys, and similar material are denied before authority execution.
+- Added `scopeRoot` to the Git revision adapter and passed the production workspace root so relative Mission Bundle paths are interpreted consistently.
+- Added `canonicalOutboundDataClasses` in the domain boundary and used it when workers project free-form Mission Bundle `dataBoundary` labels into native grants. Unknown labels produce no class and therefore fail closed.
+- Reworked owned process teardown to guard process-group signalling by detached-session identity, signal the group after leader exit, wait for close, and verify a real same-group descendant is killed. Documented `setsid`/double-fork escape as an explicit limitation.
+- Focused scope, composition, Git, domain mapping, and process acceptance tests pass; a fresh full check is required after this slice.
+
+
+## 2026-09-08 — final fail-closed corrections
+
+- Tightened boundary-label projection to exact recognized labels; negated or unknown labels no longer grant a canonical class by substring accident.
+- Added fatal UTF-8 decoding to the read-only file port. Invalid byte sequences are rejected instead of converted to replacement characters.
+- Read authorized files through an `O_NOFOLLOW` descriptor and verify `/proc/self/fd` canonical identity before returning evidence, closing ordinary checked-path/open-path swaps on Linux.
+- Changed missing process-group identity to fail closed for group signalling; the adapter uses the known child handle for direct leader teardown instead. Fake-child tests now assert no unproven negative-PID signal, while real descendant acceptance covers verified group teardown.
+- Native execution test fixtures now carry the mandatory numeric authority context.
+
+
+## 2026-09-08 — verification checkpoint
+
+- Independent review re-ran the focused boundary suite: 6 files and 34 tests passed across composition, file scope/UTF-8, Git scope, process ownership, domain mapping, and IPython tool validation.
+- `npm run build` passed.
+- `npm run lint` passed.
+- `git diff --check` passed.
+- Full `npm run check` passed after the authority-context fixture correction: 114 files / 734 tests passed, 57 files / 381 tests skipped by the existing database gate.
+- `npm run format:check` remains excluded because of the pre-existing repository formatting baseline; live PostgreSQL and escaped-descendant acceptance remain open.
+
+
+## 2026-09-08 — crash acceptance and grant consistency
+
+- Added `MAESTRO_OWNED_PROCESS_GROUP=1` only to the production child environment. On owner identity loss, the bootstrap kills that process group before exit; non-detached launches cannot signal their caller group.
+- Added real parent-crash injection with a shell and sleep descendant. The group is removed after the owner disappears, and no orphan remains.
+- Unified host, worker, and helper native grant outbound classes around canonical values. Head/Encore host grants now use `workspace`; helper admission accepts only exact canonical or recognized legacy labels and rejects unknown/negative labels.
+- Deferred only the explicit `setsid`/double-fork escape and durable orphan evidence to the later OS-sandbox/recovery gates.
+
+
+## 2026-09-08 — final review corrections
+
+- Mixed positive/negative or unknown Mission Bundle boundary labels now invalidate the entire canonical outbound projection instead of retaining a partial grant.
+- Unified unexpected-child and explicit-close cleanup through one idempotent teardown promise. `onClose` observers are notified only after the close/kill grace sequence completes.
+- The final full check is being rerun after these last fail-closed and lifecycle corrections; database-backed worker tests remain gated by the existing PostgreSQL environment.
+
+
+## 2026-09-08 — final verification result
+
+- Final `npm run check` passed: 114 test files and 735 tests passed; 57 files and 381 tests skipped by the existing database gate.
+- Final focused boundary suite passed: 6 files and 35 tests.
+- Final `npm run build`, `npm run lint`, and `git diff --check` passed.
+- Parent-crash group cleanup and same-group descendant acceptance passed with no matching `python3 -I -S` or `sleep 30` orphan remaining.

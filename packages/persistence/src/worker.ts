@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   assertValidWorkerTransition,
+  canonicalOutboundDataClasses,
   toExecutionRef,
   toInvocationRef,
   type ExecutionAdmission,
@@ -178,6 +179,9 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
     const council = await readHeadCouncil(pool, request.councilId);
     if (council.goalId !== proof.goalId || proof.goalId === "" || proof.ownerId === "" || !isValidFencingToken(proof.fencingToken)) throw new StaleGoalLeaseError(proof.goalId);
     const ownerLeaseExpiresAt = await lockGoalLease(client, proof);
+    const control = await client.query<{ control_epoch: string }>("SELECT control_epoch FROM goal_controls WHERE project_id = $1 AND goal_id = $2 FOR UPDATE", [council.snapshot.projectId, council.goalId]);
+    if (control.rowCount !== 1 || control.rows[0]!.control_epoch.trim() === "") throw new WorkerError("Goal control epoch is unavailable");
+    const controlEpoch = control.rows[0]!.control_epoch;
     const captured = council.snapshot.participants.find((participant) => (participant.departmentId ?? participant.participantId) === request.departmentId);
     if (captured === undefined) throw new WorkerError("Department is not a captured Council participant");
     const authorized = captured.headRoleId !== undefined
@@ -239,6 +243,9 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
           goalId: council.goalId,
           missionBundleId: bundle.contentHash,
           policyVersion: `${request.planVersion}:${bundle.contentHash}`,
+          authorityPolicyVersion: request.planVersion,
+          controlEpoch,
+          budgetEffectCents: 0,
           fencingToken: proof.fencingToken,
         },
         grant: {
@@ -247,7 +254,7 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
           allowedSkills: bundle.substance.allowedSkills,
           modelPolicy: [modelRef],
           pathScope: bundle.substance.allowedPaths,
-          outboundDataClasses: bundle.substance.dataBoundary,
+          outboundDataClasses: canonicalOutboundDataClasses(bundle.substance.dataBoundary),
           remaining: {
             modelTurns: 8,
             toolCalls: Math.max(1, bundle.substance.allowedTools.length * 8),

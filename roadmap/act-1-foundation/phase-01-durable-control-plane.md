@@ -1,6 +1,6 @@
 # Phase 1 — Technical Foundation and Durable Control Plane
 
-> **Current status (2026-09-08):** This phase remains open at the product boundary. Conversation and worker execution use `MaestroAgentRuntime` through `apps/model-gateway`; Prime Agent has been removed completely. Native runtime and PostgreSQL/process evidence exist, but production host-tool registration is now present in a strict fail-closed form; real persistent host execution and authority enforcement are not implemented. The Phase 2 IPython host-tool contract and approval hierarchy are now an explicit prerequisite; historical code-level completion markers do not constitute Phase 1 acceptance.
+> **Current status (2026-09-08):** This phase remains open at the product boundary. Conversation and worker execution use `MaestroAgentRuntime` through `apps/model-gateway`; Prime Agent has been removed completely. Native runtime and PostgreSQL/process evidence exist. Production host-tool registration, the real persistent read-only child bridge, and authority-backed file/Git composition now exist, while native grants remain strict fail-closed defaults. Local writes, approval hierarchy, durable effect evidence, and live acceptance remain open. The Phase 2 IPython host-tool contract and approval hierarchy are an explicit prerequisite; historical code-level completion markers do not constitute Phase 1 acceptance.
 
 
 ## Outcome

@@ -27,6 +27,8 @@ export interface MaestroConfig {
   reconcilerLeaseDurationMs: number;
   /** Maximum time allowed for provider/application shutdown drains. */
   shutdownDrainTimeoutMs?: number;
+  /** Absolute trusted Python executable for the Goal-bound IPython child. */
+  ipythonPythonExecutable?: string;
   /** Optional authenticated model gateway; native execution is unavailable when absent. */
   modelGatewayUrl?: string;
   /** Explicit provider-qualified model used for host-created Head/Encore sessions. */
@@ -65,6 +67,7 @@ const schema = z.object({
   MAESTRO_DISCORD_SIGNAL_CREDENTIAL: z.string().min(1).optional(),
   MAESTRO_METRONOME_INTERVAL_MS: z.coerce.number().int().positive().optional(),
   MAESTRO_MAX_CONCURRENT_WORKERS_PER_PROJECT: z.coerce.number().int().positive().optional(),
+  MAESTRO_IPYTHON_PYTHON: z.string().regex(/^\/.+/).optional(),
 });
 
 export function parseConfig(
@@ -98,6 +101,7 @@ export function parseConfig(
     MAESTRO_DISCORD_SIGNAL_CREDENTIAL: discordSignalCredential,
     MAESTRO_METRONOME_INTERVAL_MS: metronomeIntervalMs,
     MAESTRO_MAX_CONCURRENT_WORKERS_PER_PROJECT: maxConcurrentWorkersPerProject,
+    MAESTRO_IPYTHON_PYTHON: ipythonPythonExecutable,
   } = parsed.data;
 
   const isRemoteBind = host !== "127.0.0.1" && host !== "localhost";
@@ -131,6 +135,7 @@ export function parseConfig(
     ...(discordSignalCredential === undefined ? {} : { discordSignalCredential }),
     ...(metronomeIntervalMs === undefined ? {} : { metronomeIntervalMs }),
     ...(maxConcurrentWorkersPerProject === undefined ? {} : { maxConcurrentWorkersPerProject }),
+    ...(ipythonPythonExecutable === undefined ? {} : { ipythonPythonExecutable }),
     ...(isRemoteBind ? { tls: { certFile: certFile!, keyFile: keyFile! } } : {}),
   };
 }

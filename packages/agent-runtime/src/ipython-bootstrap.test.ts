@@ -84,4 +84,21 @@ describe("constrained Python IPython bootstrap", () => {
       await expect(reader.wait((frame) => frame.type === "done" && frame.requestId === "cell-6")).resolves.toMatchObject({ state: "error", reason: expect.stringContaining("dunder") });
     } finally { await closeChild(child); }
   });
+
+  it("exits when the configured parent identity is not valid", async () => {
+    const child = spawn("python3", ["-I", "-S", "-c", IPYTHON_PYTHON_BOOTSTRAP], {
+      stdio: ["pipe", "pipe", "ignore"],
+      env: { PATH: "/usr/bin:/bin", MAESTRO_PARENT_PID: String(process.pid), MAESTRO_PARENT_IDENTITY: "not-the-parent-start-time" },
+    });
+    try {
+      const result = await Promise.race([
+        new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => child.once("close", (code, signal) => resolve({ code, signal }))),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("parent watchdog did not terminate the child")), 1_500)),
+      ]);
+      expect(result.code === null ? result.signal : result.code).not.toBeNull();
+      expect(result.code).not.toBe(0);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+    }
+  });
 });
