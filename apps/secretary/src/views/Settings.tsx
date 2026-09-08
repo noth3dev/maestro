@@ -57,7 +57,7 @@ export function Settings() {
 
         <div className="settings-nav-group-label">workspace (preview -- not wired to a real backend yet)</div>
         {navItem("providers", "plug", "providers")}
-        {navItem("models", "cpu", "model pool")}
+        {navItem("models", "cpu", "Ensemble Router")}
         {navItem("authority", "shield", "approvals & authority")}
 
         <div className="settings-nav-divider" />
@@ -182,8 +182,8 @@ export function Settings() {
 
       {panel === "models" && (
         <div className="settings-panel">
-          <div className="settings-section-title">model pool</div>
-          <div className="settings-section-sub">preview only -- model routing isn't wired to a real backend yet; scores and roles below are illustrative, not live</div>
+          <div className="settings-section-title">Ensemble Router</div>
+          <div className="settings-section-sub">preview only -- Ensemble Router isn't wired to a real backend yet; scores and roles below are illustrative, not live</div>
 
           <div className="settings-row" style={{ marginBottom: 6 }}>
             <div><div className="settings-row-label">auto-select models</div><div className="settings-row-hint">orchestrator swaps models on the fly to fit each task. off · strictly uses the assignments below</div></div>

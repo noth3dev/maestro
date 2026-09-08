@@ -1,4 +1,4 @@
-# Model Pool & Automatic Routing — Design
+# Ensemble Router — Automatic Routing Design
 
 - **Date:** 2026-09-08
 - **Status:** Design agreed in interview. Phase 1 artifact implementation is reopened. No production router is enabled until the artifact and admission gates below are independently verified.

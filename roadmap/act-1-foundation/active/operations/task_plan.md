@@ -16,7 +16,7 @@ This block is the authoritative status for the current `main` tree. Older phase 
 - **Phase 9:** future Luthiery MCP manufacture; it is not part of the Phase 2 IPython implementation.
 - **Phase 10:** future Treasury capability; payment remains separately activated and critically governed.
 - **Documentation checkpoint:** the native host-tool hardening, native model-policy enforcement, Council timing correction, and Carnegie GUI branding commits are on synchronized `main`/`origin/main`. Prime remains structural reference only; no Prime runtime or adapter is production code.
-- **Immediate work:** complete the reopened Phase 1 model-pool artifact set before Phase 2 router or approval/effect implementation: A–E metric schemas, eight-axis scoring rubric, recipes, continuous pressure function, four bands, baseline/overlay, routing evidence, and fixed-model migration contract. Do not claim Phase 1–3 acceptance until the artifact, admission, and live gates pass.
+- **Immediate work:** complete the reopened Phase 1 Ensemble Router artifact set before Phase 2 router or approval/effect implementation: A–E metric schemas, eight-axis scoring rubric, recipes, continuous pressure function, four bands, baseline/overlay, routing evidence, and fixed-model migration contract. Do not claim Phase 1–3 acceptance until the artifact, admission, and live gates pass.
 
 ## Phase 1A–1D host-tool execution plan — approved 2026-09-08
 
@@ -1254,7 +1254,7 @@ The production read-only path is not considered verified until Goal path scopes,
 - Scope is test-only; Council production semantics and the late-brief/absence-settlement contract are unchanged.
 
 
-## 2026-09-08 — Model pool routing cross-phase integration
+## 2026-09-08 — Ensemble Router routing cross-phase integration
 
 Canonical design: `roadmap/act-1-foundation/active/2026-09-08-model-pool-routing-design.md`. The design is now distributed into every Act 1 phase without duplicating its full rule set. Prime remains structural reference only; the native Model Gateway and Control Plane remain the production boundary.
 
@@ -1287,9 +1287,9 @@ Before production router code, create and review: the eight A-axis scoring rubri
 6. Phases 4, 5, 9, and 10 consume the common contract and do not create alternate model-selection paths.
 
 
-## 2026-09-08 — Phase 1 model-pool reopening and bottom-up execution pointer
+## 2026-09-08 — Phase 1 Ensemble Router reopening and bottom-up execution pointer
 
-- The model-pool design is now the active Phase 1 boundary. Production routing remains unimplemented; this phase first delivers independently testable artifacts and admission contracts.
+- The Ensemble Router design is now the active Phase 1 boundary. Production routing remains unimplemented; this phase first delivers independently testable artifacts and admission contracts.
 - An independent design review found and resolved documentation contradictions: public `model_map` changes require a human commit; agent registration is a private proposal; local overlays are installation/project-private while each Goal receives an immutable snapshot; qualifying mid-run switches require a new native admission/binding; `approvedModels` remains an authorization intersection rather than a full pool materialization; and `MAESTRO_NATIVE_MODEL` is explicit pin/routing-off mode, not fallback. The model/task metric split now follows the agreed A eight-axis, B facts, C operations, D paired requirements, E pressure/constraint contract; retired `50/100/200` grade lookup language is not used for routing.
 - Prime references remain limited to persistent-kernel, protocol, and lifecycle structure. No Prime source, runtime, dependency, or authority behavior is copied.
 - **Next:** write the Phase 1 primitive-trait/model-profile contract and RED tests. Do not begin Phase 2 router or approval/effect code until the Phase 1 artifact set and documentation review are complete.
@@ -1383,3 +1383,10 @@ Before production router code, create and review: the eight A-axis scoring rubri
 - Independent review found that a Proxy could return one value during validation and another during pressure calculation.
 - Refactored validation to snapshot enumerable data-descriptor values once; `calculatePressure` now calculates only from that validated snapshot. Added a finite-output Proxy regression.
 - Focused E tests pass 8/8; full domain verification remains the merge gate.
+
+
+## 2026-09-08 — Ensemble Router branding boundary
+
+- The model-pool system is branded **Ensemble Router** in user-facing UI and active design/phase documentation.
+- `Head` remains the role name; `principal` is not introduced.
+- Technical contracts and identifiers such as `model_map`, `TaskDemand`, `MissionBundle`, `modelPolicy`, and `MAESTRO_NATIVE_MODEL` remain unchanged.
