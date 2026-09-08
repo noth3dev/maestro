@@ -102,7 +102,7 @@ export function Settings() {
       {panel === "connection" && (
         <div className="settings-panel">
           <div className="settings-section-title">connection</div>
-          <div className="settings-section-sub">the real control plane this Secretary instance is connected to</div>
+          <div className="settings-section-sub">the real control plane this Carnegie instance is connected to</div>
           {config === undefined ? (
             <p>Not connected.</p>
           ) : (
