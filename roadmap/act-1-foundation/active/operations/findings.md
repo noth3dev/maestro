@@ -1198,3 +1198,12 @@ All downstream routing documentation must use this contract and must not restore
 ## 2026-09-09 — Direct refactor R1 closure
 
 - R1 review passed. A TypeScript index-signature issue found during verification was corrected before commit. Main post-merge build/lint and 19/19 focused tests passed; no behavior or API regressions found.
+
+
+## 2026-09-09 — Plan 1 S2 IPython orphan/restart journal
+
+- The fresh worktree initially lacked installed workspace dependencies, so the baseline could not resolve `@earendil-works/pi-tui`; installing dependencies in the worktree fixed setup without changing the implementation contract.
+- The terminal outcome boundary is intentionally fail-closed: a closed IPython process is not evidence of success or cancellation. Startup may classify only a proven `ESRCH` termination as `reaped`; a live or indeterminate provider response is persisted as `unknown` and remains non-retryable until a later authoritative observation.
+- Durable start ordering is required to avoid a prompt racing ahead of the journal. The adapter now waits for the `started` callback before allowing the first cell.
+- The append-only journal and `process_ref` terminal uniqueness fence prevent duplicate reconciliation across restart and reject direct UPDATE/DELETE mutation at the database boundary.
+- Full real-PostgreSQL verification passed 187 files / 1,239 tests, including the required kill/restart tests; no new S2 verification blocker remains. Independent no-edit review is still required.
