@@ -3241,3 +3241,27 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - On clean `main`, `npm run build` and `npm run lint` both exited 0.
 - Main serialized PostgreSQL revalidation completed with **exit code 0: 188/188 files and 1,251/1,251 tests**, duration 534.12s.
 - S2 implementation and verification are complete; remaining operational steps are worktree/branch cleanup, push, and post-push CI confirmation.
+
+
+## 2026-09-09 — Plan 1 S3 serialized verification and review remediation
+
+- First serialized PostgreSQL S3 verification exited 1 at 188/189 files and 1,257/1,258 tests because `reconciliation.integration.test.ts` observed a lease-contended result; the isolated reconciliation suite then passed 11/11.
+- Second serialized PostgreSQL rerun passed with exit code 0: **189/189 files and 1,258/1,258 tests**, duration 472.97s. The reconciliation suite and `tui-sse-reconnect.integration.test.ts` both passed.
+- Independent S3 review initially returned `REVIEW: FAIL`; remediation is in progress. The S3 integration now guards the DB-less skip, uses `readDashboard`, reloads the persisted cursor before a fresh subscription, and exercises the shared `runActivityStream` path for real 401/403/503 failures.
+- Remediation focused verification is green: DB-less suite cleanly skips; PostgreSQL S3 integration **2/2**; API/activity/S3 focused tests **3 files, 32/32**; build, lint, and diff check exit 0.
+- S3 remains open pending second independent `REVIEW: PASS`, post-remediation serialized full PostgreSQL verification, commit/merge, main revalidation, cleanup, push, and CI.
+
+
+## 2026-09-09 — S3 worker recovery red diagnosis
+
+- The post-review full run's only red file was `worker.kill-restart.integration.test.ts`: 2 failures (one 30s timeout and one observed unfenced spawned reservation).
+- The worker suite passed in isolation (**2/2**, 9.50s), and the exact predecessor sequence `concertmaster-report.integration` → `main.integration` → `worker.kill-restart` passed **3 files/19 tests**. This supports transient full-run scheduling/resource interference rather than an S3 regression.
+- A fresh serialized full PostgreSQL rerun is required; S3 remains open until its final exit code and complete Vitest summary are green.
+
+
+## 2026-09-09 — Plan 1 S3 final serialized verification
+
+- The second post-review remediation full PostgreSQL verification passed with exit code 0: **189/189 test files and 1,258/1,258 tests**, duration 460.88s.
+- The prior worker recovery red did not reproduce; `worker.kill-restart.integration.test.ts` passed in the green full run.
+- S3 exit evidence is now complete: real PostgreSQL/API/TUI parity, persisted-cursor reload across a fresh subscription, exact event IDs with no duplicates, explicit 401/403/503 failure states, DB-less skip safety, independent `REVIEW: PASS`, focused tests, build, lint, diff check, and serialized full verification.
+- Remaining S3 lifecycle steps: commit, merge to current main, main revalidation, worktree/branch deletion, push, and post-push CI.
