@@ -103,5 +103,7 @@ describe("TaskDemand and Mission Bundle routing contracts", () => {
     expect(MissionBundleSubstanceSchema.safeParse({ ...substance, taskDemand: { ...taskDemand, provider: "openai" } }).success).toBe(false);
     expect(TaskDemandSchema.safeParse({ ...taskDemand, taskKinds: ["coding", "coding"] }).success).toBe(false);
     expect(TaskDemandSchema.safeParse({ ...taskDemand, requirements: { ...taskDemand.requirements, knowledge: undefined } }).success).toBe(false);
+    expect(TaskDemandSchema.safeParse({ ...taskDemand, provenance: { taskContractRef: " ", headDecisionRef: "head-decision:1" } }).success).toBe(false);
+    expect(TaskDemandSchema.safeParse({ ...taskDemand, requirements: { ...taskDemand.requirements, coding: { ...requirement, rationale: "line\nnext" } } }).success).toBe(false);
   });
 });
