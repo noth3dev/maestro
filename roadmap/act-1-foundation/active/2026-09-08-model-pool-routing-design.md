@@ -1,4 +1,4 @@
-# Model Pool & Automatic Routing — Design
+# Ensemble Router — Automatic Routing Design
 
 - **Date:** 2026-09-08
 - **Status:** Design agreed in interview. Phase 1 artifact implementation is reopened. No production router is enabled until the artifact and admission gates below are independently verified.
@@ -61,7 +61,7 @@ The tag recipes combine only the eight A capability axes. `creativity` and `long
 
 ---
 
-## 4. Model side — the pool
+## 4. Model side — Ensemble Router catalog
 
 ### 4.1 A. Capability — human-scored `model_map` vector
 

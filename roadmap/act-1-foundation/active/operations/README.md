@@ -3,7 +3,7 @@
 These files are the canonical live planning and evidence records for the repository:
 
 - `task_plan.md` — current work order, phase gates, and open items.
-- `../2026-09-08-model-pool-routing-design.md` — canonical cross-phase model-pool and routing design.
+- `../2026-09-08-model-pool-routing-design.md` — canonical cross-phase Ensemble Router design.
 - `progress.md` — append-only execution log.
 - `findings.md` — append-only findings and verification evidence.
 - `logs/` — ignored local execution logs; durable conclusions belong in the two ledgers above.

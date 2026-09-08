@@ -1390,3 +1390,10 @@ Before production router code, create and review: the eight A-axis scoring rubri
 - CI exposed a type drift after Mission Bundle binding: domain `TaskDemand.taskKinds` is readonly while the contracts Zod inference remained mutable at the control-plane service boundary.
 - Added explicit immutable exported wire types for `TaskDemand`, `MissionBundleSubstance`, `MissionBundle`, and `CreateMissionBundleInput`, plus a compile-time readonly regression.
 - Control-plane package typecheck now passes when workspace package links resolve to the current worktree.
+
+
+## 2026-09-08 — Ensemble Router branding boundary
+
+- The model-pool system is branded **Ensemble Router** in user-facing UI and active design/phase documentation.
+- `Head` remains the role name; `principal` is not introduced.
+- Technical contracts and identifiers such as `model_map`, `TaskDemand`, `MissionBundle`, `modelPolicy`, and `MAESTRO_NATIVE_MODEL` remain unchanged.
