@@ -53,3 +53,4 @@ export * from "./account-login.js";
 export * from "./native-execution-binding.js";
 
 export * from "./ensemble-router-artifacts.js";
+export * from "./ipython-session-journal.js";
