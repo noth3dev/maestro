@@ -155,14 +155,14 @@ The Department Head does not directly assign a routing tier. It records work-cha
 | Time pressure | Allowed delay | constrains B and C |
 | Budget headroom | Allowed cost | constrains B and C |
 
-The first three create pressure:
+The first three create pressure. The implemented Phase 1 contract uses the transparent equal-weight function in [the E work-character artifact](../specs/2026-09-08-work-character-and-pressure.md):
 
 ```text
-pressure_floor = f(risk, reversibility, verification_attachment)
+pressure_floor = (risk + (200 - reversibility) + verification_attachment) / 3
 pressure = max(pressure_floor, explicit_head_uplift)
 ```
 
-`f` is continuous and monotonic in the dangerous direction. The exact function is a Phase 1 artifact, not a hidden table. The Head may add an uplift; it may never reduce `pressure_floor`. Material scale, time pressure, and budget headroom do not become capability requirements. They constrain provider facts and operational ranking instead.
+The function is continuous over the normalized `0..200` inputs and monotonic in the dangerous direction. The Head may add an uplift; it may never reduce `pressure_floor`. Material scale, time pressure, and budget headroom do not become capability requirements. They constrain provider facts and operational ranking instead.
 
 ### 5.3 Task kinds and pressure are separate
 
@@ -304,8 +304,8 @@ Phase 1 is reopened for the stable routing substrate, not for automatic model se
 2. **B fact schema:** context capacity, input/output pricing, authentication, data policy, modalities, and tool-call support as provider-declared hard facts.
 3. **C operational overlay:** local measurements for latency, cost, failures/timeouts, provider errors, and availability/account binding without mutating `model_map`.
 4. **D requirement schema and recipes:** static task-kind axis roles over these eight axes, plus a runtime TaskDemand with one Head-declared level per A axis.
-5. **E work-character schema:** risk, reversibility, verification attachment, material scale, time pressure, and budget headroom; only the first three feed pressure.
-6. **Pressure function:** a continuous calculation with a Head uplift that cannot lower the calculated floor. No direct tier assignment.
+5. **E work-character schema:** risk, reversibility, verification attachment, material scale, time pressure, and budget headroom; only the first three feed pressure. Implemented at `packages/domain/src/work-character.ts`.
+6. **Pressure function:** the transparent equal-weight continuous calculation with a Head uplift that cannot lower the calculated floor. Implemented with the E contract.
 7. **Pressure bands:** four labels and numeric thresholds for approval/escalation/recording/reporting only; no matching behavior.
 8. **Public baseline:** a versioned human-owned `model_map` format containing exact identity, A scores with reasons/evidence, B facts, profile version, and provenance.
 9. **Project overlay and snapshots:** private C observations plus immutable per-Goal routing snapshots.
@@ -316,14 +316,15 @@ The first schema slice now exists at `packages/domain/src/model-profile.ts` (pro
 
 The D slice now exists at `packages/domain/src/task-demand.ts` with [the recipe and runtime-demand artifact](../specs/2026-09-08-task-kind-recipes-and-runtime-demand.md). Static recipes define only axis roles. Runtime `TaskDemand` stores Head-declared numeric levels and provenance. `declareTaskDemand` is the explicit Head declaration boundary: it never derives levels from recipes or selects a model. The declared demand now rides the existing `MissionBundleSubstance` record and is included in its content hash; a bundle without a valid demand is invalid at the domain and wire-contract boundaries.
 
+The E slice now exists at `packages/domain/src/work-character.ts` with [the work-character and pressure artifact](../specs/2026-09-08-work-character-and-pressure.md). It validates six explicit `0..200` work-character axes and calculates continuous pressure as the equal-weight average of risk, irreversibility, and verification attachment, with a non-lowering Head uplift. Material scale, time pressure, and budget headroom remain outside pressure and constrain B/C only. No pressure band or model selection is created by this function.
+
 Phase 1 does not claim a production router until each artifact has a schema/validator, focused RED/GREEN tests, and a native admission test proving routing evidence cannot widen authority, account, data-policy, context, or exact model identity.
 
 ## 15. Remaining implementation artifacts
 
 The following concrete artifacts are intentionally still open for the Phase 1 slices:
 
-1. The continuous pressure calculation function.
-2. The four pressure-band threshold values.
+1. The four pressure-band threshold values.
 3. The `model_map` file format and initial entries.
 4. The local C overlay and Goal snapshot format.
 5. The routing evidence schema and append-only persistence path.
