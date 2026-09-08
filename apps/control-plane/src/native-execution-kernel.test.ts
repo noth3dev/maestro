@@ -43,6 +43,9 @@ function rootRequest(model = "test/model-a"): SpawnRequest {
       goalId: "goal-1",
       missionBundleId: "bundle-1",
       policyVersion: "policy-1",
+      authorityPolicyVersion: 1,
+      controlEpoch: "epoch-1",
+      budgetEffectCents: 0,
       accountRef: "test-account",
     },
     grant: {

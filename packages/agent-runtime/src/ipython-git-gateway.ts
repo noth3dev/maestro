@@ -8,6 +8,8 @@ export interface IpPythonGitRevisionAdapterOptions {
   readonly git: Pick<GitPort, "headRevision">;
   /** Repository target selected by Control Plane composition, never by Python input. */
   readonly repositoryPath: string;
+  /** Resolve relative Goal scopes against this trusted repository/workspace root. */
+  readonly scopeRoot?: string;
 }
 
 function canonicalPath(inputPath: string): string {
@@ -27,12 +29,12 @@ function canonicalPath(inputPath: string): string {
   }
 }
 
-function isWithinScope(targetPath: string, scopes: readonly string[]): boolean {
+function isWithinScope(targetPath: string, scopes: readonly string[], scopeRoot = process.cwd()): boolean {
   let target: string;
   try { target = canonicalPath(targetPath); } catch { return false; }
   return scopes.some((scope) => {
     try {
-      const remainder = relative(canonicalPath(scope), target);
+      const remainder = relative(canonicalPath(resolve(scopeRoot, scope)), target);
       return remainder === "" || (!remainder.startsWith("..") && !isAbsolute(remainder));
     } catch { return false; }
   });
@@ -47,7 +49,7 @@ export function createIpPythonGitRevisionAdapter(options: IpPythonGitRevisionAda
   if (typeof options.repositoryPath !== "string" || options.repositoryPath.trim() === "") throw new Error("IPython Git repository path is required");
   if (typeof options.git.headRevision !== "function") throw new Error("IPython Git revision port is required");
   return async (binding, ref) => {
-    if (!isWithinScope(options.repositoryPath, binding.pathScope)) throw new Error("IPython Git repository is outside the Goal scope");
+    if (!isWithinScope(options.repositoryPath, binding.pathScope, options.scopeRoot)) throw new Error("IPython Git repository is outside the Goal scope");
     if (typeof ref !== "string" || ref.trim() === "" || ref.includes("\0") || /\s/.test(ref)) throw new Error("IPython Git ref is invalid");
     return options.git.headRevision(options.repositoryPath, ref);
   };

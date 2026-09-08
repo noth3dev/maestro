@@ -7,8 +7,11 @@ export const IPYTHON_PYTHON_BOOTSTRAP = String.raw`import ast
 import contextlib
 import io
 import json
+import os
+import signal
 import sys
 import threading
+import time
 
 VERSION = 1
 MAX_FRAME_BYTES = 1_048_576
@@ -23,6 +26,56 @@ _interrupt = threading.Event()
 _shutdown = threading.Event()
 _namespace = {}
 _session_id = None
+_parent_pid_text = os.environ.get("MAESTRO_PARENT_PID")
+_parent_identity = os.environ.get("MAESTRO_PARENT_IDENTITY")
+_owned_process_group = os.environ.get("MAESTRO_OWNED_PROCESS_GROUP") == "1"
+
+
+def parent_identity(pid):
+    with open("/proc/" + str(pid) + "/stat", "r", encoding="utf-8") as stat_file:
+        stat = stat_file.read()
+    command_end = stat.rfind(")")
+    fields = stat[command_end + 2:].strip().split()
+    if len(fields) <= 19:
+        raise RuntimeError("parent process identity is unavailable")
+    return fields[19]
+
+
+def terminate_owned_group_or_exit():
+    # The production adapter starts this child as a detached process-group
+    # leader. Kill the complete group before exiting so same-group descendants
+    # cannot survive a Control Plane crash. Test/non-detached launches retain
+    # the safe exit-only behavior and must never signal the caller's group.
+    try:
+        group_id = os.getpgrp()
+        if _owned_process_group and group_id > 1:
+            os.killpg(group_id, signal.SIGKILL)
+            return
+    except Exception:
+        pass
+    os._exit(70)
+
+
+def parent_watchdog():
+    if not _parent_pid_text or not _parent_identity:
+        terminate_owned_group_or_exit()
+    try:
+        expected_pid = int(_parent_pid_text)
+        if expected_pid <= 0:
+            raise ValueError("parent PID is invalid")
+    except Exception:
+        terminate_owned_group_or_exit()
+    while True:
+        try:
+            if os.getppid() != expected_pid or parent_identity(expected_pid) != _parent_identity:
+                terminate_owned_group_or_exit()
+        except Exception:
+            terminate_owned_group_or_exit()
+        time.sleep(0.05)
+
+
+if _parent_pid_text is not None or _parent_identity is not None:
+    threading.Thread(target=parent_watchdog, daemon=True).start()
 
 
 def send(frame):

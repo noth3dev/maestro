@@ -4,7 +4,7 @@ import { Pool } from "pg";
 import { AuthorizedEffectExecutor, type ActionRequest } from "@maestro/authority";
 import { createLocalGitPort } from "@maestro/git-adapter";
 import type { ExecutionAdmission, ExecutionKernelPort, GitPort } from "@maestro/domain";
-import { createIpPythonSessionManager, createIpPythonTool, createUnavailableIpPythonKernel, parseModelRef, ToolRegistry, type IpPythonKernel } from "@maestro/agent-runtime";
+import { createIpPythonSessionManager, createIpPythonTool, parseModelRef, ToolRegistry, type IpPythonKernel } from "@maestro/agent-runtime";
 import { assertProjectMembership, authenticateLocalOperator, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, reconcileOnStartup, recordDiscordSignal, runMigrations } from "@maestro/persistence";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
@@ -25,6 +25,7 @@ import { createMetronomeLoop } from "./metronome-loop.js";
 import { createModelGatewayClient } from "./model-gateway-client.js";
 import { createNativeExecutionKernel, createUnavailableNativeExecutionKernel } from "./native-execution-kernel.js";
 import { createPostgresConversationService } from "./conversation-service.js";
+import { createIpPythonProductionKernel } from "./ipython-composition.js";
 
 export interface ControlPlane {
   app: ReturnType<typeof buildServer>;
@@ -65,7 +66,7 @@ function createHostNativeAdmission(config: MaestroConfig, input: NativeAdmission
   const grantId = `native:${input.purpose}:${input.goalId}:${suffix}`;
   return {
     context: { operatorId: input.purpose === "head" ? input.actorId : config.actorId, projectId: input.projectId, goalId: input.goalId, missionBundleId: `native-${input.purpose}`, policyVersion: "native-host-v1", accountRef, fencingToken: input.fencingToken },
-    grant: { grantId, allowedTools: [], allowedSkills: [], modelPolicy: [config.nativeModelRef], pathScope: [config.worktreeRoot], outboundDataClasses: ["repository files only"], remaining: { modelTurns: 8, toolCalls: 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } },
+    grant: { grantId, allowedTools: [], allowedSkills: [], modelPolicy: [config.nativeModelRef], pathScope: [config.worktreeRoot], outboundDataClasses: ["workspace"], remaining: { modelTurns: 8, toolCalls: 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } },
     modelPolicy: [config.nativeModelRef],
     // A council command fans out into independent roots; their gateway
     // admissions must not replay the same idempotency identity.
@@ -101,7 +102,9 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   const modelGateway = config.modelGatewayToken === undefined ? undefined : createModelGatewayClient({ baseUrl: config.modelGatewayUrl!, token: config.modelGatewayToken });
   const accountLoginStore = modelGateway === undefined ? undefined : createPostgresAccountLoginStore(pool);
   const accountLoginOwnerId = `${config.leaseOwnerId}:${randomUUID()}`;
-  const ipythonSessions = createIpPythonSessionManager({ createKernel: () => overrides.ipythonKernel ?? createUnavailableIpPythonKernel() });
+  const authorityRepository = new PostgresAuthorityRepository(pool);
+  const authorityExecutor = new AuthorizedEffectExecutor(authorityRepository);
+  const ipythonSessions = createIpPythonSessionManager({ createKernel: (sessionId, binding) => overrides.ipythonKernel ?? createIpPythonProductionKernel({ authority: authorityExecutor, workspaceRoot: config.worktreeRoot, pythonExecutable: config.ipythonPythonExecutable ?? "/usr/bin/python3" }, sessionId, binding) });
   const tools = new ToolRegistry();
   tools.register(createIpPythonTool({ sessions: ipythonSessions }));
   const executionKernel = overrides.executionKernel ?? (modelGateway === undefined
@@ -117,8 +120,6 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   const authenticator: OperatorAuthenticator = {
     authenticateBearerSecret: (secret) => authenticateLocalOperator(pool, secret),
   };
-  const authorityRepository = new PostgresAuthorityRepository(pool);
-  const authorityExecutor = new AuthorizedEffectExecutor(authorityRepository);
   const criticalActionService = createCriticalActionService({
     pool,
     ...(config.ceoOperatorId === undefined ? {} : { ceoOperatorId: config.ceoOperatorId }),

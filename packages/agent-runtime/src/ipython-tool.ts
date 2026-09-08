@@ -14,6 +14,9 @@ export interface IpPythonSessionBinding {
   readonly goalId: string;
   readonly pathScope: readonly string[];
   readonly outboundDataClasses: readonly string[];
+  readonly authorityPolicyVersion: number;
+  readonly controlEpoch: string;
+  readonly budgetEffectCents: number;
 }
 
 export interface IpPythonExecutionRequest {
@@ -167,6 +170,16 @@ function sessionIdFor(context: ToolContext): string {
   return JSON.stringify(parts);
 }
 
+function authorityContext(context: ToolContext): { authorityPolicyVersion: number; controlEpoch: string; budgetEffectCents: number } {
+  const authorityPolicyVersion = context.authorityPolicyVersion;
+  const controlEpoch = context.controlEpoch;
+  const budgetEffectCents = context.budgetEffectCents;
+  if (typeof authorityPolicyVersion !== "number" || !Number.isSafeInteger(authorityPolicyVersion) || authorityPolicyVersion < 0) throw new Error("IPython tool requires numeric authority context");
+  if (typeof controlEpoch !== "string" || controlEpoch.trim() === "") throw new Error("IPython tool requires authority context");
+  if (typeof budgetEffectCents !== "number" || !Number.isSafeInteger(budgetEffectCents) || budgetEffectCents < 0) throw new Error("IPython tool requires numeric authority context");
+  return { authorityPolicyVersion, controlEpoch, budgetEffectCents };
+}
+
 function sessionBindingKey(binding: IpPythonSessionBinding | undefined): string {
   if (binding === undefined) return "undefined";
   const { commandId: _commandId, toolCallId: _toolCallId, ...stableBinding } = binding;
@@ -192,7 +205,8 @@ export function createIpPythonTool(options: { sessions: IpPythonSessionManager }
     async execute(args, context) {
       const { code } = parseCode(args);
       const sessionId = sessionIdFor(context);
-      return toolResult(await options.sessions.execute({ sessionId, code, binding: { sessionId, commandId: context.commandId, toolCallId: context.toolCallId, operatorId: context.operatorId, projectId: context.projectId, goalId: context.goalId, pathScope: context.capabilityGrant.pathScope, outboundDataClasses: context.capabilityGrant.outboundDataClasses } }), context);
+      const authority = authorityContext(context);
+      return toolResult(await options.sessions.execute({ sessionId, code, binding: { sessionId, commandId: context.commandId, toolCallId: context.toolCallId, operatorId: context.operatorId, projectId: context.projectId, goalId: context.goalId, pathScope: context.capabilityGrant.pathScope, outboundDataClasses: context.capabilityGrant.outboundDataClasses, ...authority } }), context);
     },
   };
 }

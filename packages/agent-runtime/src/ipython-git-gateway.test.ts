@@ -13,6 +13,9 @@ const binding = {
   goalId: "goal-1",
   pathScope: ["/workspace/project-1"],
   outboundDataClasses: ["workspace"],
+  authorityPolicyVersion: 1,
+  controlEpoch: "1",
+  budgetEffectCents: 0,
 } as const;
 
 describe("IPython Git read gateway", () => {
@@ -51,6 +54,17 @@ describe("IPython Git read gateway", () => {
     } finally {
       rmSync(temporaryRoot, { recursive: true, force: true });
     }
+  });
+
+  it("resolves relative Goal scopes from the configured repository root", async () => {
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "maestro-ipython-git-"));
+    try {
+      const repository = join(temporaryRoot, "repo");
+      mkdirSync(repository);
+      const headRevision = vi.fn(async () => "abc123");
+      const readRevision = createIpPythonGitRevisionAdapter({ git: { headRevision }, repositoryPath: repository, scopeRoot: temporaryRoot });
+      await expect(readRevision({ ...binding, pathScope: ["repo"] }, "HEAD")).resolves.toBe("abc123");
+    } finally { rmSync(temporaryRoot, { recursive: true, force: true }); }
   });
 
   it("rejects invalid Git refs before calling GitPort", async () => {

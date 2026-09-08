@@ -42,7 +42,7 @@ describe("IPython host protocol", () => {
     const transport = new FakeTransport();
     const commandIds: string[] = [];
     const kernel = createIpPythonKernel({ transport, hostRequest: async (_request, binding) => { commandIds.push(binding?.commandId ?? "missing"); return { state: "ok", dataClass: "workspace", content: "evidence" }; } });
-    const firstBinding = { sessionId: "session-1", commandId: "command-1", toolCallId: "tool-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["workspace"] } as const;
+    const firstBinding = { sessionId: "session-1", commandId: "command-1", toolCallId: "tool-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["workspace"], authorityPolicyVersion: 1, controlEpoch: "1", budgetEffectCents: 0 } as const;
     const first = kernel.execute({ sessionId: firstBinding.sessionId, code: "read_file('README.md')", binding: firstBinding });
     const firstRequestId = (transport.sent[0] as { requestId: string }).requestId;
     transport.emit({ version: 1, type: "host_request", requestId: firstRequestId, hostRequestId: "host-1", method: "read_file", payload: { path: "README.md" } });
@@ -132,7 +132,7 @@ describe("IPython host protocol", () => {
     const readFile = vi.fn(async (_binding: { projectId: string; goalId: string }, relativePath: string) => ({ state: "ok" as const, dataClass: "workspace" as const, content: `file:${relativePath}` }));
     const gitRevision = vi.fn(async () => ({ state: "ok" as const, dataClass: "workspace" as const, content: "abc123" }));
     const handler = createReadOnlyHostRequestHandler({
-      binding: { sessionId: "session-1", commandId: "command-1", toolCallId: "tool-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["workspace"] },
+      binding: { sessionId: "session-1", commandId: "command-1", toolCallId: "tool-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["workspace"], authorityPolicyVersion: 1, controlEpoch: "1", budgetEffectCents: 0 },
       gateway: { readFile, gitRevision },
     });
 
@@ -142,7 +142,7 @@ describe("IPython host protocol", () => {
     await expect(handler({ requestId: "cell-1", hostRequestId: "host-3", method: "write_file", payload: { path: "x", content: "bad" } })).rejects.toThrow("not allowed");
     await expect(handler({ requestId: "cell-1", hostRequestId: "host-4", method: "read_file", payload: { path: "../secret" } })).rejects.toThrow("path");
     expect(gitRevision).toHaveBeenCalledWith(expect.objectContaining({ projectId: "project-1", goalId: "goal-1" }), "HEAD");
-    const nextBinding = { sessionId: "session-1", commandId: "command-2", toolCallId: "tool-2", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["workspace"] } as const;
+    const nextBinding = { sessionId: "session-1", commandId: "command-2", toolCallId: "tool-2", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["workspace"], authorityPolicyVersion: 1, controlEpoch: "1", budgetEffectCents: 0 } as const;
     await expect(handler({ requestId: "cell-2", hostRequestId: "host-5", method: "read_file", payload: { path: "README.md" } }, nextBinding)).resolves.toMatchObject({ state: "ok" });
     expect(readFile).toHaveBeenLastCalledWith(expect.objectContaining({ commandId: "command-2", toolCallId: "tool-2" }), "README.md");
   });

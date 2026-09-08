@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   assertValidTeamLeadGrantSubstance,
+  canonicalOutboundDataClasses,
   toExecutionRef,
   type ExecutionAdmission,
   type ExecutionKernelPort,
@@ -111,6 +112,20 @@ function isSubset(values: readonly string[], allowed: readonly string[]): boolea
   return values.every((value) => allowed.includes(value));
 }
 
+const CANONICAL_OUTBOUND_DATA_CLASSES = ["public", "workspace", "private", "pii", "phi", "secret"] as const;
+function canonicalizeGrantOutboundDataClasses(values: readonly string[]): readonly string[] {
+  const result: string[] = [];
+  for (const value of values) {
+    if (CANONICAL_OUTBOUND_DATA_CLASSES.includes(value as (typeof CANONICAL_OUTBOUND_DATA_CLASSES)[number])) result.push(value);
+    else {
+      const mapped = canonicalOutboundDataClasses([value]);
+      if (mapped.length !== 1) throw new TeamLeadGrantError("Helper admission outbound data class is invalid");
+      result.push(mapped[0]!);
+    }
+  }
+  return result;
+}
+
 function assertNativeHelperAdmission(
   admission: ExecutionAdmission,
   bundle: MissionBundle,
@@ -129,7 +144,9 @@ function assertNativeHelperAdmission(
   if (admission.idempotencyKey.trim() === "" || admission.grant.parentGrantId !== `worker:${parentWorkerId}`) {
     throw new TeamLeadGrantError("Helper admission does not inherit the team-lead grant");
   }
-  if (!isSubset(admission.grant.allowedTools, bundle.substance.allowedTools) || !isSubset(admission.grant.allowedSkills, bundle.substance.allowedSkills) || !isSubset(admission.grant.pathScope, bundle.substance.allowedPaths) || !isSubset(admission.grant.outboundDataClasses, bundle.substance.dataBoundary)) {
+  const allowedOutboundDataClasses = canonicalOutboundDataClasses(bundle.substance.dataBoundary);
+  const helperOutboundDataClasses = canonicalizeGrantOutboundDataClasses(admission.grant.outboundDataClasses);
+  if (!isSubset(admission.grant.allowedTools, bundle.substance.allowedTools) || !isSubset(admission.grant.allowedSkills, bundle.substance.allowedSkills) || !isSubset(admission.grant.pathScope, bundle.substance.allowedPaths) || !isSubset(helperOutboundDataClasses, allowedOutboundDataClasses)) {
     throw new TeamLeadGrantError("Helper admission widens the Mission Bundle capability scope");
   }
   const remaining = admission.grant.remaining;

@@ -41,9 +41,36 @@ export interface InvocationContext {
   readonly goalId: string;
   readonly missionBundleId: string;
   readonly policyVersion: string;
+  /** Numeric authority policy version required by local host effects. */
+  readonly authorityPolicyVersion?: number;
+  /** Durable Goal control epoch required by local host effects. */
+  readonly controlEpoch?: string;
+  /** Estimated effect cost in cents; read-only effects use zero. */
+  readonly budgetEffectCents?: number;
   readonly accountRef?: string;
   readonly leaseRef?: string;
   readonly fencingToken?: string;
+}
+
+export type CanonicalOutboundDataClass = "public" | "workspace" | "private" | "pii" | "phi" | "secret";
+
+/** Map explicitly recognized Mission Bundle labels to the narrow host-result vocabulary. Unknown or negative labels deny by omission. */
+export function canonicalOutboundDataClasses(boundaries: readonly string[]): readonly CanonicalOutboundDataClass[] {
+  const classes = new Set<CanonicalOutboundDataClass>();
+  let invalidBoundary = false;
+  for (const boundary of boundaries) {
+    if (typeof boundary !== "string") { invalidBoundary = true; continue; }
+    const value = boundary.trim().toLowerCase().replace(/\s+/g, " ");
+    if (value === "" || /(^| )(no|non|not|without|deny|denied|forbidden|exclude|excluded|none)( |$)/.test(value)) { invalidBoundary = true; continue; }
+    if (["repository", "repository files only", "repository only", "local", "local repository only", "workspace", "workspace only"].includes(value)) classes.add("workspace");
+    else if (["public", "public data", "public reports", "publicly shareable", "publicly shareable data"].includes(value)) classes.add("public");
+    else if (["private", "private data"].includes(value)) classes.add("private");
+    else if (["pii", "customer pii", "personally identifiable information"].includes(value)) classes.add("pii");
+    else if (["phi", "protected health information"].includes(value)) classes.add("phi");
+    else if (["secret", "secrets", "credentials", "credential data"].includes(value)) classes.add("secret");
+    else invalidBoundary = true;
+  }
+  return invalidBoundary ? [] : [...classes];
 }
 
 export interface CapabilityGrant {

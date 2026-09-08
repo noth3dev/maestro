@@ -1039,3 +1039,45 @@ The previously reported review blockers are resolved in the working tree: stable
 ## 2026-09-08 — interrupt teardown correction
 
 The process-kernel review exposed that `interruptGraceMs` was accepted by the exported process-kernel options but not forwarded to the inner protocol kernel. A focused fake-timer test also exposed a transport lifecycle bug: JSON-lines `close()` removed the channel listener without notifying the kernel's close listeners, leaving an interrupted active cell pending. The process kernel now forwards the configured grace period, and transport close emits one explicit close notification before channel teardown; the focused process suite passes.
+
+
+## 2026-09-08 — production-owned child channel
+
+Added `createIpPythonOwnedProcessChannel` as the real Node-side child-process adapter. It uses an absolute trusted Python executable, `-I -S`, detached process-group ownership, a minimal non-inherited environment, parent PID/start-time metadata, bounded stderr diagnostics, and bounded SIGTERM→SIGKILL group teardown. The constrained Python bootstrap now checks the passed parent identity and exits if the owner disappears or the PID is reused. This is the process ownership seam, not full production activation: Control Plane composition, durable orphan journaling/reaping, crash injection, and descendant-survival acceptance remain open.
+
+
+## 2026-09-08 — authority context and Control Plane composition
+
+The runtime/provider context previously carried only the string policy identity and fencing token. The IPython host-effect boundary now requires and carries a numeric `authorityPolicyVersion`, exact `controlEpoch`, and `budgetEffectCents`; the worker derives the control epoch from the locked Goal control row and uses its Department Plan version as the numeric authority policy version. Control Plane composition now builds the production persistent child kernel with the authority-backed UTF-8 file port and fixed-repository Git revision adapter. Native admissions still default to no tools, and missing authority context fails closed. Full approval/effect policy, durable effect journaling, and live PostgreSQL worker acceptance remain open.
+
+## 2026-09-08 — process adapter review corrections
+
+Independent review found three lifecycle issues in the first child adapter draft: an asynchronous launch error could be unhandled when process handles were invalid, the stderr option had no hard maximum and could split UTF-8 into over-limit replacement text, and teardown used the process-group ID after leader exit. The adapter now installs an error listener immediately after spawn, caps configured stderr at 1 MiB, bounds emitted UTF-8 text by encoded bytes, and stops signaling the group after the leader emits `exit`. Descendant-survival and crash-injection acceptance remain intentionally separate gates because a group-only unit spy is not proof against double-fork/`setsid` escapes.
+
+
+## 2026-09-08 — re-review fixes for scope and owned teardown
+
+The first production composition review exposed four integration gaps that focused unit tests did not cover. Mission Bundle `dataBoundary` values are free-form labels, so worker admission now maps known labels (`repository`/`workspace`/`local`, `public`, `private`, `PII`, `PHI`, `secret`) into the canonical outbound data-class vocabulary and drops unknown labels rather than widening access. Mission Bundle `allowedPaths` are commonly relative; the Git adapter now resolves them against the trusted workspace root, and the file adapter applies the same Goal scope before authority execution. File sensitivity is checked against both the requested name and the canonical symlink target, preventing a harmless alias from exposing `.env` or key material. Production composition now passes the binding scope to both adapters.
+
+The process channel now records the detached group's session identity, waits for child `close`, and signals the still-owned process group even after the leader's `exit` event. A real descendant acceptance test confirms a same-group shell child is reaped. Group-only ownership is explicitly bounded: a `setsid`/double-fork descendant can escape and needs an OS sandbox boundary, which remains a later hardening item.
+
+
+## 2026-09-08 — final boundary review clarification
+
+The earlier lifecycle note describing teardown as stopping after leader `exit` is a superseded intermediate snapshot. The current adapter intentionally signals the still-owned detached group after `exit`, waits for `close`, and reports `child_kill_timeout` when close or ownership proof is incomplete. The real same-group descendant acceptance is now present; only escaped `setsid`/double-fork descendants and durable crash/orphan evidence remain open.
+
+The read-only file port now rejects invalid UTF-8 and reads through an `O_NOFOLLOW` descriptor whose `/proc/self/fd` identity must match the canonical authorized target. This closes the checked-path-to-open-path race for ordinary symlink/rename swaps on the supported Linux host. Hardlink identity and content mutation remain filesystem semantics to address in the broader Phase 8 hardening boundary.
+
+
+## 2026-09-08 — crash ownership and native grant representation
+
+The crash-injection acceptance initially reproduced the remaining lifecycle gap: a Python leader watchdog exited while a shell/sleep descendant survived because the wrapper process was the group leader. The adapter now marks the owned group explicitly, and the bootstrap watchdog sends `SIGKILL` to that owned process group before fallback exit; non-detached test launches retain exit-only behavior and never signal the caller's group. The acceptance now passes with no matching descendant left. `setsid`/double-fork escape remains outside group-only ownership.
+
+Native grant representation is now canonical end to end for the current read-only path: host-created Head/Encore grants use `workspace`, worker grants map exact Mission Bundle labels, and helper admission validates/canonicalizes both legacy labels and canonical classes against the Mission Bundle projection. Unknown or negative labels fail closed.
+
+
+## 2026-09-08 — mixed-boundary fail-closed correction
+
+Canonical Mission Bundle projection now invalidates the entire outbound-class projection when any boundary entry is unknown, negated, or contradictory. A positive entry cannot silently override a negative one. This keeps helper, worker, and host admissions from receiving a partial class grant from an ambiguous free-form boundary.
+
+The owned channel's close notification is emitted only after its shared teardown promise has waited for close and completed the owned-group/direct-leader termination attempt. Unexpected child close starts the same teardown path, so transport observers do not treat a leader/stdout close as complete ownership cleanup.
