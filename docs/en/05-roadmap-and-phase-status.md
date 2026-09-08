@@ -43,6 +43,14 @@ Phase 6 Step 1 is accepted as an immutable, project-private Improvement Digest s
 
 ---
 
+## Act-by-Act status (2026-09-08)
+
+| Act | Current status | Ensemble Router / runtime boundary |
+| --- | --- | --- |
+| **Act 1 — Foundation** | **In progress; not certified** | A/D/E contracts, B provider facts, C operational overlay with pure Goal snapshot, four pressure-band schemas, and the human-owned empty `model_map` baseline are present. Persistence migrations, durable C/Goal snapshots, routing evidence, router selection, fixed-model migration, host-tool writes/effects, and live acceptance remain open. See [`roadmap/act-1-foundation/README.md`](../../roadmap/act-1-foundation/README.md). |
+| **Act 2 — Flashmob** | **Blocked on Act 1 certification** | No Flashmob production path or automatic Ensemble Router selection is claimed. See [`roadmap/act-2-flashmob/README.md`](../../roadmap/act-2-flashmob/README.md). |
+| **Act 3 — Arrangement** | **Deferred** | Personalized self-modification remains downstream of Act 2 and does not promote routing or model-map changes automatically. See [`roadmap/act-3-arrangement/README.md`](../../roadmap/act-3-arrangement/README.md). |
+
 ## 2. Operational Usability Audit Notice
 
 > [!IMPORTANT]

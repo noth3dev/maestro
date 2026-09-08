@@ -31,7 +31,7 @@ Historical “code complete” and “accepted” markers remain in append-only 
 - [Maestro TUI implementation plan](active/2026-09-06-maestro-tui.md)
 - [Native agent backend plan](active/2026-09-07-maestro-native-agent-backend.md)
 - [Native cutover record](active/2026-09-08-native-prime-removal-cutover.md)
-- [Ensemble Router — Automatic Routing design](active/2026-09-08-model-pool-routing-design.md)
+- [Ensemble Router — Automatic Routing design](active/2026-09-08-ensemble-router-routing-design.md)
 - [Phase 5 execution slices](active/phase5-execution-slices.md)
 - [Live operations ledger](active/operations/README.md)
 

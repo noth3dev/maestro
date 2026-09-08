@@ -91,3 +91,7 @@ flowchart TD
 1. **Graceful Takeover**: 기존 프로세스의 리스가 아직 유효하다면 강제로 빼앗지 않고 대기하여 경합을 방지합니다.
 2. **Stale Proof Invalidation**: 재시작 전 발행되었던 이전 토큰 기반의 모든 작업 증거는 자동으로 무효화됩니다.
 3. **SSE 복구**: Server-Sent Event (SSE) 클라이언트는 `goal_events.global_position`을 가리키는 `Last-Event-ID`를 사용하여 재연결하여 이벤트 유실을 방지합니다.
+
+## Ensemble Router 영속성 경계
+
+PostgreSQL Control Plane은 Goal lifecycle, lease, event, outbox 및 native execution binding을 저장합니다. 하지만 C operational overlay와 불변 Goal overlay snapshot을 위한 persistence migration 및 durable storage는 아직 없고 routing evidence도 저장하지 않습니다. 이 누락된 저장소는 기존 native identity binding과 별개입니다.

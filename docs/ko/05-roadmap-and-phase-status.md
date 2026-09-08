@@ -43,6 +43,14 @@ Phase 6 Step 1은 불변·프로젝트 전용 Improvement Digest slice로 승인
 
 ---
 
+## Act별 현황 (2026-09-08)
+
+| Act | 현재 상태 | Ensemble Router / runtime 경계 |
+| --- | --- | --- |
+| **Act 1 — Foundation** | **진행 중; 인증 전** | A/D/E contract, B provider facts, 순수 Goal snapshot을 포함한 C operational overlay, 4개 pressure-band schema 및 human-owned 빈 `model_map` baseline이 있습니다. Persistence migration, durable C/Goal snapshot, routing evidence, router selection, fixed-model migration, host-tool write/effect 및 live acceptance는 남아 있습니다. [`roadmap/act-1-foundation/README.md`](../../roadmap/act-1-foundation/README.md) 참조. |
+| **Act 2 — Flashmob** | **Act 1 인증까지 차단** | Flashmob production path나 automatic Ensemble Router selection을 구현되었다고 주장하지 않습니다. [`roadmap/act-2-flashmob/README.md`](../../roadmap/act-2-flashmob/README.md) 참조. |
+| **Act 3 — Arrangement** | **보류** | 개인화 self-modification은 Act 2 이후이며 routing 또는 model-map 변경을 자동 승격하지 않습니다. [`roadmap/act-3-arrangement/README.md`](../../roadmap/act-3-arrangement/README.md) 참조. |
+
 ## 2. 운영 사용성 감사 공지 (Operational Usability Audit)
 
 > [!IMPORTANT]

@@ -631,7 +631,7 @@ Budget allocation is adaptive rather than a fixed percentage template.
 
 ## Ensemble Router routing contract — adopted design
 
-The Department Head Council declares D requirements and E work-character inputs; the native router selects one qualifying model; admission remains authoritative. The full rules live in [Ensemble Router — Automatic Routing](active/2026-09-08-model-pool-routing-design.md).
+The Department Head Council declares D requirements and E work-character inputs; the native router selects one qualifying model; admission remains authoritative. The full rules live in [Ensemble Router — Automatic Routing](active/2026-09-08-ensemble-router-routing-design.md).
 
 - During decomposition, each Mission Bundle receives versioned task-kind axis-role recipes over exactly eight D axes paired to A. The Head then records a runtime TaskDemand with one explicit `0..200` level and rationale per axis.
 - Provider facts B are hard filters: context capacity, input/output pricing, authentication, data policy, modalities, and tool support. Operational measurements C are local corrections for latency, cost, failures/timeouts, provider errors, and availability/account binding.

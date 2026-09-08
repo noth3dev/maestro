@@ -31,8 +31,22 @@ Maestro is an open-source enterprise AI orchestration framework designed for rel
 
 - **Conversation path:** `MaestroAgentRuntime` in the Control Plane, using the authenticated `apps/model-gateway` process.
 - **Provider authentication:** API keys stay in the gateway credential store. OpenAI ChatGPT subscription login is delegated to the documented Codex app-server; Maestro persists only login metadata and state.
-- **Worker path:** `ExecutionKernelPort` is composed with the native Model Gateway router. Every admission carries host context, capability grant, model policy, account binding, and idempotency. Production host tools are not registered yet; unregistered tools fail closed and native Workers are text/evidence-only.
+- **Worker path:** `ExecutionKernelPort` uses the authenticated Model Gateway transport; Ensemble Router selection is not implemented. Every admission carries host context, capability grant, model policy, account binding, and idempotency. Production host tools are not registered yet; unregistered tools fail closed and native Workers are text/evidence-only.
 - **Terminal UI:** `@earendil-works/pi-tui` is used for presentation only and has no execution authority.
+
+## Ensemble Router implementation status
+
+The repository contains the routing **artifact contracts**, not a production selector. The verified boundary is:
+
+- **A capability:** eight-axis `0..200` domain vector/validator with explicit `unproven` entries ([`packages/domain/src/model-profile.ts`](../packages/domain/src/model-profile.ts)).
+- **D demand:** Head-declared `TaskDemand` domain and wire contracts with provenance ([`packages/domain/src/task-demand.ts`](../packages/domain/src/task-demand.ts), [`packages/contracts/src/index.ts`](../packages/contracts/src/index.ts)).
+- **E work character/pressure:** domain contract and continuous pressure calculation ([`packages/domain/src/work-character.ts`](../packages/domain/src/work-character.ts)); pressure bands are a separate projection.
+- **B provider facts:** domain and wire schema ([`packages/domain/src/provider-facts.ts`](../packages/domain/src/provider-facts.ts), [`packages/contracts/src/index.ts`](../packages/contracts/src/index.ts)).
+- **C operational overlay:** domain and wire schema with a pure per-Goal snapshot helper ([`packages/domain/src/operational-overlay.ts`](../packages/domain/src/operational-overlay.ts), [`packages/contracts/src/index.ts`](../packages/contracts/src/index.ts)).
+- **Four pressure bands:** domain and wire schema ([`packages/domain/src/pressure-band.ts`](../packages/domain/src/pressure-band.ts), [`packages/contracts/src/index.ts`](../packages/contracts/src/index.ts)).
+- **Human-owned baseline:** `model_map` domain validator and empty [`config/model_map.json`](../config/model_map.json).
+
+Persistence migrations, durable overlay/Goal snapshot storage, routing evidence, router selection, fixed-model pin migration, host-tool writes/effects, and live host-tool acceptance are **not implemented**. Current native admission still uses one exact `modelPolicy` identity; `MAESTRO_NATIVE_MODEL` remains an explicit fixed-model pin/routing-off input where required. The native Worker remains text/evidence-only because the production host-tool registry is empty. See the [canonical registry](../roadmap/_meta/naming-registry.md) and [Ensemble Router design](../roadmap/act-1-foundation/active/2026-09-08-ensemble-router-routing-design.md).
 
 ## Core Architecture & Pillars
 
