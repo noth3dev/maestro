@@ -2599,3 +2599,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Resolved the roadmap/code mismatch: `apps/secretary` remains the intentional Electron + Vite + React 19 desktop operator app. Its main-process `contextBridge`, local credential handling, and renderer/API boundary are current product constraints, not temporary drift.
 - Updated Phase 7 and all three roadmap status copies to remove the contradictory “Do not add Electron” instruction. Next.js/PWA/browser-first is explicitly superseded for the current client; a browser client would require a separate product decision.
 - Preserved the radial product direction, but marked `@xyflow/react`/`d3-hierarchy` as future Phase 7 dependencies to add only with the graph implementation.
+
+## 2026-09-08 — CI test-job build correction
+
+- Root cause: GitHub Actions `static` and `test` jobs run on separate runners. The `test` job installed dependencies and invoked Vitest without first running `npm run build`, while workspace package exports point at `dist/*.js`/`dist/*.d.ts`. Vitest therefore failed to resolve `@maestro/*` package entries across 87 suites; the four CLI bootstrap failures were the same missing-build condition, because the local Control Plane/model-gateway entrypoints were absent on the fresh runner.
+- Fix prepared in `.github/workflows/ci.yml`: the PostgreSQL-backed `test` job now runs `npm run build` after `npm ci` and before Vitest.
+- Verification: `npm run build` passed; the previously failing `apps/cli/src/tui/local-bootstrap.test.ts` passed 13/13; a representative build-backed PostgreSQL run passed 9 files / 96 tests; the full no-database run passed 105/162 files / 677 tests and correctly skipped 57 database-gated files / 381 tests; `npm run lint` and `git diff --check` passed.
+- A local full PostgreSQL run was not counted as a pass because the five-minute shell cap expired before completion; no assertion failure was emitted before the cap. The existing CI timeout remains 30 minutes.
+- The user’s uncommitted `.gitignore` change remains preserved. Phase 2 host-tool implementation remains gated separately on explicit `진행해`.
