@@ -967,3 +967,8 @@ Prime's harness separates session-local and explicit global state and validates 
 The first 1B slice now defines a versioned JSON-lines protocol and a persistent-kernel wrapper without importing Prime: one cell per kernel, out-of-band host requests/responses, typed `done`/`event`/`error` frames, malformed-frame rejection, child-close → `unknown`, interrupt, bounded frame size, and shutdown framing. This is deliberately transport-level only.
 
 The real Python child/channel composition and strict read-only host-effect allowlist remain open. Production still injects the explicit unavailable kernel, so no raw process, filesystem, shell, Git, network, or provider effect is reachable from the new protocol modules. This preserves the documented fail-closed boundary while the authority adapter matrix is implemented next.
+
+
+## 2026-09-08 — 1B read-only host router
+
+Added a transport-independent read-only host-request router. It accepts only `read_file` and `git_revision`, validates relative paths/Git refs, passes an immutable Goal/session binding to injected gateways, ignores model-supplied project identity fields, validates result envelopes, enforces the declared outbound data classes, and rejects writes/unknown methods. This is the adapter contract only; real file/Git adapters still must call the existing authority-backed boundaries.

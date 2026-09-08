@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { StringDecoder } from "node:string_decoder";
-import type { IpPythonExecutionRequest, IpPythonExecutionResult, IpPythonKernel } from "./ipython-tool.js";
+import type { IpPythonExecutionRequest, IpPythonExecutionResult, IpPythonKernel, IpPythonSessionBinding } from "./ipython-tool.js";
 
 export const IPYTHON_PROTOCOL_VERSION = 1 as const;
 
@@ -145,6 +145,13 @@ export interface IpPythonKernelOptions {
   readonly onEvent?: (event: Pick<IpPythonEventFrame, "requestId" | "stream" | "text">) => void;
 }
 
+export type IpPythonHostBinding = IpPythonSessionBinding;
+
+export interface IpPythonReadOnlyGateway {
+  readFile(binding: IpPythonHostBinding, relativePath: string): IpPythonExecutionResult | Promise<IpPythonExecutionResult>;
+  gitRevision(binding: IpPythonHostBinding, ref: string): IpPythonExecutionResult | Promise<IpPythonExecutionResult>;
+}
+
 export class IpPythonProtocolError extends Error {
   constructor(message: string) {
     super(message);
@@ -157,6 +164,40 @@ export class IpPythonKernelBusyError extends Error {
     super("IPython kernel is busy");
     this.name = "IpPythonKernelBusyError";
   }
+}
+
+
+function payloadRecord(payload: unknown): Record<string, unknown> {
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) throw new IpPythonProtocolError("IPython host payload must be an object");
+  return payload as Record<string, unknown>;
+}
+
+function relativeReadPath(value: unknown): string {
+  const path = requiredString(value, "path");
+  if (path.includes("\\") || path.startsWith("/") || path.split("/").some((part) => part === "..")) throw new IpPythonProtocolError("IPython read path is outside the Goal scope");
+  return path;
+}
+
+function gitRef(value: unknown): string {
+  const ref = requiredString(value, "ref");
+  if (ref.includes("\0") || /\s/.test(ref)) throw new IpPythonProtocolError("IPython Git ref is invalid");
+  return ref;
+}
+
+function validateHostResult(value: IpPythonExecutionResult, binding: IpPythonHostBinding): IpPythonExecutionResult {
+  if (value === null || typeof value !== "object" || !["ok", "error", "cancelled", "unknown"].includes(value.state) || typeof value.content !== "string" || !["public", "workspace", "private", "pii", "phi", "secret"].includes(value.dataClass)) throw new IpPythonProtocolError("IPython host result is invalid");
+  if (!binding.outboundDataClasses.includes(value.dataClass)) throw new IpPythonProtocolError("IPython host result data class is outside the Goal scope");
+  if (Buffer.byteLength(value.content, "utf8") > MAX_FRAME_BYTES) throw new IpPythonProtocolError("IPython host result exceeds the output limit");
+  return value;
+}
+
+export function createReadOnlyHostRequestHandler(options: { readonly binding: IpPythonHostBinding; readonly gateway: IpPythonReadOnlyGateway }): (request: IpPythonHostRequest) => Promise<IpPythonExecutionResult> {
+  return async (request) => {
+    const payload = payloadRecord(request.payload);
+    if (request.method === "read_file") return validateHostResult(await options.gateway.readFile(options.binding, relativeReadPath(payload.path)), options.binding);
+    if (request.method === "git_revision") return validateHostResult(await options.gateway.gitRevision(options.binding, gitRef(payload.ref)), options.binding);
+    throw new IpPythonProtocolError(`IPython host method is not allowed: ${request.method}`);
+  };
 }
 
 function record(value: unknown): Record<string, unknown> {

@@ -2659,3 +2659,19 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Markdown relative-link scan passed with zero broken links.
 - The user-owned `.gitignore` change remains uncommitted and untouched. Protected worktrees remain untouched.
 - This checkpoint supports a local commit for the fail-closed 1A/transport 1B slice. It does not claim Phase 1/2 acceptance because real Python process composition, authority-backed host effects, approval, recovery, and live PostgreSQL host-tool evidence remain open.
+
+
+## 2026-09-08 — 1B read-only host router implemented
+
+- Added the transport-independent `createReadOnlyHostRequestHandler` to the IPython host boundary.
+- The handler currently permits only bounded `read_file` and `git_revision`; it rejects write/shell/network/unknown methods, traversal/absolute paths, invalid refs, malformed result envelopes, oversized output, and outbound data classes outside the immutable Goal binding.
+- Added focused tests proving model-supplied project identity is ignored and the bound project/Goal identity is passed to the gateway.
+- Real authority-backed file/Git adapters and process composition remain the next open slice.
+
+
+## 2026-09-08 — 1B host router verification checkpoint
+
+- Fresh `npm run check` passed: 108 files passed and 57 database-gated files skipped; 691 tests passed and 381 skipped.
+- `npm run lint` and `git diff --check` passed.
+- The read-only host router change remains transport-only and fail-closed in production. No database migration or external capability was introduced.
+- The user-owned `.gitignore` change remains unstaged; no protected worktree was modified.
