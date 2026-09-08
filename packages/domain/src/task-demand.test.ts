@@ -154,6 +154,16 @@ describe("runtime task demand", () => {
     expect(() => assertValidTaskDemand(demand({ taskKinds: inheritedKinds as never }))).toThrow(TaskDemandValidationError);
   });
 
+  it("rejects known fields when hidden as non-enumerable properties", () => {
+    const outer = demand() as Record<string, unknown>;
+    Object.defineProperty(outer, "provenance", { value: demand().provenance, enumerable: false });
+    expect(() => assertValidTaskDemand(outer)).toThrow(TaskDemandValidationError);
+
+    const nested = demand();
+    Object.defineProperty(nested.requirements, "coding", { value: nested.requirements.coding, enumerable: false });
+    expect(() => assertValidTaskDemand(nested)).toThrow(TaskDemandValidationError);
+  });
+
   it("rejects unknown fields hidden in prototypes, non-enumerable properties, or symbols", () => {
     const outer = demand();
     Object.setPrototypeOf(outer, { provider: "openai" });

@@ -53,6 +53,21 @@ function mapBundle(row: MissionBundleRow): MissionBundle {
   };
 }
 
+function assertStoredMissionBundleRow(row: MissionBundleRow): void {
+  try {
+    assertValidMissionBundleSubstance(row.substance);
+  } catch {
+    throw new MissionBundleError("Stored Mission Bundle substance is invalid");
+  }
+  let calculatedHash: string;
+  try {
+    calculatedHash = missionBundleSubstanceContentHash(row.substance);
+  } catch {
+    throw new MissionBundleError("Stored Mission Bundle content hash is invalid");
+  }
+  if (row.content_hash.trim() !== calculatedHash) throw new MissionBundleError("Stored Mission Bundle content hash is invalid");
+}
+
 function bundleSelectSql(): string {
   return "SELECT bundle_id, council_id, department_id, plan_version, plan_content_hash, item_id, parent_ref, substance, content_hash FROM mission_bundles";
 }
@@ -122,8 +137,7 @@ export async function readMissionBundle(pool: Pool, councilId: string, departmen
   const result = await pool.query<MissionBundleRow>(bundleSelectSql() + " WHERE council_id = $1 AND department_id = $2 AND plan_version = $3 AND item_id = $4", [councilId, departmentId, planVersion, itemId]);
   if (result.rowCount !== 1) throw new MissionBundleNotFoundError(`Mission Bundle not found: ${councilId}/${departmentId}/${planVersion}/${itemId}`);
   const row = result.rows[0]!;
-  try { assertValidMissionBundleSubstance(row.substance); } catch { throw new MissionBundleError("Stored Mission Bundle substance is invalid"); }
-  if (row.content_hash.trim() !== missionBundleSubstanceContentHash(row.substance)) throw new MissionBundleError("Stored Mission Bundle content hash is invalid");
+  assertStoredMissionBundleRow(row);
   const plan = await readDepartmentPlan(pool, councilId, departmentId);
   if (plan.version !== row.plan_version || plan.contentHash !== row.plan_content_hash.trim()) throw new MissionBundleError("Stored Mission Bundle Plan binding is invalid");
   const item = plan.substance.items.find((candidate) => candidate.itemId === itemId);
@@ -133,7 +147,10 @@ export async function readMissionBundle(pool: Pool, councilId: string, departmen
 
 export async function listMissionBundlesForPlan(pool: Pool, councilId: string, departmentId: string, planVersion: number): Promise<readonly MissionBundle[]> {
   const result = await pool.query<MissionBundleRow>(bundleSelectSql() + " WHERE council_id = $1 AND department_id = $2 AND plan_version = $3 ORDER BY item_id", [councilId, departmentId, planVersion]);
-  return result.rows.map(mapBundle);
+  return result.rows.map((row) => {
+    assertStoredMissionBundleRow(row);
+    return mapBundle(row);
+  });
 }
 
 export interface IssueMissionPersonaOverlayRequest {

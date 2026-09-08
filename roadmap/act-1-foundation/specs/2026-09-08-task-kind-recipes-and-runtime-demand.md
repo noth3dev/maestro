@@ -134,6 +134,6 @@ This slice does **not** implement:
 - pressure-band thresholds;
 - model matching or ranking;
 - B provider facts or C operations;
-- router admission, pressure calculation, or routing evidence persistence. The declared `TaskDemand` is now carried by `MissionBundleSubstance`; existing persisted bundles without it must be reissued or backfilled before routing can consume them.
+- router admission, pressure calculation, or routing evidence persistence. The declared `TaskDemand` is now carried by `MissionBundleSubstance`; existing persisted bundles without it must be reissued or backfilled before routing can consume them. The domain validator is authoritative for hostile in-process object boundaries; the contracts Zod schema validates the serialized wire shape.
 
 Those remain separate Phase 1 artifacts and must not be smuggled into the recipe contract.

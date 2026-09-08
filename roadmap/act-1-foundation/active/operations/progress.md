@@ -3058,3 +3058,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Applied the settled architecture decision that demand rides the existing per-unit Mission Bundle rather than a parallel persistence record. `MissionBundleSubstance.taskDemand` is required, validated with the domain TaskDemand contract, included in the Mission Bundle content hash, and mirrored in `@maestro/contracts` as a strict Zod schema.
 - Updated domain/control-plane/persistence fixtures so each Mission Bundle carries explicit Head provenance and a complete eight-axis demand. No SQL migration is needed because the substance is JSONB; old rows without `taskDemand` fail closed and must be reissued or backfilled before routing consumes them.
 - **Next:** define the E work-character contract and continuous pressure calculation.
+
+
+## 2026-09-08 — Mission Bundle hash-boundary hardening
+
+- Independent review reproduced a P1: hidden `taskDemand` fields could pass Mission Bundle validation while `canonicalJson` omitted them from the content hash. Hardened Mission Bundle and TaskDemand validators to require plain objects, own required fields, and enumerable allowed fields; `missionBundleSubstanceContentHash` now validates before hashing.
+- `listMissionBundlesForPlan` now validates stored substance and recomputes content hash before returning rows. Added a persistence unit regression proving legacy rows without `taskDemand` fail closed.
+- The contract-layer Zod schema remains the serialized HTTP shape validator; the domain validator remains authoritative for hostile in-process object/prototype boundaries.
+- Focused hash/list regressions pass; full domain/contracts/persistence checks remain required before merge.

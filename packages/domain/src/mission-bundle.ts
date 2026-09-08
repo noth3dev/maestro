@@ -56,15 +56,24 @@ function nonnegativeInt(value: unknown, field: string): asserts value is number 
 }
 function object(value: unknown, name: string): asserts value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new InvalidMissionBundleError(`${name} must be an object`);
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) throw new InvalidMissionBundleError(`${name} must be a plain object`);
 }
 function onlyKeys(value: Record<string, unknown>, allowed: readonly string[], name: string): void {
-  for (const key of Object.keys(value)) if (!allowed.includes(key)) throw new InvalidMissionBundleError(`${name} has unknown field ${key}`);
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string" || !allowed.includes(key)) throw new InvalidMissionBundleError(`${name} has unknown field ${String(key)}`);
+    if (!Object.getOwnPropertyDescriptor(value, key)?.enumerable) throw new InvalidMissionBundleError(`${name} field ${key} must be enumerable`);
+  }
+}
+function requiredKeys(value: Record<string, unknown>, required: readonly string[], name: string): void {
+  for (const key of required) if (!Object.hasOwn(value, key)) throw new InvalidMissionBundleError(`${name} field ${key} is required`);
 }
 
 export function assertValidMissionBundleSubstance(value: unknown): asserts value is MissionBundleSubstance {
   object(value, "Mission bundle substance");
   const fields = ["role", "profileRef", "goalBrief", "taskDemand", "approvedModels", "allowedSkills", "allowedTools", "allowedPaths", "environment", "authorityBoundary", "externalServiceBoundary", "dataBoundary", "costCeiling", "timeCeiling", "retryCeiling", "workerCeiling", "deliverable", "evidenceRequirements", "validationCriteria", "terminationConditions"] as const;
   onlyKeys(value, fields, "Mission bundle substance");
+  requiredKeys(value, fields, "Mission bundle substance");
   if (value.role !== "head" && value.role !== "scout" && value.role !== "execution") throw new InvalidMissionBundleError("Mission bundle role must be head, scout, or execution");
   text(value.profileRef, "Mission bundle profileRef");
   text(value.goalBrief, "Mission bundle goalBrief");
@@ -99,6 +108,7 @@ export function assertValidMissionBundleSubstance(value: unknown): asserts value
 }
 
 export function missionBundleSubstanceContentHash(substance: MissionBundleSubstance): string {
+  assertValidMissionBundleSubstance(substance);
   return createHash("sha256").update(canonicalJson(substance)).digest("hex");
 }
 
