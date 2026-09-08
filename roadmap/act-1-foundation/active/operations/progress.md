@@ -3122,3 +3122,36 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Persistence now writes and verifies relational `rejections` against the JSON evidence envelope and reads legacy 0072 evidence with an in-memory empty-list compatibility value only. Direct SQL drift is rejected.
 - Added regression coverage for a non-empty 0072-to-0073 migration, snapshot UPDATE/DELETE rejection, JSON/column rejection drift, provider-fact hard filters, hostile array properties, and accessor-backed requests/TaskDemand values.
 - Verification: `npm run build`, `npm run lint`, and focused PostgreSQL routing coverage pass: 7 files / 45 tests. Independent routing review: ACCEPT.
+
+
+## 2026-09-08 — Plan 1 S1 routing snapshot validator in progress
+
+- The requested routing WIP and migrations 0073/0074 were already committed on `main`/`origin/main`; no uncommitted routing implementation remained to resume.
+- Created isolated worktree `plan1-routing-snapshot-validator` from `9963257`.
+- Added a RED PostgreSQL regression proving a Goal snapshot could previously be created from a forged or non-durable overlay version; RED failed because the promise resolved instead of rejecting.
+- Implemented exact durable overlay-version binding and expanded coverage for same-version Goal isolation, unchanged source overlay rows, and tampered snapshot hashes. Focused PostgreSQL suite passes 5/5; build and lint pass.
+- Full PostgreSQL test run reached the 360-second command timeout before a result was returned; no next slice will start until this is diagnosed or completed.
+
+
+- S1 self-verification completed: `MAESTRO_TEST_DATABASE_URL=postgresql://maestro:maestro@127.0.0.1:55432/maestro_test npm test -- --reporter=dot` passed 185/185 files and 1,231/1,231 tests; fresh build, lint, and `git diff --check` also passed.
+- RED checkpoint `97e08b8` and implementation checkpoint `375d9d5` are present. Independent no-edit review is now pending before merge.
+
+
+## 2026-09-08 — Plan 1 S1 review remediation
+
+- First independent no-edit review returned `REVIEW: FAIL` because S1 lacked a persisted snapshot row-hash before/after mutation assertion and the tamper test asserted an error message string.
+- Added persisted snapshot payload/content-hash comparison around rejected UPDATE/DELETE attempts and changed tamper verification to assert `EnsembleRouterArtifactIntegrityError`. Focused PostgreSQL tests, build, lint, and diff checks pass.
+- Review remediation is committed as `30a55d3`; a second independent no-edit review is pending.
+
+
+- Final review remediation reordered the superseded-version integration case so Goal `goal-1` is bound to v1 before v2 is recorded, then read after v2 exists. The same-version test now explicitly selects both persisted Goal snapshot rows and compares payloads. Focused real-PG tests pass 8/8; build, lint, and diff checks pass.
+- Test-order correction is committed as `2203aa7`; explicit persisted-row evidence is committed as `12a6cd4`. A final independent no-edit review and full PostgreSQL run are pending.
+
+
+- Final default-parallel full PostgreSQL run exposed a pre-existing shared-schema migration race (28 files/65 tests failed after an `applyAllMigrations()` deadlock). This remains a verification blocker; a serialized full PG run is required before S1 closure.
+
+
+- Final independent no-edit review returned `REVIEW: PASS` for tip `12a6cd4`, confirming all four S1 behaviors and the explicit persisted-row/hash evidence. The default-parallel full PG run remains a harness-race failure; serialized verification is running before merge.
+
+
+- The first worker-limited PG rerun still failed because Vitest file parallelism remained enabled (4 files/33 tests). The migration race diagnosis is confirmed; rerunning with `--no-file-parallelism --maxWorkers=1`.
