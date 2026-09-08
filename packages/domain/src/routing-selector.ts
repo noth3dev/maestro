@@ -154,7 +154,13 @@ export function selectRoutedModel(input: RoutingSelectionRequest): RoutingSelect
   const map = new Map(input.modelMap.entries.map((entry) => [entry.modelRef, entry]));
   const observations = new Map(input.operationalOverlay.observations.map((observation) => [observation.candidateRef, observation]));
   const rejected: RoutingCandidateRejection[] = [];
-  const passing: Array<{ candidate: RouterCandidate; capabilityScore: number; latency: number; failureRate: number }> = [];
+  const passing: Array<{
+    candidate: RouterCandidate;
+    capabilityScore: number;
+    weakestMargin: number;
+    latency: number;
+    failureRate: number;
+  }> = [];
   const refs = new Set<string>();
   for (const rawCandidate of candidateValues) {
     let candidate: RouterCandidate;
@@ -212,6 +218,7 @@ export function selectRoutedModel(input: RoutingSelectionRequest): RoutingSelect
       continue;
     }
     let capabilityScore = 0;
+    let weakestMargin = Number.POSITIVE_INFINITY;
     let invalidCapability = false;
     for (const axis of MODEL_CAPABILITY_AXES) {
       const requirement = axisRequirement(input.taskDemand, axis);
@@ -221,17 +228,25 @@ export function selectRoutedModel(input: RoutingSelectionRequest): RoutingSelect
         break;
       }
       capabilityScore += score.score ?? 0;
+      if (requirement > 0 && score.score !== null) weakestMargin = Math.min(weakestMargin, score.score - requirement);
     }
     if (invalidCapability) {
       rejected.push({ candidateRef: candidate.candidateRef, reason: "human-owned capability vector does not satisfy TaskDemand" });
       continue;
     }
-    passing.push({ candidate, capabilityScore, latency: observation.measuredLatencyMs, failureRate: observation.failureRate });
+    passing.push({
+      candidate,
+      capabilityScore,
+      weakestMargin: Number.isFinite(weakestMargin) ? weakestMargin : 0,
+      latency: observation.measuredLatencyMs,
+      failureRate: observation.failureRate,
+    });
   }
   if (passing.length === 0)
     throw new RoutingSelectionError("No candidate satisfies the approved identity, A/B hard filters, and C operational binding", rejected);
   passing.sort(
     (left, right) =>
+      right.weakestMargin - left.weakestMargin ||
       right.capabilityScore - left.capabilityScore ||
       left.failureRate - right.failureRate ||
       left.latency - right.latency ||
@@ -250,6 +265,6 @@ export function selectRoutedModel(input: RoutingSelectionRequest): RoutingSelect
     candidateRefs,
     rejected: Object.freeze(rejected),
     pressure,
-    rationale: `Selected ${selected.candidate.modelRef} from ${passing.length} eligible candidate(s); pressure remains ${pressure.pressure} (${pressure.band}) and does not alter TaskDemand or authority.`,
+    rationale: `Selected ${selected.candidate.modelRef} by the weakest-link A↔D margin from ${passing.length} eligible candidate(s); pressure remains ${pressure.pressure} (${pressure.band}) and does not alter TaskDemand or authority.`,
   });
 }

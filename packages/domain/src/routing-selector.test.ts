@@ -138,6 +138,37 @@ describe("A/B/C routing selection", () => {
     expect(selected.selectedModelRef).toBe("provider/strong");
   });
 
+  it("ranks by the weakest A↔D margin before aggregate capability", () => {
+    const base = modelMap();
+    const fast = base.entries[0]!;
+    const strong = base.entries[1]!;
+    const fastAxes = { ...fast.capability.axes, coding: { ...fast.capability.axes.coding, score: 200 } };
+    const strongAxes = {
+      ...strong.capability.axes,
+      coding: { ...strong.capability.axes.coding, score: 81 },
+      reasoning: { ...strong.capability.axes.reasoning, score: 200 },
+      verification: { ...strong.capability.axes.verification, score: 200 },
+      "instruction-fidelity": { ...strong.capability.axes["instruction-fidelity"], score: 200 },
+      "tool-use": { ...strong.capability.axes["tool-use"], score: 200 },
+      "long-context": { ...strong.capability.axes["long-context"], score: 200 },
+      knowledge: { ...strong.capability.axes.knowledge, score: 200 },
+      "refusal-calibration": { ...strong.capability.axes["refusal-calibration"], score: 200 },
+    };
+    const selection = selectRoutedModel(
+      request({
+        modelMap: {
+          ...base,
+          entries: [
+            { ...fast, capability: { ...fast.capability, axes: fastAxes } },
+            { ...strong, capability: { ...strong.capability, axes: strongAxes } },
+          ],
+        },
+      }),
+    );
+    expect(selection.selectedModelRef).toBe("provider/fast");
+    expect(selection.rationale).toContain("weakest-link A↔D");
+  });
+
   it("keeps pin mode explicit and rejects contradictory identity inputs", () => {
     const selected = selectRoutedModel(request({ mode: "pin", pinModelRef: "provider/fast" }));
     expect(selected.selectedModelRef).toBe("provider/fast");
