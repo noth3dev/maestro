@@ -1317,3 +1317,10 @@ Before production router code, create and review: the eight A-axis scoring rubri
 - Combining multiple task kinds takes the strongest axis role only. It never synthesizes numeric demand levels.
 - TDD evidence: missing-module RED was observed, then the focused task-demand suite passed 8/8.
 - **Next:** define the runtime Head policy for choosing D levels from concrete Task Contracts; do not derive those levels from the static recipe alone.
+
+
+## 2026-09-08 — D validator hidden-field hardening
+
+- Independent review found that `Object.keys` alone allowed unknown fields on custom prototypes or hidden non-enumerable/symbol properties. This was a fail-closed gap in the new D validator and the existing A validator.
+- Added RED regressions for outer and nested prototype fields, non-enumerable fields, and symbol fields. Validators now require plain objects (`Object.prototype` or `null`) and inspect `Reflect.ownKeys`.
+- Focused task-demand tests pass 9/9 and model-profile tests pass 14/14 after remediation.

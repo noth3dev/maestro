@@ -42,6 +42,17 @@ describe("task-kind recipes", () => {
     }
   });
 
+  it("rejects hidden unknown fields in a recipe or its axis roles", () => {
+    const base = getTaskKindRecipe("coding");
+    const recipe = { ...base, axisRoles: { ...base.axisRoles } };
+    Object.setPrototypeOf(recipe.axisRoles, { provider: "openai" });
+    expect(() => assertValidTaskKindRecipe(recipe)).toThrow(TaskDemandValidationError);
+
+    const hidden = { ...getTaskKindRecipe("coding"), provider: "openai" } as Record<string, unknown>;
+    Object.defineProperty(hidden, "provider", { value: "openai", enumerable: false });
+    expect(() => assertValidTaskKindRecipe(hidden)).toThrow(TaskDemandValidationError);
+  });
+
   it("combines multiple kinds by the strongest axis role without producing demand levels", () => {
     const combined = composeTaskKindEmphasis(["planning", "coding"]);
     expect(combined.reasoning).toBe("primary");
@@ -90,6 +101,24 @@ describe("runtime task demand", () => {
 
     const inherited = Object.create({ schemaVersion: TASK_DEMAND_SCHEMA_VERSION, taskKinds: ["coding"], requirements: demand().requirements, provenance: demand().provenance }) as Record<string, unknown>;
     expect(() => assertValidTaskDemand(inherited)).toThrow(TaskDemandValidationError);
+  });
+
+  it("rejects unknown fields hidden in prototypes, non-enumerable properties, or symbols", () => {
+    const outer = demand();
+    Object.setPrototypeOf(outer, { provider: "openai" });
+    expect(() => assertValidTaskDemand(outer)).toThrow(TaskDemandValidationError);
+
+    const nested = demand();
+    Object.setPrototypeOf(nested.provenance, { provider: "openai" });
+    expect(() => assertValidTaskDemand(nested)).toThrow(TaskDemandValidationError);
+
+    const hidden = demand() as Record<string, unknown>;
+    Object.defineProperty(hidden, "provider", { value: "openai", enumerable: false });
+    expect(() => assertValidTaskDemand(hidden)).toThrow(TaskDemandValidationError);
+
+    const symbol = demand() as Record<string | symbol, unknown>;
+    symbol[Symbol("provider")] = "openai";
+    expect(() => assertValidTaskDemand(symbol)).toThrow(TaskDemandValidationError);
   });
 
   it("rejects empty, duplicate, or unknown task kinds", () => {

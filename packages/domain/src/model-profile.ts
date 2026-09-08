@@ -41,11 +41,15 @@ function object(value: unknown, name: string): asserts value is Record<string, u
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new ModelCapabilityValidationError(`${name} must be an object`);
   }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new ModelCapabilityValidationError(`${name} must be a plain object`);
+  }
 }
 
 function onlyKeys(value: Record<string, unknown>, allowed: readonly string[], name: string): void {
-  for (const key of Object.keys(value)) {
-    if (!allowed.includes(key)) throw new ModelCapabilityValidationError(`${name} has unknown field ${key}`);
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string" || !allowed.includes(key)) throw new ModelCapabilityValidationError(`${name} has unknown field ${String(key)}`);
   }
 }
 

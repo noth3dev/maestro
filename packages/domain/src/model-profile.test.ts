@@ -60,6 +60,24 @@ describe("model capability vector", () => {
     expect(() => assertValidModelCapabilityVector(inherited)).toThrow(ModelCapabilityValidationError);
   });
 
+  it("rejects unknown fields hidden in prototypes, non-enumerable properties, or symbols", () => {
+    const outer = vector() as Record<string, unknown>;
+    Object.setPrototypeOf(outer, { provider: "openai" });
+    expect(() => assertValidModelCapabilityVector(outer)).toThrow(ModelCapabilityValidationError);
+
+    const nested = vector();
+    Object.setPrototypeOf(nested.axes, { provider: "openai" });
+    expect(() => assertValidModelCapabilityVector(nested)).toThrow(ModelCapabilityValidationError);
+
+    const hidden = vector() as Record<string, unknown>;
+    Object.defineProperty(hidden, "provider", { value: "openai", enumerable: false });
+    expect(() => assertValidModelCapabilityVector(hidden)).toThrow(ModelCapabilityValidationError);
+
+    const symbol = vector() as Record<string | symbol, unknown>;
+    symbol[Symbol("provider")] = "openai";
+    expect(() => assertValidModelCapabilityVector(symbol)).toThrow(ModelCapabilityValidationError);
+  });
+
   it("rejects capability axes outside the closed first-version set", () => {
     const value = vector();
     (value.axes as Record<string, unknown>).creativity = scored();
