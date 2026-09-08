@@ -1245,3 +1245,10 @@ The production read-only path is not considered verified until Goal path scopes,
 - **[verified]** Fresh PostgreSQL full check passes: 172 test files and 1131 tests, 0 failures.
 - **[verified]** Independent re-review returned `ACCEPT` after the child inheritance hardening.
 - This closes the native model-policy slice only. Durable effect journaling, restart/orphan reconciliation, approvals, writes, stop/fencing, recovery, and remaining Phase 2 tools remain separate roadmap items.
+
+
+## 2026-09-08 — Council deadline integration-test timing hardening
+
+- The full PostgreSQL check exposed a flaky Council integration fixture: the late-brief regression supplied a `Date.now() + 500ms` deadline before fixture inserts and lease acquisition completed. `createHeadCouncil` correctly validates against PostgreSQL `clock_timestamp()`, so the production guard was not weakened.
+- The fixture now resolves deadline factories immediately before Council creation, gives the creation path a bounded 5-second margin, and waits against the persisted deadline using PostgreSQL time plus a small margin before submitting the late brief.
+- Scope is test-only; Council production semantics and the late-brief/absence-settlement contract are unchanged.

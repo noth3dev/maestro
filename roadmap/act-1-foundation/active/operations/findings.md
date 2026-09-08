@@ -1102,3 +1102,8 @@ Model authorization has two deliberate checks. Persistence selects only a provid
 The first model-policy review exposed a concrete contract gap: `agent-runtime` checked child model/tool fields but accepted attacker-supplied Goal/project context and widened skills, path scopes, outbound classes, and non-tool budgets. The fix is fail-closed and provider-neutral: stable context fields are immutable, budget effect cannot increase, model policy must match exactly, each capability list must be a parent subset, and model/tool/output/wall/retry budgets cannot increase. Child-call capacity remains reserved from the parent before record creation.
 
 A second review noted that native `parseModelRef` accepted an extra slash in the model id. Canonical provider/model references now reject extra separators and whitespace. The native model-policy slice is accepted; Prime remains structural reference only and is not a production runtime dependency.
+
+
+## 2026-09-08 — Council deadline fixture root cause
+
+The failing `packages/persistence/src/council.integration.test.ts` case was timing-sensitive rather than a production deadline defect. Its `+500ms` deadline was computed before multiple PostgreSQL setup writes and Goal lease acquisition, while `createHeadCouncil` intentionally checks the supplied deadline with the database clock after those operations. Under the full 172-file run, that valid server-side check observed the deadline as expired. The test now resolves a deadline factory immediately before creation and waits until the persisted snapshot deadline with `clock_timestamp()` plus 100ms. This preserves the intended late-brief assertion without fixed wall-clock assumptions.

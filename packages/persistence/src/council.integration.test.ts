@@ -26,7 +26,7 @@ const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`
 
  describeDatabase("Head Council briefs with PostgreSQL", () => {
  const pool = new Pool({ connectionString: databaseUrl });
- async function setup(departments = ["product", "engineering"], briefDeadline = new Date(Date.now() + 60_000), snapshotEvidence = evidence) {
+ async function setup(departments = ["product", "engineering"], briefDeadline: Date | (() => Date) = () => new Date(Date.now() + 60_000), snapshotEvidence = evidence) {
    const goalId = randomUUID(), contractId = randomUUID(), projectId = randomUUID();
    const contractContent = buildContractContent(projectId);
    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
@@ -39,7 +39,8 @@ const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`
    }
    for (const departmentId of departments) await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, head_role_id, contract_id, status, active_session_ref) VALUES ($1, $2, $3, $4, 'active', $5)", [goalId, departmentId, `head:${departmentId}`, contractId, `opaque:${departmentId}`]);
    const proof = await acquireGoalLease(pool, { goalId, ownerId: "test", leaseDurationMs: 60_000 });
-   const council = await createHeadCouncil(pool, { goalId, contractId, briefDeadline, evidence: snapshotEvidence }, proof, context("secretary"));
+   const resolvedBriefDeadline = typeof briefDeadline === "function" ? briefDeadline() : briefDeadline;
+   const council = await createHeadCouncil(pool, { goalId, contractId, briefDeadline: resolvedBriefDeadline, evidence: snapshotEvidence }, proof, context("secretary"));
    expect(/^[0-9a-f]{64}$/.test(council.snapshotHash)).toBe(true);
    return { goalId, contractId, projectId, proof, council };
  }
@@ -97,14 +98,14 @@ const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`
  });
 
  it("validates contract identity and rejects late briefs before absence settlement", async () => {
-   const setupResult = await setup(["product", "engineering"], new Date(Date.now() + 500));
+   const setupResult = await setup(["product", "engineering"], () => new Date(Date.now() + 5_000));
    const { council, proof, goalId, contractId } = setupResult;
    const invalid = await pool.query("UPDATE task_contracts SET content_hash = $2 WHERE contract_id = $1", [contractId, "a".repeat(64)]);
    expect(invalid.rowCount).toBe(1);
    await expect(readHeadCouncil(pool, council.councilId)).resolves.toBeDefined();
    // The snapshot already captured the valid contract identity; later contract mutation does not change it.
    await submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"));
-   await pool.query("SELECT pg_sleep(0.7)");
+   await pool.query("SELECT pg_sleep(GREATEST(EXTRACT(EPOCH FROM ($1::timestamptz - clock_timestamp())) + 0.1, 0))", [council.snapshot.deadline]);
    await expect(submitIndependentBrief(pool, council.councilId, "engineering", brief, proof, headContext("engineering"))).rejects.toBeInstanceOf(CouncilProtocolError);
    await expect(markMissingCouncilParticipantsAbsent(pool, council.councilId, {}, proof, context("secretary-absence"))).rejects.toBeInstanceOf(CouncilProtocolError);
    await markMissingCouncilParticipantsAbsent(pool, council.councilId, { engineering: "unavailable" }, proof, context("secretary-absence"));
