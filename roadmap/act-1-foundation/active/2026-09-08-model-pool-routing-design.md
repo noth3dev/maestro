@@ -61,7 +61,7 @@ The tag recipes combine only the eight A capability axes. `creativity` and `long
 
 ---
 
-## 4. Model side — the pool
+## 4. Model side — Ensemble Router catalog
 
 ### 4.1 A. Capability — human-scored `model_map` vector
 
