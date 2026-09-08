@@ -2986,24 +2986,24 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Fresh `npm run check` passed: 172 test files and 1131 tests, 0 failures. `npm run lint` and `git diff --check` also passed.
 
 
-## 2026-09-08 — Model pool routing design distributed across Act 1
+## 2026-09-08 — Ensemble Router routing design distributed across Act 1
 
-- Read and accepted the canonical `2026-09-08-model-pool-routing-design.md` as the source for model-pool behavior.
+- Read and accepted the canonical `2026-09-08-model-pool-routing-design.md` as the source for Ensemble Router behavior.
 - Updated the Act 1 index, operations index, Phase 1–10 documents, and the active task plan with phase-owned routing responsibilities, tests, and exit evidence.
 - No production routing implementation was performed in this documentation slice. This earlier checkpoint used the then-current artifact names; it is superseded by the metric-contract update below. The active gate is now the A/B/C model metrics, D/E task metrics, continuous pressure function, pressure bands, model-map format, local overlay, routing-evidence schema, and fixed-model migration contract.
 
 
-## 2026-09-08 — Phase 1 model-pool reopening checkpoint
+## 2026-09-08 — Phase 1 Ensemble Router reopening checkpoint
 
-- Reopened Phase 1 as the bottom-up implementation boundary after the model-pool design update. No production router code was added in this documentation pass.
-- Reconciled the canonical model-pool design, Phase 1, Phase 2, Phase 5, and Phase 8 wording around baseline ownership, overlay scope, qualifying switches, `approvedModels`, and fixed-model migration.
+- Reopened Phase 1 as the bottom-up implementation boundary after the Ensemble Router design update. No production router code was added in this documentation pass.
+- Reconciled the canonical Ensemble Router design, Phase 1, Phase 2, Phase 5, and Phase 8 wording around baseline ownership, overlay scope, qualifying switches, `approvedModels`, and fixed-model migration.
 - Prime remains a structural benchmark only: persistent session/protocol/lifecycle shapes may inform the design, but Maestro authority, native admission, and evidence remain independent.
 - **Next:** add the first failing tests for the closed eight-axis A capability vector, A/profile schema, unproven status, and human-owned baseline validation.
 
 
 ## 2026-09-08 — Metric contract update applied
 
-- Replaced the Phase 1 model-pool artifact target from direct `50/100/200` grade bars to the user-approved A/B/C model metrics, D/E task metrics, continuous pressure function, and four non-matching pressure bands.
+- Replaced the Phase 1 Ensemble Router artifact target from direct `50/100/200` grade bars to the user-approved A/B/C model metrics, D/E task metrics, continuous pressure function, and four non-matching pressure bands.
 - Canonical design and Phase 1/task-plan pointers now explicitly preserve the eight fixed A axes, provider hard facts, local operational corrections, weakest-link A↔D matching, and Head-only pressure uplift.
 - **Next:** write the A-axis scoring criteria and first task-kind/pressure schemas as RED tests. The formula and initial entries remain intentionally open until their criteria are documented.
 
@@ -3095,3 +3095,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Independent review found that a Proxy could return one value during validation and another during pressure calculation.
 - Refactored validation to snapshot enumerable data-descriptor values once; `calculatePressure` now calculates only from that validated snapshot. Added a finite-output Proxy regression.
 - Focused E tests pass 8/8; full domain verification remains the merge gate.
+
+
+## 2026-09-08 — Ensemble Router branding boundary
+
+- The model-pool system is branded **Ensemble Router** in user-facing UI and active design/phase documentation.
+- `Head` remains the role name; `principal` is not introduced.
+- Technical contracts and identifiers such as `model_map`, `TaskDemand`, `MissionBundle`, `modelPolicy`, and `MAESTRO_NATIVE_MODEL` remain unchanged.

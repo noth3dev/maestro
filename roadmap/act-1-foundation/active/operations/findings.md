@@ -1109,9 +1109,9 @@ A second review noted that native `parseModelRef` accepted an extra slash in the
 The failing `packages/persistence/src/council.integration.test.ts` case was timing-sensitive rather than a production deadline defect. Its `+500ms` deadline was computed before multiple PostgreSQL setup writes and Goal lease acquisition, while `createHeadCouncil` intentionally checks the supplied deadline with the database clock after those operations. Under the full 172-file run, that valid server-side check observed the deadline as expired. The test now resolves a deadline factory immediately before creation and waits until the persisted snapshot deadline with `clock_timestamp()` plus 100ms. This preserves the intended late-brief assertion without fixed wall-clock assumptions.
 
 
-## 2026-09-08 — Model pool routing phase integration findings
+## 2026-09-08 — Ensemble Router routing phase integration findings
 
-The model-pool design crosses every model-consuming surface, but the authority boundary remains concentrated: Phase 1 owns catalog/identity/evidence contracts, Phase 2 owns demand declaration and selection, Phase 3 owns certification disclosure, Phase 5 owns capacity, and Phase 6 owns evidence-driven judgment changes. This prevents each later phase from inventing a second router.
+The Ensemble Router design crosses every model-consuming surface, but the authority boundary remains concentrated: Phase 1 owns catalog/identity/evidence contracts, Phase 2 owns demand declaration and selection, Phase 3 owns certification disclosure, Phase 5 owns capacity, and Phase 6 owns evidence-driven judgment changes. This prevents each later phase from inventing a second router.
 
 Current implementation facts that the migration must preserve:
 
@@ -1124,9 +1124,9 @@ Current implementation facts that the migration must preserve:
 The design deliberately separates public `model_map` from project-private local overlays. Operational facts may affect current eligibility, while capability judgments require Improvement Digest evidence and the declared Encore authority.
 
 
-## 2026-09-08 — Phase 1 model-pool design reconciliation
+## 2026-09-08 — Phase 1 Ensemble Router design reconciliation
 
-An independent read-only review of the model-pool design found several contract contradictions before implementation. The canonical design now resolves them as follows:
+An independent read-only review of the Ensemble Router design found several contract contradictions before implementation. The canonical design now resolves them as follows:
 
 - `model_map` is a public human-commit-owned baseline. Concertmaster may create a private registration/score proposal, but cannot write or promote the baseline. A new model remains `unproven` and cannot satisfy any A↔D requirement lacking demonstrated evidence.
 - Local overlays are installation/project-private. A Goal receives an immutable routing snapshot; Phase 5 must not treat the overlay itself as Goal-scoped.
@@ -1139,7 +1139,7 @@ The review also identified a later Phase 2 authority gap: unknown/unregistered a
 
 ## 2026-09-08 — User-approved model/task metric split
 
-The model-pool contract was updated from the prior `50/100/200` grade model to the agreed metric split:
+The Ensemble Router contract was updated from the prior `50/100/200` grade model to the agreed metric split:
 
 - **A capability:** exactly eight human-scored `0..200` axes in `model_map`: `reasoning`, `coding`, `verification`, `instruction-fidelity`, `tool-use`, `long-context`, `knowledge`, and `refusal-calibration`. Every score needs a one-line reason and evidence. `creativity` and `long-horizon` are future append-only axes, not current substitutes.
 - **B facts:** provider-declared context capacity, input/output price, auth, data policy, modalities, and tool support are hard filters, not scores.
