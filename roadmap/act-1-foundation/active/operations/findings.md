@@ -1004,3 +1004,8 @@ The Python bootstrap now parses each cell with `ast` before execution and reject
 ## 2026-09-08 — handshake-gated process kernel
 
 `createIpPythonProcessKernel` now requires the versioned `ready` frame before sending the first cell. A missing/failed handshake returns an explicit `unknown` (`handshake_timeout`) result and sends no execute frame. This prevents a process that has not proved protocol compatibility from receiving session code.
+
+
+## 2026-09-08 — missing identity fail-closed check
+
+The model-facing IPython tool now rejects direct execution when host-owned `commandId`, `toolCallId`, or operator identity is blank. This is enforced at runtime in addition to the TypeScript type, because callers crossing an untyped boundary must not turn a missing identity into an executable host session.

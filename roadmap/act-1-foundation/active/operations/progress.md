@@ -2771,3 +2771,17 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - A post-check lint run caught an unused `createIpPythonReadOnlyGateway` import in the integration test; the test now uses the helper and a fresh `npm run lint` passes.
 - `git diff --check` passes after the correction.
+
+
+## 2026-09-08 — identity fail-closed hardening
+
+- Added runtime checks that reject an IPython call with missing command, tool-call, or operator identity before session provisioning.
+- Added regression tests for blank command/tool-call identities.
+- The existing process handshake gate and bounded interrupt remain active; no production host process is enabled.
+
+
+## 2026-09-08 — identity and handshake fail-closed verification checkpoint
+
+- Fresh `npm run check` passed: 111 files passed and 57 database-gated files skipped; 702 tests passed and 381 skipped.
+- `npm run build`, `npm run lint`, and `git diff --check` pass after the latest source/test changes.
+- No production IPython grant or child-process factory was enabled; the new behavior remains behind explicit composition seams.

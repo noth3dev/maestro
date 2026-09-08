@@ -159,6 +159,9 @@ export function createIpPythonSessionManager(options: IpPythonSessionManagerOpti
 }
 
 function sessionIdFor(context: ToolContext): string {
+  for (const [value, label] of [[context.commandId, "command identity"], [context.toolCallId, "tool-call identity"], [context.operatorId, "operator identity"]] as const) {
+    if (typeof value !== "string" || value.trim() === "") throw new Error(`IPython tool requires ${label}`);
+  }
   const parts = [context.projectId, context.goalId, context.conversationId];
   if (parts.some((part) => part.trim() === "")) throw new Error("IPython tool requires project, Goal, and conversation identity");
   return JSON.stringify(parts);
