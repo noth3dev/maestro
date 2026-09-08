@@ -19,6 +19,12 @@ Act 1 is Maestro's safety and capability substrate. It must be certified before 
 
 Act 1 preserves the non-negotiable invariants of Separation of Powers, Durable Evidence, Independent Certification, Fencing Leases, and Audit-Before-Effect.
 
+### Tool and authority phase boundary
+
+Phase 2 owns the first local host-tool contract: a persistent IPython session with explicit temporary-tool scope, project skill saving, and independent → Department Head → Encore Council → user approval tiers. Phase 4 owns individually activated external capabilities. Phase 6 owns later evidence-driven refinement and does not automatically promote tools. Phase 9 owns future dynamic MCP tool manufacture. Phase 10 owns separately activated Treasury capabilities.
+
+Historical “code complete” and “accepted” markers remain in append-only execution history for provenance. Current phase acceptance follows the status blocks in each phase document and the live operations ledger.
+
 ## Active work
 
 - [Act 1 execution plan](active/act1-execution.md)

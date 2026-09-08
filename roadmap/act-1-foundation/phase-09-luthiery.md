@@ -1,5 +1,7 @@
 # Act 1 — Phase 9: Luthiery
 
+> **Current status (2026-09-08):** Phase 9 remains future work. Phase 2's persistent IPython session and explicit local host-tool contract are the first tool surface; Luthiery is a later, separately governed dynamic MCP workshop and must not be pulled into the Phase 2 implementation.
+
 ### 1. Luthiery — Dynamic MCP & Tool Workshop (Phase 9)
 
 #### Overview
@@ -14,6 +16,7 @@
 
 - Production Ownership: Infrastructure / Operations Group (tool-manufacturing engine). MUST NOT be owned by Encore.
 - Encore Auditing: Metronome monitors live executions; Phase 6 Replay Lab analyzes token inflation and queues inefficient tools for refactoring.
+- Boundary: Phase 9 manufactures certified MCP tools; it does not replace Phase 2's session-local IPython functions, nor does it grant authority. Every generated tool still enters the same four-level approval hierarchy and authority-backed effect path.
 
 **Isolation & Process Lifecycle**
 

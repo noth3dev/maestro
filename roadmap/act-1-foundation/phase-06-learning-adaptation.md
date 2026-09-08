@@ -1,6 +1,6 @@
 # Phase 6 — Encore Learning, Refinement, and Ten-Axis Adaptation
 
-> **Current status (2026-09-07):** Phase 6 Step 1 (immutable project-private Improvement Digest) is accepted. Later replay, mutation, rollout, and adaptation work remains deferred. Older Prime refinement references are historical and do not authorize new Prime coupling.
+> **Current status (2026-09-08):** Phase 6 Step 1 (immutable project-private Improvement Digest) is accepted. IPython tool calls remain ordinary Goal evidence; temporary functions and project skills are not automatically promoted. Later replay, mutation, rollout, adaptation, and cross-project refinement remain deferred. Older Prime refinement references are historical and do not authorize new Prime coupling.
 
 
 ## Outcome
@@ -65,6 +65,15 @@ Always excluded from autonomous application:
 - external sending, deployment, remote push, deletion, or payment;
 - core identity, organizational purpose, CEO policy, or product intent;
 - removal of required Quality, Security, Safety, or Metronome checks.
+
+## Tool and self-improvement boundary
+
+Phase 2 IPython execution is a capability surface, while Phase 6 is an evidence-driven improvement surface. A temporary Python function or project skill is not automatically a learning artifact and is not promoted merely because it ran successfully.
+
+- Phase 2 records tool calls, approvals, outcomes, interruptions, and failures as ordinary Goal evidence.
+- This phase consumes only milestone-triggered Improvement Digests: Goal completion, failure, cancellation, user correction, or material quality, cost, latency, or safety change.
+- A project-scoped skill refinement may be proposed to the Department Head after evidence and evaluation. Cross-project reuse requires a generalized candidate and Encore Council judgment. Any authority, budget, provider, external-service, or safety-boundary expansion requires user approval.
+- Replay, synthetic, shadow, rollout, automatic skill promotion, and cross-project promotion remain deferred beyond the accepted Step 1 digest slice.
 
 ## Knowledge handling
 

@@ -8,10 +8,10 @@ Maestro follows a strict phased milestone roadmap. Code completion alone does no
 
 | Phase | Title | Code Status | Verification & Operational Exit Gate |
 | :--- | :--- | :---: | :--- |
-| **Phase 1** | Technical Foundation & Durable Control Plane | **Operational gate: one product decision open** | REST/SSE API, PostgreSQL 17 durability, fencing, native runtime/provider-gateway boundary, real worker acceptance, and clean full-suite evidence are complete. Production host-tool registration remains intentionally unimplemented pending an approved tool/data/effect contract. |
-| **Phase 2** | Concertmaster Office Core & Hierarchical Execution | **Implemented and PostgreSQL-verified** | Overture intake, Task Contract identity, Head Council sealed deliberation, Department Plans, Mission Bundles, native Worker admission, and isolated Git execution are covered. Final release acceptance is governed by the later operational gates. |
-| **Phase 3** | Encore, Certification & First Usable Release | **Implemented; release gate open** | Metronome loop, Encore adjudication, independent Quality certification, reports, CLI/API parity, and native process evidence exist. TUI end-to-end parity, host-tool scope, and release-level recovery evidence remain explicit gates. |
-| **Phase 4** | Isolated Environments, Devices & Discord Incidents | **Implemented; independent acceptance pending** | Environment/browser/Discord slices and a separately running authenticated device-agent live gate have evidence. Independent review and production deployment acceptance remain. |
+| **Phase 1** | Technical Foundation & Durable Control Plane | **Reopened: host-tool product gate open** | Native runtime, PostgreSQL durability, fencing, and process evidence exist. Production host-tool registration/enforcement is intentionally unimplemented until the Phase 2 IPython local host-tool and approval contract is approved. No phase acceptance is claimed from code evidence alone. |
+| **Phase 2** | Concertmaster Office Core & Hierarchical Execution | **Reopened: host-tool implementation open** | Hierarchical building blocks and PostgreSQL evidence exist, but workers remain text/evidence-only until the persistent IPython local host-tool, four-level approval hierarchy, full-access modes, and live acceptance flow are implemented and reviewed. Historical code-level completion markers are not current acceptance. |
+| **Phase 3** | Encore, Certification & First Usable Release | **Release gate open; host-tool dependency explicit** | Metronome, Encore adjudication, certification, reports, and native process evidence exist. First usable release remains unaccepted until Phase 2 host-tool behavior, TUI parity/reconnect, and release-level recovery evidence pass together. |
+| **Phase 4** | Isolated Environments, Devices & Discord Incidents | **External-capability boundary; acceptance pending** | Browser, device, external-service, deployment, and Discord capabilities remain separately activated per capability with selectable expiry/repetition scope. Independent review and production deployment acceptance remain open. |
 | **Phase 5** | Concurrent Goals & Portfolio Control | **Active remediation / capacity work** | Flat per-project worker admission control is present. Resource inventory, demand reservations, protected floors, and portfolio scheduling remain future work. |
 | **Phase 6** | Encore Learning & 10-Axis Adaptation | **Step 1 accepted** *(immutable digest)* | Step 1: project-private, source-bound Improvement Digests. Steps 2+ (replay, mutation, rollout, adaptation, promotion) remain deferred. |
 | **Phase 7** | Full Concertmaster Office & Radial Control Surface | Planned | Next.js 16 / React 19 web application, `@xyflow/react` radial portfolio visualization, real-time SSE interaction. |
@@ -26,6 +26,16 @@ The CLI TUI uses `@earendil-works/pi-tui` terminal primitives. This is a present
 ### TUI Phase Boundary
 
 The TUI is an operator view and command client, not a second control plane. It reads authoritative state and sends commands only through `@maestro/api-client` and authenticated Control Plane routes. It must not connect to PostgreSQL, the Model Gateway, provider APIs, or device transports directly. Phase acceptance requires API/TUI parity for the same real Goal, SSE cursor-safe reconnect, explicit loading/error/stale states, and no credential, prompt, raw gateway-binding, or secret-bearing output in terminal state or logs. Terminal input never bypasses leases, fencing, capability grants, approvals, or idempotency.
+
+### Production IPython host-tool boundary — 2026-09-08
+
+The first production host-tool slice belongs to Phase 2 and follows Prime Agent's execution shape without reintroducing Prime Agent: one persistent `ipython` surface, session-local Python functions, explicit project skill saving, and direct structured tools only where a stable authority contract is required.
+
+- Phase 2 covers local project files, local Git, tests, local shell commands, and local environment changes.
+- The default session is limited to the Goal worktree and declared temporary directories. The user may activate full local access per session, choosing whether intermediate Head and Encore approvals remain enabled or are skipped.
+- The approval hierarchy is independent execution → active Department Head → Encore Council → user. Ambiguous work and Encore disagreement escalate to the user. A mixed-risk IPython block uses its highest required tier and never partially executes.
+- Approval scope is selectable: one execution, bounded count/time/budget, or session duration. All decisions and effects are recorded; user stop remains available. `forbidden` actions remain denied.
+- Phase 4 separately activates external capabilities one at a time. Phase 6 remains the later evidence-driven refinement boundary; Phase 9 Luthiery remains the future dynamic MCP workshop.
 
 ### Phase 6 Step 1 — Accepted Boundary
 

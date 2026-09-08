@@ -1,6 +1,6 @@
 # Phase 2 — Secretary Office Core and Hierarchical Goal Execution
 
-> **Current status (2026-09-08):** The hierarchical execution surface is implemented and real PostgreSQL/native Model Gateway acceptance exists, including native Head and Worker admissions. Phase-level release acceptance remains governed by the host-tool, TUI, device, and independent-review gates in `roadmap/act-1-foundation/active/operations/task_plan.md`. Prime Agent is not part of the current implementation.
+> **Current status (2026-09-08):** The hierarchical execution building blocks and real PostgreSQL/native Model Gateway evidence exist, including native Head and Worker admissions. Phase 2 is reopened for the approved production host-tool contract: workers remain text/evidence-only until the IPython local host-tool surface, authority enforcement, approval hierarchy, and live acceptance scenario are implemented and independently reviewed. Historical code-level completion markers remain provenance, not current acceptance. Prime Agent is not part of the current implementation.
 
 
 ## Outcome
@@ -177,6 +177,32 @@ Installed capability is not automatically assigned capability. Missing capabilit
 - Skills are selected per mission to reduce context and authority surface.
 - Record actual provider, model, skill, plugin, cost, latency, and result for later routing improvement.
 
+## Production host-tool and IPython contract
+
+Phase 2 now owns the first executable host-tool surface. It follows Prime Agent's runtime shape without importing Prime Agent: the model receives one persistent `ipython` tool, Python code runs in a Goal-bound session, and reusable project capabilities are ordinary Python-backed skills. Direct `ToolDefinition` registrations remain for stable schemas and authority gates, not as a second general execution loop.
+
+### Scope
+
+- Local project files, local Git, project tests, local shell commands, and local environment changes are in scope.
+- The default session is limited to the Goal worktree and declared temporary directories.
+- The user may activate full local access for the session. The user chooses whether full access retains Head/Encore approvals or skips intermediate approvals; critical and forbidden boundaries remain explicit.
+- Browser, device, external API, deployment, remote push, payment, and other external capabilities remain Phase 4 or later and must be individually activated.
+
+### Approval hierarchy
+
+Every IPython code block is classified as one unit; if it contains multiple effects, the highest required level applies and no partial execution occurs:
+
+1. **Independent execution:** in-scope ordinary work covered by the active Mission Bundle.
+2. **Department Head approval:** the active Goal-scoped Department Head authorizes work within its Department boundary.
+3. **Encore Council approval:** material cross-Department impact, unresolved Head disagreement, high uncertainty, or a request to widen bounded improvement authority.
+4. **User approval:** critical, external, irreversible, authority/budget, or otherwise ambiguous work. Encore disagreement escalates here.
+
+Approval is exact and bounded to the code/action identity, target, Goal, expiry, budget, and selected repetition scope. The user may choose one execution, bounded count/time/budget, or session duration. Rejection proposes a safer alternative; it never silently downgrades the request. Every decision, interruption, result, and failure is durable evidence.
+
+### Tool lifecycle
+
+An agent may create a temporary Python function in the current session. It is not a durable capability until the user explicitly saves it as a project skill. Automatic skill promotion and cross-project sharing are outside the Phase 2 implementation; Phase 6 may consume milestone evidence later through its Improvement Digest boundary.
+
 ## Git execution model
 
 1. Record repository and immutable base revision in the Task Contract.
@@ -205,6 +231,7 @@ Encore policy produces an initial range using task uncertainty, historical evide
 5. Implement the reusable sealed-submission primitive, then the Head Council consumer: immutable frozen participant/session/contract/evidence snapshot; idempotent sealed submission; deadline/absence policy; reveal; append-only events/audit; evidence-tagged complete discussion rounds; novelty and stopping; and a non-executable escalation outcome distinct from an executable resolved decision.
 6. Implement Department Plan schema, reconciliation, revisions, and worker linkage only after a resolved Council packet bound to the exact frozen contract/evidence snapshot is durable.
 7. Implement mission bundles and least-privilege capability selection.
+7a. Implement the persistent IPython host-tool contract for local files, Git, tests, shell, and local environment changes; register it explicitly, bind it to Goal scope, enforce the four-level approval hierarchy, and keep external capabilities disabled by default.
 8. Implement Scout and Execution worker lifecycles through the native `ExecutionKernelPort` hierarchy.
 9. Implement worker request-for-help and bounded team-lead exception.
 10. Implement Git repository, branch, worktree, commit, integration, diff, and cleanup evidence.
@@ -243,12 +270,16 @@ Encore policy produces an initial range using task uncertainty, historical evide
 14. Worker cannot edit another worktree or branch.
 15. Remote push is denied before Git invocation.
 16. Late worker cannot overwrite integrated work.
-17. Real worker completes and tests a disposable local project change.
-18. App and CLI display the same Task Contract, hierarchy, plan versions, budget, and Git state.
+17. An IPython session executes an in-scope local project read/edit/test flow through the registered host tool and existing adapters.
+18. A mixed-risk IPython block is held at its highest approval level and never partially executes.
+19. Department Head, Encore, and user approval paths bind exact action scope, expiry, repetition budget, and audit evidence; disagreement and ambiguity escalate to the user.
+20. Full local access has both approval-retaining and intermediate-approval-skip modes, each explicitly selected by the user per session; forbidden actions remain denied.
+21. Real worker completes and tests a disposable local project change.
+22. App and CLI display the same Task Contract, hierarchy, plan versions, budget, and Git state.
 
 ## Exit gate
 
-A plain-language request must become one confirmed Task Contract. Only the necessary Heads activate, write independent briefs, deliberate, and own versioned Department Plans. Scouts gather evidence; native Execution workers currently produce bounded text/evidence only. The explicit Control Plane Git service can create isolated branches/worktrees and integrate accepted revisions; worker-side file changes await a registered host tool. No worker can create hidden workers, exceed authority, write another branch, or push remotely. The Goal remains `awaiting certification` until Phase 3.
+A plain-language request must become one confirmed Task Contract. Only the necessary Heads activate, write independent briefs, deliberate, and own versioned Department Plans. Scouts gather evidence; the Phase 2 IPython host tool enables bounded local file, Git, test, shell, and local-environment work only after the explicit contract and approval checks. External capabilities remain separately activated in Phase 4. No worker can create hidden workers, exceed authority, write another branch, partially execute a mixed-risk block, or push remotely. The Goal remains `awaiting certification` until Phase 3.
 
 ## Requirements preserved in this phase
 

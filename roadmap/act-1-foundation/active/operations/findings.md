@@ -900,3 +900,13 @@ No source behavior was changed in this documentation slice. The audit did not au
 - Markdown relative-link and canonical roadmap-target scans passed.
 - `git diff --check` passed.
 - Repository-wide `npm run format:check` remains red because the existing tree reports 402 formatted-file warnings; the six newly authored index/Act files were formatted separately.
+
+## 2026-09-08 — Documentation reconciliation findings
+
+- The repository has native runtime, PostgreSQL, authority, and process evidence, but production `ToolRegistry` remains empty and grants still use `allowedTools: []` / `toolCalls: 0`; therefore workers remain text/evidence-only until the host-tool contract lands.
+- The agreed first host-tool surface is a single persistent IPython tool with session-local Python functions and explicit project-skill saving. It must execute through existing authority-backed adapters rather than raw filesystem, shell, Git, network, or provider effects.
+- Approval is hierarchical and whole-block: independent execution, active Department Head, Encore Council, then user. Scope includes exact code/effect identity, target, Goal, expiry, repetition budget, and selected full-access mode. A mixed-risk block cannot partially execute.
+- Full access is user-enabled per session and has two modes: retain the intermediate hierarchy or skip intermediate Head/Encore approvals. It does not bypass `forbidden` actions, session isolation, audit, budgets, stop controls, or individually activated Phase 4 external capabilities.
+- Phase placement is now explicit: Phase 2 local IPython/authority contract; Phase 3 release and approval-flow certification; Phase 4 browser/device/external-service/deployment activation; Phase 6 evidence-driven learning only; Phase 8 security/recovery/rollback hardening.
+- Historical `accepted` and `code complete` entries remain append-only evidence and are not current acceptance. The current source of truth is the canonical status block at the top of `task_plan.md`, the Phase status blocks, and the roadmap status copies.
+- Documentation-slice verification passed: build/tests and lint are green, `git diff --check` is clean, and all tracked Markdown relative links resolve. Repository-wide Prettier still reports the pre-existing formatting baseline (394 files).

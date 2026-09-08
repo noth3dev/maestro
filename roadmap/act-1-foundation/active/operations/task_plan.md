@@ -4,19 +4,22 @@
 
 This block is the authoritative status for the current `main` tree. Older phase markers, branch maps, and “next step” entries below are historical execution notes unless they are explicitly updated here.
 
-- **Branch:** `main`; current committed base after the documentation slice: `e63d134`. Protected worktrees remain untouched.
-- **Phase 1:** technical/runtime gate is evidenced: native-only composition, no-Prime scan, real Model Gateway HTTP acceptance, real Control Plane + PostgreSQL + native Worker acceptance, and a clean single-worker PostgreSQL run of **162/162 files and 1066/1066 tests**. The remaining product decision is the exact production host-tool/data/effect contract; no tool is registered until that contract is approved.
-- **Phase 2:** hierarchical code surface and PostgreSQL evidence are present. Worker admissions are real but text/evidence-only because production `ToolRegistry` is empty. Control Plane Git operations remain explicit authority-backed services, not implicit worker callbacks.
-- **Phase 3:** Metronome, Encore, certification/reporting, CLI/API parity, conversation, and restart/fencing evidence are present. First-release acceptance still requires a dedicated TUI parity/reconnect gate and the Phase 1 host-tool decision.
-- **Phase 4:** environment, browser, Discord, and separately running device-agent protocol slices have code and real-process/PostgreSQL evidence. Independent no-edit review and production deployment acceptance remain open.
-- **Phase 5:** the project-wide worker cap is implemented. Resource inventory, demand reservations, protected floors, and Portfolio Council scheduling are not implemented.
-- **Phase 6:** Step 1 immutable project-private Improvement Digest is accepted; replay, mutation, rollout, and persona adaptation remain deferred.
-- **Phases 7–8:** planned and not accepted.
-- **Documentation checkpoint:** completed in `e63d134`; build, lint, CLI 21-test regression, diff check, and push to `origin/main` passed. The disposable PostgreSQL container used for the 162/1066 run was removed.
-- **Immediate work:** obtain the product/security decision for production host tools or take the next independently scoped TUI/device acceptance item. Do not start host-tool implementation without product scope.
+- **Branch:** `main`; protected worktrees remain untouched. This documentation slice is being applied on top of the synchronized native-runtime baseline.
+- **Phase 1:** native-only composition, no-Prime scan, Model Gateway HTTP acceptance, Control Plane + PostgreSQL + native Worker acceptance, and the clean single-worker PostgreSQL run (**162/162 files, 1066/1066 tests**) are evidenced. Phase acceptance remains open until the Phase 2 host-tool contract is implemented and the shared boundary is independently verified.
+- **Phase 2:** hierarchical building blocks and PostgreSQL evidence exist, but phase acceptance is reopened. The approved next slice is a Prime-style persistent IPython host tool for local files, Git, tests, shell, and local environment changes, with independent → Department Head → Encore Council → user approval tiers, selectable repetition scope, two full-access modes, live stop, and whole-block highest-risk handling. Production `ToolRegistry` is currently empty and workers remain text/evidence-only.
+- **Phase 3:** Metronome, Encore, certification/reporting, CLI/API parity, conversation, and restart/fencing evidence exist. First usable release remains unaccepted until the Phase 2 host-tool live flow, TUI parity/reconnect, and independent release review pass together.
+- **Phase 4:** external capabilities are a separate boundary. Browser, device, external-service, and deployment access must be individually activated with Goal-scoped grants and selectable expiry/repetition scope; independent review and production deployment acceptance remain open.
+- **Phase 5:** the project-wide worker cap is implemented. Resource inventory, demand reservations, protected floors, and Portfolio Council scheduling remain open.
+- **Phase 6:** immutable project-private Improvement Digest Step 1 remains accepted. Tool auto-promotion, replay, mutation, rollout, adaptation, and cross-project refinement remain deferred.
+- **Phase 7:** planned; UI must expose IPython scope, approval state, full-access mode, external capability activation, stop, and audit evidence.
+- **Phase 8:** planned; hardening must prove IPython authority enforcement, approval binding, mixed-risk blocking, full-access isolation, and forbidden-action denial.
+- **Phase 9:** future Luthiery MCP manufacture; it is not part of the Phase 2 IPython implementation.
+- **Phase 10:** future Treasury capability; payment remains separately activated and critically governed.
+- **Documentation checkpoint:** the prior roadmap reorganization was committed and pushed as `9d3a4ec`; this host-tool boundary update is the current uncommitted documentation slice.
+- **Immediate work:** implement the approved Phase 2 host-tool contract and its tests. Do not claim Phase 1–3 acceptance or code completion until the new host-tool gates pass.
 
 ## Goal
-Complete the remaining Phase 1 durable control-plane safety foundations, then implement Phase 2 hierarchical execution for one local software Goal.
+Complete the remaining Phase 1 boundary evidence, then implement the approved Phase 2 local IPython host-tool and four-level approval flow for one local software Goal.
 
 
 ## Operating protocol

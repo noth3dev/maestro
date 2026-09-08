@@ -1,6 +1,6 @@
 # Phase 5 — Concurrent Goals and Portfolio Control
 
-> **Current status (2026-09-08):** Phase 5 is partially implemented. The native Worker backend cutover is complete; the first capacity slice is a project-wide worker cap. Broader concurrent-goal/resource scheduling, reservations, protected floors, and Portfolio Council behavior remain open.
+> **Current status (2026-09-08):** Phase 5 is partially implemented. The native Worker backend cutover is complete; the first capacity slice is a project-wide worker cap. Broader concurrent-goal/resource scheduling, reservations, protected floors, and Portfolio Council behavior remain open. Each Goal must also isolate its persistent IPython session, temporary tools, approval ledger, full-access mode, and capability budget.
 
 
 ## Outcome
@@ -24,6 +24,10 @@ Every active Goal owns separate:
 - radial-tree sector and notifications.
 
 A persistent Head may participate in multiple Goals, but each participation is a separate runtime context. Durable Department knowledge can inform another Goal only through approved knowledge boundaries.
+
+### IPython and approval isolation
+
+Each Goal receives a separate persistent IPython session, temporary-tool namespace, approval ledger, full-access mode, and capability budget. A session-local function, approval, or full-access selection cannot cross into another Goal. Concurrent Goals never share live Python state, tool outputs, external grants, or approval repetition budgets.
 
 ## Capacity model
 

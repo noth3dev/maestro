@@ -1,6 +1,6 @@
 # Phase 3 — Encore, Independent Certification, and First Usable Release
 
-> **Current status (2026-09-08):** Conversation, account-login, oversight, and native runtime paths have live PostgreSQL/process evidence. First-usable-release acceptance still requires the approved production host-tool contract, dedicated TUI parity/reconnect evidence, and independent release review.
+> **Current status (2026-09-08):** Conversation, account-login, oversight, and native runtime paths have live PostgreSQL/process evidence. First-usable-release acceptance remains open: Phase 2 must first implement and independently review the approved IPython local host-tool contract and four-level approval flow, followed by dedicated TUI parity/reconnect evidence and independent release review. No Phase 3 release acceptance is claimed.
 
 
 ## Outcome
@@ -79,6 +79,10 @@ Flow:
 9. Route an executable decision through Concertmaster and responsible Heads.
 
 If model diversity is temporarily unavailable, routine local work may use isolated reviews from the available model. The result must say `same-model independent review`; it must not claim multi-model review. If high consequence or material disagreement combines with low confidence and insufficient diversity, escalate to CEO. Missing diversity alone must not stop safe routine work.
+
+### Encore as the third approval tier for host tools
+
+For the Phase 2 IPython host-tool path, Encore is an approval tier rather than a general execution parent. It receives a frozen, exact action request when the active Department Head cannot authorize a material cross-Department, high-uncertainty, or disputed operation. A `proceed` synthesis authorizes only the exact bounded request and selected repetition scope; it never expands the Mission Bundle or bypasses `AuthorizedEffectExecutor`. Any disagreement or `escalate` result routes to user approval. The user may preselect the maximum Council authority for a session, including full local authority, but only the user can activate a full-access session.
 
 ## Independent certification
 
@@ -185,20 +189,21 @@ Run all steps in one clean scenario:
 3. Nothing executes before one exact launch confirmation.
 4. Only necessary Heads wake and independently brief.
 5. Head Council decides and every active Head writes a Department Plan.
-6. Workers modify and test a disposable isolated project through the native `ExecutionKernelPort` hierarchy.
-7. Metronome observes all events.
+6. Workers modify and test a disposable isolated project through the native `ExecutionKernelPort` hierarchy and the registered Phase 2 IPython host tool.
+7. Metronome observes all tool calls, approval decisions, interruptions, and effects.
 8. Inject one unsupported assertion or qualifying disagreement; Council handles it and records actual model diversity.
 9. Quality independently tests the integrated revision and catches a seeded defect in the negative run.
 10. Repeat with the defect repaired and obtain all required certifications.
 11. Force a control-plane restart during execution; reconcile without loss, duplicate worker writes, or stale authority.
-12. Attempt remote push without approval and prove no remote invocation occurs.
-13. Concertmaster reports outcome, evidence, cost, dissent, recovery, and limitations.
+12. Attempt an ambiguous or critical local action and prove it escalates to the user; attempt remote push without approval and prove no remote invocation occurs.
+13. Run both full-access modes, prove the user selects them per session, and prove forbidden actions remain denied.
+14. Concertmaster reports outcome, evidence, cost, dissent, approval scope, recovery, interruptions, and limitations.
 
 Static parsing, mocked Council answers, screenshots, and worker-reported tests cannot satisfy this gate.
 
 ## Exit gate
 
-All thirteen live steps pass. No critical finding remains open. The evidence bundle reconstructs every material decision and effect. The first usable Maestro may then be used for bounded local Goals; external devices, Discord, multiple concurrent Goals, automatic improvement, and the full radial interface remain disabled.
+All fourteen live steps pass. No critical finding remains open. The evidence bundle reconstructs every material decision and effect. The first usable Maestro may then be used for bounded local Goals; external devices, Discord, multiple concurrent Goals, automatic improvement, and the full radial interface remain disabled.
 
 ## Requirements preserved in this phase
 
