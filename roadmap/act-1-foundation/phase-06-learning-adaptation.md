@@ -661,3 +661,23 @@ Encore does not invent or implement new product objectives, contact external par
 - Every applied persona change records its source evidence, expected benefit, affected roles, measured result, version, and rollback trigger. A later regression automatically disables or rolls back the adaptive change within the approved improvement boundary.
 - Changes to core identity, authority, safety boundaries, organization purpose, or CEO-facing policy always require explicit CEO approval. Such changes cannot be disguised as tone, efficiency, or persona optimization.
 - Persona may influence how an agent communicates and works, but never what evidence exists, which authority it has, or whether a required challenge, escalation, or safety action occurs.
+
+
+## Model routing learning and local overlays — adopted design
+
+Phase 6 owns evidence-driven changes to routing judgments. It does not own the authoritative admission boundary and never mutates the public model baseline automatically.
+
+- `model_map` remains the public, versioned, human-owned baseline. Project-specific corrections live in a private local overlay and never merge into the baseline.
+- Availability, timeout, measured latency, and measured cost are observations. They may update operational eligibility automatically when the current provider state requires it.
+- Capability judgments such as reasoning, coding, tool-use, or reliability produce proposals, not immediate score changes.
+- The Improvement Digest is the existing proposal container. It records the task kind, grade, model/profile versions, evidence pattern, confidence, protected metrics, and rollback target.
+- Lowering a local capability score is the safe direction and may be applied by the Lab under the enabled class. Raising a score grants eligibility for higher-grade work and requires Encore Council approval.
+- Replay, synthetic, shadow, bounded rollout, diversity checks, and rollback apply to routing candidates just as they apply to other improvement candidates.
+- A successful execution never becomes a model-map truth by itself; sparse or project-private evidence stays scoped and visible.
+
+### Additional Phase 6 tests and exit evidence
+
+- Prove that operational outage data excludes a model without changing its capability judgment.
+- Prove that a proposed capability increase cannot enter routing before independent Council approval.
+- Prove that a local overlay survives a baseline update and never writes the public `model_map`.
+- Prove rollback restores the previous routing/profile version and leaves the evidence chain intact.

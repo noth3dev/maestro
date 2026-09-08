@@ -48,4 +48,19 @@
 | Output       | Prompt hints, persona updates  | Executable MCP code, Zod schemas |
 | Timing       | Offline / post-milestone       | On-demand during live execution  |
 
+## Model capability declarations for generated tools — adopted design
+
+Luthiery-generated MCP servers and tools participate in model routing without owning the model pool or authority policy.
+
+- Each certified tool declares the primitive capabilities it requires from a model, including tool-use, context, data handling, reliability, and any safety floor.
+- The router may use those declarations when composing a task demand vector, but generated tools cannot lower grade, bypass hard filters, mutate `model_map`, or select an unapproved provider.
+- Tool manufacture remains owned by Infrastructure / Operations; Encore audits the generated tool and Phase 6 evaluates token inflation and observed outcomes.
+- A generated tool failure or model-tool mismatch becomes routing evidence and normal Goal evidence, not an automatic capability judgment.
+
+### Additional Phase 9 tests and exit evidence
+
+- A generated tool with an unmet model capability is rejected before execution.
+- Tool registration cannot widen the model's authority, data boundary, or routing-off state.
+- Reusing a certified tool preserves its capability declaration and routing evidence lineage.
+
 ---

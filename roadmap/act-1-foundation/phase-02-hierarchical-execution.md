@@ -627,3 +627,30 @@ Budget allocation is adaptive rather than a fixed percentage template.
 - Routine revisions inside the approved Goal, authority, and budget proceed without renewed CEO approval. A material cross-department change returns to the Head Council. A Goal change or critical authority, budget, external-effect, or irreversible change follows the CEO approval boundary.
 - Metronome detects work that has no active plan item, stale workers running against superseded plans, hidden scope growth, contradictory Department Plans, and execution that diverges from the Council decision.
 - Final certification checks both the Goal contract and the fulfilled Department Plans. A completed task list alone cannot override a failed Goal outcome.
+
+
+## Model pool routing contract — adopted design
+
+The Department Head Council declares demand; the native router selects one qualifying model; admission remains authoritative. The full rules live in [Model Pool & Automatic Routing](active/2026-09-08-model-pool-routing-design.md).
+
+- During decomposition, each Mission Bundle receives one or more recipe-based task kinds and one grade: `50`, `100`, or `200`. Kinds describe the work; grade describes the consequence of failure.
+- Task kinds are recipes over the closed primitive trait vector. Adding a kind must not require rescoring every model.
+- Grade `200` uses weakest-link matching with no required-trait shortfall; grade `100` permits only the defined tolerance band; grade `50` may trade capability margin for cost, latency, and availability.
+- Authority, data policy, account binding, context capacity, and required capability are hard filters before fitness scoring. Averages cannot hide a missing required trait.
+- Among survivors, the router uses grade-specific selection pressure and chooses exactly one model before admission. Candidate lists never cross into execution.
+- A pin is considered first but never bypasses the bar. Explicit routing-off mode is development-only and leaves a certification marker.
+- If no model qualifies, escalation is Department Head → Encore Council → user. Raising a grade is free; lowering a grade is explicit, recorded, and never inferred silently.
+- Connection, rate-limit, and provider-outage failures retry the same model. A switch is automatic only when the replacement still clears the bar. Automatic downgrade is forbidden.
+- Conversations keep one model for their lifetime. Heavy work is promoted to a Goal instead of silently upgrading a long conversation.
+
+### Mission Bundle and migration boundary
+
+The current `approvedModels` list and exact `modelPolicy` path remain a transition guard while the router is introduced. The target contract adds task kinds, grade, pin/routing mode, and profile version; the selected routed identity is then projected into the existing exact admission policy. `MAESTRO_NATIVE_MODEL` becomes a pin/fallback migration input, never an implicit bypass.
+
+### Phase 2 routing work order and tests
+
+1. Draft primitive traits, task-kind recipes, grade bars/weights, and the Mission Bundle fields.
+2. Write RED tests for weakest-link matching, hard-filter precedence, grade strictness, pin-as-preference, no-candidate escalation, and no automatic downgrade.
+3. Implement the smallest provider-neutral router and project its single result into the existing native admission contract.
+4. Record routed model, candidate set, rejected reasons, grade, task kinds, and profile version in the separate routing evidence store.
+5. Verify Head, Overture, Worker, Scout, Helper, Semantic Review, Encore reviewer, and Metronome callers use the common contract rather than ad-hoc model selection.

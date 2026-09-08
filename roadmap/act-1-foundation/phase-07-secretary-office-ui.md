@@ -319,3 +319,21 @@ All tree views support collapse, zoom, filtering, search, focus on current Goal 
 - Permitted actions include messaging Concertmaster or a Head, opening the Task Contract or Council record, inspecting branch, commit, diff, context, evidence, cost, or certification, and using pause, stop, incident triage, avatar, or persona actions within the actor's authority.
 - Controls outside the current authority are shown with a clear reason and required decision path rather than disappearing silently.
 - The radial canvas, conversation, timeline, Git, and detail views remain synchronized to the same selected Goal and node identity.
+
+
+## Model routing control surface — adopted design
+
+The Secretary Office exposes routing as explainable state, not as a second authority path.
+
+- Show task kinds, grade, demand vector, model/profile version, selected model, and current provider binding.
+- Show candidate count, hard-filter rejection reasons, weakest-link shortfall, cost/latency trade-offs, and routing evidence.
+- Show pins as preferences, not exemptions. Show routing-off mode as an explicit development state with its certification marker.
+- Show Head → Encore → user escalation, grade-lowering decisions, approval repetition scope, and below-bar consequences.
+- Show mid-run switches only when the replacement still clears the bar; show blocked downgrades and provider outages as explicit states.
+- The UI may request a route preference or approval, but it cannot bypass native admission, change a model identity after binding, or write routing evidence directly.
+
+### Additional Phase 7 tests and exit evidence
+
+- App and CLI render the same durable routing decision and selected identity.
+- A pinned model that fails the bar displays escalation rather than silently running.
+- Routing-off and below-bar approval markers survive reconnect, projection rebuild, and final certification views.

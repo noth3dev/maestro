@@ -241,3 +241,21 @@ A Goal is reported as successful only when the required evidence authorities hav
 5. Concertmaster reports success to the CEO only when all required certifications are present and bound to the same Task Contract and integrated result.
 
 The Encore Council adjudicates conflicting certifications or material unresolved uncertainty; it is not a mandatory routine evaluator for every Goal. The CEO need not approve ordinary certified success. Critical push, merge, deployment, release, external publication, or other critical effects retain their separate approval gate.
+
+
+## Routing evidence and certification — adopted design
+
+Phase 3 certifies not only the result but whether the work was performed by a model that met its declared bar. Routing remains advisory; certification and admission remain authoritative.
+
+- The evidence bundle includes task kinds, grade, demand/profile versions, routed model, candidate set, hard-filter rejections, selection rationale, profile provenance, actual model, provider, cost, latency, and result.
+- A model below the declared bar may run only after the documented Head → Encore → user escalation path permits it. The approving actor, approval tier, repetition scope, reason, and consequence appear on certification.
+- Encore reviewers use distinct qualifying models when available. Same-model independent review is labeled honestly and high-consequence low-diversity cases escalate.
+- Provider-result identity mismatch, routing-evidence mismatch, missing routing evidence, or an unrecorded downgrade blocks certification.
+- Quality, Security, Safety, Metronome, and final reporting retain their independent responsibilities; model fitness cannot compensate for a failed hard certification floor.
+
+### Additional Phase 3 tests and exit evidence
+
+- Replay a routed task and reconstruct the single selected identity from durable evidence.
+- Approve a sub-bar execution and prove its scope is visible on the certification.
+- Force same-model and insufficient-diversity cases and verify the required labels/escalation.
+- Force a provider identity drift or missing routing record and prove final reporting remains blocked.
