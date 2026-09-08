@@ -218,7 +218,21 @@ export async function snapshotOperationalOverlayForGoalDurably(
   } catch {
     throw new EnsembleRouterArtifactIntegrityError("Operational overlay is invalid");
   }
-  const snapshot = snapshotOperationalOverlayForGoal(overlay, goalRef);
+  const requestedSnapshot = snapshotOperationalOverlayForGoal(overlay, goalRef);
+  const requestedOverlay: OperationalOverlay = {
+    schemaVersion: requestedSnapshot.schemaVersion,
+    installationRef: requestedSnapshot.installationRef,
+    projectRef: requestedSnapshot.projectRef,
+    version: requestedSnapshot.overlayVersion,
+    observations: requestedSnapshot.observations,
+  };
+  const storedRow = await readOverlayRow(pool, overlay.installationRef, overlay.projectRef, overlay.version);
+  if (!storedRow) throw new EnsembleRouterArtifactConflictError("Goal snapshot requires a durable operational overlay version");
+  const storedOverlay = mapOverlay(storedRow);
+  if (canonicalJson(storedOverlay) !== canonicalJson(requestedOverlay)) {
+    throw new EnsembleRouterArtifactConflictError("Goal snapshot input does not match its durable operational overlay version");
+  }
+  const snapshot = snapshotOperationalOverlayForGoal(storedOverlay, goalRef);
   const hash = contentHash(snapshot);
   const result = await pool.query<SnapshotRow>(
     "INSERT INTO ensemble_router_goal_overlay_snapshots (goal_ref, installation_ref, project_ref, overlay_version, snapshot, content_hash) VALUES ($1, $2, $3, $4, $5::jsonb, $6) ON CONFLICT DO NOTHING RETURNING goal_ref, installation_ref, project_ref, overlay_version, snapshot, content_hash",
