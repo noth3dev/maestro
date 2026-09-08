@@ -2854,3 +2854,12 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - The verification run failed one real-child test because a fixed 100 ms kill delay sometimes raced the Python ready handshake (`handshake_timeout` observed instead of `child_closed`).
 - Replaced the timing guess with a deterministic wait for the outbound `execute` frame, then terminate the child.
 - Focused process suite passes 6/6 after the correction; full check must be rerun.
+
+
+## 2026-09-08 — Git/watchdog slice committed
+
+- Fresh `npm run check` passed: 112 files passed and 57 database-gated files skipped; 715 tests passed and 381 skipped.
+- Fresh `npm run build`, `npm run lint`, and `git diff --check` passed after the final transport, interrupt, identity, binding, and canonical-path changes.
+- Independent final read-only review returned READY after the forwarding and close-settlement corrections.
+- Committed locally as `c76b57e feat(agent-runtime): harden git gateway lifecycle`.
+- Only the pre-existing user-owned `.gitignore` change remains uncommitted; no remote push was performed.
