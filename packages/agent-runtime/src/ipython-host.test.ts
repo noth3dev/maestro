@@ -63,12 +63,12 @@ describe("IPython host protocol", () => {
     const readFile = vi.fn(async (_binding: { projectId: string; goalId: string }, relativePath: string) => ({ state: "ok" as const, dataClass: "workspace" as const, content: `file:${relativePath}` }));
     const gitRevision = vi.fn(async () => ({ state: "ok" as const, dataClass: "workspace" as const, content: "abc123" }));
     const handler = createReadOnlyHostRequestHandler({
-      binding: { sessionId: "session-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["workspace"] },
+      binding: { sessionId: "session-1", commandId: "command-1", toolCallId: "tool-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["workspace"] },
       gateway: { readFile, gitRevision },
     });
 
     await expect(handler({ requestId: "cell-1", hostRequestId: "host-1", method: "read_file", payload: { path: "README.md", projectId: "attacker-project" } })).resolves.toMatchObject({ state: "ok", content: "file:README.md" });
-    expect(readFile).toHaveBeenCalledWith(expect.objectContaining({ projectId: "project-1", goalId: "goal-1" }), "README.md");
+    expect(readFile).toHaveBeenCalledWith(expect.objectContaining({ commandId: "command-1", toolCallId: "tool-1", projectId: "project-1", goalId: "goal-1" }), "README.md");
     await expect(handler({ requestId: "cell-1", hostRequestId: "host-2", method: "git_revision", payload: { ref: "HEAD" } })).resolves.toMatchObject({ content: "abc123" });
     await expect(handler({ requestId: "cell-1", hostRequestId: "host-3", method: "write_file", payload: { path: "x", content: "bad" } })).rejects.toThrow("not allowed");
     await expect(handler({ requestId: "cell-1", hostRequestId: "host-4", method: "read_file", payload: { path: "../secret" } })).rejects.toThrow("path");
@@ -77,7 +77,7 @@ describe("IPython host protocol", () => {
 
   it("rejects read-only host results outside the bound outbound data classes", async () => {
     const handler = createReadOnlyHostRequestHandler({
-      binding: { sessionId: "session-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["public"] },
+      binding: { sessionId: "session-1", commandId: "command-1", toolCallId: "tool-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["public"] },
       gateway: { readFile: async () => ({ state: "ok", dataClass: "workspace", content: "secret" }), gitRevision: async () => ({ state: "ok", dataClass: "workspace", content: "sha" }) },
     });
     await expect(handler({ requestId: "cell-1", hostRequestId: "host-1", method: "read_file", payload: { path: "README.md" } })).rejects.toThrow("data class");

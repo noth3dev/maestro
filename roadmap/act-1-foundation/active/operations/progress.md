@@ -2675,3 +2675,18 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - `npm run lint` and `git diff --check` passed.
 - The read-only host router change remains transport-only and fail-closed in production. No database migration or external capability was introduced.
 - The user-owned `.gitignore` change remains unstaged; no protected worktree was modified.
+
+
+## 2026-09-08 — command/tool-call identity propagation
+
+- Extended `ToolContext` with host-owned `commandId`, `toolCallId`, and runtime `sessionId`.
+- The runtime derives `commandId` from the admission idempotency key and `toolCallId` from the model gateway call identity; neither is model-controlled through tool arguments.
+- IPython session bindings now carry these identities alongside project, Goal, path, and outbound-data scope.
+- Added regression assertions for runtime and IPython propagation.
+- This is identity plumbing only. Durable command receipts, control-epoch/fencing checks, authority adapters, and idempotent external effects remain open.
+
+
+## 2026-09-08 — identity propagation verification checkpoint
+
+- Fresh `npm run check` passed: 108 files passed and 57 database-gated files skipped; 691 tests passed and 381 skipped.
+- The runtime identity change did not alter the production fail-closed posture. No host effect was enabled.

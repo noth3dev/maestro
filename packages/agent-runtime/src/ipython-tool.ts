@@ -7,6 +7,8 @@ const MAX_RESULT_BYTES = 64_000;
 
 export interface IpPythonSessionBinding {
   readonly sessionId: string;
+  readonly commandId: string;
+  readonly toolCallId: string;
   readonly operatorId: string;
   readonly projectId: string;
   readonly goalId: string;
@@ -180,7 +182,7 @@ export function createIpPythonTool(options: { sessions: IpPythonSessionManager }
     async execute(args, context) {
       const { code } = parseCode(args);
       const sessionId = sessionIdFor(context);
-      return toolResult(await options.sessions.execute({ sessionId, code, binding: { sessionId, operatorId: context.operatorId, projectId: context.projectId, goalId: context.goalId, pathScope: context.capabilityGrant.pathScope, outboundDataClasses: context.capabilityGrant.outboundDataClasses } }), context);
+      return toolResult(await options.sessions.execute({ sessionId, code, binding: { sessionId, commandId: context.commandId, toolCallId: context.toolCallId, operatorId: context.operatorId, projectId: context.projectId, goalId: context.goalId, pathScope: context.capabilityGrant.pathScope, outboundDataClasses: context.capabilityGrant.outboundDataClasses } }), context);
     },
   };
 }

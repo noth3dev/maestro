@@ -972,3 +972,8 @@ The real Python child/channel composition and strict read-only host-effect allow
 ## 2026-09-08 — 1B read-only host router
 
 Added a transport-independent read-only host-request router. It accepts only `read_file` and `git_revision`, validates relative paths/Git refs, passes an immutable Goal/session binding to injected gateways, ignores model-supplied project identity fields, validates result envelopes, enforces the declared outbound data classes, and rejects writes/unknown methods. This is the adapter contract only; real file/Git adapters still must call the existing authority-backed boundaries.
+
+
+## 2026-09-08 — host-owned command and tool-call identity
+
+The runtime `ToolContext` now carries host-generated `commandId`, `toolCallId`, and runtime `sessionId` for every tool execution. The IPython binding forwards those values with project/Goal scope and grant data; model arguments cannot replace them. This closes the identity propagation slice needed for deterministic audit correlation and future idempotency/fencing checks. Control epoch and durable authority-effect claims remain open.

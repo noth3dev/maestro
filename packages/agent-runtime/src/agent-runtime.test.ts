@@ -36,7 +36,7 @@ describe("native Maestro agent runtime", () => {
     const spawned = await runtime.spawn({ name: "controller", modelPolicy: ["fake/model-a"], idempotencyKey: "root-1", context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1" }, grant });
     await runtime.prompt(spawned.execution, "show the Goal");
 
-    expect(execute).toHaveBeenCalledWith({ goalId: "wrong-goal" }, expect.objectContaining({ operatorId: "operator-1", projectId: "project-1", goalId: "goal-1" }));
+    expect(execute).toHaveBeenCalledWith({ goalId: "wrong-goal" }, expect.objectContaining({ operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", commandId: "root-1", toolCallId: "call-1", sessionId: expect.stringContaining("session-") }));
     expect(modelGateway.calls).toBe(2);
     expect((await runtime.getInvocationStatus(spawned.invocation))).toBe("succeeded");
     expect((await runtime.getModelIdentity(spawned.execution))).toEqual(identity);
