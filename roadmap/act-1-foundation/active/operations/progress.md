@@ -2785,3 +2785,17 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Fresh `npm run check` passed: 111 files passed and 57 database-gated files skipped; 702 tests passed and 381 skipped.
 - `npm run build`, `npm run lint`, and `git diff --check` pass after the latest source/test changes.
 - No production IPython grant or child-process factory was enabled; the new behavior remains behind explicit composition seams.
+
+
+## 2026-09-08 — real-child lifecycle hardening
+
+- Added handshake-gated real-child composition coverage for the read-only host router.
+- Added a real-child death test during an uncooperative cell; the kernel returns `unknown` with `child_closed`.
+- Hardened host responses so non-`ok` result envelopes cannot be treated as readable evidence by Python code.
+- The production parent/process-group watchdog remains open and is deliberately not inferred from test-only child termination.
+
+
+## 2026-09-08 — real-child lifecycle verification checkpoint
+
+- Fresh `npm run check` passed: 111 files passed and 57 database-gated files skipped; 703 tests passed and 381 skipped.
+- `npm run lint` and `git diff --check` must be rerun after this documentation append before commit.

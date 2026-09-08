@@ -69,6 +69,12 @@ describe("constrained Python IPython bootstrap", () => {
       expect(hostRequest).toMatchObject({ method: "read_file", payload: { path: "README.md" } });
       send(child, { version: 1, type: "host_response", requestId: "cell-3", hostRequestId: hostRequest.hostRequestId, ok: true, result: { state: "ok", dataClass: "workspace", content: "host evidence" } });
       await expect(reader.wait((frame) => frame.type === "done" && frame.requestId === "cell-3")).resolves.toMatchObject({ state: "ok", content: "host evidence\n" });
+      send(child, { version: 1, type: "execute", requestId: "cell-host-error", sessionId: "session-1", code: "print(read_file('README.md'))" });
+      const failedHostRequest = await reader.wait((frame) => frame.type === "host_request" && frame.requestId === "cell-host-error");
+      send(child, { version: 1, type: "host_response", requestId: "cell-host-error", hostRequestId: failedHostRequest.hostRequestId, ok: true, result: { state: "error", dataClass: "workspace", content: "denied" } });
+      await expect(reader.wait((frame) => frame.type === "done" && frame.requestId === "cell-host-error")).resolves.toMatchObject({ state: "error", reason: expect.stringContaining("not successful") });
+
+
 
       send(child, { version: 1, type: "execute", requestId: "cell-4", sessionId: "session-1", code: "import os" });
       await expect(reader.wait((frame) => frame.type === "done" && frame.requestId === "cell-4")).resolves.toMatchObject({ state: "error", reason: expect.stringContaining("direct imports") });

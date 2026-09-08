@@ -23,6 +23,7 @@ class PythonChildChannel implements IpPythonLineChannel {
   onData(listener: (chunk: Buffer) => void): () => void { this.child.stdout.on("data", listener); return () => { this.child.stdout.off("data", listener); }; }
   onClose(listener: (reason?: string) => void): () => void { const wrapped = () => listener("python-child-closed"); this.child.on("close", wrapped); return () => { this.child.off("close", wrapped); }; }
   close(): void { this.child.stdin.end(); this.child.kill("SIGKILL"); }
+  terminate(): void { this.child.kill("SIGKILL"); }
 }
 
 describe("IPython process kernel composition", () => {
@@ -47,6 +48,19 @@ describe("IPython process kernel composition", () => {
     const kernel = createIpPythonProcessKernel({ createProcess: () => channel, hostRequest: async () => ({ state: "error", dataClass: "workspace", content: "not used" }), readyTimeoutMs: 1 }, "session-timeout");
     await expect(kernel.execute({ sessionId: "session-timeout", code: "print('never')" })).resolves.toMatchObject({ state: "unknown", reason: "handshake_timeout" });
     expect(channel.writes).toEqual([]);
+    await kernel.close();
+  });
+
+  it("reports an unknown outcome when the real child dies mid-cell", async () => {
+    let channel: PythonChildChannel | undefined;
+    const binding = { sessionId: "session-death", commandId: "command-death", toolCallId: "tool-death", operatorId: "operator-death", projectId: "project-death", goalId: "goal-death", pathScope: ["/workspace/project-death"], outboundDataClasses: ["workspace"] } as const;
+    const kernel = createIpPythonProcessKernel({
+      createProcess: () => { channel = new PythonChildChannel(); return channel; },
+      hostRequest: async () => ({ state: "ok" as const, dataClass: "workspace" as const, content: "unused" }),
+    }, binding.sessionId, binding);
+    const pending = kernel.execute({ sessionId: binding.sessionId, code: "while True: pass", binding });
+    setTimeout(() => channel?.terminate(), 100);
+    await expect(pending).resolves.toMatchObject({ state: "unknown", reason: "child_closed" });
     await kernel.close();
   });
 

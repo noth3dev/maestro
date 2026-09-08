@@ -1009,3 +1009,8 @@ The Python bootstrap now parses each cell with `ast` before execution and reject
 ## 2026-09-08 — missing identity fail-closed check
 
 The model-facing IPython tool now rejects direct execution when host-owned `commandId`, `toolCallId`, or operator identity is blank. This is enforced at runtime in addition to the TypeScript type, because callers crossing an untyped boundary must not turn a missing identity into an executable host session.
+
+
+## 2026-09-08 — real-child lifecycle evidence
+
+The process-kernel tests now compose the constrained Python child with the read-only host router, require the ready handshake, and exercise child death during an uncooperative cell. Child death resolves to `unknown` rather than a fabricated success. The test-owned channel explicitly terminates the child; production still needs a Control Plane process adapter with parent/process-group ownership and watchdog cleanup before activation.

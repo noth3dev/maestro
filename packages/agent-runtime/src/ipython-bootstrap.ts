@@ -56,8 +56,8 @@ def host_call(request_id, method, payload):
     if not response.get("ok"):
         raise RuntimeError(response.get("error", "IPython host request failed"))
     result = response.get("result")
-    if not isinstance(result, dict) or not isinstance(result.get("content"), str):
-        raise RuntimeError("IPython host response is invalid")
+    if not isinstance(result, dict) or result.get("state") != "ok" or not isinstance(result.get("content"), str):
+        raise RuntimeError("IPython host response is invalid or not successful")
     return result.get("content")
 
 
