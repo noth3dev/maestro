@@ -2690,3 +2690,19 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Fresh `npm run check` passed: 108 files passed and 57 database-gated files skipped; 691 tests passed and 381 skipped.
 - The runtime identity change did not alter the production fail-closed posture. No host effect was enabled.
+
+
+## 2026-09-08 — process-kernel composition slice
+
+- Added version-checked `ready` handshake frames.
+- Added `createIpPythonProcessKernel`, which composes a session-bound injected child channel with the existing JSON-lines kernel; no raw child process is spawned by the model-facing tool.
+- Added a regression proving the process factory receives the exact session identity and that execute/done frames are correlated.
+- Fixed session rebinding failures to return rejected promises rather than synchronous throws, preserving the async manager contract.
+- The production Control Plane remains fail-closed until an authority-backed process adapter and strict read-only file/Git gateway are composed.
+
+
+## 2026-09-08 — process-kernel verification checkpoint
+
+- Fresh `npm run check` passed: 109 files passed and 57 database-gated files skipped; 693 tests passed and 381 skipped.
+- The new process-kernel composition test is included in the passing set.
+- No production process factory was selected, so the registered production tool remains explicitly unavailable.

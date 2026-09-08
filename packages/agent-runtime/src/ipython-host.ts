@@ -4,6 +4,12 @@ import type { IpPythonExecutionRequest, IpPythonExecutionResult, IpPythonKernel,
 
 export const IPYTHON_PROTOCOL_VERSION = 1 as const;
 
+export interface IpPythonReadyFrame {
+  readonly version: typeof IPYTHON_PROTOCOL_VERSION;
+  readonly type: "ready";
+  readonly runtime: "python";
+}
+
 type DataClass = IpPythonExecutionResult["dataClass"];
 
 export interface IpPythonExecuteFrame {
@@ -70,7 +76,7 @@ export interface IpPythonHostResponseFrame {
   readonly error?: string;
 }
 
-export type IpPythonFrame = IpPythonExecuteFrame | IpPythonHostRequestFrame | IpPythonDoneFrame | IpPythonEventFrame | IpPythonErrorFrame | IpPythonHostResponseFrame | IpPythonInterruptFrame | IpPythonShutdownFrame;
+export type IpPythonFrame = IpPythonReadyFrame | IpPythonExecuteFrame | IpPythonHostRequestFrame | IpPythonDoneFrame | IpPythonEventFrame | IpPythonErrorFrame | IpPythonHostResponseFrame | IpPythonInterruptFrame | IpPythonShutdownFrame;
 
 export interface IpPythonTransport {
   send(frame: IpPythonFrame): void | Promise<void>;
@@ -224,6 +230,10 @@ export function parseIpPythonFrame(value: unknown): IpPythonFrame {
   const input = record(value);
   if (input.version !== IPYTHON_PROTOCOL_VERSION) throw new IpPythonProtocolError("IPython protocol version is unsupported");
   const type = input.type;
+  if (type === "ready") {
+    if (input.runtime !== "python") throw new IpPythonProtocolError("IPython runtime is unsupported");
+    return { version: IPYTHON_PROTOCOL_VERSION, type, runtime: "python" };
+  }
   if (type === "execute") {
     return { version: IPYTHON_PROTOCOL_VERSION, type, requestId: requiredString(input.requestId, "requestId"), sessionId: requiredString(input.sessionId, "sessionId"), code: requiredString(input.code, "code") };
   }
@@ -248,6 +258,14 @@ export function parseIpPythonFrame(value: unknown): IpPythonFrame {
     return { version: IPYTHON_PROTOCOL_VERSION, type, requestId: requiredString(input.requestId, "requestId"), hostRequestId: requiredString(input.hostRequestId, "hostRequestId"), ok: input.ok, ...(input.result === undefined ? {} : { result: input.result as IpPythonExecutionResult }), ...(input.error === undefined ? {} : { error: requiredString(input.error, "error") }) };
   }
   throw new IpPythonProtocolError("IPython frame type is unsupported");
+}
+
+export interface IpPythonProcessKernelOptions extends Omit<IpPythonKernelOptions, "transport"> {
+  readonly createProcess: (sessionId: string, binding?: IpPythonSessionBinding) => IpPythonLineChannel;
+}
+
+export function createIpPythonProcessKernel(options: IpPythonProcessKernelOptions, sessionId: string, binding?: IpPythonSessionBinding): IpPythonKernel {
+  return createIpPythonKernel({ transport: createIpPythonJsonLinesTransport(options.createProcess(sessionId, binding)), hostRequest: options.hostRequest, ...(options.onEvent === undefined ? {} : { onEvent: options.onEvent }) });
 }
 
 interface PendingCell {

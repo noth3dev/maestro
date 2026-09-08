@@ -134,7 +134,8 @@ export function createIpPythonSessionManager(options: IpPythonSessionManagerOpti
   return {
     execute(request) {
       if (closed) return Promise.reject(new Error("IPython session manager is closed"));
-      const session = sessionFor(request.sessionId, request.binding);
+      let session: { readonly kernel: Promise<IpPythonKernel>; readonly binding?: IpPythonSessionBinding; queue: Promise<void> };
+      try { session = sessionFor(request.sessionId, request.binding); } catch (error) { return Promise.reject(error); }
       const run = session.queue.then(async () => (await session.kernel).execute(request));
       session.queue = run.then(() => undefined, () => undefined);
       return run;
