@@ -66,6 +66,21 @@ describe("E work character", () => {
     expect(() => calculatePressure(character(), Number.NaN)).toThrow(WorkCharacterValidationError);
   });
 
+  it("calculates from a validated snapshot when a Proxy changes property reads", () => {
+    let reads = 0;
+    const proxied = new Proxy(character(), {
+      get(target, property, receiver) {
+        if (property === "risk") return reads++ === 0 ? 90 : Number.NaN;
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const result = calculatePressure(proxied, 0);
+    expect(result.pressureFloor).toBe((90 + (200 - 120) + 60) / 3);
+    expect(Number.isFinite(result.pressureFloor)).toBe(true);
+    expect(Number.isFinite(result.pressure)).toBe(true);
+    expect(reads).toBe(0);
+  });
+
   it("rejects enumerable accessor fields", () => {
     const accessor = character() as Record<string, unknown>;
     let reads = 0;

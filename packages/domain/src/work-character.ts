@@ -45,18 +45,17 @@ function object(value: unknown, name: string): asserts value is Record<string, u
   if (prototype !== Object.prototype && prototype !== null) throw new WorkCharacterValidationError(`${name} must be a plain object`);
 }
 
-function onlyKeys(value: Record<string, unknown>, allowed: readonly string[], name: string): void {
+function ownDataProperties(value: Record<string, unknown>, allowed: readonly string[], name: string): Record<string, unknown> {
+  const snapshot: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
   for (const key of Reflect.ownKeys(value)) {
     if (typeof key !== "string" || !allowed.includes(key))
       throw new WorkCharacterValidationError(`${name} has unknown field ${String(key)}`);
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (!descriptor?.enumerable || !("value" in descriptor))
       throw new WorkCharacterValidationError(`${name} field ${key} must be an enumerable data property`);
+    snapshot[key] = descriptor.value;
   }
-}
-
-function requiredKeys(value: Record<string, unknown>, required: readonly string[], name: string): void {
-  for (const key of required) if (!Object.hasOwn(value, key)) throw new WorkCharacterValidationError(`${name} field ${key} is required`);
+  return snapshot;
 }
 
 function score(value: unknown, field: string): asserts value is number {
@@ -70,19 +69,48 @@ function line(value: unknown, field: string): asserts value is string {
     throw new WorkCharacterValidationError(`${field} must be a non-empty single line`);
 }
 
-export function assertValidWorkCharacter(value: unknown): asserts value is WorkCharacter {
+function validateWorkCharacter(value: unknown): WorkCharacter {
   object(value, "Work character");
   const fields = ["schemaVersion", ...WORK_CHARACTER_AXES, "provenance"] as const;
-  onlyKeys(value, fields, "Work character");
-  requiredKeys(value, fields, "Work character");
-  if (value.schemaVersion !== WORK_CHARACTER_SCHEMA_VERSION)
+  const snapshot = ownDataProperties(value, fields, "Work character");
+  if (
+    !Object.hasOwn(snapshot, "schemaVersion") ||
+    !Object.hasOwn(snapshot, "provenance") ||
+    WORK_CHARACTER_AXES.some((axis) => !Object.hasOwn(snapshot, axis))
+  ) {
+    throw new WorkCharacterValidationError("Work character is missing a required field");
+  }
+  if (snapshot.schemaVersion !== WORK_CHARACTER_SCHEMA_VERSION)
     throw new WorkCharacterValidationError(`Work character schemaVersion must be ${WORK_CHARACTER_SCHEMA_VERSION}`);
-  for (const axis of WORK_CHARACTER_AXES) score(value[axis], `Work character ${axis}`);
-  object(value.provenance, "Work character provenance");
-  onlyKeys(value.provenance, ["taskContractRef", "headDecisionRef"], "Work character provenance");
-  requiredKeys(value.provenance, ["taskContractRef", "headDecisionRef"], "Work character provenance");
-  line(value.provenance.taskContractRef, "Work character taskContractRef");
-  line(value.provenance.headDecisionRef, "Work character headDecisionRef");
+  const values = {} as Record<WorkCharacterAxis, number>;
+  for (const axis of WORK_CHARACTER_AXES) {
+    score(snapshot[axis], `Work character ${axis}`);
+    values[axis] = snapshot[axis] as number;
+  }
+  object(snapshot.provenance, "Work character provenance");
+  const provenance = ownDataProperties(snapshot.provenance, ["taskContractRef", "headDecisionRef"], "Work character provenance");
+  if (!Object.hasOwn(provenance, "taskContractRef") || !Object.hasOwn(provenance, "headDecisionRef")) {
+    throw new WorkCharacterValidationError("Work character provenance is missing a required field");
+  }
+  line(provenance.taskContractRef, "Work character taskContractRef");
+  line(provenance.headDecisionRef, "Work character headDecisionRef");
+  return {
+    schemaVersion: WORK_CHARACTER_SCHEMA_VERSION,
+    risk: values.risk,
+    reversibility: values.reversibility,
+    verificationAttachment: values.verificationAttachment,
+    materialScale: values.materialScale,
+    timePressure: values.timePressure,
+    budgetHeadroom: values.budgetHeadroom,
+    provenance: {
+      taskContractRef: provenance.taskContractRef as string,
+      headDecisionRef: provenance.headDecisionRef as string,
+    },
+  };
+}
+
+export function assertValidWorkCharacter(value: unknown): asserts value is WorkCharacter {
+  validateWorkCharacter(value);
 }
 
 function assertHeadUplift(value: unknown): asserts value is number {
@@ -91,8 +119,8 @@ function assertHeadUplift(value: unknown): asserts value is number {
 
 /** Calculate continuous pressure without creating a matching tier or pressure band. */
 export function calculatePressure(character: WorkCharacter, explicitHeadUplift: number): PressureCalculation {
-  assertValidWorkCharacter(character);
+  const validated = validateWorkCharacter(character);
   assertHeadUplift(explicitHeadUplift);
-  const pressureFloor = (character.risk + (WORK_CHARACTER_SCORE_MAX - character.reversibility) + character.verificationAttachment) / 3;
+  const pressureFloor = (validated.risk + (WORK_CHARACTER_SCORE_MAX - validated.reversibility) + validated.verificationAttachment) / 3;
   return { pressureFloor, pressure: Math.max(pressureFloor, explicitHeadUplift), explicitHeadUplift };
 }
