@@ -2735,3 +2735,18 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Fresh `npm run check` passed: 111 files passed and 57 database-gated files skipped; 698 tests passed and 381 skipped.
 - `npm run lint` passed before the full check; the bootstrap was syntax-checked by Python and exercised in a real `python3 -I -S` child test.
 - The only uncommitted file remains the user-owned `.gitignore` change.
+
+
+## 2026-09-08 — bootstrap guard and interrupt hardening
+
+- Added AST validation in the constrained Python bootstrap for imports, dynamic execution/I/O names, and underscore-prefixed attributes.
+- Added stale host-helper rejection after a cell completes and session-ID consistency checks across persistent cells.
+- Added bounded TypeScript interrupt grace handling; an uncooperative child is closed and the active result becomes `unknown` rather than hanging indefinitely.
+- Added tests for dunder rejection, stale helper references, session mismatch, and bounded interrupt.
+
+
+## 2026-09-08 — bounded interrupt and AST-guard verification checkpoint
+
+- Fresh `npm run check` passed: 111 files passed and 57 database-gated files skipped; 700 tests passed and 381 skipped.
+- `npm run lint` and `git diff --check` passed before this documentation-only verification append.
+- The real-child bootstrap and TypeScript kernel now cover cooperative interruption plus bounded close fallback; production process ownership is still not selected.

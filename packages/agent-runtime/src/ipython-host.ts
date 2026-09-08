@@ -149,6 +149,8 @@ export interface IpPythonKernelOptions {
   readonly transport: IpPythonTransport;
   readonly hostRequest: (request: IpPythonHostRequest) => IpPythonExecutionResult | Promise<IpPythonExecutionResult>;
   readonly onEvent?: (event: Pick<IpPythonEventFrame, "requestId" | "stream" | "text">) => void;
+  /** Maximum time allowed for a cooperative interrupt before the child is closed. */
+  readonly interruptGraceMs?: number;
 }
 
 export type IpPythonHostBinding = IpPythonSessionBinding;
@@ -277,12 +279,14 @@ interface PendingCell {
 
 export function createIpPythonKernel(options: IpPythonKernelOptions): IpPythonKernel {
   let active: PendingCell | undefined;
+  let interruptTimer: ReturnType<typeof setTimeout> | undefined;
   let closed = false;
+  const clearInterruptTimer = () => { if (interruptTimer !== undefined) { clearTimeout(interruptTimer); interruptTimer = undefined; } };
+  const takeActive = () => { const pending = active; active = undefined; clearInterruptTimer(); return pending; };
   const removeFrameListener = options.transport.onFrame((raw) => {
     let frame: IpPythonFrame;
     try { frame = parseIpPythonFrame(raw); } catch (error) {
-      const pending = active;
-      active = undefined;
+      const pending = takeActive();
       pending?.reject(error);
       return;
     }
@@ -294,14 +298,13 @@ export function createIpPythonKernel(options: IpPythonKernelOptions): IpPythonKe
     if (frame.type !== "event" && frame.type !== "done" && frame.type !== "error") return;
     if (active === undefined || frame.requestId !== active.requestId) return;
     if (frame.type === "event") { options.onEvent?.(frame); return; }
-    if (frame.type === "done") { const pending = active; active = undefined; pending.resolve({ state: frame.state, dataClass: frame.dataClass, content: frame.content, ...(frame.reason === undefined ? {} : { reason: frame.reason }), ...(frame.truncated === undefined ? {} : { truncated: frame.truncated }) }); return; }
-    if (frame.type === "error") { const pending = active; active = undefined; pending.resolve({ state: "unknown", dataClass: "workspace", content: frame.reason, reason: frame.reason }); }
+    if (frame.type === "done") { const pending = takeActive(); pending?.resolve({ state: frame.state, dataClass: frame.dataClass, content: frame.content, ...(frame.reason === undefined ? {} : { reason: frame.reason }), ...(frame.truncated === undefined ? {} : { truncated: frame.truncated }) }); return; }
+    if (frame.type === "error") { const pending = takeActive(); pending?.resolve({ state: "unknown", dataClass: "workspace", content: frame.reason, reason: frame.reason }); }
   });
   const removeCloseListener = options.transport.onClose((reason) => {
     if (active === undefined) return;
-    const pending = active;
-    active = undefined;
-    pending.resolve({ state: "unknown", dataClass: "workspace", content: reason ?? "IPython child closed", reason: "child_closed" });
+    const pending = takeActive();
+    pending?.resolve({ state: "unknown", dataClass: "workspace", content: reason ?? "IPython child closed", reason: "child_closed" });
   });
 
   return {
@@ -313,23 +316,24 @@ export function createIpPythonKernel(options: IpPythonKernelOptions): IpPythonKe
       try {
         await options.transport.send({ version: IPYTHON_PROTOCOL_VERSION, type: "execute", requestId, sessionId: request.sessionId, code: request.code });
       } catch (error) {
-        const pending = active as PendingCell | undefined;
-        active = undefined;
+        const pending = takeActive();
         if (pending !== undefined) pending.reject(error);
       }
       return result;
     },
     async interrupt(sessionId: string): Promise<void> {
-      if (active?.sessionId === sessionId) await options.transport.interrupt(active.requestId);
+      if (active?.sessionId !== sessionId) return;
+      await options.transport.interrupt(active.requestId);
+      if (active?.sessionId === sessionId) {
+        const graceMs = options.interruptGraceMs ?? 250;
+        interruptTimer = setTimeout(() => { void options.transport.close(); }, graceMs);
+      }
     },
     async close(): Promise<void> {
       if (closed) return;
       closed = true;
-      if (active !== undefined) {
-        const pending = active;
-        active = undefined;
-        pending.resolve({ state: "unknown", dataClass: "workspace", content: "IPython kernel closed", reason: "kernel_closed" });
-      }
+      const pending = takeActive();
+      if (pending !== undefined) pending.resolve({ state: "unknown", dataClass: "workspace", content: "IPython kernel closed", reason: "kernel_closed" });
       removeFrameListener();
       removeCloseListener();
       await options.transport.close();

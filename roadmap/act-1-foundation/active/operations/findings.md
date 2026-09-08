@@ -994,3 +994,8 @@ A test-first symlink case exposed an ordering issue where a sensitive filename b
 ## 2026-09-08 — constrained Python bootstrap
 
 Added a versioned Python bootstrap as a source artifact, tested in a real `python3 -I -S` child. The bootstrap keeps namespace state across cells, emits stdout/stderr as protocol events, performs read-only access through out-of-band `host_request`/`host_response`, caps input/output, and exposes a deliberately small builtin set without `import`, `open`, `exec`, `eval`, `compile`, or subprocess/network helpers to session code. This is a defense-in-depth restriction, not a substitute for Maestro authority; the child still receives no credentials and production composition remains fail-closed.
+
+
+## 2026-09-08 — bootstrap AST guard and bounded interrupt
+
+The Python bootstrap now parses each cell with `ast` before execution and rejects imports, dynamic-I/O names, and any underscore-prefixed attribute (including dunder escape paths). Persistent helper references also carry the originating request ID and fail closed instead of sending a stale host request into a later cell. The TypeScript kernel now uses a bounded interrupt grace timer and closes the transport when cooperative cancellation does not settle, so an injected process adapter has a deterministic teardown obligation.

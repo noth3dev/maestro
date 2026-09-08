@@ -54,6 +54,15 @@ describe("constrained Python IPython bootstrap", () => {
 
       send(child, { version: 1, type: "execute", requestId: "cell-2", sessionId: "session-1", code: "print(value + 1)" });
       await expect(reader.wait((frame) => frame.type === "done" && frame.requestId === "cell-2")).resolves.toMatchObject({ state: "ok", content: "42\n" });
+      send(child, { version: 1, type: "execute", requestId: "cell-other-session", sessionId: "session-2", code: "print(value)" });
+      await expect(reader.wait((frame) => frame.type === "done" && frame.requestId === "cell-other-session")).resolves.toMatchObject({ state: "error", reason: expect.stringContaining("session") });
+
+
+
+      send(child, { version: 1, type: "execute", requestId: "cell-stale-1", sessionId: "session-1", code: "old_reader = read_file" });
+      await expect(reader.wait((frame) => frame.type === "done" && frame.requestId === "cell-stale-1")).resolves.toMatchObject({ state: "ok" });
+      send(child, { version: 1, type: "execute", requestId: "cell-stale-2", sessionId: "session-1", code: "print(old_reader('README.md'))" });
+      await expect(reader.wait((frame) => frame.type === "done" && frame.requestId === "cell-stale-2")).resolves.toMatchObject({ state: "error", reason: expect.stringContaining("expired") });
 
       send(child, { version: 1, type: "execute", requestId: "cell-3", sessionId: "session-1", code: "print(read_file('README.md'))" });
       const hostRequest = await reader.wait((frame) => frame.type === "host_request" && frame.requestId === "cell-3");
@@ -62,9 +71,11 @@ describe("constrained Python IPython bootstrap", () => {
       await expect(reader.wait((frame) => frame.type === "done" && frame.requestId === "cell-3")).resolves.toMatchObject({ state: "ok", content: "host evidence\n" });
 
       send(child, { version: 1, type: "execute", requestId: "cell-4", sessionId: "session-1", code: "import os" });
-      await expect(reader.wait((frame) => frame.type === "done" && frame.requestId === "cell-4")).resolves.toMatchObject({ state: "error", reason: expect.stringContaining("__import__") });
+      await expect(reader.wait((frame) => frame.type === "done" && frame.requestId === "cell-4")).resolves.toMatchObject({ state: "error", reason: expect.stringContaining("direct imports") });
       send(child, { version: 1, type: "execute", requestId: "cell-5", sessionId: "session-1", code: "open('secret')" });
-      await expect(reader.wait((frame) => frame.type === "done" && frame.requestId === "cell-5")).resolves.toMatchObject({ state: "error", reason: expect.stringContaining("open") });
+      await expect(reader.wait((frame) => frame.type === "done" && frame.requestId === "cell-5")).resolves.toMatchObject({ state: "error", reason: expect.stringContaining("direct I/O") });
+      send(child, { version: 1, type: "execute", requestId: "cell-6", sessionId: "session-1", code: "print(host.__class__)" });
+      await expect(reader.wait((frame) => frame.type === "done" && frame.requestId === "cell-6")).resolves.toMatchObject({ state: "error", reason: expect.stringContaining("dunder") });
     } finally { await closeChild(child); }
   });
 });

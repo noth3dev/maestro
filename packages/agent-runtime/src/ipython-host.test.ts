@@ -51,6 +51,14 @@ describe("IPython host protocol", () => {
     await expect(first).resolves.toMatchObject({ state: "cancelled", reason: "user_stop" });
   });
 
+  it("bounds an interrupt and resolves the active cell as unknown", async () => {
+    const transport = new FakeTransport();
+    const kernel = createIpPythonKernel({ transport, hostRequest: async () => ({ state: "ok", dataClass: "workspace", content: "unused" }), interruptGraceMs: 1 });
+    const pending = kernel.execute({ sessionId: "session-1", code: "while True: pass" });
+    await kernel.interrupt("session-1");
+    await expect(pending).resolves.toMatchObject({ state: "unknown", reason: "child_closed" });
+  });
+
   it("returns an unknown outcome when the child closes during execution", async () => {
     const transport = new FakeTransport();
     const kernel = createIpPythonKernel({ transport, hostRequest: async () => ({ state: "ok", dataClass: "workspace", content: "unused" }) });
