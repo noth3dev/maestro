@@ -12,6 +12,7 @@ import {
   OperationalOverlaySchema,
   OperationalOverlaySnapshotSchema,
   PressureBandProjectionSchema,
+  RoutingEvidenceSchema,
 } from "./index.js";
 
 const projectId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01";
@@ -201,6 +202,26 @@ describe("Ensemble Router artifact wire contracts", () => {
       band: "critical",
       decisionLayer: "user",
     });
+    const evidence = {
+      schemaVersion: 1 as const,
+      evidenceId: "evidence-1",
+      goalRef: "goal-1",
+      projectRef: "project-1",
+      routeRef: "route-1",
+      mode: "ensemble" as const,
+      selectedModelRef: "provider/model",
+      accountBinding: "account-1",
+      candidateRefs: ["candidate-1"],
+      taskDemandHash: "a".repeat(64),
+      pressure: 100,
+      pressureBand: "high" as const,
+      decisionLayer: "Encore Council" as const,
+      overlayVersion: 1,
+      admissionBindingRef: "binding-1",
+      rationale: "selected",
+      createdAt: "2026-09-08T12:00:00Z",
+    };
+    expect(RoutingEvidenceSchema.parse(evidence)).toEqual(evidence);
   });
 
   it("fails closed on missing facts, forbidden identity fields, and unavailable bindings", () => {
@@ -225,5 +246,26 @@ describe("Ensemble Router artifact wire contracts", () => {
       }).success,
     ).toBe(false);
     expect(PressureBandProjectionSchema.safeParse({ pressure: 201, band: "critical", decisionLayer: "user" }).success).toBe(false);
+    expect(
+      RoutingEvidenceSchema.safeParse({
+        schemaVersion: 1,
+        evidenceId: "e",
+        goalRef: "g",
+        projectRef: "p",
+        routeRef: "r",
+        mode: "ensemble",
+        selectedModelRef: "model",
+        accountBinding: "a",
+        candidateRefs: ["c"],
+        taskDemandHash: "bad",
+        pressure: 100,
+        pressureBand: "high",
+        decisionLayer: "Encore Council",
+        overlayVersion: 1,
+        admissionBindingRef: "b",
+        rationale: "r",
+        createdAt: "now",
+      }).success,
+    ).toBe(false);
   });
 });
