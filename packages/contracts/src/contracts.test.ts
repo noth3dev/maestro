@@ -98,7 +98,12 @@ describe("TaskDemand and Mission Bundle routing contracts", () => {
       costCeiling: "1 USD", timeCeiling: "1 hour", retryCeiling: 1, workerCeiling: 0,
       deliverable: "a patch", evidenceRequirements: ["tests"], validationCriteria: ["tests pass"], terminationConditions: ["complete"],
     };
-    expect(TaskDemandSchema.parse(taskDemand)).toEqual(taskDemand);
+    const parsedDemand = TaskDemandSchema.parse(taskDemand);
+    const readonlyKinds: readonly string[] = parsedDemand.taskKinds;
+    expect(readonlyKinds).toEqual(["coding"]);
+    expect(parsedDemand).toEqual(taskDemand);
+    expect(Object.isFrozen(parsedDemand.taskKinds)).toBe(false);
+    expect(() => parsedDemand.taskKinds.push("verification")).not.toThrow();
     expect(MissionBundleSubstanceSchema.parse(substance)).toEqual(substance);
     expect(MissionBundleSubstanceSchema.safeParse({ ...substance, taskDemand: { ...taskDemand, provider: "openai" } }).success).toBe(false);
     expect(TaskDemandSchema.safeParse({ ...taskDemand, taskKinds: ["coding", "coding"] }).success).toBe(false);
