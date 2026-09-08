@@ -45,6 +45,13 @@ export interface TaskDemand {
   };
 }
 
+export interface TaskDemandDeclaration {
+  readonly taskKinds: readonly TaskKind[];
+  readonly requirements: TaskCapabilityRequirements;
+  readonly taskContractRef: string;
+  readonly headDecisionRef: string;
+}
+
 export class TaskDemandValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -186,6 +193,26 @@ export function assertValidTaskDemand(value: unknown): asserts value is TaskDema
   requiredKeys(value.provenance, ["taskContractRef", "headDecisionRef"], "Task demand provenance");
   line(value.provenance.taskContractRef, "Task demand taskContractRef");
   line(value.provenance.headDecisionRef, "Task demand headDecisionRef");
+}
+
+/** Seal explicit Head levels; this function never derives numbers from task-kind recipes. */
+export function declareTaskDemand(value: unknown): TaskDemand {
+  object(value, "Task demand declaration");
+  onlyKeys(value, ["taskKinds", "requirements", "taskContractRef", "headDecisionRef"], "Task demand declaration");
+  requiredKeys(value, ["taskKinds", "requirements", "taskContractRef", "headDecisionRef"], "Task demand declaration");
+  const candidate = {
+    schemaVersion: TASK_DEMAND_SCHEMA_VERSION,
+    taskKinds: value.taskKinds,
+    requirements: value.requirements,
+    provenance: { taskContractRef: value.taskContractRef, headDecisionRef: value.headDecisionRef },
+  };
+  assertValidTaskDemand(candidate);
+  return {
+    schemaVersion: candidate.schemaVersion,
+    taskKinds: [...candidate.taskKinds],
+    requirements: Object.fromEntries(MODEL_CAPABILITY_AXES.map((axis) => [axis, { ...candidate.requirements[axis] }])) as TaskCapabilityRequirements,
+    provenance: { ...candidate.provenance },
+  };
 }
 
 export function getTaskKindRecipe(kind: TaskKind): TaskKindRecipe {

@@ -102,6 +102,8 @@ Rules:
 6. A model is not selected while constructing demand. Native admission remains a later boundary.
 7. Multiple kinds affect the Head's attention through their combined role shape; they do not automatically raise or lower numeric levels.
 
+The runtime entrypoint is `declareTaskDemand`. It accepts only the selected kinds, the complete eight-axis requirement vector, and the two provenance references. It adds the demand schema version, validates the complete object, and returns a copied demand value. It does not accept a recipe, provider, model, or inferred default level. Missing requirements, empty provenance, hidden fields, and routing fields fail before the demand crosses the domain boundary.
+
 ## 5. Worked contrast
 
 The same `coding` recipe can produce different runtime demands:
@@ -122,7 +124,8 @@ The recipe remains unchanged. The Head's runtime demand and the E work-character
 - runtime D levels in the inclusive `0..200` range;
 - one-line rationales and mandatory provenance;
 - plain-object own-key boundaries, including hidden prototype/non-enumerable/symbol fields, and rejection of provider/model fields;
-- axis-wise role composition without producing numeric levels.
+- axis-wise role composition without producing numeric levels;
+- explicit Head declaration through `declareTaskDemand`, including declaration-boundary rejection of routing fields and incomplete vectors.
 
 This slice does **not** implement:
 
