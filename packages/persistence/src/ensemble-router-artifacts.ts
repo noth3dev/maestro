@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   assertValidOperationalOverlay,
+  assertValidOperationalOverlaySnapshot,
   assertValidRoutingEvidence,
   canonicalJson,
   snapshotOperationalOverlayForGoal,
@@ -105,6 +106,7 @@ function mapSnapshot(row: SnapshotRow): OperationalOverlaySnapshot {
     observations: value.observations,
   };
   try {
+    assertValidOperationalOverlaySnapshot(value);
     assertValidOperationalOverlay(overlay);
   } catch {
     throw new EnsembleRouterArtifactIntegrityError("Stored Goal overlay snapshot is invalid");
