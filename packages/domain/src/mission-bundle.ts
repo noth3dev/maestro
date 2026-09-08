@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { canonicalJson } from "./task-contract.js";
 import { PERSONA_AXES, parsePersonaProfile, type PersonaAxis, type PersonaProfile } from "./persona.js";
+import { assertValidTaskDemand, type TaskDemand } from "./task-demand.js";
 
 export class InvalidMissionBundleError extends Error {
   constructor(message: string) { super(message); this.name = "InvalidMissionBundleError"; }
@@ -13,6 +14,7 @@ export interface MissionBundleSubstance {
   readonly role: MissionRole;
   readonly profileRef: string;
   readonly goalBrief: string;
+  readonly taskDemand: TaskDemand;
   readonly approvedModels: readonly string[];
   readonly allowedSkills: readonly string[];
   readonly allowedTools: readonly string[];
@@ -61,11 +63,16 @@ function onlyKeys(value: Record<string, unknown>, allowed: readonly string[], na
 
 export function assertValidMissionBundleSubstance(value: unknown): asserts value is MissionBundleSubstance {
   object(value, "Mission bundle substance");
-  const fields = ["role", "profileRef", "goalBrief", "approvedModels", "allowedSkills", "allowedTools", "allowedPaths", "environment", "authorityBoundary", "externalServiceBoundary", "dataBoundary", "costCeiling", "timeCeiling", "retryCeiling", "workerCeiling", "deliverable", "evidenceRequirements", "validationCriteria", "terminationConditions"] as const;
+  const fields = ["role", "profileRef", "goalBrief", "taskDemand", "approvedModels", "allowedSkills", "allowedTools", "allowedPaths", "environment", "authorityBoundary", "externalServiceBoundary", "dataBoundary", "costCeiling", "timeCeiling", "retryCeiling", "workerCeiling", "deliverable", "evidenceRequirements", "validationCriteria", "terminationConditions"] as const;
   onlyKeys(value, fields, "Mission bundle substance");
   if (value.role !== "head" && value.role !== "scout" && value.role !== "execution") throw new InvalidMissionBundleError("Mission bundle role must be head, scout, or execution");
   text(value.profileRef, "Mission bundle profileRef");
   text(value.goalBrief, "Mission bundle goalBrief");
+  try {
+    assertValidTaskDemand(value.taskDemand);
+  } catch {
+    throw new InvalidMissionBundleError("Mission bundle taskDemand is invalid");
+  }
   texts(value.approvedModels, "Mission bundle approvedModels");
   if ((value.approvedModels as readonly string[]).length === 0) throw new InvalidMissionBundleError("Mission bundle requires at least one approved model");
   if (!(value.approvedModels as readonly string[]).every((model) => /^[^/\s]+\/[^/\s]+$/.test(model))) {

@@ -134,6 +134,6 @@ This slice does **not** implement:
 - pressure-band thresholds;
 - model matching or ranking;
 - B provider facts or C operations;
-- Mission Bundle persistence or router admission.
+- router admission, pressure calculation, or routing evidence persistence. The declared `TaskDemand` is now carried by `MissionBundleSubstance`; existing persisted bundles without it must be reissued or backfilled before routing can consume them.
 
 Those remain separate Phase 1 artifacts and must not be smuggled into the recipe contract.

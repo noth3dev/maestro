@@ -167,7 +167,8 @@ describeDatabase("authenticated Head activation API", () => {
       expect(readPlan.status).toBe(200);
       expect((await readPlan.json()).contentHash).toMatch(/^[a-f0-9]{64}$/);
       const bundle = {
-        role: "execution", profileRef: "profile/product", goalBrief: "implement the selected direction", approvedModels: ["test/model-a"],
+        role: "execution", profileRef: "profile/product", goalBrief: "implement the selected direction",
+        taskDemand: { schemaVersion: 1, taskKinds: ["coding"], requirements: { reasoning: { level: 80, rationale: "The Head set this level from the Task Contract." }, coding: { level: 80, rationale: "The Head set this level from the Task Contract." }, verification: { level: 80, rationale: "The Head set this level from the Task Contract." }, "instruction-fidelity": { level: 80, rationale: "The Head set this level from the Task Contract." }, "tool-use": { level: 80, rationale: "The Head set this level from the Task Contract." }, "long-context": { level: 80, rationale: "The Head set this level from the Task Contract." }, knowledge: { level: 80, rationale: "The Head set this level from the Task Contract." }, "refusal-calibration": { level: 80, rationale: "The Head set this level from the Task Contract." } }, provenance: { taskContractRef: "task-contract:fixture", headDecisionRef: "head-decision:fixture" } }, approvedModels: ["test/model-a"],
         allowedSkills: ["testing"], allowedTools: ["git"], allowedPaths: ["src"], environment: ["test"], authorityBoundary: ["local commit"],
         externalServiceBoundary: ["none"], dataBoundary: ["repository only"], costCeiling: "20 USD", timeCeiling: "30 minutes", retryCeiling: 1,
         workerCeiling: 0, deliverable: "implemented change", evidenceRequirements: ["test result"], validationCriteria: ["tests pass"], terminationConditions: ["done"],

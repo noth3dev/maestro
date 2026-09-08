@@ -393,9 +393,31 @@ export type CreateDepartmentPlanInput = z.infer<typeof CreateDepartmentPlanInput
 export const ReviseDepartmentPlanInputSchema = z.object({ projectId: UuidSchema, expectedVersion: CommandVersionSchema, substance: DepartmentPlanSubstanceSchema, reason: z.string().min(1) }).strict();
 export type ReviseDepartmentPlanInput = z.infer<typeof ReviseDepartmentPlanInputSchema>;
 
+const TaskKindSchema = z.enum(["planning", "coding", "verification", "research", "debugging", "tool-operation"]);
+const TaskCapabilityRequirementSchema = z.object({
+  level: z.number().int().min(0).max(200),
+  rationale: z.string().min(1).regex(/^[^\r\n]+$/),
+}).strict();
+export const TaskDemandSchema = z.object({
+  schemaVersion: z.literal(1),
+  taskKinds: z.array(TaskKindSchema).min(1).refine((kinds) => new Set(kinds).size === kinds.length, "taskKinds must not contain duplicates"),
+  requirements: z.object({
+    reasoning: TaskCapabilityRequirementSchema,
+    coding: TaskCapabilityRequirementSchema,
+    verification: TaskCapabilityRequirementSchema,
+    "instruction-fidelity": TaskCapabilityRequirementSchema,
+    "tool-use": TaskCapabilityRequirementSchema,
+    "long-context": TaskCapabilityRequirementSchema,
+    knowledge: TaskCapabilityRequirementSchema,
+    "refusal-calibration": TaskCapabilityRequirementSchema,
+  }).strict(),
+  provenance: z.object({ taskContractRef: z.string().min(1), headDecisionRef: z.string().min(1) }).strict(),
+}).strict();
+export type TaskDemand = z.infer<typeof TaskDemandSchema>;
+
 export const MissionBundleSubstanceSchema = z.object({
   role: z.enum(["head", "scout", "execution"]), profileRef: z.string().min(1), goalBrief: z.string().min(1),
-  approvedModels: NonEmptyStringListSchema, allowedSkills: NonEmptyStringListSchema, allowedTools: NonEmptyStringListSchema,
+  taskDemand: TaskDemandSchema, approvedModels: NonEmptyStringListSchema, allowedSkills: NonEmptyStringListSchema, allowedTools: NonEmptyStringListSchema,
   allowedPaths: NonEmptyStringListSchema, environment: NonEmptyStringListSchema, authorityBoundary: NonEmptyStringListSchema,
   externalServiceBoundary: NonEmptyStringListSchema, dataBoundary: NonEmptyStringListSchema, costCeiling: z.string().min(1),
   timeCeiling: z.string().min(1), retryCeiling: z.number().int().nonnegative(), workerCeiling: z.number().int().nonnegative(),

@@ -153,7 +153,8 @@ describeDatabase("real Control Plane + PostgreSQL + Model Gateway Worker accepta
       };
       expect((await send(`/v1/councils/${council.councilId}/departments/product/plan`, "POST", { projectId, substance: plan })).status).toBe(201);
       const bundle = {
-        role: "execution", profileRef: "profile/acceptance", goalBrief: "return a bounded result", approvedModels: ["test/model-a"],
+        role: "execution", profileRef: "profile/acceptance", goalBrief: "return a bounded result",
+        taskDemand: { schemaVersion: 1, taskKinds: ["coding"], requirements: { reasoning: { level: 80, rationale: "The Head set this level from the Task Contract." }, coding: { level: 80, rationale: "The Head set this level from the Task Contract." }, verification: { level: 80, rationale: "The Head set this level from the Task Contract." }, "instruction-fidelity": { level: 80, rationale: "The Head set this level from the Task Contract." }, "tool-use": { level: 80, rationale: "The Head set this level from the Task Contract." }, "long-context": { level: 80, rationale: "The Head set this level from the Task Contract." }, knowledge: { level: 80, rationale: "The Head set this level from the Task Contract." }, "refusal-calibration": { level: 80, rationale: "The Head set this level from the Task Contract." } }, provenance: { taskContractRef: "task-contract:fixture", headDecisionRef: "head-decision:fixture" } }, approvedModels: ["test/model-a"],
         allowedSkills: ["testing"], allowedTools: [], allowedPaths: ["src"], environment: ["test"], authorityBoundary: ["local"],
         externalServiceBoundary: ["none"], dataBoundary: ["repository only"], costCeiling: "20 USD", timeCeiling: "30 minutes", retryCeiling: 1,
         workerCeiling: 0, deliverable: "bounded result", evidenceRequirements: ["test result"], validationCriteria: ["bound result returned"], terminationConditions: ["done"],
