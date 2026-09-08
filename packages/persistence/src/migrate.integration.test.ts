@@ -112,6 +112,24 @@ describeDatabase("production migration runner", () => {
     }
   });
 
+  it("applies the journal hardening migration to a legacy Goal foreign key without changing 0075", async () => {
+    const { pool, drop } = await freshSchema();
+    try {
+      await runMigrations(pool);
+      await pool.query(`ALTER TABLE ipython_session_journal ADD CONSTRAINT ipython_session_journal_legacy_goal_fk FOREIGN KEY (goal_id) REFERENCES goals(goal_id)`);
+      await pool.query("DELETE FROM schema_migrations WHERE filename = '0075_ipython_session_journal_hardening.sql'");
+
+      const result = await runMigrations(pool);
+      expect(result.applied).toContain("0075_ipython_session_journal_hardening.sql");
+      const foreignKeys = await pool.query<{ count: string }>(`SELECT count(*)::text AS count
+        FROM pg_constraint
+       WHERE conrelid = 'ipython_session_journal'::regclass AND contype = 'f'`);
+      expect(foreignKeys.rows[0]!.count).toBe("0");
+    } finally {
+      await drop();
+    }
+  });
+
   it("does not re-execute any DDL when the schema was already built by the test-only applyAllMigrations helper (both runners share one ledger)", async () => {
     const { pool, drop } = await freshSchema();
     try {

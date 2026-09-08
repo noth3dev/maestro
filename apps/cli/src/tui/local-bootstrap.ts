@@ -423,7 +423,7 @@ async function waitForLocalModelGateway(options: {
 }): Promise<LocalModelGatewayProbe> {
   let last = await probeLocalModelGateway({ apiUrl: options.apiUrl, token: options.token, fetch: options.fetch });
   for (let attempt = 1; attempt < 120 && last.kind === "unavailable"; attempt += 1) {
-    if (options.retryDelayMs > 0) await delay(options.retryDelayMs);
+    await delay(Math.max(options.retryDelayMs, 1));
     last = await probeLocalModelGateway({ apiUrl: options.apiUrl, token: options.token, fetch: options.fetch });
   }
   return last;
@@ -436,7 +436,7 @@ async function waitForLocalControlPlane(options: {
 }): Promise<Awaited<ReturnType<typeof ensureLocalControlPlane>>> {
   let last = await ensureLocalControlPlane({ apiUrl: options.apiUrl, fetch: options.fetch, timeoutMs: 1_000 });
   for (let attempt = 1; attempt < 120 && last.kind !== "ready"; attempt += 1) {
-    if (options.retryDelayMs > 0) await delay(options.retryDelayMs);
+    await delay(Math.max(options.retryDelayMs, 1));
     last = await ensureLocalControlPlane({ apiUrl: options.apiUrl, fetch: options.fetch, timeoutMs: 1_000 });
   }
   return last;

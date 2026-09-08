@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { createIpPythonOwnedProcessChannel } from "./ipython-process-adapter.js";
+import { createIpPythonOwnedProcessChannel, reapIpPythonProcessGroup } from "./ipython-process-adapter.js";
 import { IPYTHON_PYTHON_BOOTSTRAP } from "./ipython-bootstrap.js";
 import { createIpPythonProcessKernel } from "./ipython-host.js";
 
@@ -66,12 +66,138 @@ describe("IPython owned process channel", () => {
     expect(() => createIpPythonOwnedProcessChannel({ pythonExecutable: "/usr/bin/python3", maxStderrBytes: 1_048_577, spawnProcess: () => new FakeChild() as unknown as ChildProcessWithoutNullStreams })).toThrow("stderr limit");
   });
 
+  it("waits for durable process-start evidence before sending a cell", async () => {
+    const child = new FakeChild();
+    let releaseStart!: () => void;
+    const startCompleted = new Promise<void>((resolve) => { releaseStart = resolve; });
+    const channel = createIpPythonOwnedProcessChannel({
+      pythonExecutable: "/usr/bin/python3",
+      onStarted: async () => { await startCompleted; },
+      spawnProcess: () => child as unknown as ChildProcessWithoutNullStreams,
+    });
+    const kernel = createIpPythonProcessKernel({ createProcess: () => channel, hostRequest: async () => ({ state: "error", dataClass: "workspace", content: "unused" }) }, "session-start-gate");
+    const pending = kernel.execute({ sessionId: "session-start-gate", code: "print('gated')" });
+    child.stdout.emit("data", Buffer.from('{"version":1,"type":"ready","runtime":"python"}\n'));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(child.stdin.write).not.toHaveBeenCalled();
+    releaseStart();
+    await vi.waitFor(() => expect(child.stdin.write).toHaveBeenCalled());
+    const frame = JSON.parse(child.stdin.write.mock.calls[0]![0] as string) as { requestId: string };
+    child.stdout.emit("data", Buffer.from(JSON.stringify({ version: 1, type: "done", requestId: frame.requestId, state: "ok", dataClass: "workspace", content: "gated" }) + "\n"));
+    await expect(pending).resolves.toMatchObject({ state: "ok", content: "gated" });
+    await kernel.close();
+  });
+
+  it("includes a verifiable process-group identity in durable-start evidence", async () => {
+    let started: unknown;
+    const channel = createIpPythonOwnedProcessChannel({
+      pythonExecutable: "/usr/bin/python3",
+      onStarted: (event) => { started = event; },
+      terminationGraceMs: 25,
+    });
+    try {
+      expect(started).toMatchObject({
+        event: "started",
+        processRef: channel.processRef,
+        processPid: channel.processPid,
+        processGroupId: String(channel.processPid),
+        processSessionId: expect.any(String),
+        processStartTime: expect.any(String),
+      });
+    } finally { await channel.close(); }
+  });
+
   it("runs the constrained real child through the owned channel", async () => {
     const channel = createIpPythonOwnedProcessChannel({ pythonExecutable: "/usr/bin/python3", terminationGraceMs: 25 });
     const kernel = createIpPythonProcessKernel({ createProcess: () => channel, hostRequest: async () => ({ state: "error", dataClass: "workspace", content: "not used" }) }, "session-owned-real");
     try {
       await expect(kernel.execute({ sessionId: "session-owned-real", code: "print('owned-child')" })).resolves.toMatchObject({ state: "ok", content: "owned-child\n" });
     } finally { await kernel.close(); }
+  });
+
+  it("reaps a persisted process group when the leader has not been observed", async () => {
+    let started: Record<string, unknown> | undefined;
+    const channel = createIpPythonOwnedProcessChannel({
+      pythonExecutable: "/usr/bin/python3",
+      onStarted: (event) => { started = event as unknown as Record<string, unknown>; },
+      terminationGraceMs: 25,
+      spawnProcess: (_command, _args, options) => spawn("/bin/sh", ["-c", "sleep 30"], options) as unknown as ChildProcessWithoutNullStreams,
+    });
+    try {
+      expect(started).toBeDefined();
+      const result = await reapIpPythonProcessGroup({
+        processPid: channel.processPid,
+        processGroupId: started!.processGroupId as string,
+        processSessionId: started!.processSessionId as string,
+        processStartTime: started!.processStartTime as string,
+      }, { terminationGraceMs: 25 });
+      expect(result).toBe("reaped");
+      expect(() => process.kill(-channel.processPid, 0)).toThrow();
+    } finally { await channel.close(); }
+  });
+
+  it("reaps same-session descendants after the persisted group leader exits", async () => {
+    const leader = spawn("/bin/sh", ["-c", "sleep 30 & exit 0"], { detached: true, stdio: "ignore" });
+    const processPid = leader.pid;
+    expect(processPid).toBeTypeOf("number");
+    const stat = readFileSync(`/proc/${processPid as number}/stat`, "utf8");
+    const commandEnd = stat.lastIndexOf(")");
+    const fields = stat.slice(commandEnd + 2).trim().split(/\s+/);
+    const identity = {
+      processPid: processPid as number,
+      processGroupId: fields[2]!,
+      processSessionId: fields[3]!,
+      processStartTime: fields[19]!,
+    };
+    await new Promise<void>((resolve) => leader.once("exit", () => resolve()));
+    expect(() => process.kill(-identity.processPid, 0)).not.toThrow();
+    const result = await reapIpPythonProcessGroup(identity, { terminationGraceMs: 25 });
+    expect(result).toBe("unknown");
+    expect(() => process.kill(-identity.processPid, 0)).not.toThrow();
+    try { process.kill(-identity.processPid, "SIGKILL"); } catch { /* cleanup */ }
+  });
+
+  it("fails closed when a live leader PID has a mismatched process generation", async () => {
+    const leader = spawn("/bin/sleep", ["30"], { detached: true, stdio: "ignore" });
+    const processPid = leader.pid;
+    expect(processPid).toBeTypeOf("number");
+    const stat = readFileSync(`/proc/${processPid as number}/stat`, "utf8");
+    const commandEnd = stat.lastIndexOf(")");
+    const fields = stat.slice(commandEnd + 2).trim().split(/\s+/);
+    const identity = {
+      processPid: processPid as number,
+      processGroupId: fields[2]!,
+      processSessionId: fields[3]!,
+      processStartTime: `${fields[19]}-stale`,
+    };
+    try {
+      await expect(reapIpPythonProcessGroup(identity, { terminationGraceMs: 25 })).resolves.toBe("unknown");
+      expect(() => process.kill(-(processPid as number), 0)).not.toThrow();
+    } finally {
+      try { process.kill(-(processPid as number), "SIGKILL"); } catch { /* cleanup */ }
+    }
+  });
+
+  it("fails closed when a mismatched live PID has no persisted process group", async () => {
+    const leader = spawn("/bin/sleep", ["30"], { detached: true, stdio: "ignore" });
+    const processPid = leader.pid;
+    expect(processPid).toBeTypeOf("number");
+    const stat = readFileSync(`/proc/${processPid as number}/stat`, "utf8");
+    const commandEnd = stat.lastIndexOf(")");
+    const fields = stat.slice(commandEnd + 2).trim().split(/\s+/);
+    const identity = {
+      processPid: processPid as number,
+      processGroupId: "999999",
+      processSessionId: fields[3]!,
+      processStartTime: `${fields[19]}-stale`,
+    };
+    try {
+      await expect(reapIpPythonProcessGroup(identity, { terminationGraceMs: 25 })).resolves.toBe("unknown");
+      expect(() => process.kill(processPid as number, 0)).not.toThrow();
+    } finally {
+      try { process.kill(-(processPid as number), "SIGKILL"); } catch { /* cleanup */ }
+      try { process.kill(processPid as number, "SIGKILL"); } catch { /* cleanup */ }
+    }
   });
 
   it("kills the owned group when the parent owner disappears", async () => {
@@ -94,6 +220,24 @@ describe("IPython owned process channel", () => {
       try { owner.kill("SIGKILL"); } catch { /* owner may already be gone */ }
       await channel?.close();
     }
+  });
+
+  it("journals an unexpected child close as an orphan without inferring a terminal outcome", async () => {
+    const child = new FakeChild();
+    const events: unknown[] = [];
+    const channel = createIpPythonOwnedProcessChannel({
+      pythonExecutable: "/usr/bin/python3",
+      processRef: "process-orphan-1",
+      sessionId: "session-orphan-1",
+      projectId: "project-orphan-1",
+      goalId: "goal-orphan-1",
+      onLifecycle: (event) => { events.push(event); },
+      spawnProcess: () => child as unknown as ChildProcessWithoutNullStreams,
+    });
+    child.closeListener?.(null, "SIGKILL");
+    await channel.close();
+    expect(channel.processRef).toBe("process-orphan-1");
+    expect(events).toEqual([expect.objectContaining({ event: "orphaned", processRef: "process-orphan-1", processPid: 4321, reason: "child_closed_without_owner_shutdown" })]);
   });
 
   it("falls back to direct leader teardown when group identity is unavailable after leader exit", async () => {
