@@ -916,3 +916,10 @@ No source behavior was changed in this documentation slice. The audit did not au
 - `apps/secretary/package.json` and `electron/main.ts` confirm the current client is Electron + Vite + React 19 with a main-process credential/API boundary and sandboxed, context-isolated renderer.
 - Product decision: retain that desktop app. The Phase 7 Next.js/Tailwind/shadcn/PWA/“Do not add Electron” wording was roadmap drift and is now superseded, not an active migration plan.
 - The current Phase 7 contract keeps the radial UI goal while deferring `@xyflow/react` and `d3-hierarchy` dependency adoption until the graph slice is implemented and verified.
+
+## 2026-09-08 — CI package-entry failure root cause
+
+- The GitHub Actions failure was environmental, not a new package-export defect. The workflow built only in the independent `static` job, then created a fresh runner for `test`. Because packages such as `@maestro/domain`, `@maestro/persistence`, and `@maestro/agent-runtime` export `dist` entrypoints, `npm test` on the fresh test runner produced Vite `Failed to resolve entry for package` errors.
+- The four `apps/cli/src/tui/local-bootstrap.test.ts` failures confirmed the same boundary: without the test-job build, `resolveControlPlaneEntry` and `resolveModelGatewayEntry` could not find generated executables and returned `setup-required`.
+- The smallest root-cause fix is to build in the test job after dependency installation. No package export, source implementation, or test behavior was changed.
+- Post-fix evidence: build-backed bootstrap and representative PostgreSQL tests passed; full no-database Vitest passed with the expected database skips; lint and diff checks passed. A complete local PostgreSQL run exceeded the bounded five-minute verification command and is therefore not reported as green.

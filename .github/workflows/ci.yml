@@ -70,5 +70,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Workspace package exports point at dist/; each job has its own runner,
+      # so the test job must build before Vitest resolves those entrypoints.
+      - name: Build workspace packages
+        run: npm run build
+
       - name: Run Vitest
         run: npm test -- --pool forks --maxWorkers 1
