@@ -226,6 +226,27 @@ export function assertValidOperationalOverlay(value: unknown): asserts value is 
   validOverlay(value);
 }
 
+export function assertValidOperationalOverlaySnapshot(value: unknown): asserts value is OperationalOverlaySnapshot {
+  const properties = ownDataProperties(
+    value,
+    ["schemaVersion", "installationRef", "projectRef", "goalRef", "overlayVersion", "observations"],
+    "Operational overlay snapshot",
+  );
+  required(
+    properties,
+    ["schemaVersion", "installationRef", "projectRef", "goalRef", "overlayVersion", "observations"],
+    "Operational overlay snapshot",
+  );
+  line(properties.goalRef, "Operational overlay snapshot goalRef");
+  validOverlay({
+    schemaVersion: properties.schemaVersion,
+    installationRef: properties.installationRef,
+    projectRef: properties.projectRef,
+    version: properties.overlayVersion,
+    observations: properties.observations,
+  });
+}
+
 function freeze<T>(value: T): T {
   return Object.freeze(value);
 }
