@@ -16,7 +16,7 @@ This block is the authoritative status for the current `main` tree. Older phase 
 - **Phase 9:** future Luthiery MCP manufacture; it is not part of the Phase 2 IPython implementation.
 - **Phase 10:** future Treasury capability; payment remains separately activated and critically governed.
 - **Documentation checkpoint:** the native host-tool hardening, native model-policy enforcement, Council timing correction, and Carnegie GUI branding commits are on synchronized `main`/`origin/main`. Prime remains structural reference only; no Prime runtime or adapter is production code.
-- **Immediate work:** complete the remaining reopened Phase 1 Ensemble Router gates before Phase 2 router or approval/effect implementation: router selection, fixed-model migration, and the native admission/live gates. A–E metric schemas, eight-axis scoring rubric, recipes, continuous pressure function, four bands, baseline/overlay persistence, and routing-evidence persistence now exist. Do not claim Phase 1–3 acceptance until the artifact, admission, and live gates pass.
+- **Immediate work:** complete the remaining reopened Phase 1 Ensemble Router gates before Phase 2 router or approval/effect implementation: production selector/native-admission wiring, fixed-model evidence migration, and the native admission/live gates. A–E metric schemas, pure A↔D/B/C selector logic, eight-axis scoring rubric, recipes, continuous pressure function, four bands, baseline/overlay persistence, and routing-evidence persistence now exist. Do not claim Phase 1–3 acceptance until the artifact, admission, and live gates pass.
 
 ## Phase 1A–1D host-tool execution plan — approved 2026-09-08
 
@@ -1401,5 +1401,5 @@ Before production router code, create and review: the eight A-axis scoring rubri
 ## 2026-09-08 — Ensemble Router artifact persistence checkpoint
 
 - Main now includes migration [`packages/persistence/migrations/0072_ensemble_router_artifacts.sql`](../../../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql) and the exported [`packages/persistence/src/ensemble-router-artifacts.ts`](../../../../packages/persistence/src/ensemble-router-artifacts.ts) adapter.
-- C operational overlays and immutable per-Goal snapshots are durably stored and integrity-checked. Routing evidence has a domain validator, wire schema, and append-only durable persistence.
-- Remaining Ensemble Router gates are router selection, fixed-model pin migration, host-tool writes/effects, and live host-tool acceptance. Exact native `modelPolicy` admission remains authoritative; no production selector is claimed.
+- C operational overlays and immutable per-Goal snapshots are durably stored and integrity-checked. Routing evidence has a domain validator, wire schema, append-only durable persistence, and a real PostgreSQL integration gate.
+- Pure `selectRoutedModel` now enforces A↔D weakest-link matching and B/C hard filters. Remaining gates are production selector/native-admission wiring, fixed-model pin/evidence migration, host-tool writes/effects, and live host-tool acceptance. Exact native `modelPolicy` admission remains authoritative.
