@@ -203,7 +203,7 @@ Existing safety constraints remain in force unless explicitly changed during thi
 - Production-impacting changes require human approval.
 
 
-## Model pool routing hardening and release gates — adopted design
+## Ensemble Router routing hardening and release gates — adopted design
 
 Phase 8 must certify the cross-phase routing contract under failure, adversarial input, provider changes, and long-running operation.
 

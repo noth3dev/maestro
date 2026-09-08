@@ -36,7 +36,7 @@
 
 ## Model routing for Treasury work — adopted design
 
-Treasury work uses the common model-pool contract, but model fitness never creates or expands financial authority.
+Treasury work uses the common Ensemble Router contract, but model fitness never creates or expands financial authority.
 
 - Treasury planning and payment-related tasks declare task-kind recipes, D requirements, and E work-character inputs in the Goal/Head Council record.
 - Spend policy, exact amount/target, account binding, approval scope, fencing, and Audit-Before-Spend remain hard gates above model selection.

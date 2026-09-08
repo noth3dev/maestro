@@ -236,7 +236,7 @@ Notification paths:
 
 ## Model routing for environments, devices, and incidents — adopted design
 
-External capabilities reuse the common model-pool contract but never let model fitness replace capability authority.
+External capabilities reuse the common Ensemble Router contract but never let model fitness replace capability authority.
 
 - Browser, device, external API, deployment, and incident tasks declare task-kind recipes, D requirements, and E work-character inputs in their Goal/Task Contract or Incident Brief.
 - Provider/account binding, data policy, endpoint/device scope, expiry, fencing, and approval are hard gates before model fitness.

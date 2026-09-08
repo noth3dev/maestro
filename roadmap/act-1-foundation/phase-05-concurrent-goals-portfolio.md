@@ -184,6 +184,6 @@ Phase 5 treats model/provider capacity as a portfolio resource without allowing 
 
 ### Additional Phase 5 tests and exit evidence
 
-- Two Goals using the same provider/model pool retain separate immutable routing snapshots, routing-evidence records, and model bindings while reading the same project-private overlay version; concurrent Goals cannot mutate that overlay or each other’s snapshots.
+- Two Goals using the same approved model set retain separate immutable routing snapshots, routing-evidence records, and model bindings while reading the same project-private overlay version; concurrent Goals cannot mutate that overlay or each other’s snapshots.
 - Provider throttling queues work without consuming protected validation reserve or silently switching below the A↔D requirement.
 - Reallocation after pause fences the old execution and never reuses the prior Goal's routing or approval state.

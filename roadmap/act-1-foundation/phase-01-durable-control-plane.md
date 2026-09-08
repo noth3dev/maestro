@@ -351,9 +351,9 @@ The target architecture may replace the current standalone Maestro execution mod
 - Historical legacy data is not required for new-system behavior or evaluation. Removal at cutover follows the agreed critical deletion and reversible Git or backup process, but no compatibility or import path is required.
 
 
-## Model pool and routing foundation — adopted design
+## Ensemble Router foundation — adopted design
 
-The canonical design is [Model Pool & Automatic Routing](active/2026-09-08-model-pool-routing-design.md). Phase 1 owns the stable substrate; production routing is not enabled until the artifact contracts and native admission tests pass.
+The canonical design is [Ensemble Router — Automatic Routing](active/2026-09-08-model-pool-routing-design.md). Phase 1 owns the stable substrate; production routing is not enabled until the artifact contracts and native admission tests pass.
 
 - Separate model metrics from task metrics. Model capability `A` is the fixed eight-axis human-scored vector (`0..200`, reason and evidence required); its human calibration guidance is [the Phase 1 scoring-rubric artifact](specs/2026-09-08-model-capability-scoring-rubric.md): `reasoning`, `coding`, `verification`, `instruction-fidelity`, `tool-use`, `long-context`, `knowledge`, and `refusal-calibration`.
 - Keep provider facts `B` as hard filters: context capacity, input/output pricing, authentication, data policy, modalities, and tool-call support. Keep operational measurements `C` local: latency, cost, failures/timeouts, provider errors, and availability/account binding.
