@@ -91,12 +91,14 @@ describeDatabase("Ensemble Router artifacts with PostgreSQL", () => {
     const first = overlay(1);
     const second = overlay(2);
     await expect(recordOperationalOverlay(pool, first)).resolves.toEqual(first);
+    const goalOne = await snapshotOperationalOverlayForGoalDurably(pool, first, "goal-1");
+    expect(goalOne.overlayVersion).toBe(1);
+    await expect(readGoalOperationalOverlaySnapshot(pool, "goal-1")).resolves.toEqual(goalOne);
+
     await expect(recordOperationalOverlay(pool, second)).resolves.toEqual(second);
     await expect(readLatestOperationalOverlay(pool, installationRef, projectRef)).resolves.toEqual(second);
 
-    const goalOne = await snapshotOperationalOverlayForGoalDurably(pool, first, "goal-1");
     const goalTwo = await snapshotOperationalOverlayForGoalDurably(pool, second, "goal-2");
-    expect(goalOne.overlayVersion).toBe(1);
     expect(goalTwo.overlayVersion).toBe(2);
     await expect(readGoalOperationalOverlaySnapshot(pool, "goal-1")).resolves.toEqual(goalOne);
     await expect(snapshotOperationalOverlayForGoalDurably(pool, second, "goal-1")).rejects.toBeInstanceOf(
