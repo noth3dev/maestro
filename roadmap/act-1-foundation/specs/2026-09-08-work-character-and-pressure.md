@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-08
 - **Status:** Phase 1 artifact, E schema and continuous pressure contract.
-- **Parent design:** [Ensemble Router — Automatic Routing](../active/2026-09-08-model-pool-routing-design.md)
+- **Parent design:** [Ensemble Router — Automatic Routing](../active/2026-09-08-ensemble-router-routing-design.md)
 - **Implementation:** `packages/domain/src/work-character.ts`
 
 ## 1. Boundary

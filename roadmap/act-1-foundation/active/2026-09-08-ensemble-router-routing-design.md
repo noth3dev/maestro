@@ -7,6 +7,22 @@
 
 ---
 
+## Verified artifact implementation status
+
+The following slices are present on the current main line and are contracts only; they do not enable automatic production selection:
+
+| Slice | Current source | Status |
+| --- | --- | --- |
+| A capability | [`packages/domain/src/model-profile.ts`](../../../packages/domain/src/model-profile.ts) | Domain vector/validator; eight `0..200` axes and explicit `unproven` entries. |
+| D demand | [`packages/domain/src/task-demand.ts`](../../../packages/domain/src/task-demand.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts) | Domain and wire `TaskDemand`; Head-declared levels and provenance. |
+| E work character/pressure | [`packages/domain/src/work-character.ts`](../../../packages/domain/src/work-character.ts) | Domain contract and continuous pressure calculation; no selection. |
+| B provider facts | [`packages/domain/src/provider-facts.ts`](../../../packages/domain/src/provider-facts.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts) | Domain and wire schema. |
+| C operational overlay | [`packages/domain/src/operational-overlay.ts`](../../../packages/domain/src/operational-overlay.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts) | Domain and wire schema plus pure per-Goal snapshot helper; no durable storage. |
+| Four pressure bands | [`packages/domain/src/pressure-band.ts`](../../../packages/domain/src/pressure-band.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts) | Domain projection and wire schema; labels only. |
+| Human-owned baseline | [`packages/domain/src/model-map.ts`](../../../packages/domain/src/model-map.ts), [`config/model_map.json`](../../../config/model_map.json) | Domain validator plus empty baseline. |
+
+Still missing: persistence migrations; durable C overlay/Goal snapshot storage; routing evidence; router selection; fixed-model pin migration; host-tool writes/effects; and live host-tool acceptance. Current native admission remains one exact `modelPolicy` identity, and `MAESTRO_NATIVE_MODEL` remains an explicit fixed-model pin/routing-off input where required. No production routing claim is made.
+
 ## 1. Objective
 
 The user never picks a model per task. Work declares what it needs; models declare what they are good at; the router matches them.
@@ -298,39 +314,29 @@ Per the interview contract, these are settled structural choices; numeric rubric
 
 ## 14. Phase 1 artifact acceptance boundary
 
-Phase 1 is reopened for the stable routing substrate, not for automatic model selection in production yet. The first implementation must produce and independently test these artifacts in order:
+Phase 1 now has the stable artifact contracts listed below, but not automatic model selection in production:
 
-1. **A-axis scoring rubric:** definitions, `0..200` scoring guidance, one-line reason requirement, evidence references, and explicit unproven semantics for the eight fixed axes.
-2. **B fact schema:** context capacity, input/output pricing, authentication, data policy, modalities, and tool-call support as provider-declared hard facts.
-3. **C operational overlay:** local measurements for latency, cost, failures/timeouts, provider errors, and availability/account binding without mutating `model_map`.
-4. **D requirement schema and recipes:** static task-kind axis roles over these eight axes, plus a runtime TaskDemand with one Head-declared level per A axis.
-5. **E work-character schema:** risk, reversibility, verification attachment, material scale, time pressure, and budget headroom; only the first three feed pressure. Implemented at `packages/domain/src/work-character.ts`.
-6. **Pressure function:** the transparent equal-weight continuous calculation with a Head uplift that cannot lower the calculated floor. Implemented with the E contract.
-7. **Pressure bands:** four labels and numeric thresholds for approval/escalation/recording/reporting only; no matching behavior.
-8. **Public baseline:** a versioned human-owned `model_map` format containing exact identity, A scores with reasons/evidence, B facts, profile version, and provenance.
-9. **Project overlay and snapshots:** private C observations plus immutable per-Goal routing snapshots.
-10. **Routing evidence:** a separate append-only record containing A/D requirements, E inputs, pressure, band, candidates, hard-filter rejections, C observations used, profile versions, selected route, and escalation/switch links. It never replaces `native_execution_bindings`.
-11. **Fixed-model migration:** explicit `MAESTRO_NATIVE_MODEL` pin/routing-off behavior, `approvedModels` intersection, singleton `modelPolicy` projection, and exact native admission tests.
+1. **A-axis scoring rubric and domain validator** ([`packages/domain/src/model-profile.ts`](../../../packages/domain/src/model-profile.ts)).
+2. **B provider-facts domain and wire schema** ([`packages/domain/src/provider-facts.ts`](../../../packages/domain/src/provider-facts.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts)).
+3. **C operational-overlay domain and wire schema**, including a pure immutable per-Goal snapshot helper ([`packages/domain/src/operational-overlay.ts`](../../../packages/domain/src/operational-overlay.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts)).
+4. **D requirement/domain and wire `TaskDemand` contracts** ([`packages/domain/src/task-demand.ts`](../../../packages/domain/src/task-demand.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts)).
+5. **E work-character domain contract and continuous pressure calculation** ([`packages/domain/src/work-character.ts`](../../../packages/domain/src/work-character.ts)).
+6. **Four pressure-band domain and wire schemas** ([`packages/domain/src/pressure-band.ts`](../../../packages/domain/src/pressure-band.ts), [`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts)).
+7. **Human-owned `model_map` validator and empty baseline** ([`packages/domain/src/model-map.ts`](../../../packages/domain/src/model-map.ts), [`config/model_map.json`](../../../config/model_map.json)).
 
-The first schema slice now exists at `packages/domain/src/model-profile.ts` (profile schema version `2`) with focused tests in `packages/domain/src/model-profile.test.ts`. It validates the closed eight-axis vector, `0..200` scored values, one-line rationale, evidence references, explicit `unproven` entries, and plain-object own-key/sparse-input boundaries. The human calibration guidance now exists in [the scoring-rubric artifact](../specs/2026-09-08-model-capability-scoring-rubric.md); initial model scores and production routing are still absent.
-
-The D slice now exists at `packages/domain/src/task-demand.ts` with [the recipe and runtime-demand artifact](../specs/2026-09-08-task-kind-recipes-and-runtime-demand.md). Static recipes define only axis roles. Runtime `TaskDemand` stores Head-declared numeric levels and provenance. `declareTaskDemand` is the explicit Head declaration boundary: it never derives levels from recipes or selects a model. The declared demand now rides the existing `MissionBundleSubstance` record and is included in its content hash; a bundle without a valid demand is invalid at the domain and wire-contract boundaries.
-
-The E slice now exists at `packages/domain/src/work-character.ts` with [the work-character and pressure artifact](../specs/2026-09-08-work-character-and-pressure.md). It validates six explicit `0..200` work-character axes and calculates continuous pressure as the equal-weight average of risk, irreversibility, and verification attachment, with a non-lowering Head uplift. Material scale, time pressure, and budget headroom remain outside pressure and constrain B/C only. No pressure band or model selection is created by this function.
-
-Phase 1 does not claim a production router until each artifact has a schema/validator, focused RED/GREEN tests, and a native admission test proving routing evidence cannot widen authority, account, data-policy, context, or exact model identity.
+These schemas are not persistence. Routing evidence, durable overlay/Goal snapshots, router selection, fixed-model migration, host-tool writes/effects, and live acceptance remain open. Native admission remains authoritative and still requires one exact provider-qualified identity.
 
 ## 15. Remaining implementation artifacts
 
-The following concrete artifacts are intentionally still open for the Phase 1 slices:
+The remaining concrete artifacts are:
 
-1. The four pressure-band threshold values.
-3. The `model_map` file format and initial entries.
-4. The local C overlay and Goal snapshot format.
-5. The routing evidence schema and append-only persistence path.
-6. The migration adapter from `approvedModels` / `MAESTRO_NATIVE_MODEL` to one exact native `modelPolicy`.
+1. Persistence migrations and durable storage for the C overlay and immutable Goal snapshot.
+2. A separate append-only routing-evidence schema and persistence path.
+3. The Ensemble Router selection implementation and native-admission integration.
+4. The migration from explicit `MAESTRO_NATIVE_MODEL`/existing singleton `modelPolicy` inputs to routed identities, with routing-off evidence.
+5. Production host-tool writes/effects and live acceptance through the real process/gateway boundary.
 
-No implementation should fill these gaps by restoring the retired `50/100/200` grade lookup or by treating a pressure band as a matching tier.
+No implementation should treat a pressure band as a matching tier, silently downgrade a requirement, or claim production routing from the presence of these artifact contracts.
 
 ---
 

@@ -2986,9 +2986,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Fresh `npm run check` passed: 172 test files and 1131 tests, 0 failures. `npm run lint` and `git diff --check` also passed.
 
 
-## 2026-09-08 — Model pool routing design distributed across Act 1
+## 2026-09-08 — Ensemble Router routing design distributed across Act 1
 
-- Read and accepted the canonical `2026-09-08-model-pool-routing-design.md` as the source for model-pool behavior.
+- Read and accepted the canonical `2026-09-08-ensemble-router-routing-design.md` as the source for Ensemble Router behavior.
 - Updated the Act 1 index, operations index, Phase 1–10 documents, and the active task plan with phase-owned routing responsibilities, tests, and exit evidence.
 - No production routing implementation was performed in this documentation slice. This earlier checkpoint used the then-current artifact names; it is superseded by the metric-contract update below. The active gate is now the A/B/C model metrics, D/E task metrics, continuous pressure function, pressure bands, model-map format, local overlay, routing-evidence schema, and fixed-model migration contract.
 

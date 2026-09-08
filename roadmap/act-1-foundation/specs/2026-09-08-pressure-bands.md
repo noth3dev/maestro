@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-08
 - **Status:** Phase 1 artifact, organizational pressure projection.
-- **Parent design:** [Ensemble Router — Automatic Routing](../active/2026-09-08-model-pool-routing-design.md)
+- **Parent design:** [Ensemble Router — Automatic Routing](../active/2026-09-08-ensemble-router-routing-design.md)
 - **Implementation:** `packages/domain/src/pressure-band.ts`
 
 ## Boundary

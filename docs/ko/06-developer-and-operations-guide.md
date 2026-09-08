@@ -82,6 +82,11 @@ CLI TUI는 `@earendil-works/pi-tui` `0.85.1`을 터미널 렌더링, 입력, ove
 
 ---
 
+
+
+### Ensemble Router 구현 경계
+
+A/D/E, B provider facts, C operational overlay와 순수 Goal snapshot, 4개 pressure band의 domain/wire artifact contract가 있습니다. Domain `model_map` validator와 빈 human-owned `config/model_map.json` baseline도 있습니다. Persistence migration, durable overlay/Goal snapshot, routing evidence, router selection, fixed-model pin migration, host-tool write/effect 및 live acceptance는 남아 있습니다. Migration 전에는 `MAESTRO_NATIVE_MODEL`과 singleton `modelPolicy`를 automatic routing으로 설명하지 마세요. 이는 명시적 fixed-model/admission 경계입니다.
 ## 4. CLI 도구 사용법 (CLI Usage)
 
 Maestro CLI (`apps/cli`)는 제어 평면 HTTP REST API와 완전한 기능적 패리티를 제공합니다.

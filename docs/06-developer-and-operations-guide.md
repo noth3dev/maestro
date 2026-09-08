@@ -97,6 +97,11 @@ The following boundaries are current production behavior, not design intent:
 
 Do not document a tool, permission, filesystem scope, or network scope until it has a named contract, an authority classification, a concrete adapter, and acceptance coverage through the real gateway/process boundary. The current native Worker is therefore a bounded text-generation path, not a general shell or file-editing agent.
 
+
+
+### Ensemble Router implementation boundary
+
+The domain and wire artifact contracts are present for A/D/E, B provider facts, C operational overlay plus pure Goal snapshot, and four pressure bands. The domain `model_map` validator and empty human-owned `config/model_map.json` baseline are also present. Persistence migrations, durable overlay/Goal snapshots, routing evidence, router selection, fixed-model pin migration, host-tool writes/effects, and live acceptance remain open. Do not describe `MAESTRO_NATIVE_MODEL` or the singleton `modelPolicy` as automatic routing; they are explicit fixed-model/admission boundaries until migration is complete.
 ## 5. Command-Line Interface (CLI) Usage
 
 The Maestro CLI (`apps/cli`) is an authenticated command client for the control plane HTTP REST API. It exposes the currently implemented lifecycle, review, Git, budget, and reporting commands; the TUI and Secretary remain client layers rather than independent runtimes.

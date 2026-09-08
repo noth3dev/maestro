@@ -1254,9 +1254,9 @@ The production read-only path is not considered verified until Goal path scopes,
 - Scope is test-only; Council production semantics and the late-brief/absence-settlement contract are unchanged.
 
 
-## 2026-09-08 — Model pool routing cross-phase integration
+## 2026-09-08 — Ensemble Router routing cross-phase integration
 
-Canonical design: `roadmap/act-1-foundation/active/2026-09-08-model-pool-routing-design.md`. The design is now distributed into every Act 1 phase without duplicating its full rule set. Prime remains structural reference only; the native Model Gateway and Control Plane remain the production boundary.
+Canonical design: `roadmap/act-1-foundation/active/2026-09-08-ensemble-router-routing-design.md`. The design is now distributed into every Act 1 phase without duplicating its full rule set. Prime remains structural reference only; the native Model Gateway and Control Plane remain the production boundary.
 
 ### Ownership matrix
 

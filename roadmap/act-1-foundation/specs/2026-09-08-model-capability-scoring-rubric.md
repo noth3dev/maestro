@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-08
 - **Status:** Phase 1 artifact, agreed scoring guidance; initial model scores are not included.
-- **Parent design:** [Ensemble Router — Automatic Routing](../active/2026-09-08-model-pool-routing-design.md)
+- **Parent design:** [Ensemble Router — Automatic Routing](../active/2026-09-08-ensemble-router-routing-design.md)
 - **Scope:** The eight A capability axes used by `model_map`.
 
 ## 1. Purpose and limits

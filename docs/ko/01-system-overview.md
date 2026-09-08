@@ -17,7 +17,7 @@ flowchart TD
     end
 
     subgraph ExecutionSecurityLayer [실행 및 보안 격리]
-        WORKERS[🛠️ Scout & Execution 워커<br/>• ExecutionKernelPort<br/>• 네이티브 런타임과 Model Gateway 사용<br/>• 격리된 Git Worktrees .worktrees/ ]
+        WORKERS[🛠️ Scout & Execution 워커<br/>• ExecutionKernelPort<br/>• 네이티브 런타임과 인증된 Model Gateway 사용 (Ensemble Router selection은 아직 구현되지 않음)<br/>• 격리된 Git Worktrees .worktrees/ ]
         EXECUTOR[🛡️ AuthorizedEffectExecutor<br/>• Default-Deny 기본 거부 & 액션 분류<br/>• Audit-Before-Effect DB 사전 감사 커밋<br/>• 단조 펜싱 토큰 리스 검증]
     end
 
@@ -67,6 +67,10 @@ Maestro는 모델 I/O, 에이전트 동작 및 내구성 있는 권한을 분리
 네이티브 런타임은 대화와 워커 실행을 모두 담당합니다. Provider credential은 gateway에만 보관되며 Control Plane state, prompt, evidence 또는 log에 들어가지 않습니다.
 
 ---
+
+### Ensemble Router 경계
+
+현재 코드는 자동 model selection이 아니라 routing artifact를 구현합니다. A/D/E domain contract, B provider-facts domain/wire schema, 순수 Goal snapshot helper를 포함한 C operational-overlay domain/wire schema, 4개 pressure-band domain/wire schema 및 human-owned 빈 `config/model_map.json` baseline이 있습니다. Durable overlay/Goal snapshot storage, routing evidence, router selection, fixed-model pin migration, host-tool write/effect 및 live acceptance는 없습니다. 따라서 native admission은 여전히 정확히 하나의 `modelPolicy` identity를 받으며, 필요한 경우 `MAESTRO_NATIVE_MODEL`은 명시적 fixed-model pin/routing-off 입력으로 남습니다.
 
 ## 4. 저장소 구조 개요 (Repository Layout Overview)
 

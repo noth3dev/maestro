@@ -91,3 +91,7 @@ flowchart TD
 1. **Graceful Takeover**: Active leases are respected until expiration, preventing split-brain lockup.
 2. **Stale Proof Invalidation**: Restart invalidates all previous fencing tokens automatically.
 3. **SSE Resumption**: Server-Sent Event (SSE) clients reconnect using `Last-Event-ID` pointing to `goal_events.global_position`, guaranteeing zero dropped event notifications.
+
+## Ensemble Router persistence boundary
+
+The PostgreSQL Control Plane persists Goal lifecycle, leases, events, outbox records, and native execution bindings. It does **not** yet have persistence migrations for the C operational overlay or immutable per-Goal overlay snapshots, and it does not persist routing evidence. These missing stores are separate from the existing native identity bindings and must not be implied by the current durability model.
