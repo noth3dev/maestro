@@ -1332,3 +1332,10 @@ Before production router code, create and review: the eight A-axis scoring rubri
 - The function adds schema version, validates before crossing the boundary, rejects extra routing fields and incomplete vectors, and returns copied values. It never derives numbers from static recipes or chooses a provider/model.
 - TDD evidence: declaration tests pass 12/12 after the missing entrypoint was observed RED.
 - **Next:** decide and document durable Mission Bundle/persistence placement for the declared demand before implementing E pressure or routing.
+
+
+## 2026-09-08 — Task-kind array boundary hardening
+
+- Independent review found that `Object.keys`-style object hardening did not cover the `taskKinds` array itself. Hidden non-enumerable, symbol, or custom-prototype fields could be accepted and then dropped by the copied output.
+- Added RED regressions for declaration and full-demand validation. `assertTaskKinds` now requires the standard `Array.prototype` and permits only `length` plus canonical numeric own indices; hidden fields fail before the domain boundary.
+- Focused task-demand tests pass 13/13; domain TypeScript build, ESLint, and diff checks pass.

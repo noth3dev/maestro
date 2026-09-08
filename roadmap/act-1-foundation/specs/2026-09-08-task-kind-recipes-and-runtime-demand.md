@@ -123,7 +123,7 @@ The recipe remains unchanged. The Head's runtime demand and the E work-character
 - known, unique task kinds;
 - runtime D levels in the inclusive `0..200` range;
 - one-line rationales and mandatory provenance;
-- plain-object own-key boundaries, including hidden prototype/non-enumerable/symbol fields, and rejection of provider/model fields;
+- plain-object own-key boundaries, including hidden prototype/non-enumerable/symbol fields, standard-array task-kind boundaries, and rejection of provider/model fields;
 - axis-wise role composition without producing numeric levels;
 - explicit Head declaration through `declareTaskDemand`, including declaration-boundary rejection of routing fields and incomplete vectors.
 

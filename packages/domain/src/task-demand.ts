@@ -131,6 +131,15 @@ function isTaskKind(value: unknown): value is TaskKind {
 
 function assertTaskKinds(value: unknown, field: string): asserts value is readonly TaskKind[] {
   if (!Array.isArray(value) || value.length === 0) throw new TaskDemandValidationError(`${field} must be a non-empty list`);
+  if (Object.getPrototypeOf(value) !== Array.prototype) throw new TaskDemandValidationError(`${field} must use the standard Array prototype`);
+  for (const key of Reflect.ownKeys(value)) {
+    if (key === "length") continue;
+    if (typeof key !== "string") throw new TaskDemandValidationError(`${field} has an unknown symbol field`);
+    const index = Number(key);
+    if (!Number.isSafeInteger(index) || index < 0 || index >= 2 ** 32 - 1 || String(index) !== key) {
+      throw new TaskDemandValidationError(`${field} has unknown field ${key}`);
+    }
+  }
   const seen = new Set<string>();
   for (let index = 0; index < value.length; index += 1) {
     const item = value[index];

@@ -134,6 +134,26 @@ describe("runtime task demand", () => {
     expect(() => assertValidTaskDemand(inherited)).toThrow(TaskDemandValidationError);
   });
 
+  it("rejects hidden fields attached to the taskKinds array", () => {
+    const nonEnumerableKinds = ["coding"] as unknown as string[];
+    Object.defineProperty(nonEnumerableKinds, "provider", { value: "openai", enumerable: false });
+    expect(() => assertValidTaskDemand(demand({ taskKinds: nonEnumerableKinds as never }))).toThrow(TaskDemandValidationError);
+    expect(() => declareTaskDemand({
+      taskKinds: nonEnumerableKinds,
+      requirements: demand().requirements,
+      taskContractRef: "task-contract:1",
+      headDecisionRef: "head-decision:1",
+    })).toThrow(TaskDemandValidationError);
+
+    const symbolKinds = ["coding"] as unknown as string[];
+    symbolKinds[Symbol("provider") as never] = "openai";
+    expect(() => assertValidTaskDemand(demand({ taskKinds: symbolKinds as never }))).toThrow(TaskDemandValidationError);
+
+    const inheritedKinds = ["coding"] as unknown as string[];
+    Object.setPrototypeOf(inheritedKinds, { provider: "openai" });
+    expect(() => assertValidTaskDemand(demand({ taskKinds: inheritedKinds as never }))).toThrow(TaskDemandValidationError);
+  });
+
   it("rejects unknown fields hidden in prototypes, non-enumerable properties, or symbols", () => {
     const outer = demand();
     Object.setPrototypeOf(outer, { provider: "openai" });
