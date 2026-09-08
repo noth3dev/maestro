@@ -1193,3 +1193,8 @@ All downstream routing documentation must use this contract and must not restore
 
 - Initial registry implementation exposed a TypeScript index-signature error for `action: string`; fixed by explicitly typing the static table as `Readonly<Record<string, ActionClassification>>`. Focused tests, build, lint, and full non-DB tests then passed.
 - R1 remains behavior-preserving and has no persistence/DB surface. Independent review is still required.
+
+
+## 2026-09-09 — Direct refactor R1 closure
+
+- R1 review passed. A TypeScript index-signature issue found during verification was corrected before commit. Main post-merge build/lint and 19/19 focused tests passed; no behavior or API regressions found.
