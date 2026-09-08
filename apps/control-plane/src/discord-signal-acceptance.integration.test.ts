@@ -36,7 +36,14 @@ function signal(): DiscordSignal {
 describeDatabase("real Discord signal delivery: authenticated operator HTTP + real HMAC signature + real PostgreSQL", () => {
   const basePool = new Pool({ connectionString: databaseUrl });
   const schema = `discord_acceptance_${randomUUID().replaceAll("-", "")}`;
-  const scopedUrl = databaseUrl === undefined ? "" : (() => { const url = new URL(databaseUrl); url.searchParams.set("options", `-c search_path=${schema}`); return url.toString(); })();
+  const scopedUrl =
+    databaseUrl === undefined
+      ? ""
+      : (() => {
+          const url = new URL(databaseUrl);
+          url.searchParams.set("options", `-c search_path=${schema}`);
+          return url.toString();
+        })();
   let pool: Pool;
 
   beforeAll(async () => {
@@ -58,10 +65,17 @@ describeDatabase("real Discord signal delivery: authenticated operator HTTP + re
     const { credentialId } = await bootstrapLocalOperator(pool, { secret });
 
     const config: MaestroConfig = {
-      databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp",
-      host: "127.0.0.1", port: 0, actorId: "maestro-control-plane", leaseOwnerId: `discord-acceptance-${randomUUID()}`,
+      databaseUrl: scopedUrl,
+      evidenceDir: "/tmp/maestro-evidence",
+      worktreeRoot: "/tmp",
+      host: "127.0.0.1",
+      port: 0,
+      actorId: "maestro-control-plane",
+      leaseOwnerId: `discord-acceptance-${randomUUID()}`,
       reconcilerLeaseDurationMs: 30_000,
-      modelGatewayOperatorId: "gateway-operator", modelAccountRefs: {},
+      modelRoutingMode: "ensemble",
+      modelGatewayOperatorId: "gateway-operator",
+      modelAccountRefs: {},
       discordSignalCredential: DISCORD_SIGNAL_SECRET,
     };
     const controlPlane = createControlPlane(config);
@@ -82,10 +96,13 @@ describeDatabase("real Discord signal delivery: authenticated operator HTTP + re
         body: JSON.stringify(envelope),
       });
       expect(delivered.status).toBe(201);
-      const deliveredBody = await delivered.json() as { signalId: string; incidentId: string | null };
+      const deliveredBody = (await delivered.json()) as { signalId: string; incidentId: string | null };
       expect(deliveredBody.signalId).toMatch(/^[0-9a-f-]{36}$/);
 
-      const row = await pool.query<{ nonce: string; sequence: number }>("SELECT nonce, sequence::int FROM discord_signals WHERE signal_id = $1", [deliveredBody.signalId]);
+      const row = await pool.query<{ nonce: string; sequence: number }>(
+        "SELECT nonce, sequence::int FROM discord_signals WHERE signal_id = $1",
+        [deliveredBody.signalId],
+      );
       expect(row.rows).toEqual([{ nonce: envelope.nonce, sequence: 1 }]);
 
       // A tampered signature over the exact same real HTTP + operator-auth
