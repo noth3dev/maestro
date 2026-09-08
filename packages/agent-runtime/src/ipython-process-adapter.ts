@@ -1,10 +1,24 @@
+import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams, type SpawnOptions } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { IPYTHON_PYTHON_BOOTSTRAP } from "./ipython-bootstrap.js";
 import { readIpPythonParentIdentity } from "./ipython-host.js";
 import type { IpPythonLineChannel } from "./ipython-host.js";
 
+export interface IpPythonProcessLifecycleEvent {
+  readonly event: "orphaned";
+  readonly sessionId?: string;
+  readonly processRef: string;
+  readonly processPid: number;
+  readonly parentPid: number;
+  readonly reason: string;
+  readonly projectId?: string;
+  readonly goalId?: string;
+}
+
 export interface IpPythonOwnedProcessChannel extends IpPythonLineChannel {
+  readonly processRef: string;
+  readonly processPid: number;
   onStderr(listener: (text: string) => void): () => void;
 }
 
@@ -14,6 +28,13 @@ export interface IpPythonOwnedProcessChannelOptions {
   readonly parentPid?: number;
   readonly parentIdentity?: string;
   readonly cwd?: string;
+  /** Stable process generation identity persisted for restart reconciliation. */
+  readonly processRef?: string;
+  readonly sessionId?: string;
+  readonly projectId?: string;
+  readonly goalId?: string;
+  /** Called when the child closes without an intentional channel close. */
+  readonly onLifecycle?: (event: IpPythonProcessLifecycleEvent) => void | Promise<void>;
   readonly terminationGraceMs?: number;
   readonly maxStderrBytes?: number;
   readonly spawnProcess?: (command: string, args: string[], options: SpawnOptions) => ChildProcessWithoutNullStreams;
@@ -130,8 +151,11 @@ export function createIpPythonOwnedProcessChannel(options: IpPythonOwnedProcessC
     throw new Error("IPython child process handles are unavailable");
   }
   const pid = rawPid as number;
+  const processRef = options.processRef ?? `ipython:${randomUUID()}`;
+  if (processRef.trim() === "") throw new Error("IPython process reference is invalid");
   const groupIdentity = readProcessGroupIdentity(pid);
   let closed = false;
+  let orphanNotified = false;
   let childClosedObserved = false;
   let closeNotified = false;
   let stderrBytes = 0;
@@ -182,9 +206,33 @@ export function createIpPythonOwnedProcessChannel(options: IpPythonOwnedProcessC
   };
   child.on("error", () => { void teardown(); });
   child.on("exit", () => { /* retain group identity for teardown; close may follow later */ });
-  child.on("close", () => { childClosedObserved = true; resolveClose(); void teardown(); });
+  child.on("close", () => {
+    childClosedObserved = true;
+    // A child that closes before the owner intentionally closes its channel is
+    // an orphan/unknown boundary. The persistence layer decides whether it
+    // can later prove reaping; this adapter never infers success or cancel.
+    if (!closed && !orphanNotified) {
+      orphanNotified = true;
+      try {
+        void Promise.resolve(options.onLifecycle?.({
+          event: "orphaned",
+          processRef,
+          processPid: pid,
+          parentPid,
+          reason: "child_closed_without_owner_shutdown",
+          ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+          ...(options.projectId === undefined ? {} : { projectId: options.projectId }),
+          ...(options.goalId === undefined ? {} : { goalId: options.goalId }),
+        })).catch(() => undefined);
+      } catch { /* lifecycle journaling cannot weaken fail-closed teardown */ }
+    }
+    resolveClose();
+    void teardown();
+  });
 
   return {
+    processRef,
+    processPid: pid,
     write(data) { if (closed) throw new Error("IPython process channel is closed"); stdin.write(data); },
     onData(listener) { dataListeners.add(listener); return () => dataListeners.delete(listener); },
     onStderr(listener) { stderrListeners.add(listener); return () => stderrListeners.delete(listener); },
