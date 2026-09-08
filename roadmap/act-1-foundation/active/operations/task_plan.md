@@ -15,14 +15,14 @@ This block is the authoritative status for the current `main` tree. Older phase 
 - **Phase 8:** planned; hardening must prove IPython authority enforcement, approval binding, mixed-risk blocking, full-access isolation, and forbidden-action denial.
 - **Phase 9:** future Luthiery MCP manufacture; it is not part of the Phase 2 IPython implementation.
 - **Phase 10:** future Treasury capability; payment remains separately activated and critically governed.
-- **Documentation checkpoint:** the prior roadmap reorganization and this host-tool boundary update are committed and pushed on `origin/main`; the current tree is clean after the documented verification run.
+- **Documentation checkpoint:** the prior roadmap reorganization and CI fix are pushed on `origin/main`; the host-tool slices are committed locally through `314f9bc` and are not yet pushed. The only uncommitted file is the user-owned `.gitignore` change.
 - **Immediate work:** implement the approved Phase 2 host-tool contract and its tests. Do not claim Phase 1–3 acceptance or code completion until the new host-tool gates pass.
 
 ## Phase 1A–1D host-tool execution plan — approved 2026-09-08
 
 This is the active implementation plan for the approved Phase 2 host-tool boundary. The plan is deliberately split into small, test-first slices. Items remain `planned` until source, focused tests, and the required acceptance evidence exist. The Prime Agent repository is a structural benchmark only; no Prime source, runtime, or dependency is copied.
 
-**Current execution status:** 1A is partially implemented: the typed tool, per-session kernel factory/queue, collision-safe Goal session identity, bounded result envelope, and fail-closed production registration exist with focused tests. The real child-process composition, authority effects, and live acceptance remain open. The 1B transport slice now also includes a bounded read-only host-request router with immutable Goal binding, relative-path/Git-ref validation, and outbound data-class checks. The 1B protocol slice now also has a versioned frame parser, out-of-band host responses, JSON-lines framing, busy/interrupt/child-close handling, and focused transport tests; real authority-backed process/adaptor composition and strict host-effect allowlists remain open; the injected `createIpPythonProcessKernel` seam and read-only router are now in place.
+**Current execution status:** 1A is partially implemented: the typed tool, per-session kernel factory/queue, collision-safe Goal session identity, bounded result envelope, fail-closed production registration, host-owned command/tool-call/session identity, and focused tests exist. The real child-process composition and live acceptance remain open. 1B now has the versioned frame parser, ready handshake validation, out-of-band host responses, JSON-lines framing, busy/interrupt/child-close handling, injected process-kernel seam, bounded read-only host router, and an authority-backed UTF-8 workspace-file adapter with symlink/sensitive-path/output-limit checks. The real Python bootstrap, Git gateway composition, durable effect evidence, and live acceptance remain open.
 
 ### Architecture boundary confirmed by the benchmark
 
@@ -50,7 +50,7 @@ For project-skill persistence, Prime’s harness separates session-local from ex
 
 It also identifies a process-ownership obligation: pass a parent identity to the Python child, detect parent/control-plane death, terminate the owned process group, journal/reap orphans, and prove no shell/test child survives a control-plane crash. This is a Phase 2 lifecycle requirement and a Phase 8 termination-injection gate.
 
-### 1A — Contract, identity, and strict read-only registration (`planned`)
+### 1A — Contract, identity, and strict read-only registration (`in_progress`)
 
 **Purpose:** make one bounded `ipython` tool visible to the existing runtime without enabling effects.
 
@@ -69,7 +69,7 @@ It also identifies a process-ownership obligation: pass a parent identity to the
 
 **Exit evidence:** a deterministic read-only tool call completes through `ExecutionKernelPort` → `MaestroAgentRuntime` → `ToolRegistry` → session manager, with no filesystem/process/network effect.
 
-### 1B — JSON-lines host bridge and read-only host effects (`planned`)
+### 1B — JSON-lines host bridge and read-only host effects (`in_progress`)
 
 **Purpose:** reproduce Prime's useful persistent-kernel shape while preserving Maestro authority.
 

@@ -982,3 +982,10 @@ The runtime `ToolContext` now carries host-generated `commandId`, `toolCallId`, 
 ## 2026-09-08 — process-kernel composition boundary
 
 The runtime now exposes `createIpPythonProcessKernel` as a dependency-injected composition point: TypeScript owns the JSON-lines transport and session lifecycle, while the caller supplies the session-bound child channel. This keeps raw process creation out of the model-facing tool and leaves the production Control Plane responsible for selecting an authority-backed, parent-owned process adapter. A ready handshake frame is version-checked; unsupported runtimes fail closed.
+
+
+## 2026-09-08 — authority-backed workspace-file evidence adapter
+
+Added `createAuthorizedReadOnlyFilePort` in `packages/environment-adapter`. It resolves existing paths before the boundary check, rejects traversal/absolute paths, symlink escapes, Git metadata, and secret-like files, applies a UTF-8 byte cap, and invokes `project.file.read` only through the injected `AuthorizedEffectExecutor`-compatible gateway. The authority classifier now treats `project.file.read` as an ordinary action. The adapter is not yet composed into the production IPython session; that remains blocked on complete numeric policy/control-epoch binding and the Git host gateway.
+
+A test-first symlink case exposed an ordering issue where a sensitive filename behind an escaping symlink masked the more important scope violation. The boundary check now resolves and rejects the escape before sensitive-path classification.

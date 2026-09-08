@@ -40,6 +40,7 @@ export type AuthorityDecision = {
 
 function classifyAction(action: string): ActionClassification {
   switch (action) {
+    case "project.file.read":
     case "project.file.edit":
     case "project.test.run":
     case "git.local.branch.create":

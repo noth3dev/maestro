@@ -72,6 +72,12 @@ describe("evaluateAction", () => {
     expect(evaluateAction(ordinary, [grant], now)).toMatchObject({ effect: "allow", reason: "exact_grant", recordId: "grant-1" });
   });
 
+  it("classifies project file reads as ordinary scoped effects", () => {
+    const fileRead: ActionRequest = { ...request, commandId: "read-1", action: "project.file.read", target: "/repo/README.md" };
+    const grant: AuthorityRecord = { ...exactApproval, recordId: "file-read-grant", kind: "grant", commandId: null, action: fileRead.action, target: fileRead.target };
+    expect(evaluateAction(fileRead, [grant], now)).toMatchObject({ effect: "allow", classification: "ordinary" });
+  });
+
   it("classifies browser commands as ordinary scoped effects", () => {
     const browser: ActionRequest = { ...request, commandId: "browser-1", action: "browser.click", target: "#submit" };
     const grant: AuthorityRecord = { ...exactApproval, recordId: "browser-grant", kind: "grant", commandId: null, action: browser.action, target: browser.target };
