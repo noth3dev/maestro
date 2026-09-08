@@ -4,7 +4,7 @@ import { Pool } from "pg";
 import { AuthorizedEffectExecutor, type ActionRequest } from "@maestro/authority";
 import { createLocalGitPort } from "@maestro/git-adapter";
 import type { ExecutionAdmission, ExecutionKernelPort, GitPort } from "@maestro/domain";
-import { createIpPythonSessionManager, createIpPythonTool, parseModelRef, ToolRegistry, type IpPythonKernel } from "@maestro/agent-runtime";
+import { createIpPythonSessionManager, createIpPythonTool, parseModelRef, reapIpPythonProcessGroup, ToolRegistry, type IpPythonKernel, type IpPythonSessionManager } from "@maestro/agent-runtime";
 import { appendIpPythonSessionJournal, assertProjectMembership, authenticateLocalOperator, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, reconcileIpPythonOrphans, reconcileOnStartup, recordDiscordSignal, recordIpPythonSessionStarted, runMigrations, type IpPythonSessionJournalEntry } from "@maestro/persistence";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
@@ -53,16 +53,17 @@ async function drainWithTimeout(operation: Promise<void> | undefined, timeoutMs:
   }
 }
 
-function inspectIpPythonProcessOutcome(entry: IpPythonSessionJournalEntry): "reaped" | "unknown" {
-  if (entry.processPid === null) return "unknown";
-  try {
-    process.kill(entry.processPid, 0);
-    // Existence is not proof of ownership or a terminal provider outcome.
-    return "unknown";
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ESRCH") return "reaped";
-    return "unknown";
-  }
+async function inspectIpPythonProcessOutcome(entry: IpPythonSessionJournalEntry): Promise<"reaped" | "unknown"> {
+  const details = entry.details;
+  const processGroupId = details.process_group_id;
+  const processSessionId = details.process_session_id;
+  const processStartTime = details.process_start_time;
+  if (entry.processPid === null || typeof processGroupId !== "string" || typeof processSessionId !== "string" || typeof processStartTime !== "string") return "unknown";
+  // A leader PID disappearing is not enough: the original detached group may
+  // still contain a shell/test descendant. The runtime helper verifies the
+  // captured group/session/start identity, terminates the matching group, and
+  // returns `reaped` only after no owned member remains.
+  return reapIpPythonProcessGroup({ processPid: entry.processPid, processGroupId, processSessionId, processStartTime });
 }
 
 export type NativeAdmissionInput =
@@ -97,6 +98,8 @@ export interface ControlPlaneOverrides {
   gitPort?: GitPort;
   /** Test-only IPython kernel injection; production remains fail-closed until the 1B bridge is composed. */
   ipythonKernel?: IpPythonKernel;
+  /** Test-only observer for driving the already-composed production IPython session manager. */
+  onIpPythonSessionManager?: (manager: IpPythonSessionManager) => void;
 }
 
 /** Compose the local Goal API and expose only authority-backed effect gateways. Credential setup remains controlled; project access uses the explicit admin gateway. */
@@ -134,6 +137,11 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
             goalId: binding.goalId,
             processPid: event.processPid,
             parentPid: event.parentPid,
+            details: {
+              ...(event.processGroupId === undefined ? {} : { process_group_id: event.processGroupId }),
+              ...(event.processSessionId === undefined ? {} : { process_session_id: event.processSessionId }),
+              ...(event.processStartTime === undefined ? {} : { process_start_time: event.processStartTime }),
+            },
           });
         },
         onLifecycle: async (event) => {
@@ -146,11 +154,17 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
             reason: event.reason,
             processPid: event.processPid,
             parentPid: event.parentPid,
+            details: {
+              ...(event.processGroupId === undefined ? {} : { process_group_id: event.processGroupId }),
+              ...(event.processSessionId === undefined ? {} : { process_session_id: event.processSessionId }),
+              ...(event.processStartTime === undefined ? {} : { process_start_time: event.processStartTime }),
+            },
           });
         },
       }, sessionId, binding);
     },
   });
+  overrides.onIpPythonSessionManager?.(ipythonSessions);
   const tools = new ToolRegistry();
   tools.register(createIpPythonTool({ sessions: ipythonSessions }));
   const executionKernel = overrides.executionKernel ?? (modelGateway === undefined
