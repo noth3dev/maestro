@@ -394,9 +394,10 @@ export const ReviseDepartmentPlanInputSchema = z.object({ projectId: UuidSchema,
 export type ReviseDepartmentPlanInput = z.infer<typeof ReviseDepartmentPlanInputSchema>;
 
 const TaskKindSchema = z.enum(["planning", "coding", "verification", "research", "debugging", "tool-operation"]);
+const NonEmptyLineSchema = z.string().regex(/^(?=[^\r\n]*\S)[^\r\n]+$/);
 const TaskCapabilityRequirementSchema = z.object({
   level: z.number().int().min(0).max(200),
-  rationale: z.string().min(1).regex(/^[^\r\n]+$/),
+  rationale: NonEmptyLineSchema,
 }).strict();
 export const TaskDemandSchema = z.object({
   schemaVersion: z.literal(1),
@@ -411,7 +412,7 @@ export const TaskDemandSchema = z.object({
     knowledge: TaskCapabilityRequirementSchema,
     "refusal-calibration": TaskCapabilityRequirementSchema,
   }).strict(),
-  provenance: z.object({ taskContractRef: z.string().min(1), headDecisionRef: z.string().min(1) }).strict(),
+  provenance: z.object({ taskContractRef: NonEmptyLineSchema, headDecisionRef: NonEmptyLineSchema }).strict(),
 }).strict();
 export type TaskDemand = z.infer<typeof TaskDemandSchema>;
 
