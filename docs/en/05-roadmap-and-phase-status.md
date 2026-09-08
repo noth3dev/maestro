@@ -23,6 +23,11 @@ The Maestro native runtime and authenticated model gateway own conversation and 
 
 The CLI TUI uses `@earendil-works/pi-tui` terminal primitives. This is a presentation dependency with no provider or execution authority.
 
+
+### Ensemble Router artifact persistence boundary
+
+The A/D/E domain contracts, B provider facts, C operational overlay and pure Goal snapshot, four pressure bands, and human-owned `model_map` baseline are implemented. Migration [`0072_ensemble_router_artifacts.sql`](../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql) and [`ensemble-router-artifacts.ts`](../../packages/persistence/src/ensemble-router-artifacts.ts) now persist C overlays, immutable Goal snapshots, and append-only routing evidence. The Ensemble Router selector, fixed-model pin migration, production host-tool writes/effects, and live host-tool acceptance remain open; native admission still requires one exact `modelPolicy` identity.
+
 ### TUI Phase Boundary
 
 The TUI is an operator view and command client, not a second control plane. It reads authoritative state and sends commands only through `@maestro/api-client` and authenticated Control Plane routes. It must not connect to PostgreSQL, the Model Gateway, provider APIs, or device transports directly. Phase acceptance requires API/TUI parity for the same real Goal, SSE cursor-safe reconnect, explicit loading/error/stale states, and no credential, prompt, raw gateway-binding, or secret-bearing output in terminal state or logs. Terminal input never bypasses leases, fencing, capability grants, approvals, or idempotency.
@@ -47,7 +52,7 @@ Phase 6 Step 1 is accepted as an immutable, project-private Improvement Digest s
 
 | Act | Current status | Ensemble Router / runtime boundary |
 | --- | --- | --- |
-| **Act 1 — Foundation** | **In progress; not certified** | A/D/E contracts, B provider facts, C operational overlay with pure Goal snapshot, four pressure-band schemas, and the human-owned empty `model_map` baseline are present. Persistence migrations, durable C/Goal snapshots, routing evidence, router selection, fixed-model migration, host-tool writes/effects, and live acceptance remain open. See [`roadmap/act-1-foundation/README.md`](../../roadmap/act-1-foundation/README.md). |
+| **Act 1 — Foundation** | **In progress; not certified** | A/D/E contracts, B provider facts, C operational overlay with pure Goal snapshot, four pressure-band schemas, and the human-owned empty `model_map` baseline are present. Migration `0072_ensemble_router_artifacts.sql` and the persistence adapter provide durable C/Goal snapshots and append-only routing evidence. Router selection, fixed-model migration, host-tool writes/effects, and live acceptance remain open. See [`roadmap/act-1-foundation/README.md`](../../roadmap/act-1-foundation/README.md). |
 | **Act 2 — Flashmob** | **Blocked on Act 1 certification** | No Flashmob production path or automatic Ensemble Router selection is claimed. See [`roadmap/act-2-flashmob/README.md`](../../roadmap/act-2-flashmob/README.md). |
 | **Act 3 — Arrangement** | **Deferred** | Personalized self-modification remains downstream of Act 2 and does not promote routing or model-map changes automatically. See [`roadmap/act-3-arrangement/README.md`](../../roadmap/act-3-arrangement/README.md). |
 

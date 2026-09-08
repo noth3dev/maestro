@@ -23,6 +23,10 @@ Maestro 네이티브 런타임과 인증된 model gateway가 대화와 워커 �
 
 CLI TUI는 `@earendil-works/pi-tui` `0.85.1` 터미널 primitive를 사용합니다. 이는 provider나 실행 권한이 없는 표현 계층 의존성입니다.
 
+### Ensemble Router artifact persistence 경계
+
+A/D/E domain contract, B provider facts, C operational overlay와 순수 Goal snapshot, 4개 pressure band 및 human-owned `model_map` baseline이 구현되었습니다. [`0072_ensemble_router_artifacts.sql`](../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql)과 [`ensemble-router-artifacts.ts`](../../packages/persistence/src/ensemble-router-artifacts.ts)가 C overlay, 불변 Goal snapshot 및 append-only routing evidence를 저장합니다. Ensemble Router selector, fixed-model pin migration, production host-tool write/effect 및 live host-tool acceptance는 남아 있으며 native admission은 여전히 정확히 하나의 `modelPolicy` identity를 요구합니다.
+
 ### TUI 단계 경계
 
 TUI는 두 번째 Control Plane이 아니라 운영자 표시·명령 클라이언트입니다. 권위 있는 상태 조회와 명령 전송은 `@maestro/api-client` 및 인증된 Control Plane route를 통해서만 수행합니다. PostgreSQL, Model Gateway, provider API, device transport에 직접 연결하지 않습니다. 단계 승인에는 동일한 실제 Goal에 대한 API/TUI parity, SSE cursor 보존 재연결, 명시적인 loading/error/stale 상태 표시, terminal state와 로그에 credential·prompt·raw gateway binding·secret-bearing output이 없다는 증거가 필요합니다. 터미널 입력은 lease, fencing, capability grant, approval, idempotency를 우회할 수 없습니다.
@@ -47,7 +51,7 @@ Phase 6 Step 1은 불변·프로젝트 전용 Improvement Digest slice로 승인
 
 | Act | 현재 상태 | Ensemble Router / runtime 경계 |
 | --- | --- | --- |
-| **Act 1 — Foundation** | **진행 중; 인증 전** | A/D/E contract, B provider facts, 순수 Goal snapshot을 포함한 C operational overlay, 4개 pressure-band schema 및 human-owned 빈 `model_map` baseline이 있습니다. Persistence migration, durable C/Goal snapshot, routing evidence, router selection, fixed-model migration, host-tool write/effect 및 live acceptance는 남아 있습니다. [`roadmap/act-1-foundation/README.md`](../../roadmap/act-1-foundation/README.md) 참조. |
+| **Act 1 — Foundation** | **진행 중; 인증 전** | A/D/E contract, B provider facts, 순수 Goal snapshot을 포함한 C operational overlay, 4개 pressure-band schema 및 human-owned 빈 `model_map` baseline이 있습니다. Migration `0072_ensemble_router_artifacts.sql`과 persistence adapter가 durable C/Goal snapshot 및 append-only routing evidence를 제공합니다. Router selection, fixed-model migration, host-tool write/effect 및 live acceptance는 남아 있습니다. [`roadmap/act-1-foundation/README.md`](../../roadmap/act-1-foundation/README.md) 참조. |
 | **Act 2 — Flashmob** | **Act 1 인증까지 차단** | Flashmob production path나 automatic Ensemble Router selection을 구현되었다고 주장하지 않습니다. [`roadmap/act-2-flashmob/README.md`](../../roadmap/act-2-flashmob/README.md) 참조. |
 | **Act 3 — Arrangement** | **보류** | 개인화 self-modification은 Act 2 이후이며 routing 또는 model-map 변경을 자동 승격하지 않습니다. [`roadmap/act-3-arrangement/README.md`](../../roadmap/act-3-arrangement/README.md) 참조. |
 

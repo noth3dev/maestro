@@ -124,7 +124,7 @@
 - Merged predecessor hardening (`phase2/head-activation-hardening` a91e980 for migration 0014, `phase2/organization-persona-hardening` 43b53db for migration 0018 role catalog, canonical Overture role rename 2f4b847) plus the three P2S5 repair branches into a new baseline branch `phase2/p2s5-integration`.
 - Found and fixed, only by running the fully-merged suite together against real PostgreSQL: several `pg_constraint` existence guards in migrations 0014/0016/0019 were unqualified by `conrelid`, so a same-named constraint already created in one schema (e.g. `public`, used by most integration suites) silently made the guard skip creating it in a fresh isolated schema (used by `cli-secretary-parity.integration.test.ts`) — this is now recorded as a durable lesson (see continual-harness memory). Also fixed a missing `CASCADE` on `task-contract.integration.test.ts`'s TRUNCATE and two missing imports (`listPermanentRoles`, `PERMANENT_ROLES`) in `organization.integration.test.ts` that had never been exercised in the same process as the rest of the suite before.
 - A second independent Luna-max acceptance review of the merged baseline found further residuals (round-command replay not idempotent; Goal control check omitted `pause_requested_at` and didn't lock `goal_controls`; Goal lifecycle state not checked at Council creation; duplicate-create retry ordering bug; absence-event actor/session provenance; revealed-brief shape not re-validated on read; migration 0020 had an unconditional `ADD CONSTRAINT`; Task Contract `evidenceReferences` not cross-checked against durable evidence). All repaired directly, including a subtle correctness bug caught mid-fix: a first content-derived round-idempotency design would have wrongly deduplicated two intentional identical-content rounds (breaking the two-round no-new-evidence stop rule) — redesigned as **opt-in** idempotency keyed on an explicit `commandId`/`idempotencyKey`, with authorization checked before any replay lookup. Committed as `7a627a2`.
-- **P2S5 ACCEPTED** by final independent review, with one explicit, documented, intentionally deferred boundary: Council admin-operation authority (create/absence/reveal/decision) and all Council reads remain trusted-internal-caller functions (consistent with the rest of this codebase's persistence layer, e.g. `authority.ts`); real authenticated-principal/capability checks belong at the future Council HTTP API boundary, which does not exist yet. Per-Department actions (brief submission, round contributions) ARE authorized against the captured Head/session.
+- **P2S5 ACCEPTED** by final independent review, with one explicit, documented, intentionally deferred boundary: Council admin-operation authority (create/absence/reveal/decision) and all Council reads remain trusted-internal-caller functions (consistent with the rest of this codebase's persistence layer, e.g. `authority.ts`); real authenticated caller/capability checks belong at the future Council HTTP API boundary, which does not exist yet. Per-Department actions (brief submission, round contributions) ARE authorized against the captured Head/session.
 - Full verification on `phase2/p2s5-integration` (7a627a2) with real PostgreSQL: **254 passed, 1 intentional live-Prime skip, 0 failed.**
 - Repo cleanup: removed 13 now-fully-superseded worktrees/branches (all confirmed ancestors of `phase2/p2s5-integration` via `git merge-base --is-ancestor`); ~4GB of duplicated `node_modules` reclaimed. Remaining worktrees: `main`, `phase1/control-plane`, `phase2/p2s5-integration`.
 - **New Phase 2 baseline branch: `phase2/p2s5-integration` (7a627a2).** All P2S6+ work should branch from here, not from the old `phase2/council-briefs`.
@@ -2993,17 +2993,17 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - No production routing implementation was performed in this documentation slice. This earlier checkpoint used the then-current artifact names; it is superseded by the metric-contract update below. The active gate is now the A/B/C model metrics, D/E task metrics, continuous pressure function, pressure bands, model-map format, local overlay, routing-evidence schema, and fixed-model migration contract.
 
 
-## 2026-09-08 — Phase 1 model-pool reopening checkpoint
+## 2026-09-08 — Phase 1 Ensemble Router reopening checkpoint
 
-- Reopened Phase 1 as the bottom-up implementation boundary after the model-pool design update. No production router code was added in this documentation pass.
-- Reconciled the canonical model-pool design, Phase 1, Phase 2, Phase 5, and Phase 8 wording around baseline ownership, overlay scope, qualifying switches, `approvedModels`, and fixed-model migration.
+- Reopened Phase 1 as the bottom-up implementation boundary after the Ensemble Router design update. No production router code was added in this documentation pass.
+- Reconciled the canonical Ensemble Router design, Phase 1, Phase 2, Phase 5, and Phase 8 wording around baseline ownership, overlay scope, qualifying switches, `approvedModels`, and fixed-model migration.
 - Prime remains a structural benchmark only: persistent session/protocol/lifecycle shapes may inform the design, but Maestro authority, native admission, and evidence remain independent.
 - **Next:** add the first failing tests for the closed eight-axis A capability vector, A/profile schema, unproven status, and human-owned baseline validation.
 
 
 ## 2026-09-08 — Metric contract update applied
 
-- Replaced the Phase 1 model-pool artifact target from direct `50/100/200` grade bars to the user-approved A/B/C model metrics, D/E task metrics, continuous pressure function, and four non-matching pressure bands.
+- Replaced the Phase 1 Ensemble Router artifact target from direct `50/100/200` grade bars to the user-approved A/B/C model metrics, D/E task metrics, continuous pressure function, and four non-matching pressure bands.
 - Canonical design and Phase 1/task-plan pointers now explicitly preserve the eight fixed A axes, provider hard facts, local operational corrections, weakest-link A↔D matching, and Head-only pressure uplift.
 - **Next:** write the A-axis scoring criteria and first task-kind/pressure schemas as RED tests. The formula and initial entries remain intentionally open until their criteria are documented.
 
@@ -3106,6 +3106,12 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 ## 2026-09-08 — Ensemble Router branding boundary
 
-- The model-pool system is branded **Ensemble Router** in user-facing UI and active design/phase documentation.
-- `Head` remains the role name; `principal` is not introduced.
+- The Ensemble Router system is branded **Ensemble Router** in user-facing UI and active design/phase documentation.
+- `Head` remains the role name; No alternate role name is introduced; `Head` remains canonical.
 - Technical contracts and identifiers such as `model_map`, `TaskDemand`, `MissionBundle`, `modelPolicy`, and `MAESTRO_NATIVE_MODEL` remain unchanged.
+
+## 2026-09-08 — Ensemble Router artifact persistence checkpoint
+
+- Main now includes migration [`packages/persistence/migrations/0072_ensemble_router_artifacts.sql`](../../../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql) and the exported [`packages/persistence/src/ensemble-router-artifacts.ts`](../../../../packages/persistence/src/ensemble-router-artifacts.ts) adapter.
+- C operational overlays and immutable per-Goal snapshots are durably stored and integrity-checked. Routing evidence has a domain validator, wire schema, and append-only durable persistence.
+- Remaining Ensemble Router gates are router selection, fixed-model pin migration, host-tool writes/effects, and live host-tool acceptance. Exact native `modelPolicy` admission remains authoritative; no production selector is claimed.

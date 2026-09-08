@@ -59,7 +59,7 @@ The production Control Plane currently composes an empty native `ToolRegistry`; 
 
 ## Router and host-tool status
 
-Authority/effect/evidence boundaries are implemented, but they do not constitute production host-tool enablement. The native `ToolRegistry` remains empty, host-tool writes/effects and live acceptance are not implemented, and Ensemble Router selection/routing evidence are not persisted. Exact `modelPolicy` admission remains authoritative.
+Authority/effect/evidence boundaries are implemented, but they do not constitute production host-tool enablement. The native `ToolRegistry` remains empty; host-tool writes/effects and live acceptance are not implemented. Ensemble Router routing evidence is persisted separately, but selection is not enabled. Exact `modelPolicy` admission remains authoritative.
 ## 3. Sealed Submissions & Cryptographic Integrity
 
 To prevent collusion, retroactive goal edits, or hallucinations, Maestro employs a **Sealed Submission Protocol**:
