@@ -923,3 +923,47 @@ No source behavior was changed in this documentation slice. The audit did not au
 - The four `apps/cli/src/tui/local-bootstrap.test.ts` failures confirmed the same boundary: without the test-job build, `resolveControlPlaneEntry` and `resolveModelGatewayEntry` could not find generated executables and returned `setup-required`.
 - The smallest root-cause fix is to build in the test job after dependency installation. No package export, source implementation, or test behavior was changed.
 - Post-fix evidence: build-backed bootstrap and representative PostgreSQL tests passed; full no-database Vitest passed with the expected database skips; lint and diff checks passed. A complete local PostgreSQL run exceeded the bounded five-minute verification command and is therefore not reported as green.
+
+
+## 2026-09-08 — Approved Phase 1A–1D host-tool execution plan
+
+The user approved the documented placement before implementation. The canonical detailed plan is inserted into `roadmap/act-1-foundation/active/operations/task_plan.md`; Phase 1 records only the minimum registry/strict-read-only gate, Phase 2 records the persistent local IPython contract and ownership, `findings.md` remains append-only evidence, `progress.md` records execution results, and `roadmap/README.md` remains a short status summary.
+
+The implementation is split into four gates: (1A) typed `ipython` registration, host-owned identity, persistent session queue, and strict read-only lifecycle; (1B) Node-owned JSON-lines bridge and read-only host effects; (1C) authority-backed local effects, whole-block approval, repetition/full-access modes, audit, idempotency, and stop; (1D) Control Plane/Gateway/Worker integration and real PostgreSQL acceptance. Prime Agent is a structural benchmark only. No Prime code or dependency is being copied.
+
+No source implementation has been changed by this planning checkpoint. The only pre-existing user-owned working-tree change remains `.gitignore`.
+
+
+## 2026-09-08 — Independent Prime benchmark addendum
+
+A read-only comparison against Prime Agent `9c8230df67b378aaedc032f90e1ae8ba687cfe4` confirmed the useful structural pattern: TypeScript owns the persistent `ReplKernelManager`, serialized cell queue, JSON-lines protocol, typed host-request dispatch, cancellation, bounded shutdown, output attribution, and lifecycle accounting; the child Python runtime owns only session-local code execution (`packages/coding-agent/docs/rlm-runtime.md:8-21,62-72`; `packages/coding-agent/src/core/kernel/repl-manager.ts:1-40`).
+
+Prime's protocol documents handshake, frame separation, ordered requests, host replies, interruption, and shutdown (`prime-agent-runtime/src/rlm/repl.md:1-41,47-123`). Its tests provide the required shape for real child-process coverage: execution/host bridge, namespace state roundtrip, abort, teardown, and parent watchdog. Maestro will copy these test categories, not Prime's authority model.
+
+Explicitly excluded from the Maestro design: arbitrary Python evaluation as authorization, `bash()` as a permission model, child-process isolation as a security boundary, generic string host handlers, detached effectful background tasks, and dill/pickle namespace restore. Maestro host effects remain Control Plane-owned, typed, Goal-scoped, lease/fence/approval/idempotency checked, and routed through existing adapters.
+
+The plan now explicitly includes out-of-band host replies, busy-kernel/cancellation behavior, bounded teardown, output attribution, project-skill manifest/hash/save/revocation, IPython-specific crash/restart recovery, and Phase 3/8 protocol/snapshot/prompt-injection/full-access security cases.
+
+
+## 2026-09-08 — Prime parent-death cleanup addendum
+
+The benchmark review found one additional lifecycle requirement: Prime passes a parent identity to the child, the Python watchdog exits when the owner dies, and the manager journals/reaps owned process groups (`packages/coding-agent/src/core/kernel/repl-manager.ts:315-328,1282-1317`; `prime-agent-runtime/src/rlm/repl.py:1061-1125`). Maestro must add the equivalent parent-death/orphan-reaping contract and prove that no shell/test child survives a Control Plane crash. This belongs in the Phase 2 lifecycle tests and the Phase 8 termination-injection gate.
+
+
+## 2026-09-08 — 1A static review corrections
+
+The independent benchmark review checked the new 1A slice before it was treated as complete. The session manager initially shared one kernel across Goal sessions, used delimiter-based session IDs, and returned unbounded/unclassified content. The implementation was corrected to require a per-session kernel factory, encode session identity as canonical JSON, require a structured data-class result envelope, enforce the invocation's outbound data-class grant, and bound returned UTF-8 output to 64,000 bytes.
+
+The review also confirmed what remains intentionally open: real child-process protocol/host requests, progress events or explicit final-only timeout semantics, authority-backed adapters, namespace snapshots, project-skill manifests, parent-death cleanup, and restart acceptance. The production registration is therefore fail-closed and not a Phase 1/2 acceptance claim.
+
+
+## 2026-09-08 — Prime harness scope/persistence reference
+
+Prime's harness separates session-local and explicit global state and validates skill references before saving (`prime-agent-runtime/src/rlm/harness.py:1-8,131-141,607-631`). It writes schema-tagged state atomically with restrictive file modes (`harness.py:287-319`). These are useful persistence patterns for a future Maestro project-skill contract only; Maestro retains explicit user save, content hash/version, Mission Bundle allowlisting, revocation, and no automatic executable promotion.
+
+
+## 2026-09-08 — 1B protocol slice and remaining composition boundary
+
+The first 1B slice now defines a versioned JSON-lines protocol and a persistent-kernel wrapper without importing Prime: one cell per kernel, out-of-band host requests/responses, typed `done`/`event`/`error` frames, malformed-frame rejection, child-close → `unknown`, interrupt, bounded frame size, and shutdown framing. This is deliberately transport-level only.
+
+The real Python child/channel composition and strict read-only host-effect allowlist remain open. Production still injects the explicit unavailable kernel, so no raw process, filesystem, shell, Git, network, or provider effect is reachable from the new protocol modules. This preserves the documented fail-closed boundary while the authority adapter matrix is implemented next.

@@ -1,6 +1,6 @@
 # Phase 1 — Technical Foundation and Durable Control Plane
 
-> **Current status (2026-09-08):** This phase remains open at the product boundary. Conversation and worker execution use `MaestroAgentRuntime` through `apps/model-gateway`; Prime Agent has been removed completely. Native runtime and PostgreSQL/process evidence exist, but production host-tool registration and enforcement are not implemented. The Phase 2 IPython host-tool contract and approval hierarchy are now an explicit prerequisite; historical code-level completion markers do not constitute Phase 1 acceptance.
+> **Current status (2026-09-08):** This phase remains open at the product boundary. Conversation and worker execution use `MaestroAgentRuntime` through `apps/model-gateway`; Prime Agent has been removed completely. Native runtime and PostgreSQL/process evidence exist, but production host-tool registration is now present in a strict fail-closed form; real persistent host execution and authority enforcement are not implemented. The Phase 2 IPython host-tool contract and approval hierarchy are now an explicit prerequisite; historical code-level completion markers do not constitute Phase 1 acceptance.
 
 
 ## Outcome
@@ -142,6 +142,12 @@ The native runtime exposes a Prime Agent-style `ipython` surface only after the 
 - A full-access session may either retain the approval hierarchy or explicitly skip intermediate Head and Encore approvals for local work; the user selects the mode at session start. `forbidden` actions remain blocked.
 - Every effect is classified before execution and enforced through the existing authority-backed adapters and `AuthorizedEffectExecutor`. Unknown or ambiguous work rises to user approval.
 - Phase 4 owns separately activated browser, device, external-service, and deployment capabilities. Phase 6 owns later evidence-driven refinement; it does not authorize automatic tool promotion in this phase.
+
+### Phase 1 gate for the host-tool boundary
+
+Phase 1 contributes only the minimum production boundary needed to prove that a registered tool cannot bypass the native runtime's host-owned grant. The implementation sequence and detailed test matrix live in `roadmap/act-1-foundation/active/operations/task_plan.md` under **Phase 1A–1D host-tool execution plan**.
+
+The first gate is strict read-only: a Goal-bound persistent session may return only declared project evidence through the host bridge. It must reject unregistered tools, missing command/session identity, malformed protocol frames, out-of-scope paths, writes, arbitrary processes, network access, dangerous imports, and forbidden or ambiguous actions. Phase 1 does not claim local write/test/shell acceptance until the authority-backed adapter and approval evidence in Phase 2 are complete.
 
 ### Recovery
 

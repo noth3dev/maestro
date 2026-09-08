@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ExecutionKernelPort, InvocationStatus, SpawnRequest } from "@maestro/domain";
-import { ToolRegistry, type GatewayBinding, type ModelGatewayPort, type ModelTurnResult } from "@maestro/agent-runtime";
+import { createIpPythonSessionManager, createIpPythonTool, ToolRegistry, type GatewayBinding, type ModelGatewayPort, type ModelTurnResult } from "@maestro/agent-runtime";
 import { createNativeExecutionKernel } from "./native-execution-kernel.js";
 
 const binding: GatewayBinding = {
@@ -112,4 +112,43 @@ describe("native Control Plane execution kernel", () => {
     await kernel.close?.();
     expect(gateway.close).toHaveBeenCalledTimes(1);
   });
+
+
+  it("routes an allowed ipython call through the native registry boundary", async () => {
+    let calls = 0;
+    const gateway = fakeGateway();
+    gateway.turn.mockImplementation(async (request: { requestId: string; tools?: readonly { name: string }[] }) => {
+      calls += 1;
+      if (calls === 1) return {
+        requestId: request.requestId,
+        model: binding.provider,
+        text: "",
+        toolCalls: [{ id: "ipython-call-1", name: "ipython", arguments: { state: "valid", value: { code: "1 + 1" } } }],
+        stopReason: "tool_use" as const,
+        usage: { state: "available" as const, totalTokens: 1 },
+      };
+      return result(request.requestId);
+    });
+    const manager = createIpPythonSessionManager({
+      createKernel: () => ({
+        async execute() { return { state: "ok" as const, dataClass: "workspace" as const, content: "2" }; },
+      }),
+    });
+    const tools = new ToolRegistry();
+    tools.register(createIpPythonTool({ sessions: manager }));
+    const kernel = createNativeExecutionKernel({ gateway, gatewayOperatorId: "operator-1", accountRefs: { test: "test-account" }, dataPolicyHash: "policy-test", tools });
+    const request = rootRequest();
+    const spawned = await kernel.spawn({
+      ...request,
+      grant: { ...request.grant!, allowedTools: ["ipython"], outboundDataClasses: ["workspace"], remaining: { ...request.grant!.remaining, toolCalls: 1 } },
+    });
+
+    await kernel.prompt(spawned.execution, "run the calculation");
+
+    expect(await kernel.getInvocationStatus(spawned.invocation)).toBe("succeeded");
+    expect(gateway.turn).toHaveBeenCalledTimes(2);
+    await manager.close();
+    await kernel.close();
+  });
+
 });

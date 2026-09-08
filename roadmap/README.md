@@ -23,7 +23,7 @@ When historical documents disagree with the repository, trust current source evi
 
 ## Current status (2026-09-08)
 
-The native runtime and model gateway serve conversation and Worker execution. Prime Agent and its adapter are removed. Durable ChatGPT account-login recovery is integrated. A clean single-worker PostgreSQL run passed 162/162 files and 1066/1066 tests. The Phase 2 production host-tool decision is now defined as a Prime-style persistent IPython surface for local files, Git, tests, shell, and local environment changes with a four-level approval hierarchy. Production registration and enforcement are not yet implemented; Phase 4 separately owns individually activated external capabilities, and Phase 6 self-improvement remains deferred beyond its accepted digest slice.
+The native runtime and model gateway serve conversation and Worker execution. Prime Agent and its adapter are removed. Durable ChatGPT account-login recovery is integrated. A clean single-worker PostgreSQL run passed 162/162 files and 1066/1066 tests. The Phase 2 production host-tool decision is now defined as a Prime-style persistent IPython surface for local files, Git, tests, shell, and local environment changes with a four-level approval hierarchy. The typed `ipython` registration now exists, but persistent execution and authority enforcement are still fail-closed and not yet implemented; Phase 4 separately owns individually activated external capabilities, and Phase 6 self-improvement remains deferred beyond its accepted digest slice.
 
 ## Act 1 organization
 

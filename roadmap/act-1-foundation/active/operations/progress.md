@@ -2607,3 +2607,55 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Verification: `npm run build` passed; the previously failing `apps/cli/src/tui/local-bootstrap.test.ts` passed 13/13; a representative build-backed PostgreSQL run passed 9 files / 96 tests; the full no-database run passed 105/162 files / 677 tests and correctly skipped 57 database-gated files / 381 tests; `npm run lint` and `git diff --check` passed.
 - A local full PostgreSQL run was not counted as a pass because the five-minute shell cap expired before completion; no assertion failure was emitted before the cap. The existing CI timeout remains 30 minutes.
 - The user’s uncommitted `.gitignore` change remains preserved. Phase 2 host-tool implementation remains gated separately on explicit `진행해`.
+
+
+## 2026-09-08 — Phase 1A–1D plan checkpoint
+
+- User approved the proposed documentation placement before implementation.
+- Added the detailed, test-first 1A–1D execution plan to `roadmap/act-1-foundation/active/operations/task_plan.md`.
+- Added the Phase 1 strict read-only gate to `roadmap/act-1-foundation/phase-01-durable-control-plane.md`.
+- Added Phase 2 implementation ownership and sequence to `roadmap/act-1-foundation/phase-02-hierarchical-execution.md`.
+- No source implementation or protected worktree was changed. `.gitignore` remains the only user-owned working-tree modification.
+- Next action: implement 1A focused tests and the strict read-only `ipython` boundary, then run build, focused tests, lint, diff checks, and the documentation consistency scan.
+
+
+## 2026-09-08 — Prime benchmark folded into the execution plan
+
+- Independent read-only review completed for Prime Agent `9c8230df67b378aaedc032f90e1ae8ba687cfe4`.
+- Folded exact Prime references into `task_plan.md`: split host/runtime ownership, versioned JSON-lines protocol, out-of-band host replies, cancellation/busy/shutdown states, output attribution, child-process tests, skill manifests, and IPython-specific crash/restart cases.
+- Recorded explicit non-copy boundaries: no Prime authority model, arbitrary Python/bash authorization, pickle/dill trust boundary, detached effectful tasks, or child-process-as-security assumptions.
+- No source behavior changed by the benchmark review. The next implementation slice remains 1A registration/lifecycle, followed by 1B real protocol and strict read-only host bridge.
+
+
+## 2026-09-08 — Parent-death cleanup added to the plan
+
+- Added Prime's parent PID/watchdog/process-group cleanup pattern to the canonical host-tool plan.
+- Added the Phase 2/8 acceptance requirement: after Control Plane death, owned Python and descendant shell/test processes must be journaled, reaped, or proven absent.
+- No source implementation changed in this addendum.
+
+
+## 2026-09-08 — 1A typed IPython boundary implemented
+
+- Added `packages/agent-runtime/src/ipython-tool.ts` with a typed `ipython` ToolDefinition, per-Goal session identity, per-session kernel factory, serialized same-session execution, isolated concurrent sessions, bounded UTF-8 input/output, structured result states, outbound data-class grant checks, interruption, and bounded manager shutdown.
+- Exported the tool from `packages/agent-runtime/src/index.ts`.
+- Registered exactly one `ipython` definition in `apps/control-plane/src/main.ts`. Until the 1B real host bridge is composed, the production kernel returns an explicit `unknown` result and remains fail-closed. Existing native admissions still grant no tools by default.
+- Added five focused tests covering FIFO ordering, concurrent session isolation, Goal identity binding, distinct namespaces, and collision-safe session IDs.
+- Evidence: focused runtime/kernel sweep passed 3 files / 18 tests; `npm run build` passed. This is 1A partial evidence, not host-tool acceptance.
+
+
+## 2026-09-08 — 1B protocol transport slice implemented
+
+- Added `packages/agent-runtime/src/ipython-host.ts` with versioned frame validation, typed JSON-lines transport, out-of-band host-request dispatch, per-kernel single-cell busy handling, interrupt, child-close unknown outcomes, and bounded shutdown framing.
+- Added focused protocol/transport tests for split JSON-lines, malformed frames, host replies during execution, busy cells, interrupt, and child closure.
+- Evidence: build passed; focused 4-file sweep passed 16/16 tests; the native kernel registry test proves an allowed `ipython` call reaches the typed tool boundary.
+- Deliberately not claimed: real Python child composition, read-only file/Git host handlers, authority adapter matrix, streaming/heartbeat, snapshots, skills, or live acceptance.
+
+
+## 2026-09-08 — 1A/1B verification checkpoint
+
+- Fresh `npm run check` passed: 108 files passed, 57 database-gated files skipped; 689 tests passed and 381 skipped in the no-database environment.
+- `npm run lint` passed.
+- `git diff --check` passed.
+- Markdown relative-link scan passed with zero broken links.
+- The user-owned `.gitignore` change remains uncommitted and untouched. Protected worktrees remain untouched.
+- This checkpoint supports a local commit for the fail-closed 1A/transport 1B slice. It does not claim Phase 1/2 acceptance because real Python process composition, authority-backed host effects, approval, recovery, and live PostgreSQL host-tool evidence remain open.
