@@ -1081,3 +1081,12 @@ Native grant representation is now canonical end to end for the current read-onl
 Canonical Mission Bundle projection now invalidates the entire outbound-class projection when any boundary entry is unknown, negated, or contradictory. A positive entry cannot silently override a negative one. This keeps helper, worker, and host admissions from receiving a partial class grant from an ambiguous free-form boundary.
 
 The owned channel's close notification is emitted only after its shared teardown promise has waited for close and completed the owned-group/direct-leader termination attempt. Unexpected child close starts the same teardown path, so transport observers do not treat a leader/stdout close as complete ownership cleanup.
+
+
+## 2026-09-08 — Ubuntu bootstrap root cause and identity boundary
+
+The login message was caused by a truthful downstream symptom, not by the ChatGPT OAuth flow. The CLI first requires a healthy authenticated Control Plane client. On this Ubuntu environment, local bootstrap failed in two independent places: `AsyncEntry.getPassword()` returned `null` for an empty keyring entry, and the default gateway operator string `local-operator` was passed to PostgreSQL UUID fields.
+
+The fix keeps the identities separate. `MAESTRO_MODEL_GATEWAY_OPERATOR_ID` remains an arbitrary gateway binding identity. `MAESTRO_LOCAL_OPERATOR_ID` and `MAESTRO_LOCAL_CREDENTIAL_ID` are canonical UUIDs; an explicit local operator override is validated, while a first-run UUID is reused through the credential envelope on later launches. The keyring adapter maps only absent `null`/`undefined` values to no credential; it does not weaken authorization or treat malformed stored metadata as valid.
+
+The next login gate is environmental: the detected `codex` command is the Windows npm installation and reports a missing `@openai/codex-linux-x64` dependency under Ubuntu. Account login must remain unavailable until a Linux-capable Codex app-server executable is installed and passed through `MAESTRO_CODEX_APP_SERVER_COMMAND`.
