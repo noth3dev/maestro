@@ -96,6 +96,24 @@ describe("IPython owned process channel", () => {
     }
   });
 
+  it("journals an unexpected child close as an orphan without inferring a terminal outcome", async () => {
+    const child = new FakeChild();
+    const events: unknown[] = [];
+    const channel = createIpPythonOwnedProcessChannel({
+      pythonExecutable: "/usr/bin/python3",
+      processRef: "process-orphan-1",
+      sessionId: "session-orphan-1",
+      projectId: "project-orphan-1",
+      goalId: "goal-orphan-1",
+      onLifecycle: (event) => { events.push(event); },
+      spawnProcess: () => child as unknown as ChildProcessWithoutNullStreams,
+    });
+    child.closeListener?.(null, "SIGKILL");
+    await channel.close();
+    expect(channel.processRef).toBe("process-orphan-1");
+    expect(events).toEqual([expect.objectContaining({ event: "orphaned", processRef: "process-orphan-1", processPid: 4321, reason: "child_closed_without_owner_shutdown" })]);
+  });
+
   it("falls back to direct leader teardown when group identity is unavailable after leader exit", async () => {
     const child = new FakeChild();
     const kill = vi.spyOn(process, "kill").mockImplementation(() => true);
