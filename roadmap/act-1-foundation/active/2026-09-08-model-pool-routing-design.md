@@ -314,7 +314,7 @@ Phase 1 is reopened for the stable routing substrate, not for automatic model se
 
 The first schema slice now exists at `packages/domain/src/model-profile.ts` (profile schema version `2`) with focused tests in `packages/domain/src/model-profile.test.ts`. It validates the closed eight-axis vector, `0..200` scored values, one-line rationale, evidence references, explicit `unproven` entries, and plain-object own-key/sparse-input boundaries. The human calibration guidance now exists in [the scoring-rubric artifact](../specs/2026-09-08-model-capability-scoring-rubric.md); initial model scores and production routing are still absent.
 
-The D slice now exists at `packages/domain/src/task-demand.ts` with [the recipe and runtime-demand artifact](../specs/2026-09-08-task-kind-recipes-and-runtime-demand.md). Static recipes define only axis roles. Runtime `TaskDemand` stores Head-declared numeric levels and provenance. The policy for choosing those levels from a concrete Task Contract remains open.
+The D slice now exists at `packages/domain/src/task-demand.ts` with [the recipe and runtime-demand artifact](../specs/2026-09-08-task-kind-recipes-and-runtime-demand.md). Static recipes define only axis roles. Runtime `TaskDemand` stores Head-declared numeric levels and provenance. `declareTaskDemand` is the explicit Head declaration boundary: it never derives levels from recipes or selects a model. The declared demand now rides the existing `MissionBundleSubstance` record and is included in its content hash; a bundle without a valid demand is invalid at the domain and wire-contract boundaries.
 
 Phase 1 does not claim a production router until each artifact has a schema/validator, focused RED/GREEN tests, and a native admission test proving routing evidence cannot widen authority, account, data-policy, context, or exact model identity.
 
@@ -322,13 +322,12 @@ Phase 1 does not claim a production router until each artifact has a schema/vali
 
 The following concrete artifacts are intentionally still open for the Phase 1 slices:
 
-1. The runtime policy for deriving and reviewing D levels from concrete Task Contracts and Head decisions.
-2. The continuous pressure calculation function.
-3. The four pressure-band threshold values.
-4. The `model_map` file format and initial entries.
-5. The local C overlay and Goal snapshot format.
-6. The routing evidence schema and append-only persistence path.
-7. The migration adapter from `approvedModels` / `MAESTRO_NATIVE_MODEL` to one exact native `modelPolicy`.
+1. The continuous pressure calculation function.
+2. The four pressure-band threshold values.
+3. The `model_map` file format and initial entries.
+4. The local C overlay and Goal snapshot format.
+5. The routing evidence schema and append-only persistence path.
+6. The migration adapter from `approvedModels` / `MAESTRO_NATIVE_MODEL` to one exact native `modelPolicy`.
 
 No implementation should fill these gaps by restoring the retired `50/100/200` grade lookup or by treating a pressure band as a matching tier.
 

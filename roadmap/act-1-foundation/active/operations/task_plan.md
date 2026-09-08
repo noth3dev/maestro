@@ -1339,3 +1339,10 @@ Before production router code, create and review: the eight A-axis scoring rubri
 - Independent review found that `Object.keys`-style object hardening did not cover the `taskKinds` array itself. Hidden non-enumerable, symbol, or custom-prototype fields could be accepted and then dropped by the copied output.
 - Added RED regressions for declaration and full-demand validation. `assertTaskKinds` now requires the standard `Array.prototype` and permits only `length` plus canonical numeric own indices; hidden fields fail before the domain boundary.
 - Focused task-demand tests pass 13/13; domain TypeScript build, ESLint, and diff checks pass.
+
+
+## 2026-09-08 — TaskDemand bound to Mission Bundle
+
+- Applied the settled architecture decision that demand rides the existing per-unit Mission Bundle rather than a parallel persistence record. `MissionBundleSubstance.taskDemand` is required, validated with the domain TaskDemand contract, included in the Mission Bundle content hash, and mirrored in `@maestro/contracts` as a strict Zod schema.
+- Updated domain/control-plane/persistence fixtures so each Mission Bundle carries explicit Head provenance and a complete eight-axis demand. No SQL migration is needed because the substance is JSONB; old rows without `taskDemand` fail closed and must be reissued or backfilled before routing consumes them.
+- **Next:** define the E work-character contract and continuous pressure calculation.

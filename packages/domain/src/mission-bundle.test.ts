@@ -12,6 +12,7 @@ import { PERSONA_AXES, CONCERTMASTER_PERSONA_BASELINE, type PersonaProfile } fro
 
 const substance = (overrides: Partial<MissionBundleSubstance> = {}): MissionBundleSubstance => ({
   role: "scout", profileRef: "profile-1", goalBrief: "assess risk before implementation",
+  taskDemand: { schemaVersion: 1, taskKinds: ["research"], requirements: { reasoning: { level: 80, rationale: "The Head set this level from the Task Contract." }, coding: { level: 80, rationale: "The Head set this level from the Task Contract." }, verification: { level: 80, rationale: "The Head set this level from the Task Contract." }, "instruction-fidelity": { level: 80, rationale: "The Head set this level from the Task Contract." }, "tool-use": { level: 80, rationale: "The Head set this level from the Task Contract." }, "long-context": { level: 80, rationale: "The Head set this level from the Task Contract." }, knowledge: { level: 80, rationale: "The Head set this level from the Task Contract." }, "refusal-calibration": { level: 80, rationale: "The Head set this level from the Task Contract." } }, provenance: { taskContractRef: "task-contract:fixture", headDecisionRef: "head-decision:fixture" } },
   approvedModels: ["test/model-a"], allowedSkills: ["research"], allowedTools: ["read"], allowedPaths: ["packages/x"],
   environment: ["node24"], authorityBoundary: ["read-only"], externalServiceBoundary: ["none"], dataBoundary: ["repository files only"],
   costCeiling: "5 USD", timeCeiling: "2 hours", retryCeiling: 1, workerCeiling: 0,
@@ -29,6 +30,18 @@ describe("Mission Bundle", () => {
 
   it("rejects an unknown field", () => {
     expect(() => assertValidMissionBundleSubstance({ ...substance(), extra: 1 })).toThrow(InvalidMissionBundleError);
+  });
+
+  it("requires a valid declared task demand and includes it in the bundle hash", () => {
+    const value = substance();
+    const changed = substance({ taskDemand: { ...value.taskDemand, taskKinds: ["verification"] } });
+    expect(() => assertValidMissionBundleSubstance(value)).not.toThrow();
+    expect(missionBundleSubstanceContentHash(value)).not.toBe(missionBundleSubstanceContentHash(changed));
+
+    const missing = { ...value } as Record<string, unknown>;
+    delete missing.taskDemand;
+    expect(() => assertValidMissionBundleSubstance(missing)).toThrow(InvalidMissionBundleError);
+    expect(() => assertValidMissionBundleSubstance({ ...value, taskDemand: { ...value.taskDemand, provider: "openai" } })).toThrow(InvalidMissionBundleError);
   });
 
   it("rejects an invalid role", () => {

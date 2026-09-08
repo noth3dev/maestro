@@ -6,6 +6,8 @@ import {
   GoalStateSchema,
   StableApiErrorSchema,
   TransitionGoalInputSchema,
+  MissionBundleSubstanceSchema,
+  TaskDemandSchema,
 } from "./index.js";
 
 const projectId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01";
@@ -72,5 +74,34 @@ describe("conversation streaming contracts", () => {
       payload: { turnId: projectId, text: "chunk" },
       occurredAt: "2030-01-01T00:00:00.000Z",
     }).eventType).toBe("turn_delta");
+  });
+});
+
+
+describe("TaskDemand and Mission Bundle routing contracts", () => {
+  const requirement = { level: 80, rationale: "The Head set this level from the Task Contract." };
+  const taskDemand = {
+    schemaVersion: 1,
+    taskKinds: ["coding"],
+    requirements: {
+      reasoning: requirement, coding: requirement, verification: requirement, "instruction-fidelity": requirement,
+      "tool-use": requirement, "long-context": requirement, knowledge: requirement, "refusal-calibration": requirement,
+    },
+    provenance: { taskContractRef: "task-contract:1", headDecisionRef: "head-decision:1" },
+  };
+
+  it("requires the complete eight-axis demand on a Mission Bundle", () => {
+    const substance = {
+      role: "execution", profileRef: "profile-1", goalBrief: "implement safely", taskDemand,
+      approvedModels: ["test/model-a"], allowedSkills: ["implementation"], allowedTools: ["write"], allowedPaths: ["packages/product"],
+      environment: ["node24"], authorityBoundary: ["bounded"], externalServiceBoundary: ["none"], dataBoundary: ["repository"],
+      costCeiling: "1 USD", timeCeiling: "1 hour", retryCeiling: 1, workerCeiling: 0,
+      deliverable: "a patch", evidenceRequirements: ["tests"], validationCriteria: ["tests pass"], terminationConditions: ["complete"],
+    };
+    expect(TaskDemandSchema.parse(taskDemand)).toEqual(taskDemand);
+    expect(MissionBundleSubstanceSchema.parse(substance)).toEqual(substance);
+    expect(MissionBundleSubstanceSchema.safeParse({ ...substance, taskDemand: { ...taskDemand, provider: "openai" } }).success).toBe(false);
+    expect(TaskDemandSchema.safeParse({ ...taskDemand, taskKinds: ["coding", "coding"] }).success).toBe(false);
+    expect(TaskDemandSchema.safeParse({ ...taskDemand, requirements: { ...taskDemand.requirements, knowledge: undefined } }).success).toBe(false);
   });
 });
