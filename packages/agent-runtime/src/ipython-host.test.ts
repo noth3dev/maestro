@@ -20,6 +20,7 @@ const done = (requestId: string, content = "read-only") => ({ version: 1, type: 
 describe("IPython host protocol", () => {
   it("rejects unknown protocol versions and frame types", () => {
     expect(() => parseIpPythonFrame({ version: 2, type: "done" })).toThrow("protocol version");
+    expect(parseIpPythonFrame({ version: 1, type: "ready", runtime: "python" })).toEqual({ version: 1, type: "ready", runtime: "python" });
     expect(() => parseIpPythonFrame({ version: 1, type: "unknown" })).toThrow("frame type");
   });
 

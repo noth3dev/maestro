@@ -977,3 +977,8 @@ Added a transport-independent read-only host-request router. It accepts only `re
 ## 2026-09-08 — host-owned command and tool-call identity
 
 The runtime `ToolContext` now carries host-generated `commandId`, `toolCallId`, and runtime `sessionId` for every tool execution. The IPython binding forwards those values with project/Goal scope and grant data; model arguments cannot replace them. This closes the identity propagation slice needed for deterministic audit correlation and future idempotency/fencing checks. Control epoch and durable authority-effect claims remain open.
+
+
+## 2026-09-08 — process-kernel composition boundary
+
+The runtime now exposes `createIpPythonProcessKernel` as a dependency-injected composition point: TypeScript owns the JSON-lines transport and session lifecycle, while the caller supplies the session-bound child channel. This keeps raw process creation out of the model-facing tool and leaves the production Control Plane responsible for selecting an authority-backed, parent-owned process adapter. A ready handshake frame is version-checked; unsupported runtimes fail closed.

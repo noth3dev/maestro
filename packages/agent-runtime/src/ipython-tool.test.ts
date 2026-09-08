@@ -102,6 +102,17 @@ describe("persistent ipython tool boundary", () => {
   });
 
 
+  it("passes the immutable session binding to kernel provisioning and rejects rebinding", async () => {
+    const bindings: unknown[] = [];
+    const manager = createIpPythonSessionManager({
+      createKernel: (_sessionId, binding) => { bindings.push(binding); return { async execute() { return { state: "ok", dataClass: "public", content: "ok" }; } }; },
+    });
+    const bound = { sessionId: "session-1", commandId: "command-1", toolCallId: "tool-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: [], outboundDataClasses: ["public"] } as const;
+    await expect(manager.execute({ sessionId: bound.sessionId, code: "one", binding: bound })).resolves.toMatchObject({ state: "ok" });
+    expect(bindings).toEqual([bound]);
+    await expect(manager.execute({ sessionId: bound.sessionId, code: "two", binding: { ...bound, goalId: "goal-2" } })).rejects.toThrow("binding changed");
+  });
+
   it("provisions a distinct kernel namespace for each Goal-bound session", async () => {
     const state = new Map<string, string>();
     const kernels = new Map<string, IpPythonKernel>();
