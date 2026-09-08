@@ -3175,3 +3175,13 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Independent no-edit review returned `REVIEW: PASS`. Merged R1 as `df180c9` after implementation `55aabfe` and records `56dd686`; main build, lint, diff check, and focused authority/classification tests passed 19/19. The R1 worktree and branch were removed.
 - `classifyAction` now uses a static central registry with all 22 prior mappings preserved; unknown actions remain `ambiguous` and default-denied. Ready for the next ordered work item.
+
+
+## 2026-09-09 — Plan 1 S2 IPython orphan/restart journal
+
+- Added migration `0075_ipython_session_journal.sql` and an append-only persistence adapter keyed by `process_ref`, with a database trigger rejecting UPDATE/DELETE and a unique terminal fence for exactly-once reconciliation.
+- Hardened the IPython lifecycle: durable `started` evidence is written before the first cell, process identity/PID is retained, unexpected close records an orphan candidate, and the ready gate prevents prompt submission before the start journal commits.
+- Control Plane startup now reconciles orphan candidates. It records `reaped` only when provider termination is proven by `ESRCH`; process existence never infers success or cancellation, and all unproven outcomes remain `unknown`.
+- RED checkpoint `7c12747`; migration `604f3fc`; persistence adapter `78644c7`; implementation `ee44068` (`fix(agent-runtime): reject inferred ipython terminal outcomes`).
+- Focused runtime/persistence tests pass 23/23; journal adapter tests pass 11/11. Build, lint, and `git diff --check` pass. Required live kill/restart coverage passes 2/2.
+- Full real-PostgreSQL `npm run check` passes **187/187 test files and 1,239/1,239 tests** (duration 816.73s). Independent no-edit review remains the final gate before merge.
