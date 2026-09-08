@@ -1149,3 +1149,35 @@ The Ensemble Router contract was updated from the prior `50/100/200` grade model
 - **Bands:** low/medium/high/critical are organizational labels for automatic/Head/Encore/user authority. They do not participate in matching; thresholds remain a Phase 1 artifact.
 
 All downstream routing documentation must use this contract and must not restore grade buckets as matching tiers.
+
+
+## 2026-09-08 — Plan 1 S1 verification blocker
+
+- The first worktree baseline build failed only because the newly-created worktree had no dependency installation and could not resolve `@earendil-works/pi-tui`; `npm install` fixed the setup issue.
+- `npm run build` and `npm run lint` pass in the S1 worktree. The focused real-PostgreSQL Ensemble Router artifact suite passes 5/5, including the new durable overlay binding and hash-integrity regressions.
+- A full `MAESTRO_TEST_DATABASE_URL` test run was terminated by the 360-second command timeout without a captured summary. This is a verification blocker, not a claimed test failure; investigate before merge.
+
+
+- The previously timed-out full PostgreSQL run completed successfully on rerun: 185 test files and 1,231 tests passed, 0 failed. The delay is test-suite duration (~468 seconds), not a hanging test.
+- S1 implementation is committed as `375d9d5` after the RED checkpoint `97e08b8`; no merge is claimed pending the mandatory independent review.
+
+
+## 2026-09-08 — Plan 1 S1 review findings and remediation
+
+- Independent review correctly found that the first S1 test version did not compare persisted Goal snapshot rows before and after rejected mutation attempts, and that the tamper regression depended on literal error text.
+- Remediation adds direct before/after `snapshot` + `content_hash` equality assertions and uses the typed `EnsembleRouterArtifactIntegrityError` boundary. Focused real-PostgreSQL verification passes 5/5; second review remains required.
+
+
+- Second review found the superseded-overlay test had the wrong temporal order (v2 was recorded before the v1 Goal snapshot). Corrected the test ordering and added explicit SELECT evidence for both same-version persisted snapshots. Focused 8-test real-PG suite, build, lint, and diff checks pass; final review/full suite remain open.
+
+
+## 2026-09-09 — Full PostgreSQL verification concurrency finding
+
+- The final default-parallel `npm test` run exited red: 28 files failed and 65 tests failed, while 157 files and 1,007 tests passed. The first failure was a deadlock in `applyAllMigrations()`; subsequent failures reported missing relations such as `goals`, `goal_leases`, and `workers`.
+- The failure is in the existing test harness concurrency: multiple PostgreSQL integration suites share the base schema and concurrently execute destructive `DROP SCHEMA current_schema; CREATE SCHEMA` migration setup. The S1 diff does not modify `test-migrations.ts` or Vitest configuration. Re-run with one worker to distinguish this environmental race from S1 behavior; do not close S1 on the red default-parallel result.
+
+
+- Final independent review passed (`REVIEW: PASS`) at `12a6cd4`; no implementation findings remain. Only the shared-schema parallel test-harness race blocks merge pending serialized full-PG confirmation.
+
+
+- `--maxWorkers=1` alone did not remove Vitest file-level parallelism: the serialized-worker run still failed 4 files/33 tests, with `retention_class` type collision, migration deadlock, and missing tables. Vitest reports `--fileParallelism` defaults to true; the next diagnostic run disables both file parallelism and workers.
