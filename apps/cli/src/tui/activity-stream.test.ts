@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeEvents, subscribeToEvents } from "./activity-stream.js";
+import { describeStreamFailure, mergeEvents, subscribeToEvents } from "./activity-stream.js";
 
 describe("mergeEvents", () => {
   it("deduplicates reconnect overlap by durable cursor", () => {
@@ -14,6 +14,20 @@ describe("mergeEvents", () => {
   });
 });
 
+
+describe("describeStreamFailure", () => {
+  it("renders authorization failures as authorization failures", () => {
+    expect(describeStreamFailure(Object.assign(new Error("Credential is not active"), { status: 403 })))
+      .toBe("Activity stream authorization denied: Credential is not active");
+    expect(describeStreamFailure(Object.assign(new Error("Authentication is required"), { status: 401 })))
+      .toBe("Activity stream authorization required: Authentication is required");
+  });
+
+  it("renders gateway failures as explicit unavailable state", () => {
+    expect(describeStreamFailure(Object.assign(new Error("Gateway unavailable"), { status: 503 })))
+      .toBe("Activity stream unavailable: Gateway unavailable");
+  });
+});
 
 describe("subscribeToEvents", () => {
   it("bounds failed reconnects and reports retry state", async () => {
@@ -38,6 +52,32 @@ describe("subscribeToEvents", () => {
     for await (const item of subscribeToEvents({ client, projectId: "project-1", signal: new AbortController().signal, reconnectDelayMs: 0, maxReconnectAttempts: 2 })) received.push(item.eventId);
     expect(calls).toEqual(["0", "1", "1"]);
     expect(received).toEqual(["event-1"]);
+  });
+
+  it("surfaces authorization failures without retrying or inventing credentials", async () => {
+    let calls = 0;
+    const authorizationError = Object.assign(new Error("Credential is not active"), { status: 403 });
+    const client = {
+      streamEvents: (_query: { projectId: string; after: string }) => {
+        calls += 1;
+        return { [Symbol.asyncIterator]: () => ({ next: async () => { throw authorizationError; } }) };
+      },
+    };
+
+    const consume = async () => {
+      for await (const _event of subscribeToEvents({
+        client,
+        projectId: "project-1",
+        signal: new AbortController().signal,
+        reconnectDelayMs: 0,
+        maxReconnectAttempts: 5,
+      })) {
+        // The authorization failure must terminate before yielding local state.
+      }
+    };
+
+    await expect(consume()).rejects.toMatchObject({ status: 403, message: "Credential is not active" });
+    expect(calls).toBe(1);
   });
 
   it("reconnects from the latest cursor and suppresses duplicate event identities", async () => {

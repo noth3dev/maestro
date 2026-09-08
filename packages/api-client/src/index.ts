@@ -248,7 +248,12 @@ async function* readEventStream(fetch: Fetch, base: URL, headers: Record<string,
   } catch {
     throw new Error("Control plane event stream failed");
   }
-  if (!response.ok) throw new Error(`Control plane event stream returned HTTP ${response.status}`);
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => undefined);
+    const stable = StableApiErrorSchema.safeParse(body);
+    if (stable.success) throw new ApiError(response.status, stable.data.error.code, stable.data.error.message);
+    throw new Error(`Control plane event stream returned HTTP ${response.status}`);
+  }
   if (response.body === null) throw new Error("Control plane event stream returned no body");
 
   const reader = response.body.getReader();
