@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createIpPythonKernel, createReadOnlyHostRequestHandler, parseIpPythonFrame, type IpPythonTransport } from "./ipython-host.js";
+import { createIpPythonKernel, createIpPythonParentWatchdog, createReadOnlyHostRequestHandler, parseIpPythonFrame, type IpPythonTransport } from "./ipython-host.js";
 
 class FakeTransport implements IpPythonTransport {
   readonly sent: unknown[] = [];
@@ -38,6 +38,26 @@ describe("IPython host protocol", () => {
     await expect(pending).resolves.toEqual({ state: "ok", dataClass: "workspace", content: "read-only" });
   });
 
+  it("passes the current per-call binding to protocol host callbacks", async () => {
+    const transport = new FakeTransport();
+    const commandIds: string[] = [];
+    const kernel = createIpPythonKernel({ transport, hostRequest: async (_request, binding) => { commandIds.push(binding?.commandId ?? "missing"); return { state: "ok", dataClass: "workspace", content: "evidence" }; } });
+    const firstBinding = { sessionId: "session-1", commandId: "command-1", toolCallId: "tool-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["workspace"] } as const;
+    const first = kernel.execute({ sessionId: firstBinding.sessionId, code: "read_file('README.md')", binding: firstBinding });
+    const firstRequestId = (transport.sent[0] as { requestId: string }).requestId;
+    transport.emit({ version: 1, type: "host_request", requestId: firstRequestId, hostRequestId: "host-1", method: "read_file", payload: { path: "README.md" } });
+    transport.emit(done(firstRequestId));
+    await first;
+
+    const secondBinding = { ...firstBinding, commandId: "command-2", toolCallId: "tool-2" } as const;
+    const second = kernel.execute({ sessionId: secondBinding.sessionId, code: "read_file('package.json')", binding: secondBinding });
+    const secondRequestId = (transport.sent[2] as { requestId: string }).requestId;
+    transport.emit({ version: 1, type: "host_request", requestId: secondRequestId, hostRequestId: "host-2", method: "read_file", payload: { path: "package.json" } });
+    transport.emit(done(secondRequestId));
+    await second;
+    expect(commandIds).toEqual(["command-1", "command-2"]);
+  });
+
   it("rejects a second cell while the kernel is busy and interrupts the active request", async () => {
     const transport = new FakeTransport();
     const kernel = createIpPythonKernel({ transport, hostRequest: async () => ({ state: "ok", dataClass: "workspace", content: "unused" }) });
@@ -49,6 +69,46 @@ describe("IPython host protocol", () => {
     expect(transport.interrupts).toEqual([requestId]);
     transport.emit({ version: 1, type: "done", requestId, state: "cancelled", dataClass: "workspace", content: "cancelled", reason: "user_stop" });
     await expect(first).resolves.toMatchObject({ state: "cancelled", reason: "user_stop" });
+  });
+
+  it("terminates the owned process when the parent is no longer alive", async () => {
+    let alive = true;
+    const reasons: string[] = [];
+    const watchdog = createIpPythonParentWatchdog({ parentPid: 1234, parentIdentity: "parent-start-1", intervalMs: 1, isAlive: () => alive, readIdentity: () => "parent-start-1", terminate: async (reason) => { reasons.push(reason); } });
+    await watchdog.checkNow();
+    expect(reasons).toEqual([]);
+    alive = false;
+    await watchdog.checkNow();
+    expect(reasons).toEqual(["parent_dead"]);
+    await watchdog.checkNow();
+    expect(reasons).toEqual(["parent_dead"]);
+  });
+
+  it("terminates exactly once when liveness checks overlap", async () => {
+    let resolveAlive!: (alive: boolean) => void;
+    let livenessChecks = 0;
+    const alive = new Promise<boolean>((resolve) => { resolveAlive = resolve; });
+    const reasons: string[] = [];
+    const watchdog = createIpPythonParentWatchdog({ parentPid: 1234, intervalMs: 1, parentIdentity: "parent-start-1", isAlive: async () => { livenessChecks += 1; return alive; }, readIdentity: async () => "parent-start-1", terminate: async (reason) => { reasons.push(reason); } });
+    const checks = Promise.all([watchdog.checkNow(), watchdog.checkNow(), watchdog.checkNow()]);
+    resolveAlive(false);
+    await checks;
+    expect(livenessChecks).toBe(1);
+    expect(reasons).toEqual(["parent_dead"]);
+  });
+
+  it("terminates when the parent PID is reused by another process", async () => {
+    const reasons: string[] = [];
+    const watchdog = createIpPythonParentWatchdog({ parentPid: 1234, parentIdentity: "parent-start-1", isAlive: () => true, readIdentity: () => "parent-start-2", terminate: async (reason) => { reasons.push(reason); } });
+    await watchdog.checkNow();
+    expect(reasons).toEqual(["parent_identity_mismatch"]);
+  });
+
+  it("fails closed when parent liveness cannot be checked", async () => {
+    const reasons: string[] = [];
+    const watchdog = createIpPythonParentWatchdog({ parentPid: 1234, parentIdentity: "parent-start-1", isAlive: () => { throw new Error("permission denied"); }, readIdentity: () => "parent-start-1", terminate: async (reason) => { reasons.push(reason); } });
+    await watchdog.checkNow();
+    expect(reasons).toEqual(["parent_liveness_unknown"]);
   });
 
   it("bounds an interrupt and resolves the active cell as unknown", async () => {
@@ -82,6 +142,9 @@ describe("IPython host protocol", () => {
     await expect(handler({ requestId: "cell-1", hostRequestId: "host-3", method: "write_file", payload: { path: "x", content: "bad" } })).rejects.toThrow("not allowed");
     await expect(handler({ requestId: "cell-1", hostRequestId: "host-4", method: "read_file", payload: { path: "../secret" } })).rejects.toThrow("path");
     expect(gitRevision).toHaveBeenCalledWith(expect.objectContaining({ projectId: "project-1", goalId: "goal-1" }), "HEAD");
+    const nextBinding = { sessionId: "session-1", commandId: "command-2", toolCallId: "tool-2", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["workspace"] } as const;
+    await expect(handler({ requestId: "cell-2", hostRequestId: "host-5", method: "read_file", payload: { path: "README.md" } }, nextBinding)).resolves.toMatchObject({ state: "ok" });
+    expect(readFile).toHaveBeenLastCalledWith(expect.objectContaining({ commandId: "command-2", toolCallId: "tool-2" }), "README.md");
   });
 
   it("rejects read-only host results outside the bound outbound data classes", async () => {

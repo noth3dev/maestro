@@ -1014,3 +1014,28 @@ The model-facing IPython tool now rejects direct execution when host-owned `comm
 ## 2026-09-08 — real-child lifecycle evidence
 
 The process-kernel tests now compose the constrained Python child with the read-only host router, require the ready handshake, and exercise child death during an uncooperative cell. Child death resolves to `unknown` rather than a fabricated success. The test-owned channel explicitly terminates the child; production still needs a Control Plane process adapter with parent/process-group ownership and watchdog cleanup before activation.
+
+
+## 2026-09-08 — parent-death watchdog seam
+
+Added a deterministic parent-liveness watchdog to the process-kernel boundary. It supports immediate checks and periodic checks, treats liveness-check errors as a termination condition, triggers exactly once, and is started/stopped with the session kernel. Its termination callback is explicitly required to kill the complete owned process group; runtime tests do not pretend that a leader-only kill is sufficient.
+
+
+## 2026-09-08 — Git read gateway composition
+
+Added `createIpPythonGitRevisionAdapter` as the runtime-side composition seam for the existing `GitPort.headRevision`. The adapter accepts only a `headRevision` port, fixes the repository path outside the Python payload, verifies that fixed target is inside the immutable binding path scope, validates the ref, and propagates port failures. It does not start Git or interpret raw command strings. Authority enforcement remains owned by the injected `GitPort` (the production implementation is `createLocalGitPort`); Control Plane composition with a complete numeric policy/control-epoch binding remains open.
+
+
+## 2026-09-08 — independent review corrections for the Git/watchdog slice
+
+The independent review found four concrete issues and the implementation was corrected before acceptance: per-call command/tool-call IDs were incorrectly treated as session identity; overlapping asynchronous watchdog checks could terminate more than once; Git repository scope used lexical paths instead of canonicalized paths; and the Git tests claimed ref validation without covering an invalid ref. The fixes now compare only stable session binding fields, guard watchdog checks in flight, resolve existing paths and ancestors before scope comparison, and test invalid refs plus symlink escape. The review also required a stable parent identity to prevent PID reuse; the watchdog now requires and checks parent identity and exposes Linux `/proc` start-time reading for production composition.
+
+
+## 2026-09-08 — review correction status
+
+The previously reported review blockers are resolved in the working tree: stable session identity now excludes only per-call command/tool-call IDs; protocol host callbacks receive the active cell binding; watchdog checks have an in-flight guard and stable parent identity comparison; Git scope uses canonical paths; and invalid-ref/symlink tests are present. The slice is still not accepted until the final full verification and a fresh no-edit review complete.
+
+
+## 2026-09-08 — interrupt teardown correction
+
+The process-kernel review exposed that `interruptGraceMs` was accepted by the exported process-kernel options but not forwarded to the inner protocol kernel. A focused fake-timer test also exposed a transport lifecycle bug: JSON-lines `close()` removed the channel listener without notifying the kernel's close listeners, leaving an interrupted active cell pending. The process kernel now forwards the configured grace period, and transport close emits one explicit close notification before channel teardown; the focused process suite passes.

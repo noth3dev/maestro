@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { IPYTHON_PYTHON_BOOTSTRAP } from "./ipython-bootstrap.js";
 import { createIpPythonProcessKernel, createIpPythonReadOnlyGateway, createReadOnlyHostRequestHandler, type IpPythonLineChannel } from "./ipython-host.js";
 
@@ -17,9 +17,10 @@ class FakeProcessChannel implements IpPythonLineChannel {
 
 
 class PythonChildChannel implements IpPythonLineChannel {
+  readonly writes: string[] = [];
   private readonly child: ChildProcessWithoutNullStreams;
   constructor() { this.child = spawn("python3", ["-I", "-S", "-c", IPYTHON_PYTHON_BOOTSTRAP], { stdio: ["pipe", "pipe", "ignore"] }); }
-  write(data: string): void { this.child.stdin.write(data); }
+  write(data: string): void { this.writes.push(data); this.child.stdin.write(data); }
   onData(listener: (chunk: Buffer) => void): () => void { this.child.stdout.on("data", listener); return () => { this.child.stdout.off("data", listener); }; }
   onClose(listener: (reason?: string) => void): () => void { const wrapped = () => listener("python-child-closed"); this.child.on("close", wrapped); return () => { this.child.off("close", wrapped); }; }
   close(): void { this.child.stdin.end(); this.child.kill("SIGKILL"); }
@@ -43,6 +44,32 @@ describe("IPython process kernel composition", () => {
     await expect(pending).resolves.toEqual({ state: "ok", dataClass: "workspace", content: "hello" });
   });
 
+  it("starts and stops the parent watchdog with the process kernel", async () => {
+    const calls: string[] = [];
+    const channel = new FakeProcessChannel();
+    const watchdog = { start: () => { calls.push("start"); }, stop: () => { calls.push("stop"); }, checkNow: async () => {} };
+    const kernel = createIpPythonProcessKernel({ createProcess: () => channel, hostRequest: async () => ({ state: "error", dataClass: "workspace", content: "not used" }), parentWatchdog: watchdog }, "session-watchdog");
+    expect(calls).toEqual(["start"]);
+    await kernel.close();
+    expect(calls).toEqual(["start", "stop"]);
+  });
+
+  it("forwards the bounded interrupt grace period to the child kernel", async () => {
+    vi.useFakeTimers();
+    try {
+      const channel = new FakeProcessChannel();
+      const kernel = createIpPythonProcessKernel({ createProcess: () => channel, hostRequest: async () => ({ state: "error", dataClass: "workspace", content: "not used" }), interruptGraceMs: 1 }, "session-interrupt");
+      channel.emit({ version: 1, type: "ready", runtime: "python" });
+      const pending = kernel.execute({ sessionId: "session-interrupt", code: "while True: pass" });
+      await kernel.interrupt?.("session-interrupt");
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).resolves.toMatchObject({ state: "unknown", reason: "child_closed" });
+      await kernel.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("fails closed when the child never completes the ready handshake", async () => {
     const channel = new FakeProcessChannel();
     const kernel = createIpPythonProcessKernel({ createProcess: () => channel, hostRequest: async () => ({ state: "error", dataClass: "workspace", content: "not used" }), readyTimeoutMs: 1 }, "session-timeout");
@@ -59,7 +86,8 @@ describe("IPython process kernel composition", () => {
       hostRequest: async () => ({ state: "ok" as const, dataClass: "workspace" as const, content: "unused" }),
     }, binding.sessionId, binding);
     const pending = kernel.execute({ sessionId: binding.sessionId, code: "while True: pass", binding });
-    setTimeout(() => channel?.terminate(), 100);
+    await vi.waitFor(() => expect(channel?.writes.some((data) => JSON.parse(data).type === "execute")).toBe(true), { timeout: 3_000 });
+    channel?.terminate();
     await expect(pending).resolves.toMatchObject({ state: "unknown", reason: "child_closed" });
     await kernel.close();
   });

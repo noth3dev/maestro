@@ -99,6 +99,9 @@ describe("persistent ipython tool boundary", () => {
 
     await expect(tool.execute({ code: "show_lines('README.md')" }, context)).resolves.toEqual({ status: "ok", content: "read-only result" });
     expect(requests).toEqual([{ sessionId: '["project-1","goal-1","conversation-1"]', code: "show_lines('README.md')", binding: { sessionId: '["project-1","goal-1","conversation-1"]', commandId: "command-1", toolCallId: "tool-call-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["public", "workspace"] } }]);
+    await expect(tool.execute({ code: "show_lines('package.json')" }, { ...context, commandId: "command-2", toolCallId: "tool-call-2" })).resolves.toEqual({ status: "ok", content: "read-only result" });
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toMatchObject({ sessionId: '["project-1","goal-1","conversation-1"]', binding: { commandId: "command-2", toolCallId: "tool-call-2" } });
   });
 
 

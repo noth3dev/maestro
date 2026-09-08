@@ -123,7 +123,7 @@ export function createIpPythonSessionManager(options: IpPythonSessionManagerOpti
     if (binding !== undefined && binding.sessionId !== sessionId) throw new Error("IPython session binding identity mismatch");
     const existing = sessions.get(sessionId);
     if (existing !== undefined) {
-      if (JSON.stringify(existing.binding) !== JSON.stringify(binding)) throw new Error("IPython session binding changed");
+      if (sessionBindingKey(existing.binding) !== sessionBindingKey(binding)) throw new Error("IPython session binding changed");
       return existing;
     }
     const session = { kernel: Promise.resolve(options.createKernel(sessionId, binding)), ...(binding === undefined ? {} : { binding }), queue: Promise.resolve() };
@@ -165,6 +165,12 @@ function sessionIdFor(context: ToolContext): string {
   const parts = [context.projectId, context.goalId, context.conversationId];
   if (parts.some((part) => part.trim() === "")) throw new Error("IPython tool requires project, Goal, and conversation identity");
   return JSON.stringify(parts);
+}
+
+function sessionBindingKey(binding: IpPythonSessionBinding | undefined): string {
+  if (binding === undefined) return "undefined";
+  const { commandId: _commandId, toolCallId: _toolCallId, ...stableBinding } = binding;
+  return JSON.stringify(stableBinding);
 }
 
 export function createIpPythonTool(options: { sessions: IpPythonSessionManager }): ToolDefinition {
