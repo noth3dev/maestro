@@ -44,6 +44,7 @@ interface EvidenceRow extends QueryResultRow {
   selected_model_ref: string;
   account_binding: string;
   candidate_refs: unknown;
+  rejections: unknown;
   task_demand_hash: string;
   pressure: number;
   pressure_band: "low" | "medium" | "high" | "critical";
@@ -127,15 +128,21 @@ function mapSnapshot(row: SnapshotRow): OperationalOverlaySnapshot {
 }
 
 function mapEvidence(row: EvidenceRow): RoutingEvidence {
+  const raw = row.evidence;
+  const normalized =
+    raw && typeof raw === "object" && !Array.isArray(raw) && !Object.hasOwn(raw, "rejections")
+      ? { ...(raw as Record<string, unknown>), rejections: row.rejections ?? [] }
+      : raw;
   try {
-    assertValidRoutingEvidence(row.evidence);
+    assertValidRoutingEvidence(normalized);
   } catch {
     throw new EnsembleRouterArtifactIntegrityError("Stored routing evidence is invalid");
   }
-  const evidence = row.evidence as RoutingEvidence;
+  const evidence = normalized as RoutingEvidence;
   const storedCandidates = row.candidate_refs;
   if (
     canonicalJson(evidence.candidateRefs) !== canonicalJson(storedCandidates) ||
+    canonicalJson(evidence.rejections) !== canonicalJson(row.rejections) ||
     evidence.evidenceId !== row.evidence_id ||
     evidence.goalRef !== row.goal_ref ||
     evidence.projectRef !== row.project_ref ||
@@ -243,7 +250,7 @@ export async function recordRoutingEvidence(pool: Pool, value: RoutingEvidence):
     throw new EnsembleRouterArtifactIntegrityError("Routing evidence is invalid");
   }
   const result = await pool.query<EvidenceRow>(
-    "INSERT INTO ensemble_router_routing_evidence (evidence_id, goal_ref, project_ref, route_ref, mode, selected_model_ref, account_binding, candidate_refs, task_demand_hash, pressure, pressure_band, decision_layer, overlay_version, admission_binding_ref, rationale, evidence) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13, $14, $15, $16::jsonb) ON CONFLICT DO NOTHING RETURNING evidence_id, goal_ref, project_ref, route_ref, mode, selected_model_ref, account_binding, candidate_refs, task_demand_hash, pressure, pressure_band, decision_layer, overlay_version, admission_binding_ref, rationale, evidence",
+    "INSERT INTO ensemble_router_routing_evidence (evidence_id, goal_ref, project_ref, route_ref, mode, selected_model_ref, account_binding, candidate_refs, rejections, task_demand_hash, pressure, pressure_band, decision_layer, overlay_version, admission_binding_ref, rationale, evidence) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12, $13, $14, $15, $16, $17::jsonb) ON CONFLICT DO NOTHING RETURNING evidence_id, goal_ref, project_ref, route_ref, mode, selected_model_ref, account_binding, candidate_refs, rejections, task_demand_hash, pressure, pressure_band, decision_layer, overlay_version, admission_binding_ref, rationale, evidence",
     [
       value.evidenceId,
       value.goalRef,
@@ -253,6 +260,7 @@ export async function recordRoutingEvidence(pool: Pool, value: RoutingEvidence):
       value.selectedModelRef,
       value.accountBinding,
       JSON.stringify(value.candidateRefs),
+      JSON.stringify(value.rejections),
       value.taskDemandHash,
       value.pressure,
       value.pressureBand,
@@ -273,7 +281,7 @@ export async function recordRoutingEvidence(pool: Pool, value: RoutingEvidence):
 
 export async function readRoutingEvidence(pool: Queryable, evidenceId: string): Promise<RoutingEvidence | null> {
   const result = await pool.query<EvidenceRow>(
-    "SELECT evidence_id, goal_ref, project_ref, route_ref, mode, selected_model_ref, account_binding, candidate_refs, task_demand_hash, pressure, pressure_band, decision_layer, overlay_version, admission_binding_ref, rationale, evidence FROM ensemble_router_routing_evidence WHERE evidence_id = $1",
+    "SELECT evidence_id, goal_ref, project_ref, route_ref, mode, selected_model_ref, account_binding, candidate_refs, rejections, task_demand_hash, pressure, pressure_band, decision_layer, overlay_version, admission_binding_ref, rationale, evidence FROM ensemble_router_routing_evidence WHERE evidence_id = $1",
     [evidenceId],
   );
   return result.rows[0] ? mapEvidence(result.rows[0]) : null;
@@ -281,7 +289,7 @@ export async function readRoutingEvidence(pool: Queryable, evidenceId: string): 
 
 export async function listRoutingEvidenceForGoal(pool: Queryable, goalRef: string): Promise<readonly RoutingEvidence[]> {
   const result = await pool.query<EvidenceRow>(
-    "SELECT evidence_id, goal_ref, project_ref, route_ref, mode, selected_model_ref, account_binding, candidate_refs, task_demand_hash, pressure, pressure_band, decision_layer, overlay_version, admission_binding_ref, rationale, evidence FROM ensemble_router_routing_evidence WHERE goal_ref = $1 ORDER BY created_at, evidence_id",
+    "SELECT evidence_id, goal_ref, project_ref, route_ref, mode, selected_model_ref, account_binding, candidate_refs, rejections, task_demand_hash, pressure, pressure_band, decision_layer, overlay_version, admission_binding_ref, rationale, evidence FROM ensemble_router_routing_evidence WHERE goal_ref = $1 ORDER BY created_at, evidence_id",
     [goalRef],
   );
   return Object.freeze(result.rows.map(mapEvidence));
