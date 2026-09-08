@@ -33,3 +33,6 @@ export * from "./improvement-digest.js";
 export * from "./model-profile.js";
 export * from "./task-demand.js";
 export * from "./work-character.js";
+export * from "./pressure-band.js";
+export * from "./provider-facts.js";
+export * from "./operational-overlay.js";
