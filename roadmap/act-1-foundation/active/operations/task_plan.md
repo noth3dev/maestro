@@ -11,7 +11,7 @@ This block is the authoritative status for the current `main` tree. Older phase 
 - **Phase 4:** external capabilities are a separate boundary. Browser, device, external-service, and deployment access must be individually activated with Goal-scoped grants and selectable expiry/repetition scope; independent review and production deployment acceptance remain open.
 - **Phase 5:** the project-wide worker cap is implemented. Resource inventory, demand reservations, protected floors, and Portfolio Council scheduling remain open.
 - **Phase 6:** immutable project-private Improvement Digest Step 1 remains accepted. Tool auto-promotion, replay, mutation, rollout, adaptation, and cross-project refinement remain deferred.
-- **Phase 7:** planned; UI must expose IPython scope, approval state, full-access mode, external capability activation, stop, and audit evidence.
+- **Phase 7:** planned and not accepted; the intentional client is the existing Electron + Vite + React 19 desktop app. Next.js/PWA/browser-first is not the current target. The UI must expose IPython scope, approval state, full-access mode, external capability activation, stop, and audit evidence.
 - **Phase 8:** planned; hardening must prove IPython authority enforcement, approval binding, mixed-risk blocking, full-access isolation, and forbidden-action denial.
 - **Phase 9:** future Luthiery MCP manufacture; it is not part of the Phase 2 IPython implementation.
 - **Phase 10:** future Treasury capability; payment remains separately activated and critically governed.

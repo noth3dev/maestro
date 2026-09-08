@@ -910,3 +910,9 @@ No source behavior was changed in this documentation slice. The audit did not au
 - Phase placement is now explicit: Phase 2 local IPython/authority contract; Phase 3 release and approval-flow certification; Phase 4 browser/device/external-service/deployment activation; Phase 6 evidence-driven learning only; Phase 8 security/recovery/rollback hardening.
 - Historical `accepted` and `code complete` entries remain append-only evidence and are not current acceptance. The current source of truth is the canonical status block at the top of `task_plan.md`, the Phase status blocks, and the roadmap status copies.
 - Documentation-slice verification passed: build/tests and lint are green, `git diff --check` is clean, and all tracked Markdown relative links resolve. Repository-wide Prettier still reports the pre-existing formatting baseline (394 files).
+
+## 2026-09-08 — Phase 7 client alignment
+
+- `apps/secretary/package.json` and `electron/main.ts` confirm the current client is Electron + Vite + React 19 with a main-process credential/API boundary and sandboxed, context-isolated renderer.
+- Product decision: retain that desktop app. The Phase 7 Next.js/Tailwind/shadcn/PWA/“Do not add Electron” wording was roadmap drift and is now superseded, not an active migration plan.
+- The current Phase 7 contract keeps the radial UI goal while deferring `@xyflow/react` and `d3-hierarchy` dependency adoption until the graph slice is implemented and verified.

@@ -2593,3 +2593,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Phase 6 Step 1 remains the only accepted learning boundary: immutable project-private Improvement Digest. Automatic tool promotion, replay, mutation, rollout, and cross-project refinement remain deferred.
 - No source implementation was changed in this documentation slice. Next implementation gate: register the strict/read-only IPython bridge, then add local authority-backed write/test effects and approval/audit tests.
 - Verification after the documentation edits: `npm run check` passed (105 files, 677 tests passed; 57 files, 381 tests skipped by environment gates), `npm run lint` passed, `git diff --check` passed, and the repository-wide relative-link scan found no broken links. `npm run format:check` remains red on the repository's existing 394-file formatting baseline; no source implementation was formatted or changed.
+
+## 2026-09-08 — Phase 7 client decision
+
+- Resolved the roadmap/code mismatch: `apps/secretary` remains the intentional Electron + Vite + React 19 desktop operator app. Its main-process `contextBridge`, local credential handling, and renderer/API boundary are current product constraints, not temporary drift.
+- Updated Phase 7 and all three roadmap status copies to remove the contradictory “Do not add Electron” instruction. Next.js/PWA/browser-first is explicitly superseded for the current client; a browser client would require a separate product decision.
+- Preserved the radial product direction, but marked `@xyflow/react`/`d3-hierarchy` as future Phase 7 dependencies to add only with the graph implementation.

@@ -14,7 +14,7 @@ Maestro는 각 단계의 검증 증거가 완료되어야 다음 단계로 진�
 | **Phase 4** | Isolated Environments, Devices & Discord Incidents | **외부 capability 경계; 승인 대기** | Browser, device, external-service, deployment 및 Discord capability는 각각 별도 활성화하며 만료·반복 범위를 선택함. 독립 review와 production deployment 승인은 남음 |
 | **Phase 5** | Concurrent Goals & Portfolio Control | **활성 remediation/capacity 작업** | 프로젝트별 worker cap은 구현됨. Resource inventory, demand reservation 및 portfolio scheduling은 향후 작업 |
 | **Phase 6** | Encore Learning & 10-Axis Adaptation | **Step 1 승인 완료** *(불변 다이제스트)* | Step 1: 프로젝트 전용·출처 바인딩 Improvement Digest. Step 2 이후(리플레이, 변경, 롤아웃, 적응, 프로젝트 간 승격)는 보류 |
-| **Phase 7** | Full Concertmaster Office & Radial Control Surface | 예정 | Next.js 16 / React 19 웹 UI(Concertmaster Office), `@xyflow/react` 방사형 포트폴리오 대시보드 |
+| **Phase 7** | Full Concertmaster Office & Radial Control Surface | 예정 — Electron 방향 | Electron + Vite + React 19 데스크톱 앱, typed API/SSE 상호작용 및 그래프 slice 구현 시 `@xyflow/react` 방사형 포트폴리오 시각화. 현재 목표는 Next.js/PWA가 아님 |
 | **Phase 8** | Full-System Hardening & Release Certification | 예정 | 적대적 장애 주입, 보안 침투 감사, 지속 부하 검증 및 릴리즈 프리즈 |
 
 ### 네이티브 에이전트 백엔드 마이그레이션 — 현재 경계

@@ -29,15 +29,19 @@ Default home:
 
 ## Technical implementation
 
-- Next.js 16, React 19, strict TypeScript.
-- Tailwind CSS 4 and shadcn/ui primitives.
-- TanStack Query for server state.
-- Server-Sent Events with durable cursor reconnection.
-- React Flow (`@xyflow/react`) plus `d3-hierarchy` for the radial graph.
-- Playwright and axe-core for behavior and accessibility.
-- PWA/browser delivery first. Do not add Electron. Evaluate Tauri only after a real native-only need exists.
+- Electron + Vite + React 19 is the intentional desktop application shell in `apps/secretary`; strict TypeScript remains required.
+- The renderer uses the existing Vite React build and CSS/theme primitives. Tailwind CSS, shadcn/ui, and Next.js are not current runtime dependencies and must not be described as implemented until separately adopted.
+- `@maestro/api-client` remains the typed server-state boundary. Add TanStack Query only when a concrete query/cache need is introduced.
+- Server-Sent Events use durable cursor reconnection through the Control Plane API.
+- The radial product direction remains. When the radial slice is implemented, use `@xyflow/react` and `d3-hierarchy` only after adding and validating those dependencies in the Electron renderer.
+- Playwright and axe-core remain the behavior and accessibility verification tools.
+- Desktop-first local operator delivery is the chosen direction. Do not replace Electron with Next.js/PWA or add Tauri without a new explicit product decision. Browser delivery may be a later separate client, not an implicit Phase 7 migration.
 
 The UI never writes database state directly. All actions call the same typed API as the CLI and receive accepted durable versions. Optimistic presentation may show pending state but cannot claim completion before server acceptance.
+
+### Decision: retain the Electron application
+
+The Electron + Vite app is an intentional product choice, not roadmap drift. It provides the local operator shell, OS-keychain-backed token handling, and a controlled `contextBridge` boundary while keeping all authority in the authenticated Control Plane. The earlier Next.js/PWA/browser-first wording is superseded for the current Phase 7 implementation; it is not an unfinished migration target. Phase 7 acceptance therefore targets the existing Electron app, its renderer, IPC boundary, API parity, recovery behavior, and accessibility. A separate browser client requires a later scope and approval.
 
 ### Projection-read-model contract
 

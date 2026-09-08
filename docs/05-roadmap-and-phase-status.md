@@ -14,7 +14,7 @@ Maestro follows a strict phased milestone roadmap. Code completion alone does no
 | **Phase 4** | Isolated Environments, Devices & Discord Incidents | **External-capability boundary; acceptance pending** | Browser, device, external-service, deployment, and Discord capabilities remain separately activated per capability with selectable expiry/repetition scope. Independent review and production deployment acceptance remain open. |
 | **Phase 5** | Concurrent Goals & Portfolio Control | **Active remediation / capacity work** | Flat per-project worker admission control is present. Resource inventory, demand reservations, protected floors, and portfolio scheduling remain future work. |
 | **Phase 6** | Encore Learning & 10-Axis Adaptation | **Step 1 accepted** *(immutable digest)* | Step 1: project-private, source-bound Improvement Digests. Steps 2+ (replay, mutation, rollout, adaptation, promotion) remain deferred. |
-| **Phase 7** | Full Concertmaster Office & Radial Control Surface | Planned | Next.js 16 / React 19 web application, `@xyflow/react` radial portfolio visualization, real-time SSE interaction. |
+| **Phase 7** | Full Concertmaster Office & Radial Control Surface | Planned — Electron direction | Electron + Vite + React 19 desktop application, typed API/SSE interaction, and `@xyflow/react` radial portfolio visualization when the graph slice is implemented. Next.js/PWA is not the current target. |
 | **Phase 8** | Full-System Hardening & Release Certification | Planned | Adversarial stress testing, security penetration audit, recovery verification, release candidate freeze. |
 
 ### Native agent backend migration — current boundary
