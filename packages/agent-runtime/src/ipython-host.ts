@@ -371,10 +371,20 @@ export interface IpPythonProcessKernelOptions extends Omit<IpPythonKernelOptions
 }
 
 export function createIpPythonProcessKernel(options: IpPythonProcessKernelOptions, sessionId: string, binding?: IpPythonSessionBinding): IpPythonKernel {
-  const kernel = createIpPythonKernel({ transport: createIpPythonJsonLinesTransport(options.createProcess(sessionId, binding)), hostRequest: options.hostRequest, requireReady: true, ...(options.interruptGraceMs === undefined ? {} : { interruptGraceMs: options.interruptGraceMs }), ...(options.readyTimeoutMs === undefined ? {} : { readyTimeoutMs: options.readyTimeoutMs }), ...(options.onEvent === undefined ? {} : { onEvent: options.onEvent }) });
+  const channel = options.createProcess(sessionId, binding);
+  const processReady = (channel as IpPythonLineChannel & { readonly ready?: Promise<void> }).ready;
+  const kernel = createIpPythonKernel({ transport: createIpPythonJsonLinesTransport(channel), hostRequest: options.hostRequest, requireReady: true, ...(options.interruptGraceMs === undefined ? {} : { interruptGraceMs: options.interruptGraceMs }), ...(options.readyTimeoutMs === undefined ? {} : { readyTimeoutMs: options.readyTimeoutMs }), ...(options.onEvent === undefined ? {} : { onEvent: options.onEvent }) });
   options.parentWatchdog?.start();
   return {
-    execute: kernel.execute,
+    execute: processReady === undefined ? kernel.execute : async (request) => {
+      try {
+        await processReady;
+      } catch (error) {
+        await Promise.resolve(channel.close()).catch(() => undefined);
+        throw error;
+      }
+      return kernel.execute(request);
+    },
     ...(kernel.interrupt === undefined ? {} : { interrupt: kernel.interrupt }),
     async close() { options.parentWatchdog?.stop(); await kernel.close?.(); },
   };

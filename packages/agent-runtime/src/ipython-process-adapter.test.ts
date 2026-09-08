@@ -66,6 +66,28 @@ describe("IPython owned process channel", () => {
     expect(() => createIpPythonOwnedProcessChannel({ pythonExecutable: "/usr/bin/python3", maxStderrBytes: 1_048_577, spawnProcess: () => new FakeChild() as unknown as ChildProcessWithoutNullStreams })).toThrow("stderr limit");
   });
 
+  it("waits for durable process-start evidence before sending a cell", async () => {
+    const child = new FakeChild();
+    let releaseStart!: () => void;
+    const startCompleted = new Promise<void>((resolve) => { releaseStart = resolve; });
+    const channel = createIpPythonOwnedProcessChannel({
+      pythonExecutable: "/usr/bin/python3",
+      onStarted: async () => { await startCompleted; },
+      spawnProcess: () => child as unknown as ChildProcessWithoutNullStreams,
+    });
+    const kernel = createIpPythonProcessKernel({ createProcess: () => channel, hostRequest: async () => ({ state: "error", dataClass: "workspace", content: "unused" }) }, "session-start-gate");
+    const pending = kernel.execute({ sessionId: "session-start-gate", code: "print('gated')" });
+    child.stdout.emit("data", Buffer.from('{"version":1,"type":"ready","runtime":"python"}\n'));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(child.stdin.write).not.toHaveBeenCalled();
+    releaseStart();
+    await vi.waitFor(() => expect(child.stdin.write).toHaveBeenCalled());
+    const frame = JSON.parse(child.stdin.write.mock.calls[0]![0] as string) as { requestId: string };
+    child.stdout.emit("data", Buffer.from(JSON.stringify({ version: 1, type: "done", requestId: frame.requestId, state: "ok", dataClass: "workspace", content: "gated" }) + "\n"));
+    await expect(pending).resolves.toMatchObject({ state: "ok", content: "gated" });
+    await kernel.close();
+  });
+
   it("runs the constrained real child through the owned channel", async () => {
     const channel = createIpPythonOwnedProcessChannel({ pythonExecutable: "/usr/bin/python3", terminationGraceMs: 25 });
     const kernel = createIpPythonProcessKernel({ createProcess: () => channel, hostRequest: async () => ({ state: "error", dataClass: "workspace", content: "not used" }) }, "session-owned-real");

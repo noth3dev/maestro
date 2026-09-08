@@ -5,7 +5,17 @@ import { IPYTHON_PYTHON_BOOTSTRAP } from "./ipython-bootstrap.js";
 import { readIpPythonParentIdentity } from "./ipython-host.js";
 import type { IpPythonLineChannel } from "./ipython-host.js";
 
-export interface IpPythonProcessLifecycleEvent {
+export interface IpPythonProcessStartedEvent {
+  readonly event: "started";
+  readonly sessionId?: string;
+  readonly processRef: string;
+  readonly processPid: number;
+  readonly parentPid: number;
+  readonly projectId?: string;
+  readonly goalId?: string;
+}
+
+export interface IpPythonProcessOrphanedEvent {
   readonly event: "orphaned";
   readonly sessionId?: string;
   readonly processRef: string;
@@ -16,9 +26,13 @@ export interface IpPythonProcessLifecycleEvent {
   readonly goalId?: string;
 }
 
+export type IpPythonProcessLifecycleEvent = IpPythonProcessStartedEvent | IpPythonProcessOrphanedEvent
+
 export interface IpPythonOwnedProcessChannel extends IpPythonLineChannel {
   readonly processRef: string;
   readonly processPid: number;
+  /** Resolves after the durable start callback has completed. */
+  readonly ready: Promise<void>;
   onStderr(listener: (text: string) => void): () => void;
 }
 
@@ -33,8 +47,10 @@ export interface IpPythonOwnedProcessChannelOptions {
   readonly sessionId?: string;
   readonly projectId?: string;
   readonly goalId?: string;
+  /** Called after the child identity is available, before the first cell. */
+  readonly onStarted?: (event: IpPythonProcessStartedEvent) => void | Promise<void>;
   /** Called when the child closes without an intentional channel close. */
-  readonly onLifecycle?: (event: IpPythonProcessLifecycleEvent) => void | Promise<void>;
+  readonly onLifecycle?: (event: IpPythonProcessOrphanedEvent) => void | Promise<void>;
   readonly terminationGraceMs?: number;
   readonly maxStderrBytes?: number;
   readonly spawnProcess?: (command: string, args: string[], options: SpawnOptions) => ChildProcessWithoutNullStreams;
@@ -130,6 +146,8 @@ export function createIpPythonOwnedProcessChannel(options: IpPythonOwnedProcessC
   const terminationGraceMs = boundedPositive(options.terminationGraceMs, DEFAULT_TERMINATION_GRACE_MS, "IPython termination grace");
   const maxStderrBytes = boundedPositive(options.maxStderrBytes, DEFAULT_MAX_STDERR_BYTES, "IPython stderr limit");
   if (maxStderrBytes > MAX_ALLOWED_STDERR_BYTES) throw new Error("IPython stderr limit is invalid");
+  const processRef = options.processRef ?? `ipython:${randomUUID()}`;
+  if (processRef.trim() === "") throw new Error("IPython process reference is invalid");
   const spawnProcess = options.spawnProcess ?? ((command, args, spawnOptions) => spawn(command, args, spawnOptions));
   const child = spawnProcess(options.pythonExecutable, ["-I", "-S", "-c", IPYTHON_PYTHON_BOOTSTRAP], {
     ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
@@ -151,9 +169,21 @@ export function createIpPythonOwnedProcessChannel(options: IpPythonOwnedProcessC
     throw new Error("IPython child process handles are unavailable");
   }
   const pid = rawPid as number;
-  const processRef = options.processRef ?? `ipython:${randomUUID()}`;
-  if (processRef.trim() === "") throw new Error("IPython process reference is invalid");
   const groupIdentity = readProcessGroupIdentity(pid);
+  let startedReady: Promise<void>;
+  try {
+    startedReady = Promise.resolve(options.onStarted?.({
+      event: "started",
+      processRef,
+      processPid: pid,
+      parentPid,
+      ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+      ...(options.projectId === undefined ? {} : { projectId: options.projectId }),
+      ...(options.goalId === undefined ? {} : { goalId: options.goalId }),
+    }));
+  } catch (error) {
+    startedReady = Promise.reject(error);
+  }
   let closed = false;
   let orphanNotified = false;
   let childClosedObserved = false;
@@ -233,6 +263,7 @@ export function createIpPythonOwnedProcessChannel(options: IpPythonOwnedProcessC
   return {
     processRef,
     processPid: pid,
+    ready: startedReady,
     write(data) { if (closed) throw new Error("IPython process channel is closed"); stdin.write(data); },
     onData(listener) { dataListeners.add(listener); return () => dataListeners.delete(listener); },
     onStderr(listener) { stderrListeners.add(listener); return () => stderrListeners.delete(listener); },

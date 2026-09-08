@@ -5,7 +5,7 @@ import { AuthorizedEffectExecutor, type ActionRequest } from "@maestro/authority
 import { createLocalGitPort } from "@maestro/git-adapter";
 import type { ExecutionAdmission, ExecutionKernelPort, GitPort } from "@maestro/domain";
 import { createIpPythonSessionManager, createIpPythonTool, parseModelRef, ToolRegistry, type IpPythonKernel } from "@maestro/agent-runtime";
-import { assertProjectMembership, authenticateLocalOperator, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, reconcileOnStartup, recordDiscordSignal, runMigrations } from "@maestro/persistence";
+import { appendIpPythonSessionJournal, assertProjectMembership, authenticateLocalOperator, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, reconcileIpPythonOrphans, reconcileOnStartup, recordDiscordSignal, recordIpPythonSessionStarted, runMigrations, type IpPythonSessionJournalEntry } from "@maestro/persistence";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
 import { createDurableGoalService } from "./goal-service.js";
@@ -50,6 +50,18 @@ async function drainWithTimeout(operation: Promise<void> | undefined, timeoutMs:
     ]);
   } finally {
     if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+function inspectIpPythonProcessOutcome(entry: IpPythonSessionJournalEntry): "reaped" | "unknown" {
+  if (entry.processPid === null) return "unknown";
+  try {
+    process.kill(entry.processPid, 0);
+    // Existence is not proof of ownership or a terminal provider outcome.
+    return "unknown";
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ESRCH") return "reaped";
+    return "unknown";
   }
 }
 
@@ -104,7 +116,41 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   const accountLoginOwnerId = `${config.leaseOwnerId}:${randomUUID()}`;
   const authorityRepository = new PostgresAuthorityRepository(pool);
   const authorityExecutor = new AuthorizedEffectExecutor(authorityRepository);
-  const ipythonSessions = createIpPythonSessionManager({ createKernel: (sessionId, binding) => overrides.ipythonKernel ?? createIpPythonProductionKernel({ authority: authorityExecutor, workspaceRoot: config.worktreeRoot, pythonExecutable: config.ipythonPythonExecutable ?? "/usr/bin/python3" }, sessionId, binding) });
+  const ipythonSessions = createIpPythonSessionManager({
+    createKernel: async (sessionId, binding) => {
+      if (overrides.ipythonKernel !== undefined) return overrides.ipythonKernel;
+      if (binding === undefined) throw new Error("IPython production kernel requires an authority binding");
+      const processRef = `ipython:${randomUUID()}`;
+      return createIpPythonProductionKernel({
+        authority: authorityExecutor,
+        workspaceRoot: config.worktreeRoot,
+        pythonExecutable: config.ipythonPythonExecutable ?? "/usr/bin/python3",
+        processRef,
+        onStarted: async (event) => {
+          await recordIpPythonSessionStarted(pool, {
+            sessionId,
+            processRef: event.processRef,
+            projectId: binding.projectId,
+            goalId: binding.goalId,
+            processPid: event.processPid,
+            parentPid: event.parentPid,
+          });
+        },
+        onLifecycle: async (event) => {
+          await appendIpPythonSessionJournal(pool, {
+            sessionId,
+            processRef: event.processRef,
+            projectId: binding.projectId,
+            goalId: binding.goalId,
+            event: "orphaned",
+            reason: event.reason,
+            processPid: event.processPid,
+            parentPid: event.parentPid,
+          });
+        },
+      }, sessionId, binding);
+    },
+  });
   const tools = new ToolRegistry();
   tools.register(createIpPythonTool({ sessions: ipythonSessions }));
   const executionKernel = overrides.executionKernel ?? (modelGateway === undefined
@@ -243,6 +289,10 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       // ever queries goal/lease/control tables that a pending migration
       // might still be introducing.
       await runMigrations(pool);
+      // A fresh Control Plane cannot honestly resume an old Python process.
+      // Reconcile started/orphaned generations before traffic; absence proves
+      // only reaping, while every other observation remains unknown.
+      await reconcileIpPythonOrphans(pool, { determineOutcome: inspectIpPythonProcessOutcome });
       if (accountLoginStore !== undefined) await accountLoginStore.recoverStarting(accountLoginOwnerId);
       // Seed the immutable canonical organization before provisioning can
       // validate requested roles. This is idempotent and creates no sessions.
