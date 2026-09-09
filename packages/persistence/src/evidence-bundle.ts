@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { assertEvidenceBundleIntegrity, evidenceBundleContentHash, type EvidenceBundle } from "@maestro/domain";
+import { assertEvidenceBundleIntegrity, assertValidRoutingEvidence, canonicalJson, evidenceBundleContentHash, type EvidenceBundle, type RoutingEvidence } from "@maestro/domain";
 import { verifyEvidenceRecord, type EvidenceContentReader } from "@maestro/evidence";
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
@@ -215,6 +215,26 @@ async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string
             gateway_binding_id, data_policy_hash, created_at
        FROM native_execution_bindings WHERE goal_id = $1 ORDER BY created_at, binding_id`, [goalId],
   )).rows;
+  const bindingByRef = new Map<string, Record<string, unknown>>();
+  for (const binding of nativeExecutionBindings) {
+    bindingByRef.set(String(binding.binding_id), binding);
+    bindingByRef.set(String(binding.execution_ref), binding);
+    bindingByRef.set(String(binding.invocation_ref), binding);
+  }
+  for (const row of routingEvidence) {
+    const raw = row.evidence;
+    try { assertValidRoutingEvidence(raw); } catch { throw new EvidenceBundleError(`Malformed routing evidence: ${String(row.evidence_id)}`); }
+    const evidence = raw as unknown as RoutingEvidence;
+    if (evidence.goalRef !== goalId || evidence.projectRef !== projectId || evidence.evidenceId !== row.evidence_id || evidence.routeRef !== row.route_ref || evidence.admissionBindingRef !== row.admission_binding_ref || canonicalJson(evidence) !== canonicalJson({ ...(row.evidence as Record<string, unknown>), rejections: row.rejections ?? [] }))
+      throw new EvidenceBundleError(`Routing evidence identity or canonical payload mismatch: ${String(row.evidence_id)}`);
+    const binding = bindingByRef.get(evidence.admissionBindingRef);
+    if (!binding || String(binding.goal_id) !== goalId || String(binding.project_id) !== String(projectId))
+      throw new EvidenceBundleError(`Routing evidence admission binding scope mismatch: ${String(row.evidence_id)}`);
+    const selected = `${binding.selected_model_provider}/${binding.selected_model_id}`;
+    const actual = `${binding.actual_model_provider}/${binding.actual_model_id}`;
+    if (selected !== evidence.selectedModelRef || actual !== evidence.selectedModelRef)
+      throw new EvidenceBundleError(`Routing evidence provider identity mismatch: ${String(row.evidence_id)}`);
+  }
   const councilBriefs = (await pool.query<Record<string, unknown>>(
     `SELECT council_id, department_id, payload, submitted_at
        FROM independent_briefs

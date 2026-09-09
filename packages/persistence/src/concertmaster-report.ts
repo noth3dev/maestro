@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { assertValidTaskContractSubstance, certificationsConflict, evaluateCertificationCompleteness, requiredConditionalCertifications, taskContractContentHash, type CertificationRecordFact } from "@maestro/domain";
+import { assertValidRoutingEvidence, canonicalJson, assertValidTaskContractSubstance, certificationsConflict, evaluateCertificationCompleteness, requiredConditionalCertifications, taskContractContentHash, type CertificationRecordFact } from "@maestro/domain";
 import type { EvidenceContentReader } from "@maestro/evidence";
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
@@ -180,6 +180,8 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
     })
     : true;
 
+  const goalIdentity = await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId]);
+  const goalProjectId = goalIdentity.rows[0]?.project_id;
   const routingEvidence = await pool.query<{
     evidence_id: string; admission_binding_ref: string; selected_model_ref: string;
     pressure_band: string; decision_layer: string; evidence: Record<string, unknown>;
@@ -195,6 +197,12 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
              selected_model_id, actual_model_provider, actual_model_id
         FROM native_execution_bindings WHERE goal_id = $1`, [goalId]);
   const lineageBlockers: { reason: string; detail: string }[] = [];
+  for (const route of routingEvidence.rows) {
+    try { assertValidRoutingEvidence(route.evidence); } catch { lineageBlockers.push({ reason: "routing_evidence_malformed", detail: `Routing evidence ${route.evidence_id} is malformed` }); continue; }
+    const evidence = route.evidence;
+    if (evidence.goalRef !== goalId || evidence.projectRef !== goalProjectId || evidence.evidenceId !== route.evidence_id || evidence.admissionBindingRef !== route.admission_binding_ref || canonicalJson(evidence) !== canonicalJson({ ...(evidence as Record<string, unknown>) }))
+      lineageBlockers.push({ reason: "routing_evidence_identity_mismatch", detail: `Routing evidence ${route.evidence_id} is outside this Goal/project scope or has altered payload` });
+  }
   if (routingEvidence.rowCount === 0) {
     lineageBlockers.push({ reason: "routing_evidence_missing", detail: "No durable routing evidence is recorded for this Goal" });
   } else {
