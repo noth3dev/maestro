@@ -1364,3 +1364,16 @@ All downstream routing documentation must use this contract and must not restore
 ## 2026-09-09 — Plan 2 S1 CI remediation merge finding
 
 - The prior CI failure is resolved by the domain project reference fix; no new local findings remain.
+
+## 2026-09-09 — Plan 2 S2 findings
+
+- The integration test initially attempted to journal a non-existent approval ID; the test was corrected to exercise journal append-only behavior without an approval foreign key.
+- Local worktree build needed a fresh `npm ci --ignore-scripts` because the shared root dependency surface lacked `@earendil-works/pi-tui`; this was environment-only and produced no repository change.
+
+## 2026-09-09 — Plan 2 S2 full verification finding
+
+- No S2 test failures occurred. The full PostgreSQL gate passed all `1,277` tests; no new finding blocks review.
+
+## 2026-09-09 — Plan 2 S2 review finding
+
+- Independent review found no additional S2 findings (`REVIEW: PASS`).

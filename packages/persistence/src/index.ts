@@ -54,3 +54,5 @@ export * from "./native-execution-binding.js";
 
 export * from "./ensemble-router-artifacts.js";
 export * from "./ipython-session-journal.js";
+
+export * from "./capability-approval.js";
