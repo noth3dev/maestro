@@ -1,4 +1,4 @@
-import type { ApprovalDialogEffect, ApprovalDialogSummary, CriticalActionSummary } from "../confirmation.js";
+import { APPROVAL_DIALOG_SCOPE_OPTIONS, type ApprovalDialogEffect, type ApprovalDialogSummary, type CriticalActionSummary } from "../confirmation.js";
 import { panelLine } from "../panels/common.js";
 
 function legacy(summary: CriticalActionSummary, width: number): string[] {
@@ -20,14 +20,13 @@ function effectLine(effect: ApprovalDialogEffect): string {
 }
 
 function scopeLine(scope: NonNullable<ApprovalDialogSummary["repetitionScope"]>): string {
-  const labels: Record<NonNullable<ApprovalDialogSummary["repetitionScope"]>, string> = {
+  const labels: Record<(typeof APPROVAL_DIALOG_SCOPE_OPTIONS)[number], string> = {
     once: "once",
-    bounded_count: "bounded count",
-    bounded_time: "bounded time",
-    bounded_budget: "bounded budget",
+    bounded_count: "5 more",
     session: "this session",
   };
-  return `Scope  [·] ${labels[scope]}   [ ] 5 more   [ ] this session`;
+  const selected = scope === "bounded_time" || scope === "bounded_budget" ? "once" : scope;
+  return `Scope  ${APPROVAL_DIALOG_SCOPE_OPTIONS.map((option) => `[${option === selected ? "·" : " "}] ${labels[option]}`).join("   ")}`;
 }
 
 export function renderApprovalDialog(summary: ApprovalDialogSummary, width: number): string[] {
@@ -40,8 +39,8 @@ export function renderApprovalDialog(summary: ApprovalDialogSummary, width: numb
     "",
     ...effects.map(effectLine),
     "",
-    ...(summary.pressure === undefined || summary.pressureBand === undefined ? [] : [`Pressure  ${summary.pressure} (${summary.pressureBand}) · ${summary.tier}`]),
-    `Tier set by ${summary.tierTrigger}`,
+    ...(summary.pressure === undefined || summary.pressureBand === undefined ? [] : [`Pressure  ${summary.pressure} (${summary.pressureBand}) · ${summary.pressureTier ?? summary.tier}`]),
+    `Tier set by ${summary.tierTrigger} (${summary.tierTrigger === "effect" ? summary.effects.find((effect) => effect.setsTier)?.classification ?? "block" : summary.pressureBand ?? "pressure"})`,
     ...(summary.fullAccessMode === "skip_intermediate_approvals" && summary.tier === "user" ? ["Tier 4 user approval remains required"] : []),
     scopeLine(summary.repetitionScope),
     `Reject: ${summary.saferAlternative}`,

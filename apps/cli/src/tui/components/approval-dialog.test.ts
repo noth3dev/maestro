@@ -7,6 +7,7 @@ describe("approval dialog", () => {
     tierTrigger: "effect" as const,
     pressure: 118,
     pressureBand: "high" as const,
+    pressureTier: "Encore Council" as const,
     effects: [
       { classification: "ordinary" as const, action: "project.file.edit", target: "src/server.ts" },
       { classification: "critical" as const, action: "git.remote.push", target: "origin/main", setsTier: true },
@@ -23,8 +24,8 @@ describe("approval dialog", () => {
 
   it("names the tier and trigger in both effect- and pressure-driven cases", () => {
     expect(renderApprovalDialog(summary, 100).join("\n")).toContain("Approval required · Encore Council");
-    expect(renderApprovalDialog(summary, 100).join("\n")).toContain("Tier set by effect");
-    expect(renderApprovalDialog({ ...summary, tierTrigger: "pressure", tier: "user" }, 100).join("\n")).toContain("Tier set by pressure");
+    expect(renderApprovalDialog(summary, 100).join("\n")).toContain("Tier set by effect (critical)");
+    expect(renderApprovalDialog({ ...summary, tierTrigger: "pressure", tier: "user", pressure: 168, pressureBand: "critical", pressureTier: "user" }, 100).join("\n")).toContain("Tier set by pressure (critical)");
   });
   it("lists every effect and marks the tier-setting effect", () => {
     const rendered = renderApprovalDialog(summary, 100).join("\n");

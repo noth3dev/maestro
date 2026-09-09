@@ -73,7 +73,7 @@ describeDatabase("capability approval ledger", () => {
     await expect(consumeCapabilityApproval(pool, {
       approvalId: created.approvalId, capabilityKind: "ipython", projectId, goalId: goalA,
       commandId: randomUUID(), action: "project.file.edit", target: "/workspace/other.txt",
-      policyVersion: 1, budgetEffectCents: 10,
+      policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10,
     })).rejects.toThrow("exact capability identity");
   });
 
@@ -82,7 +82,7 @@ describeDatabase("capability approval ledger", () => {
     await expect(consumeCapabilityApproval(pool, {
       approvalId: created.approvalId, capabilityKind: "ipython", projectId, goalId: goalA,
       commandId: randomUUID(), action: "project.file.edit", target: "/workspace/a.txt",
-      policyVersion: 1, budgetEffectCents: 10,
+      policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10,
     })).rejects.toBeInstanceOf(CapabilityApprovalExpiredError);
   });
 
@@ -91,11 +91,11 @@ describeDatabase("capability approval ledger", () => {
     const commandId = randomUUID();
     await expect(consumeCapabilityApproval(pool, {
       approvalId: created.approvalId, capabilityKind: "ipython", projectId, goalId: goalA, commandId,
-      action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, budgetEffectCents: 10,
+      action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10,
     })).resolves.toMatchObject({ consumed: true, remainingCount: 0 });
     await expect(consumeCapabilityApproval(pool, {
       approvalId: created.approvalId, capabilityKind: "ipython", projectId, goalId: goalA, commandId: randomUUID(),
-      action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, budgetEffectCents: 10,
+      action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10,
     })).rejects.toBeInstanceOf(RepetitionBudgetExhaustedError);
   });
 
@@ -107,7 +107,7 @@ describeDatabase("capability approval ledger", () => {
     const created = await createCapabilityApproval(pool, approval());
     await expect(consumeCapabilityApproval(pool, {
       approvalId: created.approvalId, capabilityKind: "ipython", projectId, goalId: goalB, commandId: randomUUID(),
-      action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, budgetEffectCents: 10,
+      action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10,
     })).rejects.toThrow("Goal-scoped");
   });
 
@@ -123,7 +123,7 @@ describeDatabase("capability approval ledger", () => {
   it("cannot consume two repetition units for one command identity", async () => {
     const created = await createCapabilityApproval(pool, approval({ repetitionScope: { kind: "bounded_count", count: 2 } }));
     const commandId = randomUUID();
-    const input = { approvalId: created.approvalId, capabilityKind: "ipython", projectId, goalId: goalA, commandId, action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, budgetEffectCents: 10 };
+    const input = { approvalId: created.approvalId, capabilityKind: "ipython", projectId, goalId: goalA, commandId, action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10 };
     await expect(consumeCapabilityApproval(pool, input)).resolves.toMatchObject({ consumed: true, remainingCount: 1 });
     await expect(consumeCapabilityApproval(pool, input)).resolves.toMatchObject({ consumed: false, remainingCount: 1 });
     await expect(pool.query("SELECT count(*)::int AS count FROM capability_repetition_claims WHERE approval_id = $1", [created.approvalId])).resolves.toMatchObject({ rows: [{ count: 1 }] });

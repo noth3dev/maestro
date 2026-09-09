@@ -51,6 +51,14 @@ describe("TUI write commands", () => {
     const confirm = vi.fn().mockResolvedValue("cancelled" as const);
     await expect(executeWriteCommand({ client, projectId, confirm }, { name: "goal", action: "emergency-stop", options: { "goal-id": goalId, "expected-version": "1", "command-id": commandId } })).resolves.toEqual({ title: "Cancelled", lines: ["No mutation was sent."] });
     expect(confirm).toHaveBeenCalledOnce();
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ tier: "user", tierTrigger: "effect", repetitionScope: "once", effects: [expect.objectContaining({ action: "goal.emergency-stop", setsTier: true })] }));
+    expect(client.emergencyStopGoal).not.toHaveBeenCalled();
+  });
+
+  it("does not execute when a non-once scope cannot be persisted by the legacy endpoint", async () => {
+    const client = api();
+    const confirm = vi.fn().mockResolvedValue({ decision: "approved", repetitionScope: "session" } as const);
+    await expect(executeWriteCommand({ client, projectId, confirm }, { name: "goal", action: "emergency-stop", options: { "goal-id": goalId, "expected-version": "1", "command-id": commandId } })).resolves.toEqual({ title: "Unavailable", lines: ["Approval scope session is not persisted by this execution path; no mutation was sent."] });
     expect(client.emergencyStopGoal).not.toHaveBeenCalled();
   });
 

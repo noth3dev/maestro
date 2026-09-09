@@ -3671,3 +3671,13 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Main post-merge `npm run build` exited `0`. The serialized non-PostgreSQL suite exited `0`: **135/197 files passed, 62 skipped; 917/1320 tests passed, 403 skipped**; log `/tmp/plan2-s4-main-postmerge-nonpg.log`.
 - The authoritative S4 PostgreSQL gate remains `/tmp/plan2-s4-relative-postgres-full.log`: **197/197 files and 1330/1330 tests passed**. Independent review is `REVIEW: PASS`.
 - No live-provider acceptance ran. S4 is ready for cleanup and push; no later slice is being started.
+
+
+## 2026-09-09 — Plan 2 S5 approval hierarchy implementation and remediation
+
+- Created the isolated `plan2-approval-hierarchy-adapter` worktree from clean main and implemented the four-tier approval service, detailed approval dialog, and full-access session adapter.
+- Initial focused tests, build, lint, and diff checks passed, but independent review correctly rejected the first version for caller-controlled tier selection, weak actor/session checks, and a legacy-only CLI dialog path.
+- Remediated the service to derive tiers from `classifyHostEffects` over the complete effect block and pressure, require exact active Goal-scoped actors plus an `authorizeActor` adapter, validate resolver identity, require exact session identity for skip mode, bind control epochs during consumption, and persist safer alternatives in the single decision-journal entry.
+- Remediated the CLI path to pass detailed approval summaries, support keyboard scope selection and `?` explanation, carry the selected scope in the confirmation result, and fail closed rather than mutate when the legacy endpoint cannot persist a non-once scope.
+- S5 focused verification now passes **4 files / 37 tests**; build, lint, and `git diff --check` pass. Full verification is being rerun after remediation; independent re-review remains open.
+- No live-provider acceptance ran. S6 production composition remains deferred.
