@@ -1516,3 +1516,8 @@ All downstream routing documentation must use this contract and must not restore
 
 - Push CI `34314783417` remains in progress, not red; Build and lint is successful and PostgreSQL/Vitest has not concluded.
 - No S0 implementation blocker is known. If the in-progress CI later fails, S4 work will stop and the CI failure will be handled first.
+
+
+## 2026-09-09 — S0 CI failure finding
+
+- S0's semantic transcript contract was correctly propagated through the activity stream, but the existing PostgreSQL SSE integration test still treated callback values as strings. This caused CI to fail while runtime behavior was correct: the failing assertion called `.toContain` on a `TranscriptLine` object. The repair updates the test contract and asserts `kind: "error"`; no production behavior change is required.
