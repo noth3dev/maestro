@@ -3690,3 +3690,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Final non-PostgreSQL verification passed **136/198 files and 936/1339 tests**; **62 files and 403 tests** were skipped because no PostgreSQL URL was configured. No failure lines were reported.
 - Final build, lint, diff check, focused S5 tests, and full suite passed. No live-provider acceptance ran.
 - S5 is ready for merge/revalidation; S6 production wiring and user-run live acceptance remain deferred.
+
+
+## 2026-09-09 — S5 merged main revalidation
+
+- Merged S5 with `649f8a6` (`merge: integrate Plan 2 S5 approval hierarchy`).
+- Main post-merge build, lint, and `git diff --check` passed. The serialized post-merge full suite passed **136/198 files and 936/1339 tests**; **62 files and 403 tests** were skipped because no PostgreSQL URL was configured. Log: `/tmp/plan2-s5-main-postmerge-full.log`.
+- The merged worktree contains no live-provider acceptance. S6 production wiring remains deferred.
