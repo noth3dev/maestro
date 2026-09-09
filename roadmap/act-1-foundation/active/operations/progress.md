@@ -3367,3 +3367,8 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Full serialized PostgreSQL verification completed with exit `0`: Vitest `193/193` files and `1,277/1,277` tests passed in `/tmp/plan2-s2-full-postgres.log`.
 - Main build is green and the latest known CI `34301780188` is successful. S2 is ready for independent review; it is not merged yet.
+
+## 2026-09-09 — Plan 2 S2 independent review
+
+- Independent review returned `REVIEW: PASS` with no blocking findings. The review confirmed the migration/API/test scope and the recorded full PostgreSQL evidence.
+- S2 exit evidence is complete: Goal-scoped ledger tables, server-side expiry, exact identity, repetition claims, session isolation, and journal UPDATE/DELETE rejection are covered by the six integration tests.
