@@ -1,6 +1,6 @@
 # Phase 2 — Secretary Office Core and Hierarchical Goal Execution
 
-> **Current status (2026-09-08):** The hierarchical execution building blocks and real PostgreSQL/native Model Gateway evidence exist, including native Head and Worker admissions. Plan 2 S6 is merged and verified, and the §S7 documentation sync is complete. Phase 2 live acceptance remains a user-run gate; no product acceptance is claimed here. The later Plan 3 production host-tool contract remains separate: workers remain text/evidence-only until the IPython local host-tool surface, authority enforcement, approval hierarchy, and live acceptance scenario are implemented and independently reviewed. Historical code-level completion markers remain provenance, not current acceptance. Prime Agent is not part of the current implementation.
+> **Current status (2026-09-10):** The hierarchical execution building blocks and real PostgreSQL/native Model Gateway evidence exist, including native Head and Worker admissions. Plan 2 S6 is merged and verified, and the §S7 documentation sync is complete. Phase 2 live acceptance remains a user-run gate; no product acceptance is claimed here. The later Plan 3 release work remains separate. Plan 2 S6 now supplies the IPython local host-tool surface, authority enforcement, approval hierarchy, and recovery evidence; only the user-run live acceptance scenario remains pending. Historical code-level completion markers remain provenance, not current acceptance. Prime Agent is not part of the current implementation.
 
 
 ## Outcome
@@ -210,7 +210,7 @@ The detailed test-first execution plan is canonical in `roadmap/act-1-foundation
 Implementation is deliberately incremental:
 
 1. Register `ipython` with a typed schema and prove grant filtering, session serialization, identity propagation, and fail-closed lifecycle behavior.
-2. Add the Node-owned JSON-lines bridge and a constrained Python bootstrap. Read-only file/Git evidence is the only initial host allowlist. The current implementation has the versioned bridge, production-owned detached process channel, parent-identity watchdog, real-child-tested constrained Python bootstrap, read-only host router, and authority-backed workspace-file/Git adapters; durable orphan evidence, local effects/approvals, and live worker acceptance remain open.
+2. Add the Node-owned JSON-lines bridge and a constrained Python bootstrap. Read-only file/Git evidence is the only initial host allowlist. The current implementation has the versioned bridge, production-owned detached process channel, parent-identity watchdog, real-child-tested constrained Python bootstrap, read-only host router, and authority-backed workspace-file/Git adapters; durable orphan evidence, local effects/approvals, and live worker acceptance are covered by Plan 2 S4–S6; only the user-run live acceptance remains open.
 3. Add whole-block classification, exact approval scope, repetition limits, two full-access modes, durable audit, idempotency, interruption, stale-fence, and forbidden-action enforcement.
 4. Compose the registry through Control Plane → native kernel → worker Mission Bundle, then verify the real PostgreSQL/API/Gateway path and independent review.
 
