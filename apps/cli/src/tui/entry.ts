@@ -45,7 +45,7 @@ import { mergeEvents, runActivityStream, subscribeToEvents } from "./activity-st
 import { addConversationMessage, applyConversationEvent, createConversationTranscript, renderConversationMarkdown, type ConversationTranscriptState } from "./conversation-transcript.js";
 import { renderActivityTimeline } from "./components/activity-timeline.js";
 import { renderShell, renderTuiFooter, type TuiShellState } from "./components/shell.js";
-import { getModeAccentProgress, setModeAccentProgress, tuiTheme } from "./theme.js";
+import { getModeAccentProgress, setModeAccentProgress, tuiTheme, type TranscriptLine } from "./theme.js";
 import type { CliIo } from "../main.js";
 import { copyToClipboard, openExternalUrl } from "../external-url.js";
 import { editorTheme, SecretEditor } from "./components/editors.js";
@@ -182,8 +182,9 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       footer.setText(renderTuiFooter(terminal.columns));
       tui.requestRender(true);
     };
-    const append = (line: string) => {
-      const next = addConversationMessage(conversation, "system", line);
+    const append = (line: string | TranscriptLine) => {
+      const semanticLine: TranscriptLine = typeof line === "string" ? { kind: "system", text: line } : line;
+      const next = addConversationMessage(conversation, "system", semanticLine.text, semanticLine.kind);
       conversation = { ...next, messages: next.messages.slice(-80) };
       render();
     };
@@ -250,7 +251,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         cursor: session?.lastEventCursor ?? "0",
         signal,
         maxReconnectAttempts: 5,
-        onReconnect: (attempt, maxAttempts) => append(`Activity stream reconnecting (${attempt}/${maxAttempts})`),
+        onReconnect: (attempt, maxAttempts) => append({ kind: "warning", text: `Activity stream reconnecting (${attempt}/${maxAttempts})` }),
         onEvent: async (event) => {
           activity = mergeEvents(activity, [event]);
           const nextSession = advanceWorkspaceSession(workspace.cwd, session, event);
@@ -282,7 +283,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           cursor: conversation.lastCursor,
           signal,
           maxReconnectAttempts: 5,
-          onReconnect: (attempt, maxAttempts) => append(`Conversation stream reconnecting (${attempt}/${maxAttempts})`),
+          onReconnect: (attempt, maxAttempts) => append({ kind: "warning", text: `Conversation stream reconnecting (${attempt}/${maxAttempts})` }),
         })) {
           if (signal.aborted || session?.conversationId !== conversationId || project.kind !== "attached" || project.projectId !== projectId) return;
           conversation = applyConversationEvent(conversation, event);

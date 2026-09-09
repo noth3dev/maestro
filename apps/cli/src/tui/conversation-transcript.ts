@@ -1,7 +1,8 @@
 import type { ConversationEvent } from "@maestro/contracts";
+import type { TranscriptKind } from "./theme.js";
 
 export type ConversationTurnStatus = "idle" | "streaming" | "succeeded" | "failed" | "cancelled" | "unknown";
-export type ConversationTranscriptMessage = { role: "user" | "assistant" | "system"; content: string };
+export type ConversationTranscriptMessage = { role: "user" | "assistant" | "system"; content: string; kind: TranscriptKind };
 
 export type ConversationTranscriptState = {
   messages: ConversationTranscriptMessage[];
@@ -20,9 +21,10 @@ export function addConversationMessage(
   state: ConversationTranscriptState,
   role: "user" | "system",
   content: string,
+  kind: TranscriptKind = role === "system" ? "system" : "text",
 ): ConversationTranscriptState {
   if (content.trim() === "") return state;
-  return { ...state, messages: [...state.messages, { role, content }] };
+  return { ...state, messages: [...state.messages, { role, content, kind }] };
 }
 
 function payloadText(event: ConversationEvent, key: string): string | undefined {
@@ -47,11 +49,11 @@ export function applyConversationEvent(
   const turnId = payloadText(event, "turnId");
   if (event.eventType === "turn_started") {
     const userText = payloadText(event, "text");
-    const previousAssistant = next.assistantText !== "" ? [{ role: "assistant" as const, content: next.assistantText }] : [];
+    const previousAssistant = next.assistantText !== "" ? [{ role: "assistant" as const, content: next.assistantText, kind: "text" as const }] : [];
     const lastUser = [...next.messages].reverse().find((message) => message.role === "user");
     const withAssistant = [...next.messages, ...previousAssistant];
     const messages = userText !== undefined && lastUser?.content !== userText
-      ? [...withAssistant, { role: "user" as const, content: userText }]
+      ? [...withAssistant, { role: "user" as const, content: userText, kind: "text" as const }]
       : withAssistant;
     return { ...next, messages, activeTurnId: turnId, assistantText: "", status: "streaming", statusMessage: undefined };
   }

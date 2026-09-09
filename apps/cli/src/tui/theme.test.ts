@@ -14,6 +14,7 @@ afterEach(() => {
 
 describe("TUI theme", () => {
   it("animates the Warm Earth accent into the Flashmob execution-profile accent", () => {
+    delete process.env.NO_COLOR;
     process.env.COLORTERM = "truecolor";
     setModeAccentProgress(0);
     const warm = tuiTheme.primary("x");
@@ -34,6 +35,7 @@ describe("TUI theme", () => {
   });
 
   it("does not infer success from prose such as disconnected", () => {
+    delete process.env.NO_COLOR;
     process.env.COLORTERM = "truecolor";
     const output = paintTranscript({ kind: "text", text: "Activity stream disconnected" }, 80);
 
@@ -42,11 +44,14 @@ describe("TUI theme", () => {
   });
 
   it("switches on semantic kind rather than transcript text", () => {
+    delete process.env.NO_COLOR;
     process.env.COLORTERM = "truecolor";
     const first = paintTranscript({ kind: "error", text: "first message" }, 80);
     const changed = paintTranscript({ kind: "error", text: "changed message" }, 80);
 
+    // eslint-disable-next-line no-control-regex
     expect(first).toMatch(/^\u001b\[38;2;200;106;88m/);
+    // eslint-disable-next-line no-control-regex
     expect(changed).toMatch(/^\u001b\[38;2;200;106;88m/);
   });
 
@@ -69,6 +74,7 @@ describe("TUI theme", () => {
   });
 
   it("leaves body text in the terminal default foreground", () => {
+    delete process.env.NO_COLOR;
     process.env.COLORTERM = "truecolor";
 
     expect(paintTranscript({ kind: "text", text: "body text" }, 80)).toBe("  body text");
