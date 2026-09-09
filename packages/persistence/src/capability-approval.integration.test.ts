@@ -113,7 +113,7 @@ describeDatabase("capability approval ledger", () => {
 
   it("rejects journal UPDATE and DELETE at the database level", async () => {
     const entry = await appendCapabilityJournal(pool, {
-      capabilityKind: "ipython", projectId, goalId: goalA, approvalId: randomUUID(), commandId: randomUUID(),
+      capabilityKind: "ipython", projectId, goalId: goalA, commandId: randomUUID(),
       event: "rejection", details: { reason: "test" },
     });
     await expect(pool.query("UPDATE capability_decision_journal SET details = '{}' WHERE journal_id = $1", [entry.journalId])).rejects.toThrow("append-only");
