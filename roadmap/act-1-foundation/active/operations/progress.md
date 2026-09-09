@@ -3333,3 +3333,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Independent review returned `REVIEW: PASS` with no findings. The reviewer confirmed registry reuse, fail-closed action mapping, ordered max combination, and append-only ledger updates.
 - S1 exit evidence is complete: focused authority/domain/pressure tests pass `26/26`; `npm run build`, `npm run lint`, and `git diff --check` pass.
+
+## 2026-09-09 — Plan 2 S1 merged and revalidated
+
+- Merged S1 as `466a0be` after green main CI `34300045169` and independent `REVIEW: PASS`.
+- Post-merge revalidation passed: focused authority/domain/pressure tests `26/26`, `npm run build`, `npm run lint`, and `git diff --check`.
+- The S1 worktree is ready for cleanup; no Plan 2 S2 implementation has started.

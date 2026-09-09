@@ -1347,3 +1347,7 @@ All downstream routing documentation must use this contract and must not restore
 ## 2026-09-09 — Plan 2 S1 review finding
 
 - Independent review found no additional S1 findings (`REVIEW: PASS`).
+
+## 2026-09-09 — Plan 2 S1 merge finding
+
+- No new findings during post-merge revalidation. Main remains clean and S1 exit evidence is green.
