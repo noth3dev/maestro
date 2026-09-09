@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
@@ -160,6 +160,22 @@ describe("local runtime environment adapter", () => {
       }));
 
       await expect(waitForTerminal(handle)).resolves.toMatchObject({ status: "succeeded", stdout: "missing", stderr: "" });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves a relative Goal path scope against the environment workspace", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "maestro-runtime-scope-"));
+    const allowed = join(cwd, "allowed");
+    mkdirSync(allowed);
+    try {
+      const childProcess = new FakeProcess();
+      const { authority } = permissiveAuthority();
+      const adapter = createLocalRuntimeAdapter(makeEnvironment({ boundaries: { ...makeEnvironment().boundaries, filesystem: [cwd] } }), authority, { spawn: vi.fn(() => childProcess), scopeRoot: cwd });
+      const handle = await adapter.start(command({ cwd: allowed, target: allowed, pathScope: ["allowed"] }));
+      childProcess.finish(0);
+      await expect(handle.observe()).resolves.toMatchObject({ status: "succeeded" });
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

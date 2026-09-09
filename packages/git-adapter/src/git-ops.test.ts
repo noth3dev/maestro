@@ -75,6 +75,18 @@ describe("local Git operations", () => {
     expect(execFileSync("git", ["branch", "--list", "goal/duplicate"], { cwd: repositoryPath }).toString()).toBe("");
   });
 
+  it("resolves a relative Goal path scope against the configured workspace root", async () => {
+    const port = createLocalGitPort({
+      authority: authorityWith(() => ({})),
+      context: gitContext,
+      workspaceRoot,
+      pathScope: ["."],
+    });
+
+    await expect(port.createBranch(repositoryPath, "goal/relative-scope", baseRevision)).resolves.toBeUndefined();
+    expect(execFileSync("git", ["branch", "--list", "goal/relative-scope"], { cwd: repositoryPath }).toString()).toContain("goal/relative-scope");
+  });
+
   it("creates a branch at the exact base revision", async () => {
     await localGitPort.createBranch(repositoryPath, "goal/integration", baseRevision);
     const sha = execFileSync("git", ["rev-parse", "goal/integration"], { cwd: repositoryPath }).toString().trim();

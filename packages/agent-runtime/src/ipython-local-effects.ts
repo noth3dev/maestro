@@ -142,8 +142,8 @@ function boundedNumber(value: unknown, name: string): number | undefined {
   return value as number;
 }
 
-function canonicalForScope(path: string): string {
-  let candidate = resolve(path);
+function canonicalForScope(path: string, scopeRoot = process.cwd()): string {
+  let candidate = resolve(scopeRoot, path);
   const missing: string[] = [];
   while (true) {
     try { return missing.length === 0 ? realpathSync.native(candidate) : resolve(realpathSync.native(candidate), ...missing); }
@@ -156,28 +156,28 @@ function canonicalForScope(path: string): string {
   }
 }
 
-function assertGoalScopedPath(path: string, binding: IpPythonHostBinding, label: string): string {
-  const candidate = canonicalForScope(path);
+function assertGoalScopedPath(path: string, binding: IpPythonHostBinding, label: string, scopeRoot?: string): string {
+  const candidate = canonicalForScope(path, scopeRoot);
   if (binding.pathScope.length === 0 || !binding.pathScope.some((scope) => {
-    const root = canonicalForScope(scope);
+    const root = canonicalForScope(scope, scopeRoot);
     const remainder = relative(root, candidate);
     return remainder === "" || (!remainder.startsWith(`..${sep}`) && remainder !== "..");
   })) throw new IpPythonProtocolError(`IPython local effect ${label} is outside the Goal path scope`);
   return path;
 }
 
-function safeCommand(payload: Record<string, unknown>, binding: IpPythonHostBinding, action: IpPythonRunCommandRequest["action"]): IpPythonRunCommandRequest {
+function safeCommand(payload: Record<string, unknown>, binding: IpPythonHostBinding, action: IpPythonRunCommandRequest["action"], scopeRoot?: string): IpPythonRunCommandRequest {
   const argv = stringList(payload.argv, "argv");
   const executable = argv[0]!.split(/[\\/]/).at(-1)!.toLowerCase();
   if (["sh", "bash", "zsh", "fish", "cmd", "powershell", "pwsh", "env", "xargs", "parallel", "find", "busybox", "make", "just", "task", "node", "nodejs", "python", "python3", "perl", "ruby", "php", "java", "dotnet", "go"].includes(executable)) throw new IpPythonProtocolError("IPython local effect command wrapper or interpreter is not allowed");
   if (executable === "git") throw new IpPythonProtocolError("Git operations must use dedicated local Git methods");
   if (["npm", "npx", "pnpm", "yarn", "bun"].includes(executable) && (action !== "project.test.run" || argv.length !== 2 || argv[1] !== "test")) throw new IpPythonProtocolError("IPython package-manager effects are limited to the exact test command");
   const target = requiredString(payload.target, "target");
-  const cwd = assertGoalScopedPath(absolutePath(payload.cwd, "cwd"), binding, "cwd");
+  const cwd = assertGoalScopedPath(absolutePath(payload.cwd, "cwd"), binding, "cwd", scopeRoot);
   for (const argument of argv.slice(1)) {
     if (/(?:^|[/\\=:])\.\.(?:[/\\]|$)/.test(argument)) throw new IpPythonProtocolError("IPython local effect command argument escapes the Goal path scope");
     const absoluteArgument = argument.startsWith("/") ? argument : argument.match(/[=:](\/.*)$/)?.[1];
-    if (absoluteArgument !== undefined) assertGoalScopedPath(absoluteArgument, binding, "command argument");
+    if (absoluteArgument !== undefined) assertGoalScopedPath(absoluteArgument, binding, "command argument", scopeRoot);
   }
   return {
     binding,
@@ -200,7 +200,7 @@ function sameBinding(left: IpPythonHostBinding, right: IpPythonHostBinding): boo
   return stable(left) === stable(right);
 }
 
-export function createIpPythonLocalEffectsGateway(options: { adapters: IpPythonLocalEffectAdapters }): IpPythonLocalEffectsGateway {
+export function createIpPythonLocalEffectsGateway(options: { adapters: IpPythonLocalEffectAdapters; scopeRoot?: string }): IpPythonLocalEffectsGateway {
   const operation = (binding: IpPythonHostBinding, request: IpPythonLocalEffectRequest): (() => Promise<IpPythonExecutionResult>) => {
     const payload = payloadRecord(request.payload);
     switch (request.method as IpPythonLocalEffectMethod) {
@@ -210,15 +210,15 @@ export function createIpPythonLocalEffectsGateway(options: { adapters: IpPythonL
         return () => Promise.resolve(options.adapters.writeFile({ binding, path, content }));
       }
       case "run_test": {
-        const command = safeCommand(payload, binding, "project.test.run");
+        const command = safeCommand(payload, binding, "project.test.run", options.scopeRoot);
         return () => Promise.resolve(options.adapters.runTest(command));
       }
       case "run_shell": {
-        const command = safeCommand(payload, binding, "project.shell.run");
+        const command = safeCommand(payload, binding, "project.shell.run", options.scopeRoot);
         return () => Promise.resolve(options.adapters.runShell(command));
       }
       case "run_environment": {
-        const command = safeCommand(payload, binding, "project.environment.change");
+        const command = safeCommand(payload, binding, "project.environment.change", options.scopeRoot);
         return () => Promise.resolve(options.adapters.runEnvironment(command));
       }
       case "git_create_branch": {

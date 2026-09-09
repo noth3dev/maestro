@@ -99,6 +99,18 @@ describe("IPython authority-backed local effects", () => {
     expect(adapters.runShell).not.toHaveBeenCalled();
   });
 
+  it("resolves relative Goal scopes against the trusted workspace root", async () => {
+    const fixture = makeAdapters();
+    const { adapters } = fixture;
+    const gateway = createIpPythonLocalEffectsGateway({ adapters, scopeRoot: "/workspace/project" });
+    const scopedBinding = { ...binding, pathScope: ["allowed"] };
+
+    await expect(gateway.handle(scopedBinding, {
+      method: "run_test",
+      payload: { target: "allowed", argv: ["echo", "ok"], cwd: "/workspace/project/allowed" },
+    })).resolves.toEqual(ok("tested"));
+  });
+
   it("preserves an adapter's unknown outcome instead of treating cancellation as success", async () => {
     const fixture = makeAdapters();
     const { adapters } = fixture;

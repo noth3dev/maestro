@@ -103,7 +103,10 @@ async function observeEnvironment(runtime: EnvironmentExecutionPort, request: { 
 
 function createLocalEffects(options: { readonly authority: ReadOnlyFileAuthorityGateway; readonly workspaceRoot: string; readonly environment: EnvironmentRecord; readonly readEnvironment?: () => Promise<EnvironmentRecord | undefined>; readonly onHandle?: (handle: { cancel(reason?: string): Promise<{ cancelled: boolean }>; observe(): Promise<unknown> } | undefined) => void }) {
   const runtimeFactory = options.environment.type === "container_sandbox" ? createContainerSandboxAdapter : createLocalRuntimeAdapter;
-  const runtime = runtimeFactory(options.environment, options.authority, { ...(options.readEnvironment === undefined ? {} : { readEnvironment: options.readEnvironment }) });
+  const runtime = runtimeFactory(options.environment, options.authority, {
+    scopeRoot: options.workspaceRoot,
+    ...(options.readEnvironment === undefined ? {} : { readEnvironment: options.readEnvironment }),
+  });
   const filePort = (currentBinding: IpPythonHostBinding) => createAuthorizedFileEditPort({ authority: options.authority, context: authorityContext(currentBinding), workspaceRoot: options.workspaceRoot, pathScope: currentBinding.pathScope });
   const gitPort = (currentBinding: IpPythonHostBinding) => createLocalGitPort({ authority: options.authority, context: authorityContext(currentBinding), workspaceRoot: options.workspaceRoot, pathScope: currentBinding.pathScope });
   const safe = async <T>(work: () => Promise<T>, format: (value: T) => string) => {
@@ -115,7 +118,7 @@ function createLocalEffects(options: { readonly authority: ReadOnlyFileAuthority
       return result("error", error instanceof Error ? error.message : String(error), "authority_or_boundary_rejected");
     }
   };
-  return createIpPythonLocalEffectsGateway({ adapters: {
+  return createIpPythonLocalEffectsGateway({ scopeRoot: options.workspaceRoot, adapters: {
     writeFile: (request) => safe(() => filePort(request.binding).writeFile(request.path, request.content), () => "file written"),
     runTest: (request) => observeEnvironment(runtime, environmentRequest(request, JSON.stringify([request.cwd, request.argv])), options.onHandle),
     runShell: (request) => observeEnvironment(runtime, environmentRequest(request, JSON.stringify([request.cwd, request.argv])), options.onHandle),
