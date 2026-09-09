@@ -3356,3 +3356,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Merged CI remediation as `7453f1f` after `REVIEW: PASS`.
 - Post-merge local revalidation passed: clean-fix reproduction, focused tests `26/26`, `npm run build`, `npm run lint`, and `git diff --check`.
 - Plan 2 S1 is fully closed pending the new push CI; S2 remains unopened.
+
+## 2026-09-09 — Plan 2 S2 approval ledger
+
+- Created S2 worktree and confirmed the RED test failed because `capability-approval.ts` did not exist.
+- Added migration `0076_capability_approval_ledger.sql` and the persistence API for Goal-scoped approvals, session full-access mode, repetition budgets/claims, and append-only decision journal.
+- S2 integration tests pass `6/6` against PostgreSQL 17 in the dedicated `maestro_p2` database; build, lint, and diff check pass. Full repository PostgreSQL verification is still required before review/closure.
