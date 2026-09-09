@@ -18,7 +18,7 @@ const binding: IpPythonHostBinding = {
 
 const ok = (content: string): IpPythonExecutionResult => ({ state: "ok", dataClass: "workspace", content });
 
-function adapters(): { adapters: IpPythonLocalEffectAdapters; calls: Record<string, unknown[]> } {
+function makeAdapters(): { adapters: IpPythonLocalEffectAdapters; calls: Record<string, unknown[]> } {
   const calls: Record<string, unknown[]> = {};
   const track = (name: string, value: unknown): void => { (calls[name] ??= []).push(value); };
   return {
@@ -37,7 +37,8 @@ function adapters(): { adapters: IpPythonLocalEffectAdapters; calls: Record<stri
 
 describe("IPython authority-backed local effects", () => {
   it("routes local file, command, and Git requests with the immutable Goal binding", async () => {
-    const { adapters, calls } = adapters();
+    const fixture = makeAdapters();
+    const { adapters, calls } = fixture;
     const gateway = createIpPythonLocalEffectsGateway({ adapters });
 
     await expect(gateway.handle(binding, { method: "write_file", payload: { path: "src/app.ts", content: "export {}" } })).resolves.toEqual(ok("written"));
@@ -50,7 +51,8 @@ describe("IPython authority-backed local effects", () => {
   });
 
   it("rejects remote, network, unknown, and malformed effects before an adapter can run", async () => {
-    const { adapters } = adapters();
+    const fixture = makeAdapters();
+    const { adapters } = fixture;
     const gateway = createIpPythonLocalEffectsGateway({ adapters });
 
     await expect(gateway.handle(binding, { method: "git_remote_push", payload: { remote: "origin", ref: "main" } })).rejects.toThrow("not allowed");
@@ -63,7 +65,8 @@ describe("IPython authority-backed local effects", () => {
   });
 
   it("preserves an adapter's unknown outcome instead of treating cancellation as success", async () => {
-    const { adapters } = adapters();
+    const fixture = makeAdapters();
+    const { adapters } = fixture;
     adapters.runCommand = vi.fn(async () => ({ state: "unknown", dataClass: "workspace", content: "cancelled", reason: "cancellation_outcome_unknown" }));
     const gateway = createIpPythonLocalEffectsGateway({ adapters });
 
@@ -71,7 +74,8 @@ describe("IPython authority-backed local effects", () => {
   });
 
   it("exposes local effects through the host request handler without weakening read-only routing", async () => {
-    const { adapters } = adapters();
+    const fixture = makeAdapters();
+    const { adapters } = fixture;
     const handler = createLocalHostRequestHandler({
       binding,
       readOnly: { readFile: async () => ok("read"), gitRevision: async () => ok("abc123") },
