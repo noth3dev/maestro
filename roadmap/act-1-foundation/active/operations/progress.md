@@ -3625,3 +3625,27 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added RED tests for IPython local-effects, environment runtime, and Git path containment. Fixed scope resolution to use the trusted workspace root, and threaded that root from Control Plane composition.
 - Focused verification passes **5 files / 58 tests**; build, lint, and diff check pass. The next gate is the full non-PostgreSQL and authoritative PostgreSQL verification followed by a fresh independent review.
 - No live-provider acceptance, merge, push, worktree deletion, or later slice was performed.
+
+
+## 2026-09-09 — S4 resumed after state check
+
+- Read `execution/plan-1.md` §0.1, `execution/plan-2.md` S4/S5/S6/Order, and the full canonical operations plan. Main is clean at `dc5966a`; `npm run build` exits `0`; latest CI `34317606352` is `completed / success`.
+- The active implementation is the isolated S4 worktree `plan2-authority-backed-local-effects` at `6c83c82`; it contains the relative-Goal-scope remediation that is not yet on main. The canonical main-tree status block and main progress history predate this active worktree, so repository/worktree state is treated as authoritative.
+- Relative-scope non-PostgreSQL verification already passed `135/197` files and `917/1320` tests; the PostgreSQL result after the remediation was still open.
+- Started the authoritative PostgreSQL verification for the latest S4 commits: PID `4116465`, log `/tmp/plan2-s4-relative-postgres-full.log`. No live-provider acceptance, merge, push, worktree deletion, or later slice was performed.
+
+
+## 2026-09-09 — S4 authoritative PostgreSQL remediation gate green
+
+- Latest S4 worktree PostgreSQL command (`MAESTRO_TEST_DATABASE_URL=postgresql://maestro@127.0.0.1:55432/maestro_local npm test -- --pool forks --maxWorkers 1 --no-file-parallelism`) exited `0`; log: `/tmp/plan2-s4-relative-postgres-full.log`.
+- Final evidence: **197/197 test files passed and 1330/1330 tests passed**, duration `661.39s`; no failure lines. The prior green PostgreSQL gate had 1325 tests, so this run includes the new relative-scope regressions.
+- No live-provider acceptance ran. S4 remains open pending fresh independent review; merge, push, worktree deletion, and later slices remain blocked until `REVIEW: PASS`.
+
+
+## 2026-09-09 — S4 fresh independent review PASS
+
+- Fresh independent review covered `92c8cb6..6c83c82` in the S4 worktree and returned **`REVIEW: PASS`**.
+- Reviewer confirmed relative Goal scopes resolve against the trusted `workspaceRoot` in local-effects, environment runtime, and Git path containment; absolute-scope, symlink-escape, and workspace/path-escape regressions remain covered.
+- Reviewer evidence: focused 5-file suite `55/55`, build exit `0`, lint exit `0`, and diff-check exit `0`; authoritative PostgreSQL log `/tmp/plan2-s4-relative-postgres-full.log` reports `197/197` files and `1330/1330` tests.
+- Reviewer confirmed no S6 production-wiring scope creep; `main.ts` is unchanged. Live-provider acceptance was not run.
+- Per the current operator instruction, merge, push, worktree deletion, and next-slice initiation remain intentionally pending.
