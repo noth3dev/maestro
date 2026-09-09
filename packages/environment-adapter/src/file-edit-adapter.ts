@@ -35,7 +35,7 @@ export class FileEditAuthorizationError extends FileEditBoundaryError {
 }
 
 const DEFAULT_MAX_BYTES = 1_048_576;
-const SENSITIVE_PATH = /(?:^|[\/])(?:\.git(?:[\/].*)?|\.env(?:\..*)?|id_rsa(?:\..*)?|.*(?:password|passwd|secret|token|private[-_]?key|api[-_]?key).*[.]?(?:pem|key|json|txt)?|.*\.(?:pem|key))$/i;
+const SENSITIVE_PATH = /(?:^|[/])(?:\.git(?:[/].*)?|\.env(?:\..*)?|id_rsa(?:\..*)?|.*(?:password|passwd|secret|token|private[-_]?key|api[-_]?key).*[.]?(?:pem|key|json|txt)?|.*\.(?:pem|key))$/i;
 
 function existingPath(path: string): string {
   try { return realpathSync.native(path); } catch { return resolve(path); }
