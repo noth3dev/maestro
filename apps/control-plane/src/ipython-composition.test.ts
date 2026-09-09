@@ -4,8 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import type { ActionRequest, AuthorityDecision } from "@maestro/authority";
-import { createAuthorizedFileEditPort } from "@maestro/environment-adapter";
-import { createIpPythonLocalEffectsGateway } from "@maestro/agent-runtime";
+import type { EnvironmentRecord } from "@maestro/domain";
 import { createIpPythonProductionKernel } from "./ipython-composition.js";
 
 const binding = {
@@ -22,6 +21,18 @@ const binding = {
   budgetEffectCents: 0,
 } as const;
 
+
+
+function localEnvironment(root: string): EnvironmentRecord {
+  return {
+    environmentId: "environment-composition", recipeVersion: 1, goalId: binding.goalId, departmentId: "department-composition", workerId: binding.operatorId, projectId: binding.projectId, missionId: "mission-composition", type: "local_worktree",
+    recipe: {}, resolvedInputs: {}, capabilities: [{ name: "echo", version: "1" }], secretsReferences: [],
+    boundaries: { network: ["none"], filesystem: [root], processes: ["echo"], browsers: [], devices: [] },
+    resources: { cpuMillis: 1000, memoryMb: 64, diskMb: 64, processCount: 1, durationSeconds: 30 },
+    expiresAt: "2030-01-01T00:00:00.000Z", state: "ready", setupLog: [], health: { status: "healthy", checkedAt: null, summary: null }, contentIdentity: "a".repeat(64),
+    cleanup: { status: "not_scheduled", scheduledAt: null, completedAt: null, ownedResources: [], retainedEvidence: [] },
+  };
+}
 
 describe("Control Plane IPython composition", () => {
   it("routes real Python read_file and git_revision through authority-backed adapters", async () => {
@@ -48,7 +59,7 @@ describe("Control Plane IPython composition", () => {
   });
 
 
-  it("routes real Python write_file through the optional authority-backed local-effect gateway", async () => {
+  it("routes real Python file and test effects through composed authority-backed adapters", async () => {
     const root = mkdtempSync(join(tmpdir(), "maestro-ipython-composition-write-"));
     try {
       const calls: string[] = [];
@@ -59,21 +70,11 @@ describe("Control Plane IPython composition", () => {
           return { effect: "allow", reason: "test_allow", classification: "ordinary", request, recordId: "test-record" };
         },
       };
-      const file = createAuthorizedFileEditPort({ authority, context: { ...binding, policyVersion: binding.authorityPolicyVersion }, workspaceRoot: root, pathScope: [root] });
-      const localEffects = createIpPythonLocalEffectsGateway({ adapters: {
-        writeFile: async ({ path, content }) => { await file.writeFile(path, content); return { state: "ok", dataClass: "workspace", content: "written" }; },
-        runTest: async () => ({ state: "error", dataClass: "workspace", content: "not configured" }),
-        gitCreateBranch: async () => ({ state: "error", dataClass: "workspace", content: "not configured" }),
-        gitCreateWorktree: async () => ({ state: "error", dataClass: "workspace", content: "not configured" }),
-        gitCommit: async () => ({ state: "error", dataClass: "workspace", content: "not configured" }),
-        gitAdvanceBranch: async () => ({ state: "error", dataClass: "workspace", content: "not configured" }),
-        gitRemoveWorktree: async () => ({ state: "error", dataClass: "workspace", content: "not configured" }),
-      } });
-      const kernel = createIpPythonProductionKernel({ authority, workspaceRoot: root, pythonExecutable: "/usr/bin/python3", localEffects }, binding.sessionId, { ...binding, pathScope: [root] });
+      const kernel = createIpPythonProductionKernel({ authority, workspaceRoot: root, pythonExecutable: "/usr/bin/python3", localEnvironment: localEnvironment(root) }, binding.sessionId, { ...binding, pathScope: [root] });
       try {
-        await expect(kernel.execute({ sessionId: binding.sessionId, code: "print(write_file('README.md', 'local effect'))", binding: { ...binding, pathScope: [root] } })).resolves.toMatchObject({ state: "ok" });
+        await expect(kernel.execute({ sessionId: binding.sessionId, code: "print(write_file('README.md', 'local effect'))\nprint(run_test('echo', ['echo', 'test effect'], '"+root+"'))", binding: { ...binding, pathScope: [root] } })).resolves.toMatchObject({ state: "ok" });
         expect(readFileSync(join(root, "README.md"), "utf8")).toBe("local effect");
-        expect(calls).toEqual(["project.file.edit"]);
+        expect(calls).toEqual(["project.file.edit", "project.test.run"]);
       } finally { await kernel.close?.(); }
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
