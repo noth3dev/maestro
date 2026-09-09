@@ -4,6 +4,8 @@ const ACTION_CLASSIFICATIONS: Readonly<Record<string, ActionClassification>> = {
   "project.file.read": "ordinary",
   "project.file.edit": "ordinary",
   "project.test.run": "ordinary",
+  "project.shell.run": "ordinary",
+  "project.environment.change": "ordinary",
   "git.local.branch.create": "ordinary",
   "git.local.branch.advance": "ordinary",
   "git.local.commit": "ordinary",
