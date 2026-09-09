@@ -140,15 +140,24 @@ class Host:
     def write_file(self, path, content):
         return host_call(self._request_id, "write_file", {"path": path, "content": content})
 
-    def run_command(self, action, target, argv, cwd, environment=None, timeoutMs=None, outputCapBytes=None):
-        payload = {"action": action, "target": target, "argv": argv, "cwd": cwd}
+    def _run(self, method, target, argv, cwd, environment=None, timeoutMs=None, outputCapBytes=None):
+        payload = {"target": target, "argv": argv, "cwd": cwd}
         if environment is not None:
             payload["environment"] = environment
         if timeoutMs is not None:
             payload["timeoutMs"] = timeoutMs
         if outputCapBytes is not None:
             payload["outputCapBytes"] = outputCapBytes
-        return host_call(self._request_id, "run_command", payload)
+        return host_call(self._request_id, method, payload)
+
+    def run_test(self, target, argv, cwd, environment=None, timeoutMs=None, outputCapBytes=None):
+        return self._run("run_test", target, argv, cwd, environment, timeoutMs, outputCapBytes)
+
+    def run_shell(self, target, argv, cwd, environment=None, timeoutMs=None, outputCapBytes=None):
+        return self._run("run_shell", target, argv, cwd, environment, timeoutMs, outputCapBytes)
+
+    def run_environment(self, target, argv, cwd, environment=None, timeoutMs=None, outputCapBytes=None):
+        return self._run("run_environment", target, argv, cwd, environment, timeoutMs, outputCapBytes)
 
     def git_create_branch(self, branchName, baseRevision):
         return host_call(self._request_id, "git_create_branch", {"branchName": branchName, "baseRevision": baseRevision})
@@ -224,7 +233,9 @@ def execute(frame):
     local_namespace["read_file"] = local_namespace["host"].read_file
     local_namespace["git_revision"] = local_namespace["host"].git_revision
     local_namespace["write_file"] = local_namespace["host"].write_file
-    local_namespace["run_command"] = local_namespace["host"].run_command
+    local_namespace["run_test"] = local_namespace["host"].run_test
+    local_namespace["run_shell"] = local_namespace["host"].run_shell
+    local_namespace["run_environment"] = local_namespace["host"].run_environment
     local_namespace["git_create_branch"] = local_namespace["host"].git_create_branch
     local_namespace["git_create_worktree"] = local_namespace["host"].git_create_worktree
     local_namespace["git_commit"] = local_namespace["host"].git_commit
