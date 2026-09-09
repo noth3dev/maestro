@@ -190,7 +190,7 @@ describeDatabase("real HTTP worker recovery with a process-backed provider", () 
       const ownerA = `owner-bind-window-${randomUUID()}`;
       controlPlaneA = await startControlPlane({
         databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0,
-        actorId: "maestro-control-plane", leaseOwnerId: ownerA, reconcilerLeaseDurationMs: 30_000, shutdownDrainTimeoutMs: 100,
+        actorId: "maestro-control-plane", leaseOwnerId: ownerA, reconcilerLeaseDurationMs: 30_000, shutdownDrainTimeoutMs: 100, modelRoutingMode: "pin", nativeModelRef: "test/model-a",
       }, provider.port, { MAESTRO_TEST_SPAWN_RETURN_DELAY_MS: "5000" });
       const request = fetch(`http://127.0.0.1:${controlPlaneA.port}/v1/councils/${graph.councilId}/departments/product/workers`, {
         method: "POST", headers: { ...auth, "idempotency-key": randomUUID() }, body: JSON.stringify({ projectId, planVersion: graph.planVersion, itemId: "scout-1" }),
@@ -212,7 +212,7 @@ describeDatabase("real HTTP worker recovery with a process-backed provider", () 
       const ownerB = `owner-bind-successor-${randomUUID()}`;
       controlPlaneB = await startControlPlane({
         databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0,
-        actorId: "maestro-control-plane", leaseOwnerId: ownerB, reconcilerLeaseDurationMs: 30_000, shutdownDrainTimeoutMs: 100,
+        actorId: "maestro-control-plane", leaseOwnerId: ownerB, reconcilerLeaseDurationMs: 30_000, shutdownDrainTimeoutMs: 100, modelRoutingMode: "pin", nativeModelRef: "test/model-a",
       }, provider.port);
       await expect(readWorker(pool, workerId)).resolves.toMatchObject({
         status: "unknown", recoveryState: "fenced", executionRef: expect.stringMatching(/^pending:/), invocationRef: expect.stringMatching(/^pending:/), ownerId: `reconciler:${ownerB}`,
@@ -249,7 +249,7 @@ describeDatabase("real HTTP worker recovery with a process-backed provider", () 
       const ownerA = `owner-a-${randomUUID()}`;
       controlPlaneA = await startControlPlane({
         databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0,
-        actorId: "maestro-control-plane", leaseOwnerId: ownerA, reconcilerLeaseDurationMs: 30_000, shutdownDrainTimeoutMs: 100,
+        actorId: "maestro-control-plane", leaseOwnerId: ownerA, reconcilerLeaseDurationMs: 30_000, shutdownDrainTimeoutMs: 100, modelRoutingMode: "pin", nativeModelRef: "test/model-a",
       }, provider.port);
       const response = await fetch(`http://127.0.0.1:${controlPlaneA.port}/v1/councils/${graph.councilId}/departments/product/workers`, {
         method: "POST", headers: { ...auth, "idempotency-key": randomUUID() }, body: JSON.stringify({ projectId, planVersion: graph.planVersion, itemId: "scout-1" }),
@@ -273,7 +273,7 @@ describeDatabase("real HTTP worker recovery with a process-backed provider", () 
       const ownerB = `owner-b-${randomUUID()}`;
       controlPlaneB = await startControlPlane({
         databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0,
-        actorId: "maestro-control-plane", leaseOwnerId: ownerB, reconcilerLeaseDurationMs: 30_000, shutdownDrainTimeoutMs: 100,
+        actorId: "maestro-control-plane", leaseOwnerId: ownerB, reconcilerLeaseDurationMs: 30_000, shutdownDrainTimeoutMs: 100, modelRoutingMode: "pin", nativeModelRef: "test/model-a",
       }, provider.port);
       const recovered = await readWorker(pool, workerId!);
       expect(recovered).toMatchObject({ status: "unknown", recoveryState: "fenced", executionRef: expect.stringMatching(/^provider-/), invocationRef: expect.stringMatching(/^provider-/), ownerId: `reconciler:${ownerB}` });
