@@ -11,6 +11,7 @@ import { applyAllMigrations } from "../../../packages/persistence/src/test-migra
 import { advanceWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession, type WorkspaceSession } from "../../cli/src/tui/session.js";
 import { readDashboard } from "../../cli/src/tui/commands/read-commands.js";
 import { runActivityStream, subscribeToEvents } from "../../cli/src/tui/activity-stream.js";
+import type { TranscriptLine } from "../../cli/src/tui/theme.js";
 import { renderStatusHeader } from "../../cli/src/tui/components/shell.js";
 import { createControlPlane } from "./main.js";
 
@@ -164,8 +165,8 @@ describeDatabase("TUI SSE cursor and failure semantics against real PostgreSQL",
 
     const consumeFailure = async (client: Parameters<typeof runActivityStream>[0]["client"], streamProjectId = projectId) => {
       const controller = new AbortController();
-      const failures: string[] = [];
-      const unavailable: string[] = [];
+      const failures: TranscriptLine[] = [];
+      const unavailable: TranscriptLine[] = [];
       const events: GoalEvent[] = [];
       const savedCursors: string[] = [];
       await runActivityStream({
@@ -180,14 +181,16 @@ describeDatabase("TUI SSE cursor and failure semantics against real PostgreSQL",
     try {
       const unauthorized = createApiClient({ baseUrl, token: "not-a-valid-token" });
       const unauthorizedResult = await consumeFailure(unauthorized);
-      expect(unauthorizedResult.failures[0]).toContain("authorization required");
+      expect(unauthorizedResult.failures[0]?.text).toContain("authorization required");
+      expect(unauthorizedResult.failures[0]?.kind).toBe("error");
       expect(unauthorizedResult.unavailable).toEqual([]);
       expect(unauthorizedResult.events).toEqual([]);
       expect(unauthorizedResult.savedCursors).toEqual([]);
 
       const forbidden = createApiClient({ baseUrl, token: `${credentialId}.${secret}` });
       const forbiddenResult = await consumeFailure(forbidden, randomUUID());
-      expect(forbiddenResult.failures[0]).toContain("authorization denied");
+      expect(forbiddenResult.failures[0]?.text).toContain("authorization denied");
+      expect(forbiddenResult.failures[0]?.kind).toBe("error");
       expect(forbiddenResult.unavailable).toEqual([]);
       expect(forbiddenResult.events).toEqual([]);
       expect(forbiddenResult.savedCursors).toEqual([]);
@@ -197,8 +200,9 @@ describeDatabase("TUI SSE cursor and failure semantics against real PostgreSQL",
         fetch: async () => new Response(JSON.stringify({ error: { code: "provider_unavailable", message: "Gateway unavailable" } }), { status: 503 }),
       });
       const unavailableResult = await consumeFailure(unavailable);
-      expect(unavailableResult.unavailable[0]).toContain("Activity stream unavailable");
-      expect(unavailableResult.unavailable[0]).toContain("Gateway unavailable");
+      expect(unavailableResult.unavailable[0]?.text).toContain("Activity stream unavailable");
+      expect(unavailableResult.unavailable[0]?.text).toContain("Gateway unavailable");
+      expect(unavailableResult.unavailable[0]?.kind).toBe("error");
       expect(unavailableResult.failures).toEqual([]);
       expect(unavailableResult.events).toEqual([]);
       expect(unavailableResult.savedCursors).toEqual([]);
