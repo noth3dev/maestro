@@ -2,9 +2,9 @@
 
 ## Current canonical status — 2026-09-09
 
-This block is authoritative for the current `plan2-worker-ipython-composition` worktree. Older phase markers, branch maps, and “next step” entries below are historical execution notes unless explicitly updated here.
+This block is authoritative for the repository root `main`. Older worktree markers, branch maps, and “next step” entries below are historical execution notes unless explicitly updated here.
 
-- **Branch:** `plan2-worker-ipython-composition`, based on `d4ed213`; S6 source, tests, four migrations, and append-only progress/findings updates are uncommitted in the isolated worktree. The main checkout remains untouched.
+- **Main:** `a37ebad` (`merge: integrate Plan 2 S6 verified work`), based on `d4ed213`; the verified S6 worktree and branch have been merged, pushed, and removed.
 - **Phase 1:** inherited native-only foundation is verified. No Prime runtime or fallback is present in this slice.
 - **Phase 2 S6:** Worker-only IPython composition is implemented through the native Model Gateway boundary. Durable Worker/worktree/environment bindings, Goal lease/fencing/expiry checks, typed tool identity, constrained JSON-lines host bridge, local adapters, capability journaling, observations, two-stage effects, crash/restart handling, and orphan evidence are implemented.
 - **Phase 2 S6 acceptance evidence:** latest serialized PostgreSQL suite `/tmp/plan2-s6-postgres-authoritative-final2.log` exited `0` with **199/199 files and 1365/1365 tests passed**. Focused IPython verification passed **5/5 files and 57/57 tests**; focused PostgreSQL verification passed **4/4 files and 59/59 tests**. Real Model Gateway + PostgreSQL Worker acceptance, real Git worktree evidence, SIGKILL recovery, fencing, cancellation, and environment binding checks passed.

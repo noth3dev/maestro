@@ -1,6 +1,6 @@
 # Phase 2 — Secretary Office Core and Hierarchical Goal Execution
 
-> **Current status (2026-09-08):** The hierarchical execution building blocks and real PostgreSQL/native Model Gateway evidence exist, including native Head and Worker admissions. Phase 2 is reopened for the approved production host-tool contract: workers remain text/evidence-only until the IPython local host-tool surface, authority enforcement, approval hierarchy, and live acceptance scenario are implemented and independently reviewed. Historical code-level completion markers remain provenance, not current acceptance. Prime Agent is not part of the current implementation.
+> **Current status (2026-09-08):** The hierarchical execution building blocks and real PostgreSQL/native Model Gateway evidence exist, including native Head and Worker admissions. Plan 2 S6 is merged and verified; Phase 2 now proceeds to §S7 documentation handoff. The later Plan 3 production host-tool contract remains separate: workers remain text/evidence-only until the IPython local host-tool surface, authority enforcement, approval hierarchy, and live acceptance scenario are implemented and independently reviewed. Historical code-level completion markers remain provenance, not current acceptance. Prime Agent is not part of the current implementation.
 
 
 ## Outcome
