@@ -3562,3 +3562,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Reproduced CI run `34314783417` locally against PostgreSQL 17: the server correctly returns HTTP 401 with `authentication_required`, and the stream runner correctly emits a semantic `TranscriptLine`.
 - The failure was a stale integration assertion left as a string assertion after S0 changed `onFailure`/`onUnavailable` to typed transcript lines. Updated `apps/control-plane/src/tui-sse-reconnect.integration.test.ts` to assert `.text` and semantic `kind`.
 - Focused PostgreSQL verification passed: `2 tests`, `1 file`, exit `0`. Next: full `npm run check`, independent review, commit, and push this CI repair before resuming S4.
+
+
+## 2026-09-09 — Plan 2 S0 CI repair verified
+
+- Independent review returned `REVIEW: PASS` for commit `2a6abe6`; the repair is limited to the stale typed-transcript assertions and append-only CI notes.
+- Corrected full PostgreSQL verification completed with exit `0`: Vitest `195 passed` files and `1299 passed` tests.
+- `npm run lint` completed with exit `0`; `git diff --check HEAD~1..HEAD` completed with exit `0`.
+- The original push run `34314783417` remains the historical RED run; this repair is ready to push. No S4 implementation work has resumed.
