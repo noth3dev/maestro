@@ -1,3 +1,5 @@
+import type { TranscriptLine } from "./theme.js";
+
 export interface CursorEvent {
   cursor: string;
   eventId?: string;
@@ -47,11 +49,15 @@ function isAuthorizationFailure(error: unknown): boolean {
   return status === 401 || status === 403;
 }
 
-export function describeStreamFailure(error: unknown): string {
+export function describeStreamFailureLine(error: unknown): TranscriptLine {
   const status = streamErrorStatus(error);
-  if (status === 401) return `Activity stream authorization required: ${streamErrorMessage(error)}`;
-  if (status === 403) return `Activity stream authorization denied: ${streamErrorMessage(error)}`;
-  return `Activity stream unavailable: ${streamErrorMessage(error)}`;
+  if (status === 401) return { kind: "error", text: `Activity stream authorization required: ${streamErrorMessage(error)}` };
+  if (status === 403) return { kind: "error", text: `Activity stream authorization denied: ${streamErrorMessage(error)}` };
+  return { kind: "error", text: `Activity stream unavailable: ${streamErrorMessage(error)}` };
+}
+
+export function describeStreamFailure(error: unknown): string {
+  return describeStreamFailureLine(error).text;
 }
 
 function waitForReconnect(delayMs: number, signal: AbortSignal): Promise<void> {
@@ -99,8 +105,8 @@ export async function* subscribeToEvents<T extends CursorEvent>(options: EventSu
 
 export interface ActivityStreamRunnerOptions<T extends CursorEvent> extends EventSubscriptionOptions<T> {
   onEvent: (event: T) => void | Promise<void>;
-  onUnavailable?: (message: string) => void;
-  onFailure?: (message: string) => void;
+  onUnavailable?: (message: TranscriptLine) => void;
+  onFailure?: (message: TranscriptLine) => void;
 }
 
 export async function runActivityStream<T extends CursorEvent>(options: ActivityStreamRunnerOptions<T>): Promise<void> {
@@ -108,12 +114,12 @@ export async function runActivityStream<T extends CursorEvent>(options: Activity
   try {
     for await (const event of subscribeToEvents({
       ...subscription,
-      onExhausted: (error) => onUnavailable?.(describeStreamFailure(error)),
+      onExhausted: (error) => onUnavailable?.(describeStreamFailureLine(error)),
     })) {
       if (options.signal.aborted) return;
       await onEvent(event);
     }
   } catch (error) {
-    if (!options.signal.aborted) onFailure?.(describeStreamFailure(error));
+    if (!options.signal.aborted) onFailure?.(describeStreamFailureLine(error));
   }
 }

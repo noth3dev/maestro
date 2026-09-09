@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { describeStreamFailure, mergeEvents, subscribeToEvents } from "./activity-stream.js";
+import type { TranscriptLine } from "./theme.js";
+import { describeStreamFailure, describeStreamFailureLine, mergeEvents, subscribeToEvents } from "./activity-stream.js";
 
 describe("mergeEvents", () => {
   it("deduplicates reconnect overlap by durable cursor", () => {
@@ -14,6 +15,14 @@ describe("mergeEvents", () => {
   });
 });
 
+
+describe("describeStreamFailureLine", () => {
+  it("carries authorization and availability failures as error semantics", () => {
+    const line: TranscriptLine = describeStreamFailureLine(Object.assign(new Error("Gateway unavailable"), { status: 503 }));
+
+    expect(line).toEqual({ kind: "error", text: "Activity stream unavailable: Gateway unavailable" });
+  });
+});
 
 describe("describeStreamFailure", () => {
   it("renders authorization failures as authorization failures", () => {
