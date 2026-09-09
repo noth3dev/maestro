@@ -209,12 +209,18 @@ export function createIpPythonLocalEffectsGateway(options: { adapters: IpPythonL
         const content = textValue(payload.content, "content");
         return () => Promise.resolve(options.adapters.writeFile({ binding, path, content }));
       }
-      case "run_test":
-        return () => Promise.resolve(options.adapters.runTest(safeCommand(payload, binding, "project.test.run")));
-      case "run_shell":
-        return () => Promise.resolve(options.adapters.runShell(safeCommand(payload, binding, "project.shell.run")));
-      case "run_environment":
-        return () => Promise.resolve(options.adapters.runEnvironment(safeCommand(payload, binding, "project.environment.change")));
+      case "run_test": {
+        const command = safeCommand(payload, binding, "project.test.run");
+        return () => Promise.resolve(options.adapters.runTest(command));
+      }
+      case "run_shell": {
+        const command = safeCommand(payload, binding, "project.shell.run");
+        return () => Promise.resolve(options.adapters.runShell(command));
+      }
+      case "run_environment": {
+        const command = safeCommand(payload, binding, "project.environment.change");
+        return () => Promise.resolve(options.adapters.runEnvironment(command));
+      }
       case "git_create_branch": {
         const branchName = requiredString(payload.branchName, "branchName");
         const baseRevision = requiredString(payload.baseRevision, "baseRevision");

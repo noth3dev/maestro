@@ -87,6 +87,18 @@ describe("IPython authority-backed local effects", () => {
     expect(adapters.writeFile).toHaveBeenCalledTimes(1);
   });
 
+  it("rejects an invalid command during preparation before any commit can run", async () => {
+    const fixture = makeAdapters();
+    const { adapters } = fixture;
+    const gateway = createIpPythonLocalEffectsGateway({ adapters });
+
+    await expect(gateway.prepare(binding, {
+      method: "run_shell",
+      payload: { target: "network", argv: ["curl", "https://example.com"], cwd: "/workspace/project" },
+    })).rejects.toThrow("outside the Goal path scope");
+    expect(adapters.runShell).not.toHaveBeenCalled();
+  });
+
   it("preserves an adapter's unknown outcome instead of treating cancellation as success", async () => {
     const fixture = makeAdapters();
     const { adapters } = fixture;
