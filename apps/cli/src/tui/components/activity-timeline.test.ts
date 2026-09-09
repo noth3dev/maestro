@@ -37,11 +37,19 @@ describe("renderActivityTimeline", () => {
   it("maps durable wire effect payloads into semantic gate events", () => {
     const mapped = toActivityTimelineEvent({
       cursor: "11", eventId: "event-11", projectId: "project-1", goalId: "goal-1", aggregateVersion: "1", schemaVersion: 1, occurredAt: "2026-01-01T00:00:00.000Z", eventType: "effect.denied",
-      payload: { actor: "worker-3", action: "system.policy.bypass", target: "policy", classification: "forbidden", outcome: "denied", reason: "forbidden" },
+      payload: { actor: "worker-3", action: "system.policy.bypass", target: "policy", classification: "forbidden", outcome: "denied", reason: "forbidden", kind: "error" },
     });
     expect(mapped.effect).toMatchObject({ actor: "worker-3", action: "system.policy.bypass", classification: "forbidden", outcome: "denied", reason: "forbidden", kind: "error" });
     const line = stripAnsi(renderActivityTimeline([mapped], 120)[0]!);
     expect(line).toContain("forbidden · denied");
+  });
+
+  it("preserves the source semantic kind when outcome text changes", () => {
+    const mapped = toActivityTimelineEvent({
+      cursor: "12", eventId: "event-12", projectId: "project-1", goalId: "goal-1", aggregateVersion: "2", schemaVersion: 1, occurredAt: "2026-01-01T00:00:00.000Z", eventType: "effect.completed",
+      payload: { actor: "worker-3", action: "project.file.edit", target: "src/server.ts", classification: "ordinary", outcome: "changed", kind: "error" },
+    });
+    expect(mapped.effect?.kind).toBe("error");
   });
 
   it("renders an explicit empty state", () => {
