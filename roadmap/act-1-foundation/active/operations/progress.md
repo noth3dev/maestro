@@ -3555,3 +3555,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Rechecked main state: HEAD `374aafd`, working tree clean, `npm run build` exit `0`; `gh run list --limit 1` reports push CI `34314783417` still `in_progress` with no failure.
 - S0 was pushed to `origin/main`; no later S0 worktree remains.
 - Per Plan 2 Order, the next slice is S4 `authority-backed-local-effects`. Starting its isolated lifecycle now; S0 CI remains monitored and will take priority if it turns red.
+
+
+## 2026-09-09 — Plan 2 S0 CI failure reproduced and isolated
+
+- Reproduced CI run `34314783417` locally against PostgreSQL 17: the server correctly returns HTTP 401 with `authentication_required`, and the stream runner correctly emits a semantic `TranscriptLine`.
+- The failure was a stale integration assertion left as a string assertion after S0 changed `onFailure`/`onUnavailable` to typed transcript lines. Updated `apps/control-plane/src/tui-sse-reconnect.integration.test.ts` to assert `.text` and semantic `kind`.
+- Focused PostgreSQL verification passed: `2 tests`, `1 file`, exit `0`. Next: full `npm run check`, independent review, commit, and push this CI repair before resuming S4.
