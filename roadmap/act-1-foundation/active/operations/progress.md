@@ -3432,3 +3432,17 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - The stale-schema reproduction was separately verified in `packages/persistence/src/device.integration.test.ts`: fresh database device suite passed `11/11`; the prior red was environmental residue from an interrupted run, not S3 production behavior.
 - Independent no-edit review returned `REVIEW: PASS`. S3 exit evidence is complete: filesystem/Git byte-equality checks, approval rejection, stage divergence rejection, stop/fencing handling, durable journal callbacks, session isolation, factory-bound binding checks, and Stage 2 output preservation are covered.
 - Main build and latest CI check were green before this gate. Next lifecycle step is local commit and merge to main; no S4 or later slice has started.
+
+
+## 2026-09-09 — Plan 2 S3 post-merge revalidation status
+
+- Main is merged at `892cfea`; `git status --short` is clean before this ledger append, `npm run build` exits `0`, and `gh run list --limit 1` reports successful CI `34305169030`.
+- Post-merge main revalidation is running serially against disposable PostgreSQL container `maestro-plan2-s3-postgres` on port `55433`, PID `3886249`, log `/tmp/plan2-s3-main-revalidation.log`.
+- Latest observed suites are green; final exit code and Vitest summary are still pending. No later slice has started.
+
+
+## 2026-09-09 — Plan 2 S3 main revalidation closure
+
+- Post-merge main revalidation ran serially against disposable PostgreSQL container `maestro-plan2-s3-postgres` on port `55433` with `npm test -- --pool forks --maxWorkers 1 --no-file-parallelism`.
+- Exit code `0`; Vitest summary: `194/194` files passed and `1,289/1,289` tests passed. Log: `/tmp/plan2-s3-main-revalidation.log`.
+- The merged S3 result at main commit `892cfea` satisfies the S3 lifecycle gates; no later slice was started.

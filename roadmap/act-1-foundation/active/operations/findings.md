@@ -1424,3 +1424,14 @@ All downstream routing documentation must use this contract and must not restore
 
 - The replacement run on a fresh PostgreSQL container passed without failures: exit `0`, `194/194` files, `1,289/1,289` tests. The prior device migration red was confirmed as stale cross-schema residue from an interrupted process.
 - No production fix was required for that environmental failure. The fresh container will remain until post-merge revalidation is complete, then be removed.
+
+
+## 2026-09-09 — Plan 2 S3 post-merge revalidation pending
+
+- Post-merge main verification has no observed test failure, but it remains non-authoritative until PID `3886249` exits and the complete Vitest summary is recorded.
+
+
+## 2026-09-09 — Plan 2 S3 main revalidation finding
+
+- Main post-merge verification passed cleanly: exit `0`, `194/194` files, `1,289/1,289` tests. The disposable PostgreSQL container was isolated on port `55433`; the run was serialized with one worker and no concurrent Vitest process.
+- No new failure or unresolved finding remains for Plan 2 S3.
