@@ -3345,3 +3345,8 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Push CI `34301031718` completed `failure` during clean-runner `npm run build`; the new `@maestro/authority` import was not resolvable because `packages/domain/tsconfig.json` lacked the authority project reference.
 - Root cause was reproduced with a clean local `npm ci` and removed build outputs. Added the missing project reference; the same clean build now passes.
 - S2 remains unopened while the remediation is reviewed and revalidated.
+
+## 2026-09-09 — Plan 2 S1 CI remediation review
+
+- Independent review returned `REVIEW: PASS` for `be571dc`; the missing domain-to-authority project reference is the minimal scoped fix.
+- Clean workspace build reproduction and lint/diff checks are green.
