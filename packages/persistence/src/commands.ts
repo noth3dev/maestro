@@ -389,7 +389,7 @@ async function applyGoalControlTransition(
              WHERE resolution.capability_kind = pending.capability_kind
                AND resolution.project_id = pending.project_id AND resolution.goal_id = pending.goal_id
                AND resolution.command_id = pending.command_id
-               AND resolution.effect_index = CASE WHEN pending.details->>'effectIndex' ~ '^[0-9]+$' AND (pending.details->>'effectIndex')::numeric BETWEEN 0 AND 2147483647 THEN (pending.details->>'effectIndex')::integer END
+               AND resolution.effect_index = CASE WHEN pending.details->>'effectIndex' ~ '^[0-9]{1,10}$' AND (pending.details->>'effectIndex')::numeric BETWEEN 0 AND 2147483647 THEN (pending.details->>'effectIndex')::integer END
           )`,
       [command.projectId, command.goalId],
     );
