@@ -31,7 +31,6 @@ const baseRequest: CapabilityApprovalRequest = {
   controlEpoch: "1",
   budgetEffectCents: 0,
   requiredTier: "Department Head",
-  departmentId: "engineering",
   expiresAt: new Date("2030-01-01T00:00:00.000Z"),
   repetitionScope: scope,
   saferAlternative: "Prepare a patch without applying it.",

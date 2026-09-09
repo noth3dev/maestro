@@ -31,7 +31,6 @@ export interface CapabilityApprovalLedger {
 
 export interface CapabilityApprovalRequest extends Omit<CapabilityApprovalInput, "approverId" | "decision" | "tier"> {
   readonly requiredTier: CapabilityTier;
-  readonly departmentId?: string;
   readonly headDisagreement?: boolean;
   readonly saferAlternative: string;
   readonly sessionId?: string;
@@ -41,7 +40,7 @@ export interface CapabilityApprovalRequest extends Omit<CapabilityApprovalInput,
 export interface CapabilityApprovalServiceDependencies {
   readonly ledger?: CapabilityApprovalLedger;
   readonly pool?: Pool;
-  readonly resolveDepartmentHead: (input: { projectId: string; goalId: string; departmentId: string }) => Promise<ApprovalActor | undefined>;
+  readonly resolveDepartmentHead: (input: { projectId: string; goalId: string }) => Promise<ApprovalActor | undefined>;
   readonly resolveEncoreCouncil: (input: { projectId: string; goalId: string }) => Promise<ApprovalActor | undefined>;
   readonly clock?: () => Date;
 }
@@ -124,10 +123,10 @@ export function createCapabilityApprovalService(deps: CapabilityApprovalServiceD
       return;
     }
     if (tier === "Department Head") {
-      const departmentId = requireText(request.departmentId, "departmentId");
-      const head = await deps.resolveDepartmentHead({ projectId: request.projectId, goalId: request.goalId, departmentId });
-      if (head === undefined || head.active === false || head.kind !== "department_head" || head.actorId !== actor.actorId || head.departmentId !== departmentId || actor.kind !== "department_head" || actor.departmentId !== departmentId) {
-        throw new CapabilityApprovalUnauthorizedError("Only the active Department Head for this Goal and department may approve");
+      const head = await deps.resolveDepartmentHead({ projectId: request.projectId, goalId: request.goalId });
+      const departmentId = head?.departmentId;
+      if (head === undefined || head.active === false || head.kind !== "department_head" || departmentId === undefined || head.actorId !== actor.actorId || actor.kind !== "department_head" || actor.departmentId !== departmentId) {
+        throw new CapabilityApprovalUnauthorizedError("Only the active Goal-scoped Department Head may approve");
       }
       return;
     }
