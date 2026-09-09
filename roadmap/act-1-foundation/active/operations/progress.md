@@ -3548,3 +3548,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Main revalidation command `npm run build && npm test` completed with exit `0`: Vitest `133 passed / 62 skipped` files and `886 passed / 403 skipped` tests (`1289` total).
 - S0 independent review remains `REVIEW: PASS`; no live-provider acceptance ran.
 - S0 is closed through merge and revalidation. Worktree cleanup is next. Push is intentionally pending because the current operator instruction says not to push. No later slice started.
+
+
+## 2026-09-09 — Plan 2 S0 push gate and S4 start
+
+- Rechecked main state: HEAD `374aafd`, working tree clean, `npm run build` exit `0`; `gh run list --limit 1` reports push CI `34314783417` still `in_progress` with no failure.
+- S0 was pushed to `origin/main`; no later S0 worktree remains.
+- Per Plan 2 Order, the next slice is S4 `authority-backed-local-effects`. Starting its isolated lifecycle now; S0 CI remains monitored and will take priority if it turns red.
