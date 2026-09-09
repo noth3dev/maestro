@@ -1643,3 +1643,6 @@ All downstream routing documentation must use this contract and must not restore
 - **Resolved:** a partially replayed effect block could claim new repetition units before returning a replay rejection. The atomic consumption transaction now rolls back mixed replay/new blocks.
 - **Verification:** latest serialized PostgreSQL gate passed **199 files / 1365 tests**; latest focused PostgreSQL gate passed **4 files / 59 tests**; latest focused IPython gate passed **5 files / 57 tests**; build, lint, and diff check passed.
 - No unresolved S6 product finding remains in this worktree. Worktree cleanup, merge, and push remain separate integration actions.
+
+## 2026-09-10 — plan-2 S7
+- Repository documents had stale Phase 2 wording. S7 now records S6 implementation evidence while preserving the user-only live acceptance boundary.
