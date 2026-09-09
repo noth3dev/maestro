@@ -3,6 +3,7 @@ import {
   addConversationMessage,
   applyConversationEvent,
   createConversationTranscript,
+  renderConversationBlocks,
   renderConversationMarkdown,
 } from "./conversation-transcript.js";
 
@@ -21,6 +22,12 @@ describe("conversation transcript", () => {
     const state = addConversationMessage(createConversationTranscript(), "system", "Gateway unavailable", "error");
 
     expect(state.messages).toEqual([{ role: "system", content: "Gateway unavailable", kind: "error" }]);
+  });
+
+  it("preserves message semantics for the active TUI renderer", () => {
+    const state = addConversationMessage(createConversationTranscript(), "system", "Gateway unavailable", "error");
+
+    expect(renderConversationBlocks(state)).toEqual([{ heading: "**System**", content: "Gateway unavailable", kind: "error" }]);
   });
 
   it("renders user and assistant Markdown while a turn streams", () => {

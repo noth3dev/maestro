@@ -82,12 +82,29 @@ function messageHeading(role: ConversationTranscriptMessage["role"]): string {
   return role === "user" ? "**You**" : role === "system" ? "**System**" : "**Maestro**";
 }
 
-export function renderConversationMarkdown(state: ConversationTranscriptState): string {
-  const sections = state.messages.map((message) => `${messageHeading(message.role)}\n\n${message.content}`);
+export type ConversationTranscriptBlock = {
+  heading: string;
+  content: string;
+  kind: TranscriptKind;
+};
+
+export function renderConversationBlocks(state: ConversationTranscriptState): ConversationTranscriptBlock[] {
+  const blocks = state.messages.map((message) => ({
+    heading: messageHeading(message.role),
+    content: message.content,
+    kind: message.kind,
+  }));
   if (state.assistantText !== "" || state.status !== "idle") {
     const suffix = state.status === "streaming" ? " _(streaming…)" : state.status === "idle" ? "" : ` _(${state.status})_`;
     const content = state.assistantText || state.statusMessage || (state.status === "streaming" ? "_Waiting for response…_" : "");
-    sections.push(`**Maestro**${suffix}\n\n${content}`);
+    const kind: TranscriptKind = state.status === "failed" ? "error" : state.status === "succeeded" ? "success" : state.status === "idle" || state.status === "streaming" ? "text" : "warning";
+    blocks.push({ heading: `**Maestro**${suffix}`, content, kind });
   }
-  return sections.join("\n\n");
+  return blocks;
+}
+
+export function renderConversationMarkdown(state: ConversationTranscriptState): string {
+  return renderConversationBlocks(state)
+    .map((block) => `${block.heading}\n\n${block.content}`)
+    .join("\n\n");
 }

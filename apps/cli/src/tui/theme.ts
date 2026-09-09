@@ -70,7 +70,7 @@ export const tuiTheme = {
   surface2: terminalBackground,
   surface3: terminalBackground,
   text: terminalForeground,
-  secondary: foreground("#a8a59c", 37),
+  secondary: foreground("#a8a59c", 30),
   muted: foreground("#75726a", 90),
   dim: foreground("#5f5d57", 90),
   border: foreground("#2a2927", 90),
@@ -108,7 +108,7 @@ export function frameRule(width: number, top = false): string {
   return tuiTheme.border(`${top ? "╭" : "╰"}${"─".repeat(Math.max(0, width - 2))}${top ? "╮" : "╯"}`);
 }
 
-function transcriptPaint(kind: TranscriptKind): Paint {
+export function transcriptPaint(kind: TranscriptKind): Paint {
   switch (kind) {
     case "error":
       return tuiTheme.danger;
