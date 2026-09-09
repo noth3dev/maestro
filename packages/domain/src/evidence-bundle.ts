@@ -28,6 +28,9 @@ export interface EvidenceBundle {
   readonly authorityDecisions: readonly Readonly<Record<string, unknown>>[];
   /** Sealed Council brief material and the activation history that led to it. */
   readonly councilBriefs: readonly Readonly<Record<string, unknown>>[];
+  /** Durable routing decisions and native admission identities used by this Goal. */
+  readonly routingEvidence: readonly Readonly<Record<string, unknown>>[];
+  readonly nativeExecutionBindings: readonly Readonly<Record<string, unknown>>[];
   readonly headParticipation: Readonly<{
     participations: readonly Readonly<Record<string, unknown>>[];
     activationAttempts: readonly Readonly<Record<string, unknown>>[];
