@@ -1583,3 +1583,13 @@ All downstream routing documentation must use this contract and must not restore
 
 - The first seven-file focused run reported one failure in the pre-existing real-child runtime test: the 100-attempt/1ms polling helper expired before the detached Node child reached `close`; all S4-targeted tests otherwise passed (`72/73`).
 - The runtime-adapter file rerun in isolation passed `23/23`, confirming no deterministic regression from the S4 remediation. The original PostgreSQL gate remains authoritative and green; this transient timing observation is retained rather than treated as an S4 production defect.
+
+
+## 2026-09-09 — S4 review remediation: relative Goal scopes
+
+- The fresh review withdrew the production `main.ts` wiring finding as Plan 2 S6 scope and confirmed the TUI and prepare-time command findings are fixed. It found one remaining S4 defect: relative `Goal.pathScope` values were canonicalized against `process.cwd()` or rejected as non-absolute by local-effects, environment, and Git adapters.
+- Contract evidence: `MissionBundle.allowedPaths` accepts generic non-empty strings, and `packages/persistence/src/worker.ts` copies them unchanged to `grant.pathScope`; S4 therefore cannot assume absolute scopes.
+- Added RED regressions for relative scopes at all three boundaries: local-effects gateway, runtime adapter, and Git path containment. The initial results were local-effects `1` failure, runtime fixture import error plus boundary failure, and Git `1` failure; after fixing the fixture import, the intended runtime/Git boundary failures remained.
+- Fixed all three adapters to resolve relative scopes against the trusted `workspaceRoot`; Control Plane composition now passes that root to both local-effects and environment adapters. Existing file-edit handling already resolved relative scopes against `workspaceRoot`.
+- GREEN focused verification passes **5 files / 58 tests**; build, lint, and `git diff --check` pass. Review remains open pending full verification and fresh independent review.
+- No live-provider acceptance, merge, push, worktree deletion, or later slice was performed.

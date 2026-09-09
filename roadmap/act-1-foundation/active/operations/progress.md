@@ -3617,3 +3617,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Fixed the TUI mapper to consume the source semantic kind with a neutral `system` fallback and moved `safeCommand` validation into preparation for test/shell/environment effects.
 - Focused S4 verification now passes **7 files / 73 tests**; build, lint, and diff check pass. The independent reviewer has been asked to reassess the remaining production-wiring finding against Plan 2 S6's explicit composition scope.
 - No live-provider acceptance, merge, push, worktree deletion, or later slice was performed.
+
+
+## 2026-09-09 — S4 relative-scope remediation GREEN
+
+- Independent review found relative `Goal.pathScope` mishandling as the sole remaining S4 defect; the production wiring item was withdrawn as S6 scope.
+- Added RED tests for IPython local-effects, environment runtime, and Git path containment. Fixed scope resolution to use the trusted workspace root, and threaded that root from Control Plane composition.
+- Focused verification passes **5 files / 58 tests**; build, lint, and diff check pass. The next gate is the full non-PostgreSQL and authoritative PostgreSQL verification followed by a fresh independent review.
+- No live-provider acceptance, merge, push, worktree deletion, or later slice was performed.
