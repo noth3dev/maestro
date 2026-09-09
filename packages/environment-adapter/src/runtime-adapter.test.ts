@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
@@ -11,10 +11,14 @@ import {
   EnvironmentAuthorizationError,
   EnvironmentBoundaryError,
   EnvironmentExecutionError,
+  EnvironmentOutcomeUnknownError,
   createContainerSandboxAdapter,
-  createLocalRuntimeAdapter,
+  createLocalRuntimeAdapter as createUnisolatedLocalRuntimeAdapter,
+  type EnvironmentAdapterOptions,
   type SpawnedProcess,
 } from "./runtime-adapter.js";
+
+const createLocalRuntimeAdapter = (environment: EnvironmentRecord, authority: Parameters<typeof createUnisolatedLocalRuntimeAdapter>[1], options: EnvironmentAdapterOptions = {}) => createUnisolatedLocalRuntimeAdapter(environment, authority, { unsafeTestOnlyAllowUnisolatedLocalNetwork: true, ...options });
 
 class FakeProcess extends EventEmitter implements SpawnedProcess {
   readonly stdout = new PassThrough();
@@ -126,6 +130,22 @@ function realAuthority(allow: boolean) {
 }
 
 describe("local runtime environment adapter", () => {
+  it("fails closed when local network isolation is not explicitly available", async () => {
+    const { authority } = permissiveAuthority();
+    const adapter = createUnisolatedLocalRuntimeAdapter(makeEnvironment(), authority);
+    await expect(adapter.start(command())).rejects.toThrow("cannot enforce network isolation");
+  });
+
+  it("reports an unknown outcome for a duplicate authority claim without spawning", async () => {
+    const authority = {
+      async execute(request: Parameters<ReturnType<typeof permissiveAuthority>["authority"]["execute"]>[0], _effect: () => Promise<unknown>) {
+        return { effect: "allow", reason: "already_executed", classification: "ordinary", request, recordId: "duplicate" } as const;
+      },
+    };
+    const adapter = createLocalRuntimeAdapter(makeEnvironment(), authority, { unsafeTestOnlyAllowUnisolatedLocalNetwork: true });
+    await expect(adapter.start(command())).rejects.toBeInstanceOf(EnvironmentOutcomeUnknownError);
+  });
+
   it("executes a real local child without inheriting the host environment", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "maestro-runtime-test-"));
     try {
@@ -145,6 +165,32 @@ describe("local runtime environment adapter", () => {
     }
   });
 
+  it("resolves a relative Goal path scope against the environment workspace", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "maestro-runtime-scope-"));
+    const allowed = join(cwd, "allowed");
+    mkdirSync(allowed);
+    try {
+      const childProcess = new FakeProcess();
+      const { authority } = permissiveAuthority();
+      const adapter = createLocalRuntimeAdapter(makeEnvironment({ boundaries: { ...makeEnvironment().boundaries, filesystem: [cwd] } }), authority, { spawn: vi.fn(() => childProcess), scopeRoot: cwd });
+      const handle = await adapter.start(command({ cwd: allowed, target: allowed, pathScope: ["allowed"] }));
+      childProcess.finish(0);
+      await expect(handle.observe()).resolves.toMatchObject({ status: "succeeded" });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("redacts secret-like assignments from child output", async () => {
+    const childProcess = new FakeProcess();
+    const { authority } = permissiveAuthority();
+    const adapter = createLocalRuntimeAdapter(makeEnvironment(), authority, { spawn: vi.fn(() => childProcess) });
+    const handle = await adapter.start(command());
+    childProcess.stdout.write("API_TOKEN=do-not-leak\nnormal output");
+    childProcess.finish(0);
+    await expect(handle.observe()).resolves.toMatchObject({ status: "succeeded", stdout: "API_TOKEN=[REDACTED]\nnormal output" });
+  });
+
   it("runs only an explicitly argv-shaped command in the bound ready environment", async () => {
     const childProcess = new FakeProcess();
     const spawn = vi.fn(() => childProcess);
@@ -157,6 +203,7 @@ describe("local runtime environment adapter", () => {
       cwd: "/workspace/project",
       env: { NODE_ENV: "test" },
       shell: false,
+      detached: true,
     }));
     expect(calls).toEqual(["project.test.run"]);
     await expect(handle.observe()).resolves.toMatchObject({ invocationId: handle.invocationId, status: "running" });
