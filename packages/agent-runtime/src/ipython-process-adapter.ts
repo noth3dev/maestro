@@ -2,8 +2,10 @@ import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams, type SpawnOptions } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { IPYTHON_PYTHON_BOOTSTRAP } from "./ipython-bootstrap.js";
-import { readIpPythonParentIdentity } from "./ipython-host.js";
-import type { IpPythonLineChannel } from "./ipython-host.js";
+import { createIpPythonProcessKernel, executeIpPythonBlockInTwoStages, readIpPythonParentIdentity } from "./ipython-host.js";
+import type { IpPythonHostRequest, IpPythonLineChannel, IpPythonProcessKernelOptions } from "./ipython-host.js";
+import { sessionBindingKey } from "./ipython-tool.js";
+import type { IpPythonExecutionRequest, IpPythonExecutionResult, IpPythonKernel, IpPythonSessionBinding } from "./ipython-tool.js";
 
 export interface IpPythonProcessStartedEvent {
   readonly event: "started";
@@ -342,5 +344,71 @@ export function createIpPythonOwnedProcessChannel(options: IpPythonOwnedProcessC
       return () => closeListeners.delete(listener);
     },
     close: teardown,
+  };
+}
+
+
+export interface IpPythonTwoStageProcessKernelOptions extends Omit<IpPythonProcessKernelOptions, "hostRequest"> {
+  readonly prepareEffect: (request: IpPythonHostRequest, binding?: IpPythonSessionBinding) => import("./ipython-host.js").IpPythonPreparedEffect | Promise<import("./ipython-host.js").IpPythonPreparedEffect>;
+  readonly fencingToken: string;
+  readonly approve: import("./ipython-host.js").IpPythonTwoStageExecutionOptions["approve"];
+  readonly isFencingCurrent: (fencingToken: string) => boolean | Promise<boolean>;
+  readonly recordEffectResult: (index: number, request: IpPythonHostRequest, result: IpPythonExecutionResult) => void | Promise<void>;
+  readonly recordStageBoundary: import("./ipython-host.js").IpPythonTwoStageExecutionOptions["recordStageBoundary"];
+}
+
+/**
+ * Bind the two-stage host router to one owned process. The child is reused for
+ * the collect and execute runs, while its host requests remain intent-only
+ * until the orchestrator has approved and compared both stages.
+ */
+export function createIpPythonTwoStageProcessKernel(options: IpPythonTwoStageProcessKernelOptions, sessionId: string, binding?: IpPythonSessionBinding): IpPythonKernel {
+  let activeHostRequest: ((request: IpPythonHostRequest) => Promise<IpPythonExecutionResult>) | undefined;
+  let activeExecution: Promise<IpPythonExecutionResult> | undefined;
+  let stopRequested = false;
+  const kernel = createIpPythonProcessKernel({
+    ...options,
+    hostRequest: (request) => {
+      if (activeHostRequest === undefined) return { state: "unknown", dataClass: "workspace", content: "IPython host request arrived outside a two-stage block", reason: "host_request_outside_block" };
+      return activeHostRequest(request);
+    },
+  }, sessionId, binding);
+  const execute = async (request: IpPythonExecutionRequest): Promise<IpPythonExecutionResult> => {
+    if (request.sessionId !== sessionId) return { state: "unknown", dataClass: "workspace", content: "IPython session identity changed", reason: "session_identity_changed" };
+    if (binding !== undefined && sessionBindingKey(request.binding ?? binding) !== sessionBindingKey(binding)) return { state: "unknown", dataClass: "workspace", content: "IPython session binding changed", reason: "session_binding_changed" };
+    if (activeExecution !== undefined) return { state: "unknown", dataClass: "workspace", content: "IPython two-stage kernel is busy", reason: "kernel_busy" };
+    stopRequested = false;
+    const execution = executeIpPythonBlockInTwoStages({
+    request,
+    fencingToken: options.fencingToken,
+    approve: options.approve,
+    isFencingCurrent: options.isFencingCurrent,
+    isStopRequested: () => stopRequested,
+    prepareEffect: (effect) => options.prepareEffect(effect, request.binding ?? binding),
+    recordEffectResult: options.recordEffectResult,
+    recordStageBoundary: options.recordStageBoundary,
+    runBlock: async (stageRequest, _mode, hostRequest) => {
+      activeHostRequest = hostRequest;
+      try { return await kernel.execute(stageRequest); }
+      finally { activeHostRequest = undefined; }
+    },
+  });
+    activeExecution = execution;
+    try { return await execution; }
+    finally { if (activeExecution === execution) activeExecution = undefined; }
+  };
+  return {
+    execute,
+    ...(kernel.interrupt === undefined ? {} : { interrupt: async (session) => {
+      if (session !== sessionId || activeExecution === undefined) return;
+      stopRequested = true;
+      await kernel.interrupt?.(session);
+    } }),
+    async close() {
+      stopRequested = true;
+      const active = activeExecution;
+      try { await kernel.close?.(); }
+      finally { await active?.catch(() => undefined); }
+    },
   };
 }

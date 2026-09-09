@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { createIpPythonOwnedProcessChannel, reapIpPythonProcessGroup } from "./ipython-process-adapter.js";
+import { createIpPythonOwnedProcessChannel, createIpPythonTwoStageProcessKernel, reapIpPythonProcessGroup } from "./ipython-process-adapter.js";
 import { IPYTHON_PYTHON_BOOTSTRAP } from "./ipython-bootstrap.js";
 import { createIpPythonProcessKernel } from "./ipython-host.js";
 
@@ -105,6 +105,38 @@ describe("IPython owned process channel", () => {
         processStartTime: expect.any(String),
       });
     } finally { await channel.close(); }
+  });
+
+  it("rejects an execute request from a different bound session or Goal", async () => {
+    const channel = createIpPythonOwnedProcessChannel({ pythonExecutable: "/usr/bin/python3", terminationGraceMs: 25 });
+    const binding = { sessionId: "session-bound", commandId: "command-1", toolCallId: "tool-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/tmp/project"], outboundDataClasses: ["workspace"], authorityPolicyVersion: 1, controlEpoch: "epoch-1", budgetEffectCents: 0 };
+    const kernel = createIpPythonTwoStageProcessKernel({ createProcess: () => channel, prepareEffect: async () => ({ result: { state: "ok", dataClass: "workspace", content: "value" }, commit: async (lease) => { await lease.assertValid(); return { state: "ok", dataClass: "workspace", content: "value" }; }, rollback: async () => {} }), fencingToken: "fence-1", approve: async (_effects, blockDigest) => ({ approvalId: "approval-1", blockDigest, fencingToken: "fence-1" }), isFencingCurrent: () => true, recordEffectResult: async () => {}, recordStageBoundary: async () => {} }, "session-bound", binding);
+    try {
+      await expect(kernel.execute({ sessionId: "other-session", code: "print('no')" })).resolves.toMatchObject({ state: "unknown", reason: "session_identity_changed" });
+      await expect(kernel.execute({ sessionId: "session-bound", binding: { ...binding, goalId: "other-goal" }, code: "print('no')" })).resolves.toMatchObject({ state: "unknown", reason: "session_binding_changed" });
+    } finally { await kernel.close?.(); }
+  });
+
+  it("routes a real child through collect and applies an approved host request once", async () => {
+    const channel = createIpPythonOwnedProcessChannel({ pythonExecutable: "/usr/bin/python3", terminationGraceMs: 25 });
+    const applied: string[] = [];
+    const kernel = createIpPythonTwoStageProcessKernel({
+      createProcess: () => channel,
+      prepareEffect: async (request) => ({
+        result: { state: "ok", dataClass: "workspace", content: "value" },
+        commit: async (lease) => { await lease.assertValid(); applied.push(request.method); return { state: "ok", dataClass: "workspace", content: "value" }; },
+        rollback: async () => {},
+      }),
+      fencingToken: "fence-1",
+      approve: async (_effects, blockDigest) => ({ approvalId: "approval-1", blockDigest, fencingToken: "fence-1" }),
+      isFencingCurrent: () => true,
+      recordEffectResult: async () => {},
+      recordStageBoundary: async () => {},
+    }, "session-two-stage");
+    try {
+      await expect(kernel.execute({ sessionId: "session-two-stage", code: "print(read_file('a.txt'))" })).resolves.toMatchObject({ state: "ok", content: "value\n" });
+      expect(applied).toEqual(["read_file"]);
+    } finally { await kernel.close?.(); }
   });
 
   it("runs the constrained real child through the owned channel", async () => {

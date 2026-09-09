@@ -180,7 +180,7 @@ function authorityContext(context: ToolContext): { authorityPolicyVersion: numbe
   return { authorityPolicyVersion, controlEpoch, budgetEffectCents };
 }
 
-function sessionBindingKey(binding: IpPythonSessionBinding | undefined): string {
+export function sessionBindingKey(binding: IpPythonSessionBinding | undefined): string {
   if (binding === undefined) return "undefined";
   const { commandId: _commandId, toolCallId: _toolCallId, ...stableBinding } = binding;
   return JSON.stringify(stableBinding);
