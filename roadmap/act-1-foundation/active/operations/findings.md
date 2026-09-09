@@ -1337,3 +1337,13 @@ All downstream routing documentation must use this contract and must not restore
 
 - `execution/plan-2.md` contains stale historical references to commit `2fa6168` and the pre-merge ensemble WIP; the repository is authoritative and now has native admission merge `d30f7cd`. The actionable Plan 2 boundary is unchanged: start S1 only after current main CI is green.
 - Plan 2 Decisions D1–D4 are settled and were not revisited. The first implementation slice is the registry-backed whole-block classifier; no parallel action vocabulary should be introduced.
+
+## 2026-09-09 — Plan 2 S1 findings
+
+- The authority action registry was not exported from `@maestro/authority`; exporting the existing module was required so the classifier consumes one vocabulary rather than duplicating action names.
+- Unknown action names remain `ambiguous` through `classifyAction` and map to the user tier; forbidden actions throw before tier assignment.
+- CI run `34300045169` was still in progress during implementation; merge/push remains gated on its conclusion.
+
+## 2026-09-09 — Plan 2 S1 review finding
+
+- Independent review found no additional S1 findings (`REVIEW: PASS`).
