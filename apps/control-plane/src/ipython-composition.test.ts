@@ -79,6 +79,30 @@ describe("Control Plane IPython composition", () => {
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 
+  it("routes real Python local Git mutations through the fixed repository authority port", async () => {
+    const root = mkdtempSync(join(tmpdir(), "maestro-ipython-composition-git-"));
+    try {
+      writeFileSync(join(root, "README.md"), "git evidence");
+      execFileSync("/usr/bin/git", ["init", "--quiet", root]);
+      execFileSync("/usr/bin/git", ["-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "add", "README.md"]);
+      execFileSync("/usr/bin/git", ["-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--quiet", "--no-verify", "-m", "init"]);
+      const calls: string[] = [];
+      const authority = {
+        async execute(request: ActionRequest, effect: () => Promise<unknown>): Promise<AuthorityDecision> {
+          calls.push(request.action);
+          await effect();
+          return { effect: "allow", reason: "test_allow", classification: "ordinary", request, recordId: "test-record" };
+        },
+      };
+      const kernel = createIpPythonProductionKernel({ authority, workspaceRoot: root, pythonExecutable: "/usr/bin/python3", localEnvironment: localEnvironment(root) }, binding.sessionId, { ...binding, pathScope: [root] });
+      try {
+        await expect(kernel.execute({ sessionId: binding.sessionId, code: "print(git_create_branch('goal/test', 'HEAD'))", binding: { ...binding, pathScope: [root] } })).resolves.toMatchObject({ state: "ok" });
+        expect(execFileSync("/usr/bin/git", ["-C", root, "branch", "--list", "goal/test"], { encoding: "utf8" })).toContain("goal/test");
+        expect(calls).toEqual(["git.local.branch.create"]);
+      } finally { await kernel.close?.(); }
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
   it("denies file reads outside the Goal path scope", async () => {
     const root = mkdtempSync(join(tmpdir(), "maestro-ipython-composition-scope-"));
     try {
