@@ -25,7 +25,9 @@ function makeAdapters(): { adapters: IpPythonLocalEffectAdapters; calls: Record<
     calls,
     adapters: {
       writeFile: vi.fn(async (request) => { track("writeFile", request); return ok("written"); }),
-      runCommand: vi.fn(async (request) => { track("runCommand", request); return ok("tested"); }),
+      runTest: vi.fn(async (request) => { track("runTest", request); return ok("tested"); }),
+      runShell: vi.fn(async (request) => { track("runShell", request); return ok("shelled"); }),
+      runEnvironment: vi.fn(async (request) => { track("runEnvironment", request); return ok("changed"); }),
       gitCreateBranch: vi.fn(async (request) => { track("gitCreateBranch", request); return ok("branched"); }),
       gitCreateWorktree: vi.fn(async (request) => { track("gitCreateWorktree", request); return ok("worktree"); }),
       gitCommit: vi.fn(async (request) => { track("gitCommit", request); return ok("committed"); }),
@@ -42,11 +44,11 @@ describe("IPython authority-backed local effects", () => {
     const gateway = createIpPythonLocalEffectsGateway({ adapters });
 
     await expect(gateway.handle(binding, { method: "write_file", payload: { path: "src/app.ts", content: "export {}" } })).resolves.toEqual(ok("written"));
-    await expect(gateway.handle(binding, { method: "run_command", payload: { action: "project.test.run", target: "npm test", argv: ["npm", "test"], cwd: "/workspace/project" } })).resolves.toEqual(ok("tested"));
+    await expect(gateway.handle(binding, { method: "run_test", payload: { action: "git.remote.push", target: "npm test", argv: ["npm", "test"], cwd: "/workspace/project" } })).resolves.toEqual(ok("tested"));
     await expect(gateway.handle(binding, { method: "git_create_branch", payload: { branchName: "goal/one", baseRevision: "abc123" } })).resolves.toEqual(ok("branched"));
 
     expect(calls.writeFile?.[0]).toMatchObject({ binding, path: "src/app.ts", content: "export {}" });
-    expect(calls.runCommand?.[0]).toMatchObject({ binding, action: "project.test.run", target: "npm test", argv: ["npm", "test"], cwd: "/workspace/project" });
+    expect(calls.runTest?.[0]).toMatchObject({ binding, action: "project.test.run", target: "npm test", argv: ["npm", "test"], cwd: "/workspace/project" });
     expect(calls.gitCreateBranch?.[0]).toMatchObject({ binding, branchName: "goal/one", baseRevision: "abc123" });
   });
 
@@ -59,7 +61,8 @@ describe("IPython authority-backed local effects", () => {
     await expect(gateway.handle(binding, { method: "network_request", payload: { url: "https://example.com" } })).rejects.toThrow("not allowed");
     await expect(gateway.handle(binding, { method: "unknown", payload: {} })).rejects.toThrow("not allowed");
     await expect(gateway.handle(binding, { method: "write_file", payload: { path: "../escape", content: "bad" } })).rejects.toThrow("path");
-    await expect(gateway.handle(binding, { method: "run_command", payload: { action: "shell.command", target: "echo bad", argv: ["sh", "-c", "echo bad"], cwd: "/workspace/project" } })).rejects.toThrow("command");
+    await expect(gateway.handle(binding, { method: "run_shell", payload: { action: "shell.command", target: "echo bad", argv: ["sh", "-c", "echo bad"], cwd: "/workspace/project" } })).rejects.toThrow("command");
+    await expect(gateway.handle(binding, { method: "run_command", payload: { argv: ["npm", "test"], cwd: "/workspace/project" } })).rejects.toThrow("not allowed");
 
     for (const adapter of Object.values(adapters)) expect(adapter).not.toHaveBeenCalled();
   });
@@ -67,10 +70,10 @@ describe("IPython authority-backed local effects", () => {
   it("preserves an adapter's unknown outcome instead of treating cancellation as success", async () => {
     const fixture = makeAdapters();
     const { adapters } = fixture;
-    adapters.runCommand = vi.fn(async () => ({ state: "unknown", dataClass: "workspace", content: "cancelled", reason: "cancellation_outcome_unknown" }));
+    adapters.runTest = vi.fn(async () => ({ state: "unknown", dataClass: "workspace", content: "cancelled", reason: "cancellation_outcome_unknown" }));
     const gateway = createIpPythonLocalEffectsGateway({ adapters });
 
-    await expect(gateway.handle(binding, { method: "run_command", payload: { action: "project.test.run", target: "npm test", argv: ["npm", "test"], cwd: "/workspace/project" } })).resolves.toMatchObject({ state: "unknown", reason: "cancellation_outcome_unknown" });
+    await expect(gateway.handle(binding, { method: "run_test", payload: { action: "git.remote.push", target: "npm test", argv: ["npm", "test"], cwd: "/workspace/project" } })).resolves.toMatchObject({ state: "unknown", reason: "cancellation_outcome_unknown" });
   });
 
   it("exposes local effects through the host request handler without weakening read-only routing", async () => {
