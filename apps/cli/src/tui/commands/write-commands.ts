@@ -126,6 +126,9 @@ async function confirmIfCritical(context: WriteCommandContext, command: ParsedCo
     repetitionScope: "once",
     saferAlternative: "Prepare a dry-run or patch without applying this effect.",
   }, context.confirm);
+  // The legacy critical-action endpoint only persists one command-bound approval.
+  // Never pretend that a broader S5 scope was durable until S6 wires the
+  // capability-approval service through the API.
   if (typeof decision === "object" && decision.repetitionScope !== "once") {
     return { title: "Unavailable", lines: [`Approval scope ${decision.repetitionScope} is not persisted by this execution path; no mutation was sent.`] };
   }
