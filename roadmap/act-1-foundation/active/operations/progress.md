@@ -3372,3 +3372,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Independent review returned `REVIEW: PASS` with no blocking findings. The review confirmed the migration/API/test scope and the recorded full PostgreSQL evidence.
 - S2 exit evidence is complete: Goal-scoped ledger tables, server-side expiry, exact identity, repetition claims, session isolation, and journal UPDATE/DELETE rejection are covered by the six integration tests.
+
+## 2026-09-09 — Plan 2 S2 merged and revalidated
+
+- Merged S2 as `993e66a` after `REVIEW: PASS`.
+- Post-merge revalidation passed: focused S2 PostgreSQL integration `6/6`, `npm run build`, `npm run lint`, and `git diff --check`. The authoritative pre-merge full PostgreSQL gate remains `193/193` files and `1,277/1,277` tests, exit `0`.
+- S2 worktree is ready for cleanup; Plan 2 S3 is the next slice and has not started.
