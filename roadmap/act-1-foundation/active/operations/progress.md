@@ -3296,3 +3296,22 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Independent no-edit review returned `REVIEW: PASS` after the delimiter, stale Phase 3 wording, and status-date corrections.
 - S4 exit evidence is documentation consistency plus explicit separation of G1–G6 implementation evidence from remaining host-tool/live/product acceptance.
+
+## 2026-09-09 — Native admission WIP verification
+
+- Full serialized PostgreSQL verification initially reached `189/191` files and `1,261/1,264` tests with three failures caused by legacy HTTP fixtures entering the new fail-closed ensemble worker boundary without an explicit routing mode.
+- Updated the process-backed Head/Worker fixtures to use explicit `pin` mode with `test/model-a`; focused Head API and worker SIGKILL/restart tests are green. A second full serialized rerun is in progress.
+
+## 2026-09-09 — Native admission binding hardening
+
+- Independent review identified a candidate/model/account identity gap in the routed admission helper. Added durable candidate binding records, exact decision-set coverage, duplicate detection, and selected candidate model/account equality checks before constructing native policy.
+- The full rerun that was already active while this hardening landed ended `1` with `190/191` files and `1,263/1,264` tests; its sole failure was the concurrently edited native-admission test and is not the final-code gate. Focused native/worker tests are `6/6` green.
+- The branch was fast-forwarded to merged S4 main before the final rerun so prior S4 lifecycle evidence remains append-only.
+
+## 2026-09-09 — Verification surface cleanup
+
+- The first final rerun ended red because temporary `.test.ts` copies created under the worktree `tmp/` directory were discovered by Vitest and duplicated the process-backed worker suite. Those files were local inspection artifacts, not repository sources; the directory was removed before the next rerun.
+
+## 2026-09-09 — Worker successor fixture correction
+
+- Clean full verification exposed the remaining fixture gap: successor control-plane instances (`ownerB`) still omitted the explicit pin routing identity, so recovery conflict retries returned `503` instead of `409`. Added `modelRoutingMode: "pin"` and `nativeModelRef: "test/model-a"` to both successor fixtures. The focused SIGKILL/restart suite is now `2/2` green.

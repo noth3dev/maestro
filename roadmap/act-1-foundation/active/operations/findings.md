@@ -1315,3 +1315,20 @@ All downstream routing documentation must use this contract and must not restore
 ## 2026-09-09 — S4 independent review closure
 
 - The corrected documentation set passed independent review. Markdown diff check is clean.
+
+## 2026-09-09 — Native admission verification finding
+
+- The new Worker service correctly rejects production `ensemble` admission until a routed tuple exists. Existing process-backed fixtures omitted `modelRoutingMode`, which produced the observed `503` responses and missing provider spawn. The fixtures now explicitly exercise the supported pin path; no production fail-open behavior was added.
+
+## 2026-09-09 — Native admission binding hardening
+
+- Routed admission now requires candidate records captured with the selection and verifies candidateRef → modelRef → accountBinding before emitting either model policy field. This closes the forged inconsistent-selection path found by independent review.
+- The active full run was intentionally not treated as final evidence because code/tests changed during execution; a fresh serialized rerun is required after this merge synchronization.
+
+## 2026-09-09 — Verification surface cleanup finding
+
+- Do not create `.test.ts` inspection copies under a worktree path scanned by Vitest. The contaminated run was rejected as non-authoritative; the temporary `tmp/` directory was removed.
+
+## 2026-09-09 — Worker successor fixture finding
+
+- The production fail-closed worker boundary was correct; only the successor test processes lacked the explicit pin configuration required after restart. The fixture correction preserves the expected durable `409 council_conflict` recovery assertion without weakening ensemble fail-closed behavior.

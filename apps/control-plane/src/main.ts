@@ -4,7 +4,7 @@ import { Pool } from "pg";
 import { AuthorizedEffectExecutor, type ActionRequest } from "@maestro/authority";
 import { createLocalGitPort } from "@maestro/git-adapter";
 import type { ExecutionAdmission, ExecutionKernelPort, GitPort } from "@maestro/domain";
-import { createIpPythonSessionManager, createIpPythonTool, parseModelRef, reapIpPythonProcessGroup, ToolRegistry, type IpPythonKernel, type IpPythonSessionManager } from "@maestro/agent-runtime";
+import { createIpPythonSessionManager, createIpPythonTool, reapIpPythonProcessGroup, ToolRegistry, type IpPythonKernel, type IpPythonSessionManager } from "@maestro/agent-runtime";
 import { appendIpPythonSessionJournal, assertProjectMembership, authenticateLocalOperator, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, reconcileIpPythonOrphans, reconcileOnStartup, recordDiscordSignal, recordIpPythonSessionStarted, runMigrations, type IpPythonSessionJournalEntry } from "@maestro/persistence";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
@@ -26,6 +26,9 @@ import { createModelGatewayClient } from "./model-gateway-client.js";
 import { createNativeExecutionKernel, createUnavailableNativeExecutionKernel } from "./native-execution-kernel.js";
 import { createPostgresConversationService } from "./conversation-service.js";
 import { createIpPythonProductionKernel } from "./ipython-composition.js";
+import { createPinnedNativeAdmission, type NativeAdmissionInput } from "./native-admission.js";
+
+export type { NativeAdmissionInput } from "./native-admission.js";
 
 export interface ControlPlane {
   app: ReturnType<typeof buildServer>;
@@ -66,25 +69,9 @@ async function inspectIpPythonProcessOutcome(entry: IpPythonSessionJournalEntry)
   return reapIpPythonProcessGroup({ processPid: entry.processPid, processGroupId, processSessionId, processStartTime });
 }
 
-export type NativeAdmissionInput =
-  | { purpose: "head"; goalId: string; projectId: string; departmentId: string; actorId: string; sessionRef: string; commandId: string; fencingToken: string }
-  | { purpose: "encore"; goalId: string; projectId: string; commandId: string; reviewerIndex: number; fencingToken: string };
-
 function createHostNativeAdmission(config: MaestroConfig, input: NativeAdmissionInput): ExecutionAdmission {
-  if (config.nativeModelRef === undefined) throw new Error("Native execution requires MAESTRO_NATIVE_MODEL");
-  const model = parseModelRef(config.nativeModelRef);
-  const accountRef = config.modelAccountRefs[model.provider];
-  if (accountRef === undefined) throw new Error(`Native execution has no account binding for provider: ${model.provider}`);
-  const suffix = input.purpose === "head" ? input.departmentId : `reviewer-${input.reviewerIndex}`;
-  const grantId = `native:${input.purpose}:${input.goalId}:${suffix}`;
-  return {
-    context: { operatorId: input.purpose === "head" ? input.actorId : config.actorId, projectId: input.projectId, goalId: input.goalId, missionBundleId: `native-${input.purpose}`, policyVersion: "native-host-v1", accountRef, fencingToken: input.fencingToken },
-    grant: { grantId, allowedTools: [], allowedSkills: [], modelPolicy: [config.nativeModelRef], pathScope: [config.worktreeRoot], outboundDataClasses: ["workspace"], remaining: { modelTurns: 8, toolCalls: 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } },
-    modelPolicy: [config.nativeModelRef],
-    // A council command fans out into independent roots; their gateway
-    // admissions must not replay the same idempotency identity.
-    idempotencyKey: input.purpose === "encore" ? `${input.commandId}:reviewer:${input.reviewerIndex}` : input.commandId,
-  };
+  if (config.modelRoutingMode !== "pin") throw new Error("Native host admission requires pin routing mode");
+  return createPinnedNativeAdmission(config, input);
 }
 
 export interface ControlPlaneOverrides {
@@ -204,7 +191,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   const councilService = createCouncilService({ pool, withGoalLease: goalService.withGoalLease! });
   const departmentPlanService = createDepartmentPlanService({ pool, withGoalLease: goalService.withGoalLease! });
   const missionBundleService = createMissionBundleService({ pool, withGoalLease: goalService.withGoalLease! });
-  const workerService = createWorkerService({ pool, kernel: executionKernel, withGoalLease: goalService.withGoalLease!, ...(config.maxConcurrentWorkersPerProject === undefined ? {} : { maxConcurrentWorkersPerProject: config.maxConcurrentWorkersPerProject }) });
+  const workerService = createWorkerService({ modelRoutingMode: config.modelRoutingMode, ...(config.nativeModelRef === undefined ? {} : { nativeModelRef: config.nativeModelRef }), pool, kernel: executionKernel, withGoalLease: goalService.withGoalLease!, ...(config.maxConcurrentWorkersPerProject === undefined ? {} : { maxConcurrentWorkersPerProject: config.maxConcurrentWorkersPerProject }) });
   const gitIntegrationService = createGitIntegrationService({
     pool, withGoalLease: goalService.withGoalLease!,
     createGitPort: (context) => overrides.gitPort ?? createLocalGitPort({ authority: authorityExecutor, context, workspaceRoot: config.worktreeRoot }),

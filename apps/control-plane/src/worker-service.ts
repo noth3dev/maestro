@@ -11,6 +11,10 @@ export interface WorkerService {
 }
 export interface WorkerServiceDependencies {
   pool: Pool;
+  /** Production ensemble admissions remain fail-closed until the full routed tuple is composed. */
+  modelRoutingMode: "ensemble" | "pin";
+  /** Host-owned fixed model for the explicit pin mode. */
+  nativeModelRef?: string;
   kernel: ExecutionKernelPort;
   withGoalLease: <T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
   /**
@@ -25,6 +29,25 @@ export class WorkerProjectMismatchError extends Error {
 }
 export class WorkerCapacityExceededError extends Error {
   constructor(limit: number) { super(`Project worker capacity is exhausted (limit ${limit}); queue and retry once a worker slot frees`); this.name = "WorkerCapacityExceededError"; }
+}
+export class EnsembleRoutingUnavailableError extends Error {
+  constructor() { super("Ensemble Router worker admission is not enabled"); this.name = "EnsembleRoutingUnavailableError"; }
+}
+
+export function assertWorkerRoutingMode(mode: "ensemble" | "pin"): void {
+  if (mode === "ensemble") throw new EnsembleRoutingUnavailableError();
+}
+
+export function resolveWorkerModelForRouting(
+  mode: "ensemble" | "pin",
+  nativeModelRef: string | undefined,
+  requestedModel: string | undefined,
+): string | undefined {
+  assertWorkerRoutingMode(mode);
+  if (nativeModelRef === undefined) throw new Error("Pin worker admission requires MAESTRO_NATIVE_MODEL");
+  if (requestedModel !== undefined && requestedModel !== nativeModelRef)
+    throw new Error("Worker model does not match the configured pin identity");
+  return nativeModelRef;
 }
 
 /** Keep provider/process ownership internals out of the current public Worker wire contract. */
@@ -41,6 +64,7 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
   return {
     async spawn(councilId, departmentId, input, commandId, operator) {
       await assertProjectRole(deps.pool, operator.operatorId, input.projectId, `head-${departmentId}`);
+      const fixedModelRef = resolveWorkerModelForRouting(deps.modelRoutingMode, deps.nativeModelRef, input.model);
       if (deps.maxConcurrentWorkersPerProject !== undefined) {
         const active = await countActiveWorkersForProject(deps.pool, input.projectId);
         if (active >= deps.maxConcurrentWorkersPerProject) throw new WorkerCapacityExceededError(deps.maxConcurrentWorkersPerProject);
@@ -52,7 +76,7 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
       const participant = council.snapshot.participants.find((entry) => (entry.departmentId ?? entry.participantId) === departmentId);
       if (participant === undefined || participant.headRoleId === undefined || participant.departmentId === undefined) throw new Error("Department is not a captured Head Council participant");
       const context: CouncilActorContext = { actorId: participant.headRoleId, sessionRef: participant.sessionRef, commandId };
-      return deps.withGoalLease(council.goalId, (proof) => spawnWorker(deps.pool, deps.kernel, { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, commandId, ...(input.model === undefined ? {} : { modelRef: input.model }) }, proof, context).then(toApiWorker));
+      return deps.withGoalLease(council.goalId, (proof) => spawnWorker(deps.pool, deps.kernel, { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, commandId, ...(fixedModelRef === undefined ? {} : { modelRef: fixedModelRef }) }, proof, context).then(toApiWorker));
     },
     async get(workerId, projectId) {
       const worker = await readWorker(deps.pool, workerId);
