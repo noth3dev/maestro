@@ -67,6 +67,18 @@ describe("IPython authority-backed local effects", () => {
     for (const adapter of Object.values(adapters)) expect(adapter).not.toHaveBeenCalled();
   });
 
+  it("prepares a local effect without invoking its adapter until commit", async () => {
+    const fixture = makeAdapters();
+    const { adapters } = fixture;
+    const gateway = createIpPythonLocalEffectsGateway({ adapters });
+    const request = { method: "write_file", payload: { path: "src/app.ts", content: "prepared" } };
+    const prepared = await gateway.prepare(binding, request);
+    expect(adapters.writeFile).not.toHaveBeenCalled();
+    expect(prepared.result).toMatchObject({ state: "ok", content: "[effect prepared]" });
+    await expect(prepared.commit()).resolves.toEqual(ok("written"));
+    expect(adapters.writeFile).toHaveBeenCalledTimes(1);
+  });
+
   it("preserves an adapter's unknown outcome instead of treating cancellation as success", async () => {
     const fixture = makeAdapters();
     const { adapters } = fixture;
