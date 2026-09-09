@@ -3446,3 +3446,28 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Post-merge main revalidation ran serially against disposable PostgreSQL container `maestro-plan2-s3-postgres` on port `55433` with `npm test -- --pool forks --maxWorkers 1 --no-file-parallelism`.
 - Exit code `0`; Vitest summary: `194/194` files passed and `1,289/1,289` tests passed. Log: `/tmp/plan2-s3-main-revalidation.log`.
 - The merged S3 result at main commit `892cfea` satisfies the S3 lifecycle gates; no later slice was started.
+
+
+## 2026-09-09 — Updated-plan resume status
+
+- Read the new formal TUI design specification `roadmap/act-1-foundation/specs/2026-09-09-tui-design.md` in full, including P1–P8 and all seven acceptance criteria, and re-read the updated `execution/plan-2.md` S0/order and `execution/plan-3.md` S3b/order.
+- Repository state still places the active lifecycle at Plan 2 S3 `two-stage-block-execution`: S3 is merged at main `892cfea` with ledger commit `43005ec`, while the final push gate is still running as PID `3898306`.
+- Plan 2 S0 `tui-color-and-semantics` is the next eligible slice after the current S3 final push gate, and its files do not overlap S3 (`theme.ts`/`conversation-transcript.ts` versus `ipython-host.ts`/`ipython-process-adapter.ts`). It must land before Plan 2 S4. No S0 worktree was started while the S3 gate remains active.
+- The new TUI spec is currently an untracked user-supplied file; it was not altered or included in the S3 push gate.
+
+
+## 2026-09-09 — Plan 2 S0 parallel start
+
+- Per updated Plan 2 order and explicit user request, started Plan 2 § S0 `tui-color-and-semantics` in isolated worktree `/home/ubuntu/projects/ms/.worktrees/plan2-tui-color-and-semantics` on branch `plan2-tui-color-and-semantics`.
+- S0 is isolated from the active Plan 2 S3 final push gate and touches the planned TUI rendering files, not S3's IPython execution files.
+- Delegated implementation to `s0-implementer`; it must follow RED tests first, minimal GREEN implementation, focused verification, and no live-provider run or push.
+
+
+## 2026-09-09 — Plan 2 S3 final push gate complete
+
+- Final push gate command `npm run build && npm test -- --pool forks --maxWorkers 1 --no-file-parallelism` completed with outer exit `0`.
+- Build completed with exit `0` (`tsc -b`).
+- Vitest completed with exit `0`: **194/194 test files passed; 1,289/1,289 tests passed; 0 failures**. Duration: `505.02s`.
+- Cancelled heartbeat `79aacb8c-d134-44bd-9e9f-ae682d3b0710` after the gate completed.
+- Removed clean merged S3 worktree and branch `plan2-two-stage-block-execution`.
+- S3 is now eligible for push; Plan 2 S0 continues independently in its own worktree.

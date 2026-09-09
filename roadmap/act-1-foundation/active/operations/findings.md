@@ -1435,3 +1435,21 @@ All downstream routing documentation must use this contract and must not restore
 
 - Main post-merge verification passed cleanly: exit `0`, `194/194` files, `1,289/1,289` tests. The disposable PostgreSQL container was isolated on port `55433`; the run was serialized with one worker and no concurrent Vitest process.
 - No new failure or unresolved finding remains for Plan 2 S3.
+
+
+## 2026-09-09 — Updated-plan ordering finding
+
+- The updated plan permits S0 to run independently, but the existing Plan 2 S3 final push gate is still active. Starting S0 now would violate the current serialized lifecycle gate, so S0 remains pending until S3's final test exit is recorded.
+- The new TUI spec is untracked in the repository and must be preserved; it is a dependency for future Plan 3 S3b, not part of the current S3 implementation.
+
+
+## 2026-09-09 — Parallel S0 execution
+
+- No blocker found for parallel start: `.worktrees/` is git-ignored, the S0 worktree was created from main `43005ec`, and the S0 file scope is disjoint from S3.
+- S0 remains open pending the implementer's RED/GREEN evidence and independent review.
+
+
+## 2026-09-09 — Plan 2 S3 final gate evidence
+
+- Authoritative final push gate passed: build exit `0`; Vitest exit `0`; `194/194` files and `1,289/1,289` tests passed. Source log: `/tmp/plan2-s3-final-push-gate.log`.
+- No test failure or cleanup blocker was found. The S3 worktree was clean and safely removed; its merged branch was deleted.
