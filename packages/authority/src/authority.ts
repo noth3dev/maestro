@@ -158,6 +158,16 @@ export class AuthorizedEffectExecutor {
     private readonly clock: () => Date = () => new Date(),
   ) {}
 
+  async deny(request: ActionRequest, reason: string): Promise<AuthorityDecision> {
+    const decision: AuthorityDecision = { effect: "deny", reason, classification: classifyAction(request.action), request };
+    try {
+      await this.repository.appendDecision({ decision, decidedAt: this.clock() });
+      return decision;
+    } catch {
+      return { ...decision, reason: "authority_unavailable" };
+    }
+  }
+
   async execute(request: ActionRequest, effect: () => Promise<unknown>): Promise<AuthorityDecision> {
     let decision: AuthorityDecision;
     try {

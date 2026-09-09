@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { ToolContext, ToolDefinition } from "./agent-runtime.js";
 import type { ToolResultStatus } from "./model-provider.js";
 
@@ -7,6 +8,9 @@ const MAX_RESULT_BYTES = 64_000;
 
 export interface IpPythonSessionBinding {
   readonly sessionId: string;
+  /** Root admission command used to resolve the durable Worker binding. */
+  readonly admissionCommandId?: string;
+  /** Deterministic command identity for this exact tool call. */
   readonly commandId: string;
   readonly toolCallId: string;
   readonly operatorId: string;
@@ -182,8 +186,16 @@ function authorityContext(context: ToolContext): { authorityPolicyVersion: numbe
 
 export function sessionBindingKey(binding: IpPythonSessionBinding | undefined): string {
   if (binding === undefined) return "undefined";
-  const { commandId: _commandId, toolCallId: _toolCallId, ...stableBinding } = binding;
+  const { admissionCommandId: _admissionCommandId, commandId: _commandId, toolCallId: _toolCallId, ...stableBinding } = binding;
   return JSON.stringify(stableBinding);
+}
+
+/** Derive a deterministic UUID because durable command identities are PostgreSQL UUIDs. */
+export function deriveIpPythonToolCallCommandId(commandId: string, turnId: string, toolCallId: string): string {
+  const digest = createHash("sha256").update(JSON.stringify([commandId, turnId, toolCallId]), "utf8").digest("hex").split("");
+  digest[12] = "5"; // deterministic name-based UUID version
+  digest[16] = ((Number.parseInt(digest[16]!, 16) & 0x3) | 0x8).toString(16); // RFC 4122 variant
+  return `${digest.slice(0, 8).join("")}-${digest.slice(8, 12).join("")}-${digest.slice(12, 16).join("")}-${digest.slice(16, 20).join("")}-${digest.slice(20, 32).join("")}`;
 }
 
 export function createIpPythonTool(options: { sessions: IpPythonSessionManager }): ToolDefinition {
@@ -206,7 +218,7 @@ export function createIpPythonTool(options: { sessions: IpPythonSessionManager }
       const { code } = parseCode(args);
       const sessionId = sessionIdFor(context);
       const authority = authorityContext(context);
-      return toolResult(await options.sessions.execute({ sessionId, code, binding: { sessionId, commandId: context.commandId, toolCallId: context.toolCallId, operatorId: context.operatorId, projectId: context.projectId, goalId: context.goalId, pathScope: context.capabilityGrant.pathScope, outboundDataClasses: context.capabilityGrant.outboundDataClasses, ...authority } }), context);
+      return toolResult(await options.sessions.execute({ sessionId, code, binding: { sessionId, admissionCommandId: context.commandId, commandId: deriveIpPythonToolCallCommandId(context.commandId, context.turnId, context.toolCallId), toolCallId: context.toolCallId, operatorId: context.operatorId, projectId: context.projectId, goalId: context.goalId, pathScope: context.capabilityGrant.pathScope, outboundDataClasses: context.capabilityGrant.outboundDataClasses, ...authority } }), context);
     },
   };
 }

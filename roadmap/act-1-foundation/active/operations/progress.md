@@ -3697,3 +3697,23 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Merged S5 with `649f8a6` (`merge: integrate Plan 2 S5 approval hierarchy`).
 - Main post-merge build, lint, and `git diff --check` passed. The serialized post-merge full suite passed **136/198 files and 936/1339 tests**; **62 files and 403 tests** were skipped because no PostgreSQL URL was configured. Log: `/tmp/plan2-s5-main-postmerge-full.log`.
 - The merged worktree contains no live-provider acceptance. S6 production wiring remains deferred.
+
+
+## 2026-09-09 — Plan 2 S6 worker/IPython composition verification
+
+- Continued the active `plan2-worker-ipython-composition` worktree from the prior S6 review findings. The stop-before-approval-consumption regression is green, and the worker composition resolver now fails closed for missing, invalid, outside-root, or multi-environment bindings.
+- Production worker composition now resolves durable Mission Bundle and Worker state, provisions a real authority-backed Git branch/worktree from the immutable Task Contract base revision when needed, verifies `HEAD`, and persists `worker_worktrees` before composing IPython.
+- Worker IPython remains Mission Bundle-scoped: only explicitly granted `ipython` is exposed, host requests are authority-checked, local effects use collect/approve/execute fencing, and worker observations expose redacted capability/session/stop state through the existing API.
+- Added successful read, forbidden write, and outside-path rejection evidence to the real Model Gateway + PostgreSQL worker acceptance. Acceptance passed with the real disposable Git worktree and no forbidden file mutation. The real SIGKILL orphan journal, worker kill/restart fencing, cancellation, environment, and worker lifecycle gates were also exercised; one concurrent PostgreSQL run was intentionally discarded after test schemas interfered, and a serial rerun remains the authoritative gate.
+- Latest non-PostgreSQL focused verification passed `5 files / 38 tests`; the full non-PostgreSQL rerun and PostgreSQL full gate are still completing. Latest build and diff check are green; lint was green before the final narrow test-only assertions and will be rerun.
+- Independent final review is requested and remains the close gate. No live-provider acceptance, merge, push, cleanup, or S7 work has occurred.
+
+
+## 2026-09-09 — Plan 2 S6 crash-consistency closure and authoritative verification
+
+- Added migration `0080_capability_effect_resolutions.sql` with append-only operator resolutions for effects whose repetition claim committed before the external outcome was known. `aborted` resolutions restore the repetition budget; `confirmed` resolutions close the ambiguity without replay.
+- Pending capability journals now retain the Worker admission command identity. Startup reconciliation finds unresolved pending effects, fences the associated Worker, and keeps the Goal in `recovering` until an explicit resolution exists. `recovering -> active` is blocked while any pending effect remains unresolved.
+- Excluded revoked approvals from IPython approval selection, revalidated environment/worktree bindings after provisioning, and required the Worker owner lease to remain live before every local effect. Partial replay of a multi-effect block rolls back rather than consuming fresh repetition budget.
+- Latest authoritative serialized PostgreSQL verification passed **199/199 files and 1365/1365 tests** with `MAESTRO_TEST_DATABASE_URL` set. Latest focused PostgreSQL verification passed **4/4 files and 59/59 tests**. Latest focused IPython/composition verification passed **5/5 files and 57/57 tests**.
+- Latest build, lint, and `git diff --check` passed. Real Model Gateway + PostgreSQL Worker acceptance, real Git worktree evidence, process orphan/restart evidence, and Worker fencing recovery passed.
+- S6 implementation and verification are complete in this worktree. The branch remains uncommitted and unmerged; real Codex account/browser callback completion and system-account login remain environment-dependent blockers.

@@ -352,6 +352,7 @@ export interface IpPythonTwoStageProcessKernelOptions extends Omit<IpPythonProce
   readonly prepareEffect: (request: IpPythonHostRequest, binding?: IpPythonSessionBinding) => import("./ipython-host.js").IpPythonPreparedEffect | Promise<import("./ipython-host.js").IpPythonPreparedEffect>;
   readonly fencingToken: string;
   readonly approve: import("./ipython-host.js").IpPythonTwoStageExecutionOptions["approve"];
+  readonly consumeApproval?: import("./ipython-host.js").IpPythonTwoStageExecutionOptions["consumeApproval"];
   readonly isFencingCurrent: (fencingToken: string) => boolean | Promise<boolean>;
   readonly recordEffectResult: (index: number, request: IpPythonHostRequest, result: IpPythonExecutionResult) => void | Promise<void>;
   readonly recordStageBoundary: import("./ipython-host.js").IpPythonTwoStageExecutionOptions["recordStageBoundary"];
@@ -382,6 +383,7 @@ export function createIpPythonTwoStageProcessKernel(options: IpPythonTwoStagePro
     request,
     fencingToken: options.fencingToken,
     approve: options.approve,
+    ...(options.consumeApproval === undefined ? {} : { consumeApproval: options.consumeApproval }),
     isFencingCurrent: options.isFencingCurrent,
     isStopRequested: () => stopRequested,
     prepareEffect: (effect) => options.prepareEffect(effect, request.binding ?? binding),

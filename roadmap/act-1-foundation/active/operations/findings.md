@@ -1626,3 +1626,20 @@ All downstream routing documentation must use this contract and must not restore
 
 - Main revalidation after `649f8a6` is green: build, lint, diff check, and full non-PostgreSQL suite passed (`136/198` files; `936/1339` tests; `62/403` PostgreSQL tests skipped).
 - Independent S5 review remains **`REVIEW: PASS`**.
+
+
+## 2026-09-09 — S6 verification findings
+
+- The first S6 orphan harness adaptation eagerly created an IPython process before Control Plane startup reconciliation, so startup immediately classified it as orphaned/reaped. A test-only lazy kernel factory now creates the process after `listen()` completes; the real SIGKILL restart test passes.
+- A durable `worker_worktrees` row must not be trusted merely because it contains a path. Resolver validation now requires an absolute, existing, realpath-contained worktree under the configured trusted root; invalid durable rows fail closed without attempting replacement provisioning. Environment declarations are bounded to at most one ready, unexpired, Goal/project/worker-matching record, with relative filesystem scopes anchored to the worker workspace.
+- Running the PostgreSQL worker target suite concurrently with the full PostgreSQL suite caused schema teardown interference (`goals`, `workers`, and `reconciler_leader_lease` missing). Acceptance, orphan, environment, and kill/restart tests passed in that run, but the worker failures are not treated as product evidence; rerun the complete S6 PostgreSQL target serially after the full suite finishes.
+
+
+## 2026-09-09 — S6 findings closed
+
+- **Resolved:** `pending_unknown` effects could permanently consume repetition budget and leave retries blocked. Durable effect-resolution records now support idempotent `confirmed`/`aborted` decisions, budget restoration for aborted effects, and recovery gating until resolution.
+- **Resolved:** pending effects were not reliably attributable to a Worker. Consumption journals now carry `admissionCommandId`; startup reconciliation matches that identity to the durable Worker reservation and fences it before Goal recovery.
+- **Resolved:** revoked approvals could be selected by the IPython approval query. Selection now requires `revoked_at IS NULL`; Worker local effects also require a live owner lease and current control epoch.
+- **Resolved:** a partially replayed effect block could claim new repetition units before returning a replay rejection. The atomic consumption transaction now rolls back mixed replay/new blocks.
+- **Verification:** latest serialized PostgreSQL gate passed **199 files / 1365 tests**; latest focused PostgreSQL gate passed **4 files / 59 tests**; latest focused IPython gate passed **5 files / 57 tests**; build, lint, and diff check passed.
+- No unresolved S6 product finding remains in this worktree. Worktree cleanup, merge, and push remain separate integration actions.

@@ -129,7 +129,7 @@ function target(...parts: readonly string[]): string {
  */
 export function createLocalGitPort(options: LocalGitPortOptions): GitPort {
   const { authority, context, workspaceRoot, pathScope } = options;
-  return {
+  return ({
     async createBranch(repositoryPath: string, branchName: string, baseRevision: string): Promise<void> {
       const repository = assertGoalScopedWorkspacePath(repositoryPath, "repositoryPath", workspaceRoot, pathScope);
       await authorized(authority, context, "git.local.branch.create", target(repository, branchName, baseRevision), () =>
@@ -175,5 +175,10 @@ export function createLocalGitPort(options: LocalGitPortOptions): GitPort {
       await authorized(authority, context, "git.local.worktree.remove", target(repository, worktree), () =>
         runGit(["worktree", "remove", "--force", "--", worktree], repository).then(() => undefined));
     },
-  };
+    async removeBranch(repositoryPath: string, branchName: string): Promise<void> {
+      const repository = assertGoalScopedWorkspacePath(repositoryPath, "repositoryPath", workspaceRoot, pathScope);
+      await authorized(authority, context, "git.local.branch.remove", target(repository, branchName), () =>
+        runGit(["branch", "-D", "--", branchName], repository).then(() => undefined));
+    },
+  } as GitPort);
 }
