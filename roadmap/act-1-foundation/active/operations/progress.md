@@ -3272,3 +3272,27 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Revalidated clean main after merge commit `c5fe042`: build, lint, and diff check exited 0.
 - Serialized PostgreSQL full revalidation passed with exit code 0: **189/189 test files and 1,258/1,258 tests**, duration 567.93s.
 - S3 implementation, review, merge, main revalidation, and exit evidence are complete. Remaining operational steps are worktree/branch cleanup, push, and post-push CI.
+
+
+## 2026-09-09 — Plan 1 S4 phase status sync
+
+- Updated the Phase 1 status header, root/English/Korean roadmap status copies, and the canonical `operations/task_plan.md` block with the completed S1–S3/G6 evidence paths.
+- Checked G6 in the local ignored `execution/plan-1.md` and recorded the real PostgreSQL/API/TUI integration path, clean-main revalidation log, and CI run `34293072671` for SHA `2fa6168`.
+- Kept final product acceptance open: Phase 2 host-tool/live acceptance and other explicit operational gates remain pending. Independent S4 documentation review is pending.
+
+
+## 2026-09-09 — S4 review correction
+
+- Independent review found and the worktree fixed two documentation consistency issues: an extra empty cell in the Korean Act 1 table row and a stale Phase 3 header that still treated TUI parity/reconnect as a future gate.
+- Phase 3 now records G6 as complete while retaining the Phase 2 host-tool and independent release-review gates.
+
+
+## 2026-09-09 — S4 status-date alignment
+
+- Aligned the three localized roadmap status headings to the current S4 evidence date `2026-09-09`; historical evidence timestamps remain in the canonical ledger and logs.
+
+
+## 2026-09-09 — S4 independent review closure
+
+- Independent no-edit review returned `REVIEW: PASS` after the delimiter, stale Phase 3 wording, and status-date corrections.
+- S4 exit evidence is documentation consistency plus explicit separation of G1–G6 implementation evidence from remaining host-tool/live/product acceptance.

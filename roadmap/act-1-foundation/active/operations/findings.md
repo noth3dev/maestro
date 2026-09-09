@@ -1299,3 +1299,19 @@ All downstream routing documentation must use this contract and must not restore
 
 - Clean main full PostgreSQL revalidation is green at **189/189 files and 1,258/1,258 tests**, exit code 0. The transient worker recovery failure did not recur.
 - No unresolved S3 findings remain before the push gate.
+
+
+## 2026-09-09 — S4 documentation sync findings
+
+- No implementation defect was found. The status language now distinguishes completed G1–G6 implementation evidence from final product acceptance and user-run live gates.
+- The local `execution/plan-1.md` is ignored by Git; its G6 checkbox/evidence was updated locally as required, while the tracked status evidence lives in the five repository documents and the append-only operations ledger.
+
+
+## 2026-09-09 — S4 review correction
+
+- `REVIEW: FAIL` identified a malformed Korean Markdown table delimiter and stale Phase 3 acceptance wording. Both were corrected; no code or product-acceptance claim changed.
+
+
+## 2026-09-09 — S4 independent review closure
+
+- The corrected documentation set passed independent review. Markdown diff check is clean.

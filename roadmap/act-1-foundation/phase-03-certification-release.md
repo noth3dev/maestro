@@ -1,6 +1,6 @@
 # Phase 3 — Encore, Independent Certification, and First Usable Release
 
-> **Current status (2026-09-08):** Conversation, account-login, oversight, and native runtime paths have live PostgreSQL/process evidence. First-usable-release acceptance remains open: Phase 2 must first implement and independently review the approved IPython local host-tool contract and four-level approval flow, followed by dedicated TUI parity/reconnect evidence and independent release review. No Phase 3 release acceptance is claimed.
+> **Current status (2026-09-09):** Conversation, account-login, oversight, and native runtime paths have live PostgreSQL/process evidence. Phase 1 G6 TUI parity/reconnect evidence is complete and independently revalidated on clean `main`; first-usable-release acceptance remains open until Phase 2 implements and independently reviews the approved IPython local host-tool contract and four-level approval flow, followed by independent release review. No Phase 3 release acceptance is claimed.
 
 
 ## Outcome
