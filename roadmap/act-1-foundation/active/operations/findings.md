@@ -1360,3 +1360,7 @@ All downstream routing documentation must use this contract and must not restore
 ## 2026-09-09 — Plan 2 S1 CI remediation review finding
 
 - No additional findings. The CI remediation is ready to merge and re-run in GitHub CI.
+
+## 2026-09-09 — Plan 2 S1 CI remediation merge finding
+
+- The prior CI failure is resolved by the domain project reference fix; no new local findings remain.
