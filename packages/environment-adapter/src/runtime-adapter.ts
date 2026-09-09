@@ -30,6 +30,7 @@ export interface ProcessSpawnOptions {
   readonly cwd: string;
   readonly env: Readonly<Record<string, string>>;
   readonly shell: false;
+  readonly detached: true;
 }
 
 export type ProcessSpawner = (
@@ -46,6 +47,8 @@ export interface EnvironmentAuthorityGateway {
 }
 
 export interface EnvironmentAdapterOptions {
+  /** Local worktrees cannot enforce OS network isolation. Tests may opt into the explicit legacy host-network boundary. */
+  readonly unsafeTestOnlyAllowUnisolatedLocalNetwork?: boolean;
   readonly clock?: () => Date;
   readonly spawn?: ProcessSpawner;
   /** Optional durable reread used to close state/expiry TOCTOU windows. */
@@ -71,9 +74,21 @@ export class EnvironmentAuthorizationError extends EnvironmentExecutionError {
   }
 }
 
+export class EnvironmentOutcomeUnknownError extends EnvironmentExecutionError {
+  constructor(readonly decision: AuthorityDecision) {
+    super("Environment command was already claimed; its prior outcome is unknown");
+  }
+}
+
 const DEFAULT_OUTPUT_CAP_BYTES = 1024 * 1024;
 const DEFAULT_CANCEL_GRACE_MS = 250;
 const SECRET_NAME = /(?:password|passwd|secret|token|private[_-]?key|api[_-]?key)/i;
+const SECRET_OUTPUT_ASSIGNMENT = /(^|\n)(\s*(?:api[_-]?(?:key|token)|access[_-]?token|auth[_-]?token|password|passwd|secret|private[_-]?key)\s*[:=]\s*)([^\r\n]*)/gim;
+
+function redactSecretOutput(value: string): string {
+  return value.replace(SECRET_OUTPUT_ASSIGNMENT, "$1$2[REDACTED]");
+}
+
 const ENVIRONMENT_ALLOWLIST_KEYS = [
   "environmentAllowlist",
   "allowedEnvironment",
@@ -92,6 +107,7 @@ const defaultProcessSpawner: ProcessSpawner = (executable, args, options) => {
     cwd: options.cwd,
     env: { ...options.env },
     shell: false,
+    detached: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
   if (child.stdout === null || child.stderr === null) throw new EnvironmentBoundaryError("Process output pipes were not created");
@@ -103,7 +119,14 @@ const defaultProcessSpawner: ProcessSpawner = (executable, args, options) => {
       const closeListener = listener as (code: number | null, signal: string | null) => unknown;
       return child.on("close", (code, signal) => closeListener(code, signal));
     },
-    kill: (signal?: string) => signal === undefined ? child.kill() : child.kill(signal as NodeJS.Signals),
+    kill: (signal?: string) => {
+      const value = signal === undefined ? "SIGTERM" : signal as NodeJS.Signals;
+      if (child.pid !== undefined) {
+        try { process.kill(-child.pid, value); return true; }
+        catch { /* fall through when the process group is already gone */ }
+      }
+      return child.kill(value);
+    },
   };
 };
 
@@ -240,10 +263,16 @@ function validateEnvironment(
   if (!Array.isArray(record.boundaries.filesystem) || !pathWithinAllowlist(request.cwd, record.boundaries.filesystem)) {
     throw new EnvironmentBoundaryError("Environment cwd is outside its filesystem boundary");
   }
+  if (request.pathScope !== undefined && !pathWithinAllowlist(request.cwd, request.pathScope)) {
+    throw new EnvironmentBoundaryError("Environment cwd is outside the Goal path scope");
+  }
   // Absolute targets identify project paths. Relative or opaque targets (for
   // example a Git ref) remain bounded by the exact authority request.
   if (isAbsolutePath(request.target) && !pathWithinAllowlist(request.target, record.boundaries.filesystem)) {
     throw new EnvironmentBoundaryError("Environment project target is outside its filesystem boundary");
+  }
+  if (request.pathScope !== undefined && isAbsolutePath(request.target) && !pathWithinAllowlist(request.target, request.pathScope)) {
+    throw new EnvironmentBoundaryError("Environment project target is outside the Goal path scope");
   }
   const executable = basename(request.argv[0]!);
   if (!record.boundaries.processes.includes(executable) && !record.boundaries.processes.includes(request.argv[0]!)) {
@@ -424,8 +453,8 @@ function createHandle(
         status,
         exitCode,
         signal,
-        stdout: Buffer.concat(stdout).toString("utf8"),
-        stderr: Buffer.concat(stderr).toString("utf8"),
+        stdout: redactSecretOutput(Buffer.concat(stdout).toString("utf8")),
+        stderr: redactSecretOutput(Buffer.concat(stderr).toString("utf8")),
         outputTruncated: outputLimitExceeded,
         startedAt,
         completedAt,
@@ -458,6 +487,7 @@ function createAdapter(
 
   return {
     async start(request): Promise<EnvironmentProcessHandle> {
+      if (expectedType === "local_worktree" && options.unsafeTestOnlyAllowUnisolatedLocalNetwork !== true) throw new EnvironmentBoundaryError("local_worktree cannot enforce network isolation; use container_sandbox");
       validateRequestShape(request);
       const initial = await readBoundEnvironment();
       validateEnvironment(initial, expectedType, request, clock(), defaultOutputCapBytes);
@@ -493,6 +523,7 @@ function createAdapter(
           handle = createHandle(child, `environment-invocation-${++sequence}-${nextInvocationId()}`, clock().toISOString(), currentLimits.timeoutMs, currentLimits.outputCapBytes, cancelGraceMs, clock, release);
         });
         if (decision.effect !== "allow") throw new EnvironmentAuthorizationError(decision);
+        if (decision.reason === "already_executed") throw new EnvironmentOutcomeUnknownError(decision);
         if (handle === undefined) throw new EnvironmentExecutionError("Authority gateway allowed without starting a process");
         return handle;
       } catch (error) {
@@ -515,6 +546,7 @@ export function createLocalRuntimeAdapter(
       cwd: request.cwd,
       env: { ...(request.environment ?? {}) },
       shell: false,
+      detached: true,
     },
   }));
 }
@@ -546,6 +578,7 @@ export function createContainerSandboxAdapter(
         cwd: request.cwd,
         env: { ...(request.environment ?? {}) },
         shell: false,
+        detached: true,
       },
     };
   });

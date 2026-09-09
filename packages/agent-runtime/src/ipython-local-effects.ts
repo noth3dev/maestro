@@ -1,3 +1,5 @@
+import { realpathSync } from "node:fs";
+import { basename, dirname, relative, resolve, sep } from "node:path";
 import type { IpPythonExecutionResult } from "./ipython-tool.js";
 import type { IpPythonHostBinding, IpPythonHostRequest, IpPythonReadOnlyGateway } from "./ipython-host.js";
 import { createReadOnlyHostRequestHandler, IpPythonProtocolError } from "./ipython-host.js";
@@ -30,6 +32,7 @@ export interface IpPythonRunCommandRequest {
   readonly target: string;
   readonly argv: readonly string[];
   readonly cwd: string;
+  readonly pathScope: readonly string[];
   readonly environment?: Readonly<Record<string, string>>;
   readonly timeoutMs?: number;
   readonly outputCapBytes?: number;
@@ -139,17 +142,50 @@ function boundedNumber(value: unknown, name: string): number | undefined {
   return value as number;
 }
 
+function canonicalForScope(path: string): string {
+  let candidate = resolve(path);
+  const missing: string[] = [];
+  while (true) {
+    try { return missing.length === 0 ? realpathSync.native(candidate) : resolve(realpathSync.native(candidate), ...missing); }
+    catch {
+      const parent = dirname(candidate);
+      if (parent === candidate) return resolve(path);
+      missing.unshift(basename(candidate));
+      candidate = parent;
+    }
+  }
+}
+
+function assertGoalScopedPath(path: string, binding: IpPythonHostBinding, label: string): string {
+  const candidate = canonicalForScope(path);
+  if (binding.pathScope.length === 0 || !binding.pathScope.some((scope) => {
+    const root = canonicalForScope(scope);
+    const remainder = relative(root, candidate);
+    return remainder === "" || (!remainder.startsWith(`..${sep}`) && remainder !== "..");
+  })) throw new IpPythonProtocolError(`IPython local effect ${label} is outside the Goal path scope`);
+  return path;
+}
+
 function safeCommand(payload: Record<string, unknown>, binding: IpPythonHostBinding, action: IpPythonRunCommandRequest["action"]): IpPythonRunCommandRequest {
   const argv = stringList(payload.argv, "argv");
   const executable = argv[0]!.split(/[\\/]/).at(-1)!.toLowerCase();
-  if (["sh", "bash", "zsh", "fish", "cmd", "powershell", "pwsh"].includes(executable)) throw new IpPythonProtocolError("IPython local effect command shell is not allowed");
+  if (["sh", "bash", "zsh", "fish", "cmd", "powershell", "pwsh", "env", "xargs", "parallel", "find", "busybox", "make", "just", "task", "node", "nodejs", "python", "python3", "perl", "ruby", "php", "java", "dotnet", "go"].includes(executable)) throw new IpPythonProtocolError("IPython local effect command wrapper or interpreter is not allowed");
+  if (executable === "git") throw new IpPythonProtocolError("Git operations must use dedicated local Git methods");
+  if (["npm", "npx", "pnpm", "yarn", "bun"].includes(executable) && (action !== "project.test.run" || argv.length !== 2 || argv[1] !== "test")) throw new IpPythonProtocolError("IPython package-manager effects are limited to the exact test command");
   const target = requiredString(payload.target, "target");
+  const cwd = assertGoalScopedPath(absolutePath(payload.cwd, "cwd"), binding, "cwd");
+  for (const argument of argv.slice(1)) {
+    if (/(?:^|[/\\=:])\.\.(?:[/\\]|$)/.test(argument)) throw new IpPythonProtocolError("IPython local effect command argument escapes the Goal path scope");
+    const absoluteArgument = argument.startsWith("/") ? argument : argument.match(/[=:](\/.*)$/)?.[1];
+    if (absoluteArgument !== undefined) assertGoalScopedPath(absoluteArgument, binding, "command argument");
+  }
   return {
     binding,
     action,
     target,
     argv,
-    cwd: absolutePath(payload.cwd, "cwd"),
+    cwd,
+    pathScope: binding.pathScope,
     ...(payload.environment === undefined ? {} : { environment: safeEnvironment(payload.environment)! }),
     ...(payload.timeoutMs === undefined ? {} : { timeoutMs: boundedNumber(payload.timeoutMs, "timeoutMs")! }),
     ...(payload.outputCapBytes === undefined ? {} : { outputCapBytes: boundedNumber(payload.outputCapBytes, "outputCapBytes")! }),

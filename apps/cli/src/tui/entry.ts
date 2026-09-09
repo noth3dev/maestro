@@ -43,7 +43,7 @@ import {
 } from "./session.js";
 import { mergeEvents, runActivityStream, subscribeToEvents } from "./activity-stream.js";
 import { addConversationMessage, applyConversationEvent, createConversationTranscript, renderConversationBlocks, type ConversationTranscriptState } from "./conversation-transcript.js";
-import { renderActivityTimeline } from "./components/activity-timeline.js";
+import { renderActivityTimeline, toActivityTimelineEvent } from "./components/activity-timeline.js";
 import { renderShell, renderTuiFooter, type TuiShellState } from "./components/shell.js";
 import { getModeAccentProgress, setModeAccentProgress, tuiTheme, type TranscriptLine } from "./theme.js";
 import type { CliIo } from "../main.js";
@@ -174,7 +174,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       const lines = [...renderShell(state, terminal.columns, terminal.rows), "", ...renderRecoveryBanner(recovery, terminal.columns)];
       if (pendingConfirmation !== undefined) lines.push("", ...renderApprovalDialog(pendingConfirmation.summary, terminal.columns));
       if (accountLoginSelection !== undefined && accountLoginState !== undefined) lines.push("", ...renderProviderLoginDialog(terminal.columns, accountLoginSelection, accountLoginState, accountLoginUrl));
-      if (activity.length > 0) lines.push("", "Activity", ...renderActivityTimeline(activity, terminal.columns));
+      if (activity.length > 0) lines.push("", "Activity", ...renderActivityTimeline(activity.map(toActivityTimelineEvent), terminal.columns));
       return lines;
     });
     header.setTranscriptRenderer(() => renderConversationBlocks(conversation));

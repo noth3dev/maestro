@@ -105,6 +105,28 @@ describe("IPython two-stage block execution", () => {
     expect(execFileSync("git", ["status", "--porcelain=v1"], { cwd: directory })).toEqual(beforeGit);
   });
 
+  it("reports unknown when the first commit fails before its mutation outcome is known", async () => {
+    const result = await executeIpPythonBlockInTwoStages(options({
+      runBlock: runner({ collect: [effect("write_file", { path: "a" })], execute: [effect("write_file", { path: "a" })] }),
+      prepareEffect: async () => ({ result: ok, commit: async () => ({ state: "error", dataClass: "workspace", content: "write interrupted", reason: "effect_failed" }), rollback: async () => {} }),
+    }));
+    expect(result).toMatchObject({ state: "unknown", reason: "effect_outcome_unknown" });
+  });
+
+  it("reports unknown when a later commit fails after an earlier effect applied", async () => {
+    let applied = 0;
+    let prepared = 0;
+    const result = await executeIpPythonBlockInTwoStages(options({
+      runBlock: runner({ collect: [effect("write_file", { path: "a" }), effect("write_file", { path: "b" })], execute: [effect("write_file", { path: "a" }), effect("write_file", { path: "b" })] }),
+      prepareEffect: async (_request) => {
+        const index = prepared++;
+        return { result: ok, commit: async (lease) => { await lease.assertValid(); if (index === 0) { applied += 1; return ok; } return { state: "error", dataClass: "workspace", content: "second effect failed", reason: "effect_failed" }; }, rollback: async () => {} };
+      },
+    }));
+    expect(result).toMatchObject({ state: "unknown", reason: "partial_commit" });
+    expect(applied).toBe(1);
+  });
+
   it("leaves no effect when stage one is stopped and records queue-boundary outcomes", async () => {
     const result = await executeIpPythonBlockInTwoStages(options({
       runBlock: async (_request, mode) => mode === "collect" ? { state: "cancelled", dataClass: "workspace", content: "stopped", reason: "user_stop" } : ok,
