@@ -9,7 +9,7 @@ Maestro는 각 단계의 검증 증거가 완료되어야 다음 단계로 진�
 | 단계 | 명칭 | 코드 상태 | 검증 기준 및 운영 승인 게이트 |
 | :--- | :--- | :---: | :--- |
 | **Phase 1** | Technical Foundation & Durable Control Plane | **구현 게이트 완료; host-tool 제품 게이트 대기** | G1–G6 구현 증거가 완료되었으며 실제 PostgreSQL TUI/API parity와 SSE cursor-safe reconnect를 포함함. Production host-tool 등록/집행은 Phase 2 IPython 계약으로 남아 있으며 코드 증거만으로 최종 제품 승인을 주장하지 않음 |
-| **Phase 2** | Concertmaster Office Core & Hierarchical Execution | **재개방: host-tool 구현 대기** | 계층 실행 building block과 PostgreSQL 증거는 있으나, persistent IPython 로컬 host-tool, 4단계 승인 계층, full-access 모드 및 live acceptance가 구현·리뷰되기 전까지 Worker는 text/evidence-only임. 과거 code-level 완료 표시는 현재 승인으로 보지 않음 |
+| **Phase 2** | Concertmaster Office Core & Hierarchical Execution | **Plan 2 S6 검증 완료; 문서 동기화 완료; live acceptance 대기** | Plan 2 S6에서 persistent IPython 로컬 host-tool, 4단계 승인 계층, full-access 모드 및 recovery 증거를 확보함. Live acceptance는 사용자가 실행하는 게이트로 남으며, 과거 code-level 완료 표시는 제품 승인을 뜻하지 않음 |
 | **Phase 3** | Encore, Certification & First Usable Release | **릴리스 게이트 대기; host-tool 의존성 명시** | Metronome, Encore, 인증, 보고서 및 native process 증거는 있음. TUI parity/reconnect 증거는 확보되었으며 Phase 2 host-tool 동작과 release-level recovery 증거가 통과하기 전까지 first usable release는 승인하지 않음 |
 | **Phase 4** | Isolated Environments, Devices & Discord Incidents | **외부 capability 경계; 승인 대기** | Browser, device, external-service, deployment 및 Discord capability는 각각 별도 활성화하며 만료·반복 범위를 선택함. 독립 review와 production deployment 승인은 남음 |
 | **Phase 5** | Concurrent Goals & Portfolio Control | **활성 remediation/capacity 작업** | 프로젝트별 worker cap은 구현됨. Resource inventory, demand reservation 및 portfolio scheduling은 향후 작업 |
