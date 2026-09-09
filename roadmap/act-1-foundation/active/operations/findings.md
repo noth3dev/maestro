@@ -1593,3 +1593,10 @@ All downstream routing documentation must use this contract and must not restore
 - Fixed all three adapters to resolve relative scopes against the trusted `workspaceRoot`; Control Plane composition now passes that root to both local-effects and environment adapters. Existing file-edit handling already resolved relative scopes against `workspaceRoot`.
 - GREEN focused verification passes **5 files / 58 tests**; build, lint, and `git diff --check` pass. Review remains open pending full verification and fresh independent review.
 - No live-provider acceptance, merge, push, worktree deletion, or later slice was performed.
+
+
+## 2026-09-09 — S4 relative-scope finding closed by independent review
+
+- The sole remaining review finding is resolved. The fresh reviewer verified trusted-root normalization across local-effects, environment runtime, and Git adapters, plus preserved absolute/symlink/path escape rejection.
+- `REVIEW: PASS`; no remaining S4 defects. PostgreSQL full verification passed `197/197` files and `1330/1330` tests.
+- Live-provider acceptance remains user-run only and was not executed.
