@@ -3471,3 +3471,72 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Cancelled heartbeat `79aacb8c-d134-44bd-9e9f-ae682d3b0710` after the gate completed.
 - Removed clean merged S3 worktree and branch `plan2-two-stage-block-execution`.
 - S3 is now eligible for push; Plan 2 S0 continues independently in its own worktree.
+
+
+## 2026-09-09 — Plan 2 S0 continuation status
+
+- Re-ran required repository status checks: main HEAD is `97a7765`; main working tree is clean; `npm run build` exited `0`.
+- `gh run list --limit 1` reports post-push CI `34311637704` still `in_progress`, not red; no CI repair is indicated.
+- Plan 2 S0 remains the active slice in its isolated worktree. Its RED checkpoint commit is `4b8ab94` (`test(cli): add transcript semantic and colour capability gates`); focused RED run correctly failed 5 new tests and passed 2 existing tests.
+- S0 implementation/GREEN and independent review remain pending.
+
+
+## 2026-09-09 — Plan 2 S3 post-push CI complete
+
+- GitHub Actions CI run `34311637704` for main commit `97a7765` completed with status `completed` and conclusion `success` at `2026-09-09T04:40:14Z`.
+- Cancelled CI heartbeat `a9feacd4-49c2-4085-9df7-fea77194f207` after confirming the final conclusion.
+- Plan 2 S0 remains the active implementation slice in its isolated worktree.
+
+
+## 2026-09-09 — Plan 2 S0 periodic monitoring
+
+- Created agent-owned heartbeat `7a52b380-79d8-4b15-a6d4-94c44650268c` at one-minute intervals to monitor S0 implementation, RED/GREEN evidence, blockers, commit state, and review readiness.
+- The heartbeat is instructed not to start another slice or push; S0 remains the sole active implementation slice.
+
+
+## 2026-09-09 — Plan 2 S0 GREEN evidence in progress
+
+- Required main checks remain green: `npm run build` exit `0`; latest CI `34311637704` is `completed / success`.
+- S0 implementer has reached focused GREEN: theme, transcript, activity-stream, and shell tests pass `4/4` files and `27/27` tests.
+- S0 implementation is not yet closed: the implementer is completing lint/build review and must commit, report evidence, and pass independent review.
+
+
+## 2026-09-09 — Plan 2 S0 lint checkpoint
+
+- S0 focused GREEN remains `27/27`. Initial ESLint caught two `no-control-regex` violations in ANSI escape assertions; the implementer added a targeted test comment and reran ESLint successfully with exit `0`.
+- S0 is now at final diff review before its implementation commit; independent review has not started.
+
+
+## 2026-09-09 — Plan 2 S0 takeover and verification
+
+- Took over S0 after independent verification found two issues: formatting-only churn and a new `paintTranscript` overload error.
+- Reproduced the missing `@earendil-works/pi-tui` as a baseline environment/setup issue; `npm ci` in the S0 worktree restored the locked dependency set.
+- Restored unrelated Prettier churn to the implementation commit and added the minimal union overload fix in `theme.ts`, committed as `7138ca4` (`fix(cli): accept mixed transcript lines in renderer`).
+- Fresh S0 verification now passes: `npm test -- apps/cli/src/tui --run` = 28 files / 125 tests; scoped ESLint exit `0`; `npm run build -- --pretty false` exit `0`. Worktree is clean.
+- Dispatched independent review agent `s0-reviewer`; S0 remains open until its verdict is received.
+
+
+## 2026-09-09 — Plan 2 S0 review continuation
+
+- Required main checks remain green: `npm run build` exit `0`; latest CI `34311637704` remains `completed / success`.
+- S0 worktree remains clean at `7138ca4`; the independent reviewer re-ran focused semantic tests (`3 files / 21 tests`) and is still completing call-site and capability review.
+- No new blocker or review verdict is available; no merge, push, or next slice started.
+
+
+## 2026-09-09 — Plan 2 S0 review-fix cycle
+
+- Independent review returned `REVIEW: NEEDS-FIX` with a High finding that semantic kinds stopped at an unused helper, plus Medium findings for plain-string call sites and ANSI-16 secondary contrast.
+- Added RED coverage for active `ConversationViewport` semantic rendering and ANSI-16 secondary fallback, then fixed the active path by rendering semantic blocks with `Markdown` default text colors and adapting `entry.ts` call sites through explicit error/success/warning helpers.
+- Added `ConversationViewport` integration coverage; fresh verification passes `29 files / 128 tests`, scoped ESLint exit `0`, and build exit `0`.
+- Committed the fixes as `c18cdee` (`fix(cli): route transcript semantics through viewport`); worktree is clean.
+- Dispatched fresh independent reviewer `s0-reviewer-v2`; no merge or push yet.
+
+
+- Independent review for Plan 2 S0 completed with `REVIEW: PASS` from `s0-reviewer-v2` over `43005ec..c18cdee`; no actionable findings. Reviewer evidence: focused TUI `4 files / 24 tests`, full `apps/cli` `30 files / 149 tests`, build exit `0`, scoped lint exit `0`, and `git diff --check` exit `0`. No live-provider acceptance ran; S0 is ready for merge/revalidation, but merge/push remain intentionally pending this check-only request.
+
+
+## 2026-09-09 — Plan 2 S0 closure started
+
+- Rechecked the required state: main build exit `0`; latest CI `34311637704` is `completed / success`; S0 worktree is clean at `c18cdee`. Repository state and the latest ledger agree that the active slice is Plan 2 S0 `tui-color-and-semantics`.
+- Read `execution/plan-1.md` §0.1 and `execution/plan-2.md` S0/Order. The S0 exit evidence is met and the independent reviewer returned `REVIEW: PASS` with no actionable findings.
+- Proceeding with S0 merge and main revalidation. No later slice has started.

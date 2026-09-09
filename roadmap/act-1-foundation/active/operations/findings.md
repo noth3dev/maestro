@@ -1453,3 +1453,54 @@ All downstream routing documentation must use this contract and must not restore
 
 - Authoritative final push gate passed: build exit `0`; Vitest exit `0`; `194/194` files and `1,289/1,289` tests passed. Source log: `/tmp/plan2-s3-final-push-gate.log`.
 - No test failure or cleanup blocker was found. The S3 worktree was clean and safely removed; its merged branch was deleted.
+
+
+## 2026-09-09 — S0 RED evidence
+
+- RED evidence is valid: `apps/cli/src/tui/theme.test.ts` reported `5 failed | 2 passed`; failures were due to the missing semantic/capability implementation, including the expected `line.startsWith is not a function` contract mismatch.
+- The post-push CI run remains `in_progress`; it is not a blocking red result.
+
+
+## 2026-09-09 — CI completion
+
+- Post-push CI run `34311637704` passed (`completed` / `success`); no CI blocker remains for Plan 2 S3.
+
+
+## 2026-09-09 — S0 monitoring
+
+- No new blocker was found. Periodic status monitoring is active while the implementer completes the S0 GREEN cycle.
+
+
+## 2026-09-09 — S0 GREEN checkpoint
+
+- Focused S0 tests pass `27/27`; no blocker observed. Full slice closure remains pending lint/build evidence and independent review.
+
+
+## 2026-09-09 — S0 lint finding resolved
+
+- Initial S0 lint red was limited to two intentional ANSI escape regex assertions in `theme.test.ts`; targeted lint suppression resolved it and the rerun exited `0`.
+
+
+## 2026-09-09 — S0 verification findings resolved
+
+- The first independent check's build red combined missing worktree dependencies with one real S0 overload issue. Baseline build reproduced the missing dependency errors but not the S0 `shell.ts` overload error.
+- `npm ci` resolved the setup blocker; the minimal overload compatibility fix resolved the S0 type error. Fresh build and focused tests are green.
+- The initial Prettier failure was also present on baseline files; broad formatter churn was reverted rather than included in S0.
+
+
+## 2026-09-09 — S0 review still pending
+
+- S0 independent review remains in progress. The reviewer found no blocker so far; final `REVIEW: PASS` or `REVIEW: NEEDS-FIX` is still required.
+
+
+## 2026-09-09 — S0 review findings addressed
+
+- High semantic-rendering gap addressed by changing the live ConversationViewport contract from Markdown string-only to semantic transcript blocks and adding an integration test.
+- Medium call-site gap addressed for known unavailable/failed/succeeded/warning outcomes in `entry.ts`; generic system text remains system-kind.
+- Medium ANSI fallback gap addressed for secondary text with a dark ANSI-16 code and a regression test.
+- Fresh independent review is required before closure.
+
+
+## 2026-09-09 — S0 review closure finding
+
+- No new blocker was found in the final independent review. The review confirmed semantic kinds reach the active renderer, known call sites preserve outcome semantics, terminal capability handling is fail-safe, and the required S0 verification evidence is present.
