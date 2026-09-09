@@ -3378,3 +3378,57 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Merged S2 as `993e66a` after `REVIEW: PASS`.
 - Post-merge revalidation passed: focused S2 PostgreSQL integration `6/6`, `npm run build`, `npm run lint`, and `git diff --check`. The authoritative pre-merge full PostgreSQL gate remains `193/193` files and `1,277/1,277` tests, exit `0`.
 - S2 worktree is ready for cleanup; Plan 2 S3 is the next slice and has not started.
+
+
+## 2026-09-09 — Plan 2 S3 two-stage block execution remediation
+
+- Started S3 in `.worktrees/plan2-two-stage-block-execution`; the first RED run failed because the two-stage executor was not yet exported.
+- Added collect-only intent capture and transactional Stage 2 `prepareEffect` / `commit` / `rollback` routing in `packages/agent-runtime/src/ipython-host.ts`, plus the owned-process binding in `ipython-process-adapter.ts`.
+- Added filesystem/Git byte-equality tests for collect, approval rejection, and stage divergence; tests also cover stop queue boundaries, stale fencing, approval block digests, durable stage/effect records, preparation failure, journal failure, and real-child Stage 2 results.
+- Independent review initially returned `REVIEW: FAIL` because the first implementation returned `[effect queued]` during Stage 2, did not stop the commit queue, and lacked durable boundary/failure handling. Those blockers are being remediated in this same slice.
+- Current focused verification after remediation is green: `26/26` tests, `npm run build`, `npm run lint`, and `git diff --check`. Authoritative full PostgreSQL verification must be rerun against this remediation before review/merge.
+
+
+## 2026-09-09 — Plan 2 S3 review remediation and final gate
+
+- The first S3 review remediation still had a TOCTOU window between the executor fence check and `commit()`, and did not rollback uncommitted prepared transactions on queue stop/failure.
+- Added `IpPythonCommitLease.assertValid`, aligned prepared entries with queued intents (including failed preparation), rollback of every uncommitted transaction, per-prepare stop/fence checks, session-safe interrupt/close behavior, and regression coverage for the commit-boundary fence race.
+- Focused verification remains green at `26/26` tests with build, lint, and diff checks passing.
+- A prior full PostgreSQL run completed with exit `0` at `194/194` files and `1,286/1,286` tests, but it predates the final failure-path test; the final authoritative run is now executing at `/tmp/plan2-s3-final-full-postgres.log`.
+
+
+## 2026-09-09 — Plan 2 S3 final API hardening
+
+- Added stable factory-bound session binding validation, malformed approval validation, commit-result plus Stage 2 output envelope handling, and regression tests for wrong session/Goal binding and malformed approval.
+- A concurrent stale full-run attempt produced unrelated shared-database failures and was terminated; it is explicitly non-authoritative. All stale Vitest workers are now gone.
+- Clean focused verification is green at `28/28`; build and lint are green. A clean serialized PostgreSQL full gate is now required.
+
+
+## 2026-09-09 — Plan 2 S3 resume status check
+
+- Read `execution/plan-1.md` through its lifecycle, `execution/plan-2.md` through S3, and the remaining plan documents in `execution/`; settled decisions and order were preserved.
+- Repository evidence places work in Plan 2 S3 `two-stage-block-execution`: main is clean at `4135601`, while `.worktrees/plan2-two-stage-block-execution` contains the uncommitted S3 implementation and tests.
+- Main `npm run build` exited 0; `gh run list --limit 1` reports successful CI run `34305169030`. The clean authoritative serialized PostgreSQL run remains active as PID `3866788`; it is the only valid full-suite gate.
+- Independent final review is `REVIEW: PASS`. No later slice was started.
+
+
+## 2026-09-09 — Plan 2 S3 authoritative gate reset
+
+- Clean gate PID `3866788` was stopped at the first reproducible stale-schema test failure; it is not green evidence.
+- A new disposable PostgreSQL container will be used for the replacement authoritative run.
+
+
+## 2026-09-09 — Plan 2 S3 resume verification
+
+- Re-read the execution plans and confirmed the active item remains Plan 2 S3 `two-stage-block-execution`; no later slice was started.
+- Main remains clean at `4135601`; main `npm run build` exited 0; `gh run list --limit 1` reports successful CI `34305169030`.
+- The S3 worktree still contains only the uncommitted S3 implementation/tests and operation ledgers. Fresh authoritative run PID `3876576` is still active on disposable DB port `55433`; its latest output has no failed test summary.
+
+
+## 2026-09-09 — Plan 2 S3 authoritative verification closure
+
+- Fresh isolated PostgreSQL container `maestro-plan2-s3-postgres` on port `55433` ran the serialized command `npm test -- --pool forks --maxWorkers 1 --no-file-parallelism` in the S3 worktree.
+- Exit code `0`; Vitest summary: `194/194` files passed and `1,289/1,289` tests passed. Log: `/tmp/plan2-s3-fresh-full-postgres.log`.
+- The stale-schema reproduction was separately verified in `packages/persistence/src/device.integration.test.ts`: fresh database device suite passed `11/11`; the prior red was environmental residue from an interrupted run, not S3 production behavior.
+- Independent no-edit review returned `REVIEW: PASS`. S3 exit evidence is complete: filesystem/Git byte-equality checks, approval rejection, stage divergence rejection, stop/fencing handling, durable journal callbacks, session isolation, factory-bound binding checks, and Stage 2 output preservation are covered.
+- Main build and latest CI check were green before this gate. Next lifecycle step is local commit and merge to main; no S4 or later slice has started.

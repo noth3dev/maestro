@@ -1381,3 +1381,46 @@ All downstream routing documentation must use this contract and must not restore
 ## 2026-09-09 — Plan 2 S2 merge finding
 
 - No new findings during post-merge revalidation. S2 is green and ready to push.
+
+
+## 2026-09-09 — Plan 2 S3 independent review finding
+
+- Independent review returned `REVIEW: FAIL`. It found that the first implementation gave Stage 2 the same `[effect queued]` response as collect mode, had no stop signal during the commit queue, lacked failure-safe stage-boundary journaling, did not bind approval to a block digest, and allowed concurrent process-wrapper calls to overwrite the active host handler.
+- Remediation is in progress in the same S3 worktree: Stage 2 now uses transactional prepare/commit/rollback results, approval carries the exact block digest and fencing token, stop is checked before every commit, and effect/stage outcomes are journaled.
+
+
+## 2026-09-09 — Plan 2 S3 second review finding
+
+- The first remediation review still found a commit-boundary TOCTOU window, unrolled prepared transactions on stop/failure, incomplete journal-failure fail-closed behavior, missing failed-prepare intent records, preparation-time stop races, and unsafe interrupt/session handling.
+- The final remediation adds a commit lease that revalidates fencing and stop immediately before mutation, tracks and rolls back uncommitted prepares, queues intents before preparation, checks stop/fence before each prepare, validates approval identity fields, and guards interrupt/close by session and active execution.
+- Final focused verification is green; the authoritative full PostgreSQL rerun is required before S3 review can pass or merge.
+
+
+## 2026-09-09 — Plan 2 S3 contaminated full-run finding
+
+- A final full run was interrupted after three unrelated certification-conflict failures because an older full Vitest worker was still running concurrently against the same PostgreSQL test database; the two runs shared the database. Its exit was `-15` and it is not authoritative evidence.
+- All stale Vitest workers were terminated before restarting. The next full run uses the clean test database serially and will be the only final gate.
+
+
+## 2026-09-09 — Plan 2 S3 resume finding
+
+- `execution/plan-1.md` and `execution/plan-2.md` contain stale historical verified-state/commit references, but the live repository and active S3 worktree are authoritative. Main is clean at `4135601`; S3 remains unmerged in its dedicated worktree.
+- The active full PostgreSQL run is still in progress and must not be replaced or run concurrently. Its output currently shows only passing suites; no exit code is available yet.
+
+
+## 2026-09-09 — Authoritative run blocked by stale test schema
+
+- The clean serialized run was terminated after `packages/persistence/src/device.integration.test.ts` failed its first test; the interrupted process exit was `-15`, so no Vitest summary is authoritative.
+- Root cause was reproduced in isolation: the test queries `pg_class` by relation name without restricting `pg_namespace`, and a prior interrupted `apps/device-agent` run left a `device_agent_*` schema. The query therefore returned two `devices` and two `device_policies` rows instead of the two public tables.
+- No Plan 2 S3 production code caused this failure. The next authoritative run will use a new disposable PostgreSQL container with no stale schemas, serially and without concurrent Vitest workers.
+
+
+## 2026-09-09 — Plan 2 S3 resume verification finding
+
+- The active fresh run emitted several `fatal: Needed a single revision` lines from an exercised Git test path, but no Vitest failure summary has appeared; do not classify these lines as a failing test until the process exit and final report are available.
+
+
+## 2026-09-09 — Plan 2 S3 authoritative verification finding
+
+- The replacement run on a fresh PostgreSQL container passed without failures: exit `0`, `194/194` files, `1,289/1,289` tests. The prior device migration red was confirmed as stale cross-schema residue from an interrupted process.
+- No production fix was required for that environmental failure. The fresh container will remain until post-merge revalidation is complete, then be removed.
