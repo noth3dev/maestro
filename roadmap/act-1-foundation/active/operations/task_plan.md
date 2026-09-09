@@ -85,7 +85,7 @@ It also identifies a process-ownership obligation: pass a parent identity to the
 
 **Exit evidence:** a real persistent read-only session can read only declared Goal-scoped evidence; all listed escape attempts fail closed and leave no effect.
 
-### 1C — Authority, approvals, audit, repetition, and stop (`planned`)
+### 1C — Authority, approvals, audit, repetition, and stop (`complete — Plan 2 S4–S5 evidence`)
 
 **Purpose:** add local effects without allowing the Python runtime to bypass policy.
 
@@ -107,7 +107,7 @@ It also identifies a process-ownership obligation: pass a parent identity to the
 
 **Exit evidence:** local file/test/shell/Git effects execute only through authority-backed adapters and are durably auditable; rejection, stop, stale fencing, and forbidden actions prevent effects.
 
-### 1D — Gateway/runtime/worker integration and live acceptance (`planned`)
+### 1D — Gateway/runtime/worker integration and live acceptance (`complete — Plan 2 S6 implementation; live gate pending`)
 
 **Purpose:** prove the complete production path for one local software Goal.
 
