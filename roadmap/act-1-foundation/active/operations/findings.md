@@ -1568,3 +1568,18 @@ All downstream routing documentation must use this contract and must not restore
 
 - Non-PostgreSQL full suite is green at `135/197` files and `912/1,315` tests, with PostgreSQL integration files intentionally skipped because no database URL was provided.
 - Focused boundary suite is green at `71/71`; no live provider acceptance was run.
+
+
+## 2026-09-09 — Plan 2 S4 independent review NEEDS-FIX
+
+- The independent reviewer verified focused S4 coverage (`7` files / `71` tests), build, and diff checks, but returned `REVIEW: NEEDS-FIX`.
+- High finding 1: `apps/cli/src/tui/components/activity-timeline.ts` derives `TranscriptKind` by regex-testing `effect.outcome` and discards any semantic kind from the durable `GoalEvent.payload`; this violates the S0/S4 no-prose-parsing contract.
+- High finding 2: production `apps/control-plane/src/main.ts` does not yet compose persisted local-environment/two-stage execution or connect effect results to durable GoalEvent events. This overlaps the explicitly scoped Plan 2 S6 worker composition; S4 remediation must make the boundary explicit without claiming live production acceptance.
+- High finding 3: `packages/agent-runtime/src/ipython-local-effects.ts` defers `safeCommand` validation until commit, so a mixed block can apply an earlier effect before a later command is rejected. Command validation must happen during preparation.
+- No live-provider acceptance was run. S4 remains open until the findings are resolved or explicitly scoped with evidence and the reviewer returns `REVIEW: PASS`.
+
+
+## 2026-09-09 — S4 focused verification transient child-start timing
+
+- The first seven-file focused run reported one failure in the pre-existing real-child runtime test: the 100-attempt/1ms polling helper expired before the detached Node child reached `close`; all S4-targeted tests otherwise passed (`72/73`).
+- The runtime-adapter file rerun in isolation passed `23/23`, confirming no deterministic regression from the S4 remediation. The original PostgreSQL gate remains authoritative and green; this transient timing observation is retained rather than treated as an S4 production defect.

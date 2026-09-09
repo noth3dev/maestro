@@ -3608,3 +3608,12 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - The authoritative PostgreSQL gate `/tmp/plan2-s4-postgres-final.log` completed with exit `0`: **197/197 test files passed and 1,325/1,325 tests passed**; no failure lines were present.
 - Fresh S4 worktree verification passed: `npm run build` exit `0`, `npm run lint` exit `0`, and `git diff --check` exit `0`.
 - S4 remains the only active slice. No live-provider acceptance ran, and no later slice was started. The worktree is ready for the required independent review and merge gate.
+
+
+## 2026-09-09 — Plan 2 S4 remediation RED/GREEN
+
+- Rechecked main: `npm run build` exit `0`, main clean at `dc5966a`, and CI `34317606352` remains `completed / success`; S4 remains the only active worktree.
+- Added and observed RED regressions for the two confirmed implementation defects: a durable effect payload with `kind: error` and outcome `changed` was incorrectly mapped to `system`, and an invalid command was accepted by `prepare()` until commit.
+- Fixed the TUI mapper to consume the source semantic kind with a neutral `system` fallback and moved `safeCommand` validation into preparation for test/shell/environment effects.
+- Focused S4 verification now passes **7 files / 73 tests**; build, lint, and diff check pass. The independent reviewer has been asked to reassess the remaining production-wiring finding against Plan 2 S6's explicit composition scope.
+- No live-provider acceptance, merge, push, worktree deletion, or later slice was performed.
