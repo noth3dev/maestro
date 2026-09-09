@@ -3540,3 +3540,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Rechecked the required state: main build exit `0`; latest CI `34311637704` is `completed / success`; S0 worktree is clean at `c18cdee`. Repository state and the latest ledger agree that the active slice is Plan 2 S0 `tui-color-and-semantics`.
 - Read `execution/plan-1.md` §0.1 and `execution/plan-2.md` S0/Order. The S0 exit evidence is met and the independent reviewer returned `REVIEW: PASS` with no actionable findings.
 - Proceeding with S0 merge and main revalidation. No later slice has started.
+
+
+## 2026-09-09 — Plan 2 S0 merged and revalidated
+
+- Merged `plan2-tui-color-and-semantics` with merge commit `ceff6ae` (`merge: integrate Plan 2 S0 TUI semantics`).
+- Main revalidation command `npm run build && npm test` completed with exit `0`: Vitest `133 passed / 62 skipped` files and `886 passed / 403 skipped` tests (`1289` total).
+- S0 independent review remains `REVIEW: PASS`; no live-provider acceptance ran.
+- S0 is closed through merge and revalidation. Worktree cleanup is next. Push is intentionally pending because the current operator instruction says not to push. No later slice started.
