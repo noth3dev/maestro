@@ -161,7 +161,7 @@ export interface IpPythonCommitLease {
 export interface IpPythonPreparedEffect {
   /** Result visible to the Python block during stage two. */
   readonly result: IpPythonExecutionResult;
-  /** Commit through the authority adapter's atomic fence/stop boundary. */
+  /** Commit through the authority adapter's fence/stop boundary. Earlier commits are not rolled back. */
   readonly commit: (lease: IpPythonCommitLease) => IpPythonExecutionResult | Promise<IpPythonExecutionResult>;
   /** Release a prepared effect when stage two stops or diverges before commit. */
   readonly rollback: () => void | Promise<void>;
@@ -232,11 +232,17 @@ function errorResult(reason: string, content = `IPython two-stage execution reje
   return { state: "error", dataClass: "workspace", content, reason };
 }
 
+function partialCommitResult(appliedCount: number, reason: string): IpPythonExecutionResult {
+  return unknownResult("partial_commit", `IPython effect queue applied ${appliedCount} effect(s) before ${reason}; outcome requires reconciliation`);
+}
+
 /**
- * Run one IPython block through collect, approve, transactional prepare, and
- * queue-bound commit. Collect never calls a host effect. Stage two receives
- * prepared effect results, but commits them only after its complete intent
- * digest matches the approved stage-one digest.
+ * Run one IPython block through collect, approve, prepare, and queue-bound
+ * commit. Collect never calls a host effect. Stage two receives prepared
+ * effect results, but commits them only after its complete intent digest
+ * matches the approved stage-one digest. Commit is deliberately best-effort: a
+ * later effect cannot roll back an earlier external commit, so partial outcomes
+ * are returned as unknown and must be reconciled from the durable journal.
  */
 export async function executeIpPythonBlockInTwoStages(options: IpPythonTwoStageExecutionOptions): Promise<IpPythonExecutionResult> {
   const collected: IpPythonHostRequest[] = [];
@@ -395,7 +401,8 @@ export async function executeIpPythonBlockInTwoStages(options: IpPythonTwoStageE
       const skipped = await skip(queued, rolledBack ? reason : "rollback_failed", index);
       const boundaryWritten = await boundary({ stage: "commit", outcome: rolledBack ? (stop ? "stopped" : "stale") : "failed", sessionId: options.request.sessionId, fencingToken: options.fencingToken, blockDigest: stageTwoDigest, approvedBlockDigest: approved.blockDigest, intentCount: queued.length, appliedCount, skippedCount: queued.length - index, reason: rolledBack ? reason : "rollback_failed" });
       if (!skipped || !boundaryWritten) return unknownResult("journal_failed");
-      return rolledBack ? (stop ? { state: "cancelled", dataClass: "workspace", content: `IPython effect queue stopped after ${appliedCount} effect(s)`, reason } : unknownResult(reason, `IPython effect queue stopped after ${appliedCount} effect(s)`)) : unknownResult("rollback_failed");
+      if (!rolledBack) return unknownResult("rollback_failed");
+      return appliedCount > 0 ? partialCommitResult(appliedCount, reason) : (stop ? { state: "cancelled", dataClass: "workspace", content: `IPython effect queue stopped after ${appliedCount} effect(s)`, reason } : unknownResult(reason, `IPython effect queue stopped after ${appliedCount} effect(s)`));
     }
     const item = prepared[index];
     if (item === undefined) return unknownResult("stage_two_failed");
@@ -416,7 +423,9 @@ export async function executeIpPythonBlockInTwoStages(options: IpPythonTwoStageE
       const skipped = await skip(queued, rolledBack ? "effect_failed" : "rollback_failed", index + 1);
       const boundaryWritten = await boundary({ stage: "commit", outcome: rolledBack ? "failed" : "failed", sessionId: options.request.sessionId, fencingToken: options.fencingToken, blockDigest: stageTwoDigest, approvedBlockDigest: approved.blockDigest, intentCount: queued.length, appliedCount, skippedCount: queued.length - index - 1, reason: rolledBack ? "effect_failed" : "rollback_failed" });
       if (!skipped || !boundaryWritten) return unknownResult("journal_failed");
-      return result;
+      if (appliedCount > 0) return partialCommitResult(appliedCount, "an effect failed");
+      if (result.reason === "stop_requested" || result.reason === "stale_fencing_token" || result.reason === "authority_or_boundary_rejected") return result;
+      return unknownResult("effect_outcome_unknown", `IPython effect commit failed before a durable outcome was established: ${result.reason ?? "unknown"}`);
     }
     committed.add(index);
     finalCommitResult = result;

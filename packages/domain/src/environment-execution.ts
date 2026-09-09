@@ -18,6 +18,8 @@ export interface EnvironmentCommandRequest {
   /** The executable and every argument are separate values. Shell syntax is not accepted. */
   readonly argv: readonly string[];
   readonly cwd: string;
+  /** Goal path scope, revalidated against the provider's canonical filesystem boundary. */
+  readonly pathScope?: readonly string[];
   /** Only these variables are passed to the process; host process.env is never inherited. */
   readonly environment?: Readonly<Record<string, string>>;
   readonly timeoutMs?: number;
