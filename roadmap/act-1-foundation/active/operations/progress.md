@@ -3315,3 +3315,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 ## 2026-09-09 — Worker successor fixture correction
 
 - Clean full verification exposed the remaining fixture gap: successor control-plane instances (`ownerB`) still omitted the explicit pin routing identity, so recovery conflict retries returned `503` instead of `409`. Added `modelRoutingMode: "pin"` and `nativeModelRef: "test/model-a"` to both successor fixtures. The focused SIGKILL/restart suite is now `2/2` green.
+
+## 2026-09-09 — Plan 2 preflight
+
+- Read `execution/plan-2.md` in full and cross-checked its S1–S7 order against canonical `operations/task_plan.md` §1C/§1D.
+- Repository state after Plan 1/native-admission merge: Plan 2 S1 `ipython-block-classifier` is the next implementation slice; no 1C/1D implementation has started (`fullAccess`, `approvalTier`, `repetitionScope`, `wholeBlock`, and worker `allowedTools` searches are empty).
+- Plan 1 S2/S3/S4 prerequisites are present on `main`; migration tail is `0073`, `0074`, `0075_ipython_session_journal.sql`, and `0075_ipython_session_journal_hardening.sql`.
+- No Plan 2 worktree or implementation was started. Push CI `34299888550` is still running; S1 remains blocked until that gate is resolved.
