@@ -113,14 +113,27 @@ async function confirmIfCritical(context: WriteCommandContext, command: ParsedCo
   const definition = createCommandRegistry().find(command.name);
   const action = definition?.actions.find((item) => item.name === command.action);
   if (action?.kind !== "critical") return undefined;
+  const actionName = `${command.name}.${command.action ?? ""}`.replace(/\.$/, "");
   const decision = await confirmCriticalAction({
-    action: `${command.name}.${command.action ?? ""}`.replace(/\.$/, ""),
+    action: actionName,
     target,
     ...((option(command, "goal-id") ?? context.goalId) === undefined ? {} : { goalId: option(command, "goal-id") ?? context.goalId }),
     effect: `Execute ${command.name} ${command.action ?? ""}`.trim(),
     expiresAt: option(command, "expires-at") ?? "server-defined",
+    tier: "user",
+    tierTrigger: "effect",
+    effects: [{ classification: "critical", action: actionName, target, setsTier: true }],
+    repetitionScope: "once",
+    saferAlternative: "Prepare a dry-run or patch without applying this effect.",
   }, context.confirm);
-  return decision === "cancelled" ? { title: "Cancelled", lines: ["No mutation was sent."] } : undefined;
+  // The legacy critical-action endpoint only persists one command-bound approval.
+  // Never pretend that a broader S5 scope was durable until S6 wires the
+  // capability-approval service through the API.
+  if (typeof decision === "object" && decision.repetitionScope !== "once") {
+    return { title: "Unavailable", lines: [`Approval scope ${decision.repetitionScope} is not persisted by this execution path; no mutation was sent.`] };
+  }
+  const approved = typeof decision === "object" ? decision.decision : decision;
+  return approved === "cancelled" ? { title: "Cancelled", lines: ["No mutation was sent."] } : undefined;
 }
 
 export async function executeWriteCommand(context: WriteCommandContext, command: ParsedCommand): Promise<WriteCommandResult> {

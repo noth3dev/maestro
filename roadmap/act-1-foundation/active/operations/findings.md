@@ -1604,3 +1604,19 @@ All downstream routing documentation must use this contract and must not restore
 - The sole remaining review finding is resolved. The fresh reviewer verified trusted-root normalization across local-effects, environment runtime, and Git adapters, plus preserved absolute/symlink/path escape rejection.
 - `REVIEW: PASS`; no remaining S4 defects. PostgreSQL full verification passed `197/197` files and `1330/1330` tests.
 - Live-provider acceptance remains user-run only and was not executed.
+
+
+## 2026-09-09 — S5 first review findings and remediation
+
+- The first independent review returned `REVIEW: FAIL`: `requiredTier` was caller-controlled instead of derived from S1; Department Head/Council/user actor identity and session checks were incomplete; safer alternatives were not durably included; and the live CLI rendered the legacy dialog without scope interaction.
+- Added RED regressions for critical-tier downgrade attempts, Goal-mismatched/inactive resolver and user actors, missing skip-session identity, D3 retained/skip behavior across tiers 2–4, durable safer-alternative details, and confirmation scope propagation.
+- Fixed the findings with authoritative `classifyHostEffects` derivation, strict actor/resolver checks and `authorizeActor`, exact session binding, one-shot fail-closed behavior for the legacy endpoint, and control-epoch verification in capability consumption.
+- A stale full run failed only because it started before the updated dialog assertion; it otherwise reported 135 passed and 62 skipped files. A fresh full run and independent re-review are required.
+- Live-provider acceptance remains user-run only.
+
+
+## 2026-09-09 — S5 findings closed
+
+- The initial S5 review findings are closed by `12ecc54`: tier derivation now uses S1 classification, actor and resolver identities are strictly Goal-scoped and authenticated through an adapter, skipped intermediates cannot bypass user authorization, control epochs are checked at consumption, and safer alternatives are recorded once in the decision journal.
+- The CLI carries selected scope through confirmation and rejects bounded/session scope before mutation when the legacy endpoint cannot persist it. The capability approval service persists the requested repetition scope for the S6 API composition boundary.
+- Independent re-review: **`REVIEW: PASS`**. PostgreSQL integration remains unrun in this worktree because no test database URL was configured; the existing S2 PostgreSQL evidence remains the database gate.

@@ -3671,3 +3671,22 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Main post-merge `npm run build` exited `0`. The serialized non-PostgreSQL suite exited `0`: **135/197 files passed, 62 skipped; 917/1320 tests passed, 403 skipped**; log `/tmp/plan2-s4-main-postmerge-nonpg.log`.
 - The authoritative S4 PostgreSQL gate remains `/tmp/plan2-s4-relative-postgres-full.log`: **197/197 files and 1330/1330 tests passed**. Independent review is `REVIEW: PASS`.
 - No live-provider acceptance ran. S4 is ready for cleanup and push; no later slice is being started.
+
+
+## 2026-09-09 — Plan 2 S5 approval hierarchy implementation and remediation
+
+- Created the isolated `plan2-approval-hierarchy-adapter` worktree from clean main and implemented the four-tier approval service, detailed approval dialog, and full-access session adapter.
+- Initial focused tests, build, lint, and diff checks passed, but independent review correctly rejected the first version for caller-controlled tier selection, weak actor/session checks, and a legacy-only CLI dialog path.
+- Remediated the service to derive tiers from `classifyHostEffects` over the complete effect block and pressure, require exact active Goal-scoped actors plus an `authorizeActor` adapter, validate resolver identity, require exact session identity for skip mode, bind control epochs during consumption, and persist safer alternatives in the single decision-journal entry.
+- Remediated the CLI path to pass detailed approval summaries, support keyboard scope selection and `?` explanation, carry the selected scope in the confirmation result, and fail closed rather than mutate when the legacy endpoint cannot persist a non-once scope.
+- S5 focused verification now passes **4 files / 37 tests**; build, lint, and `git diff --check` pass. Full verification is being rerun after remediation; independent re-review remains open.
+- No live-provider acceptance ran. S6 production composition remains deferred.
+
+
+## 2026-09-09 — S5 remediation verification and review PASS
+
+- Final S5 commits are `12ecc54` and `38c38b8`; the worktree is clean.
+- Independent re-review returned **`REVIEW: PASS`**. It verified authoritative S1 tier derivation, strict active Goal-scoped actor/resolver checks, exact skip-session binding, control-epoch fencing, durable safer alternatives, D3 retained/skip/T4 tests, and fail-closed handling when the legacy CLI endpoint cannot persist a broader scope.
+- Final non-PostgreSQL verification passed **136/198 files and 936/1339 tests**; **62 files and 403 tests** were skipped because no PostgreSQL URL was configured. No failure lines were reported.
+- Final build, lint, diff check, focused S5 tests, and full suite passed. No live-provider acceptance ran.
+- S5 is ready for merge/revalidation; S6 production wiring and user-run live acceptance remain deferred.
