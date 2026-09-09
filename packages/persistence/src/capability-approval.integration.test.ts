@@ -2,10 +2,14 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { applyAllMigrations } from "./test-migrations.js";
+import { acquireGoalLease, executeGoalCommand, releaseGoalLease } from "./commands.js";
 import {
   appendCapabilityJournal,
   createCapabilityApproval,
   consumeCapabilityApproval,
+  consumeCapabilityApprovals,
+  listPendingCapabilityEffects,
+  resolveCapabilityEffect,
   getCapabilitySession,
   setCapabilitySession,
   CapabilityApprovalExpiredError,
@@ -59,7 +63,7 @@ describeDatabase("capability approval ledger", () => {
   });
 
   beforeEach(async () => {
-    await pool.query("TRUNCATE capability_decision_journal, capability_repetition_claims, capability_repetition_budgets, capability_sessions, capability_approvals CASCADE");
+    await pool.query("TRUNCATE capability_effect_resolutions, capability_decision_journal, capability_repetition_claims, capability_repetition_budgets, capability_sessions, capability_approvals CASCADE");
   });
 
   afterAll(async () => {
@@ -120,6 +124,72 @@ describeDatabase("capability approval ledger", () => {
     await expect(pool.query("DELETE FROM capability_decision_journal WHERE journal_id = $1", [entry.journalId])).rejects.toThrow("append-only");
   });
 
+  it("consumes a multi-effect block atomically and scopes claims by effect index", async () => {
+    const approvalCommandId = randomUUID();
+    const first = await createCapabilityApproval(pool, approval({ commandId: approvalCommandId, target: "/workspace/a.txt", repetitionScope: { kind: "bounded_count", count: 1 } }));
+    const second = await createCapabilityApproval(pool, approval({ commandId: approvalCommandId, target: "/workspace/b.txt", repetitionScope: { kind: "bounded_count", count: 1 }, expiresAt: new Date("2000-01-01T00:00:00Z") }));
+    const commandId = randomUUID();
+    const inputs = [
+      { approvalId: first.approvalId, capabilityKind: "ipython", projectId, goalId: goalA, commandId, effectIndex: 0, action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10 },
+      { approvalId: second.approvalId, capabilityKind: "ipython", projectId, goalId: goalA, commandId, effectIndex: 1, action: "project.file.edit", target: "/workspace/b.txt", policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10 },
+    ] as const;
+    await expect(consumeCapabilityApprovals(pool, inputs)).rejects.toBeInstanceOf(CapabilityApprovalExpiredError);
+    await expect(pool.query("SELECT remaining_count FROM capability_repetition_budgets WHERE approval_id = $1", [first.approvalId])).resolves.toMatchObject({ rows: [{ remaining_count: "1" }] });
+    await expect(pool.query("SELECT count(*)::int AS count FROM capability_repetition_claims WHERE command_id = $1", [commandId])).resolves.toMatchObject({ rows: [{ count: 0 }] });
+  });
+
+  it("lists and explicitly resolves a pending effect before releasing its repetition budget", async () => {
+    const created = await createCapabilityApproval(pool, approval({ repetitionScope: { kind: "bounded_count", count: 1 } }));
+    const commandId = randomUUID();
+    const admissionCommandId = randomUUID();
+    const consumed = await consumeCapabilityApproval(pool, { approvalId: created.approvalId, capabilityKind: "ipython", projectId, goalId: goalA, commandId, admissionCommandId, action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10 });
+    const claim = (await pool.query<{ claim_id: string }>("SELECT claim_id FROM capability_repetition_claims WHERE approval_id = $1", [created.approvalId])).rows[0]!;
+    await expect(listPendingCapabilityEffects(pool, "ipython", projectId, goalA)).resolves.toEqual([{ commandId, effectIndex: 0, admissionCommandId }]);
+    await expect(resolveCapabilityEffect(pool, { claimId: claim.claim_id, approvalId: created.approvalId, capabilityKind: "ipython", projectId, goalId: goalA, commandId, effectIndex: 0, outcome: "aborted", resolvedBy: "operator-1", reason: "provider audit proves the write was not issued" })).resolves.toMatchObject({ outcome: "aborted", commandId, effectIndex: 0 });
+    await expect(listPendingCapabilityEffects(pool, "ipython", projectId, goalA)).resolves.toEqual([]);
+    await expect(pool.query("SELECT remaining_count FROM capability_repetition_budgets WHERE approval_id = $1", [created.approvalId])).resolves.toMatchObject({ rows: [{ remaining_count: "1" }] });
+    await expect(resolveCapabilityEffect(pool, { claimId: claim.claim_id, approvalId: created.approvalId, capabilityKind: "ipython", projectId, goalId: goalA, commandId, effectIndex: 0, outcome: "aborted", resolvedBy: "operator-1", reason: "provider audit proves the write was not issued" })).resolves.toMatchObject({ outcome: "aborted" });
+    expect(consumed.consumed).toBe(true);
+  });
+
+  it("allows one approval to cover distinct effects in one atomic block", async () => {
+    const created = await createCapabilityApproval(pool, approval({ repetitionScope: { kind: "bounded_count", count: 2 } }));
+    const commandId = randomUUID();
+    const inputs = [
+      { approvalId: created.approvalId, capabilityKind: "ipython", projectId, goalId: goalA, commandId, effectIndex: 0, action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10 },
+      { approvalId: created.approvalId, capabilityKind: "ipython", projectId, goalId: goalA, commandId, effectIndex: 1, action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10 },
+    ] as const;
+    await expect(consumeCapabilityApprovals(pool, inputs)).resolves.toEqual([
+      expect.objectContaining({ consumed: true, remainingCount: 1 }),
+      expect.objectContaining({ consumed: true, remainingCount: 0 }),
+    ]);
+    await expect(pool.query("SELECT effect_index FROM capability_repetition_claims WHERE approval_id = $1 ORDER BY effect_index", [created.approvalId])).resolves.toMatchObject({ rows: [{ effect_index: 0 }, { effect_index: 1 }] });
+  });
+
+  it("rolls back a partially replayed effect block instead of consuming fresh budget", async () => {
+    const created = await createCapabilityApproval(pool, approval({ repetitionScope: { kind: "bounded_count", count: 2 } }));
+    const commandId = randomUUID();
+    const input = (effectIndex: number) => ({ approvalId: created.approvalId, capabilityKind: "ipython" as const, projectId, goalId: goalA, commandId, effectIndex, action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10 });
+    await expect(consumeCapabilityApproval(pool, input(0))).resolves.toMatchObject({ consumed: true, remainingCount: 1 });
+    await expect(consumeCapabilityApprovals(pool, [input(0), input(1)] as const)).rejects.toThrow("partially consumed");
+    await expect(pool.query("SELECT count(*)::int AS count FROM capability_repetition_claims WHERE approval_id = $1", [created.approvalId])).resolves.toMatchObject({ rows: [{ count: 1 }] });
+    await expect(pool.query("SELECT remaining_count FROM capability_repetition_budgets WHERE approval_id = $1", [created.approvalId])).resolves.toMatchObject({ rows: [{ remaining_count: "1" }] });
+  });
+
+  it("keeps a Goal in recovery while a pending effect has no terminal evidence", async () => {
+    const created = await createCapabilityApproval(pool, approval({ repetitionScope: { kind: "bounded_count", count: 1 } }));
+    const commandId = randomUUID();
+    await consumeCapabilityApproval(pool, { approvalId: created.approvalId, capabilityKind: "ipython", projectId, goalId: goalA, commandId, action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10 });
+    const claim = (await pool.query<{ claim_id: string }>("SELECT claim_id FROM capability_repetition_claims WHERE approval_id = $1", [created.approvalId])).rows[0]!;
+    const proof = await acquireGoalLease(pool, { goalId: goalA, ownerId: "recovery-test", leaseDurationMs: 60_000 });
+    const recovering = await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId: goalA, actorId: "recovery-test", type: "TransitionGoal", expectedVersion: 1, to: "recovering" }, proof);
+    expect(recovering.outcome).toBe("succeeded");
+    await expect(executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId: goalA, actorId: "recovery-test", type: "TransitionGoal", expectedVersion: 2, to: "active" }, proof)).resolves.toMatchObject({ outcome: "rejected", code: "invalid_transition" });
+    await expect(resolveCapabilityEffect(pool, { claimId: claim.claim_id, approvalId: created.approvalId, capabilityKind: "ipython", projectId, goalId: goalA, commandId, effectIndex: 0, outcome: "confirmed", resolvedBy: "operator-1", reason: "external audit confirms the effect was applied" })).resolves.toMatchObject({ outcome: "confirmed" });
+    await expect(executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId: goalA, actorId: "recovery-test", type: "TransitionGoal", expectedVersion: 2, to: "active" }, proof)).resolves.toMatchObject({ outcome: "succeeded", state: "active" });
+    await releaseGoalLease(pool, proof);
+  });
+
   it("cannot consume two repetition units for one command identity", async () => {
     const created = await createCapabilityApproval(pool, approval({ repetitionScope: { kind: "bounded_count", count: 2 } }));
     const commandId = randomUUID();
@@ -127,5 +197,6 @@ describeDatabase("capability approval ledger", () => {
     await expect(consumeCapabilityApproval(pool, input)).resolves.toMatchObject({ consumed: true, remainingCount: 1 });
     await expect(consumeCapabilityApproval(pool, input)).resolves.toMatchObject({ consumed: false, remainingCount: 1 });
     await expect(pool.query("SELECT count(*)::int AS count FROM capability_repetition_claims WHERE approval_id = $1", [created.approvalId])).resolves.toMatchObject({ rows: [{ count: 1 }] });
+    await expect(pool.query("SELECT details->>'outcome' AS outcome FROM capability_decision_journal WHERE approval_id = $1 AND command_id = $2 AND event = 'effect_result' ORDER BY recorded_at ASC LIMIT 1", [created.approvalId, commandId])).resolves.toMatchObject({ rows: [{ outcome: "pending_unknown" }] });
   });
 });

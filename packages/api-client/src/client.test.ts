@@ -57,6 +57,33 @@ describe("createApiClient", () => {
     expect(fetch).toHaveBeenNthCalledWith(2, "https://maestro.test/v1/provider-account-logins/status", expect.objectContaining({ method: "POST", body: JSON.stringify({ providerId: "openai-codex", loginId: "login-1" }) }));
   });
 
+  it("parses worker observations with redacted observability state", async () => {
+    const worker = {
+      workerId: "77777777-7777-4777-8777-777777777777",
+      councilId: "88888888-8888-4888-8888-888888888888",
+      departmentId: "product",
+      planVersion: 1,
+      itemId: "item-1",
+      bundleContentHash: "a".repeat(64),
+      attempt: 1,
+      executionRef: "execution-1",
+      invocationRef: "invocation-1",
+      status: "succeeded",
+      answerText: "done",
+      usageTotalTokens: null,
+      observability: {
+        stopState: "open",
+        capabilityJournal: [],
+        ipythonSessionJournal: [],
+        toolEvents: { state: "empty", events: [] },
+      },
+    };
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(worker), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+
+    await expect(client.observeWorker(worker.workerId, { projectId }, commandId)).resolves.toEqual(worker);
+  });
+
   it("sends authenticated idempotent create commands and parses the result", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ goalId, projectId, state: "draft", version: 0 }), { status: 201 }));
     const client = createApiClient({ baseUrl: "https://maestro.test/", token: "top-secret", fetch });

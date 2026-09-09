@@ -105,6 +105,28 @@ describe("IPython two-stage block execution", () => {
     expect(execFileSync("git", ["status", "--porcelain=v1"], { cwd: directory })).toEqual(beforeGit);
   });
 
+  it("does not consume a repetition budget when stage two diverges", async () => {
+    let consumed = 0;
+    const result = await executeIpPythonBlockInTwoStages(options({
+      runBlock: runner({ collect: [effect("write_file", { path: "a" })], execute: [effect("write_file", { path: "a" }), effect("git_commit", { ref: "HEAD" })] }),
+      consumeApproval: async () => { consumed += 1; return true; },
+    }));
+    expect(result).toMatchObject({ state: "error", reason: "stage_divergence" });
+    expect(consumed).toBe(0);
+  });
+
+  it("does not consume approval after a stop arrives before the first commit", async () => {
+    let checks = 0;
+    let consumed = 0;
+    const result = await executeIpPythonBlockInTwoStages(options({
+      runBlock: runner({ collect: [effect("write_file", { path: "a" })], execute: [effect("write_file", { path: "a" })] }),
+      isStopRequested: () => { checks += 1; return checks >= 4; },
+      consumeApproval: async () => { consumed += 1; return true; },
+    }));
+    expect(result).toMatchObject({ state: "cancelled", reason: "stop_requested" });
+    expect(consumed).toBe(0);
+  });
+
   it("reports unknown when the first commit fails before its mutation outcome is known", async () => {
     const result = await executeIpPythonBlockInTwoStages(options({
       runBlock: runner({ collect: [effect("write_file", { path: "a" })], execute: [effect("write_file", { path: "a" })] }),

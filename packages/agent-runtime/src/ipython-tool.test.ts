@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createIpPythonSessionManager, createIpPythonTool, type IpPythonKernel } from "./ipython-tool.js";
+import { createIpPythonSessionManager, createIpPythonTool, deriveIpPythonToolCallCommandId, type IpPythonKernel } from "./ipython-tool.js";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -101,10 +101,12 @@ describe("persistent ipython tool boundary", () => {
     const tool = createIpPythonTool({ sessions: manager });
 
     await expect(tool.execute({ code: "show_lines('README.md')" }, context)).resolves.toEqual({ status: "ok", content: "read-only result" });
-    expect(requests).toEqual([{ sessionId: '["project-1","goal-1","conversation-1"]', code: "show_lines('README.md')", binding: { sessionId: '["project-1","goal-1","conversation-1"]', commandId: "command-1", toolCallId: "tool-call-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["public", "workspace"], authorityPolicyVersion: 1, controlEpoch: "1", budgetEffectCents: 0 } }]);
+    const firstCommandId = deriveIpPythonToolCallCommandId("command-1", "turn-1", "tool-call-1");
+    expect(requests).toEqual([{ sessionId: '["project-1","goal-1","conversation-1"]', code: "show_lines('README.md')", binding: { sessionId: '["project-1","goal-1","conversation-1"]', admissionCommandId: "command-1", commandId: firstCommandId, toolCallId: "tool-call-1", operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", pathScope: ["/workspace/project-1"], outboundDataClasses: ["public", "workspace"], authorityPolicyVersion: 1, controlEpoch: "1", budgetEffectCents: 0 } }]);
     await expect(tool.execute({ code: "show_lines('package.json')" }, { ...context, commandId: "command-2", toolCallId: "tool-call-2" })).resolves.toEqual({ status: "ok", content: "read-only result" });
     expect(requests).toHaveLength(2);
-    expect(requests[1]).toMatchObject({ sessionId: '["project-1","goal-1","conversation-1"]', binding: { commandId: "command-2", toolCallId: "tool-call-2" } });
+    const secondCommandId = deriveIpPythonToolCallCommandId("command-2", "turn-1", "tool-call-2");
+    expect(requests[1]).toMatchObject({ sessionId: '["project-1","goal-1","conversation-1"]', binding: { admissionCommandId: "command-2", commandId: secondCommandId, toolCallId: "tool-call-2" } });
   });
 
 

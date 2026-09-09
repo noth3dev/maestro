@@ -525,6 +525,35 @@ export const WorkerSchema = z.object({
   status: z.enum(["spawned", "running", "succeeded", "failed", "cancelled", "unknown"]), answerText: z.string().nullable(), usageTotalTokens: z.number().int().nonnegative().nullable(),
 }).strict();
 export type Worker = z.infer<typeof WorkerSchema>;
+const WorkerCapabilityJournalEntrySchema = z.object({
+  journalId: UuidSchema, capabilityKind: z.string().min(1), projectId: UuidSchema, goalId: UuidSchema,
+  approvalId: UuidSchema.optional(), commandId: UuidSchema.optional(),
+  event: z.enum(["approval", "rejection", "safer_alternative", "interruption", "effect_result", "failure"]),
+  details: z.record(z.string(), z.unknown()), recordedAt: z.string().datetime(),
+}).strict();
+const WorkerToolEventSchema = z.object({
+  ref: z.string().min(1), kind: z.literal("activity"), state: z.enum(["waiting", "writing", "executing"]), toolName: z.string().min(1).optional(),
+}).strict();
+const WorkerToolEventsSchema = z.discriminatedUnion("state", [
+  z.object({ state: z.literal("available"), events: z.array(WorkerToolEventSchema).readonly() }).strict(),
+  z.object({ state: z.literal("empty"), events: z.array(z.never()).readonly() }).strict(),
+  z.object({ state: z.literal("unavailable"), reason: z.enum(["provider-does-not-expose-tool-events", "snapshot-unavailable"]) }).strict(),
+]);
+const WorkerIpPythonSessionEventSchema = z.object({
+  journalId: UuidSchema, journalPosition: z.string().regex(/^\d+$/), sessionId: z.string().min(1), processRef: z.string().min(1),
+  projectId: UuidSchema, goalId: UuidSchema, event: z.enum(["started", "orphaned", "reaped", "completed", "failed", "cancelled", "unknown"]),
+  reason: z.string().nullable(), processPid: z.number().int().positive().nullable(), parentPid: z.number().int().positive().nullable(),
+  details: z.record(z.string(), z.unknown()), occurredAt: z.string().datetime(),
+}).strict();
+export const WorkerObservationSchema = WorkerSchema.extend({
+  observability: z.object({
+    stopState: z.enum(["open", "pause_requested", "paused", "stopping", "stopped", "emergency_stopped"]),
+    capabilityJournal: z.array(WorkerCapabilityJournalEntrySchema),
+    ipythonSessionJournal: z.array(WorkerIpPythonSessionEventSchema),
+    toolEvents: WorkerToolEventsSchema,
+  }).strict(),
+}).strict();
+export type WorkerObservation = z.infer<typeof WorkerObservationSchema>;
 export const WorkerListSchema = z.object({ workers: z.array(WorkerSchema) }).strict();
 export type WorkerList = z.infer<typeof WorkerListSchema>;
 export const SpawnWorkerInputSchema = z.object({ projectId: UuidSchema, planVersion: z.number().int().positive(), itemId: z.string().min(1), model: ModelRefSchema.optional() }).strict();

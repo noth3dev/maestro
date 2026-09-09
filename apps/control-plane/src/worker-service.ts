@@ -1,12 +1,12 @@
-import type { SpawnWorkerInput, Worker } from "@maestro/contracts";
-import type { ExecutionKernelPort } from "@maestro/domain";
-import { assertProjectRole, cancelWorker, countActiveWorkersForProject, observeWorker, readDepartmentPlan, readHeadCouncil, readWorker, spawnWorker, type CouncilActorContext, type OperatorContext } from "@maestro/persistence";
+import type { SpawnWorkerInput, Worker, WorkerObservation } from "@maestro/contracts";
+import { toInvocationRef, type ToolEvents, type ExecutionKernelPort } from "@maestro/domain";
+import { assertProjectRole, cancelWorker, countActiveWorkersForProject, getGoalControl, listCapabilityJournal, listIpPythonSessionJournalForGoal, observeWorker, readDepartmentPlan, readHeadCouncil, readWorker, spawnWorker, type CouncilActorContext, type OperatorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
 
 export interface WorkerService {
   spawn(councilId: string, departmentId: string, input: SpawnWorkerInput, commandId: string, operator: OperatorContext): Promise<Worker>;
   get(workerId: string, projectId: string): Promise<Worker>;
-  observe(workerId: string, projectId: string, commandId: string, operator: OperatorContext): Promise<Worker>;
+  observe(workerId: string, projectId: string, commandId: string, operator: OperatorContext): Promise<WorkerObservation>;
   cancel(workerId: string, projectId: string, commandId: string, operator: OperatorContext): Promise<Worker>;
 }
 export interface WorkerServiceDependencies {
@@ -59,6 +59,22 @@ function toApiWorker(worker: Awaited<ReturnType<typeof readWorker>>): Worker {
   };
 }
 
+function stopState(control: Awaited<ReturnType<typeof getGoalControl>>): WorkerObservation["observability"]["stopState"] {
+  if (control.emergencyStoppedAt !== undefined) return "emergency_stopped";
+  if (control.stoppedAt !== undefined) return "stopped";
+  if (control.stoppingAt !== undefined) return "stopping";
+  if (control.pausedAt !== undefined) return "paused";
+  if (control.pauseRequestedAt !== undefined) return "pause_requested";
+  return "open";
+}
+
+function iso(value: Date): string { return value.toISOString(); }
+
+const OBSERVATION_DETAIL_KEYS = new Set(["blockDigest", "approvedBlockDigest", "stage", "outcome", "intentCount", "appliedCount", "skippedCount", "reason", "method", "payloadDigest", "state", "tier", "effectCount", "approvedEffectCount", "approvalCount", "saferAlternative", "admissionCommandId"]);
+function redactedDetails(details: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(details).filter(([key, value]) => OBSERVATION_DETAIL_KEYS.has(key) && (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null)));
+}
+
 /** Worker creation derives the actor/session from the immutable Council snapshot and scopes the spawn with the Goal lease. */
 export function createWorkerService(deps: WorkerServiceDependencies): WorkerService {
   return {
@@ -92,7 +108,27 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
       const participant = council.snapshot.participants.find((entry) => (entry.departmentId ?? entry.participantId) === worker.departmentId);
       if (participant === undefined || participant.headRoleId === undefined || participant.departmentId === undefined) throw new Error("Worker department is not a captured Head participant");
       const context: CouncilActorContext = { actorId: participant.headRoleId, sessionRef: participant.sessionRef, commandId };
-      return deps.withGoalLease(council.goalId, (proof) => observeWorker(deps.pool, deps.kernel, workerId, proof, context).then(toApiWorker));
+      return deps.withGoalLease(council.goalId, async (proof) => {
+        let toolEvents: ToolEvents = { state: "unavailable", reason: "snapshot-unavailable" };
+        try { toolEvents = await deps.kernel.getToolEvents(toInvocationRef(worker.invocationRef)); } catch { /* preserve redacted unavailable observability */ }
+        const observed = await observeWorker(deps.pool, deps.kernel, workerId, proof, context);
+        const workerCommand = await deps.pool.query<{ spawn_command_id: string | null }>("SELECT spawn_command_id FROM workers WHERE worker_id = $1", [workerId]);
+        const spawnCommandId = workerCommand.rows[0]?.spawn_command_id;
+        const [control, capabilityJournal, ipythonSessionJournal] = await Promise.all([
+          getGoalControl(deps.pool, projectId, council.goalId),
+          listCapabilityJournal(deps.pool, "ipython", projectId, council.goalId),
+          listIpPythonSessionJournalForGoal(deps.pool, projectId, council.goalId),
+        ]);
+        return {
+          ...toApiWorker(observed),
+          observability: {
+            stopState: stopState(control),
+            capabilityJournal: capabilityJournal.filter((entry) => spawnCommandId !== undefined && (entry.commandId === spawnCommandId || entry.details.admissionCommandId === spawnCommandId)).map((entry) => ({ ...entry, details: redactedDetails(entry.details), ...(entry.approvalId === undefined ? {} : { approvalId: entry.approvalId }), ...(entry.commandId === undefined ? {} : { commandId: entry.commandId }), recordedAt: iso(entry.recordedAt) })),
+            ipythonSessionJournal: ipythonSessionJournal.filter((entry) => entry.details.worker_id === workerId).map((entry) => ({ ...entry, details: redactedDetails(entry.details), occurredAt: iso(entry.occurredAt) })),
+            toolEvents,
+          },
+        } satisfies WorkerObservation;
+      });
     },
     async cancel(workerId, projectId, commandId, operator) {
       const worker = await readWorker(deps.pool, workerId);

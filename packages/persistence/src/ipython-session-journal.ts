@@ -232,6 +232,17 @@ export async function reconcileIpPythonOrphans(
   return reconciled;
 }
 
+export async function listIpPythonSessionJournalForGoal(pool: Pick<Pool, "query">, projectId: string, goalId: string, limit = 100): Promise<readonly IpPythonSessionJournalEntry[]> {
+  if (projectId.trim() === "" || goalId.trim() === "") throw new IpPythonSessionJournalError("IPython journal scope is required");
+  if (!Number.isSafeInteger(limit) || limit <= 0 || limit > 500) throw new IpPythonSessionJournalError("IPython journal limit is invalid");
+  const result = await pool.query<JournalRow>(
+    `SELECT journal_id, journal_position, session_id, process_ref, project_id, goal_id, event, reason, process_pid, parent_pid, details, occurred_at
+       FROM ipython_session_journal WHERE project_id = $1 AND goal_id = $2 ORDER BY occurred_at DESC, journal_position DESC LIMIT $3`,
+    [projectId, goalId, limit],
+  );
+  return result.rows.map(map);
+}
+
 export async function recordIpPythonSessionStarted(
   pool: Pick<Pool, "query">,
   input: Omit<AppendIpPythonSessionJournalInput, "event" | "reason">,
