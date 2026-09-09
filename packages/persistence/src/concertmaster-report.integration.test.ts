@@ -71,6 +71,17 @@ describeDatabase("Concertmaster final report with PostgreSQL", () => {
       budget: { ceiling: "1", reportingExpectations: [], stoppingConditions: [] },
     };
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
+    const bindingId = randomUUID();
+    await pool.query(`INSERT INTO native_execution_bindings
+      (binding_id, execution_ref, invocation_ref, goal_id, project_id, admission_kind, operator_id, mission_bundle_id, policy_version, idempotency_key, selected_model_provider, selected_model_id, actual_model_provider, actual_model_id)
+      VALUES ($1, $2, $3, $4, $5, 'conversation', 'test', 'fixture', 'v1', $6, 'test', 'model', 'test', 'model')`,
+      [bindingId, `exec:${goalId}`, `inv:${goalId}`, goalId, projectId, `idem:${goalId}`]);
+    const routing = { schemaVersion: 1, evidenceId: randomUUID(), goalRef: goalId, projectRef: projectId, routeRef: `route:${goalId}`, mode: "pin", selectedModelRef: "test/model", accountBinding: "fixture", candidateRefs: ["test/model"], rejections: [], taskDemandHash: "0".repeat(64), pressure: 1, pressureBand: "low", decisionLayer: "automatic progress", overlayVersion: null, admissionBindingRef: bindingId, rationale: "fixture", createdAt: new Date().toISOString() };
+    await pool.query(`INSERT INTO ensemble_router_routing_evidence
+      (evidence_id, goal_ref, project_ref, route_ref, mode, selected_model_ref, account_binding, candidate_refs, rejections, task_demand_hash, pressure, pressure_band, decision_layer, overlay_version, admission_binding_ref, rationale, evidence)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17::jsonb)`,
+      [routing.evidenceId, goalId, projectId, routing.routeRef, routing.mode, routing.selectedModelRef, routing.accountBinding, JSON.stringify(routing.candidateRefs), JSON.stringify(routing.rejections), routing.taskDemandHash, routing.pressure, routing.pressureBand, routing.decisionLayer, routing.overlayVersion, bindingId, routing.rationale, JSON.stringify(routing)]);
+
     await pool.query("INSERT INTO task_contracts (contract_id, schema_version, version, content, content_hash, launch_state) VALUES ($1, 1, 1, $2::jsonb, $3, 'launched')", [contractId, JSON.stringify(contractContent), taskContractContentHash(contractContent)]);
     const evidenceIds = [randomUUID(), randomUUID()];
     for (const evidenceId of evidenceIds) {
