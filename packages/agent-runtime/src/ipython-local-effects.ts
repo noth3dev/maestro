@@ -4,7 +4,9 @@ import { createReadOnlyHostRequestHandler, IpPythonProtocolError } from "./ipyth
 
 export type IpPythonLocalEffectMethod =
   | "write_file"
-  | "run_command"
+  | "run_test"
+  | "run_shell"
+  | "run_environment"
   | "git_create_branch"
   | "git_create_worktree"
   | "git_commit"
@@ -67,7 +69,9 @@ export interface IpPythonGitRemoveWorktreeRequest {
 
 export interface IpPythonLocalEffectAdapters {
   writeFile(request: IpPythonWriteFileRequest): IpPythonExecutionResult | Promise<IpPythonExecutionResult>;
-  runCommand(request: IpPythonRunCommandRequest): IpPythonExecutionResult | Promise<IpPythonExecutionResult>;
+  runTest(request: IpPythonRunCommandRequest): IpPythonExecutionResult | Promise<IpPythonExecutionResult>;
+  runShell(request: IpPythonRunCommandRequest): IpPythonExecutionResult | Promise<IpPythonExecutionResult>;
+  runEnvironment(request: IpPythonRunCommandRequest): IpPythonExecutionResult | Promise<IpPythonExecutionResult>;
   gitCreateBranch(request: IpPythonGitCreateBranchRequest): IpPythonExecutionResult | Promise<IpPythonExecutionResult>;
   gitCreateWorktree(request: IpPythonGitCreateWorktreeRequest): IpPythonExecutionResult | Promise<IpPythonExecutionResult>;
   gitCommit(request: IpPythonGitCommitRequest): IpPythonExecutionResult | Promise<IpPythonExecutionResult>;
@@ -123,11 +127,10 @@ function boundedNumber(value: unknown, name: string): number | undefined {
   return value as number;
 }
 
-function safeCommand(payload: Record<string, unknown>, binding: IpPythonHostBinding): IpPythonRunCommandRequest {
+function safeCommand(payload: Record<string, unknown>, binding: IpPythonHostBinding, action: IpPythonRunCommandRequest["action"]): IpPythonRunCommandRequest {
   const argv = stringList(payload.argv, "argv");
   const executable = argv[0]!.split(/[\\/]/).at(-1)!.toLowerCase();
   if (["sh", "bash", "zsh", "fish", "cmd", "powershell", "pwsh"].includes(executable)) throw new IpPythonProtocolError("IPython local effect command shell is not allowed");
-  const action = requiredString(payload.action, "action");
   const target = requiredString(payload.target, "target");
   return {
     binding,
@@ -156,8 +159,12 @@ export function createIpPythonLocalEffectsGateway(options: { adapters: IpPythonL
       switch (request.method as IpPythonLocalEffectMethod) {
         case "write_file":
           return options.adapters.writeFile({ binding, path: relativePath(payload.path), content: requiredString(payload.content, "content") });
-        case "run_command":
-          return options.adapters.runCommand(safeCommand(payload, binding));
+        case "run_test":
+          return options.adapters.runTest(safeCommand(payload, binding, "project.test.run"));
+        case "run_shell":
+          return options.adapters.runShell(safeCommand(payload, binding, "project.shell.run"));
+        case "run_environment":
+          return options.adapters.runEnvironment(safeCommand(payload, binding, "project.environment.change"));
         case "git_create_branch":
           return options.adapters.gitCreateBranch({ binding, branchName: requiredString(payload.branchName, "branchName"), baseRevision: requiredString(payload.baseRevision, "baseRevision") });
         case "git_create_worktree":
