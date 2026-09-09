@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { realpathSync } from "node:fs";
 import type { ActionRequest, AuthorityDecision } from "@maestro/authority";
 import { GitOperationError, type GitPort } from "@maestro/domain";
-import { assertWorkspacePath } from "./path-containment.js";
+import { assertGoalScopedWorkspacePath } from "./path-containment.js";
 
 /** The authority boundary required before any local Git process is started. */
 export interface GitAuthorityGateway {
@@ -17,6 +17,7 @@ export interface LocalGitPortOptions {
   readonly context: GitAuthorityContext;
   /** Explicit root from the validated application configuration. */
   readonly workspaceRoot?: string;
+  readonly pathScope?: readonly string[];
 }
 
 const TRUSTED_GIT_EXECUTABLE = "/usr/bin/git";
@@ -30,6 +31,13 @@ export class GitAuthorizationError extends GitOperationError {
     super(`Git operation not authorized: ${decision.reason}`);
     this.name = "GitAuthorizationError";
     this.decision = decision;
+  }
+}
+
+export class GitOutcomeUnknownError extends GitOperationError {
+  constructor(readonly decision?: AuthorityDecision) {
+    super("Git operation outcome is unknown");
+    this.name = "GitOutcomeUnknownError";
   }
 }
 
@@ -89,14 +97,21 @@ async function authorized<T>(
 ): Promise<T> {
   let invoked = false;
   let result: T | undefined;
-  const decision = await authority.execute(
-    { ...context, action, target },
-    async () => {
-      invoked = true;
-      result = await effect();
-    },
-  );
+  let decision: AuthorityDecision;
+  try {
+    decision = await authority.execute(
+      { ...context, action, target },
+      async () => {
+        invoked = true;
+        result = await effect();
+      },
+    );
+  } catch (error) {
+    if (invoked) throw new GitOutcomeUnknownError();
+    throw error;
+  }
   if (decision.effect !== "allow") throw new GitAuthorizationError(decision);
+  if (decision.reason === "already_executed") throw new GitOutcomeUnknownError(decision);
   if (!invoked) throw new GitOperationError("Git authority allowed without invoking the effect");
   return result as T;
 }
@@ -113,24 +128,24 @@ function target(...parts: readonly string[]): string {
  * this module intentionally exposes no unauthenticated Git operation.
  */
 export function createLocalGitPort(options: LocalGitPortOptions): GitPort {
-  const { authority, context, workspaceRoot } = options;
+  const { authority, context, workspaceRoot, pathScope } = options;
   return {
     async createBranch(repositoryPath: string, branchName: string, baseRevision: string): Promise<void> {
-      const repository = assertWorkspacePath(repositoryPath, "repositoryPath", workspaceRoot);
+      const repository = assertGoalScopedWorkspacePath(repositoryPath, "repositoryPath", workspaceRoot, pathScope);
       await authorized(authority, context, "git.local.branch.create", target(repository, branchName, baseRevision), () =>
         runGit(["branch", "--", branchName, baseRevision], repository).then(() => undefined));
     },
 
     async createWorktree(repositoryPath: string, worktreePath: string, branchName: string): Promise<void> {
-      const repository = assertWorkspacePath(repositoryPath, "repositoryPath", workspaceRoot);
-      const worktree = assertWorkspacePath(worktreePath, "worktreePath", workspaceRoot);
+      const repository = assertGoalScopedWorkspacePath(repositoryPath, "repositoryPath", workspaceRoot, pathScope);
+      const worktree = assertGoalScopedWorkspacePath(worktreePath, "worktreePath", workspaceRoot, pathScope);
       await authorized(authority, context, "git.local.worktree.create", target(repository, worktree, branchName), () =>
         runGit(["worktree", "add", "--", worktree, branchName], repository).then(() => undefined));
     },
 
     /** Advances a local branch atomically, only when target descends from its expected current revision. */
     async advanceBranch(repositoryPath: string, branchName: string, expectedRevision: string, targetRevision: string): Promise<void> {
-      const repository = assertWorkspacePath(repositoryPath, "repositoryPath", workspaceRoot);
+      const repository = assertGoalScopedWorkspacePath(repositoryPath, "repositoryPath", workspaceRoot, pathScope);
       if (expectedRevision === targetRevision) throw new GitOperationError("Branch target must advance beyond its expected revision");
       await authorized(authority, context, "git.local.branch.advance", target(repository, branchName, expectedRevision, targetRevision), async () => {
         await runGit(["merge-base", "--is-ancestor", expectedRevision, targetRevision], repository);
@@ -139,7 +154,7 @@ export function createLocalGitPort(options: LocalGitPortOptions): GitPort {
     },
 
     async commit(worktreePath: string, message: string, authorName: string, authorEmail: string): Promise<{ commitSha: string }> {
-      const worktree = assertWorkspacePath(worktreePath, "worktreePath", workspaceRoot);
+      const worktree = assertGoalScopedWorkspacePath(worktreePath, "worktreePath", workspaceRoot, pathScope);
       return authorized(authority, context, "git.local.commit", target(worktree, message, authorName, authorEmail), async () => {
         await runGit(["add", "-A"], worktree);
         await runGit(["-c", `user.name=${authorName}`, "-c", `user.email=${authorEmail}`, "commit", "--no-verify", "-m", message], worktree);
@@ -149,14 +164,14 @@ export function createLocalGitPort(options: LocalGitPortOptions): GitPort {
     },
 
     async headRevision(repositoryPath: string, ref = "HEAD"): Promise<string> {
-      const repository = assertWorkspacePath(repositoryPath, "repositoryPath", workspaceRoot);
+      const repository = assertGoalScopedWorkspacePath(repositoryPath, "repositoryPath", workspaceRoot, pathScope);
       return authorized(authority, context, "git.local.revision.read", target(repository, ref), () =>
         runGit(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`], repository));
     },
 
     async removeWorktree(repositoryPath: string, worktreePath: string): Promise<void> {
-      const repository = assertWorkspacePath(repositoryPath, "repositoryPath", workspaceRoot);
-      const worktree = assertWorkspacePath(worktreePath, "worktreePath", workspaceRoot);
+      const repository = assertGoalScopedWorkspacePath(repositoryPath, "repositoryPath", workspaceRoot, pathScope);
+      const worktree = assertGoalScopedWorkspacePath(worktreePath, "worktreePath", workspaceRoot, pathScope);
       await authorized(authority, context, "git.local.worktree.remove", target(repository, worktree), () =>
         runGit(["worktree", "remove", "--force", "--", worktree], repository).then(() => undefined));
     },

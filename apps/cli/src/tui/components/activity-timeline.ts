@@ -1,3 +1,4 @@
+import type { GoalEvent } from "@maestro/contracts";
 import type { CursorEvent } from "../activity-stream.js";
 import { fitPlain, transcriptPaint, tuiTheme, type TranscriptKind } from "../theme.js";
 
@@ -14,6 +15,33 @@ export interface ActivityEffectGate {
 export interface ActivityTimelineEvent extends CursorEvent {
   readonly eventType: string;
   readonly effect?: ActivityEffectGate;
+}
+
+
+function isRecord(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value); }
+function textField(value: unknown): string | undefined { return typeof value === "string" && value.trim() !== "" ? value : undefined; }
+function effectKind(classification: ActivityEffectGate["classification"], outcome: string): TranscriptKind {
+  if (classification === "forbidden" || classification === "ambiguous" || /denied|failed|error/i.test(outcome)) return "error";
+  if (/await|approval|pending/i.test(outcome)) return "warning";
+  if (/auto|allow|success|complete|committed/i.test(outcome)) return "success";
+  return "system";
+}
+
+/** Convert the durable GoalEvent payload into the renderer's typed view model. */
+export function toActivityTimelineEvent(event: GoalEvent): ActivityTimelineEvent {
+  const payload = isRecord(event.payload) ? event.payload : {};
+  const source = isRecord(payload.effect) ? payload.effect : payload;
+  const actor = textField(source.actor) ?? textField(source.actorId);
+  const action = textField(source.action);
+  const target = textField(source.target);
+  const rawClassification = source.classification;
+  const classification: ActivityEffectGate["classification"] | undefined = rawClassification === "ordinary" || rawClassification === "critical" || rawClassification === "forbidden" || rawClassification === "ambiguous" ? rawClassification : undefined;
+  const outcome = textField(source.outcome);
+  const reason = textField(source.reason);
+  const effect = actor !== undefined && action !== undefined && target !== undefined && classification !== undefined && outcome !== undefined
+    ? { actor, action, target, classification, outcome, ...(reason === undefined ? {} : { reason }), kind: effectKind(classification, outcome) }
+    : undefined;
+  return { cursor: event.cursor, eventId: event.eventId, eventType: event.eventType, ...(effect === undefined ? {} : { effect }) };
 }
 
 function effectVerb(action: string): string {

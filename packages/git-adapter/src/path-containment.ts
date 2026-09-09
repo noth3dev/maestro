@@ -62,3 +62,18 @@ export function assertWorkspacePath(inputPath: string, label = "Git path", works
   }
   return candidate;
 }
+
+
+/** Returns the canonical path only when it is contained by one declared Goal scope. */
+export function assertGoalScopedWorkspacePath(inputPath: string, label = "Git path", workspaceRoot?: string, pathScope?: readonly string[]): string {
+  const candidate = assertWorkspacePath(inputPath, label, workspaceRoot);
+  if (pathScope === undefined) return candidate;
+  if (pathScope.length === 0) throw new GitOperationError(`${label} is outside the Goal path scope`);
+  const allowed = pathScope.some((scope) => {
+    if (typeof scope !== "string" || scope.trim() === "") return false;
+    try { return isWithinRoot(canonicalizePath(scope, "Goal path scope"), candidate); }
+    catch { return false; }
+  });
+  if (!allowed) throw new GitOperationError(`${label} is outside the Goal path scope`);
+  return candidate;
+}

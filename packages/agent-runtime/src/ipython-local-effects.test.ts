@@ -62,7 +62,15 @@ describe("IPython authority-backed local effects", () => {
     await expect(gateway.handle(binding, { method: "unknown", payload: {} })).rejects.toThrow("not allowed");
     await expect(gateway.handle(binding, { method: "write_file", payload: { path: "../escape", content: "bad" } })).rejects.toThrow("path");
     await expect(gateway.handle(binding, { method: "run_shell", payload: { action: "shell.command", target: "echo bad", argv: ["sh", "-c", "echo bad"], cwd: "/workspace/project" } })).rejects.toThrow("command");
+    await expect(gateway.handle(binding, { method: "run_shell", payload: { target: "origin/main", argv: ["git", "push", "origin", "main"], cwd: "/workspace/project" } })).rejects.toThrow("Git");
+    await expect(gateway.handle(binding, { method: "run_shell", payload: { target: "wrapped", argv: ["env", "git", "push", "origin", "main"], cwd: "/workspace/project" } })).rejects.toThrow("wrapper");
+    await expect(gateway.handle(binding, { method: "run_shell", payload: { target: "interpreter", argv: ["node", "-e", "require('child_process').exec('git push')"], cwd: "/workspace/project" } })).rejects.toThrow("wrapper");
+    await expect(gateway.handle(binding, { method: "run_shell", payload: { target: "npm script", argv: ["npm", "run", "release"], cwd: "/workspace/project" } })).rejects.toThrow("package-manager");
     await expect(gateway.handle(binding, { method: "run_command", payload: { argv: ["npm", "test"], cwd: "/workspace/project" } })).rejects.toThrow("not allowed");
+    await expect(gateway.handle({ ...binding, pathScope: ["/workspace/project/allowed"] }, { method: "run_test", payload: { action: "test", target: "outside", argv: ["npm", "test"], cwd: "/workspace/project/outside" } })).rejects.toThrow("outside");
+    await expect(gateway.handle({ ...binding, pathScope: ["/workspace/project/allowed"] }, { method: "run_test", payload: { action: "test", target: "traversal", argv: ["echo", "../outside"], cwd: "/workspace/project/allowed" } })).rejects.toThrow("escapes");
+    await expect(gateway.handle({ ...binding, pathScope: ["/workspace/project/allowed"] }, { method: "run_test", payload: { action: "test", target: "flag traversal", argv: ["echo", "--output=../outside"], cwd: "/workspace/project/allowed" } })).rejects.toThrow("escapes");
+    await expect(gateway.handle({ ...binding, pathScope: ["/workspace/project/allowed"] }, { method: "run_test", payload: { action: "test", target: "flag absolute", argv: ["echo", "--output=/workspace/project/outside"], cwd: "/workspace/project/allowed" } })).rejects.toThrow("outside");
 
     for (const adapter of Object.values(adapters)) expect(adapter).not.toHaveBeenCalled();
   });

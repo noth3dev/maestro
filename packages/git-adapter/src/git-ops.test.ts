@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AuthorizedEffectExecutor, type AuthorityRecord, type AuthorityRepository } from "@maestro/authority";
 import { GitOperationError } from "@maestro/domain";
-import { createLocalGitPort } from "./git-ops.js";
+import { createLocalGitPort, GitOutcomeUnknownError } from "./git-ops.js";
 import { localGitPort } from "../../../test/git-port.js";
 
 const gitContext = {
@@ -56,6 +56,23 @@ describe("local Git operations", () => {
     if (priorWorkspaceRoot === undefined) delete process.env.MAESTRO_WORKTREE_ROOT;
     else process.env.MAESTRO_WORKTREE_ROOT = priorWorkspaceRoot;
     rmSync(workspaceRoot, { recursive: true, force: true });
+  });
+
+  it("reports an unknown outcome for a duplicate authority claim without rerunning Git", async () => {
+    const invoked = false;
+    const port = createLocalGitPort({
+      authority: {
+        async execute(request, _effect) {
+          return { effect: "allow", reason: "already_executed", classification: "ordinary", request, recordId: "duplicate" };
+        },
+      },
+      context: gitContext,
+      workspaceRoot,
+      pathScope: [workspaceRoot],
+    });
+    await expect(port.createBranch(repositoryPath, "goal/duplicate", baseRevision)).rejects.toBeInstanceOf(GitOutcomeUnknownError);
+    expect(invoked).toBe(false);
+    expect(execFileSync("git", ["branch", "--list", "goal/duplicate"], { cwd: repositoryPath }).toString()).toBe("");
   });
 
   it("creates a branch at the exact base revision", async () => {

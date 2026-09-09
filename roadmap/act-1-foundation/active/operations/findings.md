@@ -1516,3 +1516,55 @@ All downstream routing documentation must use this contract and must not restore
 
 - Push CI `34314783417` remains in progress, not red; Build and lint is successful and PostgreSQL/Vitest has not concluded.
 - No S0 implementation blocker is known. If the in-progress CI later fails, S4 work will stop and the CI failure will be handled first.
+
+
+## 2026-09-09 — Plan 2 S4 PostgreSQL failure observed
+
+- The first authoritative PostgreSQL-backed S4 run reached real integration tests but reported `apps/control-plane/src/tui-sse-reconnect.integration.test.ts` with `2 tests | 1 failed`; the cursor reconnect case passed, while `renders explicit unavailable and authorization failures without fabricating Goal state` failed.
+- The process is still running, so the assertion body and final exit code are not yet authoritative. After it exits, inspect the complete failure and run only the targeted regression before changing code. Do not attribute this to S4 local-effect code without diff evidence.
+
+
+## 2026-09-09 — Plan 2 S4 independent review findings
+
+- Independent review returned `REVIEW: NEEDS-FIX`. Verified findings: `run_shell` maps arbitrary `git push` argv to ordinary `project.shell.run`; local Git mutations ignore the narrower Goal `pathScope`; the two-stage executor can leave earlier committed effects after a later failure because local rollback is a no-op; local runtime cancellation kills only the direct child and is not process-group bounded; the TUI renderer accepts synthetic top-level effects but does not map real wire `GoalEvent.payload` effects; and file writes retain a parent-symlink TOCTOU concern.
+- The review also notes that local worktree `network: ["none"]` is metadata-only and does not enforce OS network isolation. This must be resolved or explicitly fail-closed before S4 exit evidence can be claimed.
+- No review finding is being dismissed. S4 remains open; no merge, push, cleanup, or next slice.
+
+
+## 2026-09-09 — S4 PostgreSQL gate completed red
+
+- Final authoritative evidence is exit `1`, `196/197` files and `1,312/1,313` tests passed. Failure details: `tui-sse-reconnect.integration.test.ts:183` expected the failure array to contain `authorization required`, but the typed transcript-line array was empty under the stale assertion.
+- This is a branch synchronization/test-contract failure, not evidence against local-effect adapters. Apply the existing main repair `2a6abe6` and rerun the targeted PostgreSQL test before resuming S4 review gates.
+
+
+## 2026-09-09 — S4 review findings addressed
+
+- Generic `run_shell`/`run_test`/`run_environment` Git invocations are denied; local Git must use the dedicated authority-backed port.
+- `local_worktree` no longer pretends `network: ["none"]` is enforced: the runtime adapter fails closed by default; only explicit low-level test opt-in permits the legacy unisolated boundary.
+- File and Git ports are constructed from each request binding, so command/tool identity and path scope do not leak from the first cell.
+- Git path checks now enforce the binding path scope, including denying an explicit empty scope.
+- Two-stage commit failures after prior commits return durable `unknown`/`partial_commit`; no atomic rollback claim remains. Duplicate authority claims return `unknown` rather than falsely replaying success or rerunning a side effect.
+- Local process cancellation uses detached process groups and kills the group; output assignment redaction prevents common secret-like `.env` values from reaching the model.
+- TUI now maps typed `GoalEvent.payload` effect fields into semantic gate rendering; it does not parse prose.
+
+
+## 2026-09-09 — S4 additional review findings and resolutions
+
+- Read-only Git revision now receives the current cell binding's path scope.
+- Generic command effects enforce Goal cwd/absolute-argument scope and reject relative traversal; canonical existing ancestors catch symlink escapes. The environment adapter receives and rechecks the same scope, and container execution mounts only the command cwd with network disabled.
+- Wrapper/interpreter and unrestricted package-manager invocations are rejected; only the exact `npm test`-style test command is accepted from package managers.
+- Duplicate environment claims now carry the authority decision and map to `unknown/already_executed`; file duplicate claims carry the same decision.
+- Any uncertain current commit failure returns `unknown/effect_outcome_unknown`, while deterministic stop, stale-fence, and pre-effect boundary rejections retain their explicit outcomes.
+- File writes traverse already-open directory descriptors and use `O_NOFOLLOW`, with a parent-directory swap regression proving no outside write.
+- The review note that `main.ts` does not yet resolve and pass a persisted `localEnvironment`/two-stage configuration is recorded as Plan 2 S6 `worker-ipython-composition` scope; S4's scope is adapter/composition construction, while S6 explicitly owns `apps/control-plane/src/main.ts` and worker wiring.
+
+
+## 2026-09-09 — Review PASS boundary note
+
+- The reviewer accepted command flag-path coverage after embedded absolute/traversal option checks were added. The only remaining caveat is intentionally explicit: unisolated local execution is a test-only opt-in; production Control Plane never opts in, and container execution mounts only the scoped cwd with `network=none`.
+
+
+## 2026-09-09 — S4 verification evidence
+
+- Non-PostgreSQL full suite is green at `135/197` files and `912/1,315` tests, with PostgreSQL integration files intentionally skipped because no database URL was provided.
+- Focused boundary suite is green at `71/71`; no live provider acceptance was run.

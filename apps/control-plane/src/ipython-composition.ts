@@ -1,5 +1,5 @@
 import type { ActionRequest } from "@maestro/authority";
-import { createAuthorizedFileEditPort, createAuthorizedReadOnlyFilePort, createLocalRuntimeAdapter, type ReadOnlyFileAuthorityGateway } from "@maestro/environment-adapter";
+import { createAuthorizedFileEditPort, createAuthorizedReadOnlyFilePort, createContainerSandboxAdapter, createLocalRuntimeAdapter, type ReadOnlyFileAuthorityGateway } from "@maestro/environment-adapter";
 import { createLocalGitPort } from "@maestro/git-adapter";
 import type { EnvironmentExecutionPort, EnvironmentRecord } from "@maestro/domain";
 import {
@@ -65,14 +65,21 @@ function environmentRequest(request: IpPythonRunCommandRequest, target: string) 
     controlEpoch: request.binding.controlEpoch,
     argv: request.argv,
     cwd: request.cwd,
+    pathScope: request.pathScope,
     ...(request.environment === undefined ? {} : { environment: request.environment }),
     ...(request.timeoutMs === undefined ? {} : { timeoutMs: request.timeoutMs }),
     ...(request.outputCapBytes === undefined ? {} : { outputCapBytes: request.outputCapBytes }),
   };
 }
 
-async function observeEnvironment(runtime: EnvironmentExecutionPort, request: { readonly commandId: string; readonly actorId: string; readonly action: string; readonly target: string; readonly policyVersion: number; readonly budgetEffectCents: number; readonly controlEpoch: string; readonly argv: readonly string[]; readonly cwd: string; readonly environment?: Readonly<Record<string, string>>; readonly timeoutMs?: number; readonly outputCapBytes?: number }, onHandle?: (handle: { cancel(reason?: string): Promise<{ cancelled: boolean }>; observe(): Promise<unknown> } | undefined) => void) {
-  const handle = await runtime.start(request);
+async function observeEnvironment(runtime: EnvironmentExecutionPort, request: { readonly commandId: string; readonly actorId: string; readonly action: string; readonly target: string; readonly policyVersion: number; readonly budgetEffectCents: number; readonly controlEpoch: string; readonly argv: readonly string[]; readonly cwd: string; readonly pathScope?: readonly string[]; readonly environment?: Readonly<Record<string, string>>; readonly timeoutMs?: number; readonly outputCapBytes?: number }, onHandle?: (handle: { cancel(reason?: string): Promise<{ cancelled: boolean }>; observe(): Promise<unknown> } | undefined) => void) {
+  let handle: Awaited<ReturnType<EnvironmentExecutionPort["start"]>>;
+  try { handle = await runtime.start(request); }
+  catch (error) {
+    const decision = error instanceof Error && "decision" in error ? (error as { decision?: { reason?: string } }).decision : undefined;
+    if (decision?.reason === "already_executed") return result("unknown", "Environment command was already claimed; its prior outcome is unknown", "already_executed");
+    throw error;
+  }
   onHandle?.(handle);
   const deadline = Date.now() + Math.min(request.timeoutMs ?? 30_000, 60_000);
   for (;;) {
@@ -94,25 +101,30 @@ async function observeEnvironment(runtime: EnvironmentExecutionPort, request: { 
   }
 }
 
-function createLocalEffects(options: { readonly authority: ReadOnlyFileAuthorityGateway; readonly workspaceRoot: string; readonly environment: EnvironmentRecord; readonly readEnvironment?: () => Promise<EnvironmentRecord | undefined>; readonly onHandle?: (handle: { cancel(reason?: string): Promise<{ cancelled: boolean }>; observe(): Promise<unknown> } | undefined) => void }, binding: IpPythonHostBinding) {
-  const context = authorityContext(binding);
-  const file = createAuthorizedFileEditPort({ authority: options.authority, context, workspaceRoot: options.workspaceRoot, pathScope: binding.pathScope });
-  const git = createLocalGitPort({ authority: options.authority, context, workspaceRoot: options.workspaceRoot });
-  const runtime = createLocalRuntimeAdapter(options.environment, options.authority, { ...(options.readEnvironment === undefined ? {} : { readEnvironment: options.readEnvironment }) });
+function createLocalEffects(options: { readonly authority: ReadOnlyFileAuthorityGateway; readonly workspaceRoot: string; readonly environment: EnvironmentRecord; readonly readEnvironment?: () => Promise<EnvironmentRecord | undefined>; readonly onHandle?: (handle: { cancel(reason?: string): Promise<{ cancelled: boolean }>; observe(): Promise<unknown> } | undefined) => void }) {
+  const runtimeFactory = options.environment.type === "container_sandbox" ? createContainerSandboxAdapter : createLocalRuntimeAdapter;
+  const runtime = runtimeFactory(options.environment, options.authority, { ...(options.readEnvironment === undefined ? {} : { readEnvironment: options.readEnvironment }) });
+  const filePort = (currentBinding: IpPythonHostBinding) => createAuthorizedFileEditPort({ authority: options.authority, context: authorityContext(currentBinding), workspaceRoot: options.workspaceRoot, pathScope: currentBinding.pathScope });
+  const gitPort = (currentBinding: IpPythonHostBinding) => createLocalGitPort({ authority: options.authority, context: authorityContext(currentBinding), workspaceRoot: options.workspaceRoot, pathScope: currentBinding.pathScope });
   const safe = async <T>(work: () => Promise<T>, format: (value: T) => string) => {
     try { return result("ok", format(await work())); }
-    catch (error) { return result("error", error instanceof Error ? error.message : String(error), "authority_or_boundary_rejected"); }
+    catch (error) {
+      const decision = error instanceof Error && "decision" in error ? (error as { decision?: { reason?: string } }).decision : undefined;
+      if (decision?.reason === "already_executed") return result("unknown", "Effect was already claimed; its prior outcome is unknown", "already_executed");
+      if (error instanceof Error && error.name.endsWith("OutcomeUnknownError")) return result("unknown", error.message, "effect_outcome_unknown");
+      return result("error", error instanceof Error ? error.message : String(error), "authority_or_boundary_rejected");
+    }
   };
   return createIpPythonLocalEffectsGateway({ adapters: {
-    writeFile: (request) => safe(() => file.writeFile(request.path, request.content), () => "file written"),
+    writeFile: (request) => safe(() => filePort(request.binding).writeFile(request.path, request.content), () => "file written"),
     runTest: (request) => observeEnvironment(runtime, environmentRequest(request, JSON.stringify([request.cwd, request.argv])), options.onHandle),
     runShell: (request) => observeEnvironment(runtime, environmentRequest(request, JSON.stringify([request.cwd, request.argv])), options.onHandle),
     runEnvironment: (request) => observeEnvironment(runtime, environmentRequest(request, JSON.stringify([request.cwd, request.argv])), options.onHandle),
-    gitCreateBranch: (request) => safe(() => git.createBranch(options.workspaceRoot, request.branchName, request.baseRevision), () => "branch created"),
-    gitCreateWorktree: (request) => safe(() => git.createWorktree(options.workspaceRoot, request.worktreePath, request.branchName), () => "worktree created"),
-    gitCommit: (request) => safe(() => git.commit(request.worktreePath, request.message, request.authorName, request.authorEmail), (value) => value.commitSha),
-    gitAdvanceBranch: (request) => safe(() => git.advanceBranch(options.workspaceRoot, request.branchName, request.expectedRevision, request.targetRevision), () => "branch advanced"),
-    gitRemoveWorktree: (request) => safe(() => git.removeWorktree(options.workspaceRoot, request.worktreePath), () => "worktree removed"),
+    gitCreateBranch: (request) => safe(() => gitPort(request.binding).createBranch(options.workspaceRoot, request.branchName, request.baseRevision), () => "branch created"),
+    gitCreateWorktree: (request) => safe(() => gitPort(request.binding).createWorktree(options.workspaceRoot, request.worktreePath, request.branchName), () => "worktree created"),
+    gitCommit: (request) => safe(() => gitPort(request.binding).commit(request.worktreePath, request.message, request.authorName, request.authorEmail), (value) => value.commitSha),
+    gitAdvanceBranch: (request) => safe(() => gitPort(request.binding).advanceBranch(options.workspaceRoot, request.branchName, request.expectedRevision, request.targetRevision), () => "branch advanced"),
+    gitRemoveWorktree: (request) => safe(() => gitPort(request.binding).removeWorktree(options.workspaceRoot, request.worktreePath), () => "worktree removed"),
   } });
 }
 
@@ -132,7 +144,7 @@ export function createIpPythonProductionKernel(
       pathScope: currentBinding.pathScope,
     }).readFile(relativePath),
     gitRevision: async (currentBinding, ref) => createIpPythonGitRevisionAdapter({
-      git: createLocalGitPort({ authority: options.authority, context: authorityContext(currentBinding), workspaceRoot: options.workspaceRoot }),
+      git: createLocalGitPort({ authority: options.authority, context: authorityContext(currentBinding), workspaceRoot: options.workspaceRoot, pathScope: currentBinding.pathScope }),
       repositoryPath: options.workspaceRoot,
       scopeRoot: options.workspaceRoot,
     })(currentBinding, ref),
@@ -144,7 +156,7 @@ export function createIpPythonProductionKernel(
     environment: options.localEnvironment,
     ...(options.readEnvironment === undefined ? {} : { readEnvironment: options.readEnvironment }),
     onHandle: (handle) => { activeHandle = handle; },
-  }, binding);
+  });
   if (localEffects !== undefined && options.twoStage === undefined) throw new Error("IPython local effects require two-stage execution");
   const readOnlyHostRequest = createReadOnlyHostRequestHandler({ binding, gateway });
   const hostRequest = localEffects === undefined ? readOnlyHostRequest : createLocalHostRequestHandler({ binding, readOnly: gateway, effects: localEffects });
