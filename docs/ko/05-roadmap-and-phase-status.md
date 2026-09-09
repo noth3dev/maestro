@@ -8,9 +8,9 @@ Maestro는 각 단계의 검증 증거가 완료되어야 다음 단계로 진�
 
 | 단계 | 명칭 | 코드 상태 | 검증 기준 및 운영 승인 게이트 |
 | :--- | :--- | :---: | :--- |
-| **Phase 1** | Technical Foundation & Durable Control Plane | **재개방: host-tool 제품 게이트 대기** | 네이티브 runtime, PostgreSQL durability, fencing 및 process 증거는 있음. Production host-tool 등록/집행은 Phase 2 IPython 로컬 host-tool·승인 계약 승인 전까지 의도적으로 구현하지 않음. 코드 증거만으로 단계 승인을 주장하지 않음 |
+| **Phase 1** | Technical Foundation & Durable Control Plane | **구현 게이트 완료; host-tool 제품 게이트 대기** | G1–G6 구현 증거가 완료되었으며 실제 PostgreSQL TUI/API parity와 SSE cursor-safe reconnect를 포함함. Production host-tool 등록/집행은 Phase 2 IPython 계약으로 남아 있으며 코드 증거만으로 최종 제품 승인을 주장하지 않음 |
 | **Phase 2** | Concertmaster Office Core & Hierarchical Execution | **재개방: host-tool 구현 대기** | 계층 실행 building block과 PostgreSQL 증거는 있으나, persistent IPython 로컬 host-tool, 4단계 승인 계층, full-access 모드 및 live acceptance가 구현·리뷰되기 전까지 Worker는 text/evidence-only임. 과거 code-level 완료 표시는 현재 승인으로 보지 않음 |
-| **Phase 3** | Encore, Certification & First Usable Release | **릴리스 게이트 대기; host-tool 의존성 명시** | Metronome, Encore, 인증, 보고서 및 native process 증거는 있음. Phase 2 host-tool 동작, TUI parity/reconnect, release-level recovery 증거가 함께 통과하기 전까지 first usable release는 승인하지 않음 |
+| **Phase 3** | Encore, Certification & First Usable Release | **릴리스 게이트 대기; host-tool 의존성 명시** | Metronome, Encore, 인증, 보고서 및 native process 증거는 있음. TUI parity/reconnect 증거는 확보되었으며 Phase 2 host-tool 동작과 release-level recovery 증거가 통과하기 전까지 first usable release는 승인하지 않음 |
 | **Phase 4** | Isolated Environments, Devices & Discord Incidents | **외부 capability 경계; 승인 대기** | Browser, device, external-service, deployment 및 Discord capability는 각각 별도 활성화하며 만료·반복 범위를 선택함. 독립 review와 production deployment 승인은 남음 |
 | **Phase 5** | Concurrent Goals & Portfolio Control | **활성 remediation/capacity 작업** | 프로젝트별 worker cap은 구현됨. Resource inventory, demand reservation 및 portfolio scheduling은 향후 작업 |
 | **Phase 6** | Encore Learning & 10-Axis Adaptation | **Step 1 승인 완료** *(불변 다이제스트)* | Step 1: 프로젝트 전용·출처 바인딩 Improvement Digest. Step 2 이후(리플레이, 변경, 롤아웃, 적응, 프로젝트 간 승격)는 보류 |
@@ -19,7 +19,7 @@ Maestro는 각 단계의 검증 증거가 완료되어야 다음 단계로 진�
 
 ### 네이티브 에이전트 백엔드 마이그레이션 — 현재 경계
 
-Maestro 네이티브 런타임과 인증된 model gateway가 대화와 워커 실행을 모두 담당합니다. ChatGPT account-login recovery도 내구성 상태, fenced status/cancel 작업 및 metadata-only 저장을 포함하여 통합되었습니다. 네이티브 admission은 host context, immutable grant, 정확한 provider-qualified model policy, account binding 및 idempotency를 포함하며, 모든 native 호출 지점(Worker, Head, semantic review, Encore reviewer, team-lead helper)이 selected/actual 모델과 gateway binding identity를 append-only `native_execution_bindings` 테이블에 durable하게 기록합니다. 깨끗한 disposable 컨테이너에서 실행한 단일 worker 전체 real-PostgreSQL 재실행이 **162/162 파일, 1066/1066 테스트, 실패 0건**으로 통과했습니다(2026-09-08), kill/restart 복구, fencing, authority denial, loopback Model Gateway HTTP acceptance 테스트, 그리고 실제 Model Gateway를 사용하는 전체 Control Plane + PostgreSQL + Worker acceptance 테스트(`native-worker-acceptance.integration.test.ts`)를 포함합니다. 이 테스트를 만드는 과정에서 실제 wire-schema 결함(`limitsFor()`가 10분을 넘는 모든 Mission Bundle time ceiling에 대해 clamp되지 않은 per-call timeout을 보냄)도 발견해 수정했습니다. 남은 Phase 1 항목은 하나입니다: 실제 gateway 경로를 통한 production native host-tool 등록/집행 -- `ToolRegistry`는 fail-closed로 올바르게 구현되어 있지만 production에는 아직 등록된 Maestro-callback tool이 없고, OpenAI Codex adapter는 모든 세션을 read-only로 실행하므로 현재 native Worker는 텍스트 생성만 가능합니다.
+Maestro 네이티브 런타임과 인증된 model gateway가 대화와 워커 실행을 모두 담당합니다. ChatGPT account-login recovery도 내구성 상태, fenced status/cancel 작업 및 metadata-only 저장을 포함하여 통합되었습니다. 네이티브 admission은 host context, immutable grant, 정확한 provider-qualified model policy, account binding 및 idempotency를 포함하며, 모든 native 호출 지점(Worker, Head, semantic review, Encore reviewer, team-lead helper)이 selected/actual 모델과 gateway binding identity를 append-only `native_execution_bindings` 테이블에 durable하게 기록합니다. 깨끗한 disposable 컨테이너에서 실행한 단일 worker 전체 real-PostgreSQL 재실행이 **162/162 파일, 1066/1066 테스트, 실패 0건**으로 통과했습니다(2026-09-09), kill/restart 복구, fencing, authority denial, loopback Model Gateway HTTP acceptance 테스트, 그리고 실제 Model Gateway를 사용하는 전체 Control Plane + PostgreSQL + Worker acceptance 테스트(`native-worker-acceptance.integration.test.ts`)를 포함합니다. 이 테스트를 만드는 과정에서 실제 wire-schema 결함(`limitsFor()`가 10분을 넘는 모든 Mission Bundle time ceiling에 대해 clamp되지 않은 per-call timeout을 보냄)도 발견해 수정했습니다. 남은 Phase 1 항목은 하나입니다: 실제 gateway 경로를 통한 production native host-tool 등록/집행 -- `ToolRegistry`는 fail-closed로 올바르게 구현되어 있지만 production에는 아직 등록된 Maestro-callback tool이 없고, OpenAI Codex adapter는 모든 세션을 read-only로 실행하므로 현재 native Worker는 텍스트 생성만 가능합니다.
 
 CLI TUI는 `@earendil-works/pi-tui` `0.85.1` 터미널 primitive를 사용합니다. 이는 provider나 실행 권한이 없는 표현 계층 의존성입니다.
 
@@ -31,7 +31,7 @@ A/D/E domain contract, B provider facts, C operational overlay와 순수 Goal sn
 
 TUI는 두 번째 Control Plane이 아니라 운영자 표시·명령 클라이언트입니다. 권위 있는 상태 조회와 명령 전송은 `@maestro/api-client` 및 인증된 Control Plane route를 통해서만 수행합니다. PostgreSQL, Model Gateway, provider API, device transport에 직접 연결하지 않습니다. 단계 승인에는 동일한 실제 Goal에 대한 API/TUI parity, SSE cursor 보존 재연결, 명시적인 loading/error/stale 상태 표시, terminal state와 로그에 credential·prompt·raw gateway binding·secret-bearing output이 없다는 증거가 필요합니다. 터미널 입력은 lease, fencing, capability grant, approval, idempotency를 우회할 수 없습니다.
 
-### Production IPython host-tool 경계 — 2026-09-08
+### Production IPython host-tool 경계 — 2026-09-09
 
 첫 production host-tool slice는 Phase 2에 속하며 Prime Agent를 다시 도입하지 않고 Prime Agent식 실행 형태를 사용합니다. 하나의 persistent `ipython` surface, 세션 전용 Python 함수, 명시적 프로젝트 skill 저장, 안정적인 권한 계약이 필요한 경우에만 직접 구조화 tool을 사용합니다.
 
@@ -47,11 +47,11 @@ Phase 6 Step 1은 불변·프로젝트 전용 Improvement Digest slice로 승인
 
 ---
 
-## Act별 현황 (2026-09-08)
+## Act별 현황 (2026-09-09)
 
 | Act | 현재 상태 | Ensemble Router / runtime 경계 |
 | --- | --- | --- |
-| **Act 1 — Foundation** | **진행 중; 인증 전** | A/D/E contract, B provider facts, 순수 Goal snapshot을 포함한 C operational overlay, 4개 pressure-band schema 및 human-owned 빈 `model_map` baseline이 있습니다. A↔D weakest-link selection과 B/C hard filter를 갖는 pure selector가 구현되었고, Migration `0072_ensemble_router_artifacts.sql`이 실제 PostgreSQL gate와 함께 durable C/Goal snapshot 및 append-only routing evidence를 제공합니다. Production selector/native-admission wiring, fixed-model evidence migration, host-tool write/effect 및 live acceptance는 남아 있습니다. [`roadmap/act-1-foundation/README.md`](../../roadmap/act-1-foundation/README.md) 참조. |
+| **Act 1 — Foundation** | **구현 게이트 완료; 최종 인증 전** | A/D/E contract, B provider facts, 순수 Goal snapshot을 포함한 C operational overlay, 4개 pressure-band schema 및 human-owned 빈 `model_map` baseline이 있습니다. S1/S2/S3와 G6의 실제 PostgreSQL TUI/API parity, cursor-safe SSE reconnect 및 명시적 failure 증거가 merge·검증되었습니다. Production selector/native-admission wiring, fixed-model evidence migration, host-tool write/effect 및 live acceptance는 남아 있으며 Phase 1은 최종 승인되지 않았습니다. [`roadmap/act-1-foundation/README.md`](../../roadmap/act-1-foundation/README.md) 참조. |
 | **Act 2 — Flashmob** | **Act 1 인증까지 차단** | Flashmob production path나 automatic Ensemble Router selection을 구현되었다고 주장하지 않습니다. [`roadmap/act-2-flashmob/README.md`](../../roadmap/act-2-flashmob/README.md) 참조. |
 | **Act 3 — Arrangement** | **보류** | 개인화 self-modification은 Act 2 이후이며 routing 또는 model-map 변경을 자동 승격하지 않습니다. [`roadmap/act-3-arrangement/README.md`](../../roadmap/act-3-arrangement/README.md) 참조. |
 
@@ -59,7 +59,7 @@ Phase 6 Step 1은 불변·프로젝트 전용 Improvement Digest slice로 승인
 
 > [!IMPORTANT]
 > **운영 사용성 게이트 공지:**  
-> 코드 및 PostgreSQL 증거는 릴리스 승인을 뜻하지 않습니다. Native conversation과 Worker는 실제 Model Gateway/PostgreSQL acceptance 및 restart/fencing 증거를 갖추었습니다. 남은 게이트는 production host-tool 제품 승인·구현, TUI parity/reconnect 증거, 별도 실행 authenticated device-agent protocol의 독립 review/production 승인입니다(실제 process gate 자체는 구현됨). 상세 상태는 `roadmap/act-1-foundation/active/operations/task_plan.md`에 기록합니다.
+> 코드 및 PostgreSQL 증거는 릴리스 승인을 뜻하지 않습니다. Native conversation과 Worker는 실제 Model Gateway/PostgreSQL acceptance 및 restart/fencing 증거를 갖추었습니다. TUI parity/reconnect 증거는 G6를 통해 완료되었습니다. 남은 게이트는 production host-tool 제품 승인·구현과 별도 실행 authenticated device-agent protocol의 독립 review/production 승인입니다(실제 process gate 자체는 구현됨). 상세 상태는 `roadmap/act-1-foundation/active/operations/task_plan.md`에 기록합니다.
 
 ---
 
