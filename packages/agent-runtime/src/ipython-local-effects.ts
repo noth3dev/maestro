@@ -79,8 +79,15 @@ export interface IpPythonLocalEffectAdapters {
   gitRemoveWorktree(request: IpPythonGitRemoveWorktreeRequest): IpPythonExecutionResult | Promise<IpPythonExecutionResult>;
 }
 
+export interface IpPythonPreparedLocalEffect {
+  readonly result: IpPythonExecutionResult;
+  readonly commit: () => Promise<IpPythonExecutionResult>;
+  readonly rollback: () => void | Promise<void>;
+}
+
 export interface IpPythonLocalEffectsGateway {
   handle(binding: IpPythonHostBinding, request: IpPythonLocalEffectRequest): Promise<IpPythonExecutionResult>;
+  prepare(binding: IpPythonHostBinding, request: IpPythonLocalEffectRequest): Promise<IpPythonPreparedLocalEffect>;
 }
 
 function payloadRecord(payload: unknown): Record<string, unknown> {
@@ -90,6 +97,11 @@ function payloadRecord(payload: unknown): Record<string, unknown> {
 
 function requiredString(value: unknown, name: string): string {
   if (typeof value !== "string" || value.trim() === "" || value.includes("\0")) throw new IpPythonProtocolError(`IPython local effect ${name} is required`);
+  return value;
+}
+
+function textValue(value: unknown, name: string): string {
+  if (typeof value !== "string" || value.includes("\0")) throw new IpPythonProtocolError(`IPython local effect ${name} must be text`);
   return value;
 }
 
@@ -153,31 +165,60 @@ function sameBinding(left: IpPythonHostBinding, right: IpPythonHostBinding): boo
 }
 
 export function createIpPythonLocalEffectsGateway(options: { adapters: IpPythonLocalEffectAdapters }): IpPythonLocalEffectsGateway {
-  return {
-    async handle(binding, request) {
-      const payload = payloadRecord(request.payload);
-      switch (request.method as IpPythonLocalEffectMethod) {
-        case "write_file":
-          return options.adapters.writeFile({ binding, path: relativePath(payload.path), content: requiredString(payload.content, "content") });
-        case "run_test":
-          return options.adapters.runTest(safeCommand(payload, binding, "project.test.run"));
-        case "run_shell":
-          return options.adapters.runShell(safeCommand(payload, binding, "project.shell.run"));
-        case "run_environment":
-          return options.adapters.runEnvironment(safeCommand(payload, binding, "project.environment.change"));
-        case "git_create_branch":
-          return options.adapters.gitCreateBranch({ binding, branchName: requiredString(payload.branchName, "branchName"), baseRevision: requiredString(payload.baseRevision, "baseRevision") });
-        case "git_create_worktree":
-          return options.adapters.gitCreateWorktree({ binding, worktreePath: absolutePath(payload.worktreePath, "worktreePath"), branchName: requiredString(payload.branchName, "branchName") });
-        case "git_commit":
-          return options.adapters.gitCommit({ binding, worktreePath: absolutePath(payload.worktreePath, "worktreePath"), message: requiredString(payload.message, "message"), authorName: requiredString(payload.authorName, "authorName"), authorEmail: requiredString(payload.authorEmail, "authorEmail") });
-        case "git_advance_branch":
-          return options.adapters.gitAdvanceBranch({ binding, branchName: requiredString(payload.branchName, "branchName"), expectedRevision: requiredString(payload.expectedRevision, "expectedRevision"), targetRevision: requiredString(payload.targetRevision, "targetRevision") });
-        case "git_remove_worktree":
-          return options.adapters.gitRemoveWorktree({ binding, worktreePath: absolutePath(payload.worktreePath, "worktreePath") });
-        default:
-          throw new IpPythonProtocolError(`IPython local effect method is not allowed: ${request.method}`);
+  const operation = (binding: IpPythonHostBinding, request: IpPythonLocalEffectRequest): (() => Promise<IpPythonExecutionResult>) => {
+    const payload = payloadRecord(request.payload);
+    switch (request.method as IpPythonLocalEffectMethod) {
+      case "write_file": {
+        const path = relativePath(payload.path);
+        const content = textValue(payload.content, "content");
+        return () => Promise.resolve(options.adapters.writeFile({ binding, path, content }));
       }
+      case "run_test":
+        return () => Promise.resolve(options.adapters.runTest(safeCommand(payload, binding, "project.test.run")));
+      case "run_shell":
+        return () => Promise.resolve(options.adapters.runShell(safeCommand(payload, binding, "project.shell.run")));
+      case "run_environment":
+        return () => Promise.resolve(options.adapters.runEnvironment(safeCommand(payload, binding, "project.environment.change")));
+      case "git_create_branch": {
+        const branchName = requiredString(payload.branchName, "branchName");
+        const baseRevision = requiredString(payload.baseRevision, "baseRevision");
+        return () => Promise.resolve(options.adapters.gitCreateBranch({ binding, branchName, baseRevision }));
+      }
+      case "git_create_worktree": {
+        const worktreePath = absolutePath(payload.worktreePath, "worktreePath");
+        const branchName = requiredString(payload.branchName, "branchName");
+        return () => Promise.resolve(options.adapters.gitCreateWorktree({ binding, worktreePath, branchName }));
+      }
+      case "git_commit": {
+        const worktreePath = absolutePath(payload.worktreePath, "worktreePath");
+        const message = requiredString(payload.message, "message");
+        const authorName = requiredString(payload.authorName, "authorName");
+        const authorEmail = requiredString(payload.authorEmail, "authorEmail");
+        return () => Promise.resolve(options.adapters.gitCommit({ binding, worktreePath, message, authorName, authorEmail }));
+      }
+      case "git_advance_branch": {
+        const branchName = requiredString(payload.branchName, "branchName");
+        const expectedRevision = requiredString(payload.expectedRevision, "expectedRevision");
+        const targetRevision = requiredString(payload.targetRevision, "targetRevision");
+        return () => Promise.resolve(options.adapters.gitAdvanceBranch({ binding, branchName, expectedRevision, targetRevision }));
+      }
+      case "git_remove_worktree": {
+        const worktreePath = absolutePath(payload.worktreePath, "worktreePath");
+        return () => Promise.resolve(options.adapters.gitRemoveWorktree({ binding, worktreePath }));
+      }
+      default:
+        throw new IpPythonProtocolError(`IPython local effect method is not allowed: ${request.method}`);
+    }
+  };
+  return {
+    async handle(binding, request) { return operation(binding, request)(); },
+    async prepare(binding, request) {
+      const commit = operation(binding, request);
+      return {
+        result: { state: "ok", dataClass: "workspace", content: "[effect prepared]" },
+        commit,
+        rollback: async () => {},
+      };
     },
   };
 }
