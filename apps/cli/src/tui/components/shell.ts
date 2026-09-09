@@ -1,5 +1,5 @@
 import type { Workspace } from "../workspace.js";
-import { fitPlain, paintTranscript, tuiTheme, type Paint } from "../theme.js";
+import { fitPlain, paintTranscript, tuiTheme, type Paint, type TranscriptLine } from "../theme.js";
 
 export type AsyncState<T> = { kind: "loading" } | { kind: "empty" } | { kind: "error"; message: string } | { kind: "value"; value: T };
 
@@ -177,7 +177,7 @@ export function renderShell(state: TuiShellState, width: number, height = 30): s
   ];
 }
 
-export function renderTranscript(lines: readonly string[], width: number): string[] {
+export function renderTranscript(lines: readonly (TranscriptLine | string)[], width: number): string[] {
   return lines.map((line) => paintTranscript(line, width));
 }
 
