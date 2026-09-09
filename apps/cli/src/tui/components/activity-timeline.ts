@@ -20,11 +20,8 @@ export interface ActivityTimelineEvent extends CursorEvent {
 
 function isRecord(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value); }
 function textField(value: unknown): string | undefined { return typeof value === "string" && value.trim() !== "" ? value : undefined; }
-function effectKind(classification: ActivityEffectGate["classification"], outcome: string): TranscriptKind {
-  if (classification === "forbidden" || classification === "ambiguous" || /denied|failed|error/i.test(outcome)) return "error";
-  if (/await|approval|pending/i.test(outcome)) return "warning";
-  if (/auto|allow|success|complete|committed/i.test(outcome)) return "success";
-  return "system";
+function sourceTranscriptKind(value: unknown): TranscriptKind {
+  return value === "error" || value === "success" || value === "system" || value === "warning" || value === "text" ? value : "system";
 }
 
 /** Convert the durable GoalEvent payload into the renderer's typed view model. */
@@ -39,7 +36,7 @@ export function toActivityTimelineEvent(event: GoalEvent): ActivityTimelineEvent
   const outcome = textField(source.outcome);
   const reason = textField(source.reason);
   const effect = actor !== undefined && action !== undefined && target !== undefined && classification !== undefined && outcome !== undefined
-    ? { actor, action, target, classification, outcome, ...(reason === undefined ? {} : { reason }), kind: effectKind(classification, outcome) }
+    ? { actor, action, target, classification, outcome, ...(reason === undefined ? {} : { reason }), kind: sourceTranscriptKind(source.kind) }
     : undefined;
   return { cursor: event.cursor, eventId: event.eventId, eventType: event.eventType, ...(effect === undefined ? {} : { effect }) };
 }
