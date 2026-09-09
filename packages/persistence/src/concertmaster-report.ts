@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { assertValidTaskContractSubstance, certificationsConflict, evaluateCertificationCompleteness, requiredConditionalCertifications, taskContractContentHash, type CertificationRecordFact } from "@maestro/domain";
+import { assertValidRoutingEvidence, canonicalJson, assertValidTaskContractSubstance, certificationsConflict, evaluateCertificationCompleteness, requiredConditionalCertifications, taskContractContentHash, type CertificationRecordFact } from "@maestro/domain";
 import type { EvidenceContentReader } from "@maestro/evidence";
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
@@ -180,7 +180,51 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
     })
     : true;
 
+  const goalIdentity = await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId]);
+  const goalProjectId = goalIdentity.rows[0]?.project_id;
+  const routingEvidence = await pool.query<{
+    evidence_id: string; admission_binding_ref: string; selected_model_ref: string;
+    pressure_band: string; decision_layer: string; evidence: Record<string, unknown>;
+  }>(`SELECT evidence_id, admission_binding_ref, selected_model_ref, pressure_band,
+             decision_layer, evidence
+        FROM ensemble_router_routing_evidence WHERE goal_ref = $1
+        ORDER BY created_at, evidence_id`, [goalId]);
+  const nativeBindings = await pool.query<{
+    binding_id: string; execution_ref: string; invocation_ref: string;
+    selected_model_provider: string; selected_model_id: string;
+    actual_model_provider: string; actual_model_id: string;
+  }>(`SELECT binding_id, execution_ref, invocation_ref, selected_model_provider,
+             selected_model_id, actual_model_provider, actual_model_id
+        FROM native_execution_bindings WHERE goal_id = $1`, [goalId]);
   const lineageBlockers: { reason: string; detail: string }[] = [];
+  for (const route of routingEvidence.rows) {
+    try { assertValidRoutingEvidence(route.evidence); } catch { lineageBlockers.push({ reason: "routing_evidence_malformed", detail: `Routing evidence ${route.evidence_id} is malformed` }); continue; }
+    const evidence = route.evidence;
+    if (evidence.goalRef !== goalId || evidence.projectRef !== goalProjectId || evidence.evidenceId !== route.evidence_id || evidence.admissionBindingRef !== route.admission_binding_ref || canonicalJson(evidence) !== canonicalJson({ ...(evidence as Record<string, unknown>) }))
+      lineageBlockers.push({ reason: "routing_evidence_identity_mismatch", detail: `Routing evidence ${route.evidence_id} is outside this Goal/project scope or has altered payload` });
+  }
+  if (routingEvidence.rowCount === 0) {
+    lineageBlockers.push({ reason: "routing_evidence_missing", detail: "No durable routing evidence is recorded for this Goal" });
+  } else {
+    const bindingsByRef = new Map<string, typeof nativeBindings.rows[number]>();
+    for (const binding of nativeBindings.rows) {
+      bindingsByRef.set(binding.binding_id, binding);
+      bindingsByRef.set(binding.execution_ref, binding);
+      bindingsByRef.set(binding.invocation_ref, binding);
+    }
+    for (const route of routingEvidence.rows) {
+      const binding = bindingsByRef.get(route.admission_binding_ref);
+      if (!binding) {
+        lineageBlockers.push({ reason: "routing_evidence_binding_missing", detail: `Routing evidence ${route.evidence_id} has no matching native admission binding` });
+        continue;
+      }
+      const selected = `${binding.selected_model_provider}/${binding.selected_model_id}`;
+      const actual = `${binding.actual_model_provider}/${binding.actual_model_id}`;
+      if (selected !== route.selected_model_ref || selected !== actual) {
+        lineageBlockers.push({ reason: "routing_evidence_identity_mismatch", detail: `Routing evidence ${route.evidence_id} does not match the provider result identity` });
+      }
+    }
+  }
   const snapshotContract = (council.snapshot_payload?.contract ?? {}) as { contractId?: string; version?: number; contentHash?: string };
   let contractHashValid = true;
   try {
@@ -245,7 +289,7 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
     [
       reportId, goalId, success, JSON.stringify(blockers), contractContent.desiredOutcome, whatChanged,
       latestByKind.get("quality")?.verdict === "passed", JSON.stringify(participatingDepartments),
-      JSON.stringify(packet?.selectedDirection !== undefined ? [packet.selectedDirection] : []), JSON.stringify(packet?.dissent ?? []),
+      JSON.stringify([...(packet?.selectedDirection !== undefined ? [packet.selectedDirection] : []), ...routingEvidence.rows.map((r) => `routing approval scope: ${r.decision_layer}; pressure band: ${r.pressure_band}`)]), JSON.stringify(packet?.dissent ?? []),
       JSON.stringify(records.map((record) => `${record.kind}: ${record.verdict}`)),
       actualCostCents, budgetCents,
       JSON.stringify(incidents), JSON.stringify(knownLimitations), criticalActionAwaitingApproval, bundleId,
@@ -255,7 +299,7 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
   return {
     reportId, goalId, success, blockers, ceoRequest: contractContent.desiredOutcome, whatChanged,
     userVisibleBehaviorPassed: latestByKind.get("quality")?.verdict === "passed", participatingDepartments,
-    keyDecisions: packet?.selectedDirection !== undefined ? [packet.selectedDirection] : [], dissent: packet?.dissent ?? [],
+    keyDecisions: [...(packet?.selectedDirection !== undefined ? [packet.selectedDirection] : []), ...routingEvidence.rows.map((r) => `routing approval scope: ${r.decision_layer}; pressure band: ${r.pressure_band}`)], dissent: packet?.dissent ?? [],
     independentValidation: records.map((record) => `${record.kind}: ${record.verdict}`),
     costCents: actualCostCents, budgetCents,
     incidents, knownLimitations, criticalActionAwaitingApproval, evidenceBundleId: bundleId,
