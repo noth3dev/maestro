@@ -1332,3 +1332,8 @@ All downstream routing documentation must use this contract and must not restore
 ## 2026-09-09 — Worker successor fixture finding
 
 - The production fail-closed worker boundary was correct; only the successor test processes lacked the explicit pin configuration required after restart. The fixture correction preserves the expected durable `409 council_conflict` recovery assertion without weakening ensemble fail-closed behavior.
+
+## 2026-09-09 — Plan 2 preflight finding
+
+- `execution/plan-2.md` contains stale historical references to commit `2fa6168` and the pre-merge ensemble WIP; the repository is authoritative and now has native admission merge `d30f7cd`. The actionable Plan 2 boundary is unchanged: start S1 only after current main CI is green.
+- Plan 2 Decisions D1–D4 are settled and were not revisited. The first implementation slice is the registry-backed whole-block classifier; no parallel action vocabulary should be introduced.
