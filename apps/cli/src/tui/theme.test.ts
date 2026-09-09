@@ -63,6 +63,14 @@ describe("TUI theme", () => {
     expect(tuiTheme.primary("accent")).toBe("accent");
   });
 
+  it("uses a dark ANSI fallback for secondary text on light terminals", () => {
+    delete process.env.NO_COLOR;
+    process.env.COLORTERM = "ansi";
+
+    // eslint-disable-next-line no-control-regex -- assert the ANSI SGR prefix emitted for light terminals.
+    expect(tuiTheme.secondary("secondary")).toMatch(/^\u001b\[30m/);
+  });
+
   it("uses ANSI-16 when truecolor is not advertised", () => {
     delete process.env.NO_COLOR;
     process.env.COLORTERM = "256color";

@@ -1,5 +1,6 @@
 import { Markdown, type MarkdownTheme } from "@earendil-works/pi-tui";
-import { tuiTheme } from "../theme.js";
+import type { ConversationTranscriptBlock } from "../conversation-transcript.js";
+import { transcriptPaint, tuiTheme } from "../theme.js";
 
 const markdownTheme: MarkdownTheme = {
   heading: (text) => tuiTheme.primary(text),
@@ -20,27 +21,29 @@ const markdownTheme: MarkdownTheme = {
 
 /** Keeps the conversation area pinned above the input dock and footer. */
 export class ConversationViewport {
-  private readonly markdown = new Markdown("", 0, 0, markdownTheme);
   private statusRenderer: () => string[] = () => [];
-  private transcriptRenderer: () => string = () => "";
+  private transcriptRenderer: () => readonly ConversationTranscriptBlock[] = () => [];
 
   setStatusRenderer(renderer: () => string[]): void {
     this.statusRenderer = renderer;
   }
-  setTranscriptRenderer(renderer: () => string): void {
+  setTranscriptRenderer(renderer: () => readonly ConversationTranscriptBlock[]): void {
     this.transcriptRenderer = renderer;
   }
 
   render(width: number): string[] {
     const status = this.statusRenderer();
-    const transcript = this.transcriptRenderer();
-    if (transcript === "") return status;
-    this.markdown.setText(transcript);
-    return [...status, "", ...this.markdown.render(width)];
+    const blocks = this.transcriptRenderer();
+    if (blocks.length === 0) return status;
+    const transcript = blocks.flatMap((block) => {
+      const markdown = new Markdown(`${block.heading}\n\n${block.content}`, 0, 0, markdownTheme, { color: transcriptPaint(block.kind) });
+      return markdown.render(width);
+    });
+    return [...status, "", ...transcript];
   }
 
   invalidate(): void {
-    this.markdown.invalidate();
+    // Transcript blocks are rendered from the current state on every frame.
   }
 }
 

@@ -42,7 +42,7 @@ import {
   startNewConversationSession,
 } from "./session.js";
 import { mergeEvents, runActivityStream, subscribeToEvents } from "./activity-stream.js";
-import { addConversationMessage, applyConversationEvent, createConversationTranscript, renderConversationMarkdown, type ConversationTranscriptState } from "./conversation-transcript.js";
+import { addConversationMessage, applyConversationEvent, createConversationTranscript, renderConversationBlocks, type ConversationTranscriptState } from "./conversation-transcript.js";
 import { renderActivityTimeline } from "./components/activity-timeline.js";
 import { renderShell, renderTuiFooter, type TuiShellState } from "./components/shell.js";
 import { getModeAccentProgress, setModeAccentProgress, tuiTheme, type TranscriptLine } from "./theme.js";
@@ -177,7 +177,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       if (activity.length > 0) lines.push("", "Activity", ...renderActivityTimeline(activity, terminal.columns));
       return lines;
     });
-    header.setTranscriptRenderer(() => renderConversationMarkdown(conversation));
+    header.setTranscriptRenderer(() => renderConversationBlocks(conversation));
     const render = () => {
       footer.setText(renderTuiFooter(terminal.columns));
       tui.requestRender(true);
@@ -188,6 +188,9 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       conversation = { ...next, messages: next.messages.slice(-80) };
       render();
     };
+    const appendError = (text: string): void => append({ kind: "error", text });
+    const appendSuccess = (text: string): void => append({ kind: "success", text });
+    const appendWarning = (text: string): void => append({ kind: "warning", text });
     let flashmobMode = false;
     let flashmobAnimationId = 0;
     const animateFlashmobMode = async (enabled: boolean): Promise<void> => {
@@ -206,7 +209,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       if (animationId !== flashmobAnimationId) return;
       setModeAccentProgress(to);
       render();
-      append(`Flashmob ${enabled ? "enabled" : "disabled"} · ${enabled ? "blue" : "Warm Earth"} accent`);
+      appendSuccess(`Flashmob ${enabled ? "enabled" : "disabled"} · ${enabled ? "blue" : "Warm Earth"} accent`);
     };
     const refreshDashboard = async () => {
       if (client === undefined || project.kind !== "attached") return;
@@ -293,9 +296,9 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             return;
           }
         }
-        if (!signal.aborted) append("Conversation stream unavailable: reconnect attempts exhausted");
+        if (!signal.aborted) appendError("Conversation stream unavailable: reconnect attempts exhausted");
       } catch (error) {
-        if (!signal.aborted) append(`Conversation stream unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
+        if (!signal.aborted) appendError(`Conversation stream unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
       }
     };
 
@@ -316,7 +319,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         conversation = hydrated;
         render();
       } catch (error) {
-        if (generation === conversationHydrationGeneration) append(`Conversation history unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
+        if (generation === conversationHydrationGeneration) appendError(`Conversation history unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
       }
     };
 
@@ -338,7 +341,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       startActivity();
     };
     const retryConnection = async () => {
-      append("Retrying Maestro startup checks…");
+      appendWarning("Retrying Maestro startup checks…");
       if (startupError !== undefined) {
         try {
           workspace = await resolveWorkspace(options.cwd);
@@ -347,7 +350,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         } catch (error) {
           startupError = error instanceof Error ? error.message : "Workspace could not be resolved";
           state.connection = { kind: "error", message: `Workspace unavailable: ${startupError}` };
-          append(`Startup retry failed: ${startupError}`);
+          appendError(`Startup retry failed: ${startupError}`);
           return;
         }
       }
@@ -359,12 +362,12 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           });
           if (connection.kind !== "configured") {
             state.connection = { kind: "setup-required", message: connection.reason };
-            append(`Startup retry blocked: ${connection.reason}`);
+            appendWarning(`Startup retry blocked: ${connection.reason}`);
             return;
           }
         } else {
           state.connection = { kind: "setup-required", message: connection.reason };
-          append(`Startup retry blocked: ${connection.reason}`);
+          appendWarning(`Startup retry blocked: ${connection.reason}`);
           return;
         }
       }
@@ -374,7 +377,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       });
       if (health.kind !== "ready") {
         state.connection = { kind: "error", message: health.reason };
-        append(`Startup retry failed: ${health.reason}`);
+        appendError(`Startup retry failed: ${health.reason}`);
         return;
       }
       try {
@@ -399,14 +402,14 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         }
         state.connection = { kind: "connected" };
         recovery = reconcileTuiSession(workspace.cwd, session);
-        append("Control Plane connected.");
-        if (projectDiscoveryNotice !== undefined) append(projectDiscoveryNotice);
+        appendSuccess("Control Plane connected.");
+        if (projectDiscoveryNotice !== undefined) appendWarning(projectDiscoveryNotice);
         void refreshDashboard();
         restartActivity();
       } catch {
         client = undefined;
         state.connection = { kind: "error", message: "Control Plane client could not be created" };
-        append("Startup retry failed: Control Plane client could not be created");
+        appendError("Startup retry failed: Control Plane client could not be created");
       }
     };
     const cancelAccountLogin = (): void => {
@@ -424,8 +427,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       render();
     };
     const startAccountLogin = async (): Promise<void> => {
-      if (client === undefined) { append("Account login is unavailable until the Control Plane is connected."); cancelAccountLogin(); return; }
-      if (accountLoginSelection === 1) { append("Claude Pro / Max account login is unavailable until Anthropic approves a public OAuth integration."); cancelAccountLogin(); return; }
+      if (client === undefined) { appendWarning("Account login is unavailable until the Control Plane is connected."); cancelAccountLogin(); return; }
+      if (accountLoginSelection === 1) { appendWarning("Claude Pro / Max account login is unavailable until Anthropic approves a public OAuth integration."); cancelAccountLogin(); return; }
       accountLoginState = "opening";
       render();
       const controller = new AbortController();
@@ -448,9 +451,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           status = await client.accountLoginStatus(login.loginId);
         }
         if (controller.signal.aborted) return;
-        if (status.state === "succeeded") { append("Account login complete: openai-codex"); void refreshDashboard(); }
-        else append(`Account login ${status.state}: ${status.message ?? "no additional details"}`);
-      } catch (error) { if (!controller.signal.aborted) append(`Account login failed: ${error instanceof Error ? error.message : "request failed"}`); }
+        if (status.state === "succeeded") { appendSuccess("Account login complete: openai-codex"); void refreshDashboard(); }
+        else if (status.state === "failed") appendError(`Account login ${status.state}: ${status.message ?? "no additional details"}`);
+        else appendWarning(`Account login ${status.state}: ${status.message ?? "no additional details"}`);
+      } catch (error) { if (!controller.signal.aborted) appendError(`Account login failed: ${error instanceof Error ? error.message : "request failed"}`); }
       finally { if (accountLoginController === controller) { accountLoginController = undefined; accountLoginId = undefined; accountLoginUrl = undefined; accountLoginSelection = undefined; accountLoginState = undefined; editor.hidden = false; render(); } }
     };
 
@@ -461,14 +465,14 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         editor.hidden = false;
         editor.setText("");
         if (client === undefined) {
-          append("Provider login is unavailable until the Control Plane is connected.");
+          appendWarning("Provider login is unavailable until the Control Plane is connected.");
           return;
         }
         try {
           await client.loginProvider({ providerId, authMode: "api-key", secret: text });
-          append(`Provider login complete: ${providerId} API key stored by the model gateway.`);
+          appendSuccess(`Provider login complete: ${providerId} API key stored by the model gateway.`);
         } catch (error) {
-          append(`Provider login failed: ${error instanceof Error ? error.message : "request failed"}`);
+          appendError(`Provider login failed: ${error instanceof Error ? error.message : "request failed"}`);
         }
         return;
       }
@@ -491,7 +495,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           void startAccountLogin();
         } else if (parsed.kind === "command" && parsed.name === "login" && (parsed.action === "openai" || parsed.action === "anthropic")) {
           if (client === undefined) {
-            append("Provider login is unavailable until the Control Plane is connected.");
+            appendWarning("Provider login is unavailable until the Control Plane is connected.");
           } else {
             pendingProviderLogin = parsed.action;
             editor.hidden = true;
@@ -500,17 +504,17 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             render();
           }
         } else if (parsed.kind === "command" && parsed.name === "logout" && parsed.action === "openai-codex") {
-          if (client === undefined) append("Account logout is unavailable until the Control Plane is connected.");
+          if (client === undefined) appendWarning("Account logout is unavailable until the Control Plane is connected.");
           else {
             await client.logoutAccount();
-            append("ChatGPT account signed out; its model bindings were revoked.");
+            appendSuccess("ChatGPT account signed out; its model bindings were revoked.");
             void refreshDashboard();
           }
         } else if (parsed.kind === "command" && parsed.name === "logout" && (parsed.action === "openai" || parsed.action === "anthropic")) {
-          if (client === undefined) append("Provider logout is unavailable until the Control Plane is connected.");
+          if (client === undefined) appendWarning("Provider logout is unavailable until the Control Plane is connected.");
           else {
             await client.logoutProvider(parsed.action);
-            append(`Provider credential revoked: ${parsed.action}.`);
+            appendSuccess(`Provider credential revoked: ${parsed.action}.`);
           }
         } else if (parsed.kind === "command" && parsed.name === "flashmob" && (parsed.action === undefined || parsed.action === "toggle")) {
           await animateFlashmobMode(!flashmobMode);
@@ -532,7 +536,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             session = startNewConversationSession(workspace.cwd, session);
             await saveWorkspaceSession(session);
             recovery = reconcileTuiSession(workspace.cwd, session);
-            append("New Concertmaster conversation started. Durable Goal state was preserved.");
+            appendSuccess("New Concertmaster conversation started. Durable Goal state was preserved.");
           } else if (parsed.action === "attach") {
             conversationStreamController?.abort();
             conversationStreamController = undefined;
@@ -548,13 +552,13 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               await saveWorkspaceSession(session);
             } else if (typeof requestedProjectIndex === "string" && requestedProjectIndex.trim() !== "") {
               if (client === undefined) {
-                append("Project discovery is unavailable until the Control Plane is connected.");
+                appendWarning("Project discovery is unavailable until the Control Plane is connected.");
                 return;
               }
               const index = Number(requestedProjectIndex);
               const projects = (await client.listProjects()).projects;
               if (!Number.isSafeInteger(index) || index < 1 || index > projects.length) {
-                append(`Project index must be a number from 1 to ${projects.length}.`);
+                appendWarning(`Project index must be a number from 1 to ${projects.length}.`);
                 return;
               }
               session = attachWorkspaceSession(workspace.cwd, current, projects[index - 1]!);
@@ -566,14 +570,14 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             } else if (client !== undefined) {
               const discovered = await discoverWorkspaceProjectFromControlPlane({ workspacePath: workspace.cwd, session: current, client });
               if (discovered.kind !== "attached") {
-                append(discovered.reason);
+                appendWarning(discovered.reason);
                 return;
               }
               session = attachWorkspaceSession(workspace.cwd, current, discovered.projectId);
               syncModelState();
               await saveWorkspaceSession(session);
             } else {
-              append("Session attach requires a connected Control Plane or --project-id.");
+              appendWarning("Session attach requires a connected Control Plane or --project-id.");
               return;
             }
             project = discoverWorkspaceProject(workspace.cwd, session);
@@ -594,14 +598,14 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
                 : renderRecoveryBanner(reconcileTuiSession(workspace.cwd, current), terminal.columns).join(" · "),
             );
           } else {
-            append(`Command: /session ${parsed.action ?? ""} (unknown session action)`.trim());
+            appendWarning(`Command: /session ${parsed.action ?? ""} (unknown session action)`.trim());
           }
         } else if (parsed.kind === "command" && parsed.name === "goal" && parsed.action === "select") {
           const requestedGoalId = parsed.options["goal-id"];
           if (client === undefined || project.kind !== "attached") {
-            append("Goal selection is unavailable until a workspace project is attached.");
+            appendWarning("Goal selection is unavailable until a workspace project is attached.");
           } else if (typeof requestedGoalId !== "string" || requestedGoalId.trim() === "") {
-            append("Goal selection requires --goal-id.");
+            appendWarning("Goal selection requires --goal-id.");
           } else {
             const selected = await client.getGoal(requestedGoalId, { projectId: project.projectId });
             if (selected.projectId !== project.projectId) throw new Error("Selected Goal is bound to another project");
@@ -609,12 +613,12 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             session = selectWorkspaceGoal(workspace.cwd, current ?? session, selected.goalId);
             await saveWorkspaceSession(session);
             recovery = reconcileTuiSession(workspace.cwd, session, { goalState: selected.state });
-            append(`Selected Goal: ${selected.goalId} · ${selected.state} · v${selected.version}`);
+            appendSuccess(`Selected Goal: ${selected.goalId} · ${selected.state} · v${selected.version}`);
             void refreshDashboard();
           }
         } else if (parsed.kind === "command" && parsed.name === "projects" && parsed.action === "list") {
           if (client === undefined) {
-            append("Projects unavailable until the Control Plane is connected.");
+            appendWarning("Projects unavailable until the Control Plane is connected.");
           } else {
             const readResult = await executeReadCommand(
               { client, projectId: project.kind === "attached" ? project.projectId : "" },
@@ -623,7 +627,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             append(`${readResult.title}: ${readResult.lines.join(" · ")}`);
           }
         } else if (parsed.kind === "command" && (parsed.name === "models" || parsed.name === "model") && (parsed.action === undefined || parsed.action === "list")) {
-          if (client === undefined) append("Model catalog unavailable until the Control Plane is connected.");
+          if (client === undefined) appendWarning("Model catalog unavailable until the Control Plane is connected.");
           else {
             const models = await client.listModels();
             append(
@@ -635,30 +639,30 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         } else if (parsed.kind === "command" && (parsed.name === "models" || parsed.name === "model") && parsed.action === "use") {
           const requestedModel = parsed.options["model"];
           if (client === undefined) {
-            append("Model selection is unavailable until the Control Plane is connected.");
+            appendWarning("Model selection is unavailable until the Control Plane is connected.");
           } else if (typeof requestedModel !== "string" || requestedModel.trim() === "") {
-            append("Model selection requires --model provider/model (use /model list first).");
+            appendWarning("Model selection requires --model provider/model (use /model list first).");
           } else {
             const models = await client.listModels();
             const selected = models.find((model) => `${model.identity.provider}/${model.identity.id}` === requestedModel);
             if (selected === undefined) {
-              append(`Model is not available: ${requestedModel}`);
+              appendWarning(`Model is not available: ${requestedModel}`);
             } else if (session?.conversationId !== undefined) {
-              append("The active conversation is bound to its model. Use /session new before selecting another model.");
+              appendWarning("The active conversation is bound to its model. Use /session new before selecting another model.");
             } else {
               session = selectWorkspaceModel(workspace.cwd, session, requestedModel);
               await saveWorkspaceSession(session);
               state.model = requestedModel;
-              append(`Selected model: ${requestedModel}`);
+              appendSuccess(`Selected model: ${requestedModel}`);
             }
           }
         } else if (parsed.kind === "command" && parsed.name === "conversation" && parsed.action === "cancel") {
           if (client === undefined || project.kind !== "attached" || session?.conversationId === undefined)
-            append("No active conversation is available to cancel.");
+            appendWarning("No active conversation is available to cancel.");
           else {
             conversationTurnController?.abort();
             const cancelled = await client.cancelConversation(session.conversationId, { projectId: project.projectId });
-            append(`Conversation ${cancelled.conversationId}: ${cancelled.status}`);
+            appendWarning(`Conversation ${cancelled.conversationId}: ${cancelled.status}`);
           }
         } else if (parsed.kind === "command" && client !== undefined && project.kind === "attached") {
           const action = registry.find(parsed.name)?.actions.find((item) => item.name === parsed.action);
@@ -694,13 +698,13 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               `Concertmaster unavailable: ${state.connection.kind === "error" ? state.connection.message : "Control Plane client unavailable"}`,
             );
           } else if (project.kind !== "attached") {
-            append("Concertmaster requires an attached workspace project.");
+            appendWarning("Concertmaster requires an attached workspace project.");
           } else if (flashmobMode) {
             append(
               "Flashmob is a planned bounded fast path, but its Vanguard runtime is not wired yet. Switch to /mode maestro for governed conversation.",
             );
           } else if (session?.goalId === undefined) {
-            append("Select a Goal before sending a Concertmaster message (use /goal select --goal-id <id>).");
+            appendWarning("Select a Goal before sending a Concertmaster message (use /goal select --goal-id <id>).");
           } else {
             const configuredModel = options.env.MAESTRO_MODEL?.trim() || session.model;
             if (session.conversationId === undefined && configuredModel === undefined) {
@@ -724,7 +728,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
                 };
                 state.model = created.model;
                 await saveWorkspaceSession(session);
-                append(`Concertmaster conversation ${created.conversationId} · ${created.model}`);
+                appendSuccess(`Concertmaster conversation ${created.conversationId} · ${created.model}`);
               }
               const activeConversationId = session.conversationId;
               if (activeConversationId === undefined) throw new Error("Conversation was not created");
@@ -762,7 +766,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           }
         }
       } catch (error) {
-        append(`Input error: ${error instanceof Error ? error.message : "invalid input"}`);
+        appendError(`Input error: ${error instanceof Error ? error.message : "invalid input"}`);
       }
       editor.addToHistory(text);
     };
@@ -819,13 +823,13 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       if (matchesKey(data, "ctrl+c")) {
         if (conversationTurnController !== undefined) {
           conversationTurnController.abort();
-          append("Cancelling the active conversation turn…");
+          appendWarning("Cancelling the active conversation turn…");
           if (client !== undefined && project.kind === "attached" && session?.conversationId !== undefined) {
             void client
               .cancelConversation(session.conversationId, { projectId: project.projectId })
-              .then((cancelled) => append(`Conversation ${cancelled.conversationId}: ${cancelled.status}`))
+              .then((cancelled) => appendWarning(`Conversation ${cancelled.conversationId}: ${cancelled.status}`))
               .catch((error) =>
-                append(`Conversation cancellation unavailable: ${error instanceof Error ? error.message : "unknown error"}`),
+                appendError(`Conversation cancellation unavailable: ${error instanceof Error ? error.message : "unknown error"}`),
               );
           }
           return { consume: true };
@@ -845,17 +849,17 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       }
       if (accountLoginSelection !== undefined && accountLoginState === "waiting" && matchesKey(data, "alt+c")) {
         const url = accountLoginUrl;
-        if (url === undefined) append("The provider login link is not ready yet.");
+        if (url === undefined) appendWarning("The provider login link is not ready yet.");
         else {
           void (options.io.copyToClipboard ?? copyToClipboard)(url)
-            .then(() => append("Provider login link copied to the clipboard."))
-            .catch(() => append(`Clipboard unavailable. Copy this provider login link: ${url}`));
+            .then(() => appendSuccess("Provider login link copied to the clipboard."))
+            .catch(() => appendWarning(`Clipboard unavailable. Copy this provider login link: ${url}`));
         }
         return { consume: true };
       }
       if (accountLoginSelection !== undefined && accountLoginState === "waiting" && matchesKey(data, "escape")) {
         cancelAccountLogin();
-        append("Account login cancelled.");
+        appendWarning("Account login cancelled.");
         return { consume: true };
       }
       if (
@@ -873,7 +877,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     });
     const runtime = createTuiRuntime({ start: () => tui.start(), stop });
     runtime.start();
-    if (projectDiscoveryNotice !== undefined) append(projectDiscoveryNotice);
+    if (projectDiscoveryNotice !== undefined) appendWarning(projectDiscoveryNotice);
     void refreshDashboard();
     startActivity();
     if (project.kind === "attached") {
