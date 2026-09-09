@@ -164,12 +164,19 @@ export async function promptWorkerUnderOwnerClaim(
   prompt: string,
   proof: GoalLeaseProof,
 ): Promise<boolean> {
-  return withWorkerLease(pool, workerId, proof, async (_client, worker) => {
+  // Claim and validate the durable owner in a short transaction. Do not hold
+  // the worker row lock across provider execution: host effects may need to
+  // persist worker-scoped evidence or worktree state, and a held row lock would
+  // deadlock their foreign-key writes. The provider receives only the proof
+  // captured by this claim; any later durable mutation must recheck it.
+  const claimed = await withWorkerLease(pool, workerId, proof, async (_client, worker) => {
     if (worker.owner_id !== proof.ownerId || worker.owner_fencing_token !== proof.fencingToken) return false;
     if (worker.status === "succeeded" || worker.status === "failed" || worker.status === "cancelled" || worker.status === "unknown") return false;
-    await kernel.prompt(execution, prompt);
     return true;
   });
+  if (!claimed) return false;
+  await kernel.prompt(execution, prompt);
+  return true;
 }
 
 export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, request: SpawnWorkerRequest, proof: GoalLeaseProof, context: CouncilActorContext): Promise<Worker> {

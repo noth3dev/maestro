@@ -370,6 +370,31 @@ async function applyGoalControlTransition(
   );
   if (result.rowCount !== 1) throw new Error("Goal control invariant violated");
   const mode = controlModeForTransition(result.rows[0]!);
+  if (from === "recovering" && to === "active") {
+    const pending = await client.query(
+      `SELECT 1
+         FROM capability_decision_journal pending
+        WHERE pending.project_id = $1 AND pending.goal_id = $2
+          AND pending.capability_kind = 'ipython' AND pending.event = 'effect_result'
+          AND pending.details->>'outcome' = 'pending_unknown' AND pending.command_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM capability_decision_journal terminal
+             WHERE terminal.capability_kind = pending.capability_kind
+               AND terminal.project_id = pending.project_id AND terminal.goal_id = pending.goal_id
+               AND terminal.command_id = pending.command_id AND terminal.event = 'effect_result'
+               AND terminal.details->>'index' = pending.details->>'effectIndex'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM capability_effect_resolutions resolution
+             WHERE resolution.capability_kind = pending.capability_kind
+               AND resolution.project_id = pending.project_id AND resolution.goal_id = pending.goal_id
+               AND resolution.command_id = pending.command_id
+               AND resolution.effect_index = CASE WHEN pending.details->>'effectIndex' ~ '^[0-9]{1,10}$' AND (pending.details->>'effectIndex')::numeric BETWEEN 0 AND 2147483647 THEN (pending.details->>'effectIndex')::integer END
+          )`,
+      [command.projectId, command.goalId],
+    );
+    if (pending.rowCount !== 0) throw new InvalidGoalTransitionError(from, to);
+  }
   const update = async (sql: string, values: readonly unknown[] = [command.projectId, command.goalId]) => {
     await client.query(sql, values);
   };

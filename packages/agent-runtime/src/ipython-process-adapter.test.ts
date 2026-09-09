@@ -120,6 +120,7 @@ describe("IPython owned process channel", () => {
   it("routes a real child through collect and applies an approved host request once", async () => {
     const channel = createIpPythonOwnedProcessChannel({ pythonExecutable: "/usr/bin/python3", terminationGraceMs: 25 });
     const applied: string[] = [];
+    let consumed = 0;
     const kernel = createIpPythonTwoStageProcessKernel({
       createProcess: () => channel,
       prepareEffect: async (request) => ({
@@ -129,6 +130,7 @@ describe("IPython owned process channel", () => {
       }),
       fencingToken: "fence-1",
       approve: async (_effects, blockDigest) => ({ approvalId: "approval-1", blockDigest, fencingToken: "fence-1" }),
+      consumeApproval: async () => { consumed += 1; return true; },
       isFencingCurrent: () => true,
       recordEffectResult: async () => {},
       recordStageBoundary: async () => {},
@@ -136,6 +138,7 @@ describe("IPython owned process channel", () => {
     try {
       await expect(kernel.execute({ sessionId: "session-two-stage", code: "print(read_file('a.txt'))" })).resolves.toMatchObject({ state: "ok", content: "value\n" });
       expect(applied).toEqual(["read_file"]);
+      expect(consumed).toBe(1);
     } finally { await kernel.close?.(); }
   });
 

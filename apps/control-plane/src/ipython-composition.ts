@@ -15,6 +15,7 @@ import {
   type IpPythonKernel,
   type IpPythonRunCommandRequest,
   type IpPythonHostRequest,
+  type IpPythonExecutionResult,
   type IpPythonPreparedEffect,
   type IpPythonTwoStageExecutionOptions,
   type IpPythonProcessOrphanedEvent,
@@ -29,10 +30,12 @@ export interface IpPythonProductionCompositionOptions {
   /** Optional task-scoped local environment. Its adapters are composed here, never injected by Python. */
   readonly localEnvironment?: EnvironmentRecord;
   /** Required when local effects are enabled; local mutations use collect/approve/commit. */
-  readonly twoStage?: Pick<IpPythonTwoStageExecutionOptions, "fencingToken" | "approve" | "isFencingCurrent" | "recordEffectResult" | "recordStageBoundary">;
+  readonly twoStage?: Pick<IpPythonTwoStageExecutionOptions, "fencingToken" | "approve" | "consumeApproval" | "isFencingCurrent" | "recordEffectResult" | "recordStageBoundary">;
   readonly readEnvironment?: () => Promise<EnvironmentRecord | undefined>;
   readonly onStarted?: (event: IpPythonProcessStartedEvent) => void | Promise<void>;
   readonly onLifecycle?: (event: IpPythonProcessOrphanedEvent) => void | Promise<void>;
+  /** Receives redacted host-request outcomes; payloads must not leave this boundary. */
+  readonly onHostRequest?: (request: IpPythonHostRequest, result: IpPythonExecutionResult, binding?: IpPythonHostBinding) => void | Promise<void>;
 }
 
 function authorityContext(binding: IpPythonHostBinding): Omit<ActionRequest, "action" | "target"> {
@@ -54,10 +57,10 @@ function result(state: "ok" | "error" | "unknown" | "cancelled", content: string
   return { state, dataClass: "workspace" as const, content, ...(reason === undefined ? {} : { reason }) };
 }
 
-function environmentRequest(request: IpPythonRunCommandRequest, target: string) {
+function environmentRequest(request: IpPythonRunCommandRequest, target: string, workerId: string) {
   return {
     commandId: request.binding.commandId,
-    actorId: request.binding.operatorId,
+    actorId: workerId,
     action: request.action,
     target,
     policyVersion: request.binding.authorityPolicyVersion,
@@ -120,9 +123,9 @@ function createLocalEffects(options: { readonly authority: ReadOnlyFileAuthority
   };
   return createIpPythonLocalEffectsGateway({ scopeRoot: options.workspaceRoot, adapters: {
     writeFile: (request) => safe(() => filePort(request.binding).writeFile(request.path, request.content), () => "file written"),
-    runTest: (request) => observeEnvironment(runtime, environmentRequest(request, JSON.stringify([request.cwd, request.argv])), options.onHandle),
-    runShell: (request) => observeEnvironment(runtime, environmentRequest(request, JSON.stringify([request.cwd, request.argv])), options.onHandle),
-    runEnvironment: (request) => observeEnvironment(runtime, environmentRequest(request, JSON.stringify([request.cwd, request.argv])), options.onHandle),
+    runTest: (request) => observeEnvironment(runtime, environmentRequest(request, JSON.stringify([request.cwd, request.argv]), options.environment.workerId), options.onHandle),
+    runShell: (request) => observeEnvironment(runtime, environmentRequest(request, JSON.stringify([request.cwd, request.argv]), options.environment.workerId), options.onHandle),
+    runEnvironment: (request) => observeEnvironment(runtime, environmentRequest(request, JSON.stringify([request.cwd, request.argv]), options.environment.workerId), options.onHandle),
     gitCreateBranch: (request) => safe(() => gitPort(request.binding).createBranch(options.workspaceRoot, request.branchName, request.baseRevision), () => "branch created"),
     gitCreateWorktree: (request) => safe(() => gitPort(request.binding).createWorktree(options.workspaceRoot, request.worktreePath, request.branchName), () => "worktree created"),
     gitCommit: (request) => safe(() => gitPort(request.binding).commit(request.worktreePath, request.message, request.authorName, request.authorEmail), (value) => value.commitSha),
@@ -162,7 +165,18 @@ export function createIpPythonProductionKernel(
   });
   if (localEffects !== undefined && options.twoStage === undefined) throw new Error("IPython local effects require two-stage execution");
   const readOnlyHostRequest = createReadOnlyHostRequestHandler({ binding, gateway });
-  const hostRequest = localEffects === undefined ? readOnlyHostRequest : createLocalHostRequestHandler({ binding, readOnly: gateway, effects: localEffects });
+  const routedHostRequest = localEffects === undefined ? readOnlyHostRequest : createLocalHostRequestHandler({ binding, readOnly: gateway, effects: localEffects });
+  const hostRequest = async (request: IpPythonHostRequest, currentBinding?: IpPythonHostBinding): Promise<IpPythonExecutionResult> => {
+    try {
+      const response = await routedHostRequest(request, currentBinding);
+      await options.onHostRequest?.(request, response, currentBinding ?? binding);
+      return response;
+    } catch (error) {
+      const response: IpPythonExecutionResult = { state: "error", dataClass: "workspace", content: "IPython host request was rejected", reason: error instanceof Error ? error.name : "host_request_rejected" };
+      await options.onHostRequest?.(request, response, currentBinding ?? binding);
+      throw error;
+    }
+  };
   const prepareEffect = async (request: IpPythonHostRequest, requestBinding?: IpPythonHostBinding): Promise<IpPythonPreparedEffect> => {
     const currentBinding = requestBinding ?? binding;
     if (request.method === "read_file" || request.method === "git_revision") {

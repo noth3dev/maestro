@@ -137,6 +137,22 @@ describe("AuthorizedEffectExecutor effect claims", () => {
   });
 });
 
+
+
+describe("AuthorizedEffectExecutor explicit denials", () => {
+  it("records a boundary denial without consulting or invoking a grant", async () => {
+    let decisions = 0;
+    const repository: AuthorityRepository = {
+      load: async () => { throw new Error("load must not run"); },
+      appendDecision: async ({ decision }) => { decisions += 1; expect(decision).toMatchObject({ effect: "deny", reason: "worker_authority_boundary", request }); },
+      recheckControl: async () => ({ effect: "allow" }),
+    };
+    await expect(new AuthorizedEffectExecutor(repository, () => now).deny(request, "worker_authority_boundary")).resolves.toMatchObject({ effect: "deny", reason: "worker_authority_boundary", request });
+    expect(decisions).toBe(1);
+  });
+});
+
+
 describe("AuthorizedEffectExecutor control recheck", () => {
   it("does not call the effect when emergency stop latches after the audit", async () => {
     const ordinary: ActionRequest = {

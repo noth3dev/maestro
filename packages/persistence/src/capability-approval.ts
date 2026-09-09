@@ -72,6 +72,10 @@ export interface CapabilityConsumptionInput {
   readonly projectId: string;
   readonly goalId: string;
   readonly commandId: string;
+  /** Durable Worker admission identity used to associate a per-tool effect with its Worker. */
+  readonly admissionCommandId?: string;
+  /** Position within one effect block; defaults to zero for legacy single-effect callers. */
+  readonly effectIndex?: number;
   readonly action: string;
   readonly target: string;
   readonly policyVersion: number;
@@ -83,6 +87,26 @@ export interface CapabilityConsumptionResult {
   readonly consumed: boolean;
   readonly remainingCount: number | null;
   readonly remainingBudgetCents: number | null;
+}
+
+export type CapabilityEffectResolutionOutcome = "confirmed" | "aborted";
+
+export interface CapabilityEffectResolutionInput {
+  readonly claimId: string;
+  readonly approvalId: string;
+  readonly capabilityKind: string;
+  readonly projectId: string;
+  readonly goalId: string;
+  readonly commandId: string;
+  readonly effectIndex: number;
+  readonly outcome: CapabilityEffectResolutionOutcome;
+  readonly resolvedBy: string;
+  readonly reason: string;
+}
+
+export interface CapabilityEffectResolution extends CapabilityEffectResolutionInput {
+  readonly resolutionId: string;
+  readonly resolvedAt: Date;
 }
 
 export class CapabilityApprovalError extends Error {
@@ -223,37 +247,167 @@ export async function getCapabilitySession(pool: QueryExecutor, capabilityKind: 
   return result.rows[0] === undefined ? undefined : mapSession(result.rows[0]);
 }
 
-export async function consumeCapabilityApproval(pool: Pool, input: CapabilityConsumptionInput): Promise<CapabilityConsumptionResult> {
+export async function listCapabilityJournal(pool: QueryExecutor, capabilityKind: string, projectId: string, goalId: string, limit = 100): Promise<readonly CapabilityJournalEntry[]> {
+  if (![capabilityKind, projectId, goalId].every((value) => typeof value === "string" && value.trim() !== "")) throw new CapabilityApprovalError("Capability journal scope is required");
+  if (!Number.isSafeInteger(limit) || limit <= 0 || limit > 500) throw new CapabilityApprovalError("Capability journal limit is invalid");
+  const result = await pool.query<JournalRow>(
+    "SELECT * FROM capability_decision_journal WHERE capability_kind = $1 AND project_id = $2 AND goal_id = $3 ORDER BY recorded_at DESC, journal_id DESC LIMIT $4",
+    [capabilityKind, projectId, goalId, limit],
+  );
+  return result.rows.map(mapJournal);
+}
+
+function validateConsumptionInput(input: CapabilityConsumptionInput): number {
   for (const [value, label] of [[input.approvalId, "approvalId"], [input.capabilityKind, "capabilityKind"], [input.projectId, "projectId"], [input.goalId, "goalId"], [input.commandId, "commandId"], [input.action, "action"], [input.target, "target"], [input.controlEpoch, "controlEpoch"]] as const) requireText(value, label);
+  if (input.admissionCommandId !== undefined) requireText(input.admissionCommandId, "admissionCommandId");
+  if (input.effectIndex !== undefined && (!Number.isSafeInteger(input.effectIndex) || input.effectIndex < 0)) throw new CapabilityApprovalError("effectIndex must be a non-negative safe integer");
+  return input.effectIndex ?? 0;
+}
+
+async function consumeCapabilityApprovalInTransaction(client: PoolClient, input: CapabilityConsumptionInput): Promise<CapabilityConsumptionResult> {
+  const effectIndex = validateConsumptionInput(input);
+  const result = await client.query<ApprovalRow>("SELECT * FROM capability_approvals WHERE approval_id = $1 FOR SHARE", [input.approvalId]);
+  const approval = result.rows[0];
+  if (approval === undefined || approval.capability_kind !== input.capabilityKind || approval.project_id !== input.projectId || approval.goal_id !== input.goalId || approval.action !== input.action || approval.target !== input.target || approval.policy_version !== input.policyVersion || approval.control_epoch !== input.controlEpoch || Number(approval.budget_effect_cents) !== input.budgetEffectCents) throw new CapabilityApprovalScopeError("Capability request does not match the exact capability identity or Goal-scoped approval");
+  if (approval.revoked_at !== null) throw new CapabilityApprovalRevokedError("Capability approval is revoked");
+  if (approval.decision !== "approved") throw new CapabilityApprovalRejectedError("Capability approval was not approved");
+  const now = (await client.query<{ now: Date }>("SELECT clock_timestamp() AS now")).rows[0]!.now;
+  if (approval.expires_at <= now) throw new CapabilityApprovalExpiredError("Capability approval is expired");
+  const budgetResult = await client.query<BudgetRow>("SELECT * FROM capability_repetition_budgets WHERE approval_id = $1 FOR UPDATE", [input.approvalId]);
+  const budget = budgetResult.rows[0];
+  if (budget === undefined) throw new CapabilityApprovalError("Capability repetition budget is missing");
+  const existing = await client.query<{ approval_id: string; action: string; target: string; policy_version: number; budget_effect_cents: string; effect_index: number }>("SELECT approval_id, action, target, policy_version, budget_effect_cents, effect_index FROM capability_repetition_claims WHERE capability_kind = $1 AND goal_id = $2 AND command_id = $3 AND effect_index = $4 FOR SHARE", [input.capabilityKind, input.goalId, input.commandId, effectIndex]);
+  if (existing.rowCount === 1) {
+    const claim = existing.rows[0]!;
+    if (claim.approval_id !== input.approvalId || claim.action !== input.action || claim.target !== input.target || claim.policy_version !== input.policyVersion || Number(claim.budget_effect_cents) !== input.budgetEffectCents) throw new CapabilityApprovalConflictError("Command identity was reused with different capability content");
+    return { consumed: false, remainingCount: budget.remaining_count === null ? null : Number(budget.remaining_count), remainingBudgetCents: budget.remaining_budget_cents === null ? null : Number(budget.remaining_budget_cents) };
+  }
+  if (budget.expires_at !== null && budget.expires_at <= now) throw new CapabilityApprovalExpiredError("Capability repetition scope is expired");
+  if (budget.remaining_count !== null && Number(budget.remaining_count) <= 0) throw new RepetitionBudgetExhaustedError("Capability repetition count is exhausted");
+  if (budget.remaining_budget_cents !== null && Number(budget.remaining_budget_cents) < input.budgetEffectCents) throw new RepetitionBudgetExhaustedError("Capability repetition budget is exhausted");
+  await client.query(`INSERT INTO capability_repetition_claims (claim_id, approval_id, capability_kind, project_id, goal_id, command_id, effect_index, action, target, policy_version, budget_effect_cents) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, [randomUUID(), input.approvalId, input.capabilityKind, input.projectId, input.goalId, input.commandId, effectIndex, input.action, input.target, input.policyVersion, input.budgetEffectCents]);
+  const updated = await client.query<BudgetRow>("UPDATE capability_repetition_budgets SET remaining_count = CASE WHEN remaining_count IS NULL THEN NULL ELSE remaining_count - 1 END, remaining_budget_cents = CASE WHEN remaining_budget_cents IS NULL THEN NULL ELSE remaining_budget_cents - $2 END WHERE approval_id = $1 RETURNING *", [input.approvalId, input.budgetEffectCents]);
+  const next = updated.rows[0]!;
+  await insertJournal(client, { capabilityKind: input.capabilityKind, projectId: input.projectId, goalId: input.goalId, approvalId: input.approvalId, commandId: input.commandId, event: "effect_result", details: { outcome: "pending_unknown", effectIndex, action: input.action, target: input.target, ...(input.admissionCommandId === undefined ? {} : { admissionCommandId: input.admissionCommandId }) } });
+  return { consumed: true, remainingCount: next.remaining_count === null ? null : Number(next.remaining_count), remainingBudgetCents: next.remaining_budget_cents === null ? null : Number(next.remaining_budget_cents) };
+}
+
+/** Consume a complete effect block under one transaction, so a rejected later approval rolls back earlier repetition claims. */
+export async function consumeCapabilityApprovals(pool: Pool, inputs: readonly CapabilityConsumptionInput[]): Promise<readonly CapabilityConsumptionResult[]> {
+  inputs.forEach(validateConsumptionInput);
+  if (inputs.length === 0) return [];
   const client = await pool.connect();
   let open = false;
   try {
     await client.query("BEGIN"); open = true;
-    const result = await client.query<ApprovalRow>("SELECT * FROM capability_approvals WHERE approval_id = $1 FOR SHARE", [input.approvalId]);
-    const approval = result.rows[0];
-    if (approval === undefined || approval.capability_kind !== input.capabilityKind || approval.project_id !== input.projectId || approval.goal_id !== input.goalId || approval.action !== input.action || approval.target !== input.target || approval.policy_version !== input.policyVersion || approval.control_epoch !== input.controlEpoch || Number(approval.budget_effect_cents) !== input.budgetEffectCents) throw new CapabilityApprovalScopeError("Capability request does not match the exact capability identity or Goal-scoped approval");
-    if (approval.revoked_at !== null) throw new CapabilityApprovalRevokedError("Capability approval is revoked");
-    if (approval.decision !== "approved") throw new CapabilityApprovalRejectedError("Capability approval was not approved");
-    const now = (await client.query<{ now: Date }>("SELECT clock_timestamp() AS now")).rows[0]!.now;
-    if (approval.expires_at <= now) throw new CapabilityApprovalExpiredError("Capability approval is expired");
-    const budgetResult = await client.query<BudgetRow>("SELECT * FROM capability_repetition_budgets WHERE approval_id = $1 FOR UPDATE", [input.approvalId]);
-    const budget = budgetResult.rows[0];
-    if (budget === undefined) throw new CapabilityApprovalError("Capability repetition budget is missing");
-    const existing = await client.query<{ approval_id: string; action: string; target: string; policy_version: number; budget_effect_cents: string }>("SELECT approval_id, action, target, policy_version, budget_effect_cents FROM capability_repetition_claims WHERE capability_kind = $1 AND goal_id = $2 AND command_id = $3 FOR SHARE", [input.capabilityKind, input.goalId, input.commandId]);
-    if (existing.rowCount === 1) {
-      const claim = existing.rows[0]!;
-      if (claim.approval_id !== input.approvalId || claim.action !== input.action || claim.target !== input.target || claim.policy_version !== input.policyVersion || Number(claim.budget_effect_cents) !== input.budgetEffectCents) throw new CapabilityApprovalConflictError("Command identity was reused with different capability content");
-      await client.query("COMMIT"); open = false;
-      return { consumed: false, remainingCount: budget.remaining_count === null ? null : Number(budget.remaining_count), remainingBudgetCents: budget.remaining_budget_cents === null ? null : Number(budget.remaining_budget_cents) };
-    }
-    if (budget.expires_at !== null && budget.expires_at <= now) throw new CapabilityApprovalExpiredError("Capability repetition scope is expired");
-    if (budget.remaining_count !== null && Number(budget.remaining_count) <= 0) throw new RepetitionBudgetExhaustedError("Capability repetition count is exhausted");
-    if (budget.remaining_budget_cents !== null && Number(budget.remaining_budget_cents) < input.budgetEffectCents) throw new RepetitionBudgetExhaustedError("Capability repetition budget is exhausted");
-    await client.query(`INSERT INTO capability_repetition_claims (claim_id, approval_id, capability_kind, project_id, goal_id, command_id, action, target, policy_version, budget_effect_cents) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, [randomUUID(), input.approvalId, input.capabilityKind, input.projectId, input.goalId, input.commandId, input.action, input.target, input.policyVersion, input.budgetEffectCents]);
-    const updated = await client.query<BudgetRow>("UPDATE capability_repetition_budgets SET remaining_count = CASE WHEN remaining_count IS NULL THEN NULL ELSE remaining_count - 1 END, remaining_budget_cents = CASE WHEN remaining_budget_cents IS NULL THEN NULL ELSE remaining_budget_cents - $2 END WHERE approval_id = $1 RETURNING *", [input.approvalId, input.budgetEffectCents]);
-    const next = updated.rows[0]!;
-    await insertJournal(client, { capabilityKind: input.capabilityKind, projectId: input.projectId, goalId: input.goalId, approvalId: input.approvalId, commandId: input.commandId, event: "effect_result", details: { outcome: "consumed", action: input.action, target: input.target } });
+    const results: CapabilityConsumptionResult[] = [];
+    for (const input of inputs) results.push(await consumeCapabilityApprovalInTransaction(client, input));
+    // A replayed effect block is safe only when every effect is already
+    // claimed. Never commit a partially new block after one identity replay,
+    // or a retry could consume fresh repetition budget before being rejected.
+    if (results.some((result) => !result.consumed) && results.some((result) => result.consumed)) throw new CapabilityApprovalConflictError("Capability effect block was partially consumed");
     await client.query("COMMIT"); open = false;
-    return { consumed: true, remainingCount: next.remaining_count === null ? null : Number(next.remaining_count), remainingBudgetCents: next.remaining_budget_cents === null ? null : Number(next.remaining_budget_cents) };
+    return results;
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+}
+
+export interface PendingCapabilityEffect {
+  readonly commandId: string;
+  readonly effectIndex: number;
+  readonly admissionCommandId?: string;
+}
+
+/** Return effect claims that were durably consumed but have no terminal effect evidence. */
+export async function listPendingCapabilityEffects(pool: QueryExecutor, capabilityKind: string, projectId: string, goalId: string): Promise<readonly PendingCapabilityEffect[]> {
+  for (const [value, label] of [[capabilityKind, "capabilityKind"], [projectId, "projectId"], [goalId, "goalId"]] as const) requireText(value, label);
+  const result = await pool.query<{ command_id: string; effect_index: number; admission_command_id: string | null }>(
+    `SELECT pending.command_id, CASE WHEN pending.details->>'effectIndex' ~ '^[0-9]{1,10}$' AND (pending.details->>'effectIndex')::numeric BETWEEN 0 AND 2147483647 THEN (pending.details->>'effectIndex')::integer END AS effect_index, pending.details->>'admissionCommandId' AS admission_command_id
+       FROM capability_decision_journal pending
+      WHERE pending.capability_kind = $1 AND pending.project_id = $2 AND pending.goal_id = $3
+        AND pending.event = 'effect_result' AND pending.details->>'outcome' = 'pending_unknown'
+        AND pending.command_id IS NOT NULL
+        AND pending.details->>'effectIndex' ~ '^[0-9]{1,10}$'
+        AND (pending.details->>'effectIndex')::numeric BETWEEN 0 AND 2147483647
+        AND NOT EXISTS (
+          SELECT 1 FROM capability_decision_journal terminal
+           WHERE terminal.capability_kind = pending.capability_kind AND terminal.project_id = pending.project_id
+             AND terminal.goal_id = pending.goal_id AND terminal.command_id = pending.command_id
+             AND terminal.event = 'effect_result'
+             AND terminal.details->>'index' = pending.details->>'effectIndex'
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM capability_effect_resolutions resolution
+           WHERE resolution.capability_kind = pending.capability_kind AND resolution.project_id = pending.project_id
+             AND resolution.goal_id = pending.goal_id AND resolution.command_id = pending.command_id
+             AND resolution.effect_index = CASE WHEN pending.details->>'effectIndex' ~ '^[0-9]{1,10}$' AND (pending.details->>'effectIndex')::numeric BETWEEN 0 AND 2147483647 THEN (pending.details->>'effectIndex')::integer END
+        )
+      ORDER BY pending.recorded_at, pending.journal_id`,
+    [capabilityKind, projectId, goalId],
+  );
+  return result.rows.map((row) => ({ commandId: row.command_id, effectIndex: row.effect_index, ...(row.admission_command_id === null ? {} : { admissionCommandId: row.admission_command_id }) }));
+}
+
+function validateResolutionInput(input: CapabilityEffectResolutionInput): void {
+  for (const [value, label] of [[input.claimId, "claimId"], [input.approvalId, "approvalId"], [input.capabilityKind, "capabilityKind"], [input.projectId, "projectId"], [input.goalId, "goalId"], [input.commandId, "commandId"], [input.resolvedBy, "resolvedBy"], [input.reason, "reason"]] as const) requireText(value, label);
+  if (!Number.isSafeInteger(input.effectIndex) || input.effectIndex < 0) throw new CapabilityApprovalError("effectIndex must be a non-negative safe integer");
+  if (input.outcome !== "confirmed" && input.outcome !== "aborted") throw new CapabilityApprovalError("resolution outcome is invalid");
+}
+
+/** Resolve one pending effect only after an operator has supplied terminal evidence. */
+export async function resolveCapabilityEffect(pool: Pool, input: CapabilityEffectResolutionInput): Promise<CapabilityEffectResolution> {
+  validateResolutionInput(input);
+  const client = await pool.connect();
+  let open = false;
+  try {
+    await client.query("BEGIN"); open = true;
+    const claimResult = await client.query<{ claim_id: string; approval_id: string; capability_kind: string; project_id: string; goal_id: string; command_id: string; effect_index: number; action: string; target: string; policy_version: number; budget_effect_cents: string }>(
+      "SELECT claim_id, approval_id, capability_kind, project_id, goal_id, command_id, effect_index, action, target, policy_version, budget_effect_cents FROM capability_repetition_claims WHERE claim_id = $1 FOR UPDATE", [input.claimId],
+    );
+    const claim = claimResult.rows[0];
+    if (claim === undefined || claim.approval_id !== input.approvalId || claim.capability_kind !== input.capabilityKind || claim.project_id !== input.projectId || claim.goal_id !== input.goalId || claim.command_id !== input.commandId || claim.effect_index !== input.effectIndex) throw new CapabilityApprovalScopeError("Capability effect resolution does not match the exact repetition claim");
+    const existingResolution = await client.query<{ resolution_id: string; claim_id: string; approval_id: string; capability_kind: string; project_id: string; goal_id: string; command_id: string; effect_index: number; outcome: CapabilityEffectResolutionOutcome; resolved_by: string; reason: string; resolved_at: Date }>(
+      "SELECT * FROM capability_effect_resolutions WHERE capability_kind = $1 AND goal_id = $2 AND command_id = $3 AND effect_index = $4 FOR SHARE", [input.capabilityKind, input.goalId, input.commandId, input.effectIndex],
+    );
+    const existing = existingResolution.rows[0];
+    if (existing !== undefined) {
+      if (existing.claim_id !== input.claimId || existing.approval_id !== input.approvalId || existing.project_id !== input.projectId || existing.outcome !== input.outcome || existing.resolved_by !== input.resolvedBy || existing.reason !== input.reason) throw new CapabilityApprovalConflictError("Capability effect resolution identity was reused with different content");
+      await client.query("COMMIT"); open = false;
+      return { resolutionId: existing.resolution_id, claimId: existing.claim_id, approvalId: existing.approval_id, capabilityKind: existing.capability_kind, projectId: existing.project_id, goalId: existing.goal_id, commandId: existing.command_id, effectIndex: existing.effect_index, outcome: existing.outcome, resolvedBy: existing.resolved_by, reason: existing.reason, resolvedAt: existing.resolved_at };
+    }
+    const pending = await client.query(
+      `SELECT 1 FROM capability_decision_journal pending
+        WHERE pending.capability_kind = $1 AND pending.project_id = $2 AND pending.goal_id = $3
+          AND pending.command_id = $4 AND pending.event = 'effect_result'
+          AND pending.details->>'outcome' = 'pending_unknown'
+          AND CASE WHEN pending.details->>'effectIndex' ~ '^[0-9]{1,10}$' AND (pending.details->>'effectIndex')::numeric BETWEEN 0 AND 2147483647 THEN (pending.details->>'effectIndex')::integer END = $5
+          AND NOT EXISTS (SELECT 1 FROM capability_decision_journal terminal
+                           WHERE terminal.capability_kind = pending.capability_kind AND terminal.project_id = pending.project_id
+                             AND terminal.goal_id = pending.goal_id AND terminal.command_id = pending.command_id
+                             AND terminal.event = 'effect_result' AND terminal.details->>'index' = pending.details->>'effectIndex')`,
+      [input.capabilityKind, input.projectId, input.goalId, input.commandId, input.effectIndex],
+    );
+    if (pending.rowCount !== 1) throw new CapabilityApprovalConflictError("Capability effect is not pending reconciliation");
+    if (input.outcome === "aborted") {
+      const restored = await client.query(
+        `UPDATE capability_repetition_budgets
+            SET remaining_count = CASE WHEN remaining_count IS NULL THEN NULL ELSE remaining_count + 1 END,
+                remaining_budget_cents = CASE WHEN remaining_budget_cents IS NULL THEN NULL ELSE remaining_budget_cents + $2 END
+          WHERE approval_id = $1`, [input.approvalId, Number(claim.budget_effect_cents)],
+      );
+      if (restored.rowCount !== 1) throw new CapabilityApprovalError("Capability repetition budget is missing");
+    }
+    const inserted = await client.query<{ resolution_id: string; resolved_at: Date }>(
+      `INSERT INTO capability_effect_resolutions
+       (resolution_id, claim_id, approval_id, capability_kind, project_id, goal_id, command_id, effect_index, outcome, resolved_by, reason)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING resolution_id, resolved_at`,
+      [randomUUID(), input.claimId, input.approvalId, input.capabilityKind, input.projectId, input.goalId, input.commandId, input.effectIndex, input.outcome, input.resolvedBy, input.reason],
+    );
+    await insertJournal(client, { capabilityKind: input.capabilityKind, projectId: input.projectId, goalId: input.goalId, approvalId: input.approvalId, commandId: input.commandId, event: "effect_result", details: { outcome: `resolved_${input.outcome}`, effectIndex: input.effectIndex, reason: input.reason } });
+    await client.query("COMMIT"); open = false;
+    return { ...input, resolutionId: inserted.rows[0]!.resolution_id, resolvedAt: inserted.rows[0]!.resolved_at };
+  } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+}
+
+export async function consumeCapabilityApproval(pool: Pool, input: CapabilityConsumptionInput): Promise<CapabilityConsumptionResult> {
+  return (await consumeCapabilityApprovals(pool, [input]))[0]!;
 }

@@ -43,6 +43,7 @@ import {
   MissionBundleSchema,
   SpawnWorkerInputSchema,
   WorkerSchema,
+  WorkerObservationSchema,
   WorkerActionInputSchema,
   GoalIntegrationBranchInputSchema,
   GoalIntegrationBranchSchema,
@@ -118,6 +119,7 @@ import {
   type MissionBundle,
   type SpawnWorkerInput,
   type Worker,
+  type WorkerObservation,
   type WorkerActionInput,
   type GoalIntegrationBranchInput,
   type GoalIntegrationBranch,
@@ -203,7 +205,7 @@ export interface ApiClient {
   getMissionBundle(councilId: string, departmentId: string, planVersion: number, itemId: string, projectId: string): Promise<MissionBundle>;
   spawnWorker(councilId: string, departmentId: string, input: SpawnWorkerInput, commandId: string): Promise<Worker>;
   getWorker(workerId: string, projectId: string): Promise<Worker>;
-  observeWorker(workerId: string, input: WorkerActionInput, commandId: string): Promise<Worker>;
+  observeWorker(workerId: string, input: WorkerActionInput, commandId: string): Promise<WorkerObservation>;
   cancelWorker(workerId: string, input: WorkerActionInput, commandId: string): Promise<Worker>;
   createGoalIntegrationBranch(goalId: string, input: GoalIntegrationBranchInput, commandId: string): Promise<GoalIntegrationBranch>;
   freezeGoalIntegrationRevision(goalId: string, input: DepartmentBranchInput, commandId: string): Promise<GoalIntegrationRevision>;
@@ -598,7 +600,7 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
       return request(`v1/workers/${encodeURIComponent(UuidSchema.parse(workerId))}/observe`, {
         method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
         body: JSON.stringify(WorkerActionInputSchema.parse(input)),
-      }, WorkerSchema);
+      }, WorkerObservationSchema);
     },
     cancelWorker(workerId, input, commandId) {
       return request(`v1/workers/${encodeURIComponent(UuidSchema.parse(workerId))}/cancel`, {
@@ -718,4 +720,4 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
   };
 }
 
-export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, GoalGitIntegrationState, WorkerList, ImprovementDigestList };
+export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, GoalGitIntegrationState, WorkerList, WorkerObservation, ImprovementDigestList };
