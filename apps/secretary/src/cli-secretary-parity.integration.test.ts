@@ -60,6 +60,9 @@ if (!databaseUrl) {
                 actorId: "maestro-control-plane",
         leaseOwnerId: `cli-secretary-parity-${randomUUID()}`,
         reconcilerLeaseDurationMs: 30_000,
+        modelRoutingMode: "pin",
+        modelGatewayOperatorId: "test-gateway-operator",
+        modelAccountRefs: {},
       });
       await controlPlane.listen();
       const address = controlPlane.app.server.address();

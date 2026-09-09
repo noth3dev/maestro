@@ -91,7 +91,6 @@ export class PostgresAuthorityRepository implements AuthorityRepository {
     );
     return result.rows.map(toAuthorityRecord);
   }
-
   async appendDecision(audit: AuthorityDecisionAudit): Promise<void> {
     const { decision, decidedAt } = audit;
     const request = decision.request;

@@ -40,7 +40,16 @@ interface MissionBundleRow {
   content_hash: string;
 }
 
+function freezeBundleValue<T>(value: T): T {
+  if (value !== null && typeof value === "object") {
+    for (const child of Object.values(value as Record<string, unknown>)) freezeBundleValue(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
 function mapBundle(row: MissionBundleRow): MissionBundle {
+  const substance = freezeBundleValue(structuredClone(row.substance));
   return {
     councilId: row.council_id,
     departmentId: row.department_id,
@@ -48,7 +57,7 @@ function mapBundle(row: MissionBundleRow): MissionBundle {
     planContentHash: row.plan_content_hash.trim(),
     itemId: row.item_id,
     parentRef: row.parent_ref,
-    substance: row.substance,
+    substance,
     contentHash: row.content_hash.trim(),
   };
 }

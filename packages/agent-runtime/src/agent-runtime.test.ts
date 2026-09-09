@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { InvocationObservation, ModelIdentity } from "@maestro/domain";
 import type { GatewayBinding, ModelGatewayPort, ModelTurnResult, TurnLimits } from "./model-provider.js";
 import { createMaestroAgentRuntime, ToolRegistry } from "./agent-runtime.js";
+import { createIpPythonTool, deriveIpPythonToolCallCommandId } from "./ipython-tool.js";
 
 const identity: ModelIdentity = { provider: "fake", id: "model-a" };
 const binding: GatewayBinding = { bindingId: "binding-1", gatewayInstanceId: "gateway-1", provider: identity, account: { providerId: "fake", accountRef: "account-1", authMode: "api-key" }, dataPolicyHash: "policy-1" };
@@ -27,6 +28,39 @@ function gateway(): ModelGatewayPort & { calls: number } {
 }
 
 describe("native Maestro agent runtime", () => {
+  it("derives IPython effect command identity from the admission, turn, and tool call", async () => {
+    const requests: unknown[] = [];
+    let calls = 0;
+    const modelGateway: ModelGatewayPort = {
+      async listModels() { return []; },
+      async admit() { return binding; },
+      async turn(request): Promise<ModelTurnResult> {
+        calls += 1;
+        if (calls === 1) return { requestId: request.requestId, model: identity, text: "", toolCalls: [{ id: "ipython-call-1", name: "ipython", arguments: { state: "valid", value: { code: "print('ok')" } } }], stopReason: "tool_use", usage: { state: "unknown" } };
+        return { requestId: request.requestId, model: identity, text: "done", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
+      },
+      async cancel() { return { state: "confirmed" as const }; },
+      async recover() { return "reconnected" as const; },
+      async close() {},
+    };
+    const sessions = {
+      async execute(request: unknown) { requests.push(request); return { state: "ok" as const, dataClass: "workspace" as const, content: "ok" }; },
+      async interrupt() {},
+      async close() {},
+    };
+    const tools = new ToolRegistry();
+    tools.register(createIpPythonTool({ sessions }));
+    const ipythonGrant = { ...grant, allowedTools: ["ipython"], outboundDataClasses: ["workspace"], pathScope: ["/workspace"] } as const;
+    const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools });
+    const spawned = await runtime.spawn({ name: "worker", modelPolicy: ["fake/model-a"], idempotencyKey: "worker-admission-1", context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1", authorityPolicyVersion: 1, controlEpoch: "epoch-1", budgetEffectCents: 0 }, grant: ipythonGrant });
+    await runtime.prompt(spawned.execution, "run the Python tool");
+
+    const request = requests[0] as { binding: { commandId: string; admissionCommandId?: string; toolCallId: string }; };
+    const expected = deriveIpPythonToolCallCommandId("worker-admission-1", `${spawned.invocation}-turn-1`, "ipython-call-1");
+    expect(request.binding.commandId).toBe(expected);
+    expect(request.binding.admissionCommandId).toBe("worker-admission-1");
+    expect(request.binding.toolCallId).toBe("ipython-call-1");
+  });
   it("executes only registered tools with host-owned context and bounded continuation", async () => {
     const modelGateway = gateway();
     const execute = vi.fn(async (args: unknown, context: { projectId: string; goalId: string }) => ({ status: "ok" as const, content: JSON.stringify({ projectId: context.projectId, goalId: context.goalId, args }) }));

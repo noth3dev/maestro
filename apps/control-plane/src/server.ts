@@ -82,6 +82,7 @@ import {
   MissionBundleSchema,
   SpawnWorkerInputSchema,
   WorkerSchema,
+  WorkerObservationSchema,
   WorkerActionInputSchema,
   GoalIntegrationBranchInputSchema,
   GoalIntegrationBranchSchema,
@@ -701,7 +702,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const input = parse(WorkerActionInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
     const worker = await workers.observe(workerId, input.projectId, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(200).send(WorkerSchema.parse(worker));
+    return reply.status(200).send(WorkerObservationSchema.parse(worker));
   });
 
   app.post("/v1/workers/:workerId/cancel", async (request, reply) => {

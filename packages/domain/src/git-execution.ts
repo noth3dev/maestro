@@ -15,6 +15,8 @@ export interface GitPort {
   /** Read HEAD for a worktree, or a named ref when repositoryPath is a repository. */
   headRevision(repositoryPath: string, ref?: string): Promise<string>;
   removeWorktree(repositoryPath: string, worktreePath: string): Promise<void>;
+  /** Removes an unreferenced local branch during failed workspace provisioning. */
+  removeBranch?(repositoryPath: string, branchName: string): Promise<void>;
 }
 
 export interface GoalIntegrationBranch {

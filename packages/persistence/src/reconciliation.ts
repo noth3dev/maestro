@@ -480,15 +480,44 @@ async function reconcileOrphanedWorkers(
   leaseDurationMs: number,
   renewLeader: () => Promise<void>,
 ): Promise<readonly string[]> {
-  if (!kernel) return [];
-  const workersResult = await pool.query<{ worker_id: string }>(
-    `SELECT w.worker_id
+  const workersResult = await pool.query<{ worker_id: string; pending_effect: boolean }>(
+    `WITH pending_effect_workers AS (
+       SELECT DISTINCT w.worker_id
+         FROM workers w
+         JOIN head_councils hc ON hc.council_id = w.council_id
+         JOIN capability_decision_journal pending
+           ON pending.project_id = (SELECT project_id FROM goals WHERE goal_id = hc.goal_id)
+          AND pending.goal_id = hc.goal_id
+          AND pending.capability_kind = 'ipython'
+          AND pending.event = 'effect_result'
+          AND pending.details->>'outcome' = 'pending_unknown'
+          AND pending.details->>'admissionCommandId' = w.spawn_command_id::text
+        WHERE hc.goal_id = $1::uuid
+          AND NOT EXISTS (
+            SELECT 1 FROM capability_decision_journal terminal
+             WHERE terminal.capability_kind = pending.capability_kind
+               AND terminal.project_id = pending.project_id AND terminal.goal_id = pending.goal_id
+               AND terminal.command_id = pending.command_id AND terminal.event = 'effect_result'
+               AND terminal.details->>'index' = pending.details->>'effectIndex'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM capability_effect_resolutions resolution
+             WHERE resolution.capability_kind = pending.capability_kind
+               AND resolution.project_id = pending.project_id AND resolution.goal_id = pending.goal_id
+               AND resolution.command_id = pending.command_id
+               AND resolution.effect_index = CASE WHEN pending.details->>'effectIndex' ~ '^[0-9]{1,10}$' AND (pending.details->>'effectIndex')::numeric BETWEEN 0 AND 2147483647 THEN (pending.details->>'effectIndex')::integer END
+          )
+     )
+     SELECT w.worker_id, (pending_effect_workers.worker_id IS NOT NULL) AS pending_effect
        FROM workers w
        JOIN head_councils hc ON hc.council_id = w.council_id
-      WHERE hc.goal_id = $1 AND w.status IN ('spawned', 'running', 'unknown')`,
+       LEFT JOIN pending_effect_workers ON pending_effect_workers.worker_id = w.worker_id
+      WHERE hc.goal_id = $1::uuid AND (w.status IN ('spawned', 'running', 'unknown') OR pending_effect_workers.worker_id IS NOT NULL)`,
     [goalId],
   );
   if (workersResult.rowCount === 0) return [];
+  const pendingEffectWorkers = new Set(workersResult.rows.filter((row) => row.pending_effect).map((row) => row.worker_id));
+  if (!kernel) return [...pendingEffectWorkers];
   // Reacquire a current fenced Goal lease before every observation/write. The
   // earlier startup snapshot is only a hint; a legitimate owner may have
   // acquired the Goal between that snapshot and this reconciliation pass.
@@ -504,8 +533,10 @@ async function reconcileOrphanedWorkers(
     for (const { worker_id: workerId } of workersResult.rows) {
       await renewLeader();
       proof = await renewGoalLease(pool, proof, leaseDurationMs);
-      const recovered = await recoverWorkerAfterRestart(pool, workerId, proof, "Provider session is unavailable after control-plane restart");
-      if (recovered.recoveryState === "fenced") reconciled.push(workerId);
+      const recovered = await recoverWorkerAfterRestart(pool, workerId, proof, pendingEffectWorkers.has(workerId)
+        ? "IPython capability effect outcome is pending; operator reconciliation is required"
+        : "Provider session is unavailable after control-plane restart");
+      if (pendingEffectWorkers.has(workerId) || recovered.recoveryState === "fenced") reconciled.push(workerId);
     }
   } finally {
     try { await releaseGoalLease(pool, proof); } catch { /* stale proof is already fenced */ }

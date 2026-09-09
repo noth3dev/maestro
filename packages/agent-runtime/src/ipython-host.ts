@@ -194,14 +194,16 @@ export interface IpPythonTwoStageExecutionOptions {
     mode: IpPythonTwoStageMode,
     hostRequest: (request: IpPythonHostRequest) => Promise<IpPythonExecutionResult>,
   ) => Promise<IpPythonExecutionResult>;
-  readonly approve: (effects: readonly IpPythonHostRequest[], blockDigest: string) => IpPythonBlockApproval | false | Promise<IpPythonBlockApproval | false>;
+  readonly approve: (effects: readonly IpPythonHostRequest[], blockDigest: string, binding?: IpPythonSessionBinding) => IpPythonBlockApproval | false | Promise<IpPythonBlockApproval | false>;
+  /** Consume persisted repetition budgets before stage-two preparation or effects. */
+  readonly consumeApproval?: (approval: IpPythonBlockApproval, effects: readonly IpPythonHostRequest[], binding?: IpPythonSessionBinding) => boolean | Promise<boolean>;
   readonly isFencingCurrent: (fencingToken: string) => boolean | Promise<boolean>;
   readonly isStopRequested: () => boolean | Promise<boolean>;
   readonly prepareEffect: (request: IpPythonHostRequest) => IpPythonPreparedEffect | Promise<IpPythonPreparedEffect>;
   /** Persist every applied and skipped effect outcome before returning. */
-  readonly recordEffectResult: (index: number, request: IpPythonHostRequest, result: IpPythonExecutionResult) => void | Promise<void>;
+  readonly recordEffectResult: (index: number, request: IpPythonHostRequest, result: IpPythonExecutionResult, binding?: IpPythonSessionBinding) => void | Promise<void>;
   /** Persist each stage boundary, including empty and rejected stages. */
-  readonly recordStageBoundary: (boundary: IpPythonStageBoundary) => void | Promise<void>;
+  readonly recordStageBoundary: (boundary: IpPythonStageBoundary, binding?: IpPythonSessionBinding) => void | Promise<void>;
 }
 
 function canonicalHostPayload(value: unknown): string {
@@ -249,14 +251,15 @@ export async function executeIpPythonBlockInTwoStages(options: IpPythonTwoStageE
   const queued: IpPythonHostRequest[] = [];
   const prepared: Array<IpPythonPreparedEffect | undefined> = [];
   const committed = new Set<number>();
+  const requestBinding = options.request.binding;
   const requestDigest = (effects: readonly IpPythonHostRequest[]) => blockDigest(options.request, effects);
   let journalFailed = false;
   const boundary = async (value: IpPythonStageBoundary): Promise<boolean> => {
-    try { await options.recordStageBoundary(value); return true; }
+    try { await options.recordStageBoundary(value, requestBinding); return true; }
     catch { journalFailed = true; return false; }
   };
   const effectRecord = async (index: number, effect: IpPythonHostRequest, result: IpPythonExecutionResult): Promise<boolean> => {
-    try { await options.recordEffectResult(index, effect, result); return true; }
+    try { await options.recordEffectResult(index, effect, result, requestBinding); return true; }
     catch { journalFailed = true; return false; }
   };
   const stopRequested = async (): Promise<boolean> => {
@@ -314,7 +317,7 @@ export async function executeIpPythonBlockInTwoStages(options: IpPythonTwoStageE
   }
 
   let approval: IpPythonBlockApproval | false;
-  try { approval = await options.approve(collected, collectedDigest); }
+  try { approval = await options.approve(collected, collectedDigest, requestBinding); }
   catch (error) {
     const skipped = await skip(collected, "approval_failed");
     const boundaryWritten = await boundary({ stage: "approval", outcome: "failed", sessionId: options.request.sessionId, fencingToken: options.fencingToken, blockDigest: collectedDigest, intentCount: collected.length, appliedCount: 0, skippedCount: collected.length, reason: "approval_failed" });
@@ -392,6 +395,7 @@ export async function executeIpPythonBlockInTwoStages(options: IpPythonTwoStageE
 
   let appliedCount = 0;
   let finalCommitResult = stageTwo;
+  let approvalConsumed = options.consumeApproval === undefined;
   for (let index = 0; index < prepared.length; index += 1) {
     const stop = await stopRequested();
     const fence = await fenceCurrent();
@@ -403,6 +407,17 @@ export async function executeIpPythonBlockInTwoStages(options: IpPythonTwoStageE
       if (!skipped || !boundaryWritten) return unknownResult("journal_failed");
       if (!rolledBack) return unknownResult("rollback_failed");
       return appliedCount > 0 ? partialCommitResult(appliedCount, reason) : (stop ? { state: "cancelled", dataClass: "workspace", content: `IPython effect queue stopped after ${appliedCount} effect(s)`, reason } : unknownResult(reason, `IPython effect queue stopped after ${appliedCount} effect(s)`));
+    }
+    if (!approvalConsumed) {
+      let consumed = false;
+      try { consumed = await options.consumeApproval!(approved, collected, requestBinding); } catch { consumed = false; }
+      if (!consumed) {
+        const skipped = await skip(collected, "approval_consumption_rejected");
+        const boundaryWritten = await boundary({ stage: "execute", outcome: "rejected", sessionId: options.request.sessionId, fencingToken: options.fencingToken, blockDigest: collectedDigest, approvedBlockDigest: approved.blockDigest, intentCount: collected.length, appliedCount: 0, skippedCount: collected.length, reason: "approval_consumption_rejected" });
+        if (!skipped || !boundaryWritten) return unknownResult("journal_failed");
+        return errorResult("approval_consumption_rejected", "IPython block approval repetition scope was exhausted or already consumed");
+      }
+      approvalConsumed = true;
     }
     const item = prepared[index];
     if (item === undefined) return unknownResult("stage_two_failed");
@@ -584,7 +599,7 @@ function validateHostResult(value: IpPythonExecutionResult, binding: IpPythonHos
 }
 
 function stableBindingKey(binding: IpPythonHostBinding): string {
-  const { commandId: _commandId, toolCallId: _toolCallId, ...stableBinding } = binding;
+  const { admissionCommandId: _admissionCommandId, commandId: _commandId, toolCallId: _toolCallId, ...stableBinding } = binding;
   return JSON.stringify(stableBinding);
 }
 

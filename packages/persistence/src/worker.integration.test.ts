@@ -10,6 +10,7 @@ import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { bindWorkerInvocation, cancelUnboundWorkerAfterBindingFailure, cancelWorker, countActiveWorkersForProject, listWorkersForGoal, markWorkerTerminal, markWorkerUnknown, observeWorker, promptWorkerUnderOwnerClaim, readWorker, recoverWorkerAfterRestart, spawnWorker, WorkerError, WorkerNotFoundError } from "./worker.js";
 import { reconcileOnStartup } from "./reconciliation.js";
+import { consumeCapabilityApproval, createCapabilityApproval } from "./capability-approval.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -676,6 +677,32 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
 
     await cancelWorker(pool, kernel, worker.workerId, proof, headContext("product"));
     expect(await countActiveWorkersForProject(pool, projectId)).toBe(0);
+  });
+
+  it("keeps a Goal recovering when a Worker has a pending capability effect after a restart", async () => {
+    const { council, plan, proof, goalId, projectId } = await setupBundle();
+    const kernel = fakeKernel("running");
+    const admissionCommandId = randomUUID();
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1", commandId: admissionCommandId }, proof, headContext("product"));
+    const approvalId = randomUUID();
+    await createCapabilityApproval(pool, {
+      approvalId, capabilityKind: "ipython", projectId, goalId, commandId: randomUUID(), action: "project.file.edit", target: "/workspace/a.txt",
+      policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10, tier: "Department Head", approverId: "head-product", decision: "approved",
+      expiresAt: new Date("2030-01-01T00:00:00Z"), repetitionScope: { kind: "bounded_count", count: 1 },
+    });
+    await consumeCapabilityApproval(pool, {
+      approvalId, capabilityKind: "ipython", projectId, goalId, commandId: randomUUID(), admissionCommandId, action: "project.file.edit", target: "/workspace/a.txt",
+      policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10,
+    });
+    await pool.query("UPDATE goal_leases SET expires_at = clock_timestamp() - interval '1 millisecond' WHERE goal_id = $1", [goalId]);
+
+    const report = await reconcileOnStartup(pool, { ownerId: "reconciler-pending-effect", kernel });
+
+    expect(report.results).toEqual([{
+      goalId, projectId, priorState: "active", outcome: "recovering", reasons: ["orphaned_workers_reconciled"],
+      reconciledWorkerIds: [worker.workerId], reconciledHeadActivationCommandIds: [],
+    }]);
+    await expect(readWorker(pool, worker.workerId)).resolves.toMatchObject({ status: "unknown", recoveryState: "fenced" });
   });
 
   it("lists every worker whose Head Council is bound to the Goal, for the Secretary/CLI roster view", async () => {

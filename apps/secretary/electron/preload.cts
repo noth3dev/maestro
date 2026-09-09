@@ -8,7 +8,13 @@ const exposedApiMethods = [
   "listGoals", "getGoal", "getBudgetSummary", "listEvents",
   "createTaskContract", "getTaskContract", "updateTaskContract", "selectOvertureRoles", "confirmTaskContract", "launchTaskContract",
   "pauseGoal", "resumeGoal", "stopGoal", "emergencyStopGoal",
-  "listCertifications", "listMetronomeChallenges", "listEncoreCouncilRounds", "getConcertmasterReport",
+  "requestCriticalAction", "approveAndRunCriticalAction",
+  "createCouncil", "submitCouncilBrief", "revealCouncil", "decideCouncil",
+  "createDepartmentPlan", "createMissionBundle", "spawnWorker", "cancelWorker",
+  "createGoalIntegrationBranch", "createDepartmentBranch", "createWorkerWorktree",
+  "acceptWorker", "certifyWorker", "certifyConditionalWorker",
+  "requestMetronomeCorrection", "requestMetronomeSafePause",
+  "listCertifications", "listMetronomeChallenges", "listEncoreCouncilRounds", "getConcertmasterReport", "getGitIntegrationState", "listWorkersForGoal", "listImprovementDigestsForGoal",
 ] as const;
 
 const api = Object.fromEntries(
