@@ -120,7 +120,7 @@ describeDatabase("authenticated Head activation API", () => {
     const { kernel: executionKernel } = kernel();
     const { git: testGit, createBranch } = gitPort();
     process.env.MAESTRO_WORKTREE_ROOT = "/tmp";
-    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, actorId: "maestro-control-plane", leaseOwnerId: `council-api-${randomUUID()}` }, { executionKernel, gitPort: testGit });
+    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, actorId: "maestro-control-plane", leaseOwnerId: `council-api-${randomUUID()}`, modelRoutingMode: "pin", nativeModelRef: "test/model-a", modelAccountRefs: { test: "test-account" } }, { executionKernel, gitPort: testGit });
     await controlPlane.listen();
     const address = controlPlane.app.server.address();
     if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
