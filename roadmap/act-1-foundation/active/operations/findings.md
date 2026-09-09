@@ -1620,3 +1620,9 @@ All downstream routing documentation must use this contract and must not restore
 - The initial S5 review findings are closed by `12ecc54`: tier derivation now uses S1 classification, actor and resolver identities are strictly Goal-scoped and authenticated through an adapter, skipped intermediates cannot bypass user authorization, control epochs are checked at consumption, and safer alternatives are recorded once in the decision journal.
 - The CLI carries selected scope through confirmation and rejects bounded/session scope before mutation when the legacy endpoint cannot persist it. The capability approval service persists the requested repetition scope for the S6 API composition boundary.
 - Independent re-review: **`REVIEW: PASS`**. PostgreSQL integration remains unrun in this worktree because no test database URL was configured; the existing S2 PostgreSQL evidence remains the database gate.
+
+
+## 2026-09-09 — S5 post-merge verification
+
+- Main revalidation after `649f8a6` is green: build, lint, diff check, and full non-PostgreSQL suite passed (`136/198` files; `936/1339` tests; `62/403` PostgreSQL tests skipped).
+- Independent S5 review remains **`REVIEW: PASS`**.
