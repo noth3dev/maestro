@@ -125,6 +125,7 @@ function transcriptPaint(kind: TranscriptKind): Paint {
 
 export function paintTranscript(line: TranscriptLine, width: number): string;
 export function paintTranscript(line: string, width: number): string;
+export function paintTranscript(line: TranscriptLine | string, width: number): string;
 export function paintTranscript(line: TranscriptLine | string, width: number): string {
   const semanticLine: TranscriptLine = typeof line === "string" ? { kind: "text", text: line } : line;
   const plain = fitPlain(`  ${semanticLine.text}`, width);
