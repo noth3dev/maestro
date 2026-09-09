@@ -27,6 +27,7 @@ export interface CapabilityApprovalInput {
   readonly tier: CapabilityTier;
   readonly approverId: string;
   readonly decision: CapabilityDecision;
+  readonly saferAlternative?: string;
   readonly expiresAt: Date;
   readonly repetitionScope: RepetitionScope;
 }
@@ -74,6 +75,7 @@ export interface CapabilityConsumptionInput {
   readonly action: string;
   readonly target: string;
   readonly policyVersion: number;
+  readonly controlEpoch: string;
   readonly budgetEffectCents: number;
 }
 
@@ -198,7 +200,7 @@ export async function createCapabilityApproval(pool: Pool, input: CapabilityAppr
     );
     const budget = budgetInserted.rows[0] ?? (await client.query<BudgetRow>("SELECT * FROM capability_repetition_budgets WHERE approval_id = $1 FOR SHARE", [input.approvalId])).rows[0];
     if (budget === undefined || !budgetMatchesScope(budget, scope)) throw new CapabilityApprovalConflictError("Capability repetition scope conflict");
-    if (inserted.rowCount === 1) await insertJournal(client, { capabilityKind: input.capabilityKind, projectId: input.projectId, goalId: input.goalId, approvalId: input.approvalId, commandId: input.commandId, event: input.decision === "approved" ? "approval" : input.decision === "rejected" ? "rejection" : "safer_alternative", details: { tier: input.tier } });
+    if (inserted.rowCount === 1) await insertJournal(client, { capabilityKind: input.capabilityKind, projectId: input.projectId, goalId: input.goalId, approvalId: input.approvalId, commandId: input.commandId, event: input.decision === "approved" ? "approval" : input.decision === "rejected" ? "rejection" : "safer_alternative", details: { tier: input.tier, ...(input.saferAlternative === undefined ? {} : { alternative: input.saferAlternative }) } });
     await client.query("COMMIT"); open = false;
     return mapApproval(row, budget);
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
@@ -222,14 +224,14 @@ export async function getCapabilitySession(pool: QueryExecutor, capabilityKind: 
 }
 
 export async function consumeCapabilityApproval(pool: Pool, input: CapabilityConsumptionInput): Promise<CapabilityConsumptionResult> {
-  for (const [value, label] of [[input.approvalId, "approvalId"], [input.capabilityKind, "capabilityKind"], [input.projectId, "projectId"], [input.goalId, "goalId"], [input.commandId, "commandId"], [input.action, "action"], [input.target, "target"]] as const) requireText(value, label);
+  for (const [value, label] of [[input.approvalId, "approvalId"], [input.capabilityKind, "capabilityKind"], [input.projectId, "projectId"], [input.goalId, "goalId"], [input.commandId, "commandId"], [input.action, "action"], [input.target, "target"], [input.controlEpoch, "controlEpoch"]] as const) requireText(value, label);
   const client = await pool.connect();
   let open = false;
   try {
     await client.query("BEGIN"); open = true;
     const result = await client.query<ApprovalRow>("SELECT * FROM capability_approvals WHERE approval_id = $1 FOR SHARE", [input.approvalId]);
     const approval = result.rows[0];
-    if (approval === undefined || approval.capability_kind !== input.capabilityKind || approval.project_id !== input.projectId || approval.goal_id !== input.goalId || approval.action !== input.action || approval.target !== input.target || approval.policy_version !== input.policyVersion || Number(approval.budget_effect_cents) !== input.budgetEffectCents) throw new CapabilityApprovalScopeError("Capability request does not match the exact capability identity or Goal-scoped approval");
+    if (approval === undefined || approval.capability_kind !== input.capabilityKind || approval.project_id !== input.projectId || approval.goal_id !== input.goalId || approval.action !== input.action || approval.target !== input.target || approval.policy_version !== input.policyVersion || approval.control_epoch !== input.controlEpoch || Number(approval.budget_effect_cents) !== input.budgetEffectCents) throw new CapabilityApprovalScopeError("Capability request does not match the exact capability identity or Goal-scoped approval");
     if (approval.revoked_at !== null) throw new CapabilityApprovalRevokedError("Capability approval is revoked");
     if (approval.decision !== "approved") throw new CapabilityApprovalRejectedError("Capability approval was not approved");
     const now = (await client.query<{ now: Date }>("SELECT clock_timestamp() AS now")).rows[0]!.now;

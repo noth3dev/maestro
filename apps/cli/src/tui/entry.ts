@@ -31,7 +31,7 @@ import { renderApprovalDialog } from "./components/approval-dialog.js";
 import { renderProviderLoginDialog, type AccountLoginProviderSelection } from "./components/provider-login-dialog.js";
 import { reconcileTuiSession, type RecoverySummary } from "./recovery.js";
 import { renderRecoveryBanner } from "./components/recovery-banner.js";
-import type { CriticalActionSummary, ConfirmationResult } from "./confirmation.js";
+import { nextApprovalDialogScope, type ApprovalDialogSummary, type CriticalActionSummary, type ConfirmationResult } from "./confirmation.js";
 import {
   advanceWorkspaceSession,
   attachWorkspaceSession,
@@ -155,7 +155,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let conversation: ConversationTranscriptState = createConversationTranscript();
     let activity: GoalEvent[] = [];
     let recovery: RecoverySummary = reconcileTuiSession(workspace.cwd, session);
-    let pendingConfirmation: { summary: CriticalActionSummary; resolve: (decision: ConfirmationResult) => void } | undefined;
+    let pendingConfirmation: { summary: ApprovalDialogSummary; resolve: (decision: ConfirmationResult) => void } | undefined;
     let activityStarted = false;
     let activityController: AbortController | undefined;
     let conversationTurnController: AbortController | undefined;
@@ -862,11 +862,31 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         appendWarning("Account login cancelled.");
         return { consume: true };
       }
+      if (pendingConfirmation !== undefined && (matchesKey(data, "up") || matchesKey(data, "down")) && pendingConfirmation.summary.repetitionScope !== undefined) {
+        pendingConfirmation = {
+          ...pendingConfirmation,
+          summary: {
+            ...pendingConfirmation.summary,
+            repetitionScope: nextApprovalDialogScope(pendingConfirmation.summary.repetitionScope, matchesKey(data, "up") ? -1 : 1),
+          },
+        };
+        render();
+        return { consume: true };
+      }
+      if (pendingConfirmation !== undefined && data === "?") {
+        const { summary } = pendingConfirmation;
+        appendWarning(`Approval tier: ${summary.tier ?? "user"}; scope: ${summary.repetitionScope ?? "once"}. Reject proposes: ${summary.saferAlternative ?? "a safer alternative"}`);
+        return { consume: true };
+      }
       if (
         pendingConfirmation !== undefined &&
         (data === "y" || data === "Y" || data === "n" || data === "N" || data === "\r" || data === "\u001b")
       ) {
-        const decision: ConfirmationResult = data === "y" || data === "Y" ? "approved" : "cancelled";
+        const decision: ConfirmationResult = data === "y" || data === "Y"
+          ? (pendingConfirmation.summary.repetitionScope === undefined
+            ? "approved"
+            : { decision: "approved", repetitionScope: pendingConfirmation.summary.repetitionScope })
+          : "cancelled";
         const resolveConfirmation = pendingConfirmation.resolve;
         pendingConfirmation = undefined;
         resolveConfirmation(decision);
