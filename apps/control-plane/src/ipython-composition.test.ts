@@ -23,18 +23,38 @@ const binding = {
 
 
 
-function localEnvironment(root: string): EnvironmentRecord {
+function localEnvironment(root: string, processName = "echo"): EnvironmentRecord {
   return {
     environmentId: "environment-composition", recipeVersion: 1, goalId: binding.goalId, departmentId: "department-composition", workerId: binding.operatorId, projectId: binding.projectId, missionId: "mission-composition", type: "local_worktree",
-    recipe: {}, resolvedInputs: {}, capabilities: [{ name: "echo", version: "1" }], secretsReferences: [],
-    boundaries: { network: ["none"], filesystem: [root], processes: ["echo"], browsers: [], devices: [] },
+    recipe: {}, resolvedInputs: {}, capabilities: [{ name: processName, version: "1" }], secretsReferences: [],
+    boundaries: { network: ["none"], filesystem: [root], processes: [processName], browsers: [], devices: [] },
     resources: { cpuMillis: 1000, memoryMb: 64, diskMb: 64, processCount: 1, durationSeconds: 30 },
     expiresAt: "2030-01-01T00:00:00.000Z", state: "ready", setupLog: [], health: { status: "healthy", checkedAt: null, summary: null }, contentIdentity: "a".repeat(64),
     cleanup: { status: "not_scheduled", scheduledAt: null, completedAt: null, ownedResources: [], retainedEvidence: [] },
   };
 }
 
+
+function twoStageOptions() {
+  return {
+    fencingToken: "fence-composition",
+    approve: async (_effects: readonly unknown[], blockDigest: string) => ({ approvalId: "approval-composition", blockDigest, fencingToken: "fence-composition" }),
+    isFencingCurrent: async () => true,
+    recordEffectResult: async () => {},
+    recordStageBoundary: async () => {},
+  };
+}
+
 describe("Control Plane IPython composition", () => {
+  it("fails closed instead of constructing an unstaged local-effect kernel", () => {
+    const root = mkdtempSync(join(tmpdir(), "maestro-ipython-composition-unstaged-"));
+    try {
+      const authority = { async execute(request: ActionRequest, effect: () => Promise<unknown>): Promise<AuthorityDecision> { await effect(); return { effect: "allow", reason: "test_allow", classification: "ordinary", request, recordId: "test-record" }; } };
+      expect(() => createIpPythonProductionKernel({ authority, workspaceRoot: root, pythonExecutable: "/usr/bin/python3", localEnvironment: localEnvironment(root) }, binding.sessionId, binding)).toThrow("two-stage execution");
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+
   it("routes real Python read_file and git_revision through authority-backed adapters", async () => {
     const root = mkdtempSync(join(tmpdir(), "maestro-ipython-composition-"));
     try {
@@ -70,11 +90,30 @@ describe("Control Plane IPython composition", () => {
           return { effect: "allow", reason: "test_allow", classification: "ordinary", request, recordId: "test-record" };
         },
       };
-      const kernel = createIpPythonProductionKernel({ authority, workspaceRoot: root, pythonExecutable: "/usr/bin/python3", localEnvironment: localEnvironment(root) }, binding.sessionId, { ...binding, pathScope: [root] });
+      const kernel = createIpPythonProductionKernel({ authority, workspaceRoot: root, pythonExecutable: "/usr/bin/python3", localEnvironment: localEnvironment(root), twoStage: twoStageOptions() }, binding.sessionId, { ...binding, pathScope: [root] });
       try {
         await expect(kernel.execute({ sessionId: binding.sessionId, code: "print(write_file('README.md', 'local effect'))\nprint(run_test('echo', ['echo', 'test effect'], '"+root+"'))", binding: { ...binding, pathScope: [root] } })).resolves.toMatchObject({ state: "ok" });
         expect(readFileSync(join(root, "README.md"), "utf8")).toBe("local effect");
         expect(calls).toEqual(["project.file.edit", "project.test.run"]);
+      } finally { await kernel.close?.(); }
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it("propagates an IPython interrupt to a running local environment command", async () => {
+    const root = mkdtempSync(join(tmpdir(), "maestro-ipython-composition-cancel-"));
+    try {
+      const authority = {
+        async execute(request: ActionRequest, effect: () => Promise<unknown>): Promise<AuthorityDecision> {
+          await effect();
+          return { effect: "allow", reason: "test_allow", classification: "ordinary", request, recordId: "test-record" };
+        },
+      };
+      const kernel = createIpPythonProductionKernel({ authority, workspaceRoot: root, pythonExecutable: "/usr/bin/python3", localEnvironment: localEnvironment(root, "sleep"), twoStage: twoStageOptions() }, binding.sessionId, { ...binding, pathScope: [root] });
+      try {
+        const execution = kernel.execute({ sessionId: binding.sessionId, code: "run_test('sleep', ['sleep', '2'], '"+root+"')", binding: { ...binding, pathScope: [root] } });
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        await kernel.interrupt?.(binding.sessionId);
+        await expect(execution).resolves.toMatchObject({ state: "cancelled" });
       } finally { await kernel.close?.(); }
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
@@ -94,7 +133,7 @@ describe("Control Plane IPython composition", () => {
           return { effect: "allow", reason: "test_allow", classification: "ordinary", request, recordId: "test-record" };
         },
       };
-      const kernel = createIpPythonProductionKernel({ authority, workspaceRoot: root, pythonExecutable: "/usr/bin/python3", localEnvironment: localEnvironment(root) }, binding.sessionId, { ...binding, pathScope: [root] });
+      const kernel = createIpPythonProductionKernel({ authority, workspaceRoot: root, pythonExecutable: "/usr/bin/python3", localEnvironment: localEnvironment(root), twoStage: twoStageOptions() }, binding.sessionId, { ...binding, pathScope: [root] });
       try {
         await expect(kernel.execute({ sessionId: binding.sessionId, code: "print(git_create_branch('goal/test', 'HEAD'))", binding: { ...binding, pathScope: [root] } })).resolves.toMatchObject({ state: "ok" });
         expect(execFileSync("/usr/bin/git", ["-C", root, "branch", "--list", "goal/test"], { encoding: "utf8" })).toContain("goal/test");
