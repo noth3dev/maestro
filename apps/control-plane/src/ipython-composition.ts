@@ -7,8 +7,10 @@ import {
   createIpPythonProcessKernel,
   createIpPythonReadOnlyGateway,
   createReadOnlyHostRequestHandler,
+  createLocalHostRequestHandler,
   type IpPythonHostBinding,
   type IpPythonKernel,
+  type IpPythonLocalEffectsGateway,
   type IpPythonProcessOrphanedEvent,
   type IpPythonProcessStartedEvent,
 } from "@maestro/agent-runtime";
@@ -18,6 +20,8 @@ export interface IpPythonProductionCompositionOptions {
   readonly workspaceRoot: string;
   readonly pythonExecutable: string;
   readonly processRef?: string;
+  /** Optional local-effect surface; every adapter must already be authority-backed. */
+  readonly localEffects?: IpPythonLocalEffectsGateway;
   readonly onStarted?: (event: IpPythonProcessStartedEvent) => void | Promise<void>;
   readonly onLifecycle?: (event: IpPythonProcessOrphanedEvent) => void | Promise<void>;
 }
@@ -58,7 +62,9 @@ export function createIpPythonProductionKernel(
       scopeRoot: options.workspaceRoot,
     })(currentBinding, ref),
   });
-  const hostRequest = createReadOnlyHostRequestHandler({ binding, gateway });
+  const hostRequest = options.localEffects === undefined
+    ? createReadOnlyHostRequestHandler({ binding, gateway })
+    : createLocalHostRequestHandler({ binding, readOnly: gateway, effects: options.localEffects });
   const channel = createIpPythonOwnedProcessChannel({
     pythonExecutable: options.pythonExecutable,
     cwd: options.workspaceRoot,
