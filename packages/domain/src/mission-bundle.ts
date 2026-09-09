@@ -51,6 +51,9 @@ function text(value: unknown, field: string): asserts value is string {
 function texts(value: unknown, field: string): asserts value is readonly string[] {
   if (!Array.isArray(value) || !value.every((item) => typeof item === "string" && item.trim() !== "")) throw new InvalidMissionBundleError(`${field} must be a string list`);
 }
+const MAX_ALLOWED_TOOLS = 125;
+const MAX_WORKER_CEILING = 100;
+
 function nonnegativeInt(value: unknown, field: string): asserts value is number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new InvalidMissionBundleError(`${field} must be a nonnegative safe integer`);
 }
@@ -89,6 +92,7 @@ export function assertValidMissionBundleSubstance(value: unknown): asserts value
   }
   texts(value.allowedSkills, "Mission bundle allowedSkills");
   texts(value.allowedTools, "Mission bundle allowedTools");
+  if (value.allowedTools.length > MAX_ALLOWED_TOOLS) throw new InvalidMissionBundleError(`Mission bundle allowedTools exceeds ${MAX_ALLOWED_TOOLS}`);
   texts(value.allowedPaths, "Mission bundle allowedPaths");
   texts(value.environment, "Mission bundle environment");
   texts(value.authorityBoundary, "Mission bundle authorityBoundary");
@@ -98,6 +102,7 @@ export function assertValidMissionBundleSubstance(value: unknown): asserts value
   text(value.timeCeiling, "Mission bundle timeCeiling");
   nonnegativeInt(value.retryCeiling, "Mission bundle retryCeiling");
   nonnegativeInt(value.workerCeiling, "Mission bundle workerCeiling");
+  if (value.workerCeiling > MAX_WORKER_CEILING) throw new InvalidMissionBundleError(`Mission bundle workerCeiling exceeds ${MAX_WORKER_CEILING}`);
   if (value.role !== "head" && value.workerCeiling !== 0) throw new InvalidMissionBundleError("Only a Head bundle may carry a nonzero workerCeiling");
   text(value.deliverable, "Mission bundle deliverable");
   texts(value.evidenceRequirements, "Mission bundle evidenceRequirements");

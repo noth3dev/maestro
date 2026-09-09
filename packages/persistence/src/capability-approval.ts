@@ -321,12 +321,12 @@ export interface PendingCapabilityEffect {
 export async function listPendingCapabilityEffects(pool: QueryExecutor, capabilityKind: string, projectId: string, goalId: string): Promise<readonly PendingCapabilityEffect[]> {
   for (const [value, label] of [[capabilityKind, "capabilityKind"], [projectId, "projectId"], [goalId, "goalId"]] as const) requireText(value, label);
   const result = await pool.query<{ command_id: string; effect_index: number; admission_command_id: string | null }>(
-    `SELECT pending.command_id, CASE WHEN pending.details->>'effectIndex' ~ '^[0-9]+$' AND (pending.details->>'effectIndex')::numeric BETWEEN 0 AND 2147483647 THEN (pending.details->>'effectIndex')::integer END AS effect_index, pending.details->>'admissionCommandId' AS admission_command_id
+    `SELECT pending.command_id, CASE WHEN pending.details->>'effectIndex' ~ '^[0-9]{1,10}$' AND (pending.details->>'effectIndex')::numeric BETWEEN 0 AND 2147483647 THEN (pending.details->>'effectIndex')::integer END AS effect_index, pending.details->>'admissionCommandId' AS admission_command_id
        FROM capability_decision_journal pending
       WHERE pending.capability_kind = $1 AND pending.project_id = $2 AND pending.goal_id = $3
         AND pending.event = 'effect_result' AND pending.details->>'outcome' = 'pending_unknown'
         AND pending.command_id IS NOT NULL
-        AND pending.details->>'effectIndex' ~ '^[0-9]+$'
+        AND pending.details->>'effectIndex' ~ '^[0-9]{1,10}$'
         AND (pending.details->>'effectIndex')::numeric BETWEEN 0 AND 2147483647
         AND NOT EXISTS (
           SELECT 1 FROM capability_decision_journal terminal
@@ -339,7 +339,7 @@ export async function listPendingCapabilityEffects(pool: QueryExecutor, capabili
           SELECT 1 FROM capability_effect_resolutions resolution
            WHERE resolution.capability_kind = pending.capability_kind AND resolution.project_id = pending.project_id
              AND resolution.goal_id = pending.goal_id AND resolution.command_id = pending.command_id
-             AND resolution.effect_index = CASE WHEN pending.details->>'effectIndex' ~ '^[0-9]+$' AND (pending.details->>'effectIndex')::numeric BETWEEN 0 AND 2147483647 THEN (pending.details->>'effectIndex')::integer END
+             AND resolution.effect_index = CASE WHEN pending.details->>'effectIndex' ~ '^[0-9]{1,10}$' AND (pending.details->>'effectIndex')::numeric BETWEEN 0 AND 2147483647 THEN (pending.details->>'effectIndex')::integer END
         )
       ORDER BY pending.recorded_at, pending.journal_id`,
     [capabilityKind, projectId, goalId],
@@ -379,7 +379,7 @@ export async function resolveCapabilityEffect(pool: Pool, input: CapabilityEffec
         WHERE pending.capability_kind = $1 AND pending.project_id = $2 AND pending.goal_id = $3
           AND pending.command_id = $4 AND pending.event = 'effect_result'
           AND pending.details->>'outcome' = 'pending_unknown'
-          AND CASE WHEN pending.details->>'effectIndex' ~ '^[0-9]+$' AND (pending.details->>'effectIndex')::numeric BETWEEN 0 AND 2147483647 THEN (pending.details->>'effectIndex')::integer END = $5
+          AND CASE WHEN pending.details->>'effectIndex' ~ '^[0-9]{1,10}$' AND (pending.details->>'effectIndex')::numeric BETWEEN 0 AND 2147483647 THEN (pending.details->>'effectIndex')::integer END = $5
           AND NOT EXISTS (SELECT 1 FROM capability_decision_journal terminal
                            WHERE terminal.capability_kind = pending.capability_kind AND terminal.project_id = pending.project_id
                              AND terminal.goal_id = pending.goal_id AND terminal.command_id = pending.command_id

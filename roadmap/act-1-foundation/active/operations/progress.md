@@ -3717,3 +3717,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Latest authoritative serialized PostgreSQL verification passed **199/199 files and 1365/1365 tests** with `MAESTRO_TEST_DATABASE_URL` set. Latest focused PostgreSQL verification passed **4/4 files and 59/59 tests**. Latest focused IPython/composition verification passed **5/5 files and 57/57 tests**.
 - Latest build, lint, and `git diff --check` passed. Real Model Gateway + PostgreSQL Worker acceptance, real Git worktree evidence, process orphan/restart evidence, and Worker fencing recovery passed.
 - S6 implementation and verification are complete in this worktree. The branch remains uncommitted and unmerged; real Codex account/browser callback completion and system-account login remain environment-dependent blockers.
+
+
+## 2026-09-09 — S6 local checkpoint
+
+- Created local checkpoint commit `39509ba` (`feat(control-plane): add durable worker ipython composition`) after the authoritative PostgreSQL gate, build, lint, diff check, direct review, and documentation consistency update.
+- Remote push/merge was intentionally not performed. The next slice is the smallest authenticated write-command surface needed to make one bounded local Worker/IPython Goal operable end to end.
