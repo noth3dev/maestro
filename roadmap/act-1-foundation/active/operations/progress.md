@@ -3350,3 +3350,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Independent review returned `REVIEW: PASS` for `be571dc`; the missing domain-to-authority project reference is the minimal scoped fix.
 - Clean workspace build reproduction and lint/diff checks are green.
+
+## 2026-09-09 — Plan 2 S1 CI remediation merged
+
+- Merged CI remediation as `7453f1f` after `REVIEW: PASS`.
+- Post-merge local revalidation passed: clean-fix reproduction, focused tests `26/26`, `npm run build`, `npm run lint`, and `git diff --check`.
+- Plan 2 S1 is fully closed pending the new push CI; S2 remains unopened.
