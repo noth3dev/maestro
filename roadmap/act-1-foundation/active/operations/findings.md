@@ -1613,3 +1613,10 @@ All downstream routing documentation must use this contract and must not restore
 - Fixed the findings with authoritative `classifyHostEffects` derivation, strict actor/resolver checks and `authorizeActor`, exact session binding, one-shot fail-closed behavior for the legacy endpoint, and control-epoch verification in capability consumption.
 - A stale full run failed only because it started before the updated dialog assertion; it otherwise reported 135 passed and 62 skipped files. A fresh full run and independent re-review are required.
 - Live-provider acceptance remains user-run only.
+
+
+## 2026-09-09 — S5 findings closed
+
+- The initial S5 review findings are closed by `12ecc54`: tier derivation now uses S1 classification, actor and resolver identities are strictly Goal-scoped and authenticated through an adapter, skipped intermediates cannot bypass user authorization, control epochs are checked at consumption, and safer alternatives are recorded once in the decision journal.
+- The CLI carries selected scope through confirmation and rejects bounded/session scope before mutation when the legacy endpoint cannot persist it. The capability approval service persists the requested repetition scope for the S6 API composition boundary.
+- Independent re-review: **`REVIEW: PASS`**. PostgreSQL integration remains unrun in this worktree because no test database URL was configured; the existing S2 PostgreSQL evidence remains the database gate.

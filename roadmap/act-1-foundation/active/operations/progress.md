@@ -3681,3 +3681,12 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Remediated the CLI path to pass detailed approval summaries, support keyboard scope selection and `?` explanation, carry the selected scope in the confirmation result, and fail closed rather than mutate when the legacy endpoint cannot persist a non-once scope.
 - S5 focused verification now passes **4 files / 37 tests**; build, lint, and `git diff --check` pass. Full verification is being rerun after remediation; independent re-review remains open.
 - No live-provider acceptance ran. S6 production composition remains deferred.
+
+
+## 2026-09-09 — S5 remediation verification and review PASS
+
+- Final S5 commits are `12ecc54` and `38c38b8`; the worktree is clean.
+- Independent re-review returned **`REVIEW: PASS`**. It verified authoritative S1 tier derivation, strict active Goal-scoped actor/resolver checks, exact skip-session binding, control-epoch fencing, durable safer alternatives, D3 retained/skip/T4 tests, and fail-closed handling when the legacy CLI endpoint cannot persist a broader scope.
+- Final non-PostgreSQL verification passed **136/198 files and 936/1339 tests**; **62 files and 403 tests** were skipped because no PostgreSQL URL was configured. No failure lines were reported.
+- Final build, lint, diff check, focused S5 tests, and full suite passed. No live-provider acceptance ran.
+- S5 is ready for merge/revalidation; S6 production wiring and user-run live acceptance remain deferred.
