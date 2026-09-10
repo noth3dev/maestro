@@ -42,9 +42,10 @@ import {
   startNewConversationSession,
 } from "./session.js";
 import { mergeEvents, runActivityStream, subscribeToEvents } from "./activity-stream.js";
-import { addConversationMessage, applyConversationEvent, createConversationTranscript, renderConversationBlocks, type ConversationTranscriptState } from "./conversation-transcript.js";
-import { renderActivityTimeline, toActivityTimelineEvent } from "./components/activity-timeline.js";
-import { renderShell, renderTuiFooter, type TuiShellState } from "./components/shell.js";
+import { addConversationMessage, applyConversationEvent, createConversationTranscript, renderUnifiedStreamEntries, type ConversationTranscriptState } from "./conversation-transcript.js";
+import { pendingDecisionsFromActivity, toActivityTimelineEvent } from "./components/activity-timeline.js";
+import { createDecisionRegion, createDynamicRegion, createStatusRegion } from "./components/regions.js";
+import { createSplashController, renderPendingDecisionDetails, renderTuiFooter, type TuiShellState } from "./components/shell.js";
 import { getModeAccentProgress, setModeAccentProgress, tuiTheme, type TranscriptLine } from "./theme.js";
 import type { CliIo } from "../main.js";
 import { copyToClipboard, openExternalUrl } from "../external-url.js";
@@ -154,9 +155,22 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     );
     let conversation: ConversationTranscriptState = createConversationTranscript();
     let activity: GoalEvent[] = [];
+    const splash = createSplashController();
     let recovery: RecoverySummary = reconcileTuiSession(workspace.cwd, session);
     let pendingConfirmation: { summary: ApprovalDialogSummary; resolve: (decision: ConfirmationResult) => void } | undefined;
+    const syncPendingDecisionState = (): void => {
+      const goalId = session?.goalId ?? (state.goal.kind === "value" ? state.goal.value.name : undefined);
+      const scopedActivity = goalId === undefined ? [] : activity.filter((event) => event.goalId === goalId).map(toActivityTimelineEvent);
+      const decisions = pendingDecisionsFromActivity(scopedActivity);
+      if (pendingConfirmation !== undefined) {
+        const summary = pendingConfirmation.summary;
+        const tier = summary.tier === "user" ? "You" : summary.tier ?? "You";
+        decisions.unshift({ tier, action: `${summary.action} ${summary.target}`, actor: "You" });
+      }
+      state.pendingDecisions = decisions;
+    };
     let activityStarted = false;
+    let activityHydrationGeneration = 0;
     let activityController: AbortController | undefined;
     let conversationTurnController: AbortController | undefined;
     let pendingProviderLogin: "openai" | "anthropic" | undefined;
@@ -170,19 +184,22 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       if (model === undefined) delete state.model;
       else state.model = model;
     };
-    header.setStatusRenderer(() => {
-      const lines = [...renderShell(state, terminal.columns, terminal.rows), "", ...renderRecoveryBanner(recovery, terminal.columns)];
-      if (pendingConfirmation !== undefined) lines.push("", ...renderApprovalDialog(pendingConfirmation.summary, terminal.columns));
-      if (accountLoginSelection !== undefined && accountLoginState !== undefined) lines.push("", ...renderProviderLoginDialog(terminal.columns, accountLoginSelection, accountLoginState, accountLoginUrl));
-      if (activity.length > 0) lines.push("", "Activity", ...renderActivityTimeline(activity.map(toActivityTimelineEvent), terminal.columns));
+    const statusRegion = createStatusRegion({ state, height: () => terminal.rows, splash });
+    const decisionRegion = createDecisionRegion({ state, height: () => terminal.rows });
+    const noticeRegion = createDynamicRegion(() => {
+      if (terminal.rows < 16) return [];
+      const lines = [...renderRecoveryBanner(recovery, terminal.columns)];
+      if (accountLoginSelection !== undefined && accountLoginState !== undefined) lines.push(...renderProviderLoginDialog(terminal.columns, accountLoginSelection, accountLoginState, accountLoginUrl));
       return lines;
     });
-    header.setTranscriptRenderer(() => renderConversationBlocks(conversation));
+    header.setOrderedStreamRenderer(() => renderUnifiedStreamEntries(conversation, activity, terminal.columns));
     const render = () => {
-      footer.setText(renderTuiFooter(terminal.columns));
+      syncPendingDecisionState();
+      footer.setText(terminal.rows < 16 ? "" : renderTuiFooter(terminal.columns, state));
       tui.requestRender(true);
     };
     const append = (line: string | TranscriptLine) => {
+      splash.dismiss();
       const semanticLine: TranscriptLine = typeof line === "string" ? { kind: "system", text: line } : line;
       const next = addConversationMessage(conversation, "system", semanticLine.text, semanticLine.kind);
       conversation = { ...next, messages: next.messages.slice(-80) };
@@ -245,21 +262,46 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         render();
       }
     };
-    const streamActivity = async (signal: AbortSignal) => {
-      const streamProject = project;
-      if (client === undefined || streamProject.kind !== "attached") return;
+    const hydrateActivity = async (projectId: string, generation: number): Promise<void> => {
+      if (client === undefined) return;
+      try {
+        let cursor = "0";
+        const history: GoalEvent[] = [];
+        for (let page = 0; page < 64; page += 1) {
+          const result = await client.listEvents({ projectId, after: cursor });
+          if (generation !== activityHydrationGeneration || project.kind !== "attached" || project.projectId !== projectId) return;
+          history.push(...result.events);
+          if (result.events.length === 0 || result.nextCursor === cursor || result.events.length < 100) break;
+          cursor = result.nextCursor;
+        }
+        if (generation !== activityHydrationGeneration || project.kind !== "attached" || project.projectId !== projectId) return;
+        activity = mergeEvents(activity, history);
+        render();
+      } catch (error) {
+        if (generation === activityHydrationGeneration && project.kind === "attached" && project.projectId === projectId) {
+          appendWarning(`Activity history unavailable: ${error instanceof Error ? error.message : "Control Plane request failed"}`);
+        }
+      }
+    };
+
+    const streamActivity = async (signal: AbortSignal, projectId: string, generation: number) => {
+      if (client === undefined) return;
       await runActivityStream({
         client,
-        projectId: streamProject.projectId,
-        cursor: session?.lastEventCursor ?? "0",
+        projectId,
+        cursor: activity.at(-1)?.cursor ?? session?.lastEventCursor ?? "0",
         signal,
         maxReconnectAttempts: 5,
         onReconnect: (attempt, maxAttempts) => append({ kind: "warning", text: `Activity stream reconnecting (${attempt}/${maxAttempts})` }),
         onEvent: async (event) => {
+          if (generation !== activityHydrationGeneration || project.kind !== "attached" || project.projectId !== projectId) return;
           activity = mergeEvents(activity, [event]);
+          splash.dismiss();
           const nextSession = advanceWorkspaceSession(workspace.cwd, session, event);
-          session = nextSession;
+          if (generation !== activityHydrationGeneration || project.kind !== "attached" || project.projectId !== projectId) return;
           await saveWorkspaceSession(nextSession);
+          if (generation !== activityHydrationGeneration || project.kind !== "attached" || project.projectId !== projectId) return;
+          session = nextSession;
           render();
         },
         onUnavailable: (message) => append(message),
@@ -290,6 +332,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         })) {
           if (signal.aborted || session?.conversationId !== conversationId || project.kind !== "attached" || project.projectId !== projectId) return;
           conversation = applyConversationEvent(conversation, event);
+          splash.dismiss();
           render();
           if (isTerminalConversationEvent(event)) {
             if (!signal.aborted) controller.abort();
@@ -317,6 +360,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         }
         if (generation !== conversationHydrationGeneration || session?.conversationId !== conversationId || project.kind !== "attached" || project.projectId !== projectId) return;
         conversation = hydrated;
+        splash.dismiss();
         render();
       } catch (error) {
         if (generation === conversationHydrationGeneration) appendError(`Conversation history unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
@@ -326,19 +370,28 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const confirm = (summary: CriticalActionSummary): Promise<ConfirmationResult> =>
       new Promise((resolveConfirmation) => {
         pendingConfirmation = { summary, resolve: resolveConfirmation };
+        syncPendingDecisionState();
         render();
       });
     const startActivity = () => {
       if (activityStarted || client === undefined || project.kind !== "attached") return;
+      const projectId = project.projectId;
+      const generation = activityHydrationGeneration;
       activityStarted = true;
       activityController = new AbortController();
-      void streamActivity(activityController.signal);
+      void streamActivity(activityController.signal, projectId, generation);
     };
     const restartActivity = () => {
       activityController?.abort();
       activityStarted = false;
       activityController = undefined;
-      startActivity();
+      activity = [];
+      state.pendingDecisions = [];
+      const generation = ++activityHydrationGeneration;
+      const projectId = project.kind === "attached" ? project.projectId : undefined;
+      if (projectId !== undefined) void hydrateActivity(projectId, generation).then(() => {
+        if (generation === activityHydrationGeneration) startActivity();
+      });
     };
     const retryConnection = async () => {
       appendWarning("Retrying Maestro startup checks…");
@@ -459,6 +512,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     };
 
     const submit = async (text: string) => {
+      if (text.trim() !== "") splash.dismiss();
       if (pendingProviderLogin !== undefined) {
         const providerId = pendingProviderLogin;
         pendingProviderLogin = undefined;
@@ -678,6 +732,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               parsed,
             );
             pendingConfirmation = undefined;
+            syncPendingDecisionState();
             append(`${writeResult.title}: ${writeResult.lines.join(" · ")}`);
             void refreshDashboard();
           } else {
@@ -741,6 +796,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               void streamConversation(activeConversationId, project.projectId, streamController);
               const turnController = new AbortController();
               conversationTurnController = turnController;
+              state.working = true;
+              render();
               try {
                 const result = await client.sendConversationTurn(
                   activeConversationId,
@@ -761,6 +818,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
                 render();
               } finally {
                 if (conversationTurnController === turnController) conversationTurnController = undefined;
+                state.working = false;
+                render();
               }
             }
           }
@@ -773,12 +832,15 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     editor.onSubmit = (text) => {
       void submit(text);
     };
-    // The explicit alternate-screen layout gives the transcript a constrained,
-    // independently scrollable region and keeps the composer/footer pinned.
+    // Keep status and decisions outside the scroll view; only the chronological
+    // conversation/activity stream may scroll or follow new output.
     const transcriptView = new ScrollView(header, { follow: "end", primary: true, overscroll: "chain", scrollbar: "auto" });
     const dock = new VStack([composer, footer]);
     tui.setLayoutRoot(new VStack([
-      { component: transcriptView, basis: 0, grow: 1, minSize: 1 },
+      { component: statusRegion, basis: "auto", shrink: 0, minSize: 1 },
+      { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 },
+      { component: decisionRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => (state.pendingDecisions?.length ?? 0) > 0 },
+      { component: noticeRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => terminal.rows >= 16 },
       { component: dock, basis: "auto", shrink: 1, minSize: 1 },
     ]));
     tui.setFocus(editor);
@@ -790,6 +852,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       stopped = true;
       pendingConfirmation?.resolve("cancelled");
       pendingConfirmation = undefined;
+      syncPendingDecisionState();
       activityController?.abort();
       conversationTurnController?.abort();
       conversationStreamController?.abort();
@@ -799,6 +862,19 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       tui.stop();
       resolve(0);
     };
+    const cancelActiveConversation = (): boolean => {
+      if (conversationTurnController === undefined) return false;
+      conversationTurnController.abort();
+      appendWarning("Cancelling the active conversation turn…");
+      if (client !== undefined && project.kind === "attached" && session?.conversationId !== undefined) {
+        void client
+          .cancelConversation(session.conversationId, { projectId: project.projectId })
+          .then((cancelled) => appendWarning(`Conversation ${cancelled.conversationId}: ${cancelled.status}`))
+          .catch((error) => appendError(`Conversation cancellation unavailable: ${error instanceof Error ? error.message : "unknown error"}`));
+      }
+      return true;
+    };
+
     tui.addInputListener((data) => {
       if (matchesKey(data, "ctrl+k")) {
         append(
@@ -820,20 +896,9 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         void submit("/session retry");
         return { consume: true };
       }
+      if (matchesKey(data, "escape") && cancelActiveConversation()) return { consume: true };
       if (matchesKey(data, "ctrl+c")) {
-        if (conversationTurnController !== undefined) {
-          conversationTurnController.abort();
-          appendWarning("Cancelling the active conversation turn…");
-          if (client !== undefined && project.kind === "attached" && session?.conversationId !== undefined) {
-            void client
-              .cancelConversation(session.conversationId, { projectId: project.projectId })
-              .then((cancelled) => appendWarning(`Conversation ${cancelled.conversationId}: ${cancelled.status}`))
-              .catch((error) =>
-                appendError(`Conversation cancellation unavailable: ${error instanceof Error ? error.message : "unknown error"}`),
-              );
-          }
-          return { consume: true };
-        }
+        if (cancelActiveConversation()) return { consume: true };
         stop();
         return { consume: true };
       }
@@ -873,9 +938,17 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         render();
         return { consume: true };
       }
+      if (matchesKey(data, "ctrl+a") && pendingConfirmation !== undefined) {
+        append(renderApprovalDialog(pendingConfirmation.summary, terminal.columns).join("\n"));
+        return { consume: true };
+      }
+      if (matchesKey(data, "ctrl+a") && pendingConfirmation === undefined && (state.pendingDecisions?.length ?? 0) > 0) {
+        append(renderPendingDecisionDetails(state, terminal.columns).join("\n"));
+        return { consume: true };
+      }
       if (pendingConfirmation !== undefined && data === "?") {
         const { summary } = pendingConfirmation;
-        appendWarning(`Approval tier: ${summary.tier ?? "user"}; scope: ${summary.repetitionScope ?? "once"}. Reject proposes: ${summary.saferAlternative ?? "a safer alternative"}`);
+        appendWarning(`Approval tier: ${summary.tier === "user" ? "You" : summary.tier ?? "You"}; scope: ${summary.repetitionScope ?? "once"}. Reject proposes: ${summary.saferAlternative ?? "a safer alternative"}`);
         return { consume: true };
       }
       if (
@@ -889,6 +962,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           : "cancelled";
         const resolveConfirmation = pendingConfirmation.resolve;
         pendingConfirmation = undefined;
+        syncPendingDecisionState();
         resolveConfirmation(decision);
         render();
         return { consume: true };
@@ -899,7 +973,12 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     runtime.start();
     if (projectDiscoveryNotice !== undefined) appendWarning(projectDiscoveryNotice);
     void refreshDashboard();
-    startActivity();
+    if (project.kind === "attached") {
+      const activityGeneration = ++activityHydrationGeneration;
+      void hydrateActivity(project.projectId, activityGeneration).then(() => {
+        if (activityGeneration === activityHydrationGeneration) startActivity();
+      });
+    }
     if (project.kind === "attached") {
       const generation = ++conversationHydrationGeneration;
       conversationHydration = hydrateConversation(session?.conversationId, project.projectId, generation);

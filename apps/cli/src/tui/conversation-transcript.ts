@@ -1,11 +1,15 @@
-import type { ConversationEvent } from "@maestro/contracts";
-import type { TranscriptKind } from "./theme.js";
+import type { ConversationEvent, GoalEvent } from "@maestro/contracts";
+import { renderActivityTimeline, toActivityTimelineEvent } from "./components/activity-timeline.js";
+import { fitPlain, type TranscriptKind } from "./theme.js";
 
 export type ConversationTurnStatus = "idle" | "streaming" | "succeeded" | "failed" | "cancelled" | "unknown";
-export type ConversationTranscriptMessage = { role: "user" | "assistant" | "system"; content: string; kind: TranscriptKind };
+export type ConversationTranscriptMessage = { role: "user" | "assistant" | "system"; content: string; kind: TranscriptKind; cursor?: string };
+export type ConversationManualMessage = { message: ConversationTranscriptMessage; occurredAt: string; sequence: number };
 
 export type ConversationTranscriptState = {
   messages: ConversationTranscriptMessage[];
+  manualMessages: ConversationManualMessage[];
+  events: ConversationEvent[];
   activeTurnId: string | undefined;
   assistantText: string;
   status: ConversationTurnStatus;
@@ -14,7 +18,7 @@ export type ConversationTranscriptState = {
 };
 
 export function createConversationTranscript(): ConversationTranscriptState {
-  return { messages: [], activeTurnId: undefined, assistantText: "", status: "idle", statusMessage: undefined, lastCursor: "0" };
+  return { messages: [], manualMessages: [], events: [], activeTurnId: undefined, assistantText: "", status: "idle", statusMessage: undefined, lastCursor: "0" };
 }
 
 export function addConversationMessage(
@@ -24,7 +28,9 @@ export function addConversationMessage(
   kind: TranscriptKind = role === "system" ? "system" : "text",
 ): ConversationTranscriptState {
   if (content.trim() === "") return state;
-  return { ...state, messages: [...state.messages, { role, content, kind }] };
+  const message = { role, content, kind } as const;
+  const manualMessage: ConversationManualMessage = { message, occurredAt: new Date().toISOString(), sequence: state.manualMessages.length };
+  return { ...state, messages: [...state.messages, message], manualMessages: [...state.manualMessages, manualMessage] };
 }
 
 function payloadText(event: ConversationEvent, key: string): string | undefined {
@@ -45,15 +51,15 @@ export function applyConversationEvent(
   event: ConversationEvent,
 ): ConversationTranscriptState {
   if (!sameOrNewerCursor(event.cursor, state.lastCursor)) return state;
-  const next: ConversationTranscriptState = { ...state, lastCursor: event.cursor };
+  const next: ConversationTranscriptState = { ...state, events: [...state.events, event].slice(-512), lastCursor: event.cursor };
   const turnId = payloadText(event, "turnId");
   if (event.eventType === "turn_started") {
     const userText = payloadText(event, "text");
-    const previousAssistant = next.assistantText !== "" ? [{ role: "assistant" as const, content: next.assistantText, kind: "text" as const }] : [];
+    const previousAssistant = next.assistantText !== "" ? [{ role: "assistant" as const, content: next.assistantText, kind: "text" as const, cursor: state.lastCursor }] : [];
     const lastUser = [...next.messages].reverse().find((message) => message.role === "user");
     const withAssistant = [...next.messages, ...previousAssistant];
     const messages = userText !== undefined && lastUser?.content !== userText
-      ? [...withAssistant, { role: "user" as const, content: userText, kind: "text" as const }]
+      ? [...withAssistant, { role: "user" as const, content: userText, kind: "text" as const, cursor: event.cursor }]
       : withAssistant;
     return { ...next, messages, activeTurnId: turnId, assistantText: "", status: "streaming", statusMessage: undefined };
   }
@@ -107,4 +113,88 @@ export function renderConversationMarkdown(state: ConversationTranscriptState): 
   return renderConversationBlocks(state)
     .map((block) => `${block.heading}\n\n${block.content}`)
     .join("\n\n");
+}
+
+
+export type UnifiedStreamEntry = {
+  readonly occurredAt: string;
+  readonly stable: string;
+  readonly content: ConversationTranscriptBlock | string;
+};
+
+function conversationEventBlock(event: ConversationEvent, aggregate?: string): ConversationTranscriptBlock | undefined {
+  const text = payloadText(event, "text");
+  const content = payloadText(event, "content") ?? aggregate;
+  const message = payloadText(event, "message");
+  if (event.eventType === "turn_started") return { heading: "**You**", content: text ?? "", kind: "text" };
+  if (event.eventType === "turn_delta") return { heading: "**Maestro**", content: aggregate ?? text ?? "", kind: "text" };
+  if (event.eventType === "turn_completed") return { heading: "**Maestro**", content: content ?? "", kind: "success" };
+  if (event.eventType === "turn_failed") return { heading: "**Maestro**", content: message ?? "turn failed", kind: "error" };
+  if (event.eventType === "turn_cancelled") return { heading: "**Maestro**", content: message ?? "cancelled", kind: "warning" };
+  if (event.eventType === "turn_unknown") return { heading: "**Maestro**", content: message ?? "unknown outcome", kind: "warning" };
+  return undefined;
+}
+
+function conversationStreamEntries(state: ConversationTranscriptState): UnifiedStreamEntry[] {
+  const completedTurns = new Set<string>();
+  const deltaText = new Map<string, string>();
+  const lastDelta = new Map<string, ConversationEvent>();
+  for (const event of state.events) {
+    const turnId = payloadText(event, "turnId");
+    if (["turn_completed", "turn_failed", "turn_cancelled", "turn_unknown"].includes(event.eventType) && turnId !== undefined) completedTurns.add(turnId);
+    if (event.eventType === "turn_delta" && turnId !== undefined) {
+      deltaText.set(turnId, `${deltaText.get(turnId) ?? ""}${payloadText(event, "text") ?? ""}`);
+      lastDelta.set(turnId, event);
+    }
+  }
+  return state.events.flatMap((event) => {
+    const turnId = payloadText(event, "turnId");
+    if (event.eventType === "turn_delta") {
+      if (turnId === undefined || completedTurns.has(turnId) || lastDelta.get(turnId) !== event) return [];
+      const block = conversationEventBlock(event, deltaText.get(turnId));
+      return block === undefined ? [] : [{ occurredAt: event.occurredAt ?? "", stable: `conversation:${event.eventId}:${event.cursor}`, content: block }];
+    }
+    const block = conversationEventBlock(event, turnId === undefined ? undefined : deltaText.get(turnId));
+    return block === undefined ? [] : [{ occurredAt: event.occurredAt ?? "", stable: `conversation:${event.eventId}:${event.cursor}`, content: block }];
+  });
+}
+
+/** Render conversation and Goal events as ordered entries for the active viewport. */
+export function renderUnifiedStreamEntries(state: ConversationTranscriptState, activity: readonly GoalEvent[], width: number): UnifiedStreamEntry[] {
+  const turnTexts = new Set(state.events.filter((event) => event.eventType === "turn_started").map((event) => payloadText(event, "text")).filter((text): text is string => text !== undefined));
+  const entries: UnifiedStreamEntry[] = [
+    ...state.manualMessages
+      .filter((item) => !(item.message.role === "user" && turnTexts.has(item.message.content)))
+      .map((item) => ({
+        occurredAt: item.occurredAt,
+        stable: `manual:${item.sequence}`,
+        content: {
+          heading: item.message.role === "user" ? "**You**" : item.message.role === "system" ? "**System**" : "**Maestro**",
+          content: item.message.content,
+          kind: item.message.kind,
+        },
+      })),
+    ...conversationStreamEntries(state),
+    ...activity.map((event) => {
+      const timelineEvent = toActivityTimelineEvent(event);
+      return { occurredAt: event.occurredAt ?? "", stable: `activity:${event.eventId}:${event.cursor}`, content: renderActivityTimeline([timelineEvent], width).join("\n") };
+    }),
+  ];
+  entries.sort((left, right) => {
+    const leftTime = Date.parse(left.occurredAt);
+    const rightTime = Date.parse(right.occurredAt);
+    if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) return leftTime - rightTime;
+    if (left.occurredAt !== right.occurredAt) return left.occurredAt.localeCompare(right.occurredAt);
+    return left.stable.localeCompare(right.stable);
+  });
+  return entries;
+}
+
+/** Render ordered stream entries as plain lines for compatibility and terminal assertions. */
+export function renderUnifiedStream(state: ConversationTranscriptState, activity: readonly GoalEvent[], width: number): string[] {
+  return renderUnifiedStreamEntries(state, activity, width).flatMap((entry) => {
+    if (typeof entry.content === "string") return entry.content.split("\n");
+    const glyph = entry.content.kind === "error" ? "✗ " : entry.content.kind === "success" ? "✓ " : entry.content.kind === "warning" ? "⚠ " : entry.content.kind === "system" ? "◆ " : "";
+    return [fitPlain(`${glyph}${entry.content.heading.replaceAll("**", "")}  ${entry.content.content}`, width)];
+  });
 }

@@ -23,6 +23,7 @@ const pendingState: TuiShellState = {
   ],
 };
 
+// eslint-disable-next-line no-control-regex
 function plain(value: string): string { return value.replace(/\u001b\[[0-9;]*m/g, ""); }
 
 describe("Maestro TUI layout and hierarchy", () => {
@@ -35,6 +36,8 @@ describe("Maestro TUI layout and hierarchy", () => {
     const frame = renderTuiLayout(pendingState, 100, 24, { stream: ["conversation"] });
     expect(frame.decisions.join("\n")).toContain("git push origin main");
     expect(frame.decisions.join("\n")).toContain("Encore Council");
+    expect(renderTuiLayout(pendingState, 80, 24).decisions.join("\n")).not.toContain("worker-3");
+    expect(renderTuiLayout(pendingState, 100, 24).decisions.join("\n")).toContain("worker-3");
   });
 
   it("removes the decisions region when nothing is pending", () => {
@@ -53,9 +56,12 @@ describe("Maestro TUI layout and hierarchy", () => {
     expect(plain(renderStatusRow(state, 80))).not.toContain("$1.24/$5.00");
     expect(plain(renderStatusRow(state, 80))).toContain("3 workers");
     expect(plain(renderStatusRow(state, 70))).not.toContain("3 workers");
-    expect(plain(renderStatusRow(state, 70))).toContain("auth-refactor");
+    expect(plain(renderStatusRow(state, 70))).toContain("maestro ·");
+    expect(plain(renderStatusRow(state, 70))).toContain("running");
+    expect(plain(renderStatusRow(state, 70))).not.toContain("auth-refactor");
     expect(plain(renderStatusRow(state, 50))).not.toContain("maestro ·");
-    expect(plain(renderStatusRow(state, 50))).toContain("auth-refactor");
+    expect(plain(renderStatusRow(state, 50))).toContain("running");
+    expect(plain(renderStatusRow(state, 50))).not.toContain("auth-refactor");
   });
 
   it("renders only status and input below 16 rows", () => {
@@ -64,6 +70,7 @@ describe("Maestro TUI layout and hierarchy", () => {
     expect(frame.stream).toEqual([]);
     expect(frame.decisions).toEqual([]);
     expect(frame.input.length).toBeGreaterThan(0);
+    expect(frame.hints).toEqual([]);
   });
 
   it("keeps a glyph beside each coloured state when colour is disabled", () => {
