@@ -3906,3 +3906,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 plan-order recheck: `execution/plan-3.md` confirms S4 must remain open until its fourteen-step real-provider handoff is runnable and complete; S5 is documentation-only and may start only after that handoff. Main root build and CI are green, and S6b is merged, but the live S4 surfaces remain unavailable, so no new slice was started.
 
 - 2026-09-10 continuation root gate: the mandated root check again passed (`main` clean at `c22938d`, `npm run build` green, CI latest `34486714616` successful). `execution/plan-3.md` still requires the S4 handoff before S5; the existing S4 worktree remains at `cfaacf5` with no new implementation started.
+
+- 2026-09-10 plan-5 continuation design gate: the request to make the full Act 1 path operable crosses the currently missing S4 production surfaces (authenticated full-access selection, Goal-scoped evidence capture, and worker repair lifecycle) and the later plan-4/plan-5 dependencies. No implementation was started pending explicit approval of a plan amendment and production-surface design.

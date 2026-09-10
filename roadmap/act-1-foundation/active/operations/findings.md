@@ -1830,3 +1830,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 plan-order finding: the S4→S5 transition is still blocked by missing authenticated capability-mode selection, public Goal-scoped evidence capture, and deterministic worker hold/requeue for repair messaging. Starting S5 would violate `execution/plan-3.md` § S5's handoff prerequisite; do not merge, push, or hand off until these gaps are resolved by the appropriate production owner/slice.
 
 - 2026-09-10 continuation gate finding: no production change has resolved the documented S4 blockers since the previous check. The correct action remains to preserve the open S4 gate; starting `phase3-status-sync` would violate the plan's handoff prerequisite.
+
+- 2026-09-10 architectural scope finding: the existing exact slice list has no named slice for the three newly verified S4 production gaps. Implementing them under an invented slice name or silently broadening the S4 harness would violate the execution rules. A plan amendment must name the prerequisite slice and preserve the settled S6b decisions before code changes begin.
