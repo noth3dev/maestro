@@ -3778,3 +3778,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 S1 final independent review of `b75bb37` returned FAIL only for sub-millisecond timestamp precision: node-postgres Date conversion can make distinct PostgreSQL timestamptz values compare equal. Added a RED regression and now bind `pending.recorded_at = claim.consumed_at` directly in SQL; focused PostgreSQL verification is pending.
 
 - 2026-09-10 S1 timestamp precision remediation verification: focused PostgreSQL suite passed 6 files / 37 tests; build, lint, and diff-check passed. Ready for a fresh independent review.
+
+- 2026-09-10 S1 final independent review `review-plan3-s1-final12`: **PASS** on `0b681c4`; reviewer confirmed CI-root-cause fixtures, complete every-claim validation, explicit snapshot key/type/null checks, direct PostgreSQL timestamp binding, and no live-provider use. S1 is ready for merge and revalidation.
