@@ -14,7 +14,7 @@ import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, su
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, sendWorkerMessageUnderOwnerClaim, spawnWorker } from "./worker.js";
-import { GitIntegrationError, advanceWorkerIntegration, getGoalGitIntegrationState, recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
+import { GitIntegrationError, advanceWorkerIntegration, getGoalGitIntegrationState, recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordWorkerWorktree } from "./git-integration.js";
 import { acceptDepartmentWorkerOutput, certifyQuality } from "./certification.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -152,9 +152,9 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     const fs = await import("node:fs/promises");
     await fs.writeFile(join(worktreePath, "change.txt"), "mission-only change");
     const commitResult = await localGitPort.commit(worktreePath, "mission: add change", "worker", "worker@example.com");
-    const recorded = await recordIntegrationCommit(pool, localGitPort, worker.workerId, "mission: add change", [...evidence.references], proof, headContext("product"));
+    const recorded = await advanceWorkerIntegration(pool, localGitPort, worker.workerId, "mission: add change", [...evidence.references], proof, headContext("product"));
     expect(recorded.commitSha).toBe(commitResult.commitSha);
-    const replayCommit = await recordIntegrationCommit(pool, localGitPort, worker.workerId, "mission: add change", [...evidence.references], proof, headContext("product"));
+    const replayCommit = await advanceWorkerIntegration(pool, localGitPort, worker.workerId, "mission: add change", [...evidence.references], proof, headContext("product"));
     expect(replayCommit).toEqual(recorded);
   });
 
@@ -271,7 +271,7 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     await fs.writeFile(join(worktreePath, "change.txt"), "mission-only change");
     const commitResult = await localGitPort.commit(worktreePath, "mission: add change", "worker", "worker@example.com");
     await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
-    await recordIntegrationCommit(pool, localGitPort, worker.workerId, "mission: add change", [...evidence.references], proof, headContext("product"));
+    await advanceWorkerIntegration(pool, localGitPort, worker.workerId, "mission: add change", [...evidence.references], proof, headContext("product"));
     const acceptanceId = randomUUID();
     await pool.query(
       "INSERT INTO department_acceptances (acceptance_id, worker_id, commit_sha, reason, accepted_by, session_ref, created_at) VALUES ($1, $2, $3, 'looks good', 'head:product', 'opaque:product', transaction_timestamp())",

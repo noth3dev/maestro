@@ -28,7 +28,7 @@ import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, spawnWorker } from "./worker.js";
 import { acceptDepartmentWorkerOutput, certifyQuality } from "./certification.js";
-import { recordGoalIntegrationRevision, recordDepartmentBranch, recordGoalIntegrationBranch, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
+import { recordGoalIntegrationRevision, recordDepartmentBranch, recordGoalIntegrationBranch, recordWorkerWorktree } from "./git-integration.js";
 import { recordEvidenceBundle, verifyStoredEvidenceBundle } from "./evidence-bundle.js";
 import { generateConcertmasterFinalReport } from "./concertmaster-report.js";
 import { recordRoutingReportFixture } from "./routing-report-fixture.js";
@@ -213,7 +213,7 @@ describeDatabase("Phase 4 work-sequence step 8: Discord incident through Task Co
     const fs = await import("node:fs/promises");
     await fs.writeFile(join(worktreePath, "fix.txt"), "the incident remediation change");
     const commitResult = await localGitPort.commit(worktreePath, "mission: fix the health endpoint", "worker", "worker@example.com");
-    const integrationCommit = await recordIntegrationCommit(pool, localGitPort, worker.workerId, "mission: fix the health endpoint", evidenceIds, proof, headContext("engineering"));
+    const integrationCommit = await advanceWorkerIntegration(pool, localGitPort, worker.workerId, "mission: fix the health endpoint", evidenceIds, proof, headContext("engineering"));
     expect(integrationCommit.commitSha).toBe(commitResult.commitSha);
 
     await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "Head reviewed the integrated fix" }, proof, headContext("engineering"));

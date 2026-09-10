@@ -17,7 +17,7 @@ import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, su
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, spawnWorker } from "./worker.js";
-import { recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
+import { recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordWorkerWorktree } from "./git-integration.js";
 import { acceptDepartmentWorkerOutput, certifyQuality, CertificationError } from "./certification.js";
 import { raiseMetronomeChallenge, MetronomeChallengeError } from "./metronome-challenge.js";
 import { requestSemanticReview } from "./semantic-review.js";
@@ -177,7 +177,7 @@ async function setupWorkerWithRealCommit(pool: Pool, repositoryPath: string, bas
   await recordWorkerWorktree(pool, localGitPort, worker.workerId, worktreePath, proof, headContext("product"));
   await writeFile(join(worktreePath, "seeded-defect.txt"), "worker produced a green result");
   const commitResult = await localGitPort.commit(worktreePath, "mission: seed implementation defect", "worker", "worker@example.com");
-  const integrationCommit = await recordIntegrationCommit(pool, localGitPort, worker.workerId, "mission: seed implementation defect", evidenceIds, proof, headContext("product"));
+  const integrationCommit = await advanceWorkerIntegration(pool, localGitPort, worker.workerId, "mission: seed implementation defect", evidenceIds, proof, headContext("product"));
   expect(integrationCommit.commitSha).toBe(commitResult.commitSha);
   await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, proof, headContext("product"));
   await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);

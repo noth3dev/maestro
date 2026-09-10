@@ -284,19 +284,6 @@ export async function advanceWorkerIntegration(
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 
-export async function recordIntegrationCommit(
-  pool: Pool,
-  git: GitPort,
-  workerId: string,
-  message: string,
-  evidenceReferences: readonly string[],
-  proof: GoalLeaseProof,
-  context: CouncilActorContext,
-): Promise<IntegrationCommit> {
-  // Compatibility name for existing internal callers. The commit SHA is read
-  // from the owned worker branch; callers cannot fabricate or inject it.
-  return advanceWorkerIntegration(pool, git, workerId, message, evidenceReferences, proof, context);
-}
 
 /**
  * Reads the current Goal integration branch and latest frozen revision (if either exists), for

@@ -21,7 +21,7 @@ import { recordEvidenceBundle, verifyStoredEvidenceBundle, readEvidenceBundle } 
 import { generateConcertmasterFinalReport } from "./concertmaster-report.js";
 import { recordRoutingReportFixture } from "./routing-report-fixture.js";
 import { reconcileOnStartup } from "./reconciliation.js";
-import { recordDepartmentBranch, recordGoalIntegrationBranch, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
+import { recordDepartmentBranch, recordGoalIntegrationBranch, recordWorkerWorktree } from "./git-integration.js";
 import { reserveDepartmentBudget, reserveGoalBudget, reserveMissionBudget } from "./budget-reservation.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -169,7 +169,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     const fs = await import("node:fs/promises");
     await fs.writeFile(join(worktreePath, "change.txt"), "the bounded mission-only change");
     const commitResult = await localGitPort.commit(worktreePath, "mission: implement the bounded change", "worker", "worker@example.com");
-    const recordedCommit = await recordIntegrationCommit(pool, localGitPort, worker.workerId, "mission: implement the bounded change", evidenceIds, proof, headContext("product"));
+    const recordedCommit = await advanceWorkerIntegration(pool, localGitPort, worker.workerId, "mission: implement the bounded change", evidenceIds, proof, headContext("product"));
     expect(recordedCommit.commitSha).toBe(commitResult.commitSha);
 
     // 9. Budget: Goal envelope, Department allocation, Mission allocation.
