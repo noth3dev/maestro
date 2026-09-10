@@ -12,6 +12,7 @@ export MAESTRO_WORKTREE_ROOT="${MAESTRO_WORKTREE_ROOT:?Set an existing disposabl
 test -d "$MAESTRO_WORKTREE_ROOT"
 export PROJECT_ID="${PROJECT_ID:?Set the project UUID}"
 export MAESTRO_MODEL="${MAESTRO_MODEL:?Set an allowed model reference}"
+export MAESTRO_NATIVE_MODEL="${MAESTRO_NATIVE_MODEL:?Set the configured native model reference}"
 export MAESTRO="node apps/cli/dist/main.js"
 export TOOLS="$PWD/test/release-scenario"
 export SCENARIO_DIR="$MAESTRO_WORKTREE_ROOT/release-run-$(date +%s)"
@@ -252,9 +253,12 @@ The fake-provider CI command below performs the real child-process restart and p
 
 ```bash
 kill -TERM "$CONTROL_PLANE_PID"
+for _ in $(seq 1 100); do kill -0 "$CONTROL_PLANE_PID" 2>/dev/null || break; sleep 0.05; done
+if kill -0 "$CONTROL_PLANE_PID" 2>/dev/null; then echo "old Control Plane did not exit" >&2; exit 1; fi
 ( cd /home/ubuntu/projects/ms/apps/control-plane && node dist/main.js ) > "$SCENARIO_DIR/control-plane-restart.log" 2>&1 &
 export CONTROL_PLANE_PID=$!
 until curl -fsS "$CONTROL_PLANE_URL/readyz" >/dev/null; do kill -0 "$CONTROL_PLANE_PID" 2>/dev/null || { cat "$SCENARIO_DIR/control-plane-restart.log"; exit 1; }; done
+ps -p "$CONTROL_PLANE_PID" -o pid= | grep -q "$CONTROL_PLANE_PID"
 $MAESTRO goal get --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/goal-after-restart.json"
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-after-restart.json"
 ```
