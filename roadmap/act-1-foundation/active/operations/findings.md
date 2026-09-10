@@ -1832,3 +1832,18 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 continuation gate finding: no production change has resolved the documented S4 blockers since the previous check. The correct action remains to preserve the open S4 gate; starting `phase3-status-sync` would violate the plan's handoff prerequisite.
 
 - 2026-09-10 architectural scope finding: the existing exact slice list has no named slice for the three newly verified S4 production gaps. Implementing them under an invented slice name or silently broadening the S4 harness would violate the execution rules. A plan amendment must name the prerequisite slice and preserve the settled S6b decisions before code changes begin.
+
+
+- 2026-09-10 S4 finding: Goal-scoped evidence cannot be captured before Goal creation, so the runbook must create the contract without an evidence reference, create the Goal, then capture an immutable scenario anchor and export its returned `evidenceId` for later contract-derived inputs. The capability selection surface is now public and authenticated; each canonical mode is selected in a fresh Goal-bound session because capability sessions are immutable. Full no-DB verification is pending.
+
+
+- 2026-09-10 independent S4 review: `REVIEW: FAIL` with P1 evidence capture replay creating a new record for the same command, P1 Step 13 selecting two modes but running only one fixture-only remote-push script that never consumes the selected mode, and P1/P2 unmapped capability/evidence service errors returning 503 instead of stable 400/403/409 responses. P2 strict base64 padding validation is also missing. The worker terminal-before-repair hold/requeue gap remains pre-existing and blocks honest live completion.
+
+
+- 2026-09-10 review follow-up: the only new deployment concern was migration 0082 potentially failing generically if historical duplicate evidence command identities exist. Added an explicit preflight that reports the duplicate group count and instructs operators to reconcile before retrying. This is fail-closed; it does not silently deduplicate immutable evidence. The separate worker hold/requeue lifecycle blocker remains open and prevents S4 live handoff closure.
+
+
+- 2026-09-10 clean-DB full PostgreSQL verification finding: 208/209 files and 1,463/1,464 tests passed; `packages/persistence/src/reconciliation.fencing.property.test.ts` failed once after 8 fast-check cases with `ReconcilerLeaseUnavailableError` while a 1ms lease takeover was expected. The focused three-test reproduction passed immediately, so this is currently classified as a scheduler/timing-sensitive existing test flake, not an S4 remediation failure. Full-suite re-run is required before advancing; no fix is assumed without reproduction.
+
+
+- 2026-09-10 verification resolution: the clean-DB full PostgreSQL rerun passed 209/209 files and 1,464/1,464 tests. The earlier reconciliation property failure was transient under the full-suite scheduler; its focused rerun and full rerun both passed. No S4 remediation test or migration failure remains. S4 is still not closable because live user acceptance is pending and the production worker lifecycle has no deterministic hold/requeue state for Step 9→10.

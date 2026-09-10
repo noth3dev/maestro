@@ -40,11 +40,15 @@ describe("release scenario runbook", () => {
     expect(runbook).toContain('spawned|running');
     expect(runbook).toContain('set +e; $MAESTRO critical-action request');
     expect(runbook).toContain('$MAESTRO git worker-advance --worker-id "$WORKER_ID"');
-    expect(runbook).toContain('SCENARIO_EVIDENCE_ID="${SCENARIO_EVIDENCE_ID:?');
+    expect(runbook).not.toContain('SCENARIO_EVIDENCE_ID="${SCENARIO_EVIDENCE_ID:?');
+    expect(runbook).toContain('$MAESTRO evidence capture');
+    expect(runbook).toContain('$MAESTRO capability select-full-access-mode');
+    expect(runbook).toContain("fixture-only");
+    expect(runbook).toContain("does not consume the selected capability session");
     expect(runbook.indexOf("git worker-advance")).toBeLessThan(runbook.indexOf("worker accept"));
     expect(runbook).toContain("retain_intermediate_approvals");
     expect(runbook).toContain("skip_intermediate_approvals");
-    expect(runbook).toContain("public Control Plane/CLI surface does not expose");
+    expect(runbook).not.toContain("public Control Plane/CLI surface does not expose");
     expect(runbook).not.toContain("MAESTRO_ACCESS_MODE");
     expect(runbook).not.toContain("full-access-read");
     expect(runbook).not.toContain("full-access-write");

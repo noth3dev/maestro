@@ -11,7 +11,6 @@ cd /home/ubuntu/projects/ms
 export MAESTRO_WORKTREE_ROOT="${MAESTRO_WORKTREE_ROOT:?Set an existing disposable parent directory}"
 test -d "$MAESTRO_WORKTREE_ROOT"
 export MAESTRO_API_TOKEN="${MAESTRO_API_TOKEN:?Set an API token}"
-export SCENARIO_EVIDENCE_ID="${SCENARIO_EVIDENCE_ID:?Set a durable evidence_records UUID for this Goal; the current public CLI has no evidence-capture command}"
 export PROJECT_ID="${PROJECT_ID:?Set the project UUID}"
 export MAESTRO_MODEL="${MAESTRO_MODEL:?Set an allowed model reference}"
 export MAESTRO_NATIVE_MODEL="${MAESTRO_NATIVE_MODEL:?Set the configured native model reference}"
@@ -50,7 +49,7 @@ Keep the same `TARGET`, Goal, Control Plane process, and provider session for ev
 Create the Task Contract first so the Goal is durably bound to the launched scenario contract. Keep the same identifiers for every later step:
 
 ```bash
-node "$TOOLS/write-input.mjs" --kind contract --project "$PROJECT_ID" --repository "$TARGET" --base "$BASE_REVISION" --evidence-id "$SCENARIO_EVIDENCE_ID" --out "$SCENARIO_DIR/contract-substance.json"
+node "$TOOLS/write-input.mjs" --kind contract --project "$PROJECT_ID" --repository "$TARGET" --base "$BASE_REVISION" --out "$SCENARIO_DIR/contract-substance.json"
 export CONTRACT_ID="$(uuid)"
 $MAESTRO task-contract create --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --substance-json "$(cat "$SCENARIO_DIR/contract-substance.json")" --json > "$SCENARIO_DIR/contract.json"
 ```
@@ -94,6 +93,9 @@ export GOAL_ID="$(json_value "$SCENARIO_DIR/goal.json" goalId)"
 $MAESTRO conversation create --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --model "$MAESTRO_MODEL" --json > "$SCENARIO_DIR/conversation.json"
 export CONVERSATION_ID="$(json_value "$SCENARIO_DIR/conversation.json" conversationId)"
 $MAESTRO conversation turn --conversation-id "$CONVERSATION_ID" --project-id "$PROJECT_ID" --text "Repair the discount calculation in $TARGET; do not push remotely." --json > "$SCENARIO_DIR/ceo-request.json"
+printf 'Goal=%s\nTarget=%s\nBase=%s\n' "$GOAL_ID" "$TARGET" "$BASE_REVISION" > "$SCENARIO_DIR/scenario-evidence-anchor.txt"
+$MAESTRO evidence capture --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --correlation-id "$(uuid)" --command-id "$(uuid)" --kind release-scenario-anchor --media-type text/plain --content-file "$SCENARIO_DIR/scenario-evidence-anchor.txt" --json > "$SCENARIO_DIR/scenario-evidence.json"
+export SCENARIO_EVIDENCE_ID="$(json_value "$SCENARIO_DIR/scenario-evidence.json" evidenceId)"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -311,17 +313,26 @@ Observable: the ambiguous/critical action escalates to the user, `attempted:true
 
 ## Step 13 — Full-access modes and forbidden effects
 
-The production capability service accepts only the session-scoped values `retain_intermediate_approvals` and `skip_intermediate_approvals` through `CapabilityApprovalService.selectFullAccessMode()`. The current public Control Plane/CLI surface does not expose that service call, so this live step is **blocked** until an authenticated Goal-scoped operator route or TUI command exists. Do not replace this with an environment variable or claim this step passed.
+Select each production capability mode through the authenticated Goal-scoped CLI route. Each mode uses a fresh immutable capability session for the same Goal; no environment variable stands in for the persisted selection. The current public capability route persists the selection, but the release fixture's standalone remote-push script does not consume the selected capability session. The check below is therefore explicitly **fixture-only** and must not be reported as provider proof of mode-specific enforcement.
 
-For the fake-provider CI path, both real mode values are exercised and the forbidden remote effect remains blocked:
+```bash
+export RETAIN_SESSION_ID="$(uuid)"
+$MAESTRO capability select-full-access-mode --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --capability-kind ipython --session-id "$RETAIN_SESSION_ID" --full-access-mode retain_intermediate_approvals --json > "$SCENARIO_DIR/full-access-retain.json"
+export SKIP_SESSION_ID="$(uuid)"
+$MAESTRO capability select-full-access-mode --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --capability-kind ipython --session-id "$SKIP_SESSION_ID" --full-access-mode skip_intermediate_approvals --json > "$SCENARIO_DIR/full-access-skip.json"
+node -e 'const fs=require("node:fs"); for (const file of process.argv.slice(1)) { const x=JSON.parse(fs.readFileSync(file,"utf8")); if (!["retain_intermediate_approvals","skip_intermediate_approvals"].includes(x.fullAccessMode)) throw new Error("unexpected capability mode"); }' "$SCENARIO_DIR/full-access-retain.json" "$SCENARIO_DIR/full-access-skip.json"
+node "$WORKER_WORKTREE/scripts/attempt-remote-push.mjs"
+cp "$WORKER_WORKTREE/fixtures/remote-push-attempt.json" "$SCENARIO_DIR/step-13-fixture-only-remote-push.json"
+node -e 'const fs=require("node:fs"); const x=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (x.attempted !== true || x.status !== "blocked" || x.networkInvoked !== false) throw new Error("fixture remote-push evidence is not blocked fail-closed");' "$SCENARIO_DIR/step-13-fixture-only-remote-push.json"
+```
+
+CI fake-provider command (the CI path uses its own disposable target):
 
 ```bash
 node "$TOOLS/run-fake-scenario.mjs" --step 13 --target "$FAKE_TARGET" --state "$FAKE_STATE"
 ```
 
-Required live evidence once the production selection surface exists: select each mode through `CapabilityApprovalService.selectFullAccessMode()` for the same Goal-bound session, attempt the forbidden remote effect, and show `networkInvoked:false` for both modes.
-
-Observable: until that selection surface is available, the release gate remains failed rather than silently treating a fictional access-mode environment value as evidence.
+Observable: both canonical modes are durably selected for the Goal, and the explicitly fixture-only remote-push check records `attempted:true`, `status:"blocked"`, and `networkInvoked:false`. A real provider run must separately demonstrate that each selected mode blocks the forbidden effect; this runbook does not claim that evidence from the standalone fixture.
 
 ## Step 14 — Final report and evidence dump
 
