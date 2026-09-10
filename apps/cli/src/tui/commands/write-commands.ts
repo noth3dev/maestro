@@ -118,6 +118,7 @@ async function confirmIfCritical(context: WriteCommandContext, command: ParsedCo
     action: actionName,
     target,
     identity,
+    actor: "You",
     ...((option(command, "goal-id") ?? context.goalId) === undefined ? {} : { goalId: option(command, "goal-id") ?? context.goalId }),
     effect: `Execute ${command.name} ${command.action ?? ""}`.trim(),
     expiresAt: option(command, "expires-at") ?? "server-defined",
