@@ -1871,3 +1871,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 S2 review finding resolved: browser activation was initially checked before authority and could consume a repetition claim before authority denial. It now runs only after authority/control allow and before the durable effect claim; a regression test asserts the gate is not called on authority denial.
 
 - 2026-09-10 Plan 4 S3 finding: Discord buffer recovery restored pending signals but did not remember delivered nonces, so an identical signed signal emitted after restart was delivered twice. The append-only `delivered` records are now loaded into a durable in-memory dedupe set before accepting new emission.
+
+- 2026-09-10 Plan 4 S4 finding: the harness can prepare and verify both scenarios but cannot certify live behavior. PostgreSQL-backed enrollment, capability activation, real Control Plane outage/restart, provider/device effects, and independent certification remain user-owned HANDOFF steps. The generated fixture deliberately writes only to a disposable caller-provided root and rejects `testbed/`.
