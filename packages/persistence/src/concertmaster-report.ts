@@ -87,7 +87,7 @@ export interface RoutingEvidenceCertificationRow {
   readonly evidence_id: string; readonly goal_ref: string; readonly project_ref: string; readonly route_ref: string; readonly mode: string;
   readonly selected_model_ref: string; readonly account_binding: string; readonly candidate_refs: unknown; readonly rejections: unknown;
   readonly task_demand_hash: string; readonly pressure: number; readonly pressure_band: string; readonly decision_layer: string;
-  readonly overlay_version: number | null; readonly admission_binding_ref: string; readonly rationale: string; readonly evidence: Record<string, unknown>;
+  readonly overlay_version: number | string | null; readonly admission_binding_ref: string; readonly rationale: string; readonly evidence: Record<string, unknown>;
 }
 export interface RoutingNativeBinding {
   readonly binding_id: string; readonly execution_ref: string; readonly invocation_ref: string; readonly goal_id: string; readonly project_id: string;
@@ -114,7 +114,8 @@ export function evaluateRoutingEvidenceLineage(input: {
   for (const route of input.routingRows) {
     try { assertValidRoutingEvidence(route.evidence); } catch { blockers.push({ reason: "routing_evidence_malformed", detail: `Routing evidence ${route.evidence_id} is malformed` }); continue; }
     const evidence = route.evidence as unknown as RoutingEvidence;
-    const expectedPayload = { ...evidence, evidenceId: route.evidence_id, goalRef: route.goal_ref, projectRef: route.project_ref, routeRef: route.route_ref, mode: route.mode, selectedModelRef: route.selected_model_ref, accountBinding: route.account_binding, candidateRefs: route.candidate_refs, rejections: route.rejections, taskDemandHash: route.task_demand_hash, pressure: route.pressure, pressureBand: route.pressure_band, decisionLayer: route.decision_layer, overlayVersion: route.overlay_version, admissionBindingRef: route.admission_binding_ref, rationale: route.rationale };
+    const persistedOverlayVersion = route.overlay_version === null ? null : Number(route.overlay_version);
+    const expectedPayload = { ...evidence, evidenceId: route.evidence_id, goalRef: route.goal_ref, projectRef: route.project_ref, routeRef: route.route_ref, mode: route.mode, selectedModelRef: route.selected_model_ref, accountBinding: route.account_binding, candidateRefs: route.candidate_refs, rejections: route.rejections, taskDemandHash: route.task_demand_hash, pressure: route.pressure, pressureBand: route.pressure_band, decisionLayer: route.decision_layer, overlayVersion: persistedOverlayVersion, admissionBindingRef: route.admission_binding_ref, rationale: route.rationale };
     if (evidence.goalRef !== input.goalId || evidence.projectRef !== input.projectId || canonicalJson(evidence) !== canonicalJson(expectedPayload)) {
       blockers.push({ reason: "routing_evidence_identity_mismatch", detail: `Routing evidence ${route.evidence_id} is outside this Goal/project scope or has altered payload` }); continue;
     }

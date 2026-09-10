@@ -1663,3 +1663,7 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 S1 verification: full suite attempt `/tmp/plan3-s1-full-final2.log` exited 1 only because unrelated `packages/agent-runtime/src/ipython-process-adapter.test.ts:297` observed the detached process group still alive; the same test passed alone in a 317ms rerun. A clean full-suite rerun is required before commit.
 
 - 2026-09-10 S1 review finding fixed: `concertmaster-report.integration.test.ts` used a stale hard-coded TaskDemand hash despite random contract provenance. The fixture now computes `taskDemandContentHash` from the exact constructed demand. Domain routing timestamps now match `z.string().datetime()` UTC semantics.
+
+- 2026-09-10 S1 CI gate: remediation commit `f383328d` CI run `34424613492` is red. Build/lint passed, but PostgreSQL Vitest had 9 failures: first actionable failure `packages/persistence/src/evidence-bundle.ts:252` (`Routing evidence identity or canonical payload mismatch`) in the report-success integration scenarios; `ensemble-router-artifacts.integration.test.ts:257` also rejects the updated routing fixture as invalid. S1 is blocked; do not merge or advance to S2 until the PostgreSQL failures are fixed and CI is green.
+
+- 2026-09-10 S1 CI follow-up: independent review found the same PostgreSQL `int8` normalization gap in `concertmaster-report.ts` (report lineage expected payload), after the first fix handled only `evidence-bundle.ts`. Normalize `overlay_version` in report row binding as well; rerun focused and CI.
