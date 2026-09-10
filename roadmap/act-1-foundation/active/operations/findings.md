@@ -1773,3 +1773,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 Plan 3 S4 additional live-path blocker: `git worker-worktree` creates a separate worktree, while Steps 9/10 run tests and request repair in `$TARGET`. The runbook has no worker-worktree-to-Goal branch advance/merge, so the authorized worker change cannot reach the tested target.
 
 - 2026-09-10 Plan 3 S4 final review conclusion: string-based `runbook.test.ts` and fake HTTP process tests do not prove real WorkerService/API/PostgreSQL/provider execution. Treat S4 as blocked; do not merge, push, hand off, or begin S5.
+
+- 2026-09-10 Plan 3 S4 exact runtime blocker: initial worker admission has neither `$TARGET` nor a repository path in its prompt/request, while production IPython may derive a separate worker worktree. The runbook cannot truthfully claim the initial worker touched only `$TARGET`.

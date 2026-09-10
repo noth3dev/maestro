@@ -3849,3 +3849,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 Plan 3 S4 review follow-up: the live runbook creates `$WORKER_WORKTREE` but continues to test `$TARGET` and asks repair against `$TARGET`; without a branch advance/merge, worker changes cannot make the target test green.
 
 - 2026-09-10 Plan 3 S4 final exit assessment: fixture assets and fake process checks exist, but Exit evidence is not met. The live runbook is not executable against the real WorkerService/API, and the evidence dump is unreachable because acceptance, certification, and integration revision prerequisites fail.
+
+- 2026-09-10 Plan 3 S4 final runtime evidence: the generated Mission Bundle goal brief only says to inspect/report and contains no target or repository path; SpawnWorkerInput has no cwd and WorkerService omits it from the initial admission. Step 6's target-only observable is therefore unsupported.
