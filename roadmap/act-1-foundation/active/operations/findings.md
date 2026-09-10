@@ -1962,3 +1962,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 S2 review finding resolved: the first fixture pass did not seed `external-capability:device`, so the production device-agent process would return 403 in PostgreSQL CI. The integration fixture now seeds the shared ledger; local execution remains skipped without MAESTRO_TEST_DATABASE_URL.
 
 - 2026-09-10 S2 review finding resolved: browser activation was initially checked before authority and could consume a repetition claim before authority denial. It now runs only after authority/control allow and before the durable effect claim; a regression test asserts the gate is not called on authority denial.
+
+- 2026-09-10 Plan 4 S3 finding: Discord buffer recovery restored pending signals but did not remember delivered nonces, so an identical signed signal emitted after restart was delivered twice. The append-only `delivered` records are now loaded into a durable in-memory dedupe set before accepting new emission.

@@ -7,6 +7,7 @@ export interface Discord { readonly config: DiscordConfig; readonly pendingCount
 type RecordLine = { readonly kind:"signal"; readonly signal: AuthenticatedDiscordSignal } | { readonly kind:"delivered"; readonly nonce:string };
 export function createDiscord(config: DiscordConfig, delivery: DiscordDelivery): Discord {
   const pending = new Map<string, AuthenticatedDiscordSignal>();
+  const delivered = new Set<string>();
   let timer: ReturnType<typeof setInterval> | undefined;
   let closed = false;
   let loaded = false;
@@ -19,8 +20,12 @@ export function createDiscord(config: DiscordConfig, delivery: DiscordDelivery):
       const text = await readFile(config.bufferPath, "utf8");
       for (const line of text.split("\n").filter(Boolean)) {
         const entry = JSON.parse(line) as RecordLine;
-        if (entry.kind === "signal") pending.set(entry.signal.nonce, entry.signal);
-        else pending.delete(entry.nonce);
+        if (entry.kind === "signal") {
+          if (!delivered.has(entry.signal.nonce)) pending.set(entry.signal.nonce, entry.signal);
+        } else {
+          delivered.add(entry.nonce);
+          pending.delete(entry.nonce);
+        }
       }
       loaded = true;
     } catch (error) {
@@ -47,6 +52,7 @@ export function createDiscord(config: DiscordConfig, delivery: DiscordDelivery):
           try {
             await delivery.deliver(signal);
             await append({ kind: "delivered", nonce });
+            delivered.add(nonce);
             pending.delete(nonce);
           } catch {
             // Retain the signal until Maestro is reachable.
@@ -66,6 +72,7 @@ export function createDiscord(config: DiscordConfig, delivery: DiscordDelivery):
       if (closed) throw new Error("Discord is closed");
       verifyDiscordSignal(signal, config.credential, Date.now(), config.freshnessWindowMs);
       await load();
+      if (delivered.has(signal.nonce)) return;
       if (!pending.has(signal.nonce)) {
         await append({ kind: "signal", signal });
         pending.set(signal.nonce, signal);
