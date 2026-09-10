@@ -13,7 +13,7 @@ const statePath = args.state;
 const worktreeRoot = args["worktree-root"];
 if (!port || !statePath || !worktreeRoot) throw new Error("provider requires --port, --state, and --worktree-root");
 let state;
-try { state = JSON.parse(await readFile(statePath, "utf8")); } catch { state = { provider: "fake", calls: [], modelIdentities: ["fake/provider-a", "fake/provider-b"] }; }
+try { state = JSON.parse(await readFile(statePath, "utf8")); } catch (error) { if (error?.code !== "ENOENT") throw new Error(`fake provider state is unreadable: ${error.message}`); state = { provider: "fake", calls: [], modelIdentities: ["fake/provider-a", "fake/provider-b"] }; }
 const save = () => writeFile(statePath, JSON.stringify(state, null, 2) + "\n");
 const body = async (request) => { let text = ""; for await (const chunk of request) text += chunk; return text === "" ? {} : JSON.parse(text); };
 const json = (response, status, value) => { response.writeHead(status, { "content-type": "application/json" }); response.end(JSON.stringify(value)); };
