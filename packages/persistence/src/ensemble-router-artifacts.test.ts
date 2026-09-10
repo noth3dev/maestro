@@ -62,6 +62,8 @@ const evidence: RoutingEvidence = {
   admissionBindingRef: "binding-1",
   rationale: "selected after hard filters",
   createdAt: "2026-09-08T12:00:00Z",
+  pressureCalculation: { pressureFloor: 200 / 3, pressure: 100, explicitHeadUplift: 100 },
+        approvalIdentity: null,
   ...routingInputs,
 };
 

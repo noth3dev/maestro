@@ -239,7 +239,10 @@ async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string
   }
   for (const row of routingEvidence) {
     const raw = row.evidence;
-    try { assertValidRoutingEvidence(raw); } catch { throw new EvidenceBundleError(`Malformed routing evidence: ${String(row.evidence_id)}`); }
+    // Legacy 0072/0073 rows remain immutable evidence, but they cannot be
+    // upgraded without inventing missing A-E inputs. Keep them in the bundle;
+    // Concertmaster records the malformed/legacy row as a certification blocker.
+    try { assertValidRoutingEvidence(raw); } catch { continue; }
     const evidence = raw as unknown as RoutingEvidence;
     const expectedPayload = {
       ...evidence, evidenceId: row.evidence_id, goalRef: row.goal_ref, projectRef: row.project_ref,
@@ -252,8 +255,8 @@ async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string
     if (evidence.goalRef !== goalId || evidence.projectRef !== projectId || canonicalJson(evidence) !== canonicalJson(expectedPayload))
       throw new EvidenceBundleError(`Routing evidence identity or canonical payload mismatch: ${String(row.evidence_id)}`);
     const binding = bindingByRef.get(evidence.admissionBindingRef);
-    if (!binding || String(binding.goal_id) !== goalId || String(binding.project_id) !== String(projectId))
-      throw new EvidenceBundleError(`Routing evidence admission binding scope mismatch: ${String(row.evidence_id)}`);
+    if (!binding || String(binding.goal_id) !== goalId || String(binding.project_id) !== String(projectId) || binding.account_ref !== evidence.accountBinding)
+      throw new EvidenceBundleError(`Routing evidence admission binding scope or account mismatch: ${String(row.evidence_id)}`);
     const selected = `${binding.selected_model_provider}/${binding.selected_model_id}`;
     const actual = `${binding.actual_model_provider}/${binding.actual_model_id}`;
     if (selected !== evidence.selectedModelRef || actual !== evidence.selectedModelRef)
