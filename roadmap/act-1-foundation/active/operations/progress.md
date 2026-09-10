@@ -3727,3 +3727,8 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 ## 2026-09-10 — plan-2 S7
 - `phase2-status-sync` documentation synchronized with merged Plan 2 S6 evidence across the Phase 2 roadmap, operations plan, and English/Korean status pages. Live acceptance remains explicitly user-run and unclaimed.
 - Verification: `npm run build`, `npm run lint`, and `git diff --check` passed in the isolated worktree.
+
+## 2026-09-10 — Plan 3 S1 remediation (parent-owned)
+- Repaired S1 after independent review failure: routing records now carry immutable task-kind recipes, full TaskDemand, WorkCharacter, selected model profile (A/B), and operational overlay snapshot (C); certification lineage now blocks missing evidence, row/payload drift, provider identity mismatch, and below-requirement routes without a current exact approval. Approval/journal snapshots are included in the evidence bundle and final reports render actor, tier, repetition scope, reason, consequence, dissent, interruptions, and limitations.
+- RED proof: `packages/persistence/src/concertmaster-report.test.ts` covers missing routing evidence, unapproved below-requirement routing, provider mismatch, and duplicated-row mismatch. Focused 11 tests passed.
+- Self-verification: `npm run build`, `npm run lint`, and `git diff --check` passed. PostgreSQL integration suites remain skipped because Docker is unavailable; no live-provider acceptance was run.
