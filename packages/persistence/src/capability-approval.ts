@@ -39,6 +39,9 @@ export interface CapabilityApproval extends Omit<CapabilityApprovalInput, "repet
   readonly createdAt: Date;
   readonly revokedAt: Date | null;
   readonly repetitionScope: RepetitionScope;
+  readonly repetitionRemainingCount: number | null;
+  readonly repetitionRemainingBudgetCents: number | null;
+  readonly repetitionExpiresAt: Date | null;
 }
 
 export interface CapabilitySessionInput {
@@ -163,7 +166,7 @@ function mapBudget(row: BudgetRow): RepetitionScope {
   return { kind: "session" };
 }
 function mapApproval(row: ApprovalRow, budget: BudgetRow): CapabilityApproval {
-  return { approvalId: row.approval_id, capabilityKind: row.capability_kind, projectId: row.project_id, goalId: row.goal_id, commandId: row.command_id, action: row.action, target: row.target, policyVersion: row.policy_version, controlEpoch: row.control_epoch, budgetEffectCents: Number(row.budget_effect_cents), tier: row.tier, approverId: row.approver_id, decision: row.decision, reason: row.reason ?? "", consequence: row.consequence ?? "", expiresAt: row.expires_at, revokedAt: row.revoked_at, createdAt: row.created_at, repetitionScope: mapBudget(budget) };
+  return { repetitionRemainingCount: budget.remaining_count === null ? null : Number(budget.remaining_count), repetitionRemainingBudgetCents: budget.remaining_budget_cents === null ? null : Number(budget.remaining_budget_cents), repetitionExpiresAt: budget.expires_at, approvalId: row.approval_id, capabilityKind: row.capability_kind, projectId: row.project_id, goalId: row.goal_id, commandId: row.command_id, action: row.action, target: row.target, policyVersion: row.policy_version, controlEpoch: row.control_epoch, budgetEffectCents: Number(row.budget_effect_cents), tier: row.tier, approverId: row.approver_id, decision: row.decision, reason: row.reason ?? "", consequence: row.consequence ?? "", expiresAt: row.expires_at, revokedAt: row.revoked_at, createdAt: row.created_at, repetitionScope: mapBudget(budget) };
 }
 function mapSession(row: SessionRow): CapabilitySession { return { sessionId: row.session_id, capabilityKind: row.capability_kind, projectId: row.project_id, goalId: row.goal_id, fullAccessMode: row.full_access_mode, selectedBy: row.selected_by, selectedAt: row.selected_at }; }
 function mapJournal(row: JournalRow): CapabilityJournalEntry {
@@ -230,6 +233,38 @@ export async function createCapabilityApproval(pool: Pool, input: CapabilityAppr
     if (inserted.rowCount === 1) await insertJournal(client, { capabilityKind: input.capabilityKind, projectId: input.projectId, goalId: input.goalId, approvalId: input.approvalId, commandId: input.commandId, event: input.decision === "approved" ? "approval" : input.decision === "rejected" ? "rejection" : "safer_alternative", details: { tier: input.tier, reason: input.reason, consequence: input.consequence, ...(input.saferAlternative === undefined ? {} : { alternative: input.saferAlternative }) } });
     await client.query("COMMIT"); open = false;
     return mapApproval(row, budget);
+  } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+}
+
+export async function findCapabilityApproval(pool: QueryExecutor, capabilityKind: string, projectId: string, goalId: string, commandId: string): Promise<CapabilityApproval | undefined> {
+  for (const [value, label] of [[capabilityKind, "capabilityKind"], [projectId, "projectId"], [goalId, "goalId"], [commandId, "commandId"]] as const) requireText(value, label);
+  const result = await pool.query<ApprovalRow>("SELECT * FROM capability_approvals WHERE capability_kind = $1 AND project_id = $2 AND goal_id = $3 AND command_id = $4", [capabilityKind, projectId, goalId, commandId]);
+  const row = result.rows[0]; if (row === undefined) return undefined;
+  const budget = (await pool.query<BudgetRow>("SELECT * FROM capability_repetition_budgets WHERE approval_id = $1", [row.approval_id])).rows[0];
+  if (budget === undefined) throw new CapabilityApprovalError("Capability repetition budget is missing");
+  return mapApproval(row, budget);
+}
+
+export async function getCapabilityApproval(pool: QueryExecutor, approvalId: string): Promise<CapabilityApproval | undefined> {
+  requireText(approvalId, "approvalId");
+  const result = await pool.query<ApprovalRow>("SELECT * FROM capability_approvals WHERE approval_id = $1", [approvalId]);
+  const row = result.rows[0];
+  if (row === undefined) return undefined;
+  const budget = (await pool.query<BudgetRow>("SELECT * FROM capability_repetition_budgets WHERE approval_id = $1", [approvalId])).rows[0];
+  if (budget === undefined) throw new CapabilityApprovalError("Capability repetition budget is missing");
+  return mapApproval(row, budget);
+}
+
+export async function revokeCapabilityApproval(pool: Pool, approvalId: string, resolvedBy: string): Promise<void> {
+  requireText(approvalId, "approvalId"); requireText(resolvedBy, "resolvedBy");
+  const client = await pool.connect(); let open = false;
+  try {
+    await client.query("BEGIN"); open = true;
+    const result = await client.query<ApprovalRow>("UPDATE capability_approvals SET revoked_at = COALESCE(revoked_at, transaction_timestamp()) WHERE approval_id = $1 RETURNING *", [approvalId]);
+    const row = result.rows[0];
+    if (row === undefined) throw new CapabilityApprovalScopeError("Capability approval does not exist");
+    await insertJournal(client, { capabilityKind: row.capability_kind, projectId: row.project_id, goalId: row.goal_id, approvalId, commandId: row.command_id, event: "interruption", details: { reason: "external capability revoked", resolvedBy } });
+    await client.query("COMMIT"); open = false;
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 
