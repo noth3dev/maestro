@@ -23,7 +23,7 @@ describe("release scenario fake-provider harness", () => {
       expect(result.provider).toBe("fake");
       expect(result.providerCalls).toBeGreaterThan(0);
       expect(new Set(result.processPids).size).toBeGreaterThan(1);
-      expect(result.events.map(({ name }) => name)).toEqual(["ceo_request", "contract_intake", "launch_confirmed", "necessary_heads", "department_plan", "native_execution", "metronome_observation", "unsupported_assertion", "quality_failed", "quality_certified", "restart_reconciled", "ambiguous_action", "forbidden_effect", "evidence_dump"]);
+      expect(result.events.map(({ name }) => name)).toEqual(["ceo_request", "contract_intake", "launch_confirmed", "necessary_heads", "department_plan", "native_execution", "metronome_observation", "unsupported_assertion", "quality_failed", "repair_requested_through_maestro", "quality_certified", "restart_reconciled", "ambiguous_action", "forbidden_effect", "evidence_dump"]);
       expect(result.events.find(({ name }) => name === "unsupported_assertion")?.modelIdentities).toEqual(["fake/provider-a", "fake/provider-b"]);
       const certified = result.certifications.find(({ verdict }) => verdict === "passed");
       expect(certified?.revision).toBe(result.events.find(({ name }) => name === "quality_certified")?.integratedRevision);

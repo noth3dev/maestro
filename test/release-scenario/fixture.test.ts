@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -20,6 +20,10 @@ describe("release scenario fixture", () => {
       expect(await readFile(fixture.restartTrigger, "utf8")).toContain("checkpoint");
       expect(await readFile(fixture.ambiguousAction, "utf8")).toContain("ambiguous");
       expect(await readFile(fixture.remotePushAttempt, "utf8")).toContain("not-attempted");
+      const occupied = join(worktreeRoot, "occupied");
+      await mkdir(occupied, { recursive: true });
+      await writeFile(join(occupied, "keep.txt"), "keep");
+      await expect(createReleaseScenarioFixture({ root: occupied, worktreeRoot })).rejects.toThrow("must be empty");
       await expect(createReleaseScenarioFixture({ root: join(tmpdir(), "outside-release-target"), worktreeRoot })).rejects.toThrow("below MAESTRO_WORKTREE_ROOT");
       await expect(createReleaseScenarioFixture({ worktreeRoot: "" })).rejects.toThrow("MAESTRO_WORKTREE_ROOT is required");
       await expect(createReleaseScenarioFixture({ worktreeRoot: join(tmpdir(), "missing-release-root", String(Date.now())) })).rejects.toThrow("must already exist");
