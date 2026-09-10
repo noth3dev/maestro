@@ -2,6 +2,8 @@ export interface CriticalActionSummary {
   action: string;
   target: string;
   goalId?: string;
+  /** Durable command identity used to correlate the confirmation with activity. */
+  identity?: string;
   effect: string;
   expiresAt: string;
 }

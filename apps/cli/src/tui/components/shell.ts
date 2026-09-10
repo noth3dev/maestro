@@ -4,6 +4,8 @@ import { fitPlain, tuiTheme } from "../theme.js";
 export type AsyncState<T> = { kind: "loading" } | { kind: "empty" } | { kind: "error"; message: string } | { kind: "value"; value: T };
 
 export interface PendingDecision {
+  /** Command/effect identity that can be correlated with durable activity. */
+  readonly identity: string;
   readonly tier: string;
   readonly action: string;
   readonly actor: string;
@@ -96,7 +98,7 @@ export function renderStatusRow(state: TuiShellState, width: number): string {
 }
 
 function decisionRows(state: TuiShellState, width: number, height: number): string[] {
-  const decisions = state.pendingDecisions ?? [];
+  const decisions = (state.pendingDecisions ?? []).filter((decision) => typeof decision.identity === "string" && decision.identity.trim() !== "");
   if (decisions.length === 0) return [];
   if (width < 60) return [fitPlain(`⏸ ${decisions.length} pending decisions · ctrl+a to review`, width)];
   const maxVisible = height < 24 ? 1 : 2;
@@ -118,7 +120,9 @@ export function renderDecisionRegion(state: TuiShellState, width: number, height
 
 /** Details shown by the one-keystroke review action when a decision was replayed from storage. */
 export function renderPendingDecisionDetails(state: TuiShellState, width: number): string[] {
-  return (state.pendingDecisions ?? []).map((decision) => fitPlain(`⏸ ${decision.tier} · ${decision.action} · requested by ${decision.actor}`, width));
+  return (state.pendingDecisions ?? [])
+    .filter((decision) => typeof decision.identity === "string" && decision.identity.trim() !== "")
+    .map((decision) => fitPlain(`⏸ ${decision.tier} · ${decision.action} · requested by ${decision.actor}`, width));
 }
 
 function renderSplash(width: number): string[] {

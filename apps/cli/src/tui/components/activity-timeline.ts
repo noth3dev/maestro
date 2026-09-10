@@ -109,7 +109,7 @@ export function pendingDecisionsFromActivity(events: readonly ActivityTimelineEv
     if (key === undefined || tier === undefined) continue;
     const outcome = effect.outcome.toLowerCase();
     if (event.eventType.includes("awaiting") || outcome.includes("awaiting")) {
-      pending.set(key, { tier, action: `${effect.action} ${effect.target}`, actor: effect.actor });
+      pending.set(key, { identity: key, tier, action: `${effect.action} ${effect.target}`, actor: effect.actor });
     } else {
       pending.delete(key);
     }

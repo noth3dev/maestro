@@ -164,8 +164,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       const decisions = pendingDecisionsFromActivity(scopedActivity);
       if (pendingConfirmation !== undefined) {
         const summary = pendingConfirmation.summary;
-        const tier = summary.tier === "user" ? "You" : summary.tier ?? "You";
-        decisions.unshift({ tier, action: `${summary.action} ${summary.target}`, actor: "You" });
+        const identity = summary.identity?.trim();
+        const tier = summary.tier === "user" ? "You" : summary.tier;
+        if (identity !== undefined && identity !== "" && tier !== undefined) {
+          decisions.unshift({ identity, tier, action: `${summary.action} ${summary.target}`, actor: "You" });
+        }
       }
       state.pendingDecisions = decisions;
     };
