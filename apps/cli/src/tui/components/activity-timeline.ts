@@ -3,13 +3,17 @@ import type { CursorEvent } from "../activity-stream.js";
 import type { PendingDecision } from "./shell.js";
 import { fitPlain, transcriptPaint, tuiTheme, type TranscriptKind } from "../theme.js";
 
+export type ActivityApprovalTier = "automatic progress" | "Department Head" | "Encore Council" | "user";
+
 export interface ActivityEffectGate {
   readonly actor: string;
+  /** Durable effect identity; pending decisions must never infer this from display fields. */
   readonly identity?: string;
   readonly action: string;
   readonly target: string;
   readonly classification: "ordinary" | "critical" | "forbidden" | "ambiguous";
   readonly outcome: string;
+  readonly tier?: ActivityApprovalTier;
   readonly reason?: string;
   readonly kind: TranscriptKind;
 }
@@ -22,8 +26,22 @@ export interface ActivityTimelineEvent extends CursorEvent {
 
 function isRecord(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value); }
 function textField(value: unknown): string | undefined { return typeof value === "string" && value.trim() !== "" ? value : undefined; }
+function indexField(value: unknown): string | undefined {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return String(value);
+  return textField(value);
+}
+function approvalTier(value: unknown): ActivityApprovalTier | undefined {
+  return value === "automatic progress" || value === "Department Head" || value === "Encore Council" || value === "user" ? value : undefined;
+}
 function sourceTranscriptKind(value: unknown): TranscriptKind {
   return value === "error" || value === "success" || value === "system" || value === "warning" || value === "text" ? value : "system";
+}
+function effectIdentity(source: Record<string, unknown>): string | undefined {
+  const direct = textField(source.effectId) ?? textField(source.effect_id) ?? textField(source.effectIdentity) ?? textField(source.effect_identity) ?? textField(source.identity);
+  if (direct !== undefined) return direct;
+  const commandId = textField(source.commandId) ?? textField(source.command_id);
+  const index = indexField(source.index ?? source.effectIndex ?? source.effect_index);
+  return commandId !== undefined && index !== undefined ? `${commandId}:${index}` : undefined;
 }
 
 /** Convert the durable GoalEvent payload into the renderer's typed view model. */
@@ -36,10 +54,11 @@ export function toActivityTimelineEvent(event: GoalEvent): ActivityTimelineEvent
   const rawClassification = source.classification;
   const classification: ActivityEffectGate["classification"] | undefined = rawClassification === "ordinary" || rawClassification === "critical" || rawClassification === "forbidden" || rawClassification === "ambiguous" ? rawClassification : undefined;
   const outcome = textField(source.outcome);
+  const tier = approvalTier(source.tier ?? source.approvalTier ?? source.approval_tier ?? source.requiredTier ?? source.required_tier);
   const reason = textField(source.reason);
-  const identity = textField(source.effectId) ?? textField(source.effect_id) ?? (textField(source.commandId) !== undefined && textField(source.index) !== undefined ? `${textField(source.commandId)}:${textField(source.index)}` : undefined);
+  const identity = effectIdentity(source);
   const effect = actor !== undefined && action !== undefined && target !== undefined && classification !== undefined && outcome !== undefined
-    ? { actor, ...(identity === undefined ? {} : { identity }), action, target, classification, outcome, ...(reason === undefined ? {} : { reason }), kind: sourceTranscriptKind(source.kind) }
+    ? { actor, ...(identity === undefined ? {} : { identity }), action, target, classification, outcome, ...(tier === undefined ? {} : { tier }), ...(reason === undefined ? {} : { reason }), kind: sourceTranscriptKind(source.kind) }
     : undefined;
   return { cursor: event.cursor, eventId: event.eventId, eventType: event.eventType, ...(effect === undefined ? {} : { effect }) };
 }
@@ -66,17 +85,14 @@ function renderEffect(event: ActivityTimelineEvent, width: number): string {
   return transcriptPaint(effect.kind)(fitPlain(line, width));
 }
 
-function activityKey(effect: ActivityEffectGate): string {
-  return effect.identity ?? `${effect.actor}\u0000${effect.action}\u0000${effect.target}`;
+function activityKey(effect: ActivityEffectGate): string | undefined {
+  const identity = effect.identity?.trim();
+  return identity === undefined || identity === "" ? undefined : identity;
 }
 
-function pendingTier(effect: ActivityEffectGate): string {
-  const outcome = effect.outcome.toLowerCase();
-  if (outcome.includes("user") || outcome.includes("you")) return "You";
-  if (outcome.includes("encore")) return "Encore Council";
-  if (outcome.includes("department") || outcome.includes("head")) return "Department Head";
-  if (effect.classification === "critical") return "Encore Council";
-  return "You";
+function pendingTier(effect: ActivityEffectGate): string | undefined {
+  if (effect.tier === undefined) return undefined;
+  return effect.tier === "user" ? "You" : effect.tier;
 }
 
 /** Reconstruct actionable approvals from the durable activity replay. */
@@ -89,9 +105,11 @@ export function pendingDecisionsFromActivity(events: readonly ActivityTimelineEv
     const effect = event.effect;
     if (effect === undefined) continue;
     const key = activityKey(effect);
+    const tier = pendingTier(effect);
+    if (key === undefined || tier === undefined) continue;
     const outcome = effect.outcome.toLowerCase();
     if (event.eventType.includes("awaiting") || outcome.includes("awaiting")) {
-      pending.set(key, { tier: pendingTier(effect), action: `${effect.action} ${effect.target}`, actor: effect.actor });
+      pending.set(key, { tier, action: `${effect.action} ${effect.target}`, actor: effect.actor });
     } else {
       pending.delete(key);
     }
