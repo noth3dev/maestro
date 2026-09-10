@@ -41,6 +41,15 @@ describeDatabase("durable evidence metadata", () => {
     await expect(getEvidenceMetadata(pool, record.evidenceId, store)).rejects.toBeInstanceOf(EvidenceIntegrityError);
   });
 
+  it("returns the original record for an exact command replay and rejects changed payloads", async () => {
+    const store = new FileEvidenceStore(await mkdtemp(join(tmpdir(), "maestro-evidence-replay-")));
+    const shared = context();
+    const first = await appendEvidenceMetadata(pool, await store.capture({ context: shared, bytes: Buffer.from("first payload"), kind: "test-result", mediaType: "text/plain" }));
+    const replay = await appendEvidenceMetadata(pool, await store.capture({ context: shared, bytes: Buffer.from("first payload"), kind: "test-result", mediaType: "text/plain" }));
+    expect(replay).toEqual(first);
+    await expect(appendEvidenceMetadata(pool, await store.capture({ context: shared, bytes: Buffer.from("changed payload"), kind: "test-result", mediaType: "text/plain" }))).rejects.toThrow(/conflict|replay/i);
+  });
+
   it("database guards forbid evidence metadata rewrites and deletion", async () => {
     const { record } = await captureAndAppend(pool);
     await expect(pool.query("UPDATE evidence_records SET kind = 'rewritten' WHERE evidence_id = $1", [record.evidenceId])).rejects.toThrow(/immutable/);
