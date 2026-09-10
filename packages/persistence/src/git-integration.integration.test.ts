@@ -13,7 +13,7 @@ import { acquireGoalLease, StaleGoalLeaseError } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
-import { observeWorker, spawnWorker } from "./worker.js";
+import { observeWorker, sendWorkerMessageUnderOwnerClaim, spawnWorker } from "./worker.js";
 import { GitIntegrationError, advanceWorkerIntegration, getGoalGitIntegrationState, recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
 import { acceptDepartmentWorkerOutput, certifyQuality } from "./certification.js";
 
@@ -181,6 +181,7 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     const { goalId, proof, worker, kernel, targetWorktreePath } = await setupPlan(["product", "quality"], ["product"], true);
     expect(targetWorktreePath).toBeDefined();
     expect(kernel.admissions[0]?.cwd).toBe(targetWorktreePath);
+    await expect(sendWorkerMessageUnderOwnerClaim(pool, kernel, worker.workerId, "repair the target defect", proof)).resolves.toBe(true);
     const fs = await import("node:fs/promises");
     await fs.writeFile(join(targetWorktreePath!, "repair.txt"), "repair");
     const commit = await localGitPort.commit(targetWorktreePath!, "repair: apply fix", "worker", "worker@example.com");
