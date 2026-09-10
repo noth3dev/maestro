@@ -1755,3 +1755,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 Plan 3 S4 third-review remediation finding: the fake Control Plane now fails closed on duplicate effect history and the fake provider records/apply modes rather than echoing them. Step 14 validates provider evidence and content hash; Step 10 no longer calls the target repair script in the live runbook. Live PostgreSQL/provider acceptance remains unrun.
 
 - 2026-09-10 Plan 3 S4 third-remediation verification finding: full no-DB remains green after closing root creation, duplicate restart effect, mode enforcement, evidence integrity, and worker repair lineage gaps. PostgreSQL/live-provider acceptance is still intentionally unrun.
+
+- 2026-09-10 Plan 3 S4 fourth-remediation finding: the remaining review concern is the production worker's lack of a public repair/reprompt command; the runbook now records the Maestro conversation repair request and integrates only after the subsequent worker observation. No new production worker API was added because that would exceed S4's declared support scope.
