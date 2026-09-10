@@ -54,9 +54,21 @@ const bundleSubstance = (): MissionBundleSubstance => ({
 function fakeKernel(status: "running" | "succeeded" = "running"): ExecutionKernelPort & { readonly admissions: readonly Record<string, unknown>[] } {
   let counter = 0;
   const admissions: Record<string, unknown>[] = [];
+  const invocations = new Map<string, string>();
   return {
-    async spawn(request) { admissions.push(request as Record<string, unknown>); counter += 1; return { execution: `exec-${counter}` as never, invocation: `inv-${counter}` as never }; },
-    async prompt() {}, async sendMessage() {}, async observe() { return []; },
+    async spawn(request) {
+      admissions.push(request as Record<string, unknown>);
+      counter += 1;
+      const execution = `exec-${counter}`;
+      const invocation = `inv-${counter}`;
+      invocations.set(execution, invocation);
+      return { execution: execution as never, invocation: invocation as never };
+    },
+    async prompt() {}, async sendMessage() {},
+    async observe(execution) {
+      const invocation = invocations.get(execution as unknown as string);
+      return invocation === undefined ? [] : [{ invocation: invocation as never, name: "worker", status, toolEvents: { state: "empty", events: [] }, usage: { state: "available", totalTokens: 1 }, answer: status === "succeeded" ? { state: "available", text: "done" } : { state: "unavailable", reason: "running" } }];
+    },
     async cancel() { return { cancelled: true }; },
     async getModelIdentity() { return { provider: "fake", id: "fake" }; },
     async getToolEvents() { return { state: "empty", events: [] }; },
