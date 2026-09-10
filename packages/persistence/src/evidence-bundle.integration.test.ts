@@ -221,6 +221,24 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     await expect(pool.query("UPDATE evidence_bundles SET content = jsonb_set(content, '{workers}', '[]'::jsonb) WHERE bundle_id = $1", [bundleId])).rejects.toThrow();
   });
 
+  it("retains malformed routing evidence as an explicit bundle blocker", async () => {
+    const projectId = randomUUID();
+    const goalId = randomUUID();
+    const evidenceId = randomUUID();
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "bundle-malformed-routing", leaseDurationMs: 120_000 });
+    await pool.query(`INSERT INTO ensemble_router_routing_evidence
+      (evidence_id, goal_ref, project_ref, route_ref, mode, selected_model_ref, account_binding, candidate_refs, rejections, task_demand_hash, pressure, pressure_band, decision_layer, overlay_version, admission_binding_ref, rationale, evidence)
+      VALUES ($1, $2, $3, $4, 'pin', 'provider/model', 'account-1', '["candidate-1"]'::jsonb, '[]'::jsonb, $5, 1, 'low', 'automatic progress', 1, 'missing-binding', 'legacy row', $6::jsonb)`,
+      [evidenceId, goalId, projectId, `route:${evidenceId}`, "0".repeat(64), JSON.stringify({ schemaVersion: 999, legacy: true })]);
+
+    const recorded = await recordEvidenceBundle(pool, goalId, proof);
+    const read = await readEvidenceBundle(pool, recorded.bundleId);
+    const routingRows = read.content.routingEvidence as readonly Record<string, unknown>[];
+    expect(routingRows).toHaveLength(1);
+    expect(routingRows[0]).toMatchObject({ evidence_id: evidenceId, malformed: true, blocker: { reason: "routing_evidence_malformed" } });
+  });
+
   it("rejects stale and paused Goal evidence effects before assembly or durable write", async () => {
     const goalId = randomUUID();
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, randomUUID()]);

@@ -3756,3 +3756,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 S1 review gate: CI `34427399920` failed only because a new integration assertion was misplaced (`ReferenceError: admissionCommandId is not defined`); after recording the correction, fresh review found additional strict admission/snapshot/model-profile/contracts gaps. S1 remains open and requires another RED-first remediation.
 
 - 2026-09-10 S1 second review remediation: added RED coverage for missing admission identity, duplicate claim snapshots, model-profile nested hostility, and contract-level hostile arrays; focused domain/report/contracts tests now pass 34/34, build/lint/diff-check pass. The prior CI failure was a test-placement defect; fresh CI is still required for the corrected tree.
+
+- 2026-09-10 S1 independent review (commit `108f8dc`) remains **FAIL** despite green CI `34428368770`: pending journal identity is not fully correlated with the claim, and malformed/legacy routing rows are dropped from `routingEvidence` during bundle assembly. Remediation continues in the same worktree with RED tests first.
+
+- 2026-09-10 S1 review remediation: added RED coverage for inconsistent claim-time journal identity and malformed routing-row retention. The identity test fails against the prior implementation and passes after the fix; the bundle regression is PostgreSQL-gated and will be validated in CI. Focused report/bundle tests, build, lint, and diff-check pass locally; S1 remains open pending fresh CI and independent review.

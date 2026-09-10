@@ -220,7 +220,7 @@ async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string
             matched_record_id, decided_at
        FROM authority_decisions WHERE goal_id = $1 ORDER BY decided_at, decision_id`, [goalId],
   )).rows;
-  const routingEvidence = (await pool.query<Record<string, unknown>>(
+  const routingEvidenceRows = (await pool.query<Record<string, unknown>>(
     `SELECT evidence_id, goal_ref, project_ref, route_ref, mode, selected_model_ref,
             account_binding, candidate_refs, rejections, task_demand_hash, pressure,
             pressure_band, decision_layer, overlay_version, admission_binding_ref,
@@ -228,6 +228,7 @@ async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string
        FROM ensemble_router_routing_evidence WHERE goal_ref = $1
        ORDER BY created_at, evidence_id`, [goalId],
   )).rows;
+  const routingEvidence: Record<string, unknown>[] = [];
   const nativeExecutionBindings = (await pool.query<Record<string, unknown>>(
     `SELECT binding_id, execution_ref, invocation_ref, worker_id, goal_id, project_id,
             admission_kind, operator_id, mission_bundle_id, policy_version,
@@ -238,12 +239,15 @@ async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string
   )).rows;
   const bindingById = new Map<string, Record<string, unknown>>();
   for (const binding of nativeExecutionBindings) bindingById.set(String(binding.binding_id), binding);
-  for (const row of routingEvidence) {
+  for (const row of routingEvidenceRows) {
     const raw = row.evidence;
     // Legacy 0072/0073 rows remain immutable evidence, but they cannot be
     // upgraded without inventing missing A-E inputs. Keep them in the bundle;
     // Concertmaster records the malformed/legacy row as a certification blocker.
-    try { assertValidRoutingEvidence(raw); } catch { continue; }
+    try { assertValidRoutingEvidence(raw); } catch {
+      routingEvidence.push({ ...row, malformed: true, blocker: { reason: "routing_evidence_malformed", detail: `Routing evidence ${String(row.evidence_id)} is malformed or legacy and cannot certify` } });
+      continue;
+    }
     const evidence = raw as unknown as RoutingEvidence;
     const expectedPayload = {
       ...evidence, evidenceId: row.evidence_id, goalRef: row.goal_ref, projectRef: row.project_ref,
@@ -262,6 +266,7 @@ async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string
     const actual = `${binding.actual_model_provider}/${binding.actual_model_id}`;
     if (selected !== evidence.selectedModelRef || actual !== evidence.selectedModelRef)
       throw new EvidenceBundleError(`Routing evidence provider identity mismatch: ${String(row.evidence_id)}`);
+    routingEvidence.push(row);
   }
   const councilBriefs = (await pool.query<Record<string, unknown>>(
     `SELECT council_id, department_id, payload, submitted_at

@@ -104,7 +104,10 @@ export interface RoutingCapabilityApproval {
 export interface RoutingCapabilityClaim {
   readonly claim_id: string; readonly approval_id: string; readonly capability_kind: string; readonly project_id: string; readonly goal_id: string;
   readonly command_id: string; readonly effect_index: number | string; readonly action: string; readonly target: string; readonly policy_version: number; readonly budget_effect_cents: string | number; readonly consumed_at: Date | string;
-  readonly admission_command_id?: string | null; readonly snapshot_count?: number | string; readonly remaining_count_at_claim?: string | number | null;
+  readonly admission_command_id?: string | null; readonly snapshot_count?: number | string;
+  readonly snapshot_capability_kind?: string | null; readonly snapshot_project_id?: string | null; readonly snapshot_goal_id?: string | null;
+  readonly snapshot_approval_id?: string | null; readonly snapshot_command_id?: string | null; readonly snapshot_action?: string | null;
+  readonly snapshot_target?: string | null; readonly snapshot_effect_index?: string | number | null; readonly remaining_count_at_claim?: string | number | null;
   readonly remaining_budget_cents_at_claim?: string | number | null; readonly repetition_expires_at_at_claim?: Date | string | null;
 }
 export function evaluateRoutingEvidenceLineage(input: {
@@ -147,12 +150,17 @@ export function evaluateRoutingEvidenceLineage(input: {
         ? Number.isFinite(repetitionExpiryAt) && Number.isFinite(claimRepetitionExpiryAt) && claimAt < repetitionExpiryAt! && claimAt < claimRepetitionExpiryAt! && repetitionExpiryAt === claimRepetitionExpiryAt
         : repetitionExpiryAt === null && claimRepetitionExpiryAt === null;
       const snapshotCount = claim?.snapshot_count == null ? 0 : Number(claim.snapshot_count);
+      const snapshotIdentityValid = claim !== undefined
+        && claim.snapshot_capability_kind === claim.capability_kind && claim.snapshot_project_id === claim.project_id
+        && claim.snapshot_goal_id === claim.goal_id && claim.snapshot_approval_id === claim.approval_id
+        && claim.snapshot_command_id === claim.command_id && claim.snapshot_action === claim.action
+        && claim.snapshot_target === claim.target && String(claim.snapshot_effect_index) === String(claim.effect_index);
       const effectIndex = claim === undefined ? Number.NaN : Number(claim.effect_index);
       const claimBudget = claim === undefined ? Number.NaN : Number(claim.budget_effect_cents);
       const approvalBudget = approval === undefined ? Number.NaN : Number(approval.budget_effect_cents);
       const remainingCountAtClaim = claim?.remaining_count_at_claim == null ? null : Number(claim.remaining_count_at_claim);
       const remainingBudgetAtClaim = claim?.remaining_budget_cents_at_claim == null ? null : Number(claim.remaining_budget_cents_at_claim);
-      const repetitionBudgetValid = snapshotCount === 1 && Number.isSafeInteger(effectIndex) && effectIndex! >= 0 && (
+      const repetitionBudgetValid = snapshotIdentityValid && snapshotCount === 1 && Number.isSafeInteger(effectIndex) && effectIndex! >= 0 && (
         approval?.scope_kind === "bounded_count"
           ? Number.isSafeInteger(remainingCountAtClaim) && remainingCountAtClaim! >= 0
           : approval?.scope_kind === "bounded_budget"
@@ -325,15 +333,26 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
   const capabilityClaims = await pool.query<RoutingCapabilityClaim>(`SELECT claim.claim_id, claim.approval_id, claim.capability_kind, claim.project_id, claim.goal_id,
                 claim.command_id, claim.effect_index, claim.action, claim.target, claim.policy_version, claim.budget_effect_cents, claim.consumed_at,
                 pending.details->>'admissionCommandId' AS admission_command_id, pending.snapshot_count,
+                pending.snapshot_capability_kind, pending.snapshot_project_id, pending.snapshot_goal_id,
+                pending.snapshot_approval_id, pending.snapshot_command_id, pending.details->>'action' AS snapshot_action,
+                pending.details->>'target' AS snapshot_target, pending.details->>'effectIndex' AS snapshot_effect_index,
                 pending.details->>'remainingCount' AS remaining_count_at_claim,
                 pending.details->>'remainingBudgetCents' AS remaining_budget_cents_at_claim,
                 pending.details->>'repetitionExpiresAt' AS repetition_expires_at_at_claim
            FROM capability_repetition_claims claim
            LEFT JOIN LATERAL (
              SELECT (array_agg(journal.details ORDER BY journal.recorded_at, journal.journal_id))[1] AS details,
+                    (array_agg(journal.capability_kind ORDER BY journal.recorded_at, journal.journal_id))[1] AS snapshot_capability_kind,
+                    (array_agg(journal.project_id ORDER BY journal.recorded_at, journal.journal_id))[1] AS snapshot_project_id,
+                    (array_agg(journal.goal_id ORDER BY journal.recorded_at, journal.journal_id))[1] AS snapshot_goal_id,
+                    (array_agg(journal.approval_id ORDER BY journal.recorded_at, journal.journal_id))[1] AS snapshot_approval_id,
+                    (array_agg(journal.command_id ORDER BY journal.recorded_at, journal.journal_id))[1] AS snapshot_command_id,
                     count(*)::int AS snapshot_count
                FROM capability_decision_journal journal
-              WHERE journal.approval_id = claim.approval_id AND journal.command_id = claim.command_id
+              WHERE journal.capability_kind = claim.capability_kind AND journal.project_id = claim.project_id
+                AND journal.goal_id = claim.goal_id AND journal.approval_id = claim.approval_id
+                AND journal.command_id = claim.command_id AND journal.details->>'action' = claim.action
+                AND journal.details->>'target' = claim.target
                 AND journal.event = 'effect_result' AND journal.details->>'outcome' = 'pending_unknown'
                 AND journal.details->>'effectIndex' = claim.effect_index::text
            ) pending ON true
