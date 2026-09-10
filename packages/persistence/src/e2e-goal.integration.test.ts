@@ -19,6 +19,7 @@ import { acceptDepartmentWorkerOutput, certifyQuality } from "./certification.js
 import { recordGoalIntegrationRevision } from "./git-integration.js";
 import { recordEvidenceBundle, verifyStoredEvidenceBundle, readEvidenceBundle } from "./evidence-bundle.js";
 import { generateConcertmasterFinalReport } from "./concertmaster-report.js";
+import { recordRoutingReportFixture } from "./routing-report-fixture.js";
 import { reconcileOnStartup } from "./reconciliation.js";
 import { recordDepartmentBranch, recordGoalIntegrationBranch, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
 import { reserveDepartmentBudget, reserveGoalBudget, reserveMissionBudget } from "./budget-reservation.js";
@@ -187,6 +188,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     const quality = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: evidenceIds }, "quality", proof, headContext("quality"));
     expect(quality.verdict).toBe("passed");
 
+    await recordRoutingReportFixture(pool, goalId, projectId);
     const bundle = await recordEvidenceBundle(pool, goalId, proof);
     await verifyStoredEvidenceBundle(pool, bundle.bundleId);
     expect(bundle.hash).toMatch(/^[0-9a-f]{64}$/);

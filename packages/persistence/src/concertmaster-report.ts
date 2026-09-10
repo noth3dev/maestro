@@ -121,11 +121,10 @@ export function evaluateRoutingEvidenceLineage(input: {
     validRoutingEvidence.push(evidence);
   }
   if (input.routingRows.length === 0) blockers.push({ reason: "routing_evidence_missing", detail: "No durable routing evidence is recorded for this Goal" });
-  const bindingsByRef = new Map<string, RoutingNativeBinding>();
-  for (const binding of input.nativeBindings) { bindingsByRef.set(binding.binding_id, binding); bindingsByRef.set(binding.execution_ref, binding); bindingsByRef.set(binding.invocation_ref, binding); }
+  const bindingById = new Map(input.nativeBindings.map((binding) => [binding.binding_id, binding] as const));
   const approvalById = new Map(input.approvals.map((approval) => [approval.approval_id, approval] as const));
   for (const route of validRoutingEvidence) {
-    const binding = bindingsByRef.get(route.admissionBindingRef);
+    const binding = bindingById.get(route.admissionBindingRef);
     if (!binding) { blockers.push({ reason: "routing_evidence_binding_missing", detail: `Routing evidence ${route.evidenceId} has no matching native admission binding` }); continue; }
     const selected = `${binding.selected_model_provider}/${binding.selected_model_id}`;
     const actual = `${binding.actual_model_provider}/${binding.actual_model_id}`;
@@ -134,10 +133,10 @@ export function evaluateRoutingEvidenceLineage(input: {
     if (below) {
       const approval = route.approvalRef === null ? undefined : approvalById.get(route.approvalRef);
       const identity = route.approvalIdentity;
-      const executionAt = new Date(binding.created_at).getTime();
+      const bindingAt = new Date(binding.created_at).getTime();
       const claim = approval === undefined || identity === null ? undefined : input.claims.find((candidate) => candidate.approval_id === approval.approval_id && candidate.goal_id === input.goalId && candidate.project_id === input.projectId && candidate.capability_kind === identity.capabilityKind && candidate.command_id === identity.commandId && candidate.action === identity.action && candidate.target === identity.target);
       const claimAt = claim === undefined ? Number.NaN : new Date(claim.consumed_at).getTime();
-      const validApproval = approval !== undefined && identity !== null && Number.isFinite(executionAt) && approval.goal_id === input.goalId && approval.project_id === input.projectId && approval.capability_kind === identity.capabilityKind && approval.command_id === identity.commandId && approval.action === identity.action && approval.target === identity.target && approval.decision === "approved" && approval.tier === route.decisionLayer && approval.scope_kind !== null && new Date(approval.created_at).getTime() <= executionAt && new Date(approval.expires_at).getTime() > executionAt && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > executionAt) && typeof approval.reason === "string" && approval.reason.trim() !== "" && typeof approval.consequence === "string" && approval.consequence.trim() !== "" && claim !== undefined && claim.policy_version === approval.policy_version && claimAt >= executionAt && claimAt <= new Date(route.createdAt).getTime();
+      const validApproval = approval !== undefined && identity !== null && Number.isFinite(bindingAt) && Number.isFinite(claimAt) && claimAt >= bindingAt && approval.goal_id === input.goalId && approval.project_id === input.projectId && approval.capability_kind === identity.capabilityKind && approval.command_id === identity.commandId && approval.action === identity.action && approval.target === identity.target && approval.decision === "approved" && approval.tier === route.decisionLayer && approval.scope_kind !== null && new Date(approval.created_at).getTime() <= bindingAt && new Date(approval.expires_at).getTime() > bindingAt && new Date(approval.expires_at).getTime() > claimAt && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > bindingAt) && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > claimAt) && typeof approval.reason === "string" && approval.reason.trim() !== "" && typeof approval.consequence === "string" && approval.consequence.trim() !== "" && claim !== undefined && claim.policy_version === approval.policy_version;
       if (!validApproval) blockers.push({ reason: "routing_evidence_unapproved_below_requirement", detail: `Below-requirement model ${route.selectedModelRef} has no approval bound to the execution identity and time` });
     }
   }

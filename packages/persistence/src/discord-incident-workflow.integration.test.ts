@@ -31,6 +31,7 @@ import { acceptDepartmentWorkerOutput, certifyQuality } from "./certification.js
 import { recordGoalIntegrationRevision, recordDepartmentBranch, recordGoalIntegrationBranch, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
 import { recordEvidenceBundle, verifyStoredEvidenceBundle } from "./evidence-bundle.js";
 import { generateConcertmasterFinalReport } from "./concertmaster-report.js";
+import { recordRoutingReportFixture } from "./routing-report-fixture.js";
 import { recordDiscordSignal } from "./discord.js";
 import {
   DiscordIncidentAuthorizationError,
@@ -220,6 +221,7 @@ describeDatabase("Phase 4 work-sequence step 8: Discord incident through Task Co
     const quality = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: evidenceIds }, "quality", proof, headContext("quality"));
     expect(quality.verdict).toBe("passed");
 
+    await recordRoutingReportFixture(pool, goalId, projectId);
     const bundle = await recordEvidenceBundle(pool, goalId, proof);
     await verifyStoredEvidenceBundle(pool, bundle.bundleId);
 

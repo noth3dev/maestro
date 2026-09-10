@@ -1,7 +1,18 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 
 export const UuidSchema = z.uuid();
 export const CommandVersionSchema = z.number().int().min(0);
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  const object = value as Record<string, unknown>;
+  return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`).join(",")}}`;
+}
+function taskDemandHash(value: unknown): string {
+  return createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
+}
 
 export const GoalStateSchema = z.enum([
   "draft", "ready_for_confirmation", "launched", "active", "pausing", "paused",
@@ -499,17 +510,20 @@ const PressureCalculationSchema = z.object({
   pressure: z.number().finite().min(0).max(200),
   explicitHeadUplift: z.number().int().min(0).max(200),
 }).strict();
+const RoutingRefSchema = z.string().regex(/^\S+$/);
+const RoutingCandidateRefSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/);
 const RoutingApprovalIdentitySchema = z.object({
-  capabilityKind: NonEmptyLineSchema, commandId: NonEmptyLineSchema, action: NonEmptyLineSchema, target: NonEmptyLineSchema,
+  capabilityKind: RoutingRefSchema, commandId: RoutingRefSchema, action: RoutingRefSchema, target: RoutingRefSchema,
 }).strict();
 export const RoutingEvidenceSchema = z.object({
-  schemaVersion: z.literal(1), evidenceId: NonEmptyLineSchema, goalRef: NonEmptyLineSchema, projectRef: NonEmptyLineSchema,
-  routeRef: NonEmptyLineSchema, mode: z.enum(["ensemble", "pin"]), selectedModelRef: z.string().regex(/^[^/\s]+\/[^/\s]+$/),
-  accountBinding: NonEmptyLineSchema, candidateRefs: z.array(NonEmptyLineSchema).min(1).refine((values) => new Set(values).size === values.length, "candidateRefs must not contain duplicates"),
+  schemaVersion: z.literal(1), evidenceId: RoutingRefSchema, goalRef: RoutingRefSchema, projectRef: RoutingRefSchema,
+  routeRef: RoutingRefSchema, mode: z.enum(["ensemble", "pin"]), selectedModelRef: z.string().regex(/^[^/\s]+\/[^/\s]+$/),
+  accountBinding: RoutingRefSchema, candidateRefs: z.array(RoutingCandidateRefSchema).min(1).refine((values) => new Set(values).size === values.length, "candidateRefs must not contain duplicates"),
+  selectedCandidateRef: RoutingCandidateRefSchema,
   rejections: z.array(z.object({ candidateRef: NonEmptyLineSchema, reason: NonEmptyLineSchema }).strict()), taskDemandHash: z.string().regex(/^[a-f0-9]{64}$/),
   pressure: z.number().finite().min(0).max(200), pressureBand: z.enum(["low", "medium", "high", "critical"]),
   decisionLayer: z.enum(["automatic progress", "Department Head", "Encore Council", "user"]), overlayVersion: z.number().int().positive(),
-  admissionBindingRef: NonEmptyLineSchema, rationale: NonEmptyLineSchema, createdAt: NonEmptyLineSchema,
+  admissionBindingRef: RoutingRefSchema, rationale: NonEmptyLineSchema, createdAt: z.string().datetime(),
   pressureCalculation: PressureCalculationSchema, taskKindRecipeVersions: z.record(z.string().min(1), z.number().int().positive()),
   taskDemand: TaskDemandSchema,
   workCharacter: z.object({
@@ -518,8 +532,22 @@ export const RoutingEvidenceSchema = z.object({
   }).strict(),
   modelProfile: ModelProfileSchema,
   operationalOverlaySnapshot: OperationalOverlaySnapshotSchema,
-  approvalRef: NonEmptyLineSchema.nullable(), approvalIdentity: RoutingApprovalIdentitySchema.nullable(),
+  approvalRef: RoutingRefSchema.nullable(), approvalIdentity: RoutingApprovalIdentitySchema.nullable(),
 }).strict().superRefine((value, context) => {
+  if (!value.candidateRefs.includes(value.selectedCandidateRef)) context.addIssue({ code: "custom", path: ["selectedCandidateRef"], message: "selected candidate must be in candidateRefs" });
+  const knownKinds = new Set(["planning", "coding", "verification", "research", "debugging", "tool-operation"]);
+  const demandedKinds = new Set<string>(value.taskDemand.taskKinds);
+  const recipeKeys = Object.keys(value.taskKindRecipeVersions);
+  if (recipeKeys.length !== demandedKinds.size || recipeKeys.some((kind) => !demandedKinds.has(kind) || !knownKinds.has(kind) || value.taskKindRecipeVersions[kind] !== 1)) context.addIssue({ code: "custom", path: ["taskKindRecipeVersions"], message: "recipe versions must exactly match known task kinds" });
+  const expectedFloor = (value.workCharacter.risk + (200 - value.workCharacter.reversibility) + value.workCharacter.verificationAttachment) / 3;
+  const expectedPressure = Math.max(expectedFloor, value.pressureCalculation.explicitHeadUplift);
+  if (value.pressureCalculation.pressureFloor !== expectedFloor || value.pressureCalculation.pressure !== expectedPressure || value.pressure !== expectedPressure) context.addIssue({ code: "custom", path: ["pressureCalculation"], message: "pressure calculation does not match WorkCharacter" });
+  const expectedBand = value.pressure < 50 ? "low" : value.pressure < 100 ? "medium" : value.pressure < 150 ? "high" : "critical";
+  const expectedLayer = expectedBand === "low" ? "automatic progress" : expectedBand === "medium" ? "Department Head" : expectedBand === "high" ? "Encore Council" : "user";
+  if (value.pressureBand !== expectedBand || value.decisionLayer !== expectedLayer) context.addIssue({ code: "custom", path: ["pressureBand"], message: "pressure projection does not match pressure" });
+  if (value.taskDemandHash !== taskDemandHash(value.taskDemand)) context.addIssue({ code: "custom", path: ["taskDemandHash"], message: "taskDemandHash does not match taskDemand" });
+  const selectedObservation = value.operationalOverlaySnapshot.observations.find((observation) => observation.candidateRef === value.selectedCandidateRef);
+  if (selectedObservation === undefined || !selectedObservation.currentAvailability || selectedObservation.accountBinding !== value.accountBinding || value.candidateRefs.some((candidate) => !value.operationalOverlaySnapshot.observations.some((observation) => observation.candidateRef === candidate))) context.addIssue({ code: "custom", path: ["operationalOverlaySnapshot"], message: "candidate set/account binding is not covered by operational observations" });
   if ((value.approvalRef === null) !== (value.approvalIdentity === null)) context.addIssue({ code: "custom", path: ["approvalIdentity"], message: "approvalRef and approvalIdentity must be supplied together" });
   if (value.taskDemand.provenance.taskContractRef !== value.workCharacter.provenance.taskContractRef || value.taskDemand.provenance.headDecisionRef !== value.workCharacter.provenance.headDecisionRef)
     context.addIssue({ code: "custom", path: ["workCharacter", "provenance"], message: "TaskDemand and WorkCharacter provenance must agree" });
