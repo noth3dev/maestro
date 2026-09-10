@@ -158,6 +158,20 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     expect(replayCommit).toEqual(recorded);
   });
 
+  it("rejects a worker branch that diverged from the current Goal branch", async () => {
+    const { proof, worker, targetWorktreePath } = await setupPlan(["product"], ["product"], true);
+    const goalWorktreePath = join(repositoryPath, "..", `maestro-goal-divergence-${randomUUID()}`);
+    worktreePaths.push(goalWorktreePath);
+    await localGitPort.createWorktree(repositoryPath, goalWorktreePath, "goal/integration");
+    const fs = await import("node:fs/promises");
+    await fs.writeFile(join(goalWorktreePath, "goal-change.txt"), "goal");
+    await localGitPort.commit(goalWorktreePath, "goal: diverge", "goal", "goal@example.com");
+    await fs.writeFile(join(targetWorktreePath!, "worker-change.txt"), "worker");
+    await localGitPort.commit(targetWorktreePath!, "worker: diverge", "worker", "worker@example.com");
+    await expect(advanceWorkerIntegration(pool, localGitPort, worker.workerId, "worker: diverge", [...evidence.references], proof, headContext("product"))).rejects.toThrow();
+    expect((await pool.query("SELECT count(*)::int AS count FROM integration_commits WHERE worker_id = $1", [worker.workerId])).rows[0]!.count).toBe(0);
+  });
+
   it("rejects a worker branch with no new commit", async () => {
     const { proof, worker } = await setupPlan(["product"], ["product"], true);
     await expect(advanceWorkerIntegration(pool, localGitPort, worker.workerId, "repair: missing", [...evidence.references], proof, headContext("product"))).rejects.toThrow("no commit");
