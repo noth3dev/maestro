@@ -638,3 +638,25 @@ describe("capability session route", () => {
     await app.close();
   });
 });
+
+describe("evidence capture route", () => {
+  it("creates a Goal-scoped durable evidence record from authenticated content", async () => {
+    const record = { evidenceId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f08", context: { correlationId: goal.goalId, commandId: goal.goalId, projectId: goal.projectId, goalId: goal.goalId, actorId: operator.operatorId }, sha256: "a".repeat(64), byteLength: 4, kind: "test-result", mediaType: "text/plain", createdAt: "2025-01-01T00:00:00.000Z", retention: "project_lifetime" as const };
+    const capture = vi.fn(async (input: unknown, actor: unknown) => {
+      expect(input).toEqual({ projectId: goal.projectId, goalId: goal.goalId, correlationId: goal.goalId, commandId: goal.goalId, kind: "test-result", mediaType: "text/plain", contentBase64: Buffer.from("test").toString("base64") });
+      expect(actor).toEqual(operator);
+      return record;
+    });
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), evidenceCaptureService: { capture } } as never);
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/goals/${goal.goalId}/evidence-records`,
+      headers: { authorization: "Bearer test-secret", "content-type": "application/json" },
+      payload: { projectId: goal.projectId, correlationId: goal.goalId, commandId: goal.goalId, kind: "test-result", mediaType: "text/plain", contentBase64: Buffer.from("test").toString("base64") },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(record);
+    expect(capture).toHaveBeenCalledOnce();
+    await app.close();
+  });
+});
