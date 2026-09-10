@@ -41,6 +41,35 @@ function fakeKernelWithVerdicts(verdicts: readonly { provider: string; id: strin
   };
 }
 
+function fakeKernelWithDurableIdentityDrift(initialModels: readonly { provider: string; id: string }[], driftedModels: readonly { provider: string; id: string }[]): ExecutionKernelPort {
+  let counter = 0;
+  const executions = new Map<string, number>();
+  const lookupCounts = new Map<string, number>();
+  return {
+    async spawn() { const execution = `durable-encore-exec-${counter}`; executions.set(execution, counter); counter += 1; return { execution: execution as never, invocation: `durable-encore-inv-${counter - 1}` as never }; },
+    async prompt() {},
+    async sendMessage() {},
+    async observe(execution) {
+      const index = executions.get(execution as unknown as string)!;
+      return [{ invocation: `durable-encore-inv-${index}` as never, name: "reviewer", status: "succeeded", toolEvents: { state: "empty", events: [] }, usage: { state: "available", totalTokens: 1 }, answer: { state: "available", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "durable evidence supports proceeding", conditions: [], dissentNote: null, citedEvidenceIds: [] }) } }];
+    },
+    async cancel() { return { cancelled: true }; },
+    async getModelIdentity(execution) {
+      const key = execution as unknown as string;
+      const index = executions.get(key)!;
+      const lookup = (lookupCounts.get(key) ?? 0) + 1;
+      lookupCounts.set(key, lookup);
+      return lookup === 1 ? initialModels[index]! : driftedModels[index]!;
+    },
+    async getExecutionBinding(execution) { const index = executions.get(execution as unknown as string)!; return { model: initialModels[index]!, accountRef: "account-1" }; },
+    async getToolEvents() { return { state: "empty", events: [] }; },
+    async getUsage() { return { state: "available", totalTokens: 1 }; },
+    async getInvocationStatus() { return "succeeded"; },
+    async resume() { throw new Error("not supported"); },
+    async reconnect() { throw new Error("not supported"); },
+  };
+}
+
 describeDatabase("Encore Council with PostgreSQL", () => {
   const pool = new Pool({ connectionString: databaseUrl });
 
@@ -91,6 +120,24 @@ describeDatabase("Encore Council with PostgreSQL", () => {
     expect(result.synthesis.escalated).toBe(false);
     const models = await pool.query("SELECT model_provider, model_id FROM encore_council_judgments WHERE round_id = $1 ORDER BY reviewer_index", [result.roundId]);
     expect(models.rows).toEqual([{ model_provider: "test", model_id: "kimi" }, { model_provider: "openai", model_id: "gpt" }]);
+  });
+
+  it("persists reviewer identities from durable native bindings, not a later runtime identity drift", async () => {
+    const { goalId, projectId, evidenceId, proof } = await setupGoalWithEvidence();
+    const initialModels = [{ provider: "test", id: "kimi" }, { provider: "openai", id: "gpt" }];
+    const driftedModels = [{ provider: "test", id: "drifted" }, { provider: "openai", id: "drifted" }];
+    const kernel = fakeKernelWithDurableIdentityDrift(initialModels, driftedModels);
+    const admission = (index: number) => {
+      const model = `${initialModels[index]!.provider}/${initialModels[index]!.id}`;
+      return {
+        context: { operatorId: "operator-1", projectId, goalId, missionBundleId: "encore-bundle", policyVersion: "encore-policy", fencingToken: proof.fencingToken, accountRef: "account-1" },
+        grant: { grantId: `encore-grant-${index}`, allowedTools: [], allowedSkills: ["review"], modelPolicy: [model], pathScope: [], outboundDataClasses: ["repository files only"], remaining: { modelTurns: 2, toolCalls: 0, childCalls: 0, outputTokens: 2048, wallTimeMs: 20_000, retryCount: 0 } },
+        modelPolicy: [model], idempotencyKey: `encore-command-${index}`,
+      };
+    };
+    const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2, admission });
+    expect(result.judgments.map((judgment) => `${judgment.modelProvider}/${judgment.modelId}`)).toEqual(["test/kimi", "openai/gpt"]);
+    expect((await pool.query("SELECT model_provider, model_id FROM encore_council_judgments WHERE round_id = $1 ORDER BY reviewer_index", [result.roundId])).rows).toEqual([{ model_provider: "test", model_id: "kimi" }, { model_provider: "openai", model_id: "gpt" }]);
   });
 
   it("replays a completed review by command identity without spawning reviewers again", async () => {
