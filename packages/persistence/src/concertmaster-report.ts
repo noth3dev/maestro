@@ -79,7 +79,7 @@ export function renderRoutingReportSections(input: {
       : renderRoutingApprovalDecision(approval, input.journalByApproval.get(approval.approval_id) ?? []);
   });
   const interruptionIncidents = input.journal.filter((entry) => entry.event === "interruption").map((entry) => `interruption: ${JSON.stringify(entry.details)}`);
-  const dissent = [...input.packetDissent, ...input.journal.filter((entry) => entry.event === "safer_alternative" && typeof entry.details.dissent === "string").map((entry) => String(entry.details.dissent))];
+  const dissent = [...input.packetDissent, ...input.journal.filter((entry) => entry.event === "safer_alternative").flatMap((entry) => typeof entry.details.dissent === "string" ? [entry.details.dissent] : typeof entry.details.alternative === "string" ? [entry.details.alternative] : [])];
   return { approvalDecisions, dissent, interruptionIncidents, knownLimitations: [...input.limitations, ...interruptionIncidents] };
 }
 
@@ -142,16 +142,43 @@ export function evaluateRoutingEvidenceLineage(input: {
       const bindingAt = new Date(binding.created_at).getTime();
       const matchingClaims = approval === undefined || identity === null ? [] : input.claims.filter((candidate) => candidate.approval_id === approval.approval_id && candidate.goal_id === input.goalId && candidate.project_id === input.projectId && candidate.capability_kind === identity.capabilityKind);
       const claim = matchingClaims.find((candidate) => candidate.command_id === identity?.commandId && candidate.action === identity?.action && candidate.target === identity?.target);
-      const claimSnapshotIsUniqueAndBound = (candidate: RoutingCapabilityClaim): boolean => candidate.command_id === identity?.commandId && candidate.action === identity?.action && candidate.target === identity?.target
-        && candidate.snapshot_count != null && Number(candidate.snapshot_count) === 1
-        && candidate.snapshot_capability_kind === candidate.capability_kind && candidate.snapshot_project_id === candidate.project_id
-        && candidate.snapshot_goal_id === candidate.goal_id && candidate.snapshot_approval_id === candidate.approval_id
-        && candidate.snapshot_command_id === candidate.command_id && candidate.snapshot_action === candidate.action
-        && candidate.snapshot_target === candidate.target && String(candidate.snapshot_effect_index) === String(candidate.effect_index);
-      const allMatchingClaimsHaveUniqueSnapshots = matchingClaims.length > 0 && matchingClaims.every(claimSnapshotIsUniqueAndBound);
       const claimAt = claim === undefined ? Number.NaN : new Date(claim.consumed_at).getTime();
       const repetitionExpiryAt = approval?.repetition_expires_at === null || approval?.repetition_expires_at === undefined ? null : new Date(approval.repetition_expires_at).getTime();
       const claimRepetitionExpiryAt = claim?.repetition_expires_at_at_claim == null ? null : new Date(claim.repetition_expires_at_at_claim).getTime();
+      const claimSnapshotIsCompleteAndBound = (candidate: RoutingCapabilityClaim): boolean => {
+        const candidateClaimAt = new Date(candidate.consumed_at).getTime();
+        const candidateSnapshotCount = candidate.snapshot_count == null ? 0 : Number(candidate.snapshot_count);
+        const candidateSnapshotIdentityValid = candidate.snapshot_capability_kind === candidate.capability_kind && candidate.snapshot_project_id === candidate.project_id
+          && candidate.snapshot_goal_id === candidate.goal_id && candidate.snapshot_approval_id === candidate.approval_id
+          && candidate.snapshot_command_id === candidate.command_id && candidate.snapshot_action === candidate.action
+          && candidate.snapshot_target === candidate.target && String(candidate.snapshot_effect_index) === String(candidate.effect_index);
+        const candidateEffectIndex = Number(candidate.effect_index);
+        const candidateRemainingCount = candidate.remaining_count_at_claim == null ? null : Number(candidate.remaining_count_at_claim);
+        const candidateRemainingBudget = candidate.remaining_budget_cents_at_claim == null ? null : Number(candidate.remaining_budget_cents_at_claim);
+        const candidateRepetitionExpiryAt = candidate.repetition_expires_at_at_claim == null ? null : new Date(candidate.repetition_expires_at_at_claim).getTime();
+        const candidateRepetitionWindowValid = approval?.scope_kind === "bounded_time"
+          ? Number.isFinite(repetitionExpiryAt) && Number.isFinite(candidateRepetitionExpiryAt) && candidateClaimAt < repetitionExpiryAt! && candidateClaimAt < candidateRepetitionExpiryAt! && repetitionExpiryAt === candidateRepetitionExpiryAt
+          : repetitionExpiryAt === null && candidateRepetitionExpiryAt === null;
+        const candidateRepetitionBudgetValid = candidateSnapshotIdentityValid && candidateSnapshotCount === 1 && Number.isSafeInteger(candidateEffectIndex) && candidateEffectIndex >= 0 && (
+          approval?.scope_kind === "bounded_count"
+            ? Number.isSafeInteger(candidateRemainingCount) && candidateRemainingCount! >= 0
+            : approval?.scope_kind === "bounded_budget"
+              ? Number.isSafeInteger(candidateRemainingBudget) && candidateRemainingBudget! >= 0
+              : approval?.scope_kind === "one_execution"
+                ? candidateRemainingCount === 0
+                : approval?.scope_kind === "session" ? candidateRemainingCount === null && candidateRemainingBudget === null : true
+        );
+        return candidate.command_id === identity?.commandId && candidate.action === identity?.action && candidate.target === identity?.target
+          && candidate.admission_command_id === binding.idempotency_key && candidateSnapshotIdentityValid && candidateSnapshotCount === 1
+          && Number.isFinite(candidateClaimAt) && candidateClaimAt >= bindingAt
+          && approval !== undefined && candidate.policy_version === approval.policy_version
+          && Number.isSafeInteger(Number(candidate.budget_effect_cents)) && Number(candidate.budget_effect_cents) >= 0
+          && Number(candidate.budget_effect_cents) === Number(approval.budget_effect_cents)
+          && new Date(approval.expires_at).getTime() > candidateClaimAt
+          && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > candidateClaimAt)
+          && candidateRepetitionWindowValid && candidateRepetitionBudgetValid;
+      };
+      const allMatchingClaimsHaveCompleteSnapshots = matchingClaims.length > 0 && matchingClaims.every(claimSnapshotIsCompleteAndBound);
       const claimAdmissionId = claim?.admission_command_id ?? null;
       const admissionBound = claim !== undefined && claimAdmissionId !== null && claimAdmissionId === binding.idempotency_key;
       const repetitionWindowValid = approval?.scope_kind === "bounded_time"
@@ -177,7 +204,7 @@ export function evaluateRoutingEvidenceLineage(input: {
               ? remainingCountAtClaim === 0
               : approval?.scope_kind === "session" ? remainingCountAtClaim === null && remainingBudgetAtClaim === null : true
       );
-      const validApproval = approval !== undefined && identity !== null && Number.isFinite(bindingAt) && Number.isFinite(claimAt) && claimAt >= bindingAt && approval.goal_id === input.goalId && approval.project_id === input.projectId && approval.capability_kind === identity.capabilityKind && approval.command_id === identity.commandId && approval.action === identity.action && approval.target === identity.target && approval.decision === "approved" && approval.tier === route.decisionLayer && approval.scope_kind !== null && new Date(approval.created_at).getTime() <= bindingAt && new Date(approval.expires_at).getTime() > bindingAt && new Date(approval.expires_at).getTime() > claimAt && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > bindingAt) && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > claimAt) && typeof approval.reason === "string" && approval.reason.trim() !== "" && typeof approval.consequence === "string" && approval.consequence.trim() !== "" && claim !== undefined && claim.policy_version === approval.policy_version && Number.isSafeInteger(claimBudget) && claimBudget! >= 0 && claimBudget === approvalBudget && admissionBound && repetitionWindowValid && repetitionBudgetValid && allMatchingClaimsHaveUniqueSnapshots;
+      const validApproval = approval !== undefined && identity !== null && Number.isFinite(bindingAt) && Number.isFinite(claimAt) && claimAt >= bindingAt && approval.goal_id === input.goalId && approval.project_id === input.projectId && approval.capability_kind === identity.capabilityKind && approval.command_id === identity.commandId && approval.action === identity.action && approval.target === identity.target && approval.decision === "approved" && approval.tier === route.decisionLayer && approval.scope_kind !== null && new Date(approval.created_at).getTime() <= bindingAt && new Date(approval.expires_at).getTime() > bindingAt && new Date(approval.expires_at).getTime() > claimAt && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > bindingAt) && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > claimAt) && typeof approval.reason === "string" && approval.reason.trim() !== "" && typeof approval.consequence === "string" && approval.consequence.trim() !== "" && claim !== undefined && claim.policy_version === approval.policy_version && Number.isSafeInteger(claimBudget) && claimBudget! >= 0 && claimBudget === approvalBudget && admissionBound && repetitionWindowValid && repetitionBudgetValid && allMatchingClaimsHaveCompleteSnapshots;
       if (!validApproval) blockers.push({ reason: "routing_evidence_unapproved_below_requirement", detail: `Below-requirement model ${route.selectedModelRef} has no approval bound to the execution identity and time` });
     }
   }
