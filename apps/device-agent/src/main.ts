@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { Pool } from "pg";
 import { createBoundedProjectFileReader, createDeviceAgentServer, DeviceFenceState } from "@maestro/device-agent";
 import { readDevice } from "@maestro/persistence";
-import { claimDeviceAgentCommand, completeDeviceAgentCommand, loadDeviceAgentAuthorization, markUnresolvedDeviceAgentCommandsUnknown } from "@maestro/persistence";
+import { claimDeviceAgentCommand, completeDeviceAgentCommand, consumeCapabilityApproval, findCapabilityApproval, loadDeviceAgentAuthorization, markUnresolvedDeviceAgentCommandsUnknown } from "@maestro/persistence";
 import { closeDeviceAgentSession, openDeviceAgentSession, touchDeviceAgentSession } from "@maestro/persistence";
 
 interface Config {
@@ -31,6 +31,16 @@ const tls = { key: await readFile(settings.keyPath), cert: await readFile(settin
 const server = createDeviceAgentServer({
   tls, deviceId: settings.deviceId, identityFingerprint: settings.identityFingerprint, issuerKeyId: settings.issuerKeyId, issuerPublicKey: settings.issuerPublicKey,
   fenceState, executor: createBoundedProjectFileReader(settings.projectRoot, settings.maxReadBytes),
+  externalCapability: {
+    require: async ({ projectId, goalId, commandId }) => {
+      const activation = await findCapabilityApproval(pool, "device", projectId, goalId, "external-capability:device");
+      if (activation === undefined) throw new Error("External device capability is not activated");
+      await consumeCapabilityApproval(pool, {
+        approvalId: activation.approvalId, capabilityKind: "device", projectId, goalId, commandId,
+        action: "external-capability.activate", target: "device", policyVersion: 1, controlEpoch: "external-capability-v1", budgetEffectCents: 0,
+      });
+    },
+  },
   beforeEffect: async () => {
     const delayMs = Number(process.env.MAESTRO_TEST_DEVICE_BEFORE_EFFECT_DELAY_MS ?? "0");
     if (Number.isFinite(delayMs) && delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));

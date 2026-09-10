@@ -27,12 +27,13 @@ describe("device-agent signed envelope and local boundary", () => {
 
   it("allows a bounded in-scope command and rejects stale fence, replay, and scope escapes locally", () => {
     const value = envelope();
-    const context = { enrollment: { ...enrollment, identityFingerprint: deviceIdentityFingerprint("public-key") }, policy, scope, expectedGoalId: "goal-1", expectedProjectId: "project-1", expectedGrantId: "grant-1", issuerKeyId: "issuer-1", issuerPublicKey: publicKey.export({ type: "spki", format: "pem" }).toString(), previousGoalFencingToken: "4", previousSequence: 0 };
+    const context = { enrollment: { ...enrollment, identityFingerprint: deviceIdentityFingerprint("public-key") }, policy, scope, expectedGoalId: "goal-1", expectedProjectId: "project-1", expectedGrantId: "grant-1", issuerKeyId: "issuer-1", issuerPublicKey: publicKey.export({ type: "spki", format: "pem" }).toString(), previousGoalFencingToken: "4", previousSequence: 0, externalCapabilityActive: true };
     expect(() => assertLocallyExecutableDeviceGrant(value, context)).not.toThrow();
     for (const invalid of [
       envelope({ goalId: "other-goal" }), envelope({ goalFencingToken: "3" }), envelope({ target: "/etc/passwd", dataResource: "/etc/passwd" }), envelope({ application: "browser" }), envelope({ networkTarget: "https://example.com" }),
     ]) expect(() => assertLocallyExecutableDeviceGrant(invalid, context)).toThrow(LocalDeviceGrantDeniedError);
     expect(() => assertLocallyExecutableDeviceGrant(envelope(), { ...context, previousSequence: 1 })).toThrow(LocalDeviceGrantDeniedError);
+    expect(() => assertLocallyExecutableDeviceGrant(envelope(), { ...context, externalCapabilityActive: false })).toThrowError(/external_capability_not_activated/);
   });
 
   it("persists a monotonic fence/sequence across agent restart", async () => {
