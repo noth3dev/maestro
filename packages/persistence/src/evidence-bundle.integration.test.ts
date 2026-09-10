@@ -20,6 +20,7 @@ import { observeWorker, spawnWorker } from "./worker.js";
 import { assembleEvidenceBundle, EvidenceBundleNotFoundError, readEvidenceBundle, recordEvidenceBundle, verifyStoredEvidenceBundle } from "./evidence-bundle.js";
 import { recordDepartmentBranch, recordGoalIntegrationBranch, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
 import { reserveDepartmentBudget, reserveGoalBudget, reserveMissionBudget } from "./budget-reservation.js";
+import { consumeCapabilityApproval, createCapabilityApproval } from "./capability-approval.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -66,11 +67,11 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
   });
 
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS evidence_bundles, certification_conflict_resolution_members, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, goal_integration_revision_commits, goal_integration_revisions, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
+    await pool.query("DROP TABLE IF EXISTS capability_effect_resolutions, capability_decision_journal, capability_repetition_claims, capability_repetition_budgets, capability_sessions, capability_approvals, evidence_bundles, certification_conflict_resolution_members, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, goal_integration_revision_commits, goal_integration_revisions, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
     await applyAllMigrations(pool);
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE evidence_bundles, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE");
+    await pool.query("TRUNCATE capability_effect_resolutions, capability_decision_journal, capability_repetition_claims, capability_repetition_budgets, capability_sessions, capability_approvals, evidence_bundles, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE");
     await bootstrapPermanentOrganization(pool);
   });
   afterAll(async () => { await pool.end(); });
@@ -180,6 +181,22 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     const finalGoal = await pool.query<{ state: string }>("SELECT state FROM goals WHERE goal_id = $1", [goalId]);
     expect(finalGoal.rows[0]!.state).toBe("certifying");
 
+    // A below-requirement capability effect must be replayable from the bundle's durable claim rows.
+    const approvalId = randomUUID();
+    const claimCommandId = `claim:${randomUUID()}`;
+    await createCapabilityApproval(pool, {
+      approvalId, capabilityKind: "ipython", projectId, goalId, commandId: claimCommandId,
+      action: "project.file.edit", target: "packages/product/change.txt", policyVersion: 1,
+      controlEpoch: "1", budgetEffectCents: 0, tier: "Encore Council", approverId: "council-1",
+      decision: "approved", reason: "Required for the bounded mission.", consequence: "Only the recorded file changes.",
+      expiresAt: new Date(Date.now() + 60_000), repetitionScope: { kind: "bounded_count", count: 1 },
+    });
+    await consumeCapabilityApproval(pool, {
+      approvalId, capabilityKind: "ipython", projectId, goalId, commandId: claimCommandId,
+      admissionCommandId: "worker-admission-claim", action: "project.file.edit", target: "packages/product/change.txt",
+      policyVersion: 1, controlEpoch: "1", budgetEffectCents: 0,
+    });
+
     // Assemble and durably record the evidence bundle spanning everything above.
     const { bundleId, hash } = await recordEvidenceBundle(pool, goalId, proof);
     await verifyStoredEvidenceBundle(pool, bundleId);
@@ -194,6 +211,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     expect(read.content.councilBriefs.length).toBeGreaterThan(0);
     expect(read.content.headParticipation.participations.length).toBeGreaterThan(0);
     expect(read.content.councilBriefs[0]).toHaveProperty("payload");
+    expect((read.content as unknown as { capabilityRepetitionClaims: readonly unknown[] }).capabilityRepetitionClaims.length).toBeGreaterThan(0);
 
     // A live re-assembly right now reflects the same durable state and hashes identically.
     const reassembled = await assembleEvidenceBundle(pool, goalId, proof);
@@ -201,6 +219,24 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
 
     // The bundle is immutable at the database level: direct tampering is rejected outright, not merely detected after the fact.
     await expect(pool.query("UPDATE evidence_bundles SET content = jsonb_set(content, '{workers}', '[]'::jsonb) WHERE bundle_id = $1", [bundleId])).rejects.toThrow();
+  });
+
+  it("retains malformed routing evidence as an explicit bundle blocker", async () => {
+    const projectId = randomUUID();
+    const goalId = randomUUID();
+    const evidenceId = randomUUID();
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "bundle-malformed-routing", leaseDurationMs: 120_000 });
+    await pool.query(`INSERT INTO ensemble_router_routing_evidence
+      (evidence_id, goal_ref, project_ref, route_ref, mode, selected_model_ref, account_binding, candidate_refs, rejections, task_demand_hash, pressure, pressure_band, decision_layer, overlay_version, admission_binding_ref, rationale, evidence)
+      VALUES ($1, $2, $3, $4, 'pin', 'provider/model', 'account-1', '["candidate-1"]'::jsonb, '[]'::jsonb, $5, 1, 'low', 'automatic progress', 1, 'missing-binding', 'legacy row', $6::jsonb)`,
+      [evidenceId, goalId, projectId, `route:${evidenceId}`, "0".repeat(64), JSON.stringify({ schemaVersion: 999, legacy: true })]);
+
+    const recorded = await recordEvidenceBundle(pool, goalId, proof);
+    const read = await readEvidenceBundle(pool, recorded.bundleId);
+    const routingRows = read.content.routingEvidence as readonly Record<string, unknown>[];
+    expect(routingRows).toHaveLength(1);
+    expect(routingRows[0]).toMatchObject({ evidence_id: evidenceId, malformed: true, blocker: { reason: "routing_evidence_malformed" } });
   });
 
   it("rejects stale and paused Goal evidence effects before assembly or durable write", async () => {

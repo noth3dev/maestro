@@ -27,6 +27,9 @@ export interface CapabilityApprovalInput {
   readonly tier: CapabilityTier;
   readonly approverId: string;
   readonly decision: CapabilityDecision;
+  /** Durable explanation required for every ledger decision. */
+  readonly reason: string;
+  readonly consequence: string;
   readonly saferAlternative?: string;
   readonly expiresAt: Date;
   readonly repetitionScope: RepetitionScope;
@@ -122,7 +125,7 @@ export class RepetitionBudgetExhaustedError extends CapabilityApprovalError {}
 interface ApprovalRow {
   approval_id: string; capability_kind: string; project_id: string; goal_id: string; command_id: string;
   action: string; target: string; policy_version: number; control_epoch: string; budget_effect_cents: string;
-  tier: CapabilityTier; approver_id: string; decision: CapabilityDecision; expires_at: Date; revoked_at: Date | null; created_at: Date;
+  tier: CapabilityTier; approver_id: string; decision: CapabilityDecision; reason: string | null; consequence: string | null; expires_at: Date; revoked_at: Date | null; created_at: Date;
 }
 interface BudgetRow {
   approval_id: string; scope_kind: RepetitionScope["kind"]; remaining_count: string | null;
@@ -160,7 +163,7 @@ function mapBudget(row: BudgetRow): RepetitionScope {
   return { kind: "session" };
 }
 function mapApproval(row: ApprovalRow, budget: BudgetRow): CapabilityApproval {
-  return { approvalId: row.approval_id, capabilityKind: row.capability_kind, projectId: row.project_id, goalId: row.goal_id, commandId: row.command_id, action: row.action, target: row.target, policyVersion: row.policy_version, controlEpoch: row.control_epoch, budgetEffectCents: Number(row.budget_effect_cents), tier: row.tier, approverId: row.approver_id, decision: row.decision, expiresAt: row.expires_at, revokedAt: row.revoked_at, createdAt: row.created_at, repetitionScope: mapBudget(budget) };
+  return { approvalId: row.approval_id, capabilityKind: row.capability_kind, projectId: row.project_id, goalId: row.goal_id, commandId: row.command_id, action: row.action, target: row.target, policyVersion: row.policy_version, controlEpoch: row.control_epoch, budgetEffectCents: Number(row.budget_effect_cents), tier: row.tier, approverId: row.approver_id, decision: row.decision, reason: row.reason ?? "", consequence: row.consequence ?? "", expiresAt: row.expires_at, revokedAt: row.revoked_at, createdAt: row.created_at, repetitionScope: mapBudget(budget) };
 }
 function mapSession(row: SessionRow): CapabilitySession { return { sessionId: row.session_id, capabilityKind: row.capability_kind, projectId: row.project_id, goalId: row.goal_id, fullAccessMode: row.full_access_mode, selectedBy: row.selected_by, selectedAt: row.selected_at }; }
 function mapJournal(row: JournalRow): CapabilityJournalEntry {
@@ -173,7 +176,7 @@ function mapJournal(row: JournalRow): CapabilityJournalEntry {
   return entry;
 }
 function assertApprovalInput(input: CapabilityApprovalInput): { scope: ReturnType<typeof scopeValues> } {
-  for (const [value, label] of [[input.approvalId, "approvalId"], [input.capabilityKind, "capabilityKind"], [input.projectId, "projectId"], [input.goalId, "goalId"], [input.commandId, "commandId"], [input.action, "action"], [input.target, "target"], [input.controlEpoch, "controlEpoch"], [input.approverId, "approverId"]] as const) requireText(value, label);
+  for (const [value, label] of [[input.approvalId, "approvalId"], [input.capabilityKind, "capabilityKind"], [input.projectId, "projectId"], [input.goalId, "goalId"], [input.commandId, "commandId"], [input.action, "action"], [input.target, "target"], [input.controlEpoch, "controlEpoch"], [input.approverId, "approverId"], [input.reason, "reason"], [input.consequence, "consequence"]] as const) requireText(value, label);
   if (!Number.isSafeInteger(input.policyVersion) || input.policyVersion <= 0) throw new CapabilityApprovalError("policyVersion must be a positive safe integer");
   if (!Number.isSafeInteger(input.budgetEffectCents) || input.budgetEffectCents < 0) throw new CapabilityApprovalError("budgetEffectCents must be a non-negative safe integer");
   requireDate(input.expiresAt, "expiresAt");
@@ -208,14 +211,14 @@ export async function createCapabilityApproval(pool: Pool, input: CapabilityAppr
   try {
     await client.query("BEGIN"); open = true;
     const inserted = await client.query<ApprovalRow>(
-      `INSERT INTO capability_approvals (approval_id, capability_kind, project_id, goal_id, command_id, action, target, policy_version, control_epoch, budget_effect_cents, tier, approver_id, decision, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      `INSERT INTO capability_approvals (approval_id, capability_kind, project_id, goal_id, command_id, action, target, policy_version, control_epoch, budget_effect_cents, tier, approver_id, decision, reason, consequence, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        ON CONFLICT (approval_id) DO NOTHING RETURNING *`,
-      [input.approvalId, input.capabilityKind, input.projectId, input.goalId, input.commandId, input.action, input.target, input.policyVersion, input.controlEpoch, input.budgetEffectCents, input.tier, input.approverId, input.decision, input.expiresAt],
+      [input.approvalId, input.capabilityKind, input.projectId, input.goalId, input.commandId, input.action, input.target, input.policyVersion, input.controlEpoch, input.budgetEffectCents, input.tier, input.approverId, input.decision, input.reason, input.consequence, input.expiresAt],
     );
     const row = inserted.rows[0] ?? (await client.query<ApprovalRow>("SELECT * FROM capability_approvals WHERE approval_id = $1 FOR SHARE", [input.approvalId])).rows[0];
     if (row === undefined) throw new CapabilityApprovalConflictError("Capability approval identity conflict");
-    const identityMatches = row.capability_kind === input.capabilityKind && row.project_id === input.projectId && row.goal_id === input.goalId && row.command_id === input.commandId && row.action === input.action && row.target === input.target && row.policy_version === input.policyVersion && row.control_epoch === input.controlEpoch && Number(row.budget_effect_cents) === input.budgetEffectCents && row.tier === input.tier && row.approver_id === input.approverId && row.decision === input.decision && row.expires_at.getTime() === input.expiresAt.getTime();
+    const identityMatches = row.capability_kind === input.capabilityKind && row.project_id === input.projectId && row.goal_id === input.goalId && row.command_id === input.commandId && row.action === input.action && row.target === input.target && row.policy_version === input.policyVersion && row.control_epoch === input.controlEpoch && Number(row.budget_effect_cents) === input.budgetEffectCents && row.tier === input.tier && row.approver_id === input.approverId && row.decision === input.decision && row.reason === input.reason && row.consequence === input.consequence && row.expires_at.getTime() === input.expiresAt.getTime();
     if (!identityMatches) throw new CapabilityApprovalConflictError("Capability approval identity conflict");
     const budgetInserted = await client.query<BudgetRow>(
       `INSERT INTO capability_repetition_budgets (approval_id, scope_kind, remaining_count, remaining_budget_cents, expires_at)
@@ -224,7 +227,7 @@ export async function createCapabilityApproval(pool: Pool, input: CapabilityAppr
     );
     const budget = budgetInserted.rows[0] ?? (await client.query<BudgetRow>("SELECT * FROM capability_repetition_budgets WHERE approval_id = $1 FOR SHARE", [input.approvalId])).rows[0];
     if (budget === undefined || !budgetMatchesScope(budget, scope)) throw new CapabilityApprovalConflictError("Capability repetition scope conflict");
-    if (inserted.rowCount === 1) await insertJournal(client, { capabilityKind: input.capabilityKind, projectId: input.projectId, goalId: input.goalId, approvalId: input.approvalId, commandId: input.commandId, event: input.decision === "approved" ? "approval" : input.decision === "rejected" ? "rejection" : "safer_alternative", details: { tier: input.tier, ...(input.saferAlternative === undefined ? {} : { alternative: input.saferAlternative }) } });
+    if (inserted.rowCount === 1) await insertJournal(client, { capabilityKind: input.capabilityKind, projectId: input.projectId, goalId: input.goalId, approvalId: input.approvalId, commandId: input.commandId, event: input.decision === "approved" ? "approval" : input.decision === "rejected" ? "rejection" : "safer_alternative", details: { tier: input.tier, reason: input.reason, consequence: input.consequence, ...(input.saferAlternative === undefined ? {} : { alternative: input.saferAlternative }) } });
     await client.query("COMMIT"); open = false;
     return mapApproval(row, budget);
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
@@ -288,7 +291,7 @@ async function consumeCapabilityApprovalInTransaction(client: PoolClient, input:
   await client.query(`INSERT INTO capability_repetition_claims (claim_id, approval_id, capability_kind, project_id, goal_id, command_id, effect_index, action, target, policy_version, budget_effect_cents) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, [randomUUID(), input.approvalId, input.capabilityKind, input.projectId, input.goalId, input.commandId, effectIndex, input.action, input.target, input.policyVersion, input.budgetEffectCents]);
   const updated = await client.query<BudgetRow>("UPDATE capability_repetition_budgets SET remaining_count = CASE WHEN remaining_count IS NULL THEN NULL ELSE remaining_count - 1 END, remaining_budget_cents = CASE WHEN remaining_budget_cents IS NULL THEN NULL ELSE remaining_budget_cents - $2 END WHERE approval_id = $1 RETURNING *", [input.approvalId, input.budgetEffectCents]);
   const next = updated.rows[0]!;
-  await insertJournal(client, { capabilityKind: input.capabilityKind, projectId: input.projectId, goalId: input.goalId, approvalId: input.approvalId, commandId: input.commandId, event: "effect_result", details: { outcome: "pending_unknown", effectIndex, action: input.action, target: input.target, ...(input.admissionCommandId === undefined ? {} : { admissionCommandId: input.admissionCommandId }) } });
+  await insertJournal(client, { capabilityKind: input.capabilityKind, projectId: input.projectId, goalId: input.goalId, approvalId: input.approvalId, commandId: input.commandId, event: "effect_result", details: { outcome: "pending_unknown", effectIndex, action: input.action, target: input.target, remainingCount: next.remaining_count === null ? null : Number(next.remaining_count), remainingBudgetCents: next.remaining_budget_cents === null ? null : Number(next.remaining_budget_cents), repetitionExpiresAt: budget.expires_at === null ? null : budget.expires_at.toISOString(), ...(input.admissionCommandId === undefined ? {} : { admissionCommandId: input.admissionCommandId }) } });
   return { consumed: true, remainingCount: next.remaining_count === null ? null : Number(next.remaining_count), remainingBudgetCents: next.remaining_budget_cents === null ? null : Number(next.remaining_budget_cents) };
 }
 

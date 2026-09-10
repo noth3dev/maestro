@@ -9,7 +9,7 @@ import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { localGitPort } from "../../../test/git-port.js";
 import { FileEvidenceStore } from "@maestro/evidence";
-import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance } from "@maestro/domain";
+import { taskContractContentHash, taskDemandContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance, type TaskDemand } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
@@ -73,10 +73,18 @@ describeDatabase("Concertmaster final report with PostgreSQL", () => {
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
     const bindingId = randomUUID();
     await pool.query(`INSERT INTO native_execution_bindings
-      (binding_id, execution_ref, invocation_ref, goal_id, project_id, admission_kind, operator_id, mission_bundle_id, policy_version, idempotency_key, selected_model_provider, selected_model_id, actual_model_provider, actual_model_id)
-      VALUES ($1, $2, $3, $4, $5, 'conversation', 'test', 'fixture', 'v1', $6, 'test', 'model', 'test', 'model')`,
+      (binding_id, execution_ref, invocation_ref, goal_id, project_id, admission_kind, operator_id, mission_bundle_id, policy_version, idempotency_key, selected_model_provider, selected_model_id, actual_model_provider, actual_model_id, account_ref)
+      VALUES ($1, $2, $3, $4, $5, 'conversation', 'test', 'fixture', 'v1', $6, 'test', 'model', 'test', 'model', 'fixture')`,
       [bindingId, `exec:${goalId}`, `inv:${goalId}`, goalId, projectId, `idem:${goalId}`]);
-    const routing = { schemaVersion: 1, evidenceId: randomUUID(), goalRef: goalId, projectRef: projectId, routeRef: `route:${goalId}`, mode: "pin", selectedModelRef: "test/model", accountBinding: "fixture", candidateRefs: ["test/model"], rejections: [], taskDemandHash: "0".repeat(64), pressure: 1, pressureBand: "low", decisionLayer: "automatic progress", overlayVersion: null, admissionBindingRef: bindingId, rationale: "fixture", createdAt: new Date().toISOString() };
+    const taskDemand = { schemaVersion: 1, taskKinds: ["coding"], requirements: Object.fromEntries(["reasoning", "coding", "verification", "instruction-fidelity", "tool-use", "long-context", "knowledge", "refusal-calibration"].map((axis) => [axis, { level: 0, rationale: "fixture" }])), provenance: { taskContractRef: contractId, headDecisionRef: "fixture-decision" } } as unknown as TaskDemand;
+    const workCharacter = { schemaVersion: 1, risk: 0, reversibility: 200, verificationAttachment: 0, materialScale: 0, timePressure: 0, budgetHeadroom: 200, provenance: { taskContractRef: contractId, headDecisionRef: "fixture-decision" } };
+    const routing = { schemaVersion: 1, evidenceId: randomUUID(), goalRef: goalId, projectRef: projectId, routeRef: `route:${goalId}`, mode: "pin", selectedModelRef: "test/model", accountBinding: "fixture", candidateRefs: ["fixture"], selectedCandidateRef: "fixture", rejections: [], taskDemandHash: taskDemandContentHash(taskDemand), pressure: 1, pressureBand: "low", decisionLayer: "automatic progress", overlayVersion: 1, admissionBindingRef: bindingId, rationale: "fixture", createdAt: new Date().toISOString(), approvalRef: null,
+      pressureCalculation: { pressureFloor: 0, pressure: 1, explicitHeadUplift: 1 }, approvalIdentity: null,
+      taskKindRecipeVersions: { coding: 1 }, taskDemand,
+      workCharacter,
+      modelProfile: { modelRef: "test/model", capability: { schemaVersion: 2, axes: Object.fromEntries(["reasoning", "coding", "verification", "instruction-fidelity", "tool-use", "long-context", "knowledge", "refusal-calibration"].map((axis) => [axis, { status: "scored", score: 180, rationale: "fixture", evidence: ["fixture"] }])) }, providerFacts: { schemaVersion: 1, contextCapacity: 128000, pricing: { inputPerMillionTokens: 1, outputPerMillionTokens: 1 }, authentication: { modes: ["fixture"] }, dataPolicy: { allowedDataClasses: ["local"], retention: "transient", trainingUse: "never", regions: ["local"] }, modalities: ["text"], toolCalls: { supported: true }, provenance: { source: "fixture", observedAt: "2026-09-08" } }, provenance: { owner: "human", sourceRefs: ["fixture"], reviewedAt: "2026-09-08" } },
+      operationalOverlaySnapshot: { schemaVersion: 1, installationRef: "fixture", projectRef: projectId, goalRef: goalId, overlayVersion: 1, observations: [{ candidateRef: "fixture", measuredLatencyMs: 1, measuredCost: 0, failureRate: 0, timeoutRate: 0, providerErrorRate: 0, currentAvailability: true, accountBinding: "fixture", observedAt: "2026-09-08T12:00:00Z" }] },
+    };
     await pool.query(`INSERT INTO ensemble_router_routing_evidence
       (evidence_id, goal_ref, project_ref, route_ref, mode, selected_model_ref, account_binding, candidate_refs, rejections, task_demand_hash, pressure, pressure_band, decision_layer, overlay_version, admission_binding_ref, rationale, evidence)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17::jsonb)`,

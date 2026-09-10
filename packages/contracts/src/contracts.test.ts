@@ -16,6 +16,8 @@ import {
 } from "./index.js";
 
 const projectId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01";
+const capabilityAxes = ["reasoning", "coding", "verification", "instruction-fidelity", "tool-use", "long-context", "knowledge", "refusal-calibration"] as const;
+
 
 describe("goal HTTP contracts", () => {
   it("accepts public create and transition inputs", () => {
@@ -212,8 +214,9 @@ describe("Ensemble Router artifact wire contracts", () => {
       selectedModelRef: "provider/model",
       accountBinding: "account-1",
       candidateRefs: ["candidate-1"],
+      selectedCandidateRef: "candidate-1",
       rejections: [],
-      taskDemandHash: "a".repeat(64),
+      taskDemandHash: "db8115791f3f3c95cfa335328821064eb1eb1effa295da88612e499aef5c841f",
       pressure: 100,
       pressureBand: "high" as const,
       decisionLayer: "Encore Council" as const,
@@ -221,8 +224,25 @@ describe("Ensemble Router artifact wire contracts", () => {
       admissionBindingRef: "binding-1",
       rationale: "selected",
       createdAt: "2026-09-08T12:00:00Z",
+      pressureCalculation: { pressureFloor: 200 / 3, pressure: 100, explicitHeadUplift: 100 },
+            approvalIdentity: null,
+      taskKindRecipeVersions: { coding: 1 },
+      taskDemand: { schemaVersion: 1, taskKinds: ["coding"], requirements: Object.fromEntries(capabilityAxes.map((axis) => [axis, { level: 80, rationale: "Head requirement" }])), provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" } },
+      workCharacter: { schemaVersion: 1, risk: 40, reversibility: 120, verificationAttachment: 80, materialScale: 20, timePressure: 30, budgetHeadroom: 150, provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" } },
+      modelProfile: { modelRef: "provider/model", capability: { schemaVersion: 2, axes: Object.fromEntries(capabilityAxes.map((axis) => [axis, { status: "scored", score: 180, rationale: "review", evidence: ["review-1"] }])) }, providerFacts: facts, provenance: { owner: "human", sourceRefs: ["review-1"], reviewedAt: "2026-09-08" } },
+      operationalOverlaySnapshot: snapshot,
+      approvalRef: null,
     };
     expect(RoutingEvidenceSchema.parse(evidence)).toEqual(evidence);
+    expect(RoutingEvidenceSchema.safeParse({ ...evidence, modelProfile: { ...evidence.modelProfile, capability: {}, providerFacts: {}, provenance: {} } }).success).toBe(false);
+    expect(RoutingEvidenceSchema.safeParse({ ...evidence, operationalOverlaySnapshot: {} }).success).toBe(false);
+    expect(RoutingEvidenceSchema.safeParse({ ...evidence, pressureCalculation: { pressureFloor: 1, pressure: 100, explicitHeadUplift: 100 } }).success).toBe(false);
+    expect(RoutingEvidenceSchema.safeParse({ ...evidence, taskKindRecipeVersions: { coding: 999 } }).success).toBe(false);
+    expect(RoutingEvidenceSchema.safeParse({ ...evidence, createdAt: "now" }).success).toBe(false);
+    const hostileCandidateRefs = ["candidate-1"] as string[];
+    Object.defineProperty(hostileCandidateRefs, "extra", { enumerable: true, value: "unexpected" });
+    expect(RoutingEvidenceSchema.safeParse({ ...evidence, candidateRefs: hostileCandidateRefs }).success).toBe(false);
+
   });
 
   it("fails closed on missing facts, forbidden identity fields, and unavailable bindings", () => {

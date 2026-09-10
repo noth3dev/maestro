@@ -1646,3 +1646,60 @@ All downstream routing documentation must use this contract and must not restore
 
 ## 2026-09-10 — plan-2 S7
 - Repository documents had stale Phase 2 wording. S7 now records S6 implementation evidence while preserving the user-only live acceptance boundary.
+
+## 2026-09-10 — Plan 3 S1 remediation
+- Resolved the prior S1 review blockers in parent-owned commits `9afd55b`, `9a0737f`, and `9eae03e`. Docker is unavailable in this environment, so real PostgreSQL validation remains an explicit gate before merge.
+
+## 2026-09-10 — S1 independent remediation review
+- `review-plan3-s1-remediation`: `REVIEW: FAIL`. High findings: missing exact native `account_ref` binding check; approval identity/time/repetition is not bound to execution; E inputs do not yield replayable pressure; contracts accept incomplete model/overlay payloads; normal approval journal entries omit durable reason/consequence. Medium findings: recipe/provenance integrity, contradictory nullable overlay version, and legacy 0072/0073 rows rejected without explicit migration/blocker handling. PostgreSQL tests remain unavailable (`MAESTRO_TEST_DATABASE_URL` unset).
+
+- Remediation now preserves legacy routing rows in bundles as explicit malformed blockers instead of throwing before the final report can be stored; new approval decisions require durable reason/consequence fields and a new additive migration `0081`.
+
+- 2026-09-10 S1 verification finding: `gh run view 34412035398 --log` shows 2 PostgreSQL integration failures (`discord-incident-workflow.integration.test.ts:228`, `e2e-goal.integration.test.ts:206`, `report.success` false) among 1365 tests; failures are actionable routing-certification fixture regressions, not PostgreSQL infrastructure errors. Local PostgreSQL validation is unavailable (`MAESTRO_TEST_DATABASE_URL` unset; no Docker/psql).
+- 2026-09-10 S1 contract finding resolved: rejected candidates intentionally remain separate from passing `candidateRefs`; malformed selector output such as `<invalid>` is accepted as a rejection line, while selected/passing candidates remain bound to overlay observations.
+
+- 2026-09-10 S1 CI remediation: existing Phase 2/4 PostgreSQL scenarios did not exercise the new required routing evidence and therefore failed final-report success. Added `routing-report-fixture.ts` with valid binding/evidence inputs to both scenarios; fixture typecheck required explicit axis casts.
+
+- 2026-09-10 S1 verification: full suite attempt `/tmp/plan3-s1-full-final2.log` exited 1 only because unrelated `packages/agent-runtime/src/ipython-process-adapter.test.ts:297` observed the detached process group still alive; the same test passed alone in a 317ms rerun. A clean full-suite rerun is required before commit.
+
+- 2026-09-10 S1 review finding fixed: `concertmaster-report.integration.test.ts` used a stale hard-coded TaskDemand hash despite random contract provenance. The fixture now computes `taskDemandContentHash` from the exact constructed demand. Domain routing timestamps now match `z.string().datetime()` UTC semantics.
+
+- 2026-09-10 S1 CI gate: remediation commit `f383328d` CI run `34424613492` is red. Build/lint passed, but PostgreSQL Vitest had 9 failures: first actionable failure `packages/persistence/src/evidence-bundle.ts:252` (`Routing evidence identity or canonical payload mismatch`) in the report-success integration scenarios; `ensemble-router-artifacts.integration.test.ts:257` also rejects the updated routing fixture as invalid. S1 is blocked; do not merge or advance to S2 until the PostgreSQL failures are fixed and CI is green.
+
+- 2026-09-10 S1 CI follow-up: independent review found the same PostgreSQL `int8` normalization gap in `concertmaster-report.ts` (report lineage expected payload), after the first fix handled only `evidence-bundle.ts`. Normalize `overlay_version` in report row binding as well; rerun focused and CI.
+
+- 2026-09-10 S1 independent review (commit 27401e5): **FAIL**. High: below-requirement report certification accepts a same-goal/project approval claim without binding it to the selected admission or checking repetition expiry/budget at claim time. Medium: nested `candidateRefs`, `rejections`, `pressureCalculation`, and `approvalIdentity` validation does not reject all extra own keys/accessors. Medium: durable evidence bundles omit `capability_repetition_claims`, so below-requirement lineage cannot be reconstructed from the bundle alone.
+
+- 2026-09-10 S1 review-remediation verification: local build/lint/full suite passed (138 files, 963 tests; 62 files, 409 tests skipped). Local Docker PostgreSQL is unavailable; fresh CI is required before acceptance.
+
+- 2026-09-10 S1 review-remediation final local check passed (138 files/963 tests; 62 files/409 tests skipped). PostgreSQL evidence remains CI-only because the local Docker daemon is unavailable.
+
+- 2026-09-10 S1 remediation CI `34427399920` failed in `packages/persistence/src/capability-approval.integration.test.ts:203` because a new snapshot assertion was inserted into the wrong test and referenced an out-of-scope `admissionCommandId`. This is a test fixture placement defect, not a production failure; moved the assertion into the admission-aware pending-effect test.
+
+- 2026-09-10 S1 review after `866e14e`: **FAIL**. High: admission binding still has a fallback that accepts missing `admissionCommandId` when claim command equals binding idempotency; claim snapshot query is not correlated by `effectIndex` and does not fail closed on missing/duplicate journal evidence. Medium: count/budget snapshots lack exact claim-time consistency checks; model-profile nested arrays/objects and exported contracts `RoutingEvidenceSchema` still accept hostile accessors/extra array keys.
+
+- 2026-09-10 S1 second review remediation: RED tests reproduced command-id admission fallback, ambiguous multi-effect snapshots, accessor-backed model-profile evidence, and hostile routing contract arrays. Implemented explicit admission identity requirement, effect-index/count-correlated journal snapshots with fail-closed checks, strict model-profile descriptor validation, and a recursive ordinary-shape guard before `RoutingEvidenceSchema` parsing.
+
+- 2026-09-10 S1 final independent review: **FAIL**. `concertmaster-report.ts` claim-time snapshot lookup must also bind pending journal rows to claim capability/project/Goal/approval/command/action/target; currently an inconsistent `effect_result` can satisfy the snapshot gate. `evidence-bundle.ts` currently catches malformed/legacy routing rows and silently omits them from the immutable bundle despite its preservation comment; the bundle needs an explicit malformed blocker marker.
+
+- 2026-09-10 S1 follow-up inspection corrected one review detail: the current bundle code's `routingEvidence` variable was the raw query result, so malformed rows were already retained as raw records rather than dropped; however, they had no explicit blocker marker. The remediation preserves valid-row shape and adds `malformed: true` plus a durable `blocker.reason = routing_evidence_malformed` marker for invalid/legacy rows, with an integration regression.
+- 2026-09-10 S1 follow-up remediation binds the claim-time pending journal aggregation to exact capability kind, project, Goal, approval, command, action, target, and effect index, and the evaluator checks the returned snapshot identity before accepting the claim.
+
+- 2026-09-10 S1 final review (commit `3902641`): **FAIL**. `evaluateRoutingEvidenceLineage` uses `claims.find(...)` for a shared approval identity, so one valid effect claim can hide another effect claim with missing/ambiguous snapshots. The claim SQL also has no deterministic claim ordering. Require every relevant claim for the routing approval identity to have exactly one correlated pending snapshot, with a multi-claim regression.
+
+- 2026-09-10 S1 review gate blocker: the first independent reviewer (GPT-5.6 Luna via `openai-codex`) terminated before review with provider `usage_limit_reached`/429; the same-model OpenRouter fallback terminated before review with provider 402 insufficient credits. Neither produced a verdict. Do not treat provider failure as PASS; S1 remains open pending an actual independent read-only review.
+
+- 2026-09-10 S1 final review `review-plan3-s1-final9`: **FAIL**. The final branch closes the `claims.find` selection gap but still validates complete snapshot details only for the selected first claim; secondary claims can omit `admissionCommandId`, `remainingCount`, `remainingBudgetCents`, or `repetitionExpiresAt` while certification passes. The report also reads `details.dissent`, while the approval ledger stores safer alternatives in `details.alternative`.
+- 2026-09-10 current `main` CI run `34430913243` for unrelated remote commit `ee646846` is red in two existing PostgreSQL integration cases (`discord-incident-workflow.integration.test.ts:228` and `e2e-goal.integration.test.ts:206`, both report success assertions). This is not caused by the S1 worktree, but push remains gated until the latest main CI is green or its cause is resolved.
+
+- 2026-09-10 CI root cause correction: the red main run `34430913243` is caused by main being behind the unmerged S1 branch, not by an unrelated test defect. `96bc94d` E2E scenarios do not record durable routing evidence, so the new certification gate correctly returns `routing_evidence_missing`; S1 worktree commits add `recordRoutingReportFixture` to those scenarios. Keep the fail-closed behavior and merge only after review/verification gates.
+
+- 2026-09-10 no-DB verification reproduced the known intermittent `packages/agent-runtime/src/ipython-process-adapter.test.ts` parent-crash cleanup timeout once; isolated rerun passed. No S1 files touch this adapter. Treat as a pre-existing flaky test, not a snapshot-hardening regression, while retaining the evidence and rerunning the full suite if the gate requires all tests green.
+
+- 2026-09-10 final S1 hardening closes the remaining claim-snapshot fail-open boundary: SQL now preserves key-presence/type/timestamp evidence instead of collapsing missing and JSON null into the same text value, and evaluator validates every scope field plus exact claim/journal transaction time. PostgreSQL 17 full suite passed 200/200 files and 1390/1390 tests. No-DB full suite had one known pre-existing IPython process-group timeout; the isolated test rerun passed.
+
+- 2026-09-10 independent review found a remaining exactness gap in `b75bb37`: JS Date equality truncates PostgreSQL timestamptz sub-millisecond precision. A pending journal timestamp differing from claim time within one millisecond could pass. Remediation adds direct SQL timestamp equality evidence and a sub-millisecond RED regression.
+
+- 2026-09-10 direct SQL timestamp binding focused verification passed 6 files / 37 tests, including E2E and Discord report scenarios. The sub-millisecond mismatch regression now fails closed through the SQL boolean.
+
+- 2026-09-10 S1 final independent review `review-plan3-s1-final12`: **PASS**. Focused report/domain checks and six-file PostgreSQL review passed; no critical finding remains open for S1. Live provider acceptance remains user-owned and was not run.

@@ -36,6 +36,8 @@ const baseRequest: CapabilityApprovalRequest = {
   expiresAt: new Date("2030-01-01T00:00:00.000Z"),
   repetitionScope: scope,
   saferAlternative: "Prepare a patch without applying it.",
+  reason: "The requested action is needed for the Goal.",
+  consequence: "The action is limited to the recorded target and repetition scope.",
   sessionId: ids.sessionId,
   fullAccessMode: "retain_intermediate_approvals",
 };

@@ -1,9 +1,11 @@
+import { createHash } from "node:crypto";
 import {
   MODEL_CAPABILITY_AXES,
   MODEL_CAPABILITY_SCORE_MAX,
   MODEL_CAPABILITY_SCORE_MIN,
   type ModelCapabilityAxis,
 } from "./model-profile.js";
+import { canonicalJson } from "./task-contract.js";
 
 export const TASK_KIND_RECIPE_SCHEMA_VERSION = 1 as const;
 export const TASK_DEMAND_SCHEMA_VERSION = 1 as const;
@@ -206,6 +208,12 @@ export function assertValidTaskDemand(value: unknown): asserts value is TaskDema
   requiredKeys(value.provenance, ["taskContractRef", "headDecisionRef"], "Task demand provenance");
   line(value.provenance.taskContractRef, "Task demand taskContractRef");
   line(value.provenance.headDecisionRef, "Task demand headDecisionRef");
+}
+
+/** Stable hash of the sealed D demand snapshot used by routing evidence. */
+export function taskDemandContentHash(value: TaskDemand): string {
+  assertValidTaskDemand(value);
+  return createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
 }
 
 /** Seal explicit Head levels; this function never derives numbers from task-kind recipes. */

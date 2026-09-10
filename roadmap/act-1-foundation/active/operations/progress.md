@@ -3727,3 +3727,56 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 ## 2026-09-10 — plan-2 S7
 - `phase2-status-sync` documentation synchronized with merged Plan 2 S6 evidence across the Phase 2 roadmap, operations plan, and English/Korean status pages. Live acceptance remains explicitly user-run and unclaimed.
 - Verification: `npm run build`, `npm run lint`, and `git diff --check` passed in the isolated worktree.
+
+## 2026-09-10 — Plan 3 S1 remediation (parent-owned)
+- Repaired S1 after independent review failure: routing records now carry immutable task-kind recipes, full TaskDemand, WorkCharacter, selected model profile (A/B), and operational overlay snapshot (C); certification lineage now blocks missing evidence, row/payload drift, provider identity mismatch, and below-requirement routes without a current exact approval. Approval/journal snapshots are included in the evidence bundle and final reports render actor, tier, repetition scope, reason, consequence, dissent, interruptions, and limitations.
+- RED proof: `packages/persistence/src/concertmaster-report.test.ts` covers missing routing evidence, unapproved below-requirement routing, provider mismatch, and duplicated-row mismatch. Focused 11 tests passed.
+- Self-verification: `npm run build`, `npm run lint`, and `git diff --check` passed. PostgreSQL integration suites remain skipped because Docker is unavailable; no live-provider acceptance was run.
+
+- Independent review of remediation commits `9afd55b`..`7a3fd11` returned `REVIEW: FAIL`; S1 remains open. Remediation must close account binding, approval execution identity/timing, pressure replay, strict wire validation, durable approval reason/consequence, overlay null contradiction, and legacy-row handling before DB gate/review.
+
+- Remediation work claimed additive migration `0081_capability_approval_decision_explanations.sql`; existing legacy approvals remain readable but lack reason/consequence and cannot satisfy below-requirement certification. Added RED coverage for exact approval/claim acceptance, account binding mismatch, replayable pressure, known recipe versions, strict A/B/C wire payloads, and rendered approval/dissent/interruption/limitation sections.
+
+- 2026-09-10 S1 remediation: synchronized sealed TaskDemand hashes and `selectedCandidateRef` fixtures; added strict routing contract checks for hash, pressure replay, recipe versions, candidate/overlay identity, provider-qualified refs, and valid timestamps. Report lineage now uses exact `binding_id`, validates approval at binding and claim times, and durable bundles select approval `reason`/`consequence`. Focused tests: 26 passed. Root CI run 34412035398 was investigated; its two PostgreSQL failures are existing end-to-end report-success regressions caused by missing routing evidence fixtures and remain a gate until fixed/revalidated.
+
+- 2026-09-10 S1 remediation: added a shared PostgreSQL routing-report fixture to the legacy end-to-end and Discord scenarios. It records an identity-only native binding and a valid A–E routing evidence row before bundle/report generation, preserving the required missing-evidence blocker while restoring those report-success scenarios.
+
+- 2026-09-10 S1 remediation: fixed the final review fixture defect by deriving the integration routing `taskDemandHash` from its per-test sealed TaskDemand (including fresh contract provenance), and aligned domain `createdAt` validation with the wire contract's UTC RFC3339 format. Focused checks: 30 passed; root and Secretary builds/lint/diff-check passed.
+
+- 2026-09-10 S1 CI follow-up: fixed the report lineage's PostgreSQL `bigint overlay_version` comparison and added a regression test for textual `"1"`; the prior post-CI-fix full non-PG suite passed 138/62 and 959/409, but this latest report normalization requires a fresh focused/full/CI gate.
+
+- 2026-09-10 S1 review gate: remediation CI `34425699118` for `27401e5` passed (build/lint and PostgreSQL Vitest), but fresh independent review returned **FAIL** with one high and two medium blockers: admission-bound approval claims/repetition validity, nested strict-value validation, and durable repetition-claim snapshots. S1 remains open; S2 is prohibited.
+
+- 2026-09-10 S1 review remediation: RED tests reproduced unrelated-admission claims, expired repetition windows, and hostile nested routing values. Implemented admission/budget/expiry lineage checks, immutable claim snapshots in the effect journal, strict nested array/object validation, and durable repetition-claim bundle retention. Full local `npm run build && npm run lint && npm test` passed: 138 files/963 tests passed, 62 files/409 tests skipped; PostgreSQL unavailable locally, pending fresh CI.
+
+- 2026-09-10 S1 review-remediation final local verification: `npm run build && npm run lint && npm test` passed with 138 files/963 tests passed and 62 files/409 tests skipped; exit 0. The remediation is ready for independent review and fresh PostgreSQL CI.
+
+- 2026-09-10 S1 remediation CI `34427399920` exposed a misplaced regression assertion (`ReferenceError: admissionCommandId is not defined`); moved it to the correct capability-approval test. The CI gate remains open and requires a fresh local/CI verification.
+
+- 2026-09-10 S1 review gate: CI `34427399920` failed only because a new integration assertion was misplaced (`ReferenceError: admissionCommandId is not defined`); after recording the correction, fresh review found additional strict admission/snapshot/model-profile/contracts gaps. S1 remains open and requires another RED-first remediation.
+
+- 2026-09-10 S1 second review remediation: added RED coverage for missing admission identity, duplicate claim snapshots, model-profile nested hostility, and contract-level hostile arrays; focused domain/report/contracts tests now pass 34/34, build/lint/diff-check pass. The prior CI failure was a test-placement defect; fresh CI is still required for the corrected tree.
+
+- 2026-09-10 S1 independent review (commit `108f8dc`) remains **FAIL** despite green CI `34428368770`: pending journal identity is not fully correlated with the claim, and malformed/legacy routing rows are dropped from `routingEvidence` during bundle assembly. Remediation continues in the same worktree with RED tests first.
+
+- 2026-09-10 S1 review remediation: added RED coverage for inconsistent claim-time journal identity and malformed routing-row retention. The identity test fails against the prior implementation and passes after the fix; the bundle regression is PostgreSQL-gated and will be validated in CI. Focused report/bundle tests, build, lint, and diff-check pass locally; S1 remains open pending fresh CI and independent review.
+
+- 2026-09-10 S1 final review found a multi-effect fail-open gap: report lineage selected only the first matching claim and could certify while another effect lacked unique snapshot evidence. Review verdict remains FAIL; a RED regression and same-worktree repair are required.
+
+- 2026-09-10 S1 review remediation: added a RED regression for two legitimate effect-index claims sharing one approval where the second snapshot is missing; confirmed the old evaluator failed to block, then added fail-closed validation across every matching claim plus deterministic SQL ordering. Focused report tests pass 16/16; fresh full no-DB and PostgreSQL checks remain pending.
+
+- 2026-09-10 S1 final self-verification evidence: multi-claim remediation `aa59e21` passed focused 16/16, no-DB `npm run check` at 968 passed / 410 skipped, lint exit 0, and dedicated PostgreSQL 17 suite at 200/200 files and 1388/1388 tests. Independent review is blocked by GPT-5.6 Luna provider limits (Codex 429, OpenRouter 402), so no acceptance verdict is recorded.
+
+- 2026-09-10 independent review `review-plan3-s1-final9` returned `REVIEW: FAIL`: secondary claims need full claim-time snapshot validation, and durable safer alternatives need report mapping. Current main CI run `34430913243` is also red on unrelated existing PostgreSQL scenarios; no S1 push/merge is allowed while that gate is red.
+
+- 2026-09-10 S1 CI diagnosis: reproduced CI run conditions on root main (`96bc94d`) with PostgreSQL 17; both existing E2E report assertions failed because main lacks the S1 `recordRoutingReportFixture` setup present in the unmerged worktree. The failure is the intended `routing_evidence_missing` fail-closed gate, not a reason to weaken the gate. The same two tests pass on the S1 worktree after its fixture commits and snapshot hardening.
+
+- 2026-09-10 S1 snapshot hardening verification: full no-DB run reached 969 passed / 410 skipped with one pre-existing `ipython-process-adapter` parent-crash cleanup timeout; the failing test passes in an isolated rerun. PostgreSQL full verification is running.
+
+- 2026-09-10 S1 snapshot hardening: claim-time pending journal snapshots now require explicit presence and JSON types for admissionCommandId, remainingCount, remainingBudgetCents, and repetitionExpiresAt; scope-inapplicable values must be explicit JSON null; pending journal recorded_at must equal claim consumed_at. Added RED regressions for omitted nullable keys, wrong-scope values, and timestamp mismatch. Full PostgreSQL verification passed 200/200 files and 1390/1390 tests; full no-DB had the known intermittent IPython adapter timeout once, with isolated rerun passing.
+
+- 2026-09-10 S1 final independent review of `b75bb37` returned FAIL only for sub-millisecond timestamp precision: node-postgres Date conversion can make distinct PostgreSQL timestamptz values compare equal. Added a RED regression and now bind `pending.recorded_at = claim.consumed_at` directly in SQL; focused PostgreSQL verification is pending.
+
+- 2026-09-10 S1 timestamp precision remediation verification: focused PostgreSQL suite passed 6 files / 37 tests; build, lint, and diff-check passed. Ready for a fresh independent review.
+
+- 2026-09-10 S1 final independent review `review-plan3-s1-final12`: **PASS** on `0b681c4`; reviewer confirmed CI-root-cause fixtures, complete every-claim validation, explicit snapshot key/type/null checks, direct PostgreSQL timestamp binding, and no live-provider use. S1 is ready for merge and revalidation.

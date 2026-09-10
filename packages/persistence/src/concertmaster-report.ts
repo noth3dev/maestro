@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { assertValidRoutingEvidence, canonicalJson, assertValidTaskContractSubstance, certificationsConflict, evaluateCertificationCompleteness, requiredConditionalCertifications, taskContractContentHash, type CertificationRecordFact } from "@maestro/domain";
+import { MODEL_CAPABILITY_AXES, assertValidRoutingEvidence, canonicalJson, assertValidTaskContractSubstance, certificationsConflict, evaluateCertificationCompleteness, requiredConditionalCertifications, taskContractContentHash, type CertificationRecordFact, type RoutingEvidence } from "@maestro/domain";
 import type { EvidenceContentReader } from "@maestro/evidence";
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
@@ -42,6 +42,182 @@ function mapConcertmasterFinalReport(row: StoredConcertmasterFinalReport): Conce
     dissent: row.dissent, independentValidation: row.independent_validation, costCents: Number(row.cost_cents), budgetCents: Number(row.budget_cents),
     incidents: row.incidents, knownLimitations: row.known_limitations, criticalActionAwaitingApproval: row.critical_action_awaiting_approval, evidenceBundleId: row.evidence_bundle_id,
   };
+}
+
+function repetitionScopeText(row: { scope_kind: string | null; remaining_count: string | null; remaining_budget_cents: string | null; repetition_expires_at: Date | string | null }): string {
+  if (row.scope_kind === "bounded_count") return `bounded_count(${row.remaining_count ?? "unknown"} remaining)`;
+  if (row.scope_kind === "bounded_budget") return `bounded_budget(${row.remaining_budget_cents ?? "unknown"} cents remaining)`;
+  if (row.scope_kind === "bounded_time") return `bounded_time(until ${String(row.repetition_expires_at)})`;
+  return row.scope_kind ?? "unknown";
+}
+
+export function renderRoutingApprovalDecision(approval: RoutingCapabilityApproval, journal: readonly { event: string; details: Record<string, unknown> }[]): string {
+  const approvalEvent = journal.find((entry) => entry.event === "approval");
+  const reason = approval.reason ?? (typeof approvalEvent?.details.reason === "string" ? approvalEvent.details.reason : "not recorded");
+  const consequence = approval.consequence ?? (typeof approvalEvent?.details.consequence === "string" ? approvalEvent.details.consequence : "not recorded");
+  return `routing approval: actor=${approval.approver_id}; tier=${approval.tier}; scope=${repetitionScopeText(approval)}; reason=${reason}; consequence=${consequence}`;
+}
+
+export interface RoutingReportSections {
+  readonly approvalDecisions: readonly string[];
+  readonly dissent: readonly string[];
+  readonly interruptionIncidents: readonly string[];
+  readonly knownLimitations: readonly string[];
+}
+export function renderRoutingReportSections(input: {
+  readonly routingEvidence: readonly RoutingEvidence[];
+  readonly approvals: ReadonlyMap<string, RoutingCapabilityApproval>;
+  readonly journalByApproval: ReadonlyMap<string, readonly { event: string; details: Record<string, unknown> }[]>;
+  readonly journal: readonly { event: string; details: Record<string, unknown> }[];
+  readonly packetDissent: readonly string[];
+  readonly limitations: readonly string[];
+}): RoutingReportSections {
+  const approvalDecisions = input.routingEvidence.map((route) => {
+    const approval = route.approvalRef === null ? undefined : input.approvals.get(route.approvalRef);
+    return approval === undefined
+      ? `routing approval: none; model=${route.selectedModelRef}; pressure=${route.pressureBand}`
+      : renderRoutingApprovalDecision(approval, input.journalByApproval.get(approval.approval_id) ?? []);
+  });
+  const interruptionIncidents = input.journal.filter((entry) => entry.event === "interruption").map((entry) => `interruption: ${JSON.stringify(entry.details)}`);
+  const dissent = [...input.packetDissent, ...input.journal.filter((entry) => entry.event === "safer_alternative").flatMap((entry) => typeof entry.details.dissent === "string" ? [entry.details.dissent] : typeof entry.details.alternative === "string" ? [entry.details.alternative] : [])];
+  return { approvalDecisions, dissent, interruptionIncidents, knownLimitations: [...input.limitations, ...interruptionIncidents] };
+}
+
+export interface RoutingEvidenceCertificationRow {
+  readonly evidence_id: string; readonly goal_ref: string; readonly project_ref: string; readonly route_ref: string; readonly mode: string;
+  readonly selected_model_ref: string; readonly account_binding: string; readonly candidate_refs: unknown; readonly rejections: unknown;
+  readonly task_demand_hash: string; readonly pressure: number; readonly pressure_band: string; readonly decision_layer: string;
+  readonly overlay_version: number | string | null; readonly admission_binding_ref: string; readonly rationale: string; readonly evidence: Record<string, unknown>;
+}
+export interface RoutingNativeBinding {
+  readonly binding_id: string; readonly execution_ref: string; readonly invocation_ref: string; readonly goal_id: string; readonly project_id: string;
+  readonly selected_model_provider: string; readonly selected_model_id: string; readonly actual_model_provider: string; readonly actual_model_id: string;
+  readonly account_ref: string | null; readonly idempotency_key: string; readonly created_at: Date | string;
+}
+export interface RoutingCapabilityApproval {
+  readonly approval_id: string; readonly goal_id: string; readonly project_id: string; readonly tier: string; readonly approver_id: string;
+  readonly decision: string; readonly created_at: Date | string; readonly expires_at: Date | string; readonly revoked_at: Date | string | null;
+  readonly policy_version: number; readonly budget_effect_cents: string | number; readonly capability_kind: string; readonly command_id: string; readonly action: string; readonly target: string; readonly reason: string | null; readonly consequence: string | null;
+  readonly scope_kind: string | null; readonly remaining_count: string | null;
+  readonly remaining_budget_cents: string | null; readonly repetition_expires_at: Date | string | null;
+}
+export interface RoutingCapabilityClaim {
+  readonly claim_id: string; readonly approval_id: string; readonly capability_kind: string; readonly project_id: string; readonly goal_id: string;
+  readonly command_id: string; readonly effect_index: number | string; readonly action: string; readonly target: string; readonly policy_version: number; readonly budget_effect_cents: string | number; readonly consumed_at: Date | string;
+  readonly admission_command_id?: string | null; readonly snapshot_count?: number | string;
+  readonly snapshot_recorded_at?: Date | string | null; readonly snapshot_timestamp_matches_claim?: boolean;
+  readonly snapshot_has_admission_command_id?: boolean; readonly snapshot_has_remaining_count?: boolean;
+  readonly snapshot_has_remaining_budget_cents?: boolean; readonly snapshot_has_repetition_expires_at?: boolean;
+  readonly snapshot_admission_command_type?: string | null; readonly snapshot_remaining_count_type?: string | null;
+  readonly snapshot_remaining_budget_cents_type?: string | null; readonly snapshot_repetition_expires_at_type?: string | null;
+  readonly snapshot_capability_kind?: string | null; readonly snapshot_project_id?: string | null; readonly snapshot_goal_id?: string | null;
+  readonly snapshot_approval_id?: string | null; readonly snapshot_command_id?: string | null; readonly snapshot_action?: string | null;
+  readonly snapshot_target?: string | null; readonly snapshot_effect_index?: string | number | null; readonly remaining_count_at_claim?: string | number | null;
+  readonly remaining_budget_cents_at_claim?: string | number | null; readonly repetition_expires_at_at_claim?: Date | string | null;
+}
+export function evaluateRoutingEvidenceLineage(input: {
+  readonly goalId: string; readonly projectId: string; readonly routingRows: readonly RoutingEvidenceCertificationRow[];
+  readonly nativeBindings: readonly RoutingNativeBinding[]; readonly approvals: readonly RoutingCapabilityApproval[]; readonly claims: readonly RoutingCapabilityClaim[];
+}): { readonly validRoutingEvidence: readonly RoutingEvidence[]; readonly blockers: readonly { reason: string; detail: string }[] } {
+  const blockers: { reason: string; detail: string }[] = [];
+  const validRoutingEvidence: RoutingEvidence[] = [];
+  for (const route of input.routingRows) {
+    try { assertValidRoutingEvidence(route.evidence); } catch { blockers.push({ reason: "routing_evidence_malformed", detail: `Routing evidence ${route.evidence_id} is malformed` }); continue; }
+    const evidence = route.evidence as unknown as RoutingEvidence;
+    const persistedOverlayVersion = route.overlay_version === null ? null : Number(route.overlay_version);
+    const expectedPayload = { ...evidence, evidenceId: route.evidence_id, goalRef: route.goal_ref, projectRef: route.project_ref, routeRef: route.route_ref, mode: route.mode, selectedModelRef: route.selected_model_ref, accountBinding: route.account_binding, candidateRefs: route.candidate_refs, rejections: route.rejections, taskDemandHash: route.task_demand_hash, pressure: route.pressure, pressureBand: route.pressure_band, decisionLayer: route.decision_layer, overlayVersion: persistedOverlayVersion, admissionBindingRef: route.admission_binding_ref, rationale: route.rationale };
+    if (evidence.goalRef !== input.goalId || evidence.projectRef !== input.projectId || canonicalJson(evidence) !== canonicalJson(expectedPayload)) {
+      blockers.push({ reason: "routing_evidence_identity_mismatch", detail: `Routing evidence ${route.evidence_id} is outside this Goal/project scope or has altered payload` }); continue;
+    }
+    validRoutingEvidence.push(evidence);
+  }
+  if (input.routingRows.length === 0) blockers.push({ reason: "routing_evidence_missing", detail: "No durable routing evidence is recorded for this Goal" });
+  const bindingById = new Map(input.nativeBindings.map((binding) => [binding.binding_id, binding] as const));
+  const approvalById = new Map(input.approvals.map((approval) => [approval.approval_id, approval] as const));
+  for (const route of validRoutingEvidence) {
+    const binding = bindingById.get(route.admissionBindingRef);
+    if (!binding) { blockers.push({ reason: "routing_evidence_binding_missing", detail: `Routing evidence ${route.evidenceId} has no matching native admission binding` }); continue; }
+    const selected = `${binding.selected_model_provider}/${binding.selected_model_id}`;
+    const actual = `${binding.actual_model_provider}/${binding.actual_model_id}`;
+    if (binding.goal_id !== input.goalId || binding.project_id !== input.projectId || binding.account_ref !== route.accountBinding || selected !== route.selectedModelRef || actual !== route.selectedModelRef) blockers.push({ reason: "routing_evidence_identity_mismatch", detail: `Routing evidence ${route.evidenceId} does not match the provider result identity or account binding` });
+    const below = MODEL_CAPABILITY_AXES.some((axis) => { const requirement = route.taskDemand.requirements[axis].level; const score = route.modelProfile.capability.axes[axis]; return score.status !== "scored" || score.score === null || score.score < requirement; });
+    if (below) {
+      const approval = route.approvalRef === null ? undefined : approvalById.get(route.approvalRef);
+      const identity = route.approvalIdentity;
+      const bindingAt = new Date(binding.created_at).getTime();
+      const matchingClaims = approval === undefined || identity === null ? [] : input.claims.filter((candidate) => candidate.approval_id === approval.approval_id && candidate.goal_id === input.goalId && candidate.project_id === input.projectId && candidate.capability_kind === identity.capabilityKind);
+      const claim = matchingClaims.find((candidate) => candidate.command_id === identity?.commandId && candidate.action === identity?.action && candidate.target === identity?.target);
+      const claimAt = claim === undefined ? Number.NaN : new Date(claim.consumed_at).getTime();
+      const repetitionExpiryAt = approval?.repetition_expires_at === null || approval?.repetition_expires_at === undefined ? null : new Date(approval.repetition_expires_at).getTime();
+      const claimRepetitionExpiryAt = claim?.repetition_expires_at_at_claim == null ? null : new Date(claim.repetition_expires_at_at_claim).getTime();
+      const claimSnapshotIsCompleteAndBound = (candidate: RoutingCapabilityClaim): boolean => {
+        const candidateClaimAt = new Date(candidate.consumed_at).getTime();
+        const candidateSnapshotRecordedAt = candidate.snapshot_recorded_at == null ? Number.NaN : new Date(candidate.snapshot_recorded_at).getTime();
+        const candidateSnapshotCount = candidate.snapshot_count == null ? 0 : Number(candidate.snapshot_count);
+        const candidateSnapshotDetailsComplete = candidate.snapshot_has_admission_command_id === true
+          && candidate.snapshot_has_remaining_count === true
+          && candidate.snapshot_has_remaining_budget_cents === true
+          && candidate.snapshot_has_repetition_expires_at === true;
+        const candidateSnapshotValueTypesValid = candidate.snapshot_admission_command_type === "string" && (
+          approval?.scope_kind === "bounded_count"
+            ? candidate.snapshot_remaining_count_type === "number" && candidate.snapshot_remaining_budget_cents_type === "null" && candidate.snapshot_repetition_expires_at_type === "null"
+            : approval?.scope_kind === "bounded_budget"
+              ? candidate.snapshot_remaining_count_type === "null" && candidate.snapshot_remaining_budget_cents_type === "number" && candidate.snapshot_repetition_expires_at_type === "null"
+              : approval?.scope_kind === "bounded_time"
+                ? candidate.snapshot_remaining_count_type === "null" && candidate.snapshot_remaining_budget_cents_type === "null" && candidate.snapshot_repetition_expires_at_type === "string"
+                : approval?.scope_kind === "one_execution"
+                  ? candidate.snapshot_remaining_count_type === "number" && candidate.snapshot_remaining_budget_cents_type === "null" && candidate.snapshot_repetition_expires_at_type === "null"
+                  : approval?.scope_kind === "session" ? candidate.snapshot_remaining_count_type === "null" && candidate.snapshot_remaining_budget_cents_type === "null" && candidate.snapshot_repetition_expires_at_type === "null" : false
+        );
+        const candidateSnapshotIdentityValid = candidateSnapshotDetailsComplete && candidateSnapshotValueTypesValid
+          && candidate.snapshot_capability_kind === candidate.capability_kind && candidate.snapshot_project_id === candidate.project_id
+          && candidate.snapshot_goal_id === candidate.goal_id && candidate.snapshot_approval_id === candidate.approval_id
+          && candidate.snapshot_command_id === candidate.command_id && candidate.snapshot_action === candidate.action
+          && candidate.snapshot_target === candidate.target && String(candidate.snapshot_effect_index) === String(candidate.effect_index);
+        const candidateEffectIndex = Number(candidate.effect_index);
+        const candidateRemainingCount = candidate.remaining_count_at_claim == null ? null : Number(candidate.remaining_count_at_claim);
+        const candidateRemainingBudget = candidate.remaining_budget_cents_at_claim == null ? null : Number(candidate.remaining_budget_cents_at_claim);
+        const candidateRepetitionExpiryAt = candidate.repetition_expires_at_at_claim == null ? null : new Date(candidate.repetition_expires_at_at_claim).getTime();
+        const candidateRepetitionWindowValid = approval?.scope_kind === "bounded_time"
+          ? Number.isFinite(repetitionExpiryAt) && Number.isFinite(candidateRepetitionExpiryAt) && candidateClaimAt < repetitionExpiryAt! && candidateClaimAt < candidateRepetitionExpiryAt! && repetitionExpiryAt === candidateRepetitionExpiryAt
+          : repetitionExpiryAt === null && candidateRepetitionExpiryAt === null;
+        const candidateRepetitionBudgetValid = candidateSnapshotIdentityValid && candidateSnapshotCount === 1 && Number.isSafeInteger(candidateEffectIndex) && candidateEffectIndex >= 0 && (
+          approval?.scope_kind === "bounded_count"
+            ? Number.isSafeInteger(candidateRemainingCount) && candidateRemainingCount! >= 0 && candidateRemainingBudget === null && candidateRepetitionExpiryAt === null
+            : approval?.scope_kind === "bounded_budget"
+              ? candidateRemainingCount === null && Number.isSafeInteger(candidateRemainingBudget) && candidateRemainingBudget! >= 0 && candidateRepetitionExpiryAt === null
+              : approval?.scope_kind === "bounded_time"
+                ? candidateRemainingCount === null && candidateRemainingBudget === null
+                : approval?.scope_kind === "one_execution"
+                  ? candidateRemainingCount === 0 && candidateRemainingBudget === null && candidateRepetitionExpiryAt === null
+                  : approval?.scope_kind === "session" ? candidateRemainingCount === null && candidateRemainingBudget === null && candidateRepetitionExpiryAt === null : false
+        );
+        return candidate.command_id === identity?.commandId && candidate.action === identity?.action && candidate.target === identity?.target
+          && candidate.admission_command_id === binding.idempotency_key && candidateSnapshotIdentityValid && candidateSnapshotCount === 1
+          && Number.isFinite(candidateClaimAt) && candidateClaimAt >= bindingAt
+          && Number.isFinite(candidateSnapshotRecordedAt) && candidateSnapshotRecordedAt === candidateClaimAt
+          && candidate.snapshot_timestamp_matches_claim === true
+          && approval !== undefined && candidate.policy_version === approval.policy_version
+          && Number.isSafeInteger(Number(candidate.budget_effect_cents)) && Number(candidate.budget_effect_cents) >= 0
+          && Number(candidate.budget_effect_cents) === Number(approval.budget_effect_cents)
+          && new Date(approval.expires_at).getTime() > candidateClaimAt
+          && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > candidateClaimAt)
+          && candidateRepetitionWindowValid && candidateRepetitionBudgetValid;
+      };
+      const allMatchingClaimsHaveCompleteSnapshots = matchingClaims.length > 0 && matchingClaims.every(claimSnapshotIsCompleteAndBound);
+      const claimAdmissionId = claim?.admission_command_id ?? null;
+      const admissionBound = claim !== undefined && claimAdmissionId !== null && claimAdmissionId === binding.idempotency_key;
+      const repetitionWindowValid = approval?.scope_kind === "bounded_time"
+        ? Number.isFinite(repetitionExpiryAt) && Number.isFinite(claimRepetitionExpiryAt) && claimAt < repetitionExpiryAt! && claimAt < claimRepetitionExpiryAt! && repetitionExpiryAt === claimRepetitionExpiryAt
+        : repetitionExpiryAt === null && claimRepetitionExpiryAt === null;
+      const repetitionBudgetValid = claim !== undefined && claimSnapshotIsCompleteAndBound(claim);
+      const claimBudget = claim === undefined ? Number.NaN : Number(claim.budget_effect_cents);
+      const approvalBudget = approval === undefined ? Number.NaN : Number(approval.budget_effect_cents);
+      const validApproval = approval !== undefined && identity !== null && Number.isFinite(bindingAt) && Number.isFinite(claimAt) && claimAt >= bindingAt && approval.goal_id === input.goalId && approval.project_id === input.projectId && approval.capability_kind === identity.capabilityKind && approval.command_id === identity.commandId && approval.action === identity.action && approval.target === identity.target && approval.decision === "approved" && approval.tier === route.decisionLayer && approval.scope_kind !== null && new Date(approval.created_at).getTime() <= bindingAt && new Date(approval.expires_at).getTime() > bindingAt && new Date(approval.expires_at).getTime() > claimAt && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > bindingAt) && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > claimAt) && typeof approval.reason === "string" && approval.reason.trim() !== "" && typeof approval.consequence === "string" && approval.consequence.trim() !== "" && claim !== undefined && claim.policy_version === approval.policy_version && Number.isSafeInteger(claimBudget) && claimBudget! >= 0 && claimBudget === approvalBudget && admissionBound && repetitionWindowValid && repetitionBudgetValid && allMatchingClaimsHaveCompleteSnapshots;
+      if (!validApproval) blockers.push({ reason: "routing_evidence_unapproved_below_requirement", detail: `Below-requirement model ${route.selectedModelRef} has no approval bound to the execution identity and time` });
+    }
+  }
+  return { validRoutingEvidence, blockers };
 }
 
 /**
@@ -182,49 +358,78 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
 
   const goalIdentity = await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId]);
   const goalProjectId = goalIdentity.rows[0]?.project_id;
-  const routingEvidence = await pool.query<{
-    evidence_id: string; admission_binding_ref: string; selected_model_ref: string;
-    pressure_band: string; decision_layer: string; evidence: Record<string, unknown>;
-  }>(`SELECT evidence_id, admission_binding_ref, selected_model_ref, pressure_band,
-             decision_layer, evidence
-        FROM ensemble_router_routing_evidence WHERE goal_ref = $1
-        ORDER BY created_at, evidence_id`, [goalId]);
-  const nativeBindings = await pool.query<{
-    binding_id: string; execution_ref: string; invocation_ref: string;
-    selected_model_provider: string; selected_model_id: string;
-    actual_model_provider: string; actual_model_id: string;
-  }>(`SELECT binding_id, execution_ref, invocation_ref, selected_model_provider,
-             selected_model_id, actual_model_provider, actual_model_id
+  const routingEvidence = await pool.query<RoutingEvidenceCertificationRow>(`SELECT evidence_id, goal_ref, project_ref, route_ref, mode, selected_model_ref,
+             account_binding, candidate_refs, rejections, task_demand_hash, pressure,
+             pressure_band, decision_layer, overlay_version, admission_binding_ref,
+             rationale, evidence
+        FROM ensemble_router_routing_evidence WHERE goal_ref = $1 ORDER BY created_at, evidence_id`, [goalId]);
+  const nativeBindings = await pool.query<RoutingNativeBinding>(`SELECT binding_id, execution_ref, invocation_ref, goal_id, project_id, idempotency_key, selected_model_provider,
+             selected_model_id, actual_model_provider, actual_model_id, account_ref, created_at
         FROM native_execution_bindings WHERE goal_id = $1`, [goalId]);
-  const lineageBlockers: { reason: string; detail: string }[] = [];
-  for (const route of routingEvidence.rows) {
-    try { assertValidRoutingEvidence(route.evidence); } catch { lineageBlockers.push({ reason: "routing_evidence_malformed", detail: `Routing evidence ${route.evidence_id} is malformed` }); continue; }
-    const evidence = route.evidence;
-    if (evidence.goalRef !== goalId || evidence.projectRef !== goalProjectId || evidence.evidenceId !== route.evidence_id || evidence.admissionBindingRef !== route.admission_binding_ref || canonicalJson(evidence) !== canonicalJson({ ...(evidence as Record<string, unknown>) }))
-      lineageBlockers.push({ reason: "routing_evidence_identity_mismatch", detail: `Routing evidence ${route.evidence_id} is outside this Goal/project scope or has altered payload` });
+  const capabilityApprovals = await pool.query<RoutingCapabilityApproval>(`SELECT approval.approval_id, approval.goal_id, approval.project_id, approval.policy_version, approval.budget_effect_cents, approval.capability_kind,
+             approval.command_id, approval.action, approval.target, approval.tier, approval.approver_id,
+             approval.decision, approval.created_at, approval.expires_at, approval.revoked_at, approval.reason, approval.consequence,
+             budget.scope_kind, budget.remaining_count,
+             budget.remaining_budget_cents, budget.expires_at AS repetition_expires_at
+        FROM capability_approvals approval
+        LEFT JOIN capability_repetition_budgets budget ON budget.approval_id = approval.approval_id
+       WHERE approval.goal_id = $1`, [goalId]);
+  const capabilityClaims = await pool.query<RoutingCapabilityClaim>(`SELECT claim.claim_id, claim.approval_id, claim.capability_kind, claim.project_id, claim.goal_id,
+                claim.command_id, claim.effect_index, claim.action, claim.target, claim.policy_version, claim.budget_effect_cents, claim.consumed_at,
+                pending.details->>'admissionCommandId' AS admission_command_id, pending.snapshot_count,
+                pending.recorded_at AS snapshot_recorded_at,
+                (pending.recorded_at = claim.consumed_at) AS snapshot_timestamp_matches_claim,
+                COALESCE(pending.details ? 'admissionCommandId', false) AS snapshot_has_admission_command_id,
+                COALESCE(pending.details ? 'remainingCount', false) AS snapshot_has_remaining_count,
+                COALESCE(pending.details ? 'remainingBudgetCents', false) AS snapshot_has_remaining_budget_cents,
+                COALESCE(pending.details ? 'repetitionExpiresAt', false) AS snapshot_has_repetition_expires_at,
+                jsonb_typeof(pending.details->'admissionCommandId') AS snapshot_admission_command_type,
+                jsonb_typeof(pending.details->'remainingCount') AS snapshot_remaining_count_type,
+                jsonb_typeof(pending.details->'remainingBudgetCents') AS snapshot_remaining_budget_cents_type,
+                jsonb_typeof(pending.details->'repetitionExpiresAt') AS snapshot_repetition_expires_at_type,
+                pending.snapshot_capability_kind, pending.snapshot_project_id, pending.snapshot_goal_id,
+                pending.snapshot_approval_id, pending.snapshot_command_id, pending.details->>'action' AS snapshot_action,
+                pending.details->>'target' AS snapshot_target, pending.details->>'effectIndex' AS snapshot_effect_index,
+                pending.details->>'remainingCount' AS remaining_count_at_claim,
+                pending.details->>'remainingBudgetCents' AS remaining_budget_cents_at_claim,
+                pending.details->>'repetitionExpiresAt' AS repetition_expires_at_at_claim
+           FROM capability_repetition_claims claim
+           LEFT JOIN LATERAL (
+             SELECT (array_agg(journal.details ORDER BY journal.recorded_at, journal.journal_id))[1] AS details,
+                    (array_agg(journal.capability_kind ORDER BY journal.recorded_at, journal.journal_id))[1] AS snapshot_capability_kind,
+                    (array_agg(journal.project_id ORDER BY journal.recorded_at, journal.journal_id))[1] AS snapshot_project_id,
+                    (array_agg(journal.goal_id ORDER BY journal.recorded_at, journal.journal_id))[1] AS snapshot_goal_id,
+                    (array_agg(journal.approval_id ORDER BY journal.recorded_at, journal.journal_id))[1] AS snapshot_approval_id,
+                    (array_agg(journal.command_id ORDER BY journal.recorded_at, journal.journal_id))[1] AS snapshot_command_id,
+                    (array_agg(journal.recorded_at ORDER BY journal.recorded_at, journal.journal_id))[1] AS recorded_at,
+                    count(*)::int AS snapshot_count
+               FROM capability_decision_journal journal
+              WHERE journal.capability_kind = claim.capability_kind AND journal.project_id = claim.project_id
+                AND journal.goal_id = claim.goal_id AND journal.approval_id = claim.approval_id
+                AND journal.command_id = claim.command_id AND journal.details->>'action' = claim.action
+                AND journal.details->>'target' = claim.target
+                AND journal.event = 'effect_result' AND journal.details->>'outcome' = 'pending_unknown'
+                AND journal.details->>'effectIndex' = claim.effect_index::text
+           ) pending ON true
+          WHERE claim.goal_id = $1
+          ORDER BY claim.consumed_at, claim.claim_id`, [goalId]);
+  const capabilityJournal = await pool.query<{ approval_id: string | null; event: string; details: Record<string, unknown> }>(
+    `SELECT approval_id, event, details FROM capability_decision_journal WHERE goal_id = $1 ORDER BY recorded_at, journal_id`, [goalId],
+  );
+  const approvalById = new Map(capabilityApprovals.rows.map((row) => [row.approval_id, row] as const));
+  const approvalJournalById = new Map<string, { event: string; details: Record<string, unknown> }[]>();
+  for (const row of capabilityJournal.rows) {
+    if (row.approval_id === null) continue;
+    const entries = approvalJournalById.get(row.approval_id) ?? [];
+    entries.push(row);
+    approvalJournalById.set(row.approval_id, entries);
   }
-  if (routingEvidence.rowCount === 0) {
-    lineageBlockers.push({ reason: "routing_evidence_missing", detail: "No durable routing evidence is recorded for this Goal" });
-  } else {
-    const bindingsByRef = new Map<string, typeof nativeBindings.rows[number]>();
-    for (const binding of nativeBindings.rows) {
-      bindingsByRef.set(binding.binding_id, binding);
-      bindingsByRef.set(binding.execution_ref, binding);
-      bindingsByRef.set(binding.invocation_ref, binding);
-    }
-    for (const route of routingEvidence.rows) {
-      const binding = bindingsByRef.get(route.admission_binding_ref);
-      if (!binding) {
-        lineageBlockers.push({ reason: "routing_evidence_binding_missing", detail: `Routing evidence ${route.evidence_id} has no matching native admission binding` });
-        continue;
-      }
-      const selected = `${binding.selected_model_provider}/${binding.selected_model_id}`;
-      const actual = `${binding.actual_model_provider}/${binding.actual_model_id}`;
-      if (selected !== route.selected_model_ref || selected !== actual) {
-        lineageBlockers.push({ reason: "routing_evidence_identity_mismatch", detail: `Routing evidence ${route.evidence_id} does not match the provider result identity` });
-      }
-    }
-  }
+  const routingLineage = evaluateRoutingEvidenceLineage({
+    goalId, projectId: String(goalProjectId), routingRows: routingEvidence.rows,
+    nativeBindings: nativeBindings.rows, approvals: capabilityApprovals.rows, claims: capabilityClaims.rows,
+  });
+  const validRoutingEvidence = routingLineage.validRoutingEvidence;
+  const lineageBlockers = [...routingLineage.blockers];
   const snapshotContract = (council.snapshot_payload?.contract ?? {}) as { contractId?: string; version?: number; contentHash?: string };
   let contractHashValid = true;
   try {
@@ -267,12 +472,19 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
   const findings = await pool.query<{ rule_id: string; evidence_identity: string; resolved_at: Date | null }>("SELECT rule_id, evidence_identity, resolved_at FROM metronome_findings WHERE goal_id = $1", [goalId]);
   const incidents = findings.rows.map((row) => `${row.rule_id}: ${row.evidence_identity}`);
   const unresolvedLimitations = findings.rows.filter((row) => row.resolved_at === null).map((row) => `unresolved: ${row.rule_id} (${row.evidence_identity})`);
+  const reportSections = renderRoutingReportSections({
+    routingEvidence: validRoutingEvidence, approvals: approvalById, journalByApproval: approvalJournalById,
+    journal: capabilityJournal.rows, packetDissent: packet?.dissent ?? [], limitations: unresolvedLimitations,
+  });
+  const approvalDecisions = reportSections.approvalDecisions;
+  const interruptionIncidents = reportSections.interruptionIncidents;
+  const dissent = reportSections.dissent;
   const waiverRows = await pool.query<{ reason: string; follow_up: string }>(
     `SELECT reason, follow_up FROM certification_waivers
       WHERE (certification_table = 'quality_certifications' AND certification_id IN (SELECT certification_id FROM quality_certifications WHERE goal_id = $1))
          OR (certification_table = 'conditional_certifications' AND certification_id IN (SELECT certification_id FROM conditional_certifications WHERE goal_id = $1))`, [goalId],
   );
-  const knownLimitations = [...unresolvedLimitations, ...waiverRows.rows.map((row) => `waived: ${row.reason} (follow-up: ${row.follow_up})`)]
+  const knownLimitations = [...reportSections.knownLimitations, ...waiverRows.rows.map((row) => `waived: ${row.reason} (follow-up: ${row.follow_up})`)]
     .concat(conflict && !conflictResolved ? ["unresolved: conflicting certifications"] : []);
   const criticalActionAwaitingApproval = records.some((record) => record.hasUnwaivedCriticalFinding);
 
@@ -289,20 +501,20 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
     [
       reportId, goalId, success, JSON.stringify(blockers), contractContent.desiredOutcome, whatChanged,
       latestByKind.get("quality")?.verdict === "passed", JSON.stringify(participatingDepartments),
-      JSON.stringify([...(packet?.selectedDirection !== undefined ? [packet.selectedDirection] : []), ...routingEvidence.rows.map((r) => `routing approval scope: ${r.decision_layer}; pressure band: ${r.pressure_band}`)]), JSON.stringify(packet?.dissent ?? []),
+      JSON.stringify([...(packet?.selectedDirection !== undefined ? [packet.selectedDirection] : []), ...approvalDecisions]), JSON.stringify(dissent),
       JSON.stringify(records.map((record) => `${record.kind}: ${record.verdict}`)),
       actualCostCents, budgetCents,
-      JSON.stringify(incidents), JSON.stringify(knownLimitations), criticalActionAwaitingApproval, bundleId,
+      JSON.stringify([...incidents, ...interruptionIncidents]), JSON.stringify(knownLimitations), criticalActionAwaitingApproval, bundleId,
     ],
   );
 
   return {
     reportId, goalId, success, blockers, ceoRequest: contractContent.desiredOutcome, whatChanged,
     userVisibleBehaviorPassed: latestByKind.get("quality")?.verdict === "passed", participatingDepartments,
-    keyDecisions: [...(packet?.selectedDirection !== undefined ? [packet.selectedDirection] : []), ...routingEvidence.rows.map((r) => `routing approval scope: ${r.decision_layer}; pressure band: ${r.pressure_band}`)], dissent: packet?.dissent ?? [],
+    keyDecisions: [...(packet?.selectedDirection !== undefined ? [packet.selectedDirection] : []), ...approvalDecisions], dissent,
     independentValidation: records.map((record) => `${record.kind}: ${record.verdict}`),
     costCents: actualCostCents, budgetCents,
-    incidents, knownLimitations, criticalActionAwaitingApproval, evidenceBundleId: bundleId,
+    incidents: [...incidents, ...interruptionIncidents], knownLimitations, criticalActionAwaitingApproval, evidenceBundleId: bundleId,
   };
 }
 

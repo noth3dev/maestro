@@ -42,6 +42,8 @@ describeDatabase("capability approval ledger", () => {
     tier: "Department Head",
     approverId: "head-1",
     decision: "approved",
+    reason: "The action is required for the approved Goal outcome.",
+    consequence: "The bounded effect may change the project state within the recorded scope.",
     expiresAt: new Date("2030-01-01T00:00:00Z"),
     repetitionScope: { kind: "bounded_count", count: 2 },
     ...overrides,
@@ -145,6 +147,7 @@ describeDatabase("capability approval ledger", () => {
     const consumed = await consumeCapabilityApproval(pool, { approvalId: created.approvalId, capabilityKind: "ipython", projectId, goalId: goalA, commandId, admissionCommandId, action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10 });
     const claim = (await pool.query<{ claim_id: string }>("SELECT claim_id FROM capability_repetition_claims WHERE approval_id = $1", [created.approvalId])).rows[0]!;
     await expect(listPendingCapabilityEffects(pool, "ipython", projectId, goalA)).resolves.toEqual([{ commandId, effectIndex: 0, admissionCommandId }]);
+    await expect(pool.query("SELECT details->>'remainingCount' AS remaining_count, details->>'remainingBudgetCents' AS remaining_budget, details->>'repetitionExpiresAt' AS repetition_expires_at, details->>'admissionCommandId' AS admission_command_id FROM capability_decision_journal WHERE approval_id = $1 AND command_id = $2 AND event = 'effect_result' ORDER BY recorded_at ASC LIMIT 1", [created.approvalId, commandId])).resolves.toMatchObject({ rows: [{ remaining_count: "0", remaining_budget: null, repetition_expires_at: null, admission_command_id: admissionCommandId }] });
     await expect(resolveCapabilityEffect(pool, { claimId: claim.claim_id, approvalId: created.approvalId, capabilityKind: "ipython", projectId, goalId: goalA, commandId, effectIndex: 0, outcome: "aborted", resolvedBy: "operator-1", reason: "provider audit proves the write was not issued" })).resolves.toMatchObject({ outcome: "aborted", commandId, effectIndex: 0 });
     await expect(listPendingCapabilityEffects(pool, "ipython", projectId, goalA)).resolves.toEqual([]);
     await expect(pool.query("SELECT remaining_count FROM capability_repetition_budgets WHERE approval_id = $1", [created.approvalId])).resolves.toMatchObject({ rows: [{ remaining_count: "1" }] });
