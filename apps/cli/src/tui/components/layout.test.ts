@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderActivityTimeline } from "./activity-timeline.js";
 import { createSplashController, renderDecisionRegion, renderStatusRow, renderTuiLayout, type PendingDecision, type TuiShellState } from "./shell.js";
+import { createStatusRegion } from "./regions.js";
 
 const state: TuiShellState = {
   workspace: { cwd: "/work/acme", gitRoot: "/work/acme" },
@@ -54,6 +55,19 @@ describe("Maestro TUI layout and hierarchy", () => {
     expect(renderTuiLayout(state, 120, 30, { showSplash: splash.visible() }).splash.length).toBeGreaterThan(0);
     splash.dismiss();
     expect(renderTuiLayout(state, 120, 30, { showSplash: splash.visible() }).splash).toEqual([]);
+  });
+
+  it("consumes the splash on a cramped first render", () => {
+    let height = 10;
+    const splash = createSplashController();
+    const region = createStatusRegion({ state, height: () => height, splash });
+
+    expect(splash.visible()).toBe(true);
+    region.render(80);
+    expect(splash.visible()).toBe(false);
+    height = 30;
+    region.render(120);
+    expect(splash.visible()).toBe(false);
   });
 
   it("drops status fields in the documented width order", () => {

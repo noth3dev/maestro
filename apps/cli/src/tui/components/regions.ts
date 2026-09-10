@@ -20,7 +20,8 @@ export function createStatusRegion(options: {
     const canShowSplash = width >= 100 && options.height() >= 28;
     const showSplash = canShowSplash && options.splash.visible();
     const lines = renderStatusRegion(options.state, width, options.height(), { showSplash });
-    if (showSplash) options.splash.dismiss();
+    // Consume the first-frame splash even when the terminal is too small to show it.
+    if (options.splash.visible()) options.splash.dismiss();
     return lines;
   });
 }
