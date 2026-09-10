@@ -110,6 +110,23 @@ describe("conversation transcript", () => {
     expect(stream.indexOf("#2")).toBeLessThan(stream.indexOf("answer"));
   });
 
+  it("rejects a malformed completion instead of presenting success", () => {
+    let state = applyConversationEvent(createConversationTranscript(), event("turn_started", "1", { turnId: "turn-1" }));
+    const malformed = event("turn_completed", "2", { content: "" });
+    state = applyConversationEvent(state, malformed);
+
+    expect(state.status).toBe("streaming");
+    expect(state.assistantText).toBe("");
+  });
+
+  it("rejects a completion without content when no delta was received", () => {
+    let state = applyConversationEvent(createConversationTranscript(), event("turn_started", "1", { turnId: "turn-1" }));
+    state = applyConversationEvent(state, event("turn_completed", "2", { turnId: "turn-1" }));
+
+    expect(state.status).toBe("streaming");
+    expect(state.assistantText).toBe("");
+  });
+
   it("shows cancellation, unknown, and provider failures without pretending success", () => {
     let state = createConversationTranscript();
     state = applyConversationEvent(state, event("turn_started", "2", { turnId: "turn-1" }));
