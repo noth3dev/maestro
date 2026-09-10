@@ -1646,3 +1646,6 @@ All downstream routing documentation must use this contract and must not restore
 
 ## 2026-09-10 — plan-2 S7
 - Repository documents had stale Phase 2 wording. S7 now records S6 implementation evidence while preserving the user-only live acceptance boundary.
+
+## 2026-09-10 — Plan 3 S1 remediation
+- Resolved the prior S1 review blockers in parent-owned commits `9afd55b`, `9a0737f`, and `9eae03e`. Docker is unavailable in this environment, so real PostgreSQL validation remains an explicit gate before merge.
