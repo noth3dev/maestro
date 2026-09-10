@@ -3760,3 +3760,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 S1 independent review (commit `108f8dc`) remains **FAIL** despite green CI `34428368770`: pending journal identity is not fully correlated with the claim, and malformed/legacy routing rows are dropped from `routingEvidence` during bundle assembly. Remediation continues in the same worktree with RED tests first.
 
 - 2026-09-10 S1 review remediation: added RED coverage for inconsistent claim-time journal identity and malformed routing-row retention. The identity test fails against the prior implementation and passes after the fix; the bundle regression is PostgreSQL-gated and will be validated in CI. Focused report/bundle tests, build, lint, and diff-check pass locally; S1 remains open pending fresh CI and independent review.
+
+- 2026-09-10 S1 final review found a multi-effect fail-open gap: report lineage selected only the first matching claim and could certify while another effect lacked unique snapshot evidence. Review verdict remains FAIL; a RED regression and same-worktree repair are required.
+
+- 2026-09-10 S1 review remediation: added a RED regression for two legitimate effect-index claims sharing one approval where the second snapshot is missing; confirmed the old evaluator failed to block, then added fail-closed validation across every matching claim plus deterministic SQL ordering. Focused report tests pass 16/16; fresh full no-DB and PostgreSQL checks remain pending.

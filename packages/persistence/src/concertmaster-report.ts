@@ -140,7 +140,15 @@ export function evaluateRoutingEvidenceLineage(input: {
       const approval = route.approvalRef === null ? undefined : approvalById.get(route.approvalRef);
       const identity = route.approvalIdentity;
       const bindingAt = new Date(binding.created_at).getTime();
-      const claim = approval === undefined || identity === null ? undefined : input.claims.find((candidate) => candidate.approval_id === approval.approval_id && candidate.goal_id === input.goalId && candidate.project_id === input.projectId && candidate.capability_kind === identity.capabilityKind && candidate.command_id === identity.commandId && candidate.action === identity.action && candidate.target === identity.target);
+      const matchingClaims = approval === undefined || identity === null ? [] : input.claims.filter((candidate) => candidate.approval_id === approval.approval_id && candidate.goal_id === input.goalId && candidate.project_id === input.projectId && candidate.capability_kind === identity.capabilityKind);
+      const claim = matchingClaims.find((candidate) => candidate.command_id === identity?.commandId && candidate.action === identity?.action && candidate.target === identity?.target);
+      const claimSnapshotIsUniqueAndBound = (candidate: RoutingCapabilityClaim): boolean => candidate.command_id === identity?.commandId && candidate.action === identity?.action && candidate.target === identity?.target
+        && candidate.snapshot_count != null && Number(candidate.snapshot_count) === 1
+        && candidate.snapshot_capability_kind === candidate.capability_kind && candidate.snapshot_project_id === candidate.project_id
+        && candidate.snapshot_goal_id === candidate.goal_id && candidate.snapshot_approval_id === candidate.approval_id
+        && candidate.snapshot_command_id === candidate.command_id && candidate.snapshot_action === candidate.action
+        && candidate.snapshot_target === candidate.target && String(candidate.snapshot_effect_index) === String(candidate.effect_index);
+      const allMatchingClaimsHaveUniqueSnapshots = matchingClaims.length > 0 && matchingClaims.every(claimSnapshotIsUniqueAndBound);
       const claimAt = claim === undefined ? Number.NaN : new Date(claim.consumed_at).getTime();
       const repetitionExpiryAt = approval?.repetition_expires_at === null || approval?.repetition_expires_at === undefined ? null : new Date(approval.repetition_expires_at).getTime();
       const claimRepetitionExpiryAt = claim?.repetition_expires_at_at_claim == null ? null : new Date(claim.repetition_expires_at_at_claim).getTime();
@@ -169,7 +177,7 @@ export function evaluateRoutingEvidenceLineage(input: {
               ? remainingCountAtClaim === 0
               : approval?.scope_kind === "session" ? remainingCountAtClaim === null && remainingBudgetAtClaim === null : true
       );
-      const validApproval = approval !== undefined && identity !== null && Number.isFinite(bindingAt) && Number.isFinite(claimAt) && claimAt >= bindingAt && approval.goal_id === input.goalId && approval.project_id === input.projectId && approval.capability_kind === identity.capabilityKind && approval.command_id === identity.commandId && approval.action === identity.action && approval.target === identity.target && approval.decision === "approved" && approval.tier === route.decisionLayer && approval.scope_kind !== null && new Date(approval.created_at).getTime() <= bindingAt && new Date(approval.expires_at).getTime() > bindingAt && new Date(approval.expires_at).getTime() > claimAt && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > bindingAt) && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > claimAt) && typeof approval.reason === "string" && approval.reason.trim() !== "" && typeof approval.consequence === "string" && approval.consequence.trim() !== "" && claim !== undefined && claim.policy_version === approval.policy_version && Number.isSafeInteger(claimBudget) && claimBudget! >= 0 && claimBudget === approvalBudget && admissionBound && repetitionWindowValid && repetitionBudgetValid;
+      const validApproval = approval !== undefined && identity !== null && Number.isFinite(bindingAt) && Number.isFinite(claimAt) && claimAt >= bindingAt && approval.goal_id === input.goalId && approval.project_id === input.projectId && approval.capability_kind === identity.capabilityKind && approval.command_id === identity.commandId && approval.action === identity.action && approval.target === identity.target && approval.decision === "approved" && approval.tier === route.decisionLayer && approval.scope_kind !== null && new Date(approval.created_at).getTime() <= bindingAt && new Date(approval.expires_at).getTime() > bindingAt && new Date(approval.expires_at).getTime() > claimAt && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > bindingAt) && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > claimAt) && typeof approval.reason === "string" && approval.reason.trim() !== "" && typeof approval.consequence === "string" && approval.consequence.trim() !== "" && claim !== undefined && claim.policy_version === approval.policy_version && Number.isSafeInteger(claimBudget) && claimBudget! >= 0 && claimBudget === approvalBudget && admissionBound && repetitionWindowValid && repetitionBudgetValid && allMatchingClaimsHaveUniqueSnapshots;
       if (!validApproval) blockers.push({ reason: "routing_evidence_unapproved_below_requirement", detail: `Below-requirement model ${route.selectedModelRef} has no approval bound to the execution identity and time` });
     }
   }
@@ -356,7 +364,8 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
                 AND journal.event = 'effect_result' AND journal.details->>'outcome' = 'pending_unknown'
                 AND journal.details->>'effectIndex' = claim.effect_index::text
            ) pending ON true
-          WHERE claim.goal_id = $1`, [goalId]);
+          WHERE claim.goal_id = $1
+          ORDER BY claim.consumed_at, claim.claim_id`, [goalId]);
   const capabilityJournal = await pool.query<{ approval_id: string | null; event: string; details: Record<string, unknown> }>(
     `SELECT approval_id, event, details FROM capability_decision_journal WHERE goal_id = $1 ORDER BY recorded_at, journal_id`, [goalId],
   );
