@@ -18,7 +18,7 @@ export interface WorkerServiceDependencies {
   nativeModelRef?: string;
   kernel: ExecutionKernelPort;
   withGoalLease: <T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
-  prepareWorkerWorktree?: (workerId: string, input: { projectId: string; worktreePath: string }, operatorId: string, commandId: string) => Promise<{ worktreePath: string }>;
+  prepareWorkerWorktree?: (workerId: string, input: { projectId: string; repositoryPath: string; worktreePath: string }, operatorId: string, commandId: string) => Promise<{ worktreePath: string }>;
   /**
    * Phase 5 capacity-model first slice: a project-wide worker-slot ceiling. Absent by default
    * (unlimited, matching current behavior); set to enable admission control. A future revision
@@ -105,8 +105,8 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
         ? undefined
         : deps.prepareWorkerWorktree === undefined
           ? (() => { throw new WorkerError("Target-scoped worker preparation is not configured"); })
-          : (workerId: string) => deps.prepareWorkerWorktree!(workerId, { projectId: input.projectId, worktreePath: input.worktreePath! }, operator.operatorId, commandId).then((result) => result.worktreePath);
-      return deps.withGoalLease(council.goalId, (proof) => spawnWorker(deps.pool, deps.kernel, { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, commandId, ...(fixedModelRef === undefined ? {} : { modelRef: fixedModelRef }), ...(targetPreparation === undefined ? {} : { prepareWorktree: targetPreparation }) }, proof, context).then(toApiWorker));
+          : (workerId: string) => deps.prepareWorkerWorktree!(workerId, { projectId: input.projectId, repositoryPath: input.repositoryPath!, worktreePath: input.worktreePath! }, operator.operatorId, commandId).then((result) => result.worktreePath);
+      return deps.withGoalLease(council.goalId, (proof) => spawnWorker(deps.pool, deps.kernel, { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, commandId, ...(fixedModelRef === undefined ? {} : { modelRef: fixedModelRef }), ...(input.repositoryPath === undefined ? {} : { repositoryPath: input.repositoryPath, worktreePath: input.worktreePath! }), ...(targetPreparation === undefined ? {} : { prepareWorktree: targetPreparation }) }, proof, context).then(toApiWorker));
     },
     async get(workerId, projectId) {
       const worker = await readWorker(deps.pool, workerId);

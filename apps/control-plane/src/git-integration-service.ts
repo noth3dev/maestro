@@ -8,7 +8,7 @@ export type GitPortFactory = (context: Omit<ActionRequest, "action" | "target">)
 export interface GitIntegrationService {
   createGoalBranch(goalId: string, input: { projectId: string; repositoryPath: string; branchName: string; baseRevision: string }, operatorId: string, commandId: string): Promise<GoalIntegrationBranch>;
   createDepartmentBranch(councilId: string, departmentId: string, projectId: string, operatorId: string, commandId: string): Promise<DepartmentBranch>;
-  createWorkerWorktree(workerId: string, input: { projectId: string; worktreePath: string }, operatorId: string, commandId: string): Promise<WorkerWorktree>;
+  createWorkerWorktree(workerId: string, input: { projectId: string; worktreePath: string; repositoryPath?: string | undefined }, operatorId: string, commandId: string): Promise<WorkerWorktree>;
   advanceWorker(workerId: string, input: WorkerIntegrationInput, operatorId: string, commandId: string): Promise<IntegrationCommit>;
   freezeGoalRevision(goalId: string, projectId: string, operatorId: string, commandId: string): Promise<GoalIntegrationRevision>;
 }
@@ -55,6 +55,8 @@ export function createGitIntegrationService(deps: GitIntegrationServiceDependenc
       if (council.snapshot.projectId !== input.projectId) throw new GitProjectMismatchError();
       await assertProjectRole(deps.pool, operatorId, input.projectId, `head-${worker.departmentId}`);
       return deps.withGoalLease(council.goalId, async (proof) => {
+        const goalBranch = await deps.pool.query<{ repository_path: string }>("SELECT repository_path FROM goal_integration_branches WHERE goal_id = $1", [council.goalId]);
+        if (goalBranch.rowCount !== 1 || (input.repositoryPath !== undefined && input.repositoryPath !== goalBranch.rows[0]!.repository_path)) throw new GitProjectMismatchError();
         const git = await port(input.projectId, council.goalId, operatorId, commandId);
         const participant = council.snapshot.participants.find((entry) => (entry.departmentId ?? entry.participantId) === worker.departmentId);
         if (participant === undefined || participant.headRoleId === undefined) throw new GitProjectMismatchError();
