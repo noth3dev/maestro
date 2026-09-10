@@ -2,10 +2,11 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ExecutionKernelPort } from "@maestro/domain";
+import type { ExecutionAdmission, ExecutionKernelPort } from "@maestro/domain";
 import { evaluateEncoreCouncilTrigger, EncoreCouncilError, runEncoreCouncilReview } from "./encore-council.js";
 import { requestSemanticReview } from "./semantic-review.js";
 import { acquireGoalLease } from "./commands.js";
+import type { GoalLeaseProof } from "./commands.js";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { raiseMetronomeChallenge } from "./metronome-challenge.js";
 
@@ -15,9 +16,21 @@ const describeDatabase = databaseUrl ? describe : describe.skip;
 const criteria = [{ criterionId: "safety", description: "does this preserve safety invariants" }];
 const metronomeContext = (label: string) => ({ actorId: "  encore-metronome  ", sessionRef: `metronome-session:${label}`, commandId: randomUUID() });
 
-function fakeKernelWithVerdicts(verdicts: readonly { provider: string; id: string; text: string }[]): ExecutionKernelPort {
+function encoreAdmission(goalId: string, projectId: string, proof: GoalLeaseProof, commandId: string, index: number, model: string): ExecutionAdmission {
+  return {
+    context: { operatorId: "operator-1", projectId, goalId, missionBundleId: "encore-bundle", policyVersion: "encore-policy", fencingToken: proof.fencingToken, accountRef: "account-1" },
+    grant: { grantId: `encore-grant-${commandId}-${index}`, allowedTools: [], allowedSkills: ["review"], modelPolicy: [model], pathScope: [], outboundDataClasses: ["repository files only"], remaining: { modelTurns: 2, toolCalls: 0, childCalls: 0, outputTokens: 2048, wallTimeMs: 20_000, retryCount: 0 } },
+    modelPolicy: [model], idempotencyKey: `encore-command-${commandId}-${index}`,
+  };
+}
+
+function fakeKernelWithVerdicts(verdicts: readonly { provider: string; id: string; text: string }[], durableBinding = true): ExecutionKernelPort {
   let counter = 0;
   const models = new Map<string, { provider: string; id: string; text: string }>();
+  const getExecutionBinding = async (execution: string) => {
+    const spec = models.get(execution)!;
+    return { model: { provider: spec.provider, id: spec.id }, accountRef: "account-1" };
+  };
   return {
     async spawn() {
       const index = counter; counter += 1;
@@ -33,6 +46,7 @@ function fakeKernelWithVerdicts(verdicts: readonly { provider: string; id: strin
     },
     async cancel() { return { cancelled: true }; },
     async getModelIdentity(execution) { const spec = models.get(execution as unknown as string)!; return { provider: spec.provider, id: spec.id }; },
+    ...(durableBinding ? { getExecutionBinding } : {}),
     async getToolEvents() { return { state: "empty", events: [] }; },
     async getUsage() { return { state: "available", totalTokens: 1 }; },
     async getInvocationStatus() { return "succeeded"; },
@@ -109,12 +123,12 @@ describeDatabase("Encore Council with PostgreSQL", () => {
   });
 
   it("runs a genuinely multi-model review, records real model identities, and reaches proceed with no dissent", async () => {
-    const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
+    const { goalId, projectId, evidenceId, proof } = await setupGoalWithEvidence();
     const kernel = fakeKernelWithVerdicts([
       { provider: "test", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
       { provider: "openai", id: "gpt", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
     ]);
-    const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
+    const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2, admission: (index) => encoreAdmission(goalId, projectId, proof, "multi", index, index === 0 ? "test/kimi" : "openai/gpt") });
     expect(result.synthesis.finalVerdict).toBe("proceed");
     expect(result.synthesis.sameModelOnly).toBe(false);
     expect(result.synthesis.escalated).toBe(false);
@@ -142,19 +156,19 @@ describeDatabase("Encore Council with PostgreSQL", () => {
 
   it("fails closed when a reviewer has no durable native identity evidence", async () => {
     const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
-    const kernel = fakeKernelWithVerdicts([{ provider: "test", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) }]);
+    const kernel = fakeKernelWithVerdicts([{ provider: "test", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) }], false);
     await expect(runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 1 })).rejects.toThrow("durable native identity evidence");
     expect((await pool.query("SELECT count(*)::int AS count FROM encore_council_rounds WHERE goal_id = $1", [goalId])).rows[0]!.count).toBe(0);
   });
 
   it("replays a completed review by command identity without spawning reviewers again", async () => {
-    const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
+    const { goalId, projectId, evidenceId, proof } = await setupGoalWithEvidence();
     const kernel = fakeKernelWithVerdicts([
       { provider: "test", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
     ]);
     const spawn = vi.spyOn(kernel, "spawn");
     const commandId = randomUUID();
-    const request = { goalId, proof, commandId, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 1 };
+    const request = { goalId, proof, commandId, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 1, admission: encoreAdmission(goalId, projectId, proof, commandId, 0, "test/kimi") };
     const first = await runEncoreCouncilReview(pool, kernel, request);
     const replay = await runEncoreCouncilReview(pool, kernel, request);
     expect(replay.roundId).toBe(first.roundId);
@@ -163,12 +177,12 @@ describeDatabase("Encore Council with PostgreSQL", () => {
   });
 
   it("escalates and preserves the dissent note when reviewers materially disagree", async () => {
-    const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
+    const { goalId, projectId, evidenceId, proof } = await setupGoalWithEvidence();
     const kernel = fakeKernelWithVerdicts([
       { provider: "test", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
       { provider: "openai", id: "gpt", text: JSON.stringify({ verdict: "do_not_proceed", confidence: "high", reasoning: "unsafe", conditions: [], dissentNote: "I believe this is unsafe", citedEvidenceIds: [evidenceId] }) },
     ]);
-    const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
+    const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2, admission: (index) => encoreAdmission(goalId, projectId, proof, "disagreement", index, index === 0 ? "test/kimi" : "openai/gpt") });
     expect(result.synthesis.escalated).toBe(true);
     expect(result.synthesis.finalVerdict).toBe("escalate");
     expect(result.synthesis.dissentNotes).toEqual(["I believe this is unsafe"]);
@@ -178,18 +192,18 @@ describeDatabase("Encore Council with PostgreSQL", () => {
   });
 
   it("labels a same-model-only round honestly and rejects an evidence reference that is not durable", async () => {
-    const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
+    const { goalId, projectId, evidenceId, proof } = await setupGoalWithEvidence();
     const kernel = fakeKernelWithVerdicts([
       { provider: "test", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
       { provider: "test", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) },
     ]);
-    const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2 });
+    const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 2, admission: (index) => encoreAdmission(goalId, projectId, proof, "same-model", index, "test/kimi") });
     expect(result.synthesis.sameModelOnly).toBe(true);
     await expect(runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "q", criteria, evidenceIds: ["fabricated"], reviewerCount: 1 })).rejects.toBeInstanceOf(EncoreCouncilError);
   });
 
   it("composes unsupported semantic uncertainty into a sealed same-model Council round", async () => {
-    const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
+    const { goalId, projectId, evidenceId, proof } = await setupGoalWithEvidence();
     const councilAnswer = (verdict: string, dissentNote: string | null) => JSON.stringify({
       verdict, confidence: "high", reasoning: verdict === "proceed" ? "claim lacks support" : "uncertainty requires adjudication",
       conditions: [], dissentNote, citedEvidenceIds: [evidenceId],
@@ -219,6 +233,7 @@ describeDatabase("Encore Council with PostgreSQL", () => {
       },
       async cancel() { return { cancelled: true }; },
       async getModelIdentity() { return { provider: "test", id: "kimi" }; },
+      async getExecutionBinding() { return { model: { provider: "test", id: "kimi" }, accountRef: "account-1" }; },
       async getToolEvents() { return { state: "empty", events: [] }; },
       async getUsage() { return { state: "available", totalTokens: 1 }; },
       async getInvocationStatus() { return "succeeded"; },
@@ -233,6 +248,7 @@ describeDatabase("Encore Council with PostgreSQL", () => {
 
     const result = await runEncoreCouncilReview(pool, kernel, {
       goalId, proof, question: "Should this unsupported claim be allowed to influence release?", criteria, evidenceIds: [evidenceId], reviewerCount: 3,
+      admission: (index) => encoreAdmission(goalId, projectId, proof, "unsupported", index, "test/kimi"),
     });
     expect(result.judgments).toHaveLength(3);
     expect(result.judgments.every((judgment) => judgment.modelProvider === "test" && judgment.modelId === "kimi")).toBe(true);
@@ -263,9 +279,9 @@ describeDatabase("Encore Council with PostgreSQL", () => {
   });
 
   it("rejects direct tampering with immutable Encore Council records", async () => {
-    const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
+    const { goalId, projectId, evidenceId, proof } = await setupGoalWithEvidence();
     const kernel = fakeKernelWithVerdicts([{ provider: "test", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) }]);
-    const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "q", criteria, evidenceIds: [evidenceId], reviewerCount: 1 });
+    const result = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "q", criteria, evidenceIds: [evidenceId], reviewerCount: 1, admission: encoreAdmission(goalId, projectId, proof, "tamper", 0, "test/kimi") });
     await expect(pool.query("UPDATE encore_council_syntheses SET final_verdict = 'proceed' WHERE round_id = $1", [result.roundId])).rejects.toThrow();
     await expect(pool.query("UPDATE encore_council_judgments SET verdict = 'escalate' WHERE round_id = $1", [result.roundId])).rejects.toThrow();
   });

@@ -287,6 +287,9 @@ export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernel
     };
   });
   if ("prior" in prepared) return prepared.prior;
+  if (request.admission === undefined || kernel.getExecutionBinding === undefined) {
+    throw new EncoreCouncilError("Encore reviewer durable native identity evidence is required");
+  }
 
   const spawnedReviewers: SpawnedInvocation[] = [];
   const durableReviewerModels = new Map<string, ModelIdentity>();
@@ -307,11 +310,13 @@ export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernel
         admissionKind: "encore_reviewer",
         ...(admission === undefined ? {} : { admission }),
       });
-      if (bindingRecorded) durableReviewerModels.set(String(spawned.execution), await readDurableEncoreReviewerIdentity(pool, String(spawned.execution), String(spawned.invocation), request.goalId, prepared.projectId));
+      if (!bindingRecorded) throw new EncoreCouncilError("Encore reviewer durable native identity evidence is required");
+      durableReviewerModels.set(String(spawned.execution), await readDurableEncoreReviewerIdentity(pool, String(spawned.execution), String(spawned.invocation), request.goalId, prepared.projectId));
     }
 
     for (const spawned of spawnedReviewers) {
-      const model = durableReviewerModels.get(String(spawned.execution)) ?? await kernel.getModelIdentity(spawned.execution);
+      const model = durableReviewerModels.get(String(spawned.execution));
+      if (model === undefined) throw new EncoreCouncilError("Encore reviewer durable native identity evidence is missing");
       let terminal: TerminalObservation;
       let promptError: unknown;
       let promptFailed = false;

@@ -71,6 +71,7 @@ function fakeReviewKernel(): ExecutionKernelPort {
     },
     async cancel() { return { cancelled: true }; },
     async getModelIdentity() { return { provider: "fake-reviewer", id: "fake-reviewer-1" }; },
+    async getExecutionBinding() { return { model: { provider: "fake-reviewer", id: "fake-reviewer-1" }, accountRef: "account-1" }; },
     async getToolEvents() { return { state: "empty", events: [] }; },
     async getUsage() { return { state: "available", totalTokens: 1 }; },
     async getInvocationStatus() { return "succeeded"; },
@@ -175,6 +176,11 @@ describeDatabase("App/API and CLI durable read-state parity (roadmap/act-1-found
       goalId, proof, question: "should we proceed to certification?",
       criteria: [{ criterionId: "safety", description: "preserves safety invariants" }],
       evidenceIds: [evidenceIds[0]!], reviewerCount: 1,
+      admission: {
+        context: { operatorId: "operator-1", projectId, goalId, missionBundleId: "encore-bundle", policyVersion: "encore-policy", fencingToken: proof.fencingToken, accountRef: "account-1" },
+        grant: { grantId: "read-state-parity-encore-grant", allowedTools: [], allowedSkills: ["review"], modelPolicy: ["fake-reviewer/fake-reviewer-1"], pathScope: [], outboundDataClasses: ["repository files only"], remaining: { modelTurns: 2, toolCalls: 0, childCalls: 0, outputTokens: 2048, wallTimeMs: 20_000, retryCount: 0 } },
+        modelPolicy: ["fake-reviewer/fake-reviewer-1"], idempotencyKey: "read-state-parity-encore",
+      },
     });
     await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     const report = await generateConcertmasterFinalReport(pool, goalId, proof);

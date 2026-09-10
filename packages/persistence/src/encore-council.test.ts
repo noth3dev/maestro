@@ -21,6 +21,7 @@ function fakePool(onClientQuery: (sql: string, parameters?: readonly unknown[]) 
     if (sql.startsWith("SELECT 1 FROM goals")) return { rowCount: 1, rows: [{}] };
     if (sql.startsWith("SELECT project_id FROM goals")) return { rowCount: 1, rows: [{ project_id: "project-1" }] };
     if (sql.startsWith("SELECT evidence_id, sha256 FROM evidence_records")) return { rowCount: 1, rows: [{ evidence_id: evidenceId, sha256: "sha-1" }] };
+    if (sql.startsWith("SELECT selected_model_provider")) return { rowCount: 1, rows: [{ selected_model_provider: "test", selected_model_id: "model-a", actual_model_provider: "test", actual_model_id: "model-a" }] };
     if (sql.startsWith("SELECT decision_packet FROM head_councils")) return { rowCount: 0, rows: [] };
     if (sql.includes("FROM metronome_challenges")) return { rowCount: 1, rows: [{ count: "0" }] };
     if (sql.includes("FROM semantic_reviews")) return { rowCount: 1, rows: [{ count: "0" }] };
@@ -88,7 +89,8 @@ function fakeKernel(sequences: readonly (readonly InvocationObservation[])[]): E
     }),
     async sendMessage() {},
     cancel: vi.fn(async (invocation: SpawnedInvocation["invocation"]) => { calls.push(`cancel-${String(invocation)}`); return { cancelled: true }; }),
-    async getModelIdentity() { return { provider: "fake", id: "model" }; },
+    async getModelIdentity() { return { provider: "test", id: "model-a" }; },
+    async getExecutionBinding() { return { model: { provider: "test", id: "model-a" }, accountRef: "account-1" }; },
     async getToolEvents() { return { state: "empty", events: [] }; },
     async getUsage() { return { state: "unknown" }; },
     async getInvocationStatus() { return "unknown"; },
@@ -113,6 +115,7 @@ describe("Encore Council execution", () => {
     grant: { grantId: "encore-grant", allowedTools: [], allowedSkills: ["review"], modelPolicy: ["test/model-a"], pathScope: [], outboundDataClasses: ["repository files only"], remaining: { modelTurns: 2, toolCalls: 0, childCalls: 0, outputTokens: 2048, wallTimeMs: 20_000, retryCount: 0 } },
     modelPolicy: ["test/model-a"], idempotencyKey: "encore-command-1",
   };
+  const durableAdmission = (index = 0): ExecutionAdmission => ({ ...admission, idempotencyKey: `${admission.idempotencyKey}:durable:${index}` });
 
   it("spawns all repository-rooted reviewers before prompting and waits for terminal judgments", async () => {
     const kernel = fakeKernel([
@@ -166,6 +169,7 @@ describe("Encore Council execution", () => {
       criteria,
       evidenceIds: [evidenceId],
       reviewerCount: 1,
+      admission: durableAdmission(),
     });
 
     expect(kernel.observe).toHaveBeenCalledTimes(2);
@@ -212,6 +216,7 @@ describe("Encore Council execution", () => {
       criteria,
       evidenceIds: [evidenceId],
       reviewerCount: 1,
+      admission: durableAdmission(),
     });
 
     expect(result.judgments[0]).toMatchObject({ verdict: "escalate", confidence: "low", citedEvidenceIds: [] });
@@ -245,6 +250,7 @@ describe("Encore Council execution", () => {
       criteria,
       evidenceIds: [evidenceId],
       reviewerCount: 1,
+      admission: durableAdmission(),
     });
 
     expect(providerTransactionStates).toEqual([false, false, false]);
@@ -263,6 +269,7 @@ describe("Encore Council execution", () => {
       criteria,
       evidenceIds: [evidenceId],
       reviewerCount: 1,
+      admission: durableAdmission(),
     });
 
     expect(kernel.cancel).toHaveBeenCalledTimes(1);
@@ -282,6 +289,7 @@ describe("Encore Council execution", () => {
       criteria,
       evidenceIds: [evidenceId],
       reviewerCount: 1,
+      admission: durableAdmission(),
     });
 
     expect(kernel.cancel).toHaveBeenCalledTimes(1);
@@ -304,6 +312,7 @@ describe("Encore Council execution", () => {
       criteria,
       evidenceIds: [evidenceId],
       reviewerCount: 1,
+      admission: durableAdmission(),
     });
 
     expect(result.synthesis.finalVerdict).toBe("proceed");

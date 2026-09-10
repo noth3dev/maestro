@@ -1,6 +1,6 @@
 import type { EncoreCouncilResult, EncoreReviewInput } from "@maestro/contracts";
 import type { ExecutionAdmission, ExecutionKernelPort } from "@maestro/domain";
-import { runEncoreCouncilReview } from "@maestro/persistence";
+import { EncoreCouncilError, runEncoreCouncilReview } from "@maestro/persistence";
 import type { Pool } from "pg";
 
 export interface EncoreService { review(goalId: string, input: EncoreReviewInput, commandId: string): Promise<EncoreCouncilResult>; }
@@ -10,6 +10,7 @@ export function createEncoreService(deps: EncoreServiceDependencies): EncoreServ
   return { async review(goalId, input, commandId) {
     const result = await deps.pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId]);
     if (result.rowCount !== 1 || result.rows[0]!.project_id !== input.projectId) throw new EncoreProjectMismatchError();
-    return deps.withGoalLease(goalId, (proof) => runEncoreCouncilReview(deps.pool, deps.kernel, { goalId, proof, commandId, question: input.question, criteria: input.criteria, evidenceIds: input.evidenceIds, reviewerCount: input.reviewerCount, ...(deps.createAdmission === undefined ? {} : { admission: (reviewerIndex: number) => deps.createAdmission!({ goalId, projectId: input.projectId, commandId, reviewerIndex, fencingToken: proof.fencingToken }) }) }));
+    if (deps.createAdmission === undefined) throw new EncoreCouncilError("Encore review requires host-owned native admission");
+    return deps.withGoalLease(goalId, (proof) => runEncoreCouncilReview(deps.pool, deps.kernel, { goalId, proof, commandId, question: input.question, criteria: input.criteria, evidenceIds: input.evidenceIds, reviewerCount: input.reviewerCount, admission: (reviewerIndex: number) => deps.createAdmission!({ goalId, projectId: input.projectId, commandId, reviewerIndex, fencingToken: proof.fencingToken }) }));
   } };
 }
