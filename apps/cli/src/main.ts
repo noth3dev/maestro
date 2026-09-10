@@ -426,6 +426,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       const bundle = await client.getEvidenceBundle(goalId, { projectId });
       const certifications = await client.listCertifications(goalId, { projectId });
       const report = await client.getConcertmasterReport(goalId, { projectId });
+      if (report.evidenceBundleId !== bundle.bundleId) throw new Error("Evidence bundle/report identity mismatch");
       printState(io.stdout, { bundle, certifications, report }, json);
       return 0;
     }

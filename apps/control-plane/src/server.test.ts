@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { once } from "node:events";
 import { request as httpRequest, type IncomingMessage } from "node:http";
 import { buildServer, type EventService, type GoalService, type OperatorAuthenticator, type HeadParticipationService, type CouncilService, type EncoreService, type ProjectDiscoveryService } from "./server.js";
-import type { ReadStateService } from "./read-state-service.js";
+import { ReadStateGoalNotFoundError, type ReadStateService } from "./read-state-service.js";
 import { ProjectMembershipRequiredError, ProjectAccessAdminRequiredError, StaleGoalLeaseError, HeadActivationRequesterInactiveError } from "@maestro/persistence";
 
 const goal = { goalId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02", projectId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01", state: "draft" as const, version: 1 };
@@ -133,6 +133,17 @@ describe("read state routes", () => {
     expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/certifications?projectId=${goal.projectId}`, headers })).json()).toEqual({ certifications: [] });
     expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/concertmaster-report?projectId=${goal.projectId}`, headers })).statusCode).toBe(404);
     expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/evidence-bundle?projectId=${goal.projectId}`, headers })).json()).toEqual({ bundleId: goal.goalId, goalId: goal.goalId, content: { goalId: goal.goalId }, hash: "a".repeat(64) });
+    await app.close();
+  });
+
+  it("does not serve an evidence bundle for a different project", async () => {
+    const guardedState: ReadStateService = { ...state, getEvidenceBundle: async (_goalId, projectId) => {
+      if (projectId !== goal.projectId) throw new ReadStateGoalNotFoundError("Goal was not found");
+      return state.getEvidenceBundle(goal.goalId, projectId);
+    } };
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readStateService: guardedState });
+    const response = await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/evidence-bundle?projectId=018f3c9b-7e71-7b44-ae23-3b5d4e8c9f07`, headers: { authorization: "Bearer test-secret" } });
+    expect(response.statusCode).toBe(404);
     await app.close();
   });
 });

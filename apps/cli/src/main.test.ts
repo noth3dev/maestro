@@ -245,7 +245,21 @@ it("dumps the evidence bundle, certifications, and report as one artifact", asyn
   const stdout = output();
   await expect(executeCli(["evidence", "dump", "--goal-id", goalId, "--project-id", projectId, "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).resolves.toBe(0);
   expect(JSON.parse(stdout.lines[0]!)).toEqual({ bundle, certifications, report });
-  expect(fetch).toHaveBeenNthCalledWith(1, `https://maestro.test/v1/goals/${goalId}/evidence-bundle?projectId=${projectId}`, expect.anything());
+  expect(fetch).toHaveBeenCalledTimes(3);
+  expect(fetch).toHaveBeenNthCalledWith(1, `https://maestro.test/v1/goals/${goalId}/evidence-bundle?projectId=${projectId}`, expect.objectContaining({ headers: expect.anything() }));
+  expect(fetch).toHaveBeenNthCalledWith(2, `https://maestro.test/v1/goals/${goalId}/certifications?projectId=${projectId}`, expect.objectContaining({ headers: expect.anything() }));
+  expect(fetch).toHaveBeenNthCalledWith(3, `https://maestro.test/v1/goals/${goalId}/concertmaster-report?projectId=${projectId}`, expect.objectContaining({ headers: expect.anything() }));
+  for (const [, options] of fetch.mock.calls) expect(options?.method).toBeUndefined();
+});
+
+it("fails closed when the report points to a different evidence bundle", async () => {
+  const fetch = vi.fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ bundleId: "77777777-7777-4777-8777-777777777777", goalId, hash: "a".repeat(64), content: { goalId } }), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ certifications: [] }), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ reportId: "88888888-8888-4888-8888-888888888888", goalId, success: true, blockers: [], ceoRequest: "Ship", whatChanged: "A safe change", userVisibleBehaviorPassed: true, participatingDepartments: [], keyDecisions: [], dissent: [], independentValidation: [], costCents: 0, budgetCents: 10, incidents: [], knownLimitations: [], criticalActionAwaitingApproval: false, evidenceBundleId: "99999999-9999-4999-8999-999999999999" }), { status: 200 }));
+  const stderr = output();
+  await expect(executeCli(["evidence", "dump", "--goal-id", goalId, "--project-id", projectId, "--json"], env, { fetch, stdout: output().write, stderr: stderr.write })).resolves.toBe(2);
+  expect(stderr.lines[0]).toContain("identity mismatch");
 });
 
 describe("CLI entrypoint detection", () => {
