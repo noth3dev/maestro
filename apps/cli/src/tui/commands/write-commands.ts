@@ -109,7 +109,7 @@ function result(title: string, value: { goalId?: string; state?: string; version
   return { title, lines: [`${identity} · ${details}`] };
 }
 
-async function confirmIfCritical(context: WriteCommandContext, command: ParsedCommand, target: string): Promise<WriteCommandResult | undefined> {
+async function confirmIfCritical(context: WriteCommandContext, command: ParsedCommand, target: string, identity: string): Promise<WriteCommandResult | undefined> {
   const definition = createCommandRegistry().find(command.name);
   const action = definition?.actions.find((item) => item.name === command.action);
   if (action?.kind !== "critical") return undefined;
@@ -117,6 +117,8 @@ async function confirmIfCritical(context: WriteCommandContext, command: ParsedCo
   const decision = await confirmCriticalAction({
     action: actionName,
     target,
+    identity,
+    actor: "You",
     ...((option(command, "goal-id") ?? context.goalId) === undefined ? {} : { goalId: option(command, "goal-id") ?? context.goalId }),
     effect: `Execute ${command.name} ${command.action ?? ""}`.trim(),
     expiresAt: option(command, "expires-at") ?? "server-defined",
@@ -152,9 +154,9 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
   }
 
   const target = option(command, "target") ?? option(command, "goal-id") ?? context.goalId ?? context.projectId;
-  const cancelled = await confirmIfCritical(context, command, target);
-  if (cancelled !== undefined) return cancelled;
   const id = commandId(command);
+  const cancelled = await confirmIfCritical(context, command, target, id);
+  if (cancelled !== undefined) return cancelled;
 
   if (command.name === "goal" && command.action === "create") {
     const contractId = option(command, "contract-id");

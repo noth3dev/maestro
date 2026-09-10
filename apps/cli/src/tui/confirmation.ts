@@ -1,12 +1,17 @@
+export type ApprovalDialogTier = "automatic progress" | "Department Head" | "Encore Council" | "user";
+
 export interface CriticalActionSummary {
   action: string;
   target: string;
   goalId?: string;
+  /** Durable command identity used to correlate the confirmation with activity. */
+  identity?: string;
+  /** Actor and tier are explicit display/audit fields; neither may be inferred. */
+  actor?: string;
+  tier?: ApprovalDialogTier;
   effect: string;
   expiresAt: string;
 }
-
-export type ApprovalDialogTier = "automatic progress" | "Department Head" | "Encore Council" | "user";
 export type ApprovalDialogEffectClassification = "ordinary" | "critical" | "forbidden" | "ambiguous";
 export type ApprovalDialogTierTrigger = "effect" | "pressure";
 export type ApprovalDialogRepetitionScope = "once" | "bounded_count" | "bounded_time" | "bounded_budget" | "session";
@@ -45,6 +50,14 @@ export interface ConfirmationApproval {
 export type ConfirmationResult = "approved" | "cancelled" | ConfirmationApproval;
 export type ConfirmationPrompt = (summary: ApprovalDialogSummary) => Promise<ConfirmationResult>;
 
+export function isApprovalDialogBound(summary: ApprovalDialogSummary): boolean {
+  const identity = summary.identity?.trim();
+  const actor = summary.actor?.trim();
+  return identity !== undefined && identity !== "" && actor !== undefined && actor !== ""
+    && (summary.tier === "automatic progress" || summary.tier === "Department Head" || summary.tier === "Encore Council" || summary.tier === "user");
+}
+
 export async function confirmCriticalAction(summary: ApprovalDialogSummary, prompt: ConfirmationPrompt): Promise<ConfirmationResult> {
+  if (!isApprovalDialogBound(summary)) return "cancelled";
   return prompt(summary);
 }

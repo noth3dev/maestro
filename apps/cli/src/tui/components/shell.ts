@@ -1,45 +1,44 @@
 import type { Workspace } from "../workspace.js";
-import { fitPlain, paintTranscript, tuiTheme, type Paint, type TranscriptLine } from "../theme.js";
+import { fitPlain, tuiTheme } from "../theme.js";
 
 export type AsyncState<T> = { kind: "loading" } | { kind: "empty" } | { kind: "error"; message: string } | { kind: "value"; value: T };
+
+export interface PendingDecision {
+  /** Command/effect identity that can be correlated with durable activity. */
+  readonly identity: string;
+  readonly tier: string;
+  readonly action: string;
+  readonly actor: string;
+}
 
 export interface TuiShellState {
   workspace: Workspace;
   model?: string;
   mode?: "maestro" | "flashmob";
+  working?: boolean;
   connection:
     { kind: "connected" } | { kind: "connecting" } | { kind: "setup-required"; message: string } | { kind: "error"; message: string };
   goal: AsyncState<{ name: string; state: string }>;
   workers: AsyncState<number>;
   approvals: AsyncState<number>;
   budget: AsyncState<{ spentCents: number; ceilingCents: number }>;
+  pendingDecisions?: readonly PendingDecision[];
 }
 
-const MAESTRO_LOGO = [
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠔⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡠⠊⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠔⠁⠀⠀⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⠋⠀⢀⣤⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⣀⠀⠀⠀⠀⢀⡜⠁⢀⣰⣾⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⣄⠀⠀⠀⠀⢼⣿⣿⠀⢀⣴⠏⠀⠀⣾⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⡏⠀⠙⠻⣷⣄⡀⠀⠈⠉⣡⣶⡟⠁⠀⠀⠀⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⡇⠀⠀⠀⠈⢻⣿⣷⣶⣿⡿⠏⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⡇⠀⠀⠀⠀⠀⢹⣿⣿⡟⠁⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⣿⡇⠀⠀⠀⠀⠀⢸⡿⠋⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⡿⠿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠃⠀⠀⠀⠀⡠⠏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡿⠟⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-  "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-];
+export interface TuiLayoutFrame {
+  readonly splash: string[];
+  readonly status: string[];
+  readonly stream: string[];
+  readonly decisions: string[];
+  readonly input: string[];
+  readonly hints: string[];
+}
+
+export interface TuiLayoutOptions {
+  readonly showSplash?: boolean;
+  readonly stream?: readonly string[];
+  readonly input?: readonly string[];
+}
 
 function stateText<T>(state: AsyncState<T>, format: (value: T) => string): string {
   if (state.kind === "loading") return "loading";
@@ -48,143 +47,148 @@ function stateText<T>(state: AsyncState<T>, format: (value: T) => string): strin
   return format(state.value);
 }
 
-function connectionText(state: TuiShellState["connection"]): string {
-  if (state.kind === "connected") return "● connected";
-  if (state.kind === "connecting") return "○ connecting";
-  if (state.kind === "setup-required") return `! setup required · ${state.message}`;
-  return `! ${state.message}`;
+function goalText(state: TuiShellState): string {
+  return stateText(state.goal, (value) => `${value.name} · ${value.state}`);
 }
 
-function connectionPaint(state: TuiShellState["connection"]): Paint {
-  if (state.kind === "connected") return tuiTheme.success;
-  if (state.kind === "connecting") return tuiTheme.warning;
-  return tuiTheme.danger;
+function goalStateText(state: TuiShellState): string {
+  return stateText(state.goal, (value) => value.state);
 }
 
-function horizontalRule(width: number): string {
-  return tuiTheme.border(fitPlain(`  ${"─".repeat(Math.max(0, width - 4))}`, width));
+function workerText(state: TuiShellState): string {
+  return stateText(state.workers, (value) => `${value} worker${value === 1 ? "" : "s"}`);
 }
 
-function splitRow(
-  left: string,
-  right: string,
-  width: number,
-  leftPaint: Paint = tuiTheme.text,
-  rightPaint: Paint = tuiTheme.muted,
-): string {
-  const innerWidth = Math.max(0, width - 2);
-  const gutter = "    ";
-  const leftWidth = Math.min(50, Math.max(0, innerWidth - gutter.length));
-  const rightWidth = Math.max(0, innerWidth - leftWidth - gutter.length);
-  const leftText = fitPlain(left, leftWidth).padEnd(leftWidth);
-  const rightText = fitPlain(right, rightWidth).padEnd(rightWidth);
-  return `${tuiTheme.muted("  ")}${leftPaint(leftText)}${gutter}${rightPaint(rightText)}`;
+function pendingCount(state: TuiShellState): number {
+  if (state.pendingDecisions !== undefined) return state.pendingDecisions.length;
+  return state.approvals.kind === "value" ? state.approvals.value : 0;
 }
 
-function compactStatusRows(state: TuiShellState, width: number): string[] {
-  const connection = connectionText(state.connection);
-  const budget =
-    state.budget.kind === "value"
-      ? `${state.budget.value.spentCents}/${state.budget.value.ceilingCents} cents`
-      : stateText(state.budget, String);
+function budgetText(state: TuiShellState): string {
+  if (state.budget.kind !== "value") return stateText(state.budget, String);
+  const spent = (state.budget.value.spentCents / 100).toFixed(2);
+  const ceiling = (state.budget.value.ceilingCents / 100).toFixed(2);
+  return `$${spent}/$${ceiling}`;
+}
+
+function connectionMessage(state: TuiShellState): string | undefined {
+  if (state.connection.kind === "connected") return undefined;
+  if (state.connection.kind === "connecting") return "gateway connecting";
+  return state.connection.message;
+}
+
+function pendingPaint(text: string): string { return tuiTheme.warning(text); }
+
+/** One-line status, ordered by what can change the operator's next action. */
+export function renderStatusRow(state: TuiShellState, width: number): string {
+  const connection = connectionMessage(state);
+  if (connection !== undefined) return tuiTheme.warning(fitPlain(`⚠ ${connection} · retry with ctrl+r`, width));
+
+  const count = pendingCount(state);
+  const pending = count > 0 ? ` · ⏸ ${count} need you` : "";
+  let base: string;
+  if (width >= 100) base = `${state.mode === "flashmob" ? "flashmob" : "maestro"} · ${goalText(state)} · ${workerText(state)} · ${budgetText(state)}`;
+  else if (width >= 80) base = `${state.mode === "flashmob" ? "flashmob" : "maestro"} · ${goalText(state)} · ${workerText(state)}`;
+  else if (width >= 60) base = `${state.mode === "flashmob" ? "flashmob" : "maestro"} · ${goalStateText(state)}`;
+  else base = goalStateText(state);
+  if (pending === "") return tuiTheme.text(fitPlain(base, width));
+  const baseWidth = Math.max(0, width - pending.length);
+  const left = fitPlain(base, baseWidth).padEnd(baseWidth, " ");
+  return `${tuiTheme.text(left)}${pendingPaint(fitPlain(pending, width - baseWidth))}`;
+}
+
+function decisionRows(state: TuiShellState, width: number, height: number): string[] {
+  const decisions = (state.pendingDecisions ?? []).filter((decision) => typeof decision.identity === "string" && decision.identity.trim() !== "");
+  if (decisions.length === 0) return [];
+  if (width < 60) return [fitPlain(`⏸ ${decisions.length} pending decisions · ctrl+a to review`, width)];
+  const maxVisible = height < 24 ? 1 : 2;
+  const visible = decisions.slice(0, maxVisible).map((decision) => {
+    const actor = width >= 100 ? `  ${decision.actor}` : "";
+    return fitPlain(`⏸ ${decision.tier}  ${decision.action}${actor}`, width);
+  });
+  if (decisions.length > visible.length) visible.push(fitPlain(`  +${decisions.length - visible.length} more · ctrl+a to review`, width));
+  return visible;
+}
+
+export function renderDecisionRegion(state: TuiShellState, width: number, height = 24): string[] {
+  if (height < 16) return [];
+  const rows = decisionRows(state, width, height);
+  if (rows.length === 0) return [];
+  if (width < 60 || height < 24) return rows.map((row) => tuiTheme.warning(row));
+  return [tuiTheme.border("─".repeat(Math.max(0, width))), ...rows.map((row) => tuiTheme.warning(row)), tuiTheme.border("─".repeat(Math.max(0, width)))];
+}
+
+/** Details shown by the one-keystroke review action when a decision was replayed from storage. */
+export function renderPendingDecisionDetails(state: TuiShellState, width: number): string[] {
+  return (state.pendingDecisions ?? [])
+    .filter((decision) => typeof decision.identity === "string" && decision.identity.trim() !== "")
+    .map((decision) => fitPlain(`⏸ ${decision.tier} · ${decision.action} · requested by ${decision.actor}`, width));
+}
+
+function renderSplash(width: number): string[] {
   return [
-    tuiTheme.primary("  ✦ MAESTRO"),
-    tuiTheme.secondary("  I AM YOUR MUZE"),
-    "",
-    tuiTheme.muted("  Welcome back · type / for commands · /flashmob"),
-    tuiTheme.text(`  workspace  ${fitPlain(state.workspace.cwd, Math.max(0, width - 12))}`),
-    tuiTheme.dim(`  git root   ${fitPlain(state.workspace.gitRoot ?? "not a Git repository", Math.max(0, width - 12))}`),
-    tuiTheme.text(
-      `  goal       ${fitPlain(
-        stateText(state.goal, (value) => `${value.name} · ${value.state}`),
-        Math.max(0, width - 12),
-      )}`,
-    ),
-    connectionPaint(state.connection)(fitPlain(`  model      ${state.model ?? "not selected"}   ·   status  ${connection}`, width)),
-    state.mode === "flashmob" ? tuiTheme.primary("  mode       flashmob") : tuiTheme.muted("  mode       maestro"),
-    tuiTheme.muted(
-      fitPlain(
-        `  workers    ${stateText(state.workers, String)}   approvals  ${stateText(state.approvals, String)}   budget  ${budget}`,
-        width,
-      ),
-    ),
-    horizontalRule(width),
+    tuiTheme.primary(fitPlain("✦ MAESTRO", width)),
+    tuiTheme.secondary(fitPlain("Your durable workspace for governed work", width)),
+    tuiTheme.dim(fitPlain("Type / for commands · Ctrl+G goals · Ctrl+A decisions", width)),
   ];
 }
 
-function wideStatusRows(state: TuiShellState, width: number): string[] {
-  // Keep the mark fixed-size. Extra terminal height belongs to conversation
-  // breathing room, not to the logo's source whitespace.
-  // Rows 6–7 are the omitted decorative upper flourish; row 8 is the first real
-  // contour and must stay visible.
-  // The side copy has 13 rows while the artwork has 10. Keep one quiet row
-  // above and two below so the mark is vertically centered beside the copy.
-  const logo = [" ".repeat(50), ...MAESTRO_LOGO.slice(8, 18), ...Array.from({ length: 2 }, () => " ".repeat(50))];
-  const budget =
-    state.budget.kind === "value"
-      ? `${state.budget.value.spentCents}/${state.budget.value.ceilingCents} cents`
-      : stateText(state.budget, String);
-  const right = [
-    "Tips for getting started",
-    "Run /model list to inspect providers.",
-    "Use /model use --model provider/model.",
-    "Use /session new to change conversation.",
-    `mode       ${state.mode === "flashmob" ? "flashmob" : "maestro"}`,
-    `workspace  ${state.workspace.cwd}`,
-    `git root   ${state.workspace.gitRoot ?? "not a Git repository"}`,
-    `goal       ${stateText(state.goal, (value) => `${value.name} · ${value.state}`)}`,
-    `model      ${state.model ?? "not selected"}`,
-    `status     ${connectionText(state.connection)}`,
-    `workers    ${stateText(state.workers, String)}`,
-    `approvals  ${stateText(state.approvals, String)}`,
-    `budget     ${budget}`,
-  ];
-  const rightPaints: Paint[] = [
-    tuiTheme.secondary,
-    tuiTheme.muted,
-    tuiTheme.muted,
-    tuiTheme.muted,
-    state.mode === "flashmob" ? tuiTheme.primary : tuiTheme.muted,
-    tuiTheme.text,
-    tuiTheme.dim,
-    tuiTheme.text,
-    tuiTheme.text,
-    connectionPaint(state.connection),
-    tuiTheme.muted,
-    tuiTheme.muted,
-    tuiTheme.muted,
-  ];
-  return [
-    tuiTheme.primary("  ✦ MAESTRO"),
-    tuiTheme.secondary("  I AM YOUR MUZE"),
-    "",
-    ...logo.map((line, index) => splitRow(line, right[index] ?? "", width, tuiTheme.text, rightPaints[index] ?? tuiTheme.muted)),
-    horizontalRule(width),
-  ];
+export interface SplashController {
+  visible(): boolean;
+  dismiss(): void;
 }
 
-export function renderStatusHeader(state: TuiShellState, width: number, height = 30): string[] {
-  if (width < 100 || height < 28) return compactStatusRows(state, width);
-  return wideStatusRows(state, width);
+export function createSplashController(): SplashController {
+  let isVisible = true;
+  return { visible: () => isVisible, dismiss: () => { isVisible = false; } };
 }
 
-export function renderShell(state: TuiShellState, width: number, height = 30): string[] {
-  return [
-    ...renderStatusHeader(state, width, height),
-    "",
-    `${tuiTheme.primary("◆")} ${tuiTheme.text("CONVERSATION")} ${tuiTheme.dim("· durable workspace dialogue")}`,
-    tuiTheme.muted(fitPlain("Ask Concertmaster about the selected Goal, or type / for commands.", width)),
-  ];
+function hintText(state: TuiShellState): string {
+  if (connectionMessage(state) !== undefined) return "ctrl+r retry · /status for detail";
+  if (state.working === true) return `esc stop · ctrl+a decisions${pendingCount(state) > 0 ? ` (${pendingCount(state)})` : ""}`;
+  const count = pendingCount(state);
+  if (count > 0) return `ctrl+a review ${count} pending decision${count === 1 ? "" : "s"}`;
+  if (state.workers.kind === "loading") return "esc stop · ctrl+a decisions";
+  return "/ commands · ctrl+g goals · ? help";
 }
 
-export function renderTranscript(lines: readonly (TranscriptLine | string)[], width: number): string[] {
-  return lines.map((line) => paintTranscript(line, width));
+export function renderHints(state: TuiShellState, width: number): string {
+  return tuiTheme.dim(fitPlain(hintText(state), width));
 }
 
-export function renderTuiFooter(width: number): string {
-  const content = fitPlain(
-    "  ◆ model gateway  │  ctrl+k commands   ctrl+g goals   ctrl+e events   ctrl+r retry   ctrl+c cancel / exit",
-    width,
-  ).padEnd(Math.max(0, width));
-  return tuiTheme.dim(content);
+export function renderTuiLayout(state: TuiShellState, width: number, height: number, options: TuiLayoutOptions = {}): TuiLayoutFrame {
+  const splash = options.showSplash === true && width >= 100 && height >= 28 ? renderSplash(width) : [];
+  const status = [renderStatusRow(state, width)];
+  const decisions = renderDecisionRegion(state, width, height);
+  const input = [fitPlain(options.input?.[0] ?? "message to Concertmaster · Enter to send", width)];
+  const hints = [renderHints(state, width)];
+  if (height < 16) return { splash, status, stream: [], decisions: [], input, hints: [] };
+  const streamHeight = Math.max(0, height - status.length - decisions.length - input.length - hints.length - splash.length);
+  const source = options.stream ?? [];
+  const stream = [...source.slice(-streamHeight)];
+  while (stream.length < streamHeight) stream.push("");
+  return { splash, status, stream, decisions, input, hints };
+}
+
+/** Fixed status chrome rendered above the independently scrollable conversation viewport. */
+export function renderStatusRegion(state: TuiShellState, width: number, height = 30, options: TuiLayoutOptions = {}): string[] {
+  const frame = renderTuiLayout(state, width, height, options);
+  return [...frame.splash, ...frame.status];
+}
+
+/** Compatibility wrapper for callers that still need the complete fixed chrome. */
+export function renderShell(state: TuiShellState, width: number, height = 30, options: TuiLayoutOptions = {}): string[] {
+  const frame = renderTuiLayout(state, width, height, options);
+  return [...frame.splash, ...frame.status, ...frame.decisions];
+}
+
+/** Compatibility wrapper: the header is now a single status row. */
+export function renderStatusHeader(state: TuiShellState, width: number, _height = 30): string[] {
+  return [renderStatusRow(state, width)];
+}
+
+export function renderTuiFooter(width: number, state?: TuiShellState): string {
+  return renderHints(state ?? {
+    workspace: { cwd: "", gitRoot: "" }, connection: { kind: "connected" }, goal: { kind: "empty" }, workers: { kind: "empty" }, approvals: { kind: "empty" }, budget: { kind: "empty" },
+  }, width);
 }
