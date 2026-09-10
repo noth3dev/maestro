@@ -275,15 +275,16 @@ export async function advanceWorkerIntegration(
     const departmentHead = (await git.headRevision(repositoryPath, worktree.rows[0]!.base_branch_name)).trim();
     if (workerHead === departmentHead) throw new GitIntegrationError("Worker branch has no commit to integrate");
     const goalHead = (await git.headRevision(repositoryPath, goalBranch.rows[0]!.branch_name)).trim();
-    if (workerHead === goalHead) throw new GitIntegrationError("Worker commit is already integrated");
     // Reserve the exact worker SHA inside the lease transaction before the
-    // external Git mutation. A failed Git advance rolls the reservation back;
-    // a retry cannot strand a branch ahead of its durable evidence row.
-    const inserted = await client.query<{ commit_sha: string; message: string; evidence_references: string[] }>(
+    // external Git mutation. A failed Git advance rolls the reservation back.
+    const reserve = () => client.query<{ commit_sha: string; message: string; evidence_references: string[] }>(
       `INSERT INTO integration_commits (commit_id, worker_id, commit_sha, message, evidence_references) VALUES ($1, $2, $3, $4, $5::jsonb) RETURNING commit_sha, message, evidence_references`,
       [randomUUID(), workerId, workerHead, message.trim(), JSON.stringify(uniqueEvidenceReferences)],
     );
-    await git.advanceBranch(repositoryPath, goalBranch.rows[0]!.branch_name, goalHead, workerHead);
+    const inserted = await reserve();
+    if (workerHead !== goalHead) await git.advanceBranch(repositoryPath, goalBranch.rows[0]!.branch_name, goalHead, workerHead);
+    // If Git advanced before a lost DB response, the next attempt sees both
+    // branch heads equal and safely records the still-unrecorded exact SHA.
     await client.query("COMMIT"); open = false;
     return { workerId, commitSha: inserted.rows[0]!.commit_sha.trim(), message: inserted.rows[0]!.message, evidenceReferences: inserted.rows[0]!.evidence_references };
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }

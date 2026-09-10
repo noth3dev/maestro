@@ -199,14 +199,15 @@ export async function sendWorkerMessageUnderOwnerClaim(
   proof: GoalLeaseProof,
 ): Promise<boolean> {
   const claimed = await withWorkerLease(pool, workerId, proof, async (_client, worker) => {
-    if (worker.owner_id !== proof.ownerId || worker.owner_fencing_token !== proof.fencingToken) return false;
-    if (worker.status === "succeeded" || worker.status === "failed" || worker.status === "cancelled" || worker.status === "unknown") return false;
-    if (worker.execution_ref.startsWith("pending:") || worker.invocation_ref.startsWith("pending:")) return false;
-    return true;
+    if (worker.owner_id !== proof.ownerId || worker.owner_fencing_token !== proof.fencingToken) return undefined;
+    if (worker.status === "succeeded" || worker.status === "failed" || worker.status === "cancelled" || worker.status === "unknown") return undefined;
+    if (worker.execution_ref.startsWith("pending:") || worker.invocation_ref.startsWith("pending:")) return undefined;
+    return { executionRef: worker.execution_ref, invocationRef: worker.invocation_ref };
   });
-  if (!claimed) return false;
-  const worker = await readWorker(pool, workerId);
-  await kernel.sendMessage(toExecutionRef(worker.executionRef), toInvocationRef(worker.invocationRef), message);
+  if (claimed === undefined) return false;
+  // Use the refs captured under the owner/fence lock. Do not reread a
+  // potentially successor-owned row after releasing that lock.
+  await kernel.sendMessage(toExecutionRef(claimed.executionRef), toInvocationRef(claimed.invocationRef), message);
   return true;
 }
 
