@@ -1946,3 +1946,9 @@ All downstream routing documentation must use this contract and must not restore
 
 
 - 2026-09-10 continuation finding: no build or CI failure is present. The real-provider fourteen-step acceptance and deterministic worker hold/requeue evidence remain outstanding, so S4 cannot close and S5/Phase 4/5 remain blocked.
+
+- 2026-09-10 Plan 4 S1 finding: the initial implementation was rejected by independent review because it created a second 0083 activation schema and did not enforce repetition or named denial. It was removed and rewritten to reuse capability_approvals, capability_repetition_budgets, and capability_repetition_claims. PostgreSQL migration/integration evidence remains unavailable in this environment because MAESTRO_TEST_DATABASE_URL is unset; do not claim that evidence.
+
+- 2026-09-10 S1 review finding resolved: independent review rejected the first revision because `consumeExternalCapability` had no production call site and remote push could bypass it. `main.ts` now composes the shared capability service into `critical-action-service`, and remote push is fail-closed without deployment activation. PostgreSQL integration remains unavailable because MAESTRO_TEST_DATABASE_URL is unset.
+
+- 2026-09-10 S1 final finding resolved: review caught that gating inside the effect callback would claim a denied command before activation. The gate now runs through the executor pre-claim hook; retries remain possible after activation.
