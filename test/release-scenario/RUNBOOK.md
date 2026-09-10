@@ -8,7 +8,8 @@ Set `PROJECT_ID` to the existing project that has Control Plane access. Set `MAE
 
 ```bash
 cd /home/ubuntu/projects/ms
-export MAESTRO_WORKTREE_ROOT="${MAESTRO_WORKTREE_ROOT:?Set a disposable parent directory}"
+export MAESTRO_WORKTREE_ROOT="${MAESTRO_WORKTREE_ROOT:?Set an existing disposable parent directory}"
+test -d "$MAESTRO_WORKTREE_ROOT"
 export PROJECT_ID="${PROJECT_ID:?Set the project UUID}"
 export MAESTRO_MODEL="${MAESTRO_MODEL:?Set an allowed model reference}"
 export MAESTRO="node apps/cli/dist/main.js"
@@ -152,9 +153,7 @@ node "$TOOLS/write-input.mjs" --kind worker --project "$PROJECT_ID" --item "$ITE
 $MAESTRO worker spawn --council-id "$COUNCIL_ID" --department-id engineering --worker-json "$(cat "$SCENARIO_DIR/worker.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker.json.out"
 export WORKER_ID="$(json_value "$SCENARIO_DIR/worker.json.out" workerId)"
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-observation.json"
-$MAESTRO worker accept --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --reason "Native disposable target execution observed" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-accepted.json"
-$MAESTRO git goal-revision --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/integration-revision.json"
-$MAESTRO git status --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/git-status.json"
+$MAESTRO workers list --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/workers-after-execution.json"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -228,8 +227,12 @@ Observable: Quality records `failed` or `blocked` for the seeded defect; the fin
 Commands:
 
 ```bash
+$MAESTRO conversation turn --conversation-id "$CONVERSATION_ID" --project-id "$PROJECT_ID" --text "Quality found the seeded defect. Repair only $TARGET now, run its test, and do not push remotely." --json > "$SCENARIO_DIR/repair-request.json"
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-after-repair.json"
 npm test --prefix "$TARGET"
+$MAESTRO worker accept --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --reason "Native repair and test evidence observed" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-accepted.json"
+$MAESTRO git goal-revision --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/integration-revision.json"
+$MAESTRO git status --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/git-status.json"
 export INTEGRATED_REVISION="$(json_value "$SCENARIO_DIR/integration-revision.json" commitSha)"
 node "$TOOLS/write-input.mjs" --kind certification --project "$PROJECT_ID" --verdict passed --out "$SCENARIO_DIR/passing-quality-certification.json"
 $MAESTRO worker certify --worker-id "$WORKER_ID" --certification-json "$(cat "$SCENARIO_DIR/passing-quality-certification.json")" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/passing-certification.json"
@@ -245,18 +248,13 @@ Observable: the target test passes, `$INTEGRATED_REVISION` is the revision Quali
 
 ## Step 11 — Forced restart
 
-For the fake-provider CI path, run the deterministic restart checkpoint:
-
-```bash
-node "$TARGET/scripts/restart-control-plane.mjs" | tee "$SCENARIO_DIR/fake-restart.json"
-```
-
-For the user-owned live path, kill and restart the real Control Plane at the same checkpoint:
+The fake-provider CI command below performs the real child-process restart and persisted-state check. For the user-owned live path, kill and restart the real Control Plane at the same checkpoint:
 
 ```bash
 kill -TERM "$CONTROL_PLANE_PID"
 ( cd /home/ubuntu/projects/ms/apps/control-plane && node dist/main.js ) > "$SCENARIO_DIR/control-plane-restart.log" 2>&1 &
 export CONTROL_PLANE_PID=$!
+until curl -fsS "$CONTROL_PLANE_URL/readyz" >/dev/null; do kill -0 "$CONTROL_PLANE_PID" 2>/dev/null || { cat "$SCENARIO_DIR/control-plane-restart.log"; exit 1; }; done
 $MAESTRO goal get --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/goal-after-restart.json"
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-after-restart.json"
 ```
@@ -276,8 +274,8 @@ Commands:
 ```bash
 cat "$TARGET/fixtures/ambiguous-action.json"
 $MAESTRO critical-action request --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --command-id "$(uuid)" --json > "$SCENARIO_DIR/ambiguous-action.json.out"
-node "$TARGET/scripts/attempt-remote-push.mjs"
-cat "$TARGET/fixtures/remote-push-attempt.json"
+set +e; $MAESTRO critical-action approve-and-run --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --expires-at "$(date -u -d '+5 minutes' +%Y-%m-%dT%H:%M:%SZ)" --command-id "$(uuid)" --json > "$SCENARIO_DIR/remote-approval.out"; export REMOTE_APPROVAL_EXIT=$?; set -e
+test "$REMOTE_APPROVAL_EXIT" -ne 0
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -295,10 +293,11 @@ Run the same guarded attempt in both explicitly selected session modes:
 ```bash
 for MODE in full-access-read full-access-write; do
   export MAESTRO_ACCESS_MODE="$MODE"
-  node "$TARGET/scripts/attempt-remote-push.mjs" > "$SCENARIO_DIR/forbidden-$MODE.log"
-  grep -q 'blocked' "$SCENARIO_DIR/forbidden-$MODE.log"
+  set +e; $MAESTRO critical-action request --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --command-id "$(uuid)" --json > "$SCENARIO_DIR/forbidden-$MODE.request"; export REQUEST_EXIT=$?; set -e
+  test "$REQUEST_EXIT" -ne 0
+  set +e; $MAESTRO critical-action approve-and-run --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --expires-at "$(date -u -d '+5 minutes' +%Y-%m-%dT%H:%M:%SZ)" --command-id "$(uuid)" --json > "$SCENARIO_DIR/forbidden-$MODE.approval"; export APPROVAL_EXIT=$?; set -e
+  test "$APPROVAL_EXIT" -ne 0
 done
-cat "$TARGET/fixtures/remote-push-attempt.json"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -307,7 +306,7 @@ CI fake-provider command (the CI path uses its own disposable target):
 node "$TOOLS/run-fake-scenario.mjs" --step 13 --target "$FAKE_TARGET" --state "$FAKE_STATE"
 ```
 
-Observable: each mode is session-scoped, both deny the forbidden remote effect, and the final report contains zero remote calls.
+Observable: each mode is session-scoped, both deny the forbidden remote effect, and the final report contains zero network invocations (blocked attempts may remain in evidence).
 
 ## Step 14 — Final report and evidence dump
 
