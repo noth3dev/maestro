@@ -1828,3 +1828,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 continuation finding: the CI gate is green, but it does not clear S4's live exit gate. `selectFullAccessMode()` still has no authenticated public route/command, evidence capture still has no public operation, and a completed native worker has no deterministic hold/requeue path for the repair message. Per the plan, do not invent a new slice or close S4 on static/fake evidence.
 
 - 2026-09-10 plan-order finding: the S4→S5 transition is still blocked by missing authenticated capability-mode selection, public Goal-scoped evidence capture, and deterministic worker hold/requeue for repair messaging. Starting S5 would violate `execution/plan-3.md` § S5's handoff prerequisite; do not merge, push, or hand off until these gaps are resolved by the appropriate production owner/slice.
+
+- 2026-09-10 continuation gate finding: no production change has resolved the documented S4 blockers since the previous check. The correct action remains to preserve the open S4 gate; starting `phase3-status-sync` would violate the plan's handoff prerequisite.

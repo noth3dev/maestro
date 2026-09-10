@@ -3904,3 +3904,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 continuation recheck: repository-root verification confirmed main remains clean at `c22938d`, root build passes, and CI `34486714616` for `c22938d` is completed-success. The S4 worktree remains clean at `9fe35c7`; no merge, push, S5, or live handoff was performed because the recorded S4 production-surface blockers remain unresolved.
 
 - 2026-09-10 plan-order recheck: `execution/plan-3.md` confirms S4 must remain open until its fourteen-step real-provider handoff is runnable and complete; S5 is documentation-only and may start only after that handoff. Main root build and CI are green, and S6b is merged, but the live S4 surfaces remain unavailable, so no new slice was started.
+
+- 2026-09-10 continuation root gate: the mandated root check again passed (`main` clean at `c22938d`, `npm run build` green, CI latest `34486714616` successful). `execution/plan-3.md` still requires the S4 handoff before S5; the existing S4 worktree remains at `cfaacf5` with no new implementation started.
