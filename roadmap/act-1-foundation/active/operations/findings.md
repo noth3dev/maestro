@@ -1757,3 +1757,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 Plan 3 S4 third-remediation verification finding: full no-DB remains green after closing root creation, duplicate restart effect, mode enforcement, evidence integrity, and worker repair lineage gaps. PostgreSQL/live-provider acceptance is still intentionally unrun.
 
 - 2026-09-10 Plan 3 S4 fourth-remediation finding: the remaining review concern is the production worker's lack of a public repair/reprompt command; the runbook now records the Maestro conversation repair request and integrates only after the subsequent worker observation. No new production worker API was added because that would exceed S4's declared support scope.
+
+- 2026-09-10 Plan 3 S4 fourth-remediation verification finding: no no-DB regression remains. The live native worker reprompt API is not part of the existing WorkerService surface; the runbook records the existing Maestro conversation request and keeps live acceptance user-owned rather than adding an unplanned production API.
