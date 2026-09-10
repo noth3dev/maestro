@@ -1703,3 +1703,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 direct SQL timestamp binding focused verification passed 6 files / 37 tests, including E2E and Discord report scenarios. The sub-millisecond mismatch regression now fails closed through the SQL boolean.
 
 - 2026-09-10 S1 final independent review `review-plan3-s1-final12`: **PASS**. Focused report/domain checks and six-file PostgreSQL review passed; no critical finding remains open for S1. Live provider acceptance remains user-owned and was not run.
+
+- 2026-09-10 S1 post-merge CI confirmation: run `34435826325` passed both Build/lint and PostgreSQL Vitest. The earlier red run `34430913243` was resolved by merging the S1 routing fixture changes; no CI blocker remains for S1.
