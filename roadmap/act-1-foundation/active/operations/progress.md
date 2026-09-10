@@ -3945,3 +3945,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 S2 review remediation: the real device-agent mTLS integration fixture now seeds an explicit durable `device` activation with bounded repetition before its first successful command, matching the production callback in `apps/device-agent/src/main.ts`.
 
 - 2026-09-10 S2 review remediation: moved the browser activation callback from pre-authority execution to `AuthorizedEffectExecutor` `beforeClaim`, preserving S1 ordering so a denied authority decision, page-ceiling rejection, or boundary failure cannot consume the external repetition budget.
+
+- 2026-09-10 Plan 4 S3 `incident-under-outage`: created the isolated worktree and RED-tested a restart boundary where a previously delivered Discord nonce was re-emitted and delivered again. Added persisted delivered-nonce recovery so buffered signals remain durable across process restart without duplicate delivery.

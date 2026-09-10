@@ -9,6 +9,21 @@ const signal=(overrides:Partial<DiscordSignal>={}):DiscordSignal=>{const now=Dat
 describe("Discord authentication",()=>{it("rejects tampering, stale timestamps, and replay",()=>{const issuedAt=new Date(Date.now()+1000).toISOString(); const now=Date.parse(issuedAt)+5000; const e=signDiscordSignal(signal(),"secret","n1",1,issuedAt); const state=verifyDiscordSignal(e,"secret",now,10_000); expect(()=>verifyDiscordSignal({...e,signal:{...e.signal,severity:"critical"}},"secret",now,10_000)).toThrow(DiscordAuthenticationError); expect(()=>verifyDiscordSignal(e,"secret",now+20_000,10_000)).toThrow(DiscordFreshnessError); expect(()=>verifyDiscordSignal(e,"secret",now,10_000,state)).toThrow(DiscordReplayError);});});
 describe("Discord durable buffer",()=>{it("buffers during outage and delivers after recovery",async()=>{const path=join(await mkdtemp(join(tmpdir(),"discord-")),"buffer.jsonl"); let healthy=false; const delivered:string[]=[]; const f=createDiscord({bufferPath:path,credential:"x",flushIntervalMs:100,freshnessWindowMs:100000},{deliver:async e=>{if(!healthy) throw new Error("down"); delivered.push(e.nonce);}}); const e=signDiscordSignal(signal(),"x","n1",1); await f.emit(e); expect(f.pendingCount()).toBe(1); healthy=true; await f.flush(); expect(delivered).toEqual(["n1"]); expect(f.pendingCount()).toBe(0); const lines=(await readFile(path,"utf8")).trim().split("\n"); expect(lines).toHaveLength(2);});});
 
+describe("Discord restart deduplication",()=>{
+  it("does not redeliver a nonce already marked delivered before process restart",async()=>{
+    const path=join(await mkdtemp(join(tmpdir(),"discord-restart-")),"buffer.jsonl");
+    const e=signDiscordSignal(signal(),"x","restart-nonce",1);
+    let firstDeliveries=0;
+    const first=createDiscord({bufferPath:path,credential:"x",flushIntervalMs:100,freshnessWindowMs:100000},{deliver:async()=>{firstDeliveries+=1;}});
+    await first.emit(e); await first.close();
+    expect(firstDeliveries).toBe(1);
+    let recoveredDeliveries=0;
+    const recovered=createDiscord({bufferPath:path,credential:"x",flushIntervalMs:100,freshnessWindowMs:100000},{deliver:async()=>{recoveredDeliveries+=1;}});
+    await recovered.emit(e); await recovered.close();
+    expect(recoveredDeliveries).toBe(0);
+  });
+});
+
 describe("Discord emission validation",()=>{it("rejects a tampered envelope before buffering or delivery",async()=>{const path=join(await mkdtemp(join(tmpdir(),"discord-")),"buffer.jsonl"); let deliveries=0; const f=createDiscord({bufferPath:path,credential:"x",flushIntervalMs:100,freshnessWindowMs:100000},{deliver:async()=>{deliveries+=1;}}); const e=signDiscordSignal(signal(),"x",randomUUID(),1); const tampered={...e,signal:{...e.signal,severity:"critical" as const}}; await expect(f.emit(tampered)).rejects.toThrow(DiscordAuthenticationError); expect(f.pendingCount()).toBe(0); expect(deliveries).toBe(0); await expect(readFile(path,"utf8")).rejects.toThrow();});});
 
 describe("Discord concurrent buffering",()=>{it("flushes a signal emitted while another delivery is in flight",async()=>{const path=join(await mkdtemp(join(tmpdir(),"discord-")),"buffer.jsonl"); const delivered:string[]=[]; let release!:()=>void; const blocked=new Promise<void>(resolve=>{release=resolve;}); let started!:()=>void; const firstStarted=new Promise<void>(resolve=>{started=resolve;}); const f=createDiscord({bufferPath:path,credential:"x",flushIntervalMs:100,freshnessWindowMs:100000},{deliver:async e=>{delivered.push(e.nonce); if(e.nonce==="n1"){started(); await blocked;}}}); const first=f.emit(signDiscordSignal(signal(),"x","n1",1)); await firstStarted; const second=f.emit(signDiscordSignal(signal(),"x","n2",2)); release(); await Promise.all([first,second]); expect(delivered).toEqual(["n1","n2"]); expect(f.pendingCount()).toBe(0);});});
