@@ -10,7 +10,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { type DeviceGrantScope } from "@maestro/domain";
 import { signDeviceGrantEnvelope, type UnsignedDeviceGrantEnvelope } from "@maestro/device-agent";
-import { applyAllMigrations, acquireGoalLease, bootstrapPermanentOrganization, createDeviceGrant, enrollDevice, revokeDevice, setLocalDevicePolicy } from "@maestro/persistence";
+import { applyAllMigrations, acquireGoalLease, bootstrapPermanentOrganization, createCapabilityApproval, createDeviceGrant, enrollDevice, revokeDevice, setLocalDevicePolicy } from "@maestro/persistence";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -79,7 +79,7 @@ describeDatabase("real device-agent mTLS and signed grant process", () => {
   const scopedUrl = databaseUrl ? (() => { const url = new URL(databaseUrl); url.searchParams.set("options", `-c search_path=${schema}`); return url.toString(); })() : "";
   let pool: Pool;
   beforeAll(async () => { await basePool.query(`CREATE SCHEMA ${schema}`); pool = new Pool({ connectionString: scopedUrl }); await applyAllMigrations(pool); await applyAllMigrations(pool); });
-  beforeEach(async () => { await pool.query("TRUNCATE device_command_claims, device_agent_sessions, device_command_results, device_grants, device_policies, devices, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls, local_operator_credentials, local_operators, operator_project_memberships CASCADE"); await bootstrapPermanentOrganization(pool); });
+  beforeEach(async () => { await pool.query("TRUNCATE capability_effect_resolutions, capability_repetition_claims, capability_repetition_budgets, capability_approvals, capability_decision_journal, capability_sessions, device_command_claims, device_agent_sessions, device_command_results, device_grants, device_policies, devices, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls, local_operator_credentials, local_operators, operator_project_memberships CASCADE"); await bootstrapPermanentOrganization(pool); });
   afterAll(async () => { await pool.end(); await basePool.query(`DROP SCHEMA ${schema} CASCADE`); await basePool.end(); });
 
   it("executes one real file read only after mTLS, signature, local fence, and durable grant rechecks", async () => {
@@ -90,6 +90,14 @@ describeDatabase("real device-agent mTLS and signed grant process", () => {
     const goalId = randomUUID(); const projectId = randomUUID(); const projectRoot = await mkdtemp(join(tmpdir(), "maestro-device-project-")); const target = join(projectRoot, "README.md"); await writeFile(target, "hello device");
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "device-authority-test", leaseDurationMs: 60_000 });
+    await createCapabilityApproval(pool, {
+      approvalId: randomUUID(), capabilityKind: "device", projectId, goalId, commandId: "external-capability:device",
+      action: "external-capability.activate", target: "device", policyVersion: 1, controlEpoch: "external-capability-v1",
+      budgetEffectCents: 0, tier: "user", approverId: "ceo", decision: "approved",
+      reason: "User explicitly activated device capability for this Goal.",
+      consequence: "Only the enrolled device grant may execute until the activation expires or is revoked.",
+      expiresAt: new Date(Date.now() + 120_000), repetitionScope: { kind: "bounded_count", count: 10 },
+    });
     const device = await enrollDevice(pool, { displayName: "real agent", deviceType: "computer", publicKey: devicePublic }, { actorId: "ceo", sessionRef: "session:ceo:device", role: "ceo" });
     await setLocalDevicePolicy(pool, device.deviceId, { rules: [{ action: "project.file.read", targets: [target] }], expiresAt: null }, { actorId: "ceo", sessionRef: "session:ceo:policy", role: "ceo" });
     const grantScope: DeviceGrantScope = { actionTypes: ["project.file.read"], projectPaths: [projectRoot], applications: ["filesystem"], dataScope: [target], networkScope: ["none"] };

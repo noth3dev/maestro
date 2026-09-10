@@ -11,6 +11,7 @@ import {
   type BrowserCommandStatus,
   type BrowserExecutionPort,
   type EnvironmentRecord,
+  type ExternalCapabilityGate,
 } from "@maestro/domain";
 import {
   EnvironmentAuthorizationError,
@@ -43,6 +44,8 @@ export interface BrowserEvidenceWriter {
 }
 
 export interface BrowserAdapterOptions {
+  /** Explicit Goal-scoped browser activation; omission is fail-closed. */
+  readonly externalCapability?: ExternalCapabilityGate;
   readonly clock?: () => Date;
   readonly driver?: BrowserDriver;
   readonly evidence?: BrowserEvidenceWriter;
@@ -206,6 +209,9 @@ export function createBrowserEnvironmentAdapter(
 ): BrowserExecutionPort {
   const clock = options.clock ?? (() => new Date());
   const driver = options.driver ?? defaultBrowserDriver;
+  const externalCapability = options.externalCapability ?? {
+    require: async () => { throw new EnvironmentBoundaryError("External browser capability is not activated"); },
+  };
   const evidence = options.evidence ?? defaultEvidenceWriter;
   const nextInvocationId = options.invocationId ?? (() => randomUUID());
   const maxCapturedTextLength = options.maxCapturedTextLength ?? DEFAULT_MAX_CAPTURED_TEXT_LENGTH;
@@ -259,6 +265,10 @@ export function createBrowserEnvironmentAdapter(
           started = true;
           completedAt = clock().toISOString();
           release();
+        }, async () => {
+          await externalCapability.require({
+            capabilityKind: "browser", projectId: initial.projectId, goalId: initial.goalId, commandId: request.commandId, budgetEffectCents: request.budgetEffectCents,
+          });
         });
         if (decision.effect !== "allow") throw new EnvironmentAuthorizationError(decision);
         if (!started) throw new EnvironmentExecutionError("Authority gateway allowed without executing a browser command");

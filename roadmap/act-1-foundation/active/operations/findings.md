@@ -1956,3 +1956,9 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 Plan 4 S1 CI finding: `apps/control-plane/src/main.integration.test.ts` expected an approved remote push to run without seeding the newly required deployment external capability, producing HTTP 503 in PostgreSQL CI. The code gate is intentional; the fixture was incomplete.
 
 - 2026-09-10 CI-fix local validation note: build and lint passed and the targeted main integration file was skipped without MAESTRO_TEST_DATABASE_URL. The full no-DB suite had one unrelated process-group timing failure in `packages/agent-runtime/src/ipython-process-adapter.test.ts` (`process.kill(-pid, 0)` did not throw), with 1,040 passed and 423 skipped; this is not caused by the integration fixture change.
+
+- 2026-09-10 Plan 4 S2 finding: browser and device adapters had no external-capability activation boundary after S1. The new adapter/server gates default to a named denial when omitted; out-of-scope browser validation remains before the gate, and device local validation can reject `external_capability_not_activated` before the executor. PostgreSQL live validation is still unavailable locally without `MAESTRO_TEST_DATABASE_URL`.
+
+- 2026-09-10 S2 review finding resolved: the first fixture pass did not seed `external-capability:device`, so the production device-agent process would return 403 in PostgreSQL CI. The integration fixture now seeds the shared ledger; local execution remains skipped without MAESTRO_TEST_DATABASE_URL.
+
+- 2026-09-10 S2 review finding resolved: browser activation was initially checked before authority and could consume a repetition claim before authority denial. It now runs only after authority/control allow and before the durable effect claim; a regression test asserts the gate is not called on authority denial.

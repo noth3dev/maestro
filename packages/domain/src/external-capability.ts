@@ -7,6 +7,21 @@ export type ExternalCapabilityRepetitionScope =
   | { readonly kind: "bounded_time"; readonly expiresAt: Date }
   | { readonly kind: "bounded_budget"; readonly budgetCents: number };
 
+export interface ExternalCapabilityRequirement {
+  readonly capabilityKind: ExternalCapabilityKind;
+  readonly projectId: string;
+  readonly goalId: string;
+  readonly commandId: string;
+  readonly budgetEffectCents?: number;
+}
+
+/** Runtime adapters must receive an explicit Goal-scoped activation gate.
+ * The gate may durably consume the repetition budget before the external
+ * effect is claimed; omitting it is fail-closed in each adapter. */
+export interface ExternalCapabilityGate {
+  require(input: ExternalCapabilityRequirement): Promise<void>;
+}
+
 export interface ExternalCapabilityActivation {
   readonly activationId: string;
   readonly capabilityKind: ExternalCapabilityKind;

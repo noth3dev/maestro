@@ -43,6 +43,7 @@ export interface EnvironmentAuthorityGateway {
   execute(
     request: ActionRequest,
     effect: () => Promise<unknown>,
+    beforeClaim?: () => Promise<void>,
   ): Promise<AuthorityDecision>;
 }
 

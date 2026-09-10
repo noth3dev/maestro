@@ -15,6 +15,8 @@ export interface LocalDeviceGrantContext {
   readonly issuerPublicKey: string | Buffer;
   readonly previousGoalFencingToken: string;
   readonly previousSequence: number;
+  /** Set only after the durable Goal-scoped device activation gate passes. */
+  readonly externalCapabilityActive: boolean;
   readonly now?: Date;
 }
 
@@ -32,6 +34,7 @@ export function assertLocallyExecutableDeviceGrant(envelope: DeviceGrantEnvelope
   const now = context.now ?? new Date();
   if (!verifyDeviceGrantEnvelope(envelope, context.issuerPublicKey)) deny("invalid_signature");
   if (envelope.issuerKeyId !== context.issuerKeyId) deny("issuer_key_mismatch");
+  if (!context.externalCapabilityActive) deny("external_capability_not_activated");
   if (envelope.deviceId !== context.enrollment.deviceId) deny("device_identity_mismatch");
   if (envelope.goalId !== context.expectedGoalId) deny("goal_mismatch");
   if (envelope.projectId !== context.expectedProjectId) deny("project_mismatch");
