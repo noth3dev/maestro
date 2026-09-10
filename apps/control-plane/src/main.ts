@@ -188,6 +188,13 @@ function ipPythonPayloadDigest(request: IpPythonHostRequest): string {
   return createHash("sha256").update(JSON.stringify({ method: request.method, payload: request.payload }), "utf8").digest("hex");
 }
 
+/** Map a runtime stage boundary to the durable approval-journal event category. */
+export function ipPythonStageJournalEvent(outcome: IpPythonStageBoundary["outcome"]): "effect_result" | "interruption" | "failure" {
+  if (outcome === "completed") return "effect_result";
+  if (outcome === "stopped") return "interruption";
+  return "failure";
+}
+
 function ipPythonStageDetails(boundary: IpPythonStageBoundary): Record<string, unknown> {
   return {
     stage: boundary.stage,
@@ -550,7 +557,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
           const effectBinding = currentBinding ?? binding;
           await appendCapabilityJournal(pool, {
             capabilityKind: "ipython", projectId: effectBinding.projectId, goalId: effectBinding.goalId, commandId: effectBinding.commandId,
-            event: boundary.outcome === "completed" ? "effect_result" : "failure", details: ipPythonJournalDetails(effectBinding, ipPythonStageDetails(boundary)),
+            event: ipPythonStageJournalEvent(boundary.outcome), details: ipPythonJournalDetails(effectBinding, ipPythonStageDetails(boundary)),
           });
         },
       } : undefined;

@@ -1,6 +1,6 @@
 import type { MetronomeCorrectionInput, MetronomeFindingList, MetronomeResolutionInput, MetronomeSafePauseInput, RaiseMetronomeChallengeInput } from "@maestro/contracts";
 import { METRONOME_ACTOR_ID } from "@maestro/domain";
-import { raiseMetronomeChallenge, requestMetronomeCorrection, requestMetronomeSafePause, resolveMetronomeChallenge, scanGoalForMetronomeFindings, type MetronomeActorContext } from "@maestro/persistence";
+import { observeGoalForMetronome, raiseMetronomeChallenge, requestMetronomeCorrection, requestMetronomeSafePause, resolveMetronomeChallenge, type MetronomeActorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
 
 export interface MetronomeService {
@@ -34,8 +34,9 @@ export function createMetronomeService(deps: MetronomeServiceDependencies): Metr
   return {
     async scan(goalId, projectId, commandId) {
       await assertProject(goalId, projectId);
-      const findings = await deps.withGoalLease(goalId, (proof) => scanGoalForMetronomeFindings(deps.pool, goalId, proof, context(commandId)));
-      return { findings };
+      const observation = await deps.withGoalLease(goalId, (proof) => observeGoalForMetronome(deps.pool, goalId, proof, context(commandId)));
+      // Keep the existing HTTP scan contract findings-only; the control-plane loop exposes the full approval observation.
+      return { findings: observation.findings };
     },
     async raise(goalId, input, commandId) {
       await assertProject(goalId, input.projectId);

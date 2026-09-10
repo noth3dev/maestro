@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import * as metronome from "./metronome.js";
+import { observeCapabilityDecisions } from "./metronome.js";
 
 describe("Metronome approval observation", () => {
   it("surfaces decisions, interruptions, effects, and failures without a ledger write", async () => {
@@ -14,11 +14,7 @@ describe("Metronome approval observation", () => {
     const query = vi.fn(async (sql: string) => sql.includes("pending.command_id")
       ? { rows: [{ command_id: "c3", effect_index: 0, admission_command_id: "admission-3" }], rowCount: 1 }
       : { rows: journalRows, rowCount: journalRows.length });
-    const observer = (metronome as unknown as { observeCapabilityDecisions?: Function }).observeCapabilityDecisions;
-    expect(typeof observer).toBe("function");
-    if (typeof observer !== "function") return;
-
-    const observed = await observer({ query }, "ipython", "p1", "g1");
+    const observed = await observeCapabilityDecisions({ query } as Parameters<typeof observeCapabilityDecisions>[0], "ipython", "p1", "g1");
     expect(observed.decisions.map((entry: { event: string }) => entry.event)).toEqual([
       "approval", "rejection", "safer_alternative", "interruption", "effect_result", "failure",
     ]);

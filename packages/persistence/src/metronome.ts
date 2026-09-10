@@ -1,12 +1,120 @@
 import { randomUUID } from "node:crypto";
-import { detectDeviceCommandUnknownOutcomeFindings, detectMissingEvidenceFindings, detectMissingPlanItemFindings, detectStaleWorkerFindings, normalizeMetronomeIdentity, type DepartmentPlanItem, type MetronomeFinding } from "@maestro/domain";
+import { MODEL_CAPABILITY_AXES, detectDeviceCommandUnknownOutcomeFindings, detectMissingEvidenceFindings, detectMissingPlanItemFindings, detectStaleWorkerFindings, normalizeMetronomeIdentity, type DepartmentPlanItem, type MetronomeFinding } from "@maestro/domain";
 import type { Pool } from "pg";
-import { assertMetronomeMutationAuthorized, requireMetronomeAuthorization, type MetronomeActorContext } from "./metronome-challenge.js";
+import { assertMetronomeMutationAuthorized, raiseMetronomeChallenge, requireMetronomeAuthorization, type MetronomeActorContext, type MetronomeChallenge } from "./metronome-challenge.js";
+import { listCapabilityJournal, listPendingCapabilityEffects, type CapabilityJournalEntry, type PendingCapabilityEffect } from "./capability-approval.js";
+import { listRoutingEvidenceForGoal } from "./ensemble-router-artifacts.js";
 import type { GoalLeaseProof } from "./commands.js";
 
 export interface MetronomeFindingRecord extends MetronomeFinding {
   readonly findingId: string;
   readonly resolved: boolean;
+}
+
+export interface MetronomeApprovalObservation {
+  readonly decisions: readonly CapabilityJournalEntry[];
+  readonly pendingEffects: readonly PendingCapabilityEffect[];
+}
+
+/** Read-only projection of the append-only capability journal and unresolved effects. */
+export async function observeCapabilityDecisions(
+  pool: Pool,
+  capabilityKind: string,
+  projectId: string,
+  goalId: string,
+  limit = 500,
+): Promise<MetronomeApprovalObservation> {
+  const [decisions, pendingEffects] = await Promise.all([
+    listCapabilityJournal(pool, capabilityKind, projectId, goalId, limit),
+    listPendingCapabilityEffects(pool, capabilityKind, projectId, goalId),
+  ]);
+  return {
+    decisions: [...decisions].sort((left, right) => left.recordedAt.getTime() - right.recordedAt.getTime() || left.journalId.localeCompare(right.journalId)),
+    pendingEffects,
+  };
+}
+
+/** Read every capability kind for one Goal without mutating the approval ledger. */
+export async function observeGoalCapabilityDecisions(pool: Pool, goalId: string, limit = 500): Promise<MetronomeApprovalObservation> {
+  const goal = await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [normalizeMetronomeIdentity(goalId)]);
+  const projectId = goal.rows[0]?.project_id;
+  if (projectId === undefined) throw new Error("Metronome observation Goal was not found");
+  const kinds = await pool.query<{ capability_kind: string }>(
+    "SELECT DISTINCT capability_kind FROM capability_decision_journal WHERE project_id = $1 AND goal_id = $2 ORDER BY capability_kind",
+    [projectId, normalizeMetronomeIdentity(goalId)],
+  );
+  const observations = await Promise.all(kinds.rows.map((row) => observeCapabilityDecisions(pool, row.capability_kind, projectId, goalId, limit)));
+  return {
+    decisions: observations.flatMap((observation) => observation.decisions).sort((left, right) => left.recordedAt.getTime() - right.recordedAt.getTime() || left.journalId.localeCompare(right.journalId)),
+    pendingEffects: observations.flatMap((observation) => observation.pendingEffects),
+  };
+}
+
+interface RoutingCapabilityFact {
+  readonly evidenceId?: unknown;
+  readonly selectedModelRef?: unknown;
+  readonly routeRef?: unknown;
+  readonly decisionLayer?: unknown;
+  readonly pressureBand?: unknown;
+  readonly taskDemand?: { readonly requirements?: Record<string, { readonly level?: unknown }> };
+  readonly modelProfile?: { readonly capability?: { readonly axes?: Record<string, { readonly status?: unknown; readonly score?: unknown }> } };
+}
+
+export class MetronomeRoutingEvidenceError extends Error {
+  constructor(evidenceId: string) { super(`Routing evidence is malformed: ${evidenceId}`); this.name = "MetronomeRoutingEvidenceError"; }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function malformedRoutingEvidence(evidenceId: unknown): MetronomeRoutingEvidenceError {
+  return new MetronomeRoutingEvidenceError(typeof evidenceId === "string" ? evidenceId : "unknown");
+}
+
+/** Derive below-requirement findings from the durable routing payload, failing closed on malformed evidence. */
+export function detectBelowRequirementRoutingFindings(
+  goalId: string,
+  routes: readonly unknown[],
+  planVersion: number,
+): readonly MetronomeFinding[] {
+  const normalizedGoalId = normalizeMetronomeIdentity(goalId);
+  const safePlanVersion = Number.isSafeInteger(planVersion) && planVersion > 0 ? planVersion : 1;
+  return routes.flatMap((value) => {
+    if (!isRecord(value)) throw malformedRoutingEvidence(undefined);
+    const route = value as RoutingCapabilityFact;
+    const evidenceId = typeof route.evidenceId === "string" && route.evidenceId.trim() !== "" ? route.evidenceId : undefined;
+    if (evidenceId === undefined || typeof route.selectedModelRef !== "string" || route.selectedModelRef.trim() === "") throw malformedRoutingEvidence(evidenceId);
+    if (!isRecord(route.taskDemand) || !isRecord(route.taskDemand.requirements) || Object.keys(route.taskDemand.requirements).length === 0) throw malformedRoutingEvidence(evidenceId);
+    if (!isRecord(route.modelProfile) || !isRecord(route.modelProfile.capability) || !isRecord(route.modelProfile.capability.axes)) throw malformedRoutingEvidence(evidenceId);
+    const requirements = route.taskDemand.requirements;
+    const axes = route.modelProfile.capability.axes;
+    for (const [axis, requirement] of Object.entries(requirements)) {
+      if (!MODEL_CAPABILITY_AXES.some((knownAxis) => knownAxis === axis) || !isRecord(requirement) || typeof requirement.level !== "number" || !Number.isFinite(requirement.level)) throw malformedRoutingEvidence(evidenceId);
+    }
+    const declaredAxes = MODEL_CAPABILITY_AXES.filter((axis) => Object.hasOwn(requirements, axis));
+    if (declaredAxes.length === 0) throw malformedRoutingEvidence(evidenceId);
+    const belowAxes = declaredAxes.filter((axis) => {
+      const requirement = requirements[axis]?.level;
+      const score = axes[axis];
+      return score?.status !== "scored" || typeof score.score !== "number" || !Number.isFinite(score.score) || score.score < (requirement as number);
+    });
+    if (belowAxes.length === 0) return [];
+    return [{
+      goalId: normalizedGoalId,
+      ruleId: "below_requirement_routing" as MetronomeFinding["ruleId"],
+      evidenceIdentity: evidenceId,
+      planVersion: safePlanVersion,
+      details: {
+        evidenceId,
+        selectedModelRef: route.selectedModelRef,
+        ...(typeof route.routeRef === "string" ? { routeRef: route.routeRef } : {}),
+        ...(typeof route.decisionLayer === "string" ? { decisionLayer: route.decisionLayer } : {}),
+        ...(typeof route.pressureBand === "string" ? { pressureBand: route.pressureBand } : {}),
+        belowRequirementAxes: belowAxes,
+      },
+    } satisfies MetronomeFinding];
+  });
 }
 
 interface FindingRow {
@@ -84,12 +192,18 @@ export async function scanGoalForMetronomeFindings(
       "SELECT command_id, device_id, grant_id FROM device_command_claims WHERE goal_id = $1 AND state = 'unknown'",
       [normalizedGoalId],
     )).rows.map((row) => ({ commandId: row.command_id, deviceId: row.device_id, grantId: row.grant_id }));
+    let routingFacts;
+    try { routingFacts = await listRoutingEvidenceForGoal(client, normalizedGoalId); }
+    catch { throw new MetronomeRoutingEvidenceError("goal-scoped routing evidence"); }
+    if (routingFacts.some((evidence) => evidence.projectRef !== projectId)) throw new MetronomeRoutingEvidenceError("routing evidence project scope");
+    const belowRequirementFindings = detectBelowRequirementRoutingFindings(normalizedGoalId, routingFacts, Math.max(1, currentMaxPlanVersion));
 
     const findings = [
       ...detectStaleWorkerFindings(normalizedGoalId, currentPlanVersionByDepartment, workerFacts),
       ...detectMissingPlanItemFindings(normalizedGoalId, currentPlanItemsByDepartment, workerFacts),
       ...detectMissingEvidenceFindings(normalizedGoalId, currentMaxPlanVersion, allReferences, durableEvidence),
       ...detectDeviceCommandUnknownOutcomeFindings(normalizedGoalId, 0, unresolvedDeviceCommands),
+      ...belowRequirementFindings,
     ];
 
     const recorded: MetronomeFindingRecord[] = [];
@@ -164,3 +278,49 @@ export async function resolveMetronomeFinding(
     return mapFinding(updated.rows[0]!);
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
+
+
+/** Raise one idempotent challenge for all currently recorded below-requirement routes. */
+export async function challengeBelowRequirementRouting(
+  pool: Pool,
+  goalId: string,
+  proof: GoalLeaseProof,
+  context: MetronomeActorContext,
+): Promise<readonly MetronomeChallenge[]> {
+  const findings = (await listMetronomeFindings(pool, goalId)).filter((finding) => String(finding.ruleId) === "below_requirement_routing");
+  if (findings.length === 0) return [];
+  const evidenceIds = findings.map((finding) => finding.evidenceIdentity).sort();
+  const challenge = await raiseMetronomeChallenge(
+    pool,
+    normalizeMetronomeIdentity(goalId),
+    findings.map((finding) => finding.findingId),
+    {
+      reason: `Routing selected a model below the declared requirement: ${evidenceIds.join(", ")}`,
+      evidenceReferences: evidenceIds,
+    },
+    proof,
+    context,
+  );
+  return [challenge];
+}
+
+export interface MetronomeGoalObservation {
+  readonly findings: readonly MetronomeFindingRecord[];
+  readonly approvalObservation: MetronomeApprovalObservation;
+  readonly challenges: readonly MetronomeChallenge[];
+}
+
+/** Run one complete read/observe/challenge pass for a Goal. */
+export async function observeGoalForMetronome(
+  pool: Pool,
+  goalId: string,
+  proof: GoalLeaseProof,
+  context: MetronomeActorContext,
+): Promise<MetronomeGoalObservation> {
+  const findings = await scanGoalForMetronomeFindings(pool, goalId, proof, context);
+  const approvalObservation = await observeGoalCapabilityDecisions(pool, goalId);
+  const challenges = await challengeBelowRequirementRouting(pool, goalId, proof, context);
+  return { findings, approvalObservation, challenges };
+}
+
+export const observeMetronomeGoal = observeGoalForMetronome;
