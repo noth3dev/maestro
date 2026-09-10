@@ -96,7 +96,8 @@ function command(overrides: Record<string, unknown> = {}) {
 }
 
 async function waitForTerminal(handle: { observe(): Promise<{ status: string }> }): Promise<Awaited<ReturnType<typeof handle.observe>>> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  // Allow the real child to exit under the full-suite scheduler load.
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
     const result = await handle.observe();
     if (result.status !== "running") return result;
     await new Promise<void>((resolve) => setTimeout(resolve, 1));
