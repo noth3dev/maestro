@@ -1850,3 +1850,12 @@ All downstream routing documentation must use this contract and must not restore
 
 
 - 2026-09-10 S4 lifecycle verification: the merged implementation and main PostgreSQL revalidation are green, but this is not live acceptance evidence. The remaining blockers are unchanged: the user must run the real-provider fourteen-step scenario using `testbed/README.md` projects #1–#4, and production still has no deterministic worker hold/requeue operation for the Step 9→10 repair sequence. Do not close S4 or begin `phase3-status-sync` until those exit conditions are satisfied.
+
+
+- 2026-09-10 continuation finding: no repository or CI failure is blocking the code-level S4 merge. The remaining gate is operational, not a reason to invent a slice: live provider acceptance must be executed by the user, and the current WorkerService still has no deterministic hold/requeue operation for a repair message after a worker reaches `succeeded`. Do not begin `phase3-status-sync` or any Phase 4/5 slice before this handoff is resolved.
+
+
+- 2026-09-10 continuation finding: repository, build, and CI gates are green, but they do not prove the real-provider handoff. The only open blockers remain the user's fourteen-step live run using `testbed/README.md` projects #1–#4 and the missing deterministic worker hold/requeue operation for repair delivery.
+
+
+- 2026-09-10 continuation finding: all code-level gates remain green, but no new evidence closes the S4 live gate. Starting S5 or Phase 4/5 now would violate the plan order; wait for the user-owned fourteen-step provider run and resolution of the deterministic repair lifecycle gap.
