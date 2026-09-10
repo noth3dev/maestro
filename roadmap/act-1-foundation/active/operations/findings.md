@@ -1775,3 +1775,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 Plan 3 S4 final review conclusion: string-based `runbook.test.ts` and fake HTTP process tests do not prove real WorkerService/API/PostgreSQL/provider execution. Treat S4 as blocked; do not merge, push, hand off, or begin S5.
 
 - 2026-09-10 Plan 3 S4 exact runtime blocker: initial worker admission has neither `$TARGET` nor a repository path in its prompt/request, while production IPython may derive a separate worker worktree. The runbook cannot truthfully claim the initial worker touched only `$TARGET`.
+
+- 2026-09-10 continuation check: S4 remains blocked by the recorded real worker admission/target binding, repair, integration commit, certification evidence, and access-mode gaps; root verification does not change the gate decision.
