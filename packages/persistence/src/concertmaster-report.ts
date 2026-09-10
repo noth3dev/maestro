@@ -97,7 +97,7 @@ export interface RoutingNativeBinding {
 export interface RoutingCapabilityApproval {
   readonly approval_id: string; readonly goal_id: string; readonly project_id: string; readonly tier: string; readonly approver_id: string;
   readonly decision: string; readonly created_at: Date | string; readonly expires_at: Date | string; readonly revoked_at: Date | string | null;
-  readonly capability_kind: string; readonly command_id: string; readonly action: string; readonly target: string; readonly reason: string | null; readonly consequence: string | null;
+  readonly policy_version: number; readonly capability_kind: string; readonly command_id: string; readonly action: string; readonly target: string; readonly reason: string | null; readonly consequence: string | null;
   readonly scope_kind: string | null; readonly remaining_count: string | null;
   readonly remaining_budget_cents: string | null; readonly repetition_expires_at: Date | string | null;
 }
@@ -136,7 +136,8 @@ export function evaluateRoutingEvidenceLineage(input: {
       const identity = route.approvalIdentity;
       const executionAt = new Date(binding.created_at).getTime();
       const claim = approval === undefined || identity === null ? undefined : input.claims.find((candidate) => candidate.approval_id === approval.approval_id && candidate.goal_id === input.goalId && candidate.project_id === input.projectId && candidate.capability_kind === identity.capabilityKind && candidate.command_id === identity.commandId && candidate.action === identity.action && candidate.target === identity.target);
-      const validApproval = approval !== undefined && identity !== null && Number.isFinite(executionAt) && approval.goal_id === input.goalId && approval.project_id === input.projectId && approval.capability_kind === identity.capabilityKind && approval.command_id === identity.commandId && approval.action === identity.action && approval.target === identity.target && approval.decision === "approved" && approval.tier === route.decisionLayer && new Date(approval.created_at).getTime() <= executionAt && new Date(approval.expires_at).getTime() > executionAt && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > executionAt) && typeof approval.reason === "string" && approval.reason.trim() !== "" && typeof approval.consequence === "string" && approval.consequence.trim() !== "" && claim !== undefined && new Date(claim.consumed_at).getTime() >= new Date(approval.created_at).getTime();
+      const claimAt = claim === undefined ? Number.NaN : new Date(claim.consumed_at).getTime();
+      const validApproval = approval !== undefined && identity !== null && Number.isFinite(executionAt) && approval.goal_id === input.goalId && approval.project_id === input.projectId && approval.capability_kind === identity.capabilityKind && approval.command_id === identity.commandId && approval.action === identity.action && approval.target === identity.target && approval.decision === "approved" && approval.tier === route.decisionLayer && approval.scope_kind !== null && new Date(approval.created_at).getTime() <= executionAt && new Date(approval.expires_at).getTime() > executionAt && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > executionAt) && typeof approval.reason === "string" && approval.reason.trim() !== "" && typeof approval.consequence === "string" && approval.consequence.trim() !== "" && claim !== undefined && claim.policy_version === approval.policy_version && claimAt >= executionAt && claimAt <= new Date(route.createdAt).getTime();
       if (!validApproval) blockers.push({ reason: "routing_evidence_unapproved_below_requirement", detail: `Below-requirement model ${route.selectedModelRef} has no approval bound to the execution identity and time` });
     }
   }
@@ -289,7 +290,7 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
   const nativeBindings = await pool.query<RoutingNativeBinding>(`SELECT binding_id, execution_ref, invocation_ref, goal_id, project_id, selected_model_provider,
              selected_model_id, actual_model_provider, actual_model_id, account_ref, created_at
         FROM native_execution_bindings WHERE goal_id = $1`, [goalId]);
-  const capabilityApprovals = await pool.query<RoutingCapabilityApproval>(`SELECT approval.approval_id, approval.goal_id, approval.project_id, approval.capability_kind,
+  const capabilityApprovals = await pool.query<RoutingCapabilityApproval>(`SELECT approval.approval_id, approval.goal_id, approval.project_id, approval.policy_version, approval.capability_kind,
              approval.command_id, approval.action, approval.target, approval.tier, approval.approver_id,
              approval.decision, approval.created_at, approval.expires_at, approval.revoked_at, approval.reason, approval.consequence,
              budget.scope_kind, budget.remaining_count,
