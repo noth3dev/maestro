@@ -188,6 +188,22 @@ async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string
     `SELECT cost_id, goal_id, command_id, amount_cents, source, actor_id, session_ref, recorded_at, retention
        FROM goal_actual_costs WHERE goal_id = $1 ORDER BY recorded_at, cost_id`, [goalId],
   )).rows;
+  const capabilityApprovals = (await pool.query<Record<string, unknown>>(
+    `SELECT approval.approval_id, approval.capability_kind, approval.project_id, approval.goal_id,
+            approval.command_id, approval.action, approval.target, approval.policy_version,
+            approval.control_epoch, approval.budget_effect_cents, approval.tier, approval.approver_id,
+            approval.decision, approval.expires_at, approval.revoked_at, approval.created_at,
+            budget.scope_kind, budget.remaining_count, budget.remaining_budget_cents,
+            budget.expires_at AS repetition_expires_at
+       FROM capability_approvals approval
+       LEFT JOIN capability_repetition_budgets budget ON budget.approval_id = approval.approval_id
+      WHERE approval.goal_id = $1 ORDER BY approval.created_at, approval.approval_id`, [goalId],
+  )).rows;
+  const capabilityDecisionJournal = (await pool.query<Record<string, unknown>>(
+    `SELECT journal_id, capability_kind, project_id, goal_id, approval_id, command_id,
+            event, details, recorded_at
+       FROM capability_decision_journal WHERE goal_id = $1 ORDER BY recorded_at, journal_id`, [goalId],
+  )).rows;
   const authorityRecords = (await pool.query<Record<string, unknown>>(
     `SELECT record_id, kind, command_id, project_id, goal_id, actor_id, action, target,
             policy_version, budget_effect_cents, expires_at, issued_at, revoked_at
@@ -225,7 +241,15 @@ async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string
     const raw = row.evidence;
     try { assertValidRoutingEvidence(raw); } catch { throw new EvidenceBundleError(`Malformed routing evidence: ${String(row.evidence_id)}`); }
     const evidence = raw as unknown as RoutingEvidence;
-    if (evidence.goalRef !== goalId || evidence.projectRef !== projectId || evidence.evidenceId !== row.evidence_id || evidence.routeRef !== row.route_ref || evidence.admissionBindingRef !== row.admission_binding_ref || canonicalJson(evidence) !== canonicalJson({ ...(row.evidence as Record<string, unknown>), rejections: row.rejections ?? [] }))
+    const expectedPayload = {
+      ...evidence, evidenceId: row.evidence_id, goalRef: row.goal_ref, projectRef: row.project_ref,
+      routeRef: row.route_ref, mode: row.mode, selectedModelRef: row.selected_model_ref,
+      accountBinding: row.account_binding, candidateRefs: row.candidate_refs, rejections: row.rejections,
+      taskDemandHash: row.task_demand_hash, pressure: row.pressure, pressureBand: row.pressure_band,
+      decisionLayer: row.decision_layer, overlayVersion: row.overlay_version,
+      admissionBindingRef: row.admission_binding_ref, rationale: row.rationale,
+    };
+    if (evidence.goalRef !== goalId || evidence.projectRef !== projectId || canonicalJson(evidence) !== canonicalJson(expectedPayload))
       throw new EvidenceBundleError(`Routing evidence identity or canonical payload mismatch: ${String(row.evidence_id)}`);
     const binding = bindingByRef.get(evidence.admissionBindingRef);
     if (!binding || String(binding.goal_id) !== goalId || String(binding.project_id) !== String(projectId))
@@ -280,6 +304,8 @@ async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string
     budgetReservations,
     evidenceRecords,
     actualCosts,
+    capabilityApprovals,
+    capabilityDecisionJournal,
     authorityRecords,
     authorityDecisions,
     councilBriefs,

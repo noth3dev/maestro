@@ -494,6 +494,15 @@ export const RoutingEvidenceSchema = z
     admissionBindingRef: NonEmptyLineSchema,
     rationale: NonEmptyLineSchema,
     createdAt: NonEmptyLineSchema,
+    taskKindRecipeVersions: z.record(z.string().min(1), z.number().int().positive()),
+    taskDemand: TaskDemandSchema,
+    workCharacter: z.object({
+      schemaVersion: z.literal(1), risk: z.number().int().min(0).max(200), reversibility: z.number().int().min(0).max(200), verificationAttachment: z.number().int().min(0).max(200), materialScale: z.number().int().min(0).max(200), timePressure: z.number().int().min(0).max(200), budgetHeadroom: z.number().int().min(0).max(200),
+      provenance: z.object({ taskContractRef: NonEmptyLineSchema, headDecisionRef: NonEmptyLineSchema }).strict(),
+    }).strict(),
+    modelProfile: z.object({ modelRef: z.string().regex(/^[^/\s]+\/[^/\s]+$/), capability: z.record(z.string(), z.unknown()), providerFacts: z.record(z.string(), z.unknown()), provenance: z.record(z.string(), z.unknown()) }).strict(),
+    operationalOverlaySnapshot: z.record(z.string(), z.unknown()),
+    approvalRef: NonEmptyLineSchema.nullable(),
   })
   .strict();
 export type RoutingEvidence = z.infer<typeof RoutingEvidenceSchema>;

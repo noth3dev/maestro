@@ -24,6 +24,8 @@ export interface EvidenceBundle {
   readonly evidenceRecords: readonly Readonly<Record<string, unknown>>[];
   /** Durable authority decisions and grants/approvals used by the Goal. */
   readonly actualCosts: readonly Readonly<Record<string, unknown>>[];
+  readonly capabilityApprovals: readonly Readonly<Record<string, unknown>>[];
+  readonly capabilityDecisionJournal: readonly Readonly<Record<string, unknown>>[];
   readonly authorityRecords: readonly Readonly<Record<string, unknown>>[];
   readonly authorityDecisions: readonly Readonly<Record<string, unknown>>[];
   /** Sealed Council brief material and the activation history that led to it. */
