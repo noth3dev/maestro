@@ -3789,3 +3789,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 S2 final integrity hardening: Metronome now obtains routing records through the canonical persistence adapter and rejects any route whose durable `project_ref` is not the Goal's project. Added a PostgreSQL regression for cross-project routing evidence. Build/lint/diff-check and the five-test observation integration file pass; final full suites and fresh independent review are pending.
 
 - 2026-09-10 S2 verification complete: full no-DB suite passed 983/983 with 415 integration tests skipped; full PostgreSQL suite passed 1408/1408 across 204/204 files. Build, lint, and `git diff --check` passed. Independent review is PASS. S2 is ready for commit/merge/revalidation; live-provider acceptance remains user-owned at the plan HANDOFF.
+
+- 2026-09-10 S2 closure: merge `d9575da` is pushed on `main`; main build/lint and focused PostgreSQL verification passed, and post-push CI `34440756793` is green (Build/lint and PostgreSQL Vitest). S2 `metronome-observes-approvals` exit evidence is closed. No live-provider acceptance was run; that remains user-owned at HANDOFF.
