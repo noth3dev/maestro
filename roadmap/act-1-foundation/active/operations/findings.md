@@ -1764,3 +1764,9 @@ All downstream routing documentation must use this contract and must not restore
 
 
 - 2026-09-10 CI remediation finding: after the nine missing imports were corrected, the serial PostgreSQL suite exposed outdated expectations in the certification and bounded Goal end-to-end tests. Both manually called `localGitPort.advanceBranch(baseRevision, workerCommit)` after `advanceWorkerIntegration`, which now performs the guarded Git advancement itself. The duplicate conditional update-ref correctly fails closed as `GitOutcomeUnknownError`; this was test drift, not a production failure. Removing the duplicate calls and preserving a real second review commit for the frozen-head scenario made the focused gate pass (15/15). Do not treat the CI gate as repaired until the committed changes are pushed and the replacement CI run is green.
+
+
+- 2026-09-10 continuation finding: no new code defect was found during the mandatory root check. The only active gate is CI run `34486161844`; its PostgreSQL Vitest job is still running after successful build/lint. Do not begin, merge, or push Plan 3 S4 work until the run reaches a successful conclusion.
+
+
+- 2026-09-10 CI gate resolution: run `34486161844` completed green with no failing job or test. The previous gate blocker is cleared. The remaining blocker is the unfinished Plan 3 S4 exit evidence documented in the active S4 worktree; S5 and live acceptance remain out of scope until S4 closes.

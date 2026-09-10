@@ -3844,3 +3844,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 
 - 2026-09-10 CI remediation: CI run `34483487650` exposed nine PostgreSQL integration fixtures that called `advanceWorkerIntegration` without importing it. Added the missing imports. The first serial full PostgreSQL rerun then reached 204/206 files and 1446/1448 tests; its two remaining failures were stale test calls that advanced `goal/integration` from `baseRevision` to a worker commit already applied by `advanceWorkerIntegration`. Updated `certification.integration.test.ts` and `e2e-goal.integration.test.ts` to observe the guarded integration advance and, for the revision-head case, apply only the subsequent review commit. Focused PostgreSQL verification passed 2 files and 15 tests. CI remains to be rerun after commit and push; Plan 3 S4 remains blocked until CI is green.
+
+
+- 2026-09-10 continuation after S6b push: root `main` is clean at `0fd02f5`; the required root build passes; the existing Plan 3 S4 worktree remains clean at `37220a0`. CI run `34486161844` is still in progress: Build and lint passed, while the PostgreSQL Vitest job is running. Plan 3 S4 remains blocked until this CI run completes successfully.
+
+
+- 2026-09-10 S6b push CI completion: run `34486161844` for commit `0fd02f5` completed successfully. Build and lint passed, and the PostgreSQL 17 Vitest job passed. The Plan 3 S4 worktree at `37220a0` is now eligible to resume; no S5 or live acceptance work has started.
