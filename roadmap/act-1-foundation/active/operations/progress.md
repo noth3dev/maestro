@@ -3845,3 +3845,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 Plan 3 S4 final independent review: `REVIEW: FAIL` at HEAD `23af78f`. Contract lifecycle, local port, Git setup, unsuppressed Quality command, and remote-block artifact corrections were accepted, but the real live runbook is not executable because the existing WorkerService cannot bind target worktree before admission, has no repair/reprompt operation, and exposes no integration-commit recording route.
 
 - 2026-09-10 Plan 3 S4 review follow-up: independent review found certification input `testEvidenceIds: ["target-test"]` has no corresponding durable `evidence_records` creation or public CLI step in the runbook, so both certification commands would fail even after worker and integration prerequisites were fixed.
+
+- 2026-09-10 Plan 3 S4 review follow-up: the live runbook creates `$WORKER_WORKTREE` but continues to test `$TARGET` and asks repair against `$TARGET`; without a branch advance/merge, worker changes cannot make the target test green.
