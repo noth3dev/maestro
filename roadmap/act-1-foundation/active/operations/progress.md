@@ -3929,3 +3929,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 
 - 2026-09-11 squash cleanup: 32 consecutive no-op "continuation gate" commits (2026-09-11 01:22–06:41, `ee7e06b`..`7859e04`) were consolidated. Each commit re-verified the same fact — clean `main`, no worktrees, green build/CI, Plan 3 § S4 paused at the user-owned live handoff, no later slice started — with no actual work performed between checks. Squashed into this single entry via `git rebase --onto`; original range preserved at branch `backup-2026-09-11-pre-squash`. Status is unchanged by this cleanup: Plan 3 § S4 is still paused at the user-owned live handoff.
+
+
+
+- 2026-09-10 Plan 4 S1 continuation: replaced the rejected parallel external activation schema with the existing capability approval ledger. External activations now persist as Goal-scoped approvals and reuse repetition budgets/claims, with durable lookup/revocation and a named fail-closed consume gate. Added coverage for all four external kinds, Goal isolation, expiry, bounded repetition, revocation, and local full-access separation. Worktree build, lint, and full test suite pass: 148 files / 1,039 tests passed; 63 integration files / 423 tests skipped because MAESTRO_TEST_DATABASE_URL is unset.
+
+- 2026-09-10 S1 review remediation: wired the deployment activation consume gate into the production critical-action composition. `git.remote.push` now consumes the Goal-scoped `deployment` activation before the effect callback; added a regression test and same-Goal cross-kind denial assertions. Build, lint, and targeted gate tests pass (14/14).
+
+- 2026-09-10 S1 final review remediation: added an AuthorizedEffectExecutor pre-claim hook. External deployment/remote-push activation is checked after authority and Goal-control decisions but before durable command claiming, so denied attempts do not consume idempotency claims. Added the regression assertion.
