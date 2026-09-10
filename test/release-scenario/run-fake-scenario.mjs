@@ -1,34 +1,50 @@
-import { execFile as execFileCallback } from "node:child_process";
+import { spawn } from "node:child_process";
+import { createServer } from "node:http";
 import { readFile, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
-import { promisify } from "node:util";
+import { assertReleaseScenarioTarget } from "./fixture.mjs";
 
-const execFile = promisify(execFileCallback);
-const parsed = parseArgs({ options: { step: { type: "string" }, target: { type: "string" }, state: { type: "string" } } });
-const step = Number(parsed.values.step);
-const target = parsed.values.target;
-const statePath = parsed.values.state;
+const values = parseArgs({ options: { step: { type: "string" }, target: { type: "string" }, state: { type: "string" } } }).values;
+const step = Number(values.step);
+const target = values.target;
+const statePath = values.state;
 if (!Number.isInteger(step) || step < 1 || step > 14 || !target || !statePath) throw new Error("--step 1..14, --target, and --state are required");
-let state;
-try { state = JSON.parse(await readFile(statePath, "utf8")); } catch { state = { lastStep: 0, events: [], provider: "fake" }; }
-if (state.lastStep !== step - 1) throw new Error(`step ${step} is out of order; expected ${state.lastStep + 1}`);
-const run = async (script) => execFile("node", [`${target}/scripts/${script}`]);
-const targetTest = async () => { try { await execFile("npm", ["test", "--prefix", target]); return 0; } catch (error) { return error.code ?? 1; } };
-const event = (name, details = {}) => state.events.push({ step, name, ...details });
-if (step === 1) event("ceo_request", { goalCreated: true });
-if (step === 2) event("contract_intake", { target });
-if (step === 3) event("launch_confirmed", { exactHash: true });
-if (step === 4) event("necessary_heads", { activeHeads: ["engineering"] });
-if (step === 5) event("department_plan", { departments: ["engineering"] });
-if (step === 6) { const exit = await targetTest(); if (exit === 0) throw new Error("seeded defect unexpectedly passed"); event("native_execution", { target, defectCaught: true }); }
-if (step === 7) event("metronome_observation", { approvals: 1, interruptions: 0, effects: 0 });
-if (step === 8) { await run("inject-unsupported-assertion.mjs"); const exit = await targetTest(); await run("clear-unsupported-assertion.mjs"); if (exit === 0) throw new Error("unsupported assertion unexpectedly passed"); event("unsupported_assertion", { challenged: true, modelIdentities: ["fake/provider-a", "fake/provider-b"] }); }
-if (step === 9) { const exit = await targetTest(); if (exit === 0) throw new Error("seeded defect unexpectedly passed Quality"); event("quality_failed", { verdict: "failed" }); }
-if (step === 10) { await run("repair-seeded-defect.mjs"); const exit = await targetTest(); if (exit !== 0) throw new Error("repair did not pass"); event("quality_certified", { verdict: "passed" }); }
-if (step === 11) { await run("restart-control-plane.mjs"); const restart = JSON.parse(await readFile(`${target}/fixtures/restart-state.json`, "utf8")); if (!restart.reconciled || restart.duplicateWrites !== 0) throw new Error("restart reconciliation failed"); event("restart_reconciled", { duplicateWrites: 0 }); }
-if (step === 12) { await run("attempt-remote-push.mjs"); const push = JSON.parse(await readFile(`${target}/fixtures/remote-push-attempt.json`, "utf8")); if (push.status !== "blocked" || push.networkInvoked !== false) throw new Error("remote push was not blocked"); event("ambiguous_action", { escalated: true, remotePush: "blocked" }); }
-if (step === 13) { await run("attempt-remote-push.mjs"); event("forbidden_effect", { fullAccessModes: ["full-access-read", "full-access-write"], remotePush: "blocked" }); }
-if (step === 14) { event("evidence_dump", { readOnly: true, bundleReportMatch: true }); }
-state.lastStep = step;
-await writeFile(statePath, JSON.stringify(state, null, 2) + "\n");
-console.log(JSON.stringify({ step, lastStep: state.lastStep, event: state.events.at(-1) }));
+const worktreeRoot = process.env.MAESTRO_WORKTREE_ROOT;
+const realTarget = await assertReleaseScenarioTarget(target, worktreeRoot);
+const getPort = async () => await new Promise((resolve, reject) => { const probe = createServer(); probe.once("error", reject); probe.listen(0, "127.0.0.1", () => { const address = probe.address(); probe.close(() => resolve(address.port)); }); });
+const waitReady = async (url) => { const deadline = Date.now() + 5000; while (Date.now() < deadline) { try { const response = await fetch(`${url}/health`); if (response.ok) return; } catch { await Promise.resolve(); } await new Promise((resolve) => setTimeout(resolve, 25)); } throw new Error(`service did not become ready: ${url}`); };
+const start = async (script, args) => { const child = spawn(process.execPath, [script, ...args], { env: { ...process.env, MAESTRO_WORKTREE_ROOT: worktreeRoot }, stdio: ["ignore", "pipe", "pipe"] }); let stderr = ""; child.stderr.on("data", (chunk) => { stderr += String(chunk); }); return { child, stderr: () => stderr }; };
+const stop = async ({ child }) => { if (child.exitCode === null) child.kill("SIGTERM"); await new Promise((resolve) => child.once("close", resolve)); };
+const post = async (url, value) => { const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(value) }); const result = await response.json(); if (!response.ok) throw new Error(result.error ?? `HTTP ${response.status}`); return result; };
+const providerStatePath = `${statePath}.provider.json`;
+const providerPort = await getPort();
+const provider = await start(new URL("./fake-provider-process.mjs", import.meta.url).pathname, ["--port", String(providerPort), "--state", providerStatePath, "--worktree-root", worktreeRoot]);
+const providerUrl = `http://127.0.0.1:${providerPort}`;
+await waitReady(providerUrl);
+let controlPort = await getPort();
+let control = await start(new URL("./fake-control-plane-process.mjs", import.meta.url).pathname, ["--port", String(controlPort), "--state", statePath, "--provider-url", providerUrl]);
+let controlUrl = `http://127.0.0.1:${controlPort}`;
+await waitReady(controlUrl);
+try {
+  if (step === 11) {
+    await stop(control);
+    controlPort = await getPort();
+    control = await start(new URL("./fake-control-plane-process.mjs", import.meta.url).pathname, ["--port", String(controlPort), "--state", statePath, "--provider-url", providerUrl]);
+    controlUrl = `http://127.0.0.1:${controlPort}`;
+    await waitReady(controlUrl);
+  }
+  const result = await post(`${controlUrl}/command`, { step, target: realTarget, modes: ["full-access-read", "full-access-write"] });
+  if (step === 14) {
+    const evidenceResponse = await fetch(`${controlUrl}/evidence`);
+    const evidence = await evidenceResponse.json();
+    if (!evidenceResponse.ok || evidence.bundle.bundleId !== evidence.report.evidenceBundleId || evidence.bundle.goalId !== evidence.report.goalId) throw new Error("fake evidence bundle/report identity mismatch");
+    result.evidence = evidence;
+  }
+  const currentState = result.state ?? JSON.parse(await readFile(statePath, "utf8"));
+  if (currentState.lastStep !== step) throw new Error(`fake Control Plane did not durably advance to step ${step}`);
+  await writeFile(statePath, JSON.stringify(currentState, null, 2) + "\n");
+  console.log(JSON.stringify({ step, observation: result.observation, providerCalls: currentState.providerCalls }));
+} finally {
+  await stop(control);
+  await stop(provider);
+}
