@@ -42,7 +42,7 @@ import {
   startNewConversationSession,
 } from "./session.js";
 import { mergeEvents, runActivityStream, subscribeToEvents } from "./activity-stream.js";
-import { addConversationMessage, applyConversationEvent, createConversationTranscript, renderUnifiedStreamEntries, type ConversationTranscriptState } from "./conversation-transcript.js";
+import { addConversationMessage, applyConversationEvent, createConversationTranscript, isTerminalConversationEvent, renderUnifiedStreamEntries, type ConversationTranscriptState } from "./conversation-transcript.js";
 import { pendingDecisionsFromActivity, toActivityTimelineEvent } from "./components/activity-timeline.js";
 import { createDecisionRegion, createDynamicRegion, createStatusRegion } from "./components/regions.js";
 import { createSplashController, renderPendingDecisionDetails, renderTuiFooter, type TuiShellState } from "./components/shell.js";
@@ -165,9 +165,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       if (pendingConfirmation !== undefined) {
         const summary = pendingConfirmation.summary;
         const identity = summary.identity?.trim();
+        const actor = summary.actor?.trim();
         const tier = summary.tier === "user" ? "You" : summary.tier;
-        if (identity !== undefined && identity !== "" && tier !== undefined) {
-          decisions.unshift({ identity, tier, action: `${summary.action} ${summary.target}`, actor: "You" });
+        if (identity !== undefined && identity !== "" && actor !== undefined && actor !== "" && tier !== undefined) {
+          decisions.unshift({ identity, tier, action: `${summary.action} ${summary.target}`, actor });
         }
       }
       state.pendingDecisions = decisions;
@@ -315,8 +316,6 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let conversationStreamController: AbortController | undefined;
     let conversationHydration: Promise<void> = Promise.resolve();
     let conversationHydrationGeneration = 0;
-    const isTerminalConversationEvent = (event: ConversationEvent): boolean =>
-      event.eventType === "turn_completed" || event.eventType === "turn_failed" || event.eventType === "turn_cancelled" || event.eventType === "turn_unknown";
     const streamConversation = async (conversationId: string, projectId: string, controller: AbortController): Promise<void> => {
       if (client === undefined) return;
       const signal = controller.signal;
@@ -337,7 +336,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           conversation = applyConversationEvent(conversation, event);
           splash.dismiss();
           render();
-          if (isTerminalConversationEvent(event)) {
+          if (isTerminalConversationEvent(conversation, event)) {
             if (!signal.aborted) controller.abort();
             return;
           }

@@ -46,12 +46,24 @@ function sameOrNewerCursor(cursor: string, lastCursor: string): boolean {
   }
 }
 
+const TERMINAL_CONVERSATION_EVENTS = new Set(["turn_completed", "turn_failed", "turn_cancelled", "turn_unknown"]);
+
+/** Accept terminal state only when it belongs to the active turn and has a usable result. */
+export function isTerminalConversationEvent(state: ConversationTranscriptState, event: ConversationEvent): boolean {
+  if (!TERMINAL_CONVERSATION_EVENTS.has(event.eventType)) return false;
+  const turnId = payloadText(event, "turnId");
+  if (turnId === undefined || state.activeTurnId === undefined || turnId !== state.activeTurnId) return false;
+  if (event.eventType === "turn_completed" && state.assistantText === "" && payloadText(event, "content") === undefined) return false;
+  return true;
+}
+
 export function applyConversationEvent(
   state: ConversationTranscriptState,
   event: ConversationEvent,
 ): ConversationTranscriptState {
   if (!sameOrNewerCursor(event.cursor, state.lastCursor)) return state;
   const next: ConversationTranscriptState = { ...state, events: [...state.events, event].slice(-512), lastCursor: event.cursor };
+  if (TERMINAL_CONVERSATION_EVENTS.has(event.eventType) && !isTerminalConversationEvent(state, event)) return next;
   const turnId = payloadText(event, "turnId");
   if (event.eventType === "turn_started") {
     const userText = payloadText(event, "text");
