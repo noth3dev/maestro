@@ -17,7 +17,7 @@ import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, su
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, spawnWorker } from "./worker.js";
-import { recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordWorkerWorktree } from "./git-integration.js";
+import { advanceWorkerIntegration, recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordWorkerWorktree } from "./git-integration.js";
 import { acceptDepartmentWorkerOutput, certifyQuality, CertificationError } from "./certification.js";
 import { raiseMetronomeChallenge, MetronomeChallengeError } from "./metronome-challenge.js";
 import { requestSemanticReview } from "./semantic-review.js";

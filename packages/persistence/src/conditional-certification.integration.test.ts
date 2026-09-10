@@ -14,7 +14,7 @@ import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, su
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, spawnWorker } from "./worker.js";
-import { recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordWorkerWorktree } from "./git-integration.js";
+import { advanceWorkerIntegration, recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordWorkerWorktree } from "./git-integration.js";
 import { acceptDepartmentWorkerOutput, CertificationError, certifyConditional, listConditionalCertifications } from "./certification.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;

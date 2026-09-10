@@ -28,7 +28,7 @@ import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, spawnWorker } from "./worker.js";
 import { acceptDepartmentWorkerOutput, certifyQuality } from "./certification.js";
-import { recordGoalIntegrationRevision, recordDepartmentBranch, recordGoalIntegrationBranch, recordWorkerWorktree } from "./git-integration.js";
+import { advanceWorkerIntegration, recordGoalIntegrationRevision, recordDepartmentBranch, recordGoalIntegrationBranch, recordWorkerWorktree } from "./git-integration.js";
 import { recordEvidenceBundle, verifyStoredEvidenceBundle } from "./evidence-bundle.js";
 import { generateConcertmasterFinalReport } from "./concertmaster-report.js";
 import { recordRoutingReportFixture } from "./routing-report-fixture.js";

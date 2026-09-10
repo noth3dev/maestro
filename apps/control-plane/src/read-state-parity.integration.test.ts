@@ -21,6 +21,7 @@ import {
   observeWorker,
   spawnWorker,
   recordDepartmentBranch,
+  advanceWorkerIntegration,
   recordGoalIntegrationBranch,
   recordGoalIntegrationRevision,
   recordWorkerWorktree,

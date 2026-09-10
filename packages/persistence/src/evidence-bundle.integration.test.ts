@@ -18,7 +18,7 @@ import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, spawnWorker } from "./worker.js";
 import { assembleEvidenceBundle, EvidenceBundleNotFoundError, readEvidenceBundle, recordEvidenceBundle, verifyStoredEvidenceBundle } from "./evidence-bundle.js";
-import { recordDepartmentBranch, recordGoalIntegrationBranch, recordWorkerWorktree } from "./git-integration.js";
+import { advanceWorkerIntegration, recordDepartmentBranch, recordGoalIntegrationBranch, recordWorkerWorktree } from "./git-integration.js";
 import { reserveDepartmentBudget, reserveGoalBudget, reserveMissionBudget } from "./budget-reservation.js";
 import { consumeCapabilityApproval, createCapabilityApproval } from "./capability-approval.js";
 
