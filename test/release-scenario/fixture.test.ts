@@ -22,6 +22,7 @@ describe("release scenario fixture", () => {
       expect(await readFile(fixture.remotePushAttempt, "utf8")).toContain("not-attempted");
       await expect(createReleaseScenarioFixture({ root: join(tmpdir(), "outside-release-target"), worktreeRoot })).rejects.toThrow("below MAESTRO_WORKTREE_ROOT");
       await expect(createReleaseScenarioFixture({ worktreeRoot: "" })).rejects.toThrow("MAESTRO_WORKTREE_ROOT is required");
+      await expect(createReleaseScenarioFixture({ worktreeRoot: join(tmpdir(), "missing-release-root", String(Date.now())) })).rejects.toThrow("must already exist");
       const outside = await mkdtemp(join(tmpdir(), "maestro-release-scenario-outside-"));
       await symlink(outside, join(worktreeRoot, "escape"), "dir");
       await expect(createReleaseScenarioFixture({ root: join(worktreeRoot, "escape", "target"), worktreeRoot })).rejects.toThrow("escapes MAESTRO_WORKTREE_ROOT");

@@ -21,8 +21,11 @@ export async function assertReleaseScenarioTarget(target, worktreeRoot = process
 export async function createReleaseScenarioFixture(options = {}) {
   const configuredWorktreeRoot = options.worktreeRoot ?? process.env.MAESTRO_WORKTREE_ROOT;
   if (typeof configuredWorktreeRoot !== "string" || configuredWorktreeRoot.trim() === "") throw new Error("MAESTRO_WORKTREE_ROOT is required");
-  await mkdir(configuredWorktreeRoot, { recursive: true });
-  const worktreeRoot = await realpath(configuredWorktreeRoot);
+  let worktreeRoot;
+  try { worktreeRoot = await realpath(configuredWorktreeRoot); } catch (error) {
+    if (error?.code === "ENOENT") throw new Error(`MAESTRO_WORKTREE_ROOT must already exist: ${configuredWorktreeRoot}`);
+    throw error;
+  }
   const root = resolve(options.root ?? join(worktreeRoot, `target-${randomUUID()}`));
   const lexicalRelative = relative(worktreeRoot, root);
   if (root === worktreeRoot || lexicalRelative === "" || lexicalRelative === ".." || lexicalRelative.startsWith(`..${sep}`) || isAbsolute(lexicalRelative)) {
