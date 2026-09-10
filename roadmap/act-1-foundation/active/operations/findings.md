@@ -1697,3 +1697,7 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 no-DB verification reproduced the known intermittent `packages/agent-runtime/src/ipython-process-adapter.test.ts` parent-crash cleanup timeout once; isolated rerun passed. No S1 files touch this adapter. Treat as a pre-existing flaky test, not a snapshot-hardening regression, while retaining the evidence and rerunning the full suite if the gate requires all tests green.
 
 - 2026-09-10 final S1 hardening closes the remaining claim-snapshot fail-open boundary: SQL now preserves key-presence/type/timestamp evidence instead of collapsing missing and JSON null into the same text value, and evaluator validates every scope field plus exact claim/journal transaction time. PostgreSQL 17 full suite passed 200/200 files and 1390/1390 tests. No-DB full suite had one known pre-existing IPython process-group timeout; the isolated test rerun passed.
+
+- 2026-09-10 independent review found a remaining exactness gap in `b75bb37`: JS Date equality truncates PostgreSQL timestamptz sub-millisecond precision. A pending journal timestamp differing from claim time within one millisecond could pass. Remediation adds direct SQL timestamp equality evidence and a sub-millisecond RED regression.
+
+- 2026-09-10 direct SQL timestamp binding focused verification passed 6 files / 37 tests, including E2E and Discord report scenarios. The sub-millisecond mismatch regression now fails closed through the SQL boolean.

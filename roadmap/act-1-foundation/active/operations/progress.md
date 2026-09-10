@@ -3774,3 +3774,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 S1 snapshot hardening verification: full no-DB run reached 969 passed / 410 skipped with one pre-existing `ipython-process-adapter` parent-crash cleanup timeout; the failing test passes in an isolated rerun. PostgreSQL full verification is running.
 
 - 2026-09-10 S1 snapshot hardening: claim-time pending journal snapshots now require explicit presence and JSON types for admissionCommandId, remainingCount, remainingBudgetCents, and repetitionExpiresAt; scope-inapplicable values must be explicit JSON null; pending journal recorded_at must equal claim consumed_at. Added RED regressions for omitted nullable keys, wrong-scope values, and timestamp mismatch. Full PostgreSQL verification passed 200/200 files and 1390/1390 tests; full no-DB had the known intermittent IPython adapter timeout once, with isolated rerun passing.
+
+- 2026-09-10 S1 final independent review of `b75bb37` returned FAIL only for sub-millisecond timestamp precision: node-postgres Date conversion can make distinct PostgreSQL timestamptz values compare equal. Added a RED regression and now bind `pending.recorded_at = claim.consumed_at` directly in SQL; focused PostgreSQL verification is pending.
+
+- 2026-09-10 S1 timestamp precision remediation verification: focused PostgreSQL suite passed 6 files / 37 tests; build, lint, and diff-check passed. Ready for a fresh independent review.

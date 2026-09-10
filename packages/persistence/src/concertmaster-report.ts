@@ -105,7 +105,7 @@ export interface RoutingCapabilityClaim {
   readonly claim_id: string; readonly approval_id: string; readonly capability_kind: string; readonly project_id: string; readonly goal_id: string;
   readonly command_id: string; readonly effect_index: number | string; readonly action: string; readonly target: string; readonly policy_version: number; readonly budget_effect_cents: string | number; readonly consumed_at: Date | string;
   readonly admission_command_id?: string | null; readonly snapshot_count?: number | string;
-  readonly snapshot_recorded_at?: Date | string | null;
+  readonly snapshot_recorded_at?: Date | string | null; readonly snapshot_timestamp_matches_claim?: boolean;
   readonly snapshot_has_admission_command_id?: boolean; readonly snapshot_has_remaining_count?: boolean;
   readonly snapshot_has_remaining_budget_cents?: boolean; readonly snapshot_has_repetition_expires_at?: boolean;
   readonly snapshot_admission_command_type?: string | null; readonly snapshot_remaining_count_type?: string | null;
@@ -196,6 +196,7 @@ export function evaluateRoutingEvidenceLineage(input: {
           && candidate.admission_command_id === binding.idempotency_key && candidateSnapshotIdentityValid && candidateSnapshotCount === 1
           && Number.isFinite(candidateClaimAt) && candidateClaimAt >= bindingAt
           && Number.isFinite(candidateSnapshotRecordedAt) && candidateSnapshotRecordedAt === candidateClaimAt
+          && candidate.snapshot_timestamp_matches_claim === true
           && approval !== undefined && candidate.policy_version === approval.policy_version
           && Number.isSafeInteger(Number(candidate.budget_effect_cents)) && Number(candidate.budget_effect_cents) >= 0
           && Number(candidate.budget_effect_cents) === Number(approval.budget_effect_cents)
@@ -377,6 +378,7 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
                 claim.command_id, claim.effect_index, claim.action, claim.target, claim.policy_version, claim.budget_effect_cents, claim.consumed_at,
                 pending.details->>'admissionCommandId' AS admission_command_id, pending.snapshot_count,
                 pending.recorded_at AS snapshot_recorded_at,
+                (pending.recorded_at = claim.consumed_at) AS snapshot_timestamp_matches_claim,
                 COALESCE(pending.details ? 'admissionCommandId', false) AS snapshot_has_admission_command_id,
                 COALESCE(pending.details ? 'remainingCount', false) AS snapshot_has_remaining_count,
                 COALESCE(pending.details ? 'remainingBudgetCents', false) AS snapshot_has_remaining_budget_cents,
