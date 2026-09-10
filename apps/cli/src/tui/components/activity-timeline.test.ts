@@ -40,7 +40,7 @@ describe("renderActivityTimeline", () => {
       occurredAt: "2026-01-01T00:00:00.000Z", eventType: "effect.awaiting_approval",
       payload: { effect: { effectId: "effect-10", tier: "user", actor: "worker-3", action: "git.remote.push", target: "origin main", classification: "critical", outcome: "awaiting user", kind: "warning" } },
     });
-    expect(pendingDecisionsFromActivity([pending])).toEqual([{ tier: "You", action: "git.remote.push origin main", actor: "worker-3" }]);
+    expect(pendingDecisionsFromActivity([pending])).toEqual([{ identity: "effect-10", tier: "You", action: "git.remote.push origin main", actor: "worker-3" }]);
     const completed = toActivityTimelineEvent({ ...pending, cursor: "11", eventId: "event-11", eventType: "effect.completed", payload: { effect: { ...pending.effect!, outcome: "approved", kind: "success" } } });
     expect(pendingDecisionsFromActivity([pending, completed])).toEqual([]);
   });
@@ -110,6 +110,6 @@ describe("renderActivityTimeline", () => {
     const pendingTwo = toActivityTimelineEvent({ ...baseEvent, cursor: "17", eventId: "event-17", payload: { effect: { commandId: "command-1", index: 1, tier: "user", actor: "worker", action: "git.remote.push", target: "main", classification: "critical", outcome: "awaiting approval", kind: "warning" } } });
     const completedOne = toActivityTimelineEvent({ ...baseEvent, cursor: "18", eventId: "event-18", eventType: "effect.completed", payload: { effect: { commandId: "command-1", index: 0, tier: "Department Head", actor: "worker", action: "git.remote.push", target: "main", classification: "critical", outcome: "approved", kind: "success" } } });
 
-    expect(pendingDecisionsFromActivity([pendingOne, pendingTwo, completedOne])).toEqual([{ tier: "You", action: "git.remote.push main", actor: "worker" }]);
+    expect(pendingDecisionsFromActivity([pendingOne, pendingTwo, completedOne])).toEqual([{ identity: "command-1:1", tier: "You", action: "git.remote.push main", actor: "worker" }]);
   });
 });

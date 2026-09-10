@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderActivityTimeline } from "./activity-timeline.js";
-import { createSplashController, renderStatusRow, renderTuiLayout, type TuiShellState } from "./shell.js";
+import { createSplashController, renderDecisionRegion, renderStatusRow, renderTuiLayout, type PendingDecision, type TuiShellState } from "./shell.js";
 
 const state: TuiShellState = {
   workspace: { cwd: "/work/acme", gitRoot: "/work/acme" },
@@ -17,9 +17,9 @@ const pendingState: TuiShellState = {
   ...state,
   approvals: { kind: "value", value: 2 },
   pendingDecisions: [
-    { tier: "Encore Council", action: "git push origin main", actor: "worker-3" },
-    { tier: "You", action: "rm -rf build/", actor: "worker-1" },
-    { tier: "Head", action: "deploy release", actor: "worker-2" },
+    { identity: "effect-1", tier: "Encore Council", action: "git push origin main", actor: "worker-3" },
+    { identity: "effect-2", tier: "You", action: "rm -rf build/", actor: "worker-1" },
+    { identity: "effect-3", tier: "Head", action: "deploy release", actor: "worker-2" },
   ],
 };
 
@@ -42,6 +42,11 @@ describe("Maestro TUI layout and hierarchy", () => {
 
   it("removes the decisions region when nothing is pending", () => {
     expect(renderTuiLayout(state, 100, 24).decisions).toEqual([]);
+  });
+
+  it("does not render a pending row without durable identity", () => {
+    const malformed = { tier: "You", action: "git push origin main", actor: "You" } as PendingDecision;
+    expect(renderDecisionRegion({ ...pendingState, pendingDecisions: [malformed] }, 100, 24)).toEqual([]);
   });
 
   it("renders the splash on the first frame only", () => {
