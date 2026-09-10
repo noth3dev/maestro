@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { readFile, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
+import { createHash } from "node:crypto";
 import { assertReleaseScenarioTarget } from "./fixture.mjs";
 
 const values = parseArgs({ options: { step: { type: "string" }, target: { type: "string" }, state: { type: "string" } } }).values;
@@ -21,10 +22,12 @@ const providerPort = await getPort();
 const provider = await start(new URL("./fake-provider-process.mjs", import.meta.url).pathname, ["--port", String(providerPort), "--state", providerStatePath, "--worktree-root", worktreeRoot]);
 const providerUrl = `http://127.0.0.1:${providerPort}`;
 await waitReady(providerUrl);
+const providerHealth = await (await fetch(`${providerUrl}/health`)).json();
 let controlPort = await getPort();
 let control = await start(new URL("./fake-control-plane-process.mjs", import.meta.url).pathname, ["--port", String(controlPort), "--state", statePath, "--provider-url", providerUrl]);
 let controlUrl = `http://127.0.0.1:${controlPort}`;
 await waitReady(controlUrl);
+let controlHealth = await (await fetch(`${controlUrl}/health`)).json();
 try {
   if (step === 11) {
     await stop(control);
@@ -32,16 +35,22 @@ try {
     control = await start(new URL("./fake-control-plane-process.mjs", import.meta.url).pathname, ["--port", String(controlPort), "--state", statePath, "--provider-url", providerUrl]);
     controlUrl = `http://127.0.0.1:${controlPort}`;
     await waitReady(controlUrl);
+    controlHealth = await (await fetch(`${controlUrl}/health`)).json();
   }
   const result = await post(`${controlUrl}/command`, { step, target: realTarget, modes: ["full-access-read", "full-access-write"] });
   if (step === 14) {
     const evidenceResponse = await fetch(`${controlUrl}/evidence`);
     const evidence = await evidenceResponse.json();
     if (!evidenceResponse.ok || evidence.bundle.bundleId !== evidence.report.evidenceBundleId || evidence.bundle.goalId !== evidence.report.goalId) throw new Error("fake evidence bundle/report identity mismatch");
+    if (!evidence.bundle.content.provider?.calls?.length || !evidence.bundle.content.provider?.remoteAttempts?.length) throw new Error("fake evidence omitted provider effect history");
+    const expectedHash = createHash("sha256").update(JSON.stringify(evidence.bundle.content)).digest("hex");
+    if (expectedHash !== evidence.bundle.hash) throw new Error("fake evidence bundle hash mismatch");
     result.evidence = evidence;
   }
   const currentState = result.state ?? JSON.parse(await readFile(statePath, "utf8"));
   if (currentState.lastStep !== step) throw new Error(`fake Control Plane did not durably advance to step ${step}`);
+  currentState.processPids = [...new Set([...(currentState.processPids ?? []), providerHealth.pid, controlHealth.pid])];
+  if (step === 14 && (!currentState.lastEvidence || currentState.lastEvidence.bundle.bundleId !== currentState.lastEvidence.report.evidenceBundleId)) throw new Error("persisted fake evidence did not match report");
   await writeFile(statePath, JSON.stringify(currentState, null, 2) + "\n");
   console.log(JSON.stringify({ step, observation: result.observation, providerCalls: currentState.providerCalls }));
 } finally {

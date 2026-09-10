@@ -29,15 +29,23 @@ const server = createServer(async (request, response) => {
     let result;
     if (input.operation === "test") {
       try { await execFile("npm", ["test", "--prefix", target]); result = { exitCode: 0 }; } catch (error) { result = { exitCode: error.code ?? 1 }; }
-    } else if (["inject", "clear", "repair", "remote"].includes(input.operation)) {
-      const script = { inject: "inject-unsupported-assertion.mjs", clear: "clear-unsupported-assertion.mjs", repair: "repair-seeded-defect.mjs", remote: "attempt-remote-push.mjs" }[input.operation];
+    } else if (["inject", "clear", "repair"].includes(input.operation)) {
+      const script = { inject: "inject-unsupported-assertion.mjs", clear: "clear-unsupported-assertion.mjs", repair: "repair-seeded-defect.mjs" }[input.operation];
       const output = await execFile("node", [`${target}/scripts/${script}`]);
       result = { exitCode: 0, stdout: output.stdout.trim() };
     } else if (input.operation === "revision") {
       const output = await execFile("git", ["-C", target, "rev-parse", "HEAD"]);
       result = { exitCode: 0, revision: output.stdout.trim() };
     } else if (input.operation === "mode") {
-      result = { exitCode: 0, mode: input.mode };
+      if (!["full-access-read", "full-access-write"].includes(input.mode)) throw new Error("unsupported provider mode");
+      state.mode = input.mode;
+      state.modeChanges = [...(state.modeChanges ?? []), input.mode];
+      result = { exitCode: 0, mode: state.mode };
+    } else if (input.operation === "remote") {
+      const mode = state.mode ?? "approval-required";
+      const blocked = { blocked: true, networkInvoked: false, mode, reason: "remote push requires explicit user approval" };
+      state.remoteAttempts = [...(state.remoteAttempts ?? []), blocked];
+      result = { exitCode: 0, ...blocked };
     } else {
       throw new Error(`unsupported fake provider operation: ${input.operation}`);
     }
