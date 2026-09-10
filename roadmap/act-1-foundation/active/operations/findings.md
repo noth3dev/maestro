@@ -1727,3 +1727,5 @@ All downstream routing documentation must use this contract and must not restore
 
 - 2026-09-10 S3b terminal-validation blocker: `applyConversationEvent` accepted a malformed `turn_completed` without `turnId`/content as `succeeded`, and `entry.ts` stopped the stream based only on `eventType`. This could present false success and prevent reconnect.
 - 2026-09-10 S3b terminal-validation remediation: terminal events now require a matching active `turnId`; completion requires content or accumulated deltas; stream termination uses the validated terminal predicate. Confirmation prompts also fail closed before invoking the approval callback when durable identity, actor, or explicit tier is absent. Focused and full no-DB verification passed; independent re-review remains required.
+
+- 2026-09-10 S3b final hardening: a cramped first frame (`<100x28`) did not dismiss splash state, allowing it to appear after resize. Added a regression and made splash consumption one-shot at the first status render. Final build/lint/no-DB verification passed; live PostgreSQL/provider acceptance remains a user HANDOFF.
