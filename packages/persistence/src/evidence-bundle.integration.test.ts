@@ -166,7 +166,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     const fs = await import("node:fs/promises");
     await fs.writeFile(join(worktreePath, "change.txt"), "the bounded mission-only change");
     const commitResult = await localGitPort.commit(worktreePath, "mission: implement the bounded change", "worker", "worker@example.com");
-    const recordedCommit = await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: implement the bounded change", evidenceIds);
+    const recordedCommit = await recordIntegrationCommit(pool, localGitPort, worker.workerId, "mission: implement the bounded change", evidenceIds, proof, headContext("product"));
     expect(recordedCommit.commitSha).toBe(commitResult.commitSha);
 
     // 9. Budget: Goal envelope, Department allocation, Mission allocation.

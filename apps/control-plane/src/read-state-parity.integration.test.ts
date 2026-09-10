@@ -163,8 +163,8 @@ describeDatabase("App/API and CLI durable read-state parity (roadmap/act-1-found
     await recordWorkerWorktree(pool, localGitPort, worker.workerId, worktreePath, proof, headContext("product"));
     await writeFile(join(worktreePath, "change.txt"), "the change");
     const commitResult = await localGitPort.commit(worktreePath, "mission: implement", "worker", "worker@example.com");
-    await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: implement", evidenceIds);
-    await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
+    const integrationCommit = await recordIntegrationCommit(pool, localGitPort, worker.workerId, "mission: implement", evidenceIds, proof, headContext("product"));
+    expect(integrationCommit.commitSha).toBe(commitResult.commitSha);
     await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, proof, headContext("product"));
     await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
 

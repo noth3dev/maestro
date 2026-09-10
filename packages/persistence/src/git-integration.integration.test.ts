@@ -152,9 +152,9 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     const fs = await import("node:fs/promises");
     await fs.writeFile(join(worktreePath, "change.txt"), "mission-only change");
     const commitResult = await localGitPort.commit(worktreePath, "mission: add change", "worker", "worker@example.com");
-    const recorded = await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: add change", [...evidence.references]);
+    const recorded = await recordIntegrationCommit(pool, localGitPort, worker.workerId, "mission: add change", [...evidence.references], proof, headContext("product"));
     expect(recorded.commitSha).toBe(commitResult.commitSha);
-    const replayCommit = await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: add change", [...evidence.references]);
+    const replayCommit = await recordIntegrationCommit(pool, localGitPort, worker.workerId, "mission: add change", [...evidence.references], proof, headContext("product"));
     expect(replayCommit).toEqual(recorded);
   });
 
@@ -181,6 +181,8 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     const { goalId, proof, worker, kernel, targetWorktreePath } = await setupPlan(["product", "quality"], ["product"], true);
     expect(targetWorktreePath).toBeDefined();
     expect(kernel.admissions[0]?.cwd).toBe(targetWorktreePath);
+    const widenedPath = join(repositoryPath, "..", `maestro-widened-worker-${randomUUID()}`);
+    await expect(recordWorkerWorktree(pool, localGitPort, worker.workerId, widenedPath, proof, headContext("product"))).rejects.toThrow(/different path/);
     await expect(sendWorkerMessageUnderOwnerClaim(pool, kernel, worker.workerId, "repair the target defect", proof)).resolves.toBe(true);
     const fs = await import("node:fs/promises");
     await fs.writeFile(join(targetWorktreePath!, "repair.txt"), "repair");
@@ -269,7 +271,7 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     await fs.writeFile(join(worktreePath, "change.txt"), "mission-only change");
     const commitResult = await localGitPort.commit(worktreePath, "mission: add change", "worker", "worker@example.com");
     await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
-    await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: add change", [...evidence.references]);
+    await recordIntegrationCommit(pool, localGitPort, worker.workerId, "mission: add change", [...evidence.references], proof, headContext("product"));
     const acceptanceId = randomUUID();
     await pool.query(
       "INSERT INTO department_acceptances (acceptance_id, worker_id, commit_sha, reason, accepted_by, session_ref, created_at) VALUES ($1, $2, $3, 'looks good', 'head:product', 'opaque:product', transaction_timestamp())",

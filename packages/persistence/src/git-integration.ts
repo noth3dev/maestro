@@ -248,6 +248,12 @@ export async function advanceWorkerIntegration(
     if (worker.rowCount !== 1) throw new GitIntegrationNotFoundError(`Worker not found: ${workerId}`);
     const council = await readHeadCouncil(pool, worker.rows[0]!.council_id);
     if (council.goalId !== proof.goalId) throw new StaleGoalLeaseError(proof.goalId);
+    const uniqueEvidenceReferences = [...new Set(evidenceReferences)];
+    if (uniqueEvidenceReferences.some((reference) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(reference))) throw new GitIntegrationError("Integration evidence references must be UUID evidence records");
+    if (uniqueEvidenceReferences.length > 0) {
+      const evidence = await client.query<{ count: string }>("SELECT count(*)::text AS count FROM evidence_records WHERE evidence_id = ANY($1::uuid[]) AND project_id = $2 AND goal_id = $3", [uniqueEvidenceReferences, council.snapshot.projectId, council.goalId]);
+      if (Number(evidence.rows[0]?.count ?? 0) !== uniqueEvidenceReferences.length) throw new GitIntegrationError("Integration evidence references must belong to the Goal project");
+    }
     const captured = council.snapshot.participants.find((participant) => (participant.departmentId ?? participant.participantId) === worker.rows[0]!.department_id);
     if (captured === undefined || captured.headRoleId === undefined || !isAuthorizedHeadCouncilActor(context, captured)) throw new GitIntegrationError("Actor is not bound to the captured Head identity and session");
     const active = await client.query("SELECT 1 FROM goal_head_participations WHERE goal_id = $1 AND department_id = $2 AND status = 'active' AND active_session_ref = $3 FOR SHARE", [council.goalId, worker.rows[0]!.department_id, captured.sessionRef]);
@@ -271,33 +277,25 @@ export async function advanceWorkerIntegration(
     await git.advanceBranch(repositoryPath, goalBranch.rows[0]!.branch_name, goalHead, workerHead);
     const inserted = await client.query<{ commit_sha: string; message: string; evidence_references: string[] }>(
       `INSERT INTO integration_commits (commit_id, worker_id, commit_sha, message, evidence_references) VALUES ($1, $2, $3, $4, $5::jsonb) RETURNING commit_sha, message, evidence_references`,
-      [randomUUID(), workerId, workerHead, message.trim(), JSON.stringify(evidenceReferences)],
+      [randomUUID(), workerId, workerHead, message.trim(), JSON.stringify(uniqueEvidenceReferences)],
     );
     await client.query("COMMIT"); open = false;
     return { workerId, commitSha: inserted.rows[0]!.commit_sha, message: inserted.rows[0]!.message, evidenceReferences: inserted.rows[0]!.evidence_references };
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 
-export async function recordIntegrationCommit(pool: Pool, workerId: string, commitSha: string, message: string, evidenceReferences: readonly string[]): Promise<IntegrationCommit> {
-  if (!/^[0-9a-f]{40}$/.test(commitSha)) throw new GitIntegrationError("commitSha must be a real 40-hex Git object id");
-  if (message.trim() === "") throw new GitIntegrationError("Integration commit message is required");
-  const worktree = await pool.query("SELECT 1 FROM worker_worktrees WHERE worker_id = $1", [workerId]);
-  if (worktree.rowCount !== 1) throw new GitIntegrationNotFoundError(`Worker has no recorded worktree: ${workerId}`);
-  const existing = await pool.query<{ commit_sha: string; message: string; evidence_references: string[] }>(
-    "SELECT commit_sha, message, evidence_references FROM integration_commits WHERE worker_id = $1 AND commit_sha = $2",
-    [workerId, commitSha],
-  );
-  if ((existing.rowCount ?? 0) > 0) {
-    const row = existing.rows[0]!;
-    return { workerId, commitSha: row.commit_sha, message: row.message, evidenceReferences: row.evidence_references };
-  }
-  const inserted = await pool.query<{ commit_sha: string; message: string; evidence_references: string[] }>(
-    `INSERT INTO integration_commits (commit_id, worker_id, commit_sha, message, evidence_references) VALUES ($1, $2, $3, $4, $5::jsonb)
-     RETURNING commit_sha, message, evidence_references`,
-    [randomUUID(), workerId, commitSha, message.trim(), JSON.stringify(evidenceReferences)],
-  );
-  const row = inserted.rows[0]!;
-  return { workerId, commitSha: row.commit_sha, message: row.message, evidenceReferences: row.evidence_references };
+export async function recordIntegrationCommit(
+  pool: Pool,
+  git: GitPort,
+  workerId: string,
+  message: string,
+  evidenceReferences: readonly string[],
+  proof: GoalLeaseProof,
+  context: CouncilActorContext,
+): Promise<IntegrationCommit> {
+  // Compatibility name for existing internal callers. The commit SHA is read
+  // from the owned worker branch; callers cannot fabricate or inject it.
+  return advanceWorkerIntegration(pool, git, workerId, message, evidenceReferences, proof, context);
 }
 
 /**

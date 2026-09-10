@@ -168,6 +168,9 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     await observeWorker(pool, kernel, worker.workerId, proof, headContext("product"));
     await expect(sendWorkerMessageUnderOwnerClaim(pool, kernel, worker.workerId, "must not run", proof)).resolves.toBe(false);
     await expect(sendWorkerMessageUnderOwnerClaim(pool, kernel, randomUUID(), "must not run", proof)).rejects.toBeInstanceOf(WorkerNotFoundError);
+    const cancelledWorker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    await cancelWorker(pool, kernel, cancelledWorker.workerId, proof, headContext("product"));
+    await expect(sendWorkerMessageUnderOwnerClaim(pool, kernel, cancelledWorker.workerId, "must not run", proof)).resolves.toBe(false);
     expect(kernel.messages).toHaveLength(0);
   });
 
