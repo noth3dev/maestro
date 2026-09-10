@@ -16,8 +16,9 @@ const evidence = (): RoutingEvidence => ({
   selectedModelRef: "provider/model",
   accountBinding: "account-1",
   candidateRefs: ["candidate-1"],
+  selectedCandidateRef: "candidate-1",
   rejections: [],
-  taskDemandHash: "a".repeat(64),
+  taskDemandHash: "db8115791f3f3c95cfa335328821064eb1eb1effa295da88612e499aef5c841f",
   pressure: 100,
   pressureBand: "high",
   decisionLayer: "Encore Council",
@@ -48,6 +49,7 @@ describe("routing evidence boundary", () => {
   it("requires replayable E pressure and known recipe versions", () => {
     expect(() => assertValidRoutingEvidence({ ...evidence(), pressureCalculation: { pressureFloor: 1, pressure: 100, explicitHeadUplift: 100 } })).toThrow(RoutingEvidenceValidationError);
     expect(() => assertValidRoutingEvidence({ ...evidence(), taskKindRecipeVersions: { coding: 999 } })).toThrow(RoutingEvidenceValidationError);
+    expect(() => assertValidRoutingEvidence({ ...evidence(), selectedCandidateRef: "missing" })).toThrow(RoutingEvidenceValidationError);
   });
 
   it("rejects hostile object shapes and invalid pressure/band pairs at the value boundary", () => {
@@ -57,4 +59,12 @@ describe("routing evidence boundary", () => {
     expect(() => assertValidRoutingEvidence({ ...evidence(), pressure: 201 })).toThrow(RoutingEvidenceValidationError);
     expect(() => assertValidRoutingEvidence({ ...evidence(), pressureBand: "low" as never })).toThrow(RoutingEvidenceValidationError);
   });
+});
+
+it("accepts selector-compatible malformed-candidate rejection records", () => {
+  expect(() => assertValidRoutingEvidence({ ...evidence(), rejections: [{ candidateRef: "<invalid>", reason: "candidate shape was rejected" }] })).not.toThrow();
+});
+
+it("requires RFC3339 UTC timestamps like the wire contract", () => {
+  expect(() => assertValidRoutingEvidence({ ...evidence(), createdAt: "2026-09-08" })).toThrow(RoutingEvidenceValidationError);
 });

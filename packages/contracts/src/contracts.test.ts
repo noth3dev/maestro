@@ -214,8 +214,9 @@ describe("Ensemble Router artifact wire contracts", () => {
       selectedModelRef: "provider/model",
       accountBinding: "account-1",
       candidateRefs: ["candidate-1"],
+      selectedCandidateRef: "candidate-1",
       rejections: [],
-      taskDemandHash: "a".repeat(64),
+      taskDemandHash: "db8115791f3f3c95cfa335328821064eb1eb1effa295da88612e499aef5c841f",
       pressure: 100,
       pressureBand: "high" as const,
       decisionLayer: "Encore Council" as const,
@@ -235,6 +236,9 @@ describe("Ensemble Router artifact wire contracts", () => {
     expect(RoutingEvidenceSchema.parse(evidence)).toEqual(evidence);
     expect(RoutingEvidenceSchema.safeParse({ ...evidence, modelProfile: { ...evidence.modelProfile, capability: {}, providerFacts: {}, provenance: {} } }).success).toBe(false);
     expect(RoutingEvidenceSchema.safeParse({ ...evidence, operationalOverlaySnapshot: {} }).success).toBe(false);
+    expect(RoutingEvidenceSchema.safeParse({ ...evidence, pressureCalculation: { pressureFloor: 1, pressure: 100, explicitHeadUplift: 100 } }).success).toBe(false);
+    expect(RoutingEvidenceSchema.safeParse({ ...evidence, taskKindRecipeVersions: { coding: 999 } }).success).toBe(false);
+    expect(RoutingEvidenceSchema.safeParse({ ...evidence, createdAt: "now" }).success).toBe(false);
   });
 
   it("fails closed on missing facts, forbidden identity fields, and unavailable bindings", () => {

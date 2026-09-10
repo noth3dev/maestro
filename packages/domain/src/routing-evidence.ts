@@ -1,5 +1,5 @@
 import { classifyPressureBand } from "./pressure-band.js";
-import { assertValidTaskDemand, TASK_KIND_RECIPES, type TaskDemand } from "./task-demand.js";
+import { assertValidTaskDemand, taskDemandContentHash, TASK_KIND_RECIPES, type TaskDemand } from "./task-demand.js";
 import { assertValidWorkCharacter, calculatePressure, type PressureCalculation, type WorkCharacter } from "./work-character.js";
 import { assertValidModelMap, type ModelMapEntry } from "./model-map.js";
 import { assertValidOperationalOverlaySnapshot, type OperationalOverlaySnapshot } from "./operational-overlay.js";
@@ -32,6 +32,7 @@ export interface RoutingEvidence {
   readonly selectedModelRef: string;
   readonly accountBinding: string;
   readonly candidateRefs: readonly string[];
+  readonly selectedCandidateRef: string;
   readonly rejections: readonly RoutingEvidenceRejection[];
   readonly taskDemandHash: string;
   readonly pressure: number;
@@ -93,6 +94,11 @@ function sha(value: unknown, field: string): asserts value is string {
   if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value))
     throw new RoutingEvidenceValidationError(`${field} must be a lowercase SHA-256 hash`);
 }
+function opaqueCandidateRef(value: unknown, field: string): asserts value is string {
+  ref(value, field);
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/.test(value)) throw new RoutingEvidenceValidationError(`${field} must be an opaque candidate reference`);
+}
+
 function list(value: unknown, field: string): asserts value is readonly string[] {
   if (!Array.isArray(value) || value.length === 0 || Object.getPrototypeOf(value) !== Array.prototype)
     throw new RoutingEvidenceValidationError(`${field} must be a non-empty array`);
@@ -135,7 +141,8 @@ function rejectionList(value: unknown, field: string): asserts value is readonly
 
 function timestamp(value: unknown, field: string): asserts value is string {
   line(value, field);
-  if (!Number.isFinite(Date.parse(value))) throw new RoutingEvidenceValidationError(`${field} must be a valid timestamp`);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value) || !Number.isFinite(Date.parse(value)))
+    throw new RoutingEvidenceValidationError(`${field} must be a valid UTC datetime`);
 }
 function modelRef(value: unknown): asserts value is string {
   ref(value, "selectedModelRef");
@@ -197,6 +204,7 @@ export function assertValidRoutingEvidence(value: unknown): asserts value is Rou
       "selectedModelRef",
       "accountBinding",
       "candidateRefs",
+      "selectedCandidateRef",
       "rejections",
       "taskDemandHash",
       "pressure",
@@ -229,6 +237,7 @@ export function assertValidRoutingEvidence(value: unknown): asserts value is Rou
       "selectedModelRef",
       "accountBinding",
       "candidateRefs",
+      "selectedCandidateRef",
       "rejections",
       "taskDemandHash",
       "pressure",
@@ -263,6 +272,9 @@ export function assertValidRoutingEvidence(value: unknown): asserts value is Rou
   if (record.mode !== "ensemble" && record.mode !== "pin") throw new RoutingEvidenceValidationError("Routing evidence mode is invalid");
   modelRef(record.selectedModelRef);
   list(record.candidateRefs, "candidateRefs");
+  for (const candidateRef of record.candidateRefs) opaqueCandidateRef(candidateRef, "candidateRefs entry");
+  opaqueCandidateRef(record.selectedCandidateRef, "selectedCandidateRef");
+  if (!record.candidateRefs.includes(record.selectedCandidateRef)) throw new RoutingEvidenceValidationError("selectedCandidateRef must be in candidateRefs");
   rejectionList(record.rejections, "rejections");
   sha(record.taskDemandHash, "taskDemandHash");
   if (typeof record.pressure !== "number" || !Number.isFinite(record.pressure) || record.pressure < 0 || record.pressure > 200)
@@ -288,10 +300,16 @@ export function assertValidRoutingEvidence(value: unknown): asserts value is Rou
   if (workCharacter.provenance.taskContractRef !== taskDemand.provenance.taskContractRef || workCharacter.provenance.headDecisionRef !== taskDemand.provenance.headDecisionRef)
     throw new RoutingEvidenceValidationError("TaskDemand and WorkCharacter provenance must agree");
   pressureCalculation(record.pressureCalculation, workCharacter, record.pressure);
+  const expectedTaskDemandHash = taskDemandContentHash(taskDemand);
+  if (record.taskDemandHash !== expectedTaskDemandHash) throw new RoutingEvidenceValidationError("taskDemandHash does not match the sealed TaskDemand");
   modelProfile(record.modelProfile, record.selectedModelRef);
   try { assertValidOperationalOverlaySnapshot(record.operationalOverlaySnapshot); } catch { throw new RoutingEvidenceValidationError("Routing evidence operationalOverlaySnapshot is invalid"); }
   const overlay = record.operationalOverlaySnapshot as OperationalOverlaySnapshot;
   if (overlay.goalRef !== record.goalRef || overlay.projectRef !== record.projectRef || overlay.overlayVersion !== record.overlayVersion)
     throw new RoutingEvidenceValidationError("Routing evidence operational overlay identity does not match route");
+  const selectedObservation = overlay.observations.find((observation) => observation.candidateRef === record.selectedCandidateRef);
+  if (selectedObservation === undefined || !selectedObservation.currentAvailability || selectedObservation.accountBinding !== record.accountBinding)
+    throw new RoutingEvidenceValidationError("Selected candidate is not available under the recorded account binding");
+  for (const candidateRef of record.candidateRefs) if (!overlay.observations.some((observation) => observation.candidateRef === candidateRef)) throw new RoutingEvidenceValidationError("Every candidate must have an operational observation");
   if (record.approvalRef !== null) ref(record.approvalRef, "approvalRef");
 }

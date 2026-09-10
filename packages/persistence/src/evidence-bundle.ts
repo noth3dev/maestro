@@ -192,7 +192,7 @@ async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string
     `SELECT approval.approval_id, approval.capability_kind, approval.project_id, approval.goal_id,
             approval.command_id, approval.action, approval.target, approval.policy_version,
             approval.control_epoch, approval.budget_effect_cents, approval.tier, approval.approver_id,
-            approval.decision, approval.expires_at, approval.revoked_at, approval.created_at,
+            approval.decision, approval.reason, approval.consequence, approval.expires_at, approval.revoked_at, approval.created_at,
             budget.scope_kind, budget.remaining_count, budget.remaining_budget_cents,
             budget.expires_at AS repetition_expires_at
        FROM capability_approvals approval
@@ -231,12 +231,8 @@ async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string
             gateway_binding_id, data_policy_hash, created_at
        FROM native_execution_bindings WHERE goal_id = $1 ORDER BY created_at, binding_id`, [goalId],
   )).rows;
-  const bindingByRef = new Map<string, Record<string, unknown>>();
-  for (const binding of nativeExecutionBindings) {
-    bindingByRef.set(String(binding.binding_id), binding);
-    bindingByRef.set(String(binding.execution_ref), binding);
-    bindingByRef.set(String(binding.invocation_ref), binding);
-  }
+  const bindingById = new Map<string, Record<string, unknown>>();
+  for (const binding of nativeExecutionBindings) bindingById.set(String(binding.binding_id), binding);
   for (const row of routingEvidence) {
     const raw = row.evidence;
     // Legacy 0072/0073 rows remain immutable evidence, but they cannot be
@@ -254,7 +250,7 @@ async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string
     };
     if (evidence.goalRef !== goalId || evidence.projectRef !== projectId || canonicalJson(evidence) !== canonicalJson(expectedPayload))
       throw new EvidenceBundleError(`Routing evidence identity or canonical payload mismatch: ${String(row.evidence_id)}`);
-    const binding = bindingByRef.get(evidence.admissionBindingRef);
+    const binding = bindingById.get(evidence.admissionBindingRef);
     if (!binding || String(binding.goal_id) !== goalId || String(binding.project_id) !== String(projectId) || binding.account_ref !== evidence.accountBinding)
       throw new EvidenceBundleError(`Routing evidence admission binding scope or account mismatch: ${String(row.evidence_id)}`);
     const selected = `${binding.selected_model_provider}/${binding.selected_model_id}`;
