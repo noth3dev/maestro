@@ -105,6 +105,11 @@ export interface RoutingCapabilityClaim {
   readonly claim_id: string; readonly approval_id: string; readonly capability_kind: string; readonly project_id: string; readonly goal_id: string;
   readonly command_id: string; readonly effect_index: number | string; readonly action: string; readonly target: string; readonly policy_version: number; readonly budget_effect_cents: string | number; readonly consumed_at: Date | string;
   readonly admission_command_id?: string | null; readonly snapshot_count?: number | string;
+  readonly snapshot_recorded_at?: Date | string | null;
+  readonly snapshot_has_admission_command_id?: boolean; readonly snapshot_has_remaining_count?: boolean;
+  readonly snapshot_has_remaining_budget_cents?: boolean; readonly snapshot_has_repetition_expires_at?: boolean;
+  readonly snapshot_admission_command_type?: string | null; readonly snapshot_remaining_count_type?: string | null;
+  readonly snapshot_remaining_budget_cents_type?: string | null; readonly snapshot_repetition_expires_at_type?: string | null;
   readonly snapshot_capability_kind?: string | null; readonly snapshot_project_id?: string | null; readonly snapshot_goal_id?: string | null;
   readonly snapshot_approval_id?: string | null; readonly snapshot_command_id?: string | null; readonly snapshot_action?: string | null;
   readonly snapshot_target?: string | null; readonly snapshot_effect_index?: string | number | null; readonly remaining_count_at_claim?: string | number | null;
@@ -147,8 +152,25 @@ export function evaluateRoutingEvidenceLineage(input: {
       const claimRepetitionExpiryAt = claim?.repetition_expires_at_at_claim == null ? null : new Date(claim.repetition_expires_at_at_claim).getTime();
       const claimSnapshotIsCompleteAndBound = (candidate: RoutingCapabilityClaim): boolean => {
         const candidateClaimAt = new Date(candidate.consumed_at).getTime();
+        const candidateSnapshotRecordedAt = candidate.snapshot_recorded_at == null ? Number.NaN : new Date(candidate.snapshot_recorded_at).getTime();
         const candidateSnapshotCount = candidate.snapshot_count == null ? 0 : Number(candidate.snapshot_count);
-        const candidateSnapshotIdentityValid = candidate.snapshot_capability_kind === candidate.capability_kind && candidate.snapshot_project_id === candidate.project_id
+        const candidateSnapshotDetailsComplete = candidate.snapshot_has_admission_command_id === true
+          && candidate.snapshot_has_remaining_count === true
+          && candidate.snapshot_has_remaining_budget_cents === true
+          && candidate.snapshot_has_repetition_expires_at === true;
+        const candidateSnapshotValueTypesValid = candidate.snapshot_admission_command_type === "string" && (
+          approval?.scope_kind === "bounded_count"
+            ? candidate.snapshot_remaining_count_type === "number" && candidate.snapshot_remaining_budget_cents_type === "null" && candidate.snapshot_repetition_expires_at_type === "null"
+            : approval?.scope_kind === "bounded_budget"
+              ? candidate.snapshot_remaining_count_type === "null" && candidate.snapshot_remaining_budget_cents_type === "number" && candidate.snapshot_repetition_expires_at_type === "null"
+              : approval?.scope_kind === "bounded_time"
+                ? candidate.snapshot_remaining_count_type === "null" && candidate.snapshot_remaining_budget_cents_type === "null" && candidate.snapshot_repetition_expires_at_type === "string"
+                : approval?.scope_kind === "one_execution"
+                  ? candidate.snapshot_remaining_count_type === "number" && candidate.snapshot_remaining_budget_cents_type === "null" && candidate.snapshot_repetition_expires_at_type === "null"
+                  : approval?.scope_kind === "session" ? candidate.snapshot_remaining_count_type === "null" && candidate.snapshot_remaining_budget_cents_type === "null" && candidate.snapshot_repetition_expires_at_type === "null" : false
+        );
+        const candidateSnapshotIdentityValid = candidateSnapshotDetailsComplete && candidateSnapshotValueTypesValid
+          && candidate.snapshot_capability_kind === candidate.capability_kind && candidate.snapshot_project_id === candidate.project_id
           && candidate.snapshot_goal_id === candidate.goal_id && candidate.snapshot_approval_id === candidate.approval_id
           && candidate.snapshot_command_id === candidate.command_id && candidate.snapshot_action === candidate.action
           && candidate.snapshot_target === candidate.target && String(candidate.snapshot_effect_index) === String(candidate.effect_index);
@@ -161,16 +183,19 @@ export function evaluateRoutingEvidenceLineage(input: {
           : repetitionExpiryAt === null && candidateRepetitionExpiryAt === null;
         const candidateRepetitionBudgetValid = candidateSnapshotIdentityValid && candidateSnapshotCount === 1 && Number.isSafeInteger(candidateEffectIndex) && candidateEffectIndex >= 0 && (
           approval?.scope_kind === "bounded_count"
-            ? Number.isSafeInteger(candidateRemainingCount) && candidateRemainingCount! >= 0
+            ? Number.isSafeInteger(candidateRemainingCount) && candidateRemainingCount! >= 0 && candidateRemainingBudget === null && candidateRepetitionExpiryAt === null
             : approval?.scope_kind === "bounded_budget"
-              ? Number.isSafeInteger(candidateRemainingBudget) && candidateRemainingBudget! >= 0
-              : approval?.scope_kind === "one_execution"
-                ? candidateRemainingCount === 0
-                : approval?.scope_kind === "session" ? candidateRemainingCount === null && candidateRemainingBudget === null : true
+              ? candidateRemainingCount === null && Number.isSafeInteger(candidateRemainingBudget) && candidateRemainingBudget! >= 0 && candidateRepetitionExpiryAt === null
+              : approval?.scope_kind === "bounded_time"
+                ? candidateRemainingCount === null && candidateRemainingBudget === null
+                : approval?.scope_kind === "one_execution"
+                  ? candidateRemainingCount === 0 && candidateRemainingBudget === null && candidateRepetitionExpiryAt === null
+                  : approval?.scope_kind === "session" ? candidateRemainingCount === null && candidateRemainingBudget === null && candidateRepetitionExpiryAt === null : false
         );
         return candidate.command_id === identity?.commandId && candidate.action === identity?.action && candidate.target === identity?.target
           && candidate.admission_command_id === binding.idempotency_key && candidateSnapshotIdentityValid && candidateSnapshotCount === 1
           && Number.isFinite(candidateClaimAt) && candidateClaimAt >= bindingAt
+          && Number.isFinite(candidateSnapshotRecordedAt) && candidateSnapshotRecordedAt === candidateClaimAt
           && approval !== undefined && candidate.policy_version === approval.policy_version
           && Number.isSafeInteger(Number(candidate.budget_effect_cents)) && Number(candidate.budget_effect_cents) >= 0
           && Number(candidate.budget_effect_cents) === Number(approval.budget_effect_cents)
@@ -184,26 +209,9 @@ export function evaluateRoutingEvidenceLineage(input: {
       const repetitionWindowValid = approval?.scope_kind === "bounded_time"
         ? Number.isFinite(repetitionExpiryAt) && Number.isFinite(claimRepetitionExpiryAt) && claimAt < repetitionExpiryAt! && claimAt < claimRepetitionExpiryAt! && repetitionExpiryAt === claimRepetitionExpiryAt
         : repetitionExpiryAt === null && claimRepetitionExpiryAt === null;
-      const snapshotCount = claim?.snapshot_count == null ? 0 : Number(claim.snapshot_count);
-      const snapshotIdentityValid = claim !== undefined
-        && claim.snapshot_capability_kind === claim.capability_kind && claim.snapshot_project_id === claim.project_id
-        && claim.snapshot_goal_id === claim.goal_id && claim.snapshot_approval_id === claim.approval_id
-        && claim.snapshot_command_id === claim.command_id && claim.snapshot_action === claim.action
-        && claim.snapshot_target === claim.target && String(claim.snapshot_effect_index) === String(claim.effect_index);
-      const effectIndex = claim === undefined ? Number.NaN : Number(claim.effect_index);
+      const repetitionBudgetValid = claim !== undefined && claimSnapshotIsCompleteAndBound(claim);
       const claimBudget = claim === undefined ? Number.NaN : Number(claim.budget_effect_cents);
       const approvalBudget = approval === undefined ? Number.NaN : Number(approval.budget_effect_cents);
-      const remainingCountAtClaim = claim?.remaining_count_at_claim == null ? null : Number(claim.remaining_count_at_claim);
-      const remainingBudgetAtClaim = claim?.remaining_budget_cents_at_claim == null ? null : Number(claim.remaining_budget_cents_at_claim);
-      const repetitionBudgetValid = snapshotIdentityValid && snapshotCount === 1 && Number.isSafeInteger(effectIndex) && effectIndex! >= 0 && (
-        approval?.scope_kind === "bounded_count"
-          ? Number.isSafeInteger(remainingCountAtClaim) && remainingCountAtClaim! >= 0
-          : approval?.scope_kind === "bounded_budget"
-            ? Number.isSafeInteger(remainingBudgetAtClaim) && remainingBudgetAtClaim! >= 0
-            : approval?.scope_kind === "one_execution"
-              ? remainingCountAtClaim === 0
-              : approval?.scope_kind === "session" ? remainingCountAtClaim === null && remainingBudgetAtClaim === null : true
-      );
       const validApproval = approval !== undefined && identity !== null && Number.isFinite(bindingAt) && Number.isFinite(claimAt) && claimAt >= bindingAt && approval.goal_id === input.goalId && approval.project_id === input.projectId && approval.capability_kind === identity.capabilityKind && approval.command_id === identity.commandId && approval.action === identity.action && approval.target === identity.target && approval.decision === "approved" && approval.tier === route.decisionLayer && approval.scope_kind !== null && new Date(approval.created_at).getTime() <= bindingAt && new Date(approval.expires_at).getTime() > bindingAt && new Date(approval.expires_at).getTime() > claimAt && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > bindingAt) && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > claimAt) && typeof approval.reason === "string" && approval.reason.trim() !== "" && typeof approval.consequence === "string" && approval.consequence.trim() !== "" && claim !== undefined && claim.policy_version === approval.policy_version && Number.isSafeInteger(claimBudget) && claimBudget! >= 0 && claimBudget === approvalBudget && admissionBound && repetitionWindowValid && repetitionBudgetValid && allMatchingClaimsHaveCompleteSnapshots;
       if (!validApproval) blockers.push({ reason: "routing_evidence_unapproved_below_requirement", detail: `Below-requirement model ${route.selectedModelRef} has no approval bound to the execution identity and time` });
     }
@@ -368,6 +376,15 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
   const capabilityClaims = await pool.query<RoutingCapabilityClaim>(`SELECT claim.claim_id, claim.approval_id, claim.capability_kind, claim.project_id, claim.goal_id,
                 claim.command_id, claim.effect_index, claim.action, claim.target, claim.policy_version, claim.budget_effect_cents, claim.consumed_at,
                 pending.details->>'admissionCommandId' AS admission_command_id, pending.snapshot_count,
+                pending.recorded_at AS snapshot_recorded_at,
+                COALESCE(pending.details ? 'admissionCommandId', false) AS snapshot_has_admission_command_id,
+                COALESCE(pending.details ? 'remainingCount', false) AS snapshot_has_remaining_count,
+                COALESCE(pending.details ? 'remainingBudgetCents', false) AS snapshot_has_remaining_budget_cents,
+                COALESCE(pending.details ? 'repetitionExpiresAt', false) AS snapshot_has_repetition_expires_at,
+                jsonb_typeof(pending.details->'admissionCommandId') AS snapshot_admission_command_type,
+                jsonb_typeof(pending.details->'remainingCount') AS snapshot_remaining_count_type,
+                jsonb_typeof(pending.details->'remainingBudgetCents') AS snapshot_remaining_budget_cents_type,
+                jsonb_typeof(pending.details->'repetitionExpiresAt') AS snapshot_repetition_expires_at_type,
                 pending.snapshot_capability_kind, pending.snapshot_project_id, pending.snapshot_goal_id,
                 pending.snapshot_approval_id, pending.snapshot_command_id, pending.details->>'action' AS snapshot_action,
                 pending.details->>'target' AS snapshot_target, pending.details->>'effectIndex' AS snapshot_effect_index,
@@ -382,6 +399,7 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
                     (array_agg(journal.goal_id ORDER BY journal.recorded_at, journal.journal_id))[1] AS snapshot_goal_id,
                     (array_agg(journal.approval_id ORDER BY journal.recorded_at, journal.journal_id))[1] AS snapshot_approval_id,
                     (array_agg(journal.command_id ORDER BY journal.recorded_at, journal.journal_id))[1] AS snapshot_command_id,
+                    (array_agg(journal.recorded_at ORDER BY journal.recorded_at, journal.journal_id))[1] AS recorded_at,
                     count(*)::int AS snapshot_count
                FROM capability_decision_journal journal
               WHERE journal.capability_kind = claim.capability_kind AND journal.project_id = claim.project_id
