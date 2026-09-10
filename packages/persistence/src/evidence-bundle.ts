@@ -245,7 +245,7 @@ async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string
       routeRef: row.route_ref, mode: row.mode, selectedModelRef: row.selected_model_ref,
       accountBinding: row.account_binding, candidateRefs: row.candidate_refs, rejections: row.rejections,
       taskDemandHash: row.task_demand_hash, pressure: row.pressure, pressureBand: row.pressure_band,
-      decisionLayer: row.decision_layer, overlayVersion: row.overlay_version,
+      decisionLayer: row.decision_layer, overlayVersion: row.overlay_version === null ? null : Number(row.overlay_version),
       admissionBindingRef: row.admission_binding_ref, rationale: row.rationale,
     };
     if (evidence.goalRef !== goalId || evidence.projectRef !== projectId || canonicalJson(evidence) !== canonicalJson(expectedPayload))

@@ -3742,3 +3742,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 S1 remediation: added a shared PostgreSQL routing-report fixture to the legacy end-to-end and Discord scenarios. It records an identity-only native binding and a valid A–E routing evidence row before bundle/report generation, preserving the required missing-evidence blocker while restoring those report-success scenarios.
 
 - 2026-09-10 S1 remediation: fixed the final review fixture defect by deriving the integration routing `taskDemandHash` from its per-test sealed TaskDemand (including fresh contract provenance), and aligned domain `createdAt` validation with the wire contract's UTC RFC3339 format. Focused checks: 30 passed; root and Secretary builds/lint/diff-check passed.
+
+- 2026-09-10 S1 CI follow-up: fixed the report lineage's PostgreSQL `bigint overlay_version` comparison and added a regression test for textual `"1"`; the prior post-CI-fix full non-PG suite passed 138/62 and 959/409, but this latest report normalization requires a fresh focused/full/CI gate.

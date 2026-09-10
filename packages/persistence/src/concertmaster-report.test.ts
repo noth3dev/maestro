@@ -69,6 +69,11 @@ describe("routing evidence certification lineage", () => {
     expect(evaluateRoutingEvidenceLineage({ goalId: "goal-1", projectId: "project-1", routingRows: [row(value)], nativeBindings: [{ ...binding, binding_id: "other-binding", execution_ref: "binding-1" }], approvals: [], claims: [] }).blockers).toContainEqual(expect.objectContaining({ reason: "routing_evidence_binding_missing" }));
   });
 
+  it("normalizes PostgreSQL bigint overlay versions during row binding", () => {
+    const value = route();
+    expect(evaluateRoutingEvidenceLineage({ goalId: "goal-1", projectId: "project-1", routingRows: [row(value, { overlay_version: "1" })], nativeBindings: [binding], approvals: [], claims: [] }).blockers).toEqual([]);
+  });
+
   it("blocks a provider identity mismatch against the admission binding", () => {
     const value = route();
     expect(evaluateRoutingEvidenceLineage({ goalId: "goal-1", projectId: "project-1", routingRows: [row(value)], nativeBindings: [{ ...binding, actual_model_id: "other" }], approvals: [], claims: [] }).blockers).toContainEqual(expect.objectContaining({ reason: "routing_evidence_identity_mismatch" }));
