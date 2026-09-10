@@ -1779,3 +1779,37 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 continuation check: S4 remains blocked by the recorded real worker admission/target binding, repair, integration commit, certification evidence, and access-mode gaps; root verification does not change the gate decision.
 
 - 2026-09-10 continuation: S4 remains blocked by missing production WorkerService target binding/repair/integration surfaces. Adding those unplanned runtime APIs inside the release-harness slice would exceed the declared plan scope, so the gate remains open.
+- 2026-09-10 Plan 2 S6b environment blocker: the required PostgreSQL/local-Git lifecycle test is present but all 9 tests in `git-integration.integration.test.ts` were skipped because `MAESTRO_TEST_DATABASE_URL` is unset. `pg_isready` is not installed and Docker is unavailable in this WSL distribution, so the required real PostgreSQL evidence cannot be produced. The implementation is not eligible for merge or for unblocking Plan 3 S4 until that integration suite runs green.
+
+- 2026-09-10 Plan 2 S6b review remediation finding: the first independent review returned `REVIEW: FAIL` because target lifecycle tests bypassed WorkerService, repository identity was not threaded into worktree binding, replay hashing omitted target paths, the exported integration writer accepted arbitrary real SHAs, and the required PostgreSQL lifecycle was skipped. These code gaps were addressed in `89a53f3`, `8b4bec8`, and `0a3a5e3`; the PostgreSQL environment blocker remains unresolved. Do not merge or unblock Plan 3 S4 until a fresh review passes and the 10 Git integration + 38 worker integration tests run against PostgreSQL.
+
+- 2026-09-10 Plan 2 S6b second review: reviewer confirmed target identity, path-scope validation, raw-SHA removal, evidence ownership, cancelled-worker rejection, and guarded branch advancement, but retained FAIL for missing PostgreSQL exit evidence and dual-write/repaired-message race risks. Canonical path handling, changed-content replay rejection, row-before-Git ordering, and a service-route test were added in `4ce5559`; PostgreSQL and crash/restart evidence remain required before closure.
+
+- 2026-09-10 Plan 2 S6b third hardening finding: a review-identified Git/DB lost-response case could leave the Goal branch ahead of `integration_commits`; retry previously rejected the already-equal heads. `advanceWorkerIntegration` now records the exact SHA on equal-head recovery, while still reserving before ordinary Git advance. Follow-up delivery now avoids rereading a row after the claim lock. Full race/crash verification still requires PostgreSQL and process-failure testing.
+
+- 2026-09-10 Plan 2 S6b final review finding: current hardening closes the prior target identity, raw SHA, evidence ownership, equal-head recovery, and stale post-lock reread findings. The mandatory real PostgreSQL/local-Git execution is still unavailable (`MAESTRO_TEST_DATABASE_URL` unset; no `pg_isready`; Docker unavailable), so the independent verdict remains `REVIEW: FAIL` on evidence, not a claim of successful slice closure. Do not merge, push, hand off, or start Plan 3 S5.
+
+- 2026-09-10 S6b continuation blocker confirmation: this environment still has no `psql`, `postgres`, `initdb`, or `pg_isready`; Docker reports unavailable WSL integration and passwordless sudo is unavailable. The 48 PostgreSQL-gated lifecycle tests cannot run here, so S6b remains open and Plan 3 S4/S5 remain blocked.
+
+- 2026-09-10 S6b repeated blocker: no environment change provides PostgreSQL, Docker integration, or `MAESTRO_TEST_DATABASE_URL`; the mandatory 48-test real lifecycle gate remains unrun. Do not advance to Plan 3 S4/S5.
+
+- 2026-09-10 S6b continuation recheck: the environment still cannot provide PostgreSQL lifecycle execution; the mandatory integration gate remains unresolved. S6b remains open, and Plan 3 S4/S5 remain blocked.
+
+- 2026-09-10 repeated S6b blocker confirmation: no TS2307/dependency failure exists; the only unresolved gate remains unavailable real PostgreSQL execution for the 48 persistence lifecycle tests. Continuing to Plan 3 without this evidence would violate the execution order and exit criteria.
+
+- 2026-09-10 S6b environment blocker resolved: Windows Docker Desktop was startable through its installed executable even though WSL integration was initially unavailable. A disposable PostgreSQL 17 container provided `MAESTRO_TEST_DATABASE_URL`; the mandatory 48 persistence tests passed. The only failure was a test-fixture defect in the real lifecycle fake kernel, where `observe()` returned `[]`; `dd6c9e1` now returns the bound invocation and terminal observation, and the focused gate is green.
+
+- 2026-09-10 S6b final independent review residuals (non-blocking): exported persistence seams could additionally assert the preparation callback returns the declared worktree, repair command IDs are not yet durably deduplicated, cancellation intent has a narrow follow-up race, and worktree provisioning lacks post-Git DB compensation. Reviewer found no blocker to the S6b checklist or verified production composition; these remain future hardening items.
+
+- 2026-09-10 S6b closure: the PostgreSQL blocker is resolved through the disposable `maestro-test-postgres` container; the merged main commit `6be6738` has green serial target lifecycle evidence. Historical non-blocking residuals remain documented: callback result equality, repair command-id deduplication, cancellation-intent race, and post-Git worktree DB compensation.
+
+- 2026-09-10 post-merge test finding: `packages/environment-adapter/src/runtime-adapter.test.ts` used a 100ms terminal polling budget, which failed once under full-suite scheduler load while passing in isolation. This was a test timing defect, not S6b behavior; the helper now allows 1s. No production code changed.
+
+
+- 2026-09-10 CI remediation finding: after the nine missing imports were corrected, the serial PostgreSQL suite exposed outdated expectations in the certification and bounded Goal end-to-end tests. Both manually called `localGitPort.advanceBranch(baseRevision, workerCommit)` after `advanceWorkerIntegration`, which now performs the guarded Git advancement itself. The duplicate conditional update-ref correctly fails closed as `GitOutcomeUnknownError`; this was test drift, not a production failure. Removing the duplicate calls and preserving a real second review commit for the frozen-head scenario made the focused gate pass (15/15). Do not treat the CI gate as repaired until the committed changes are pushed and the replacement CI run is green.
+
+
+- 2026-09-10 continuation finding: no new code defect was found during the mandatory root check. The only active gate is CI run `34486161844`; its PostgreSQL Vitest job is still running after successful build/lint. Do not begin, merge, or push Plan 3 S4 work until the run reaches a successful conclusion.
+
+
+- 2026-09-10 CI gate resolution: run `34486161844` completed green with no failing job or test. The previous gate blocker is cleared. The remaining blocker is the unfinished Plan 3 S4 exit evidence documented in the active S4 worktree; S5 and live acceptance remain out of scope until S4 closes.

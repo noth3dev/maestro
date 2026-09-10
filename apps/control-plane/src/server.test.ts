@@ -3,6 +3,8 @@ import { once } from "node:events";
 import { request as httpRequest, type IncomingMessage } from "node:http";
 import { buildServer, type EventService, type GoalService, type OperatorAuthenticator, type HeadParticipationService, type CouncilService, type EncoreService, type ProjectDiscoveryService } from "./server.js";
 import { ReadStateGoalNotFoundError, type ReadStateService } from "./read-state-service.js";
+import type { WorkerService } from "./worker-service.js";
+import type { Worker } from "@maestro/contracts";
 import { ProjectMembershipRequiredError, ProjectAccessAdminRequiredError, StaleGoalLeaseError, HeadActivationRequesterInactiveError } from "@maestro/persistence";
 
 const goal = { goalId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02", projectId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01", state: "draft" as const, version: 1 };
@@ -46,6 +48,22 @@ describe("health routes", () => {
   it("fails readiness when the configured dependency check fails", async () => {
     const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readinessCheck: async () => { throw new Error("database unavailable"); } });
     expect((await app.inject({ method: "GET", url: "/readyz" })).statusCode).toBe(503);
+    await app.close();
+  });
+});
+
+describe("worker repair route", () => {
+  it("delivers a follow-up through the bound WorkerService session", async () => {
+    const worker: Worker = { workerId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f07", councilId: goal.goalId, departmentId: "product", planVersion: 1, itemId: "repair", bundleContentHash: "a".repeat(64), attempt: 1, executionRef: "exec-1", invocationRef: "inv-1", status: "spawned", answerText: null, usageTotalTokens: null };
+    const sendMessage = vi.fn(async (workerId: string, input: { projectId: string; message: string }, commandId: string, actor: { operatorId: string }) => {
+      expect({ workerId, input, commandId, actor }).toEqual({ workerId: worker.workerId, input: { projectId: goal.projectId, message: "repair" }, commandId: goal.goalId, actor: operator });
+      return worker;
+    });
+    const workers: WorkerService = { spawn: async () => worker, get: async () => worker, observe: async () => { throw new Error("unused"); }, sendMessage, cancel: async () => worker };
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), workerService: workers });
+    const response = await app.inject({ method: "POST", url: `/v1/workers/${worker.workerId}/messages`, headers: { authorization: "Bearer test-secret", "idempotency-key": goal.goalId }, payload: { projectId: goal.projectId, message: "repair" } });
+    expect(response.statusCode).toBe(200);
+    expect(sendMessage).toHaveBeenCalledOnce();
     await app.close();
   });
 });

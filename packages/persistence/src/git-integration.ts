@@ -229,27 +229,67 @@ export async function recordWorkerWorktree(pool: Pool, git: GitPort, workerId: s
 }
 
 /** Records one worker commit already made in its owned worktree. Mission-only changes are the worker's/Head's responsibility; this records the resulting evidence link, append-only. */
-export async function recordIntegrationCommit(pool: Pool, workerId: string, commitSha: string, message: string, evidenceReferences: readonly string[]): Promise<IntegrationCommit> {
-  if (!/^[0-9a-f]{40}$/.test(commitSha)) throw new GitIntegrationError("commitSha must be a real 40-hex Git object id");
+/** Advance a worker's committed branch into the Goal branch and record the exact commit used for acceptance. */
+export async function advanceWorkerIntegration(
+  pool: Pool,
+  git: GitPort,
+  workerId: string,
+  message: string,
+  evidenceReferences: readonly string[],
+  proof: GoalLeaseProof,
+  context: CouncilActorContext,
+): Promise<IntegrationCommit> {
   if (message.trim() === "") throw new GitIntegrationError("Integration commit message is required");
-  const worktree = await pool.query("SELECT 1 FROM worker_worktrees WHERE worker_id = $1", [workerId]);
-  if (worktree.rowCount !== 1) throw new GitIntegrationNotFoundError(`Worker has no recorded worktree: ${workerId}`);
-  const existing = await pool.query<{ commit_sha: string; message: string; evidence_references: string[] }>(
-    "SELECT commit_sha, message, evidence_references FROM integration_commits WHERE worker_id = $1 AND commit_sha = $2",
-    [workerId, commitSha],
-  );
-  if ((existing.rowCount ?? 0) > 0) {
-    const row = existing.rows[0]!;
-    return { workerId, commitSha: row.commit_sha, message: row.message, evidenceReferences: row.evidence_references };
-  }
-  const inserted = await pool.query<{ commit_sha: string; message: string; evidence_references: string[] }>(
-    `INSERT INTO integration_commits (commit_id, worker_id, commit_sha, message, evidence_references) VALUES ($1, $2, $3, $4, $5::jsonb)
-     RETURNING commit_sha, message, evidence_references`,
-    [randomUUID(), workerId, commitSha, message.trim(), JSON.stringify(evidenceReferences)],
-  );
-  const row = inserted.rows[0]!;
-  return { workerId, commitSha: row.commit_sha, message: row.message, evidenceReferences: row.evidence_references };
+  const client = await pool.connect(); let open = false;
+  try {
+    await client.query("BEGIN"); open = true;
+    await lockGoalLease(client, proof);
+    const worker = await client.query<{ council_id: string; department_id: string; status: string }>("SELECT council_id, department_id, status FROM workers WHERE worker_id = $1 FOR UPDATE", [workerId]);
+    if (worker.rowCount !== 1) throw new GitIntegrationNotFoundError(`Worker not found: ${workerId}`);
+    const council = await readHeadCouncil(pool, worker.rows[0]!.council_id);
+    if (council.goalId !== proof.goalId) throw new StaleGoalLeaseError(proof.goalId);
+    const uniqueEvidenceReferences = [...new Set(evidenceReferences)];
+    if (uniqueEvidenceReferences.some((reference) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(reference))) throw new GitIntegrationError("Integration evidence references must be UUID evidence records");
+    if (uniqueEvidenceReferences.length > 0) {
+      const evidence = await client.query<{ count: string }>("SELECT count(*)::text AS count FROM evidence_records WHERE evidence_id = ANY($1::uuid[]) AND project_id = $2 AND goal_id = $3", [uniqueEvidenceReferences, council.snapshot.projectId, council.goalId]);
+      if (Number(evidence.rows[0]?.count ?? 0) !== uniqueEvidenceReferences.length) throw new GitIntegrationError("Integration evidence references must belong to the Goal project");
+    }
+    const captured = council.snapshot.participants.find((participant) => (participant.departmentId ?? participant.participantId) === worker.rows[0]!.department_id);
+    if (captured === undefined || captured.headRoleId === undefined || !isAuthorizedHeadCouncilActor(context, captured)) throw new GitIntegrationError("Actor is not bound to the captured Head identity and session");
+    const active = await client.query("SELECT 1 FROM goal_head_participations WHERE goal_id = $1 AND department_id = $2 AND status = 'active' AND active_session_ref = $3 FOR SHARE", [council.goalId, worker.rows[0]!.department_id, captured.sessionRef]);
+    if (active.rowCount !== 1) throw new GitIntegrationError("Captured Head session is no longer authorized for Git integration");
+    const worktree = await client.query<{ repository_path: string; branch_name: string; base_branch_name: string }>("SELECT repository_path, branch_name, base_branch_name FROM worker_worktrees WHERE worker_id = $1 FOR SHARE", [workerId]);
+    if (worktree.rowCount !== 1) throw new GitIntegrationNotFoundError("Worker has no recorded worktree");
+    const goalBranch = await client.query<{ repository_path: string; branch_name: string }>("SELECT repository_path, branch_name FROM goal_integration_branches WHERE goal_id = $1 FOR SHARE", [council.goalId]);
+    if (goalBranch.rowCount !== 1 || goalBranch.rows[0]!.repository_path !== worktree.rows[0]!.repository_path) throw new GitIntegrationError("Goal integration branch must exist for the worker repository");
+    const repositoryPath = assertWorkspacePath(worktree.rows[0]!.repository_path, "repositoryPath");
+    const workerHead = (await git.headRevision(repositoryPath, worktree.rows[0]!.branch_name)).trim();
+    if (!/^[0-9a-f]{40}$/.test(workerHead)) throw new GitIntegrationError("Git returned an invalid worker branch revision SHA");
+    const existing = await client.query<{ commit_sha: string; message: string; evidence_references: string[] }>("SELECT commit_sha, message, evidence_references FROM integration_commits WHERE worker_id = $1 AND commit_sha = $2 FOR SHARE", [workerId, workerHead]);
+    if ((existing.rowCount ?? 0) > 0) {
+      const prior = existing.rows[0]!;
+      if (prior.message !== message.trim() || JSON.stringify(prior.evidence_references) !== JSON.stringify(uniqueEvidenceReferences)) throw new GitIntegrationError("Integration commit identity was reused with different content");
+      await client.query("COMMIT"); open = false;
+      return { workerId, commitSha: prior.commit_sha.trim(), message: prior.message, evidenceReferences: prior.evidence_references };
+    }
+    const departmentHead = (await git.headRevision(repositoryPath, worktree.rows[0]!.base_branch_name)).trim();
+    if (workerHead === departmentHead) throw new GitIntegrationError("Worker branch has no commit to integrate");
+    const goalHead = (await git.headRevision(repositoryPath, goalBranch.rows[0]!.branch_name)).trim();
+    // Reserve the exact worker SHA inside the lease transaction before the
+    // external Git mutation. A failed Git advance rolls the reservation back.
+    const reserve = () => client.query<{ commit_sha: string; message: string; evidence_references: string[] }>(
+      `INSERT INTO integration_commits (commit_id, worker_id, commit_sha, message, evidence_references) VALUES ($1, $2, $3, $4, $5::jsonb) RETURNING commit_sha, message, evidence_references`,
+      [randomUUID(), workerId, workerHead, message.trim(), JSON.stringify(uniqueEvidenceReferences)],
+    );
+    const inserted = await reserve();
+    if (workerHead !== goalHead) await git.advanceBranch(repositoryPath, goalBranch.rows[0]!.branch_name, goalHead, workerHead);
+    // If Git advanced before a lost DB response, the next attempt sees both
+    // branch heads equal and safely records the still-unrecorded exact SHA.
+    await client.query("COMMIT"); open = false;
+    return { workerId, commitSha: inserted.rows[0]!.commit_sha.trim(), message: inserted.rows[0]!.message, evidenceReferences: inserted.rows[0]!.evidence_references };
+  } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
+
 
 /**
  * Reads the current Goal integration branch and latest frozen revision (if either exists), for

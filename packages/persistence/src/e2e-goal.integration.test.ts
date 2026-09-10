@@ -21,7 +21,7 @@ import { recordEvidenceBundle, verifyStoredEvidenceBundle, readEvidenceBundle } 
 import { generateConcertmasterFinalReport } from "./concertmaster-report.js";
 import { recordRoutingReportFixture } from "./routing-report-fixture.js";
 import { reconcileOnStartup } from "./reconciliation.js";
-import { recordDepartmentBranch, recordGoalIntegrationBranch, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
+import { advanceWorkerIntegration, recordDepartmentBranch, recordGoalIntegrationBranch, recordWorkerWorktree } from "./git-integration.js";
 import { reserveDepartmentBudget, reserveGoalBudget, reserveMissionBudget } from "./budget-reservation.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -169,7 +169,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     const fs = await import("node:fs/promises");
     await fs.writeFile(join(worktreePath, "change.txt"), "the bounded mission-only change");
     const commitResult = await localGitPort.commit(worktreePath, "mission: implement the bounded change", "worker", "worker@example.com");
-    const recordedCommit = await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: implement the bounded change", evidenceIds);
+    const recordedCommit = await advanceWorkerIntegration(pool, localGitPort, worker.workerId, "mission: implement the bounded change", evidenceIds, proof, headContext("product"));
     expect(recordedCommit.commitSha).toBe(commitResult.commitSha);
 
     // 9. Budget: Goal envelope, Department allocation, Mission allocation.
@@ -182,7 +182,8 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     // Phase 3 live gate: independently accept the worker output, freeze the
     // integrated revision, certify it from Quality, and persist a replayable
     // evidence bundle. These are real PostgreSQL rows and a real Git commit.
-    await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
+    // advanceWorkerIntegration already moves the Goal branch to commitResult;
+    // acceptance and revision freezing now observe that real branch state.
     await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "Head reviewed the integrated worker output" }, proof, headContext("product"));
     await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
     const quality = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: evidenceIds }, "quality", proof, headContext("quality"));

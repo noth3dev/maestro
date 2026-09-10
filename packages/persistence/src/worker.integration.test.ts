@@ -8,7 +8,7 @@ import { acquireGoalLease, executeGoalCommand } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
-import { bindWorkerInvocation, cancelUnboundWorkerAfterBindingFailure, cancelWorker, countActiveWorkersForProject, listWorkersForGoal, markWorkerTerminal, markWorkerUnknown, observeWorker, promptWorkerUnderOwnerClaim, readWorker, recoverWorkerAfterRestart, spawnWorker, WorkerError, WorkerNotFoundError } from "./worker.js";
+import { bindWorkerInvocation, cancelUnboundWorkerAfterBindingFailure, cancelWorker, countActiveWorkersForProject, listWorkersForGoal, markWorkerTerminal, markWorkerUnknown, observeWorker, promptWorkerUnderOwnerClaim, readWorker, recoverWorkerAfterRestart, sendWorkerMessageUnderOwnerClaim, spawnWorker, WorkerError, WorkerNotFoundError } from "./worker.js";
 import { reconcileOnStartup } from "./reconciliation.js";
 import { consumeCapabilityApproval, createCapabilityApproval } from "./capability-approval.js";
 
@@ -48,13 +48,14 @@ const bundleSubstance = (overrides: Partial<MissionBundleSubstance> = {}): Missi
 });
 
 /** A minimal, deterministic fake standing in for a real native execution kernel. */
-function fakeKernel(finalStatus: InvocationObservation["status"] = "succeeded"): ExecutionKernelPort & { spawnedCount: number; cancelledInvocations: string[]; releasedInvocations: string[]; spawnRequests: Parameters<ExecutionKernelPort["spawn"]>[0][] } {
+function fakeKernel(finalStatus: InvocationObservation["status"] = "succeeded"): ExecutionKernelPort & { spawnedCount: number; cancelledInvocations: string[]; releasedInvocations: string[]; messages: { execution: string; invocation: string; message: string }[]; spawnRequests: Parameters<ExecutionKernelPort["spawn"]>[0][] } {
   let counter = 0;
   const invocations = new Map<string, { execution: string; name: string }>();
   return {
     spawnedCount: 0,
     cancelledInvocations: [],
     releasedInvocations: [],
+    messages: [],
     spawnRequests: [],
     async spawn(request) {
       counter += 1;
@@ -74,7 +75,7 @@ function fakeKernel(finalStatus: InvocationObservation["status"] = "succeeded"):
         answer: finalStatus === "succeeded" ? { state: "available", text: "done" } : { state: "unavailable", reason: "snapshot-unavailable" },
       }));
     },
-    async sendMessage() { /* no-op */ },
+    async sendMessage(execution, invocation, message) { (this as { messages: { execution: string; invocation: string; message: string }[] }).messages.push({ execution: execution as unknown as string, invocation: invocation as unknown as string, message }); },
     async cancel(invocation) { (this as { cancelledInvocations: string[] }).cancelledInvocations.push(invocation as unknown as string); return { cancelled: true }; },
     async getModelIdentity() { return { provider: "test", id: "model-a" }; },
     async getExecutionBinding() { return { model: { provider: "test", id: "model-a" }, accountRef: "test-account", gatewayInstanceId: "gateway-test", gatewayBindingId: "binding-test", dataPolicyHash: "policy-test" }; },
@@ -150,6 +151,27 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     expect(observed.usageTotalTokens).toBe(42);
     const reobserved = await observeWorker(pool, kernel, worker.workerId, proof, headContext("product"));
     expect(reobserved).toEqual(observed);
+  });
+
+  it("delivers a repair message to the worker's bound execution and invocation", async () => {
+    const { council, plan, proof } = await setupBundle();
+    const kernel = fakeKernel("running");
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    await expect(sendWorkerMessageUnderOwnerClaim(pool, kernel, worker.workerId, "repair the defect", proof)).resolves.toBe(true);
+    expect(kernel.messages).toEqual([{ execution: "exec-1", invocation: "inv-1", message: "repair the defect" }]);
+  });
+
+  it("rejects a terminal or unknown worker follow-up without calling the kernel", async () => {
+    const { council, plan, proof } = await setupBundle();
+    const kernel = fakeKernel("succeeded");
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    await observeWorker(pool, kernel, worker.workerId, proof, headContext("product"));
+    await expect(sendWorkerMessageUnderOwnerClaim(pool, kernel, worker.workerId, "must not run", proof)).resolves.toBe(false);
+    await expect(sendWorkerMessageUnderOwnerClaim(pool, kernel, randomUUID(), "must not run", proof)).rejects.toBeInstanceOf(WorkerNotFoundError);
+    const cancelledWorker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    await cancelWorker(pool, kernel, cancelledWorker.workerId, proof, headContext("product"));
+    await expect(sendWorkerMessageUnderOwnerClaim(pool, kernel, cancelledWorker.workerId, "must not run", proof)).resolves.toBe(false);
+    expect(kernel.messages).toHaveLength(0);
   });
 
   it("records a pending worker identity before provider spawn", async () => {

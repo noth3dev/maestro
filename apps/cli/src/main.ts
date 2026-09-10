@@ -52,6 +52,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
         "conversation-id": { type: "string" },
         model: { type: "string" },
         text: { type: "string" },
+        message: { type: "string" },
         "command-id": { type: "string" },
         "contract-id": { type: "string" },
         "substance-json": { type: "string" },
@@ -300,6 +301,11 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       printState(io.stdout, result, json);
       return 0;
     }
+    if (resource === "git" && action === "worker-advance") {
+      const result = await client.advanceWorkerIntegration(string("worker-id"), { projectId: string("project-id"), message: string("message"), evidenceReferences: parseJsonOption(string("evidence-references"), "--evidence-references") }, string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
     if (resource === "git" && action === "goal-revision") {
       const result = await client.freezeGoalIntegrationRevision(string("goal-id"), { projectId: string("project-id") }, string("command-id"));
       printState(io.stdout, result, json);
@@ -322,6 +328,11 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     }
     if (resource === "worker" && action === "spawn") {
       const result = await client.spawnWorker(string("council-id"), string("department-id"), parseJsonOption(string("worker-json"), "--worker-json"), string("command-id"));
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "worker" && action === "message") {
+      const result = await client.sendWorkerMessage(string("worker-id"), { projectId: string("project-id"), message: string("message") }, string("command-id"));
       printState(io.stdout, result, json);
       return 0;
     }
@@ -436,7 +447,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       else printEvents(io.stdout, page.events, page.nextCursor);
       return 0;
     }
-    throw new Error("Usage: maestro login openai|anthropic|logout openai|anthropic|models list|conversation create|get|turn|cancel|admin project-access|goals list|goal create|get|transition|pause|stop|resume|emergency-stop|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|observe|cancel|accept|certify|certify-conditional|git goal-branch|git department-branch|worker-worktree|goal-revision|metronome scan|challenge|encore review|critical-action request|approve-and-run|evidence dump|budget ... | maestro events list ...");
+    throw new Error("Usage: maestro login openai|anthropic|logout openai|anthropic|models list|goal create|get|transition|pause|stop|resume|emergency-stop|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|message|observe|cancel|accept|certify|certify-conditional|git goal-branch|department-branch|worker-worktree|worker-advance|goal-revision|metronome scan|challenge|encore review|critical-action request|approve-and-run|evidence dump|budget ... | maestro events list ...");
   } catch (error) {
     const message = error instanceof ApiError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : "Command failed";
     io.stderr(`${message}\n`);

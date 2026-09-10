@@ -85,6 +85,9 @@ import {
   WorkerSchema,
   WorkerObservationSchema,
   WorkerActionInputSchema,
+  WorkerMessageInputSchema,
+  WorkerIntegrationInputSchema,
+  IntegrationCommitSchema,
   GoalIntegrationBranchInputSchema,
   GoalIntegrationBranchSchema,
   GoalIntegrationRevisionSchema,
@@ -158,7 +161,7 @@ export type { HeadParticipationService } from "./head-participation-service.js";
 export type { CouncilService } from "./council-service.js";
 import { DepartmentPlanProjectMismatchError, type DepartmentPlanService } from "./department-plan-service.js";
 import { MissionBundleProjectMismatchError, type MissionBundleService } from "./mission-bundle-service.js";
-import { WorkerProjectMismatchError, WorkerCapacityExceededError, type WorkerService } from "./worker-service.js";
+import { WorkerMessageRejectedError, WorkerProjectMismatchError, WorkerCapacityExceededError, type WorkerService } from "./worker-service.js";
 import { ConversationConflictError, ConversationModelNotAllowedError, ConversationNotFoundError, ConversationUnavailableError, type ConversationService } from "./conversation-service.js";
 import { ModelGatewayClientError } from "./model-gateway-client.js";
 import { WorkerError, WorkerNotFoundError } from "@maestro/persistence";
@@ -353,12 +356,14 @@ export function buildServer({ goalService, authenticator, eventService, critical
     spawn: async () => { throw new DurableStoreUnavailableError(); },
     get: async () => { throw new DurableStoreUnavailableError(); },
     observe: async () => { throw new DurableStoreUnavailableError(); },
+    sendMessage: async () => { throw new DurableStoreUnavailableError(); },
     cancel: async () => { throw new DurableStoreUnavailableError(); },
   } satisfies WorkerService;
   const gitIntegrations = gitIntegrationService ?? {
     createGoalBranch: async () => { throw new DurableStoreUnavailableError(); },
     createDepartmentBranch: async () => { throw new DurableStoreUnavailableError(); },
     createWorkerWorktree: async () => { throw new DurableStoreUnavailableError(); },
+    advanceWorker: async () => { throw new DurableStoreUnavailableError(); },
     freezeGoalRevision: async () => { throw new DurableStoreUnavailableError(); },
   } satisfies GitIntegrationService;
   const certifications = certificationService ?? {
@@ -707,6 +712,14 @@ export function buildServer({ goalService, authenticator, eventService, critical
     return reply.status(200).send(WorkerObservationSchema.parse(worker));
   });
 
+  app.post("/v1/workers/:workerId/messages", async (request, reply) => {
+    const workerId = parse(UuidSchema, (request.params as { workerId?: unknown }).workerId);
+    const input = parse(WorkerMessageInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const worker = await workers.sendMessage(workerId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(WorkerSchema.parse(worker));
+  });
+
   app.post("/v1/workers/:workerId/cancel", async (request, reply) => {
     const workerId = parse(UuidSchema, (request.params as { workerId?: unknown }).workerId);
     const input = parse(WorkerActionInputSchema, request.body);
@@ -831,6 +844,14 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
     const result = await gitIntegrations.createWorkerWorktree(workerId, input, operatorId, commandId);
     return reply.status(201).send(WorkerWorktreeSchema.parse(result));
+  });
+
+  app.post("/v1/workers/:workerId/git/advance", async (request, reply) => {
+    const workerId = parse(UuidSchema, (request.params as { workerId?: unknown }).workerId);
+    const input = parse(WorkerIntegrationInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const result = await gitIntegrations.advanceWorker(workerId, input, requestOperator(request as { operator?: OperatorContext }).operatorId, commandId);
+    return reply.status(201).send(IntegrationCommitSchema.parse(result));
   });
 
   app.post("/v1/goals/:goalId/transitions", async (request, reply) => {
@@ -1293,6 +1314,7 @@ function mapError(error: unknown): { status: number; body: StableApiError } {
   if (error instanceof MissionBundleError) return apiError(409, "mission_bundle_conflict", error.message);
   if (error instanceof WorkerProjectMismatchError) return apiError(400, "validation_error", error.message);
   if (error instanceof WorkerCapacityExceededError) return apiError(429, "worker_capacity_exceeded", error.message);
+  if (error instanceof WorkerMessageRejectedError) return apiError(409, "worker_message_rejected", error.message);
   if (error instanceof WorkerNotFoundError) return apiError(404, "worker_not_found", error.message);
   if (error instanceof WorkerError) return apiError(409, "worker_conflict", error.message);
   if (error instanceof GitProjectMismatchError) return apiError(400, "validation_error", error.message);

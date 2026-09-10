@@ -45,6 +45,9 @@ import {
   WorkerSchema,
   WorkerObservationSchema,
   WorkerActionInputSchema,
+  WorkerMessageInputSchema,
+  WorkerIntegrationInputSchema,
+  IntegrationCommitSchema,
   GoalIntegrationBranchInputSchema,
   GoalIntegrationBranchSchema,
   GoalIntegrationRevisionSchema,
@@ -121,6 +124,9 @@ import {
   type Worker,
   type WorkerObservation,
   type WorkerActionInput,
+  type WorkerMessageInput,
+  type WorkerIntegrationInput,
+  type IntegrationCommit,
   type GoalIntegrationBranchInput,
   type GoalIntegrationBranch,
   type GoalIntegrationRevision,
@@ -206,11 +212,13 @@ export interface ApiClient {
   spawnWorker(councilId: string, departmentId: string, input: SpawnWorkerInput, commandId: string): Promise<Worker>;
   getWorker(workerId: string, projectId: string): Promise<Worker>;
   observeWorker(workerId: string, input: WorkerActionInput, commandId: string): Promise<WorkerObservation>;
+  sendWorkerMessage(workerId: string, input: WorkerMessageInput, commandId: string): Promise<Worker>;
   cancelWorker(workerId: string, input: WorkerActionInput, commandId: string): Promise<Worker>;
   createGoalIntegrationBranch(goalId: string, input: GoalIntegrationBranchInput, commandId: string): Promise<GoalIntegrationBranch>;
   freezeGoalIntegrationRevision(goalId: string, input: DepartmentBranchInput, commandId: string): Promise<GoalIntegrationRevision>;
   createDepartmentBranch(councilId: string, departmentId: string, input: DepartmentBranchInput, commandId: string): Promise<DepartmentBranch>;
   createWorkerWorktree(workerId: string, input: WorkerWorktreeInput, commandId: string): Promise<WorkerWorktree>;
+  advanceWorkerIntegration(workerId: string, input: WorkerIntegrationInput, commandId: string): Promise<IntegrationCommit>;
   acceptWorker(workerId: string, input: AcceptWorkerInput, commandId: string): Promise<DepartmentAcceptance>;
   certifyWorker(workerId: string, input: CertifyWorkerInput, commandId: string): Promise<Certification>;
   certifyConditionalWorker(workerId: string, kind: "security" | "safety_compliance", input: CertifyWorkerInput, commandId: string): Promise<Certification>;
@@ -603,6 +611,11 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
         body: JSON.stringify(WorkerActionInputSchema.parse(input)),
       }, WorkerObservationSchema);
     },
+    sendWorkerMessage(workerId, input, commandId) {
+      return request(`v1/workers/${encodeURIComponent(UuidSchema.parse(workerId))}/messages`, {
+        method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) }, body: JSON.stringify(WorkerMessageInputSchema.parse(input)),
+      }, WorkerSchema);
+    },
     cancelWorker(workerId, input, commandId) {
       return request(`v1/workers/${encodeURIComponent(UuidSchema.parse(workerId))}/cancel`, {
         method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
@@ -629,6 +642,11 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
       return request(`v1/workers/${encodeURIComponent(UuidSchema.parse(workerId))}/git/worktree`, {
         method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) }, body: JSON.stringify(WorkerWorktreeInputSchema.parse(input)),
       }, WorkerWorktreeSchema);
+    },
+    advanceWorkerIntegration(workerId, input, commandId) {
+      return request(`v1/workers/${encodeURIComponent(UuidSchema.parse(workerId))}/git/advance`, {
+        method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) }, body: JSON.stringify(WorkerIntegrationInputSchema.parse(input)),
+      }, IntegrationCommitSchema);
     },
     acceptWorker(workerId, input, commandId) {
       return request(`v1/workers/${encodeURIComponent(UuidSchema.parse(workerId))}/accept`, {
