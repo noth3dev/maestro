@@ -3847,3 +3847,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 Plan 3 S4 review follow-up: independent review found certification input `testEvidenceIds: ["target-test"]` has no corresponding durable `evidence_records` creation or public CLI step in the runbook, so both certification commands would fail even after worker and integration prerequisites were fixed.
 
 - 2026-09-10 Plan 3 S4 review follow-up: the live runbook creates `$WORKER_WORKTREE` but continues to test `$TARGET` and asks repair against `$TARGET`; without a branch advance/merge, worker changes cannot make the target test green.
+
+- 2026-09-10 Plan 3 S4 final exit assessment: fixture assets and fake process checks exist, but Exit evidence is not met. The live runbook is not executable against the real WorkerService/API, and the evidence dump is unreachable because acceptance, certification, and integration revision prerequisites fail.

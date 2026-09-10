@@ -1771,3 +1771,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 Plan 3 S4 additional deterministic blocker: `write-input.mjs` hardcodes `target-test`, but certification lineage validates every test evidence ID against durable `evidence_records`; the runbook never creates such a record. This is separate from the missing worker worktree, repair, and integration-commit surfaces.
 
 - 2026-09-10 Plan 3 S4 additional live-path blocker: `git worker-worktree` creates a separate worktree, while Steps 9/10 run tests and request repair in `$TARGET`. The runbook has no worker-worktree-to-Goal branch advance/merge, so the authorized worker change cannot reach the tested target.
+
+- 2026-09-10 Plan 3 S4 final review conclusion: string-based `runbook.test.ts` and fake HTTP process tests do not prove real WorkerService/API/PostgreSQL/provider execution. Treat S4 as blocked; do not merge, push, hand off, or begin S5.
