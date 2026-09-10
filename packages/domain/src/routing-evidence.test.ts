@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MODEL_CAPABILITY_AXES } from "./model-profile.js";
 import {
   ROUTING_EVIDENCE_SCHEMA_VERSION,
   RoutingEvidenceValidationError,
@@ -24,9 +25,19 @@ const evidence = (): RoutingEvidence => ({
   admissionBindingRef: "binding-1",
   rationale: "selected after hard filters and matching",
   createdAt: "2026-09-08T12:00:00Z",
+  taskKindRecipeVersions: { coding: 1 },
+  taskDemand: { schemaVersion: 1, taskKinds: ["coding"], requirements: Object.fromEntries(MODEL_CAPABILITY_AXES.map((axis) => [axis, { level: 80, rationale: "Head requirement" }])), provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" } },
+  workCharacter: { schemaVersion: 1, risk: 40, reversibility: 120, verificationAttachment: 80, materialScale: 20, timePressure: 30, budgetHeadroom: 150, provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" } },
+  modelProfile: { modelRef: "provider/model", capability: { schemaVersion: 2, axes: Object.fromEntries(MODEL_CAPABILITY_AXES.map((axis) => [axis, { status: "scored", score: 180, rationale: "review", evidence: ["review-1"] }])) }, providerFacts: { schemaVersion: 1, contextCapacity: 128000, pricing: { inputPerMillionTokens: 1, outputPerMillionTokens: 2 }, authentication: { modes: ["api-key"] }, dataPolicy: { allowedDataClasses: ["public"], retention: "transient", trainingUse: "never", regions: ["us"] }, modalities: ["text"], toolCalls: { supported: true }, provenance: { source: "docs", observedAt: "2026-09-08" } }, provenance: { owner: "human", sourceRefs: ["review-1"], reviewedAt: "2026-09-08" } },
+  operationalOverlaySnapshot: { schemaVersion: 1, installationRef: "installation-1", projectRef: "project-1", goalRef: "goal-1", overlayVersion: 2, observations: [{ candidateRef: "candidate-1", measuredLatencyMs: 10, measuredCost: 1, failureRate: 0, timeoutRate: 0, providerErrorRate: 0, currentAvailability: true, accountBinding: "account-1", observedAt: "2026-09-08T12:00:00Z" }] },
+  approvalRef: null,
 });
 describe("routing evidence boundary", () => {
   it("accepts a complete selection record", () => expect(() => assertValidRoutingEvidence(evidence())).not.toThrow());
+  it("requires immutable routing inputs used for certification", () => {
+    const incomplete = { ...evidence() }; delete (incomplete as Record<string, unknown>).taskDemand;
+    expect(() => assertValidRoutingEvidence(incomplete)).toThrow(RoutingEvidenceValidationError);
+  });
   it("rejects identity, authority, and hash boundary violations", () => {
     expect(() => assertValidRoutingEvidence({ ...evidence(), selectedModelRef: "model" })).toThrow(RoutingEvidenceValidationError);
     expect(() => assertValidRoutingEvidence({ ...evidence(), taskDemandHash: "bad" })).toThrow(RoutingEvidenceValidationError);

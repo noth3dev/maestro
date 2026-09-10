@@ -1,4 +1,8 @@
 import { classifyPressureBand } from "./pressure-band.js";
+import { assertValidTaskDemand, type TaskDemand } from "./task-demand.js";
+import { assertValidWorkCharacter, type WorkCharacter } from "./work-character.js";
+import { assertValidModelMap, type ModelMapEntry } from "./model-map.js";
+import { assertValidOperationalOverlaySnapshot, type OperationalOverlaySnapshot } from "./operational-overlay.js";
 
 export const ROUTING_EVIDENCE_SCHEMA_VERSION = 1 as const;
 export const ROUTING_MODES = Object.freeze(["ensemble", "pin"] as const);
@@ -30,6 +34,12 @@ export interface RoutingEvidence {
   readonly admissionBindingRef: string;
   readonly rationale: string;
   readonly createdAt: string;
+  readonly taskKindRecipeVersions: Readonly<Record<string, number>>;
+  readonly taskDemand: TaskDemand;
+  readonly workCharacter: WorkCharacter;
+  readonly modelProfile: ModelMapEntry;
+  readonly operationalOverlaySnapshot: OperationalOverlaySnapshot;
+  readonly approvalRef: string | null;
 }
 
 export class RoutingEvidenceValidationError extends Error {
@@ -125,6 +135,23 @@ function modelRef(value: unknown): asserts value is string {
     throw new RoutingEvidenceValidationError("selectedModelRef must be provider-qualified");
 }
 
+function recipeVersions(value: unknown, taskKinds: readonly string[]): asserts value is Readonly<Record<string, number>> {
+  object(value, "taskKindRecipeVersions");
+  const keys = Reflect.ownKeys(value);
+  if (keys.length !== taskKinds.length || taskKinds.some((kind) => !Object.hasOwn(value, kind)))
+    throw new RoutingEvidenceValidationError("taskKindRecipeVersions must cover exactly the declared task kinds");
+  for (const key of keys) {
+    if (typeof key !== "string" || !taskKinds.includes(key)) throw new RoutingEvidenceValidationError("taskKindRecipeVersions contains an undeclared task kind");
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor?.enumerable || !("value" in descriptor) || typeof descriptor.value !== "number" || !Number.isSafeInteger(descriptor.value) || descriptor.value < 1)
+      throw new RoutingEvidenceValidationError(`taskKindRecipeVersions.${key} must be a positive version`);
+  }
+}
+function modelProfile(value: unknown, selectedModelRef: string): asserts value is ModelMapEntry {
+  try { assertValidModelMap({ schemaVersion: 1, entries: [value] }); } catch { throw new RoutingEvidenceValidationError("modelProfile is invalid"); }
+  if ((value as ModelMapEntry).modelRef !== selectedModelRef) throw new RoutingEvidenceValidationError("modelProfile.modelRef must match selectedModelRef");
+}
+
 export function assertValidRoutingEvidence(value: unknown): asserts value is RoutingEvidence {
   const record = own(
     value,
@@ -147,6 +174,12 @@ export function assertValidRoutingEvidence(value: unknown): asserts value is Rou
       "admissionBindingRef",
       "rationale",
       "createdAt",
+      "taskKindRecipeVersions",
+      "taskDemand",
+      "workCharacter",
+      "modelProfile",
+      "operationalOverlaySnapshot",
+      "approvalRef",
     ],
     "Routing evidence",
   );
@@ -171,6 +204,12 @@ export function assertValidRoutingEvidence(value: unknown): asserts value is Rou
       "admissionBindingRef",
       "rationale",
       "createdAt",
+      "taskKindRecipeVersions",
+      "taskDemand",
+      "workCharacter",
+      "modelProfile",
+      "operationalOverlaySnapshot",
+      "approvalRef",
     ],
     "Routing evidence",
   );
@@ -206,4 +245,14 @@ export function assertValidRoutingEvidence(value: unknown): asserts value is Rou
   )
     throw new RoutingEvidenceValidationError("Routing evidence overlayVersion is invalid");
   timestamp(record.createdAt, "Routing evidence createdAt");
+  try { assertValidTaskDemand(record.taskDemand); } catch { throw new RoutingEvidenceValidationError("Routing evidence taskDemand is invalid"); }
+  const taskDemand = record.taskDemand as TaskDemand;
+  recipeVersions(record.taskKindRecipeVersions, taskDemand.taskKinds);
+  try { assertValidWorkCharacter(record.workCharacter); } catch { throw new RoutingEvidenceValidationError("Routing evidence workCharacter is invalid"); }
+  modelProfile(record.modelProfile, record.selectedModelRef);
+  try { assertValidOperationalOverlaySnapshot(record.operationalOverlaySnapshot); } catch { throw new RoutingEvidenceValidationError("Routing evidence operationalOverlaySnapshot is invalid"); }
+  const overlay = record.operationalOverlaySnapshot as OperationalOverlaySnapshot;
+  if (overlay.goalRef !== record.goalRef || overlay.projectRef !== record.projectRef || overlay.overlayVersion !== record.overlayVersion)
+    throw new RoutingEvidenceValidationError("Routing evidence operational overlay identity does not match route");
+  if (record.approvalRef !== null) ref(record.approvalRef, "approvalRef");
 }
