@@ -688,6 +688,7 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     await createCapabilityApproval(pool, {
       approvalId, capabilityKind: "ipython", projectId, goalId, commandId: randomUUID(), action: "project.file.edit", target: "/workspace/a.txt",
       policyVersion: 1, controlEpoch: "1", budgetEffectCents: 10, tier: "Department Head", approverId: "head-product", decision: "approved",
+      reason: "The worker action is required by the approved plan.", consequence: "The action remains limited to the Goal-bound target.",
       expiresAt: new Date("2030-01-01T00:00:00Z"), repetitionScope: { kind: "bounded_count", count: 1 },
     });
     await consumeCapabilityApproval(pool, {

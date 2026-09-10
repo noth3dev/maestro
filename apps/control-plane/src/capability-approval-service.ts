@@ -193,6 +193,8 @@ export function createCapabilityApprovalService(deps: CapabilityApprovalServiceD
       tier,
       approverId: actor.actorId,
       decision,
+      reason: request.reason,
+      consequence: request.consequence,
       ...(saferAlternative === undefined ? {} : { saferAlternative }),
       expiresAt: request.expiresAt,
       repetitionScope: request.repetitionScope,
