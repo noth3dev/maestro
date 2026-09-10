@@ -140,6 +140,13 @@ describeDatabase("Encore Council with PostgreSQL", () => {
     expect((await pool.query("SELECT model_provider, model_id FROM encore_council_judgments WHERE round_id = $1 ORDER BY reviewer_index", [result.roundId])).rows).toEqual([{ model_provider: "test", model_id: "kimi" }, { model_provider: "openai", model_id: "gpt" }]);
   });
 
+  it("fails closed when a reviewer has no durable native identity evidence", async () => {
+    const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
+    const kernel = fakeKernelWithVerdicts([{ provider: "test", id: "kimi", text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceId] }) }]);
+    await expect(runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "should we proceed?", criteria, evidenceIds: [evidenceId], reviewerCount: 1 })).rejects.toThrow("durable native identity evidence");
+    expect((await pool.query("SELECT count(*)::int AS count FROM encore_council_rounds WHERE goal_id = $1", [goalId])).rows[0]!.count).toBe(0);
+  });
+
   it("replays a completed review by command identity without spawning reviewers again", async () => {
     const { goalId, evidenceId, proof } = await setupGoalWithEvidence();
     const kernel = fakeKernelWithVerdicts([
