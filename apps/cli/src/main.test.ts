@@ -293,3 +293,19 @@ describe("native conversation commands", () => {
     expect(stderr.lines).toEqual([]);
   });
 });
+
+describe("release capability commands", () => {
+  it("selects full-access mode and captures evidence through the CLI", async () => {
+    const session = { sessionId: goalId, capabilityKind: "ipython", projectId, goalId, fullAccessMode: "skip_intermediate_approvals", selectedBy: "operator-1", selectedAt: "2025-01-01T00:00:00.000Z" };
+    const evidence = { evidenceId: "44444444-4444-4444-8444-444444444444", context: { correlationId: commandId, commandId, projectId, goalId, actorId: "operator-1" }, sha256: "a".repeat(64), byteLength: 4, kind: "test-result", mediaType: "text/plain", createdAt: "2025-01-01T00:00:00.000Z", retention: "project_lifetime" };
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(session), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(evidence), { status: 200 }));
+    const stdout = output(); const stderr = output();
+    await expect(executeCli(["capability", "select-full-access-mode", "--goal-id", goalId, "--project-id", projectId, "--capability-kind", "ipython", "--session-id", goalId, "--full-access-mode", "skip_intermediate_approvals", "--json"], env, { fetch, stdout: stdout.write, stderr: stderr.write })).resolves.toBe(0);
+    await expect(executeCli(["evidence", "capture", "--goal-id", goalId, "--project-id", projectId, "--correlation-id", commandId, "--command-id", commandId, "--kind", "test-result", "--media-type", "text/plain", "--content-base64", Buffer.from("test").toString("base64"), "--json"], env, { fetch, stdout: stdout.write, stderr: stderr.write })).resolves.toBe(0);
+    expect(JSON.parse(stdout.lines[0]!)).toEqual(session);
+    expect(JSON.parse(stdout.lines[1]!)).toEqual(evidence);
+    expect(stderr.lines).toEqual([]);
+  });
+});
