@@ -37,7 +37,7 @@ const server = createServer(async (request, response) => {
       const output = await execFile("git", ["-C", target, "rev-parse", "HEAD"]);
       result = { exitCode: 0, revision: output.stdout.trim() };
     } else if (input.operation === "mode") {
-      if (!["full-access-read", "full-access-write"].includes(input.mode)) throw new Error("unsupported provider mode");
+      if (!["retain_intermediate_approvals", "skip_intermediate_approvals"].includes(input.mode)) throw new Error("unsupported provider mode");
       state.mode = input.mode;
       state.modeChanges = [...(state.modeChanges ?? []), input.mode];
       result = { exitCode: 0, mode: state.mode };

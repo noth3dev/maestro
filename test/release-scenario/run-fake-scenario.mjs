@@ -37,7 +37,7 @@ try {
     await waitReady(controlUrl);
     controlHealth = await (await fetch(`${controlUrl}/health`)).json();
   }
-  const result = await post(`${controlUrl}/command`, { step, target: realTarget, modes: ["full-access-read", "full-access-write"] });
+  const result = await post(`${controlUrl}/command`, { step, target: realTarget, modes: ["retain_intermediate_approvals", "skip_intermediate_approvals"] });
   if (step === 14) {
     const evidenceResponse = await fetch(`${controlUrl}/evidence`);
     const evidence = await evidenceResponse.json();

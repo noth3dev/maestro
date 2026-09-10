@@ -29,14 +29,14 @@ describe("release scenario fake-provider harness", () => {
       expect(certified?.revision).toBe(result.events.find(({ name }) => name === "quality_certified")?.integratedRevision);
       expect(result.events.find(({ name }) => name === "restart_reconciled")?.duplicateWrites).toBe(0);
       expect(result.events.find(({ name }) => name === "forbidden_effect")?.modeResults).toEqual([
-        { mode: "full-access-read", status: "blocked", networkInvoked: false },
-        { mode: "full-access-write", status: "blocked", networkInvoked: false },
+        { mode: "retain_intermediate_approvals", status: "blocked", networkInvoked: false },
+        { mode: "skip_intermediate_approvals", status: "blocked", networkInvoked: false },
       ]);
       expect(result.lastEvidence.bundle.bundleId).toBe(result.lastEvidence.report.evidenceBundleId);
       expect(result.lastEvidence.bundle.goalId).toBe(result.lastEvidence.report.goalId);
       expect(result.lastEvidence.bundle.content.provider.calls.length).toBeGreaterThan(0);
       expect(result.lastEvidence.bundle.content.provider.remoteAttempts.length).toBeGreaterThan(0);
-      expect(result.lastEvidence.bundle.content.provider.modeChanges).toEqual(["full-access-read", "full-access-write"]);
+      expect(result.lastEvidence.bundle.content.provider.modeChanges).toEqual(["retain_intermediate_approvals", "skip_intermediate_approvals"]);
     } finally {
       await rm(worktreeRoot, { recursive: true, force: true });
     }
