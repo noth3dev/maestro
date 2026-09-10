@@ -8,36 +8,22 @@ import { createReleaseScenarioFixture } from "./fixture.mjs";
 
 const execFile = promisify(execFileCallback);
 
-async function runTargetTest(root: string): Promise<number> {
-  try {
-    await execFile("npm", ["test", "--prefix", root]);
-    return 0;
-  } catch (error) {
-    return (error as { code?: number }).code ?? 1;
-  }
-}
-
 describe("release scenario fake-provider harness", () => {
-  it("runs the disposable defect/repair path without a provider or remote", async () => {
-    const root = await mkdtemp(join(tmpdir(), "maestro-release-scenario-fake-provider-"));
+  it("runs all fourteen steps through a fake provider without a remote", async () => {
+    const worktreeRoot = await mkdtemp(join(tmpdir(), "maestro-release-scenario-fake-provider-"));
+    const root = join(worktreeRoot, "target");
+    const state = join(worktreeRoot, "fake-state.json");
     try {
-      const fixture = await createReleaseScenarioFixture({ root });
-      const calls: string[] = [];
-      const fakeProvider = {
-        async repair(target: string) {
-          calls.push(target);
-          await execFile("node", [join(target, "scripts", "repair-seeded-defect.mjs")]);
-        },
-      };
-
-      await expect(runTargetTest(root)).resolves.toBeGreaterThan(0);
-      await fakeProvider.repair(root);
-      await expect(runTargetTest(root)).resolves.toBe(0);
-      const pushAttempt = JSON.parse(await readFile(fixture.remotePushAttempt, "utf8")) as { networkInvoked: boolean };
-      expect(calls).toEqual([root]);
-      expect(pushAttempt.networkInvoked).toBe(false);
+      await createReleaseScenarioFixture({ root, worktreeRoot });
+      for (let step = 1; step <= 14; step += 1) {
+        await execFile("node", ["test/release-scenario/run-fake-scenario.mjs", "--step", String(step), "--target", root, "--state", state], { cwd: process.cwd() });
+      }
+      const result = JSON.parse(await readFile(state, "utf8")) as { lastStep: number; provider: string; events: Array<{ name: string }> };
+      expect(result.lastStep).toBe(14);
+      expect(result.provider).toBe("fake");
+      expect(result.events.map(({ name }) => name)).toEqual(["ceo_request", "contract_intake", "launch_confirmed", "necessary_heads", "department_plan", "native_execution", "metronome_observation", "unsupported_assertion", "quality_failed", "quality_certified", "restart_reconciled", "ambiguous_action", "forbidden_effect", "evidence_dump"]);
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await rm(worktreeRoot, { recursive: true, force: true });
     }
   });
 });
