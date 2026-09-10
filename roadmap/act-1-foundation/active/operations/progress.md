@@ -4025,3 +4025,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 S1 review remediation: wired the deployment activation consume gate into the production critical-action composition. `git.remote.push` now consumes the Goal-scoped `deployment` activation before the effect callback; added a regression test and same-Goal cross-kind denial assertions. Build, lint, and targeted gate tests pass (14/14).
 
 - 2026-09-10 S1 final review remediation: added an AuthorizedEffectExecutor pre-claim hook. External deployment/remote-push activation is checked after authority and Goal-control decisions but before durable command claiming, so denied attempts do not consume idempotency claims. Added the regression assertion.
+
+- 2026-09-10 Plan 4 S1 CI remediation: the PostgreSQL CI failure was reproduced as the composition-root authority test receiving 503 after the new deployment gate. Updated the integration fixture to seed a Goal-scoped deployment activation through the shared capability approval ledger before the approved remote-push step.
