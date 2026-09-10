@@ -8,6 +8,7 @@ import {
   type InvocationObservation,
   type InvocationStatus,
   type SpawnedInvocation,
+  type ModelIdentity,
   type EncoreJudgmentSubstance,
   type EncoreSynthesis,
   type EncoreTriggerReason,
@@ -225,6 +226,27 @@ function assertRequestedEncoreEvidence(request: EncoreCouncilRoundRequest, durab
   for (const evidenceId of request.evidenceIds) if (!durableIds.has(evidenceId.trim())) throw new EncoreCouncilError(`Encore Council evidence reference is not durable: ${evidenceId}`);
 }
 
+async function readDurableEncoreReviewerIdentity(
+  client: Pick<PoolClient, "query">,
+  executionRef: string,
+  invocationRef: string,
+  goalId: string,
+  projectId: string,
+): Promise<ModelIdentity> {
+  const binding = await client.query<{ selected_model_provider: string; selected_model_id: string; actual_model_provider: string; actual_model_id: string }>(
+    `SELECT selected_model_provider, selected_model_id, actual_model_provider, actual_model_id
+       FROM native_execution_bindings
+      WHERE execution_ref = $1 AND invocation_ref = $2 AND goal_id = $3 AND project_id = $4 AND admission_kind = 'encore_reviewer'`,
+    [executionRef, invocationRef, goalId, projectId],
+  );
+  if (binding.rowCount !== 1) throw new EncoreCouncilError("Encore reviewer durable native binding is missing or ambiguous");
+  const row = binding.rows[0]!;
+  if (row.selected_model_provider !== row.actual_model_provider || row.selected_model_id !== row.actual_model_id || row.actual_model_provider.trim() === "" || row.actual_model_id.trim() === "") {
+    throw new EncoreCouncilError("Encore reviewer durable native binding identity mismatch");
+  }
+  return { provider: row.actual_model_provider, id: row.actual_model_id };
+}
+
 export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernelPort, request: EncoreCouncilRoundRequest): Promise<EncoreCouncilResult> {
   if (!Number.isSafeInteger(request.reviewerCount) || request.reviewerCount < 1 || request.reviewerCount > MAX_ENCORE_REVIEWERS) {
     throw new EncoreCouncilError(`Encore Council review requires between 1 and ${MAX_ENCORE_REVIEWERS} reviewers`);
@@ -267,6 +289,7 @@ export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernel
   if ("prior" in prepared) return prepared.prior;
 
   const spawnedReviewers: SpawnedInvocation[] = [];
+  const durableReviewerModels = new Map<string, ModelIdentity>();
   const terminalConfirmations = new Map<string, boolean>();
   const judgments: (EncoreJudgmentSubstance & { executionRef: string; invocationRef: string })[] = [];
   try {
@@ -276,7 +299,7 @@ export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernel
       const admission = typeof request.admission === "function" ? request.admission(index) : request.admission;
       const spawned = await kernel.spawn({ name: `encore-review:${randomUUID()}:${index}`, cwd: process.cwd(), ...(admission ?? {}) });
       spawnedReviewers.push(spawned);
-      await recordNativeExecutionBindingIfSupported(pool, kernel, {
+      const bindingRecorded = await recordNativeExecutionBindingIfSupported(pool, kernel, {
         execution: spawned.execution,
         invocation: spawned.invocation,
         goalId: request.goalId,
@@ -284,10 +307,11 @@ export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernel
         admissionKind: "encore_reviewer",
         ...(admission === undefined ? {} : { admission }),
       });
+      if (bindingRecorded) durableReviewerModels.set(String(spawned.execution), await readDurableEncoreReviewerIdentity(pool, String(spawned.execution), String(spawned.invocation), request.goalId, prepared.projectId));
     }
 
     for (const spawned of spawnedReviewers) {
-      const model = await kernel.getModelIdentity(spawned.execution);
+      const model = durableReviewerModels.get(String(spawned.execution)) ?? await kernel.getModelIdentity(spawned.execution);
       let terminal: TerminalObservation;
       let promptError: unknown;
       let promptFailed = false;

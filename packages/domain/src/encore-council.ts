@@ -1,3 +1,5 @@
+import type { ModelIdentity } from "./execution-kernel.js";
+
 export type EncoreTriggerReason =
   | "cross_department_material"
   | "unresolved_metronome_challenge"
@@ -47,6 +49,19 @@ export function assertValidEncoreJudgmentSubstance(value: EncoreJudgmentSubstanc
   text(value.reasoning, "Encore judgment reasoning");
 }
 
+export interface EncoreModelDiversity {
+  readonly reviewerCount: number;
+  readonly distinctModelCount: number;
+  readonly distinctModelRefs: readonly string[];
+  readonly sameModelOnly: boolean;
+}
+
+/** Measure diversity from provider identities observed for each reviewer, never from requested policy. */
+export function measureEncoreModelDiversity(modelIdentities: readonly ModelIdentity[]): EncoreModelDiversity {
+  const distinctModelRefs = [...new Set(modelIdentities.map((identity) => `${identity.provider}/${identity.id}`))];
+  return { reviewerCount: modelIdentities.length, distinctModelCount: distinctModelRefs.length, distinctModelRefs, sameModelOnly: distinctModelRefs.length <= 1 };
+}
+
 export interface EncoreSynthesis {
   readonly finalVerdict: EncoreVerdict;
   readonly sameModelOnly: boolean;
@@ -68,8 +83,8 @@ export interface EncoreSynthesis {
 export function synthesizeEncoreJudgments(judgments: readonly EncoreJudgmentSubstance[]): EncoreSynthesis {
   if (judgments.length === 0) throw new InvalidEncoreJudgmentError("Encore synthesis requires at least one judgment");
   const dissentNotes = judgments.map((judgment) => judgment.dissentNote).filter((note): note is string => note !== null);
-  const distinctModels = new Set(judgments.map((judgment) => `${judgment.modelProvider}/${judgment.modelId}`));
-  const sameModelOnly = distinctModels.size <= 1;
+  const diversity = measureEncoreModelDiversity(judgments.map((judgment) => ({ provider: judgment.modelProvider, id: judgment.modelId })));
+  const sameModelOnly = diversity.sameModelOnly;
   const distinctVerdicts = new Set(judgments.map((judgment) => judgment.verdict));
   const anyEscalateVote = judgments.some((judgment) => judgment.verdict === "escalate");
   const materialDisagreement = distinctVerdicts.size > 1;
