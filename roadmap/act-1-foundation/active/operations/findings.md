@@ -1736,6 +1736,49 @@ All downstream routing documentation must use this contract and must not restore
 
 - 2026-09-10 CI failure `34457086182`: color-enabled Markdown output inserted ANSI sequences between words, making a plain substring assertion fail; default local environment masked it. Test-only ANSI normalization fixes the portability issue without changing runtime rendering. The first fix hit ESLint `no-control-regex`; the constructed regex correction now passes.
 
+- 2026-09-10 Plan 3 S4 `release-scenario-harness` finding: the existing persistence layer already exposes `readEvidenceBundle`, but no project-scoped read route or CLI aggregation existed. The route now validates project ownership before selecting the newest durable bundle and returns the existing stored hash/content without creating new authority. The fixture initializes a local Git repository and never invokes a provider or remote; live acceptance must remain outside CI and be handed to the user with testbed projects #1–#4.
+
+- 2026-09-10 Plan 3 S4 verification finding: no code or test failure remains in the no-PostgreSQL surface. The skipped 63 files / 417 tests are the existing real PostgreSQL gate; no live provider acceptance was attempted.
+
+- 2026-09-10 Plan 3 S4 independent review returned `REVIEW: FAIL`: the runbook steps 1-6, 9, 11, and 13 lacked executable commands and required ID acquisition; the fake provider did not exercise Control Plane/approval/restart boundaries; remote-push and restart artifacts were static claims; the unsupported assertion injector did not use its declared fixture and was not exercised. The slice remains open for remediation.
+
+- 2026-09-10 Plan 3 S4 remediation finding: the first review's static-fixture concerns were addressed without invoking a remote or live provider. The fake scenario now executes the declared defect, assertion, repair, restart, and remote-policy scripts in order, records fourteen step events, and proves blocked remote effects; the live runbook separately provides the real Control Plane restart/CLI path for the user.
+
+- 2026-09-10 Plan 3 S4 remediation verification finding: the full no-DB suite remains green after adding fixture containment, fake fourteen-step execution, runbook input generation, and evidence bundle/report identity checks. PostgreSQL/live-provider acceptance remains intentionally unrun.
+
+- 2026-09-10 Plan 3 S4 second independent review returned `REVIEW: FAIL`: the fake runner still hard-coded events, did not restart a process, did not exercise mode-specific provider calls or evidence reads, and the fixture allowed missing-root/canonical-path escapes. Step 10 also repaired directly in the target instead of through Maestro, and the live restart PID was uninitialized. Remediation now adds separate fake provider and fake Control Plane HTTP child processes, provider-backed fourteen-step execution/evidence, actual child-process restart, mode-specific blocked effects, strict canonical containment, and live runbook process startup/worker integration commands.
+
+- 2026-09-10 Plan 3 S4 process-backed verification finding: no build, lint, focused, or full no-DB failure remains after adding child-process HTTP boundaries and strict path checks. Real PostgreSQL and live provider acceptance remain user-owned and unrun.
+
+- 2026-09-10 Plan 3 S4 third independent review returned `REVIEW: FAIL`: configured root creation remained permissive; restart duplicate effects were reported rather than rejected; provider modes only echoed and remote policy remained a target-local script; evidence assertions trusted synthesized fields; Step 6 could repair before Quality and froze integration revision too early; live restart lacked post-start readiness. Remediation is required before closure.
+
+- 2026-09-10 Plan 3 S4 third-review remediation finding: the fake Control Plane now fails closed on duplicate effect history and the fake provider records/apply modes rather than echoing them. Step 14 validates provider evidence and content hash; Step 10 no longer calls the target repair script in the live runbook. Live PostgreSQL/provider acceptance remains unrun.
+
+- 2026-09-10 Plan 3 S4 third-remediation verification finding: full no-DB remains green after closing root creation, duplicate restart effect, mode enforcement, evidence integrity, and worker repair lineage gaps. PostgreSQL/live-provider acceptance is still intentionally unrun.
+
+- 2026-09-10 Plan 3 S4 fourth-remediation finding: the remaining review concern is the production worker's lack of a public repair/reprompt command; the runbook now records the Maestro conversation repair request and integrates only after the subsequent worker observation. No new production worker API was added because that would exceed S4's declared support scope.
+
+- 2026-09-10 Plan 3 S4 fourth-remediation verification finding: no no-DB regression remains. The live native worker reprompt API is not part of the existing WorkerService surface; the runbook records the existing Maestro conversation request and keeps live acceptance user-owned rather than adding an unplanned production API.
+
+- 2026-09-10 Plan 3 S4 runbook correction finding: the existing public WorkerService still cannot establish a worker cwd/worktree before its initial provider call, has no public worker reprompt operation for Step 10, and `worker accept` requires a recorded integration commit. These are Plan 2 S6/runtime prerequisites, not solvable by a runbook-only edit; S4 remains open and must not be handed off as runnable until that boundary is resolved.
+
+- 2026-09-10 Plan 3 S4 gate remains blocked after correction pass: the runbook can now bind contract/Goal and exercise local port, Git setup, certification failure, and remote-block evidence, but the live worker path still cannot create a target worktree before admission or request the Step 10 repair through an existing public WorkerService operation. Do not merge, hand off, or start S5.
+
+- 2026-09-10 Plan 3 S4 correction finding: Goal creation rejects an unlaunched Task Contract, so creating the Goal before Step 3 launch was itself a deterministic dead end; the runbook now launches first and binds the Goal afterward. Worker runtime blockers remain unchanged.
+
+- 2026-09-10 Plan 3 S4 final blocker set: (1) worker cwd/worktree is established too late and may conflict with derived IPython provisioning; (2) Step 10 conversation turns use the separate tool-free Conversation surface, not the worker; (3) `worker accept` requires an integration_commits row but no public record/commit route exists; (4) generated certifications use engineering instead of quality and Quality certification requires acceptance/frozen revision before the current Step 9; (5) `MAESTRO_API_TOKEN` is not required/set in Prepare; (6) `MAESTRO_ACCESS_MODE` has no production implementation. Fake provider success is insufficient. Do not merge, hand off, or start S5; this needs a separately scoped Phase 2/runtime decision.
+
+- 2026-09-10 Plan 3 S4 additional deterministic blocker: `write-input.mjs` hardcodes `target-test`, but certification lineage validates every test evidence ID against durable `evidence_records`; the runbook never creates such a record. This is separate from the missing worker worktree, repair, and integration-commit surfaces.
+
+- 2026-09-10 Plan 3 S4 additional live-path blocker: `git worker-worktree` creates a separate worktree, while Steps 9/10 run tests and request repair in `$TARGET`. The runbook has no worker-worktree-to-Goal branch advance/merge, so the authorized worker change cannot reach the tested target.
+
+- 2026-09-10 Plan 3 S4 final review conclusion: string-based `runbook.test.ts` and fake HTTP process tests do not prove real WorkerService/API/PostgreSQL/provider execution. Treat S4 as blocked; do not merge, push, hand off, or begin S5.
+
+- 2026-09-10 Plan 3 S4 exact runtime blocker: initial worker admission has neither `$TARGET` nor a repository path in its prompt/request, while production IPython may derive a separate worker worktree. The runbook cannot truthfully claim the initial worker touched only `$TARGET`.
+
+- 2026-09-10 continuation check: S4 remains blocked by the recorded real worker admission/target binding, repair, integration commit, certification evidence, and access-mode gaps; root verification does not change the gate decision.
+
+- 2026-09-10 continuation: S4 remains blocked by missing production WorkerService target binding/repair/integration surfaces. Adding those unplanned runtime APIs inside the release-harness slice would exceed the declared plan scope, so the gate remains open.
 - 2026-09-10 Plan 2 S6b environment blocker: the required PostgreSQL/local-Git lifecycle test is present but all 9 tests in `git-integration.integration.test.ts` were skipped because `MAESTRO_TEST_DATABASE_URL` is unset. `pg_isready` is not installed and Docker is unavailable in this WSL distribution, so the required real PostgreSQL evidence cannot be produced. The implementation is not eligible for merge or for unblocking Plan 3 S4 until that integration suite runs green.
 
 - 2026-09-10 Plan 2 S6b review remediation finding: the first independent review returned `REVIEW: FAIL` because target lifecycle tests bypassed WorkerService, repository identity was not threaded into worktree binding, replay hashing omitted target paths, the exported integration writer accepted arbitrary real SHAs, and the required PostgreSQL lifecycle was skipped. These code gaps were addressed in `89a53f3`, `8b4bec8`, and `0a3a5e3`; the PostgreSQL environment blocker remains unresolved. Do not merge or unblock Plan 3 S4 until a fresh review passes and the 10 Git integration + 38 worker integration tests run against PostgreSQL.
@@ -1770,3 +1813,37 @@ All downstream routing documentation must use this contract and must not restore
 
 
 - 2026-09-10 CI gate resolution: run `34486161844` completed green with no failing job or test. The previous gate blocker is cleared. The remaining blocker is the unfinished Plan 3 S4 exit evidence documented in the active S4 worktree; S5 and live acceptance remain out of scope until S4 closes.
+
+
+- 2026-09-10 S4 finding: the prior runbook used fictional `MAESTRO_ACCESS_MODE=full-access-read/full-access-write` values. Production defines only `CapabilityApprovalService.selectFullAccessMode()` with Goal-scoped session modes `retain_intermediate_approvals` and `skip_intermediate_approvals`, but `buildServer`, the production Control Plane composition, and the CLI expose no route/command that invokes it. The runbook now fails closed and names this as a live Step 13 blocker; the fake harness uses the real mode values only. Do not merge S4 or hand off live acceptance until an authenticated selection surface exists or the production owner explicitly resolves this plan contradiction.
+
+- 2026-09-10 S4 verification finding: no regression appeared in the full no-DB suite after target-bound worker input, repair messaging, guarded integration, and canonical fake modes were updated. This does not replace PostgreSQL/provider evidence; the public `selectFullAccessMode()` surface remains the only known release-gate blocker.
+
+- 2026-09-10 S4 review remediation finding: the fake filenames previously supplied as integration/certification evidence were invalid because production requires UUID evidence records scoped to this Goal. The runbook now requires `INTEGRATION_EVIDENCE_ID` and fails closed with an explicit note that the public CLI has no evidence-capture command. This is an unresolved production-surface blocker, not evidence of a successful live gate.
+
+- 2026-09-10 S4 final verification finding: the latest full no-DB and PostgreSQL runs are green, but green tests do not satisfy the live exit gate. The runbook now correctly fails closed for two production-surface gaps: no authenticated `selectFullAccessMode()` route/command and no public evidence-capture operation to produce Goal-scoped UUID evidence records required by `worker-advance` and passed Quality certification.
+
+- 2026-09-10 S4 unresolved execution blocker: `spawnWorker` awaits the provider prompt, and a normal no-tool native turn can reach `succeeded` before the runbook sends its repair message. `sendWorkerMessageUnderOwnerClaim` rejects `succeeded`, `failed`, `cancelled`, and `unknown`; no production hold, follow-up wait, or requeue operation exists. Therefore the Step 9/10 live repair sequence is not deterministic on the current surface. Do not merge, push, hand off, or start S5 until this lifecycle gap is resolved.
+
+- 2026-09-10 continuation finding: the CI gate is green, but it does not clear S4's live exit gate. `selectFullAccessMode()` still has no authenticated public route/command, evidence capture still has no public operation, and a completed native worker has no deterministic hold/requeue path for the repair message. Per the plan, do not invent a new slice or close S4 on static/fake evidence.
+
+- 2026-09-10 plan-order finding: the S4→S5 transition is still blocked by missing authenticated capability-mode selection, public Goal-scoped evidence capture, and deterministic worker hold/requeue for repair messaging. Starting S5 would violate `execution/plan-3.md` § S5's handoff prerequisite; do not merge, push, or hand off until these gaps are resolved by the appropriate production owner/slice.
+
+- 2026-09-10 continuation gate finding: no production change has resolved the documented S4 blockers since the previous check. The correct action remains to preserve the open S4 gate; starting `phase3-status-sync` would violate the plan's handoff prerequisite.
+
+- 2026-09-10 architectural scope finding: the existing exact slice list has no named slice for the three newly verified S4 production gaps. Implementing them under an invented slice name or silently broadening the S4 harness would violate the execution rules. A plan amendment must name the prerequisite slice and preserve the settled S6b decisions before code changes begin.
+
+
+- 2026-09-10 S4 finding: Goal-scoped evidence cannot be captured before Goal creation, so the runbook must create the contract without an evidence reference, create the Goal, then capture an immutable scenario anchor and export its returned `evidenceId` for later contract-derived inputs. The capability selection surface is now public and authenticated; each canonical mode is selected in a fresh Goal-bound session because capability sessions are immutable. Full no-DB verification is pending.
+
+
+- 2026-09-10 independent S4 review: `REVIEW: FAIL` with P1 evidence capture replay creating a new record for the same command, P1 Step 13 selecting two modes but running only one fixture-only remote-push script that never consumes the selected mode, and P1/P2 unmapped capability/evidence service errors returning 503 instead of stable 400/403/409 responses. P2 strict base64 padding validation is also missing. The worker terminal-before-repair hold/requeue gap remains pre-existing and blocks honest live completion.
+
+
+- 2026-09-10 review follow-up: the only new deployment concern was migration 0082 potentially failing generically if historical duplicate evidence command identities exist. Added an explicit preflight that reports the duplicate group count and instructs operators to reconcile before retrying. This is fail-closed; it does not silently deduplicate immutable evidence. The separate worker hold/requeue lifecycle blocker remains open and prevents S4 live handoff closure.
+
+
+- 2026-09-10 clean-DB full PostgreSQL verification finding: 208/209 files and 1,463/1,464 tests passed; `packages/persistence/src/reconciliation.fencing.property.test.ts` failed once after 8 fast-check cases with `ReconcilerLeaseUnavailableError` while a 1ms lease takeover was expected. The focused three-test reproduction passed immediately, so this is currently classified as a scheduler/timing-sensitive existing test flake, not an S4 remediation failure. Full-suite re-run is required before advancing; no fix is assumed without reproduction.
+
+
+- 2026-09-10 verification resolution: the clean-DB full PostgreSQL rerun passed 209/209 files and 1,464/1,464 tests. The earlier reconciliation property failure was transient under the full-suite scheduler; its focused rerun and full rerun both passed. No S4 remediation test or migration failure remains. S4 is still not closable because live user acceptance is pending and the production worker lifecycle has no deterministic hold/requeue state for Step 9→10.

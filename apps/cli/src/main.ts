@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { openExternalUrl } from "./external-url.js";
 import { ApiError, createApiClient, type GoalEvent, type GoalResult } from "@maestro/api-client";
 import { startInteractiveTui } from "./tui/entry.js";
@@ -73,6 +73,14 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
         "review-json": { type: "string" },
         "finding-ids": { type: "string" },
         "evidence-references": { type: "string" },
+        "capability-kind": { type: "string" },
+        "session-id": { type: "string" },
+        "full-access-mode": { type: "string" },
+        "correlation-id": { type: "string" },
+        kind: { type: "string" },
+        "media-type": { type: "string" },
+        "content-base64": { type: "string" },
+        "content-file": { type: "string" },
         "challenge-id": { type: "string" },
         "correction-request": { type: "string" },
         reason: { type: "string" },
@@ -373,6 +381,13 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       printState(io.stdout, result, json);
       return 0;
     }
+    if (resource === "capability" && action === "select-full-access-mode") {
+      const mode = string("full-access-mode");
+      if (mode !== "retain_intermediate_approvals" && mode !== "skip_intermediate_approvals") throw new Error("--full-access-mode must be retain_intermediate_approvals or skip_intermediate_approvals");
+      const result = await client.selectFullAccessMode(string("goal-id"), { projectId: string("project-id"), capabilityKind: string("capability-kind"), sessionId: string("session-id"), fullAccessMode: mode });
+      printState(io.stdout, result, json);
+      return 0;
+    }
     if (resource === "critical-action" && action === "request") {
       const result = await client.requestCriticalAction(string("goal-id"), {
         projectId: string("project-id"),
@@ -431,13 +446,31 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     if (resource === "encore-council" && action === "list") { const result=await client.listEncoreCouncilRounds(string("goal-id"), { projectId: string("project-id") }); printState(io.stdout,result,json); return 0; }
     if (resource === "certifications" && action === "list") { const result=await client.listCertifications(string("goal-id"), { projectId: string("project-id") }); printState(io.stdout,result,json); return 0; }
     if (resource === "concertmaster-report" && action === "get") { const result=await client.getConcertmasterReport(string("goal-id"), { projectId: string("project-id") }); printState(io.stdout,result,json); return 0; }
+    if (resource === "evidence" && action === "capture") {
+      const contentFile = value("content-file");
+      const contentBase64 = contentFile === undefined ? string("content-base64") : readFileSync(string("content-file")).toString("base64");
+      if (contentFile !== undefined && value("content-base64") !== undefined) throw new Error("Use only one of --content-base64 or --content-file");
+      const result = await client.captureEvidence(string("goal-id"), { projectId: string("project-id"), correlationId: string("correlation-id"), commandId: string("command-id"), kind: string("kind"), mediaType: string("media-type"), contentBase64 });
+      printState(io.stdout, result, json);
+      return 0;
+    }
+    if (resource === "evidence" && action === "dump") {
+      const goalId = string("goal-id");
+      const projectId = string("project-id");
+      const bundle = await client.getEvidenceBundle(goalId, { projectId });
+      const certifications = await client.listCertifications(goalId, { projectId });
+      const report = await client.getConcertmasterReport(goalId, { projectId });
+      if (report.evidenceBundleId !== bundle.bundleId) throw new Error("Evidence bundle/report identity mismatch");
+      printState(io.stdout, { bundle, certifications, report }, json);
+      return 0;
+    }
     if (resource === "events" && action === "list") {
       const page = await client.listEvents({ projectId: string("project-id"), after: value("after") === undefined ? "0" : string("after") });
       if (json) io.stdout(`${JSON.stringify(page)}\n`);
       else printEvents(io.stdout, page.events, page.nextCursor);
       return 0;
     }
-    throw new Error("Usage: maestro login openai|anthropic|logout openai|anthropic|models list|conversation create|get|turn|cancel|admin project-access|goals list|goal create|get|transition|pause|stop|resume|emergency-stop|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|message|observe|cancel|accept|certify|certify-conditional|git goal-branch|department-branch|worker-worktree|worker-advance|goal-revision|metronome scan|challenge|encore review|critical-action request|approve-and-run|budget ... | maestro events list ...");
+    throw new Error("Usage: maestro login openai|anthropic|logout openai|anthropic|models list|goal create|get|transition|pause|stop|resume|emergency-stop|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|message|observe|cancel|accept|certify|certify-conditional|git goal-branch|department-branch|worker-worktree|worker-advance|goal-revision|metronome scan|challenge|encore review|critical-action request|approve-and-run|capability select-full-access-mode|evidence capture|dump|budget ... | maestro events list ...");
   } catch (error) {
     const message = error instanceof ApiError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : "Command failed";
     io.stderr(`${message}\n`);
@@ -446,7 +479,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
 }
 
 function helpText(): string {
-  return `Maestro CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  login openai|anthropic   (reads API key without echoing it)\n  logout openai|anthropic\n  admin project-access --operator-id --project-id --roles-json\n  goal create|get|transition|pause|stop|resume|emergency-stop\n  models list (also: model list)\n  conversation create|get|turn|cancel\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  workers list\n  git goal-branch|department-branch|worker-worktree|goal-revision|status\n  metronome scan|challenge\n  metronome-challenges list\n  encore review\n  encore-council list\n  certifications list\n  concertmaster-report get\n  improvement-digests list\n  critical-action request|approve-and-run\n  events list\n\nUse --json for machine-readable output.\n`;
+  return `Maestro CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  login openai|anthropic   (reads API key without echoing it)\n  logout openai|anthropic\n  admin project-access --operator-id --project-id --roles-json\n  goal create|get|transition|pause|stop|resume|emergency-stop\n  models list (also: model list)\n  conversation create|get|turn|cancel\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  workers list\n  git goal-branch|department-branch|worker-worktree|goal-revision|status\n  metronome scan|challenge\n  metronome-challenges list\n  encore review\n  encore-council list\n  certifications list\n  concertmaster-report get\n  evidence dump\n  improvement-digests list\n  critical-action request|approve-and-run\n  capability select-full-access-mode\n  evidence capture|dump\n  events list\n\nUse --json for machine-readable output.\n`;
 }
 
 function nonNegativeInteger(value: string, option: string): number {

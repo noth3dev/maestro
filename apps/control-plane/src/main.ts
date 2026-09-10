@@ -5,11 +5,14 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import { Pool } from "pg";
 import { AuthorizedEffectExecutor, classifyAction, type ActionRequest } from "@maestro/authority";
 import { createLocalGitPort } from "@maestro/git-adapter";
+import { FileEvidenceStore } from "@maestro/evidence";
 import { classifyHostEffects, type EnvironmentRecord, type ExecutionAdmission, type ExecutionKernelPort, type GitPort } from "@maestro/domain";
 import { createIpPythonSessionManager, createIpPythonTool, createUnavailableIpPythonKernel, reapIpPythonProcessGroup, ToolRegistry, type IpPythonBlockApproval, type IpPythonHostRequest, type IpPythonKernel, type IpPythonSessionBinding, type IpPythonSessionManager, type IpPythonStageBoundary } from "@maestro/agent-runtime";
 import { appendCapabilityJournal, appendIpPythonSessionJournal, assertProjectMembership, consumeCapabilityApprovals, authenticateLocalOperator, bootstrapAuthorityRecord, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, readEnvironment, reconcileIpPythonOrphans, reconcileOnStartup, recordDiscordSignal, recordIpPythonSessionStarted, runMigrations, type IpPythonSessionJournalEntry } from "@maestro/persistence";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
+import { createCapabilityApprovalService } from "./capability-approval-service.js";
+import { createEvidenceCaptureService, EvidenceCaptureGoalBindingError } from "./evidence-capture-service.js";
 import { createDurableGoalService } from "./goal-service.js";
 import { createReadStateService } from "./read-state-service.js";
 import { createDurableTaskContractService } from "./task-contract-service.js";
@@ -661,6 +664,25 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     // a no-op callback. Tests may inject a real observable effect.
     effect: overrides.criticalActionEffect ?? (async () => { throw new Error("No critical-action effect adapter is configured"); }),
   });
+    const capabilityApprovalService = createCapabilityApprovalService({
+    pool,
+    resolveDepartmentHead: async () => undefined,
+    resolveEncoreCouncil: async () => undefined,
+    authorizeActor: async ({ actor, projectId, goalId }) => {
+      if (actor.kind !== "user" || actor.projectId !== projectId || actor.goalId !== goalId || actor.active !== true) return false;
+      await assertProjectMembership(pool, actor.actorId, projectId);
+      const goal = await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId]);
+      return goal.rowCount === 1 && goal.rows[0]!.project_id === projectId;
+    },
+  });
+  const evidenceCaptureService = createEvidenceCaptureService({
+    pool,
+    store: new FileEvidenceStore(config.evidenceDir),
+    assertGoalProjectBinding: async (projectId, goalId) => {
+      const goal = await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId]);
+      if (goal.rowCount !== 1 || goal.rows[0]!.project_id !== projectId) throw new EvidenceCaptureGoalBindingError();
+    },
+  });
   const headParticipationService = createHeadParticipationService({
     pool,
     kernel: executionKernel,
@@ -726,6 +748,8 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       },
     }),
     criticalActionService,
+    capabilityApprovalService,
+    evidenceCaptureService,
     readStateService: createReadStateService(pool),
     taskContractService: createDurableTaskContractService(pool),
     ...(config.discordSignalCredential === undefined ? {} : {

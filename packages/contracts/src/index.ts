@@ -262,6 +262,7 @@ export const StableApiErrorCodeSchema = z.enum([
   "task_contract_not_found", "task_contract_conflict", "task_contract_version_conflict",
   "exact_confirmation_required", "task_contract_integrity_error", "discord_signal_rejected", "worker_capacity_exceeded", "worker_message_rejected",
   "conversation_not_found", "conversation_conflict", "conversation_unavailable", "model_not_allowed", "provider_unavailable", "account_login_session_unknown",
+  "capability_unauthorized", "replay_conflict",
 ]);
 export const StableApiErrorSchema = z.object({
   error: z.object({ code: StableApiErrorCodeSchema, message: z.string().min(1) }).strict(),
@@ -666,6 +667,24 @@ export const WorkerActionInputSchema = z.object({ projectId: UuidSchema }).stric
 export type WorkerActionInput = z.infer<typeof WorkerActionInputSchema>;
 export const WorkerMessageInputSchema = z.object({ projectId: UuidSchema, message: z.string().trim().min(1).max(32_000) }).strict();
 export type WorkerMessageInput = z.infer<typeof WorkerMessageInputSchema>;
+export const FullAccessModeSchema = z.enum(["retain_intermediate_approvals", "skip_intermediate_approvals"]);
+export type FullAccessMode = z.infer<typeof FullAccessModeSchema>;
+export const CapabilitySessionSelectionInputSchema = z.object({
+  projectId: UuidSchema, capabilityKind: z.string().trim().min(1).max(128), sessionId: UuidSchema, fullAccessMode: FullAccessModeSchema,
+}).strict();
+export type CapabilitySessionSelectionInput = z.infer<typeof CapabilitySessionSelectionInputSchema>;
+export const CapabilitySessionSchema = z.object({
+  sessionId: UuidSchema, capabilityKind: z.string().min(1), projectId: UuidSchema, goalId: UuidSchema, fullAccessMode: FullAccessModeSchema, selectedBy: z.string().min(1), selectedAt: z.string().datetime(),
+}).strict();
+export type CapabilitySession = z.infer<typeof CapabilitySessionSchema>;
+export const EvidenceCaptureInputSchema = z.object({
+  projectId: UuidSchema, correlationId: UuidSchema, commandId: UuidSchema, kind: z.string().regex(/^[a-z][a-z0-9._-]{0,127}$/), mediaType: z.string().regex(/^[a-z]+\/[a-z0-9.+-]+(?:;[a-z0-9._-]+=[a-z0-9._-]+)*$/), contentBase64: z.string().min(4).max(4_000_000),
+}).strict();
+export type EvidenceCaptureInput = z.infer<typeof EvidenceCaptureInputSchema>;
+export const EvidenceRecordSchema = z.object({
+  evidenceId: UuidSchema, context: z.object({ correlationId: UuidSchema, commandId: UuidSchema, projectId: UuidSchema, goalId: UuidSchema, actorId: z.string().min(1) }).strict(), sha256: z.string().regex(/^[a-f0-9]{64}$/), byteLength: z.number().int().nonnegative(), kind: z.string().regex(/^[a-z][a-z0-9._-]{0,127}$/), mediaType: z.string().regex(/^[a-z]+\/[a-z0-9.+-]+(?:;[a-z0-9._-]+=[a-z0-9._-]+)*$/), createdAt: z.string().datetime(), retention: z.literal("project_lifetime"),
+}).strict();
+export type EvidenceRecord = z.infer<typeof EvidenceRecordSchema>;
 export const WorkerIntegrationInputSchema = z.object({ projectId: UuidSchema, message: z.string().trim().min(1).max(4_096), evidenceReferences: z.array(z.string().min(1).max(4_096)).max(100).readonly() }).strict();
 export type WorkerIntegrationInput = z.infer<typeof WorkerIntegrationInputSchema>;
 export const GoalIntegrationBranchInputSchema = z.object({ projectId: UuidSchema, repositoryPath: z.string().min(1), branchName: z.string().min(1), baseRevision: z.string().min(1) }).strict();
@@ -751,6 +770,8 @@ export type CertifyWorkerInput = z.infer<typeof CertifyWorkerInputSchema>;
 const ConcertmasterFinalReportSchema = z.object({ reportId: UuidSchema, goalId: UuidSchema, success: z.boolean(), blockers: z.array(z.object({ reason: z.string(), detail: z.string() }).strict()), ceoRequest: z.string(), whatChanged: z.string(), userVisibleBehaviorPassed: z.boolean(), participatingDepartments: z.array(z.string()), keyDecisions: z.array(z.string()), dissent: z.array(z.string()), independentValidation: z.array(z.string()), costCents: z.number().int(), budgetCents: z.number().int(), incidents: z.array(z.string()), knownLimitations: z.array(z.string()), criticalActionAwaitingApproval: z.boolean(), evidenceBundleId: UuidSchema }).strict();
 export { ConcertmasterFinalReportSchema };
 export type ConcertmasterFinalReport = z.infer<typeof ConcertmasterFinalReportSchema>;
+export const EvidenceBundleReadSchema = z.object({ bundleId: UuidSchema, goalId: UuidSchema, content: z.record(z.string(), z.unknown()), hash: z.string().regex(/^[0-9a-f]{64}$/) }).strict();
+export type EvidenceBundleRead = z.infer<typeof EvidenceBundleReadSchema>;
 
 export const ImprovementDigestMetricSchema = z.object({ name: z.string().min(1), value: z.number().finite(), unit: z.string().min(1) }).strict();
 export const ImprovementDigestSourceRefSchema = z.object({

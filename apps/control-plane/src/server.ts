@@ -13,6 +13,8 @@ import {
   DepartmentPlanNotFoundError,
   MissionBundleError,
   MissionBundleNotFoundError,
+  CapabilityApprovalConflictError,
+  EvidenceMetadataConflictError,
 } from "@maestro/persistence";
 import {
   ProjectAccessAdminRequiredError,
@@ -47,6 +49,7 @@ import {
   EncoreCouncilRoundListSchema,
   CertificationListSchema,
   ConcertmasterFinalReportSchema,
+  EvidenceBundleReadSchema,
   GoalGitIntegrationStateSchema,
   WorkerListSchema,
   ImprovementDigestListSchema,
@@ -86,6 +89,10 @@ import {
   WorkerActionInputSchema,
   WorkerMessageInputSchema,
   WorkerIntegrationInputSchema,
+  CapabilitySessionSelectionInputSchema,
+  CapabilitySessionSchema,
+  EvidenceCaptureInputSchema,
+  EvidenceRecordSchema,
   IntegrationCommitSchema,
   GoalIntegrationBranchInputSchema,
   GoalIntegrationBranchSchema,
@@ -158,7 +165,11 @@ export type { CriticalActionService } from "./critical-action-service.js";
 export type { TaskContractService } from "./task-contract-service.js";
 export type { HeadParticipationService } from "./head-participation-service.js";
 export type { CouncilService } from "./council-service.js";
+export type { CapabilityApprovalService } from "./capability-approval-service.js";
+export type { EvidenceCaptureService } from "./evidence-capture-service.js";
 import { DepartmentPlanProjectMismatchError, type DepartmentPlanService } from "./department-plan-service.js";
+import { CapabilityApprovalUnauthorizedError, CapabilityApprovalInvalidRequestError, type CapabilityApprovalService } from "./capability-approval-service.js";
+import { EvidenceCaptureError, EvidenceCaptureGoalBindingError, type EvidenceCaptureService } from "./evidence-capture-service.js";
 import { MissionBundleProjectMismatchError, type MissionBundleService } from "./mission-bundle-service.js";
 import { WorkerMessageRejectedError, WorkerProjectMismatchError, WorkerCapacityExceededError, type WorkerService } from "./worker-service.js";
 import { ConversationConflictError, ConversationModelNotAllowedError, ConversationNotFoundError, ConversationUnavailableError, type ConversationService } from "./conversation-service.js";
@@ -258,11 +269,13 @@ async function waitForAccountLoginStart(store: AccountLoginStore, operatorId: st
   throw new Error("account login start is still in progress");
 }
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, evidenceCaptureService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
   criticalActionService?: CriticalActionService;
+  capabilityApprovalService?: CapabilityApprovalService;
+  evidenceCaptureService?: EvidenceCaptureService;
   pollingScheduler?: PollingScheduler;
   readStateService?: ReadStateService;
   taskContractService?: TaskContractService;
@@ -315,6 +328,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
     listEncoreCouncilRounds: async () => { throw new DurableStoreUnavailableError(); },
     listCertifications: async () => { throw new DurableStoreUnavailableError(); },
     getConcertmasterReport: async () => { throw new DurableStoreUnavailableError(); },
+    getEvidenceBundle: async () => { throw new DurableStoreUnavailableError(); },
     getGitIntegrationState: async () => { throw new DurableStoreUnavailableError(); },
     listWorkersForGoal: async () => { throw new DurableStoreUnavailableError(); },
     listImprovementDigestsForGoal: async () => { throw new DurableStoreUnavailableError(); },
@@ -323,6 +337,12 @@ export function buildServer({ goalService, authenticator, eventService, critical
     performCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
     approveAndPerformCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
   };
+  const capabilityApprovals = capabilityApprovalService ?? {
+    selectFullAccessMode: async () => { throw new DurableStoreUnavailableError(); },
+  } satisfies Pick<CapabilityApprovalService, "selectFullAccessMode">;
+  const evidenceCapture = evidenceCaptureService ?? {
+    capture: async () => { throw new DurableStoreUnavailableError(); },
+  } satisfies EvidenceCaptureService;
   const taskContracts = taskContractService ?? {
     createTaskContract: async () => { throw new DurableStoreUnavailableError(); },
     getTaskContract: async () => { throw new DurableStoreUnavailableError(); },
@@ -429,6 +449,21 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const candidate = requestProjectId(request);
     if (candidate === undefined) return;
     await projectMembership.assertProjectMembership(operator.operatorId, candidate);
+  });
+
+  app.post("/v1/goals/:goalId/capabilities/full-access-mode", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const input = parse(CapabilitySessionSelectionInputSchema, request.body);
+    const operatorContext = requestOperator(request as { operator?: OperatorContext });
+    const session = await capabilityApprovals.selectFullAccessMode({ ...input, goalId }, { actorId: operatorContext.operatorId, kind: "user", projectId: input.projectId, goalId, active: true });
+    return reply.status(200).send(CapabilitySessionSchema.parse({ ...session, selectedAt: session.selectedAt.toISOString() }));
+  });
+
+  app.post("/v1/goals/:goalId/evidence-records", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const input = parse(EvidenceCaptureInputSchema, request.body);
+    const record = await evidenceCapture.capture({ ...input, goalId }, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(EvidenceRecordSchema.parse(record));
   });
 
   app.setErrorHandler((error, _request, reply) => {
@@ -1140,6 +1175,11 @@ export function buildServer({ goalService, authenticator, eventService, critical
     if (!report) throw new GoalNotFoundError();
     return reply.send(ConcertmasterFinalReportSchema.parse(report));
   });
+  app.get("/v1/goals/:goalId/evidence-bundle", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const query = parse(GoalQuerySchema, request.query);
+    return reply.send(EvidenceBundleReadSchema.parse(await readState.getEvidenceBundle(goalId, query.projectId)));
+  });
   app.get("/v1/goals/:goalId/git/integration-state", async (request, reply) => {
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
     const query = parse(GoalQuerySchema, request.query);
@@ -1287,6 +1327,9 @@ function mapError(error: unknown): { status: number; body: StableApiError } {
   if (isMalformedJsonError(error) || error instanceof RequestValidationError) return apiError(400, "validation_error", "Invalid request");
   if (error instanceof AuthenticationRequiredError) return apiError(401, "authentication_required", "Authentication is required");
   if (error instanceof CredentialForbiddenError) return apiError(403, "credential_forbidden", "Credential is not active");
+  if (error instanceof CapabilityApprovalUnauthorizedError) return apiError(403, "capability_unauthorized", error.message);
+  if (error instanceof CapabilityApprovalInvalidRequestError || error instanceof EvidenceCaptureError || error instanceof EvidenceCaptureGoalBindingError) return apiError(400, "validation_error", error.message);
+  if (error instanceof CapabilityApprovalConflictError || error instanceof EvidenceMetadataConflictError) return apiError(409, "replay_conflict", error.message);
   if (error instanceof AuthenticationUnavailableError) return apiError(429, "authentication_unavailable", "Authentication is temporarily unavailable");
   if (error instanceof TaskContractProjectMismatchError || error instanceof TaskContractProjectBoundaryError || error instanceof CriticalActionProjectMismatchError) return apiError(400, "validation_error", error.message);
   if (error instanceof CriticalActionGoalNotFoundError) return apiError(404, "goal_not_found", error.message);

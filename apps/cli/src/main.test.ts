@@ -21,6 +21,7 @@ describe("executeCli", () => {
     expect(stdout.lines[0]).toContain("metronome-challenges list");
     expect(stdout.lines[0]).toContain("encore-council list");
     expect(stdout.lines[0]).toContain("concertmaster-report get");
+    expect(stdout.lines[0]).toContain("evidence dump");
     expect(stderr.lines).toEqual([]);
     stdout.lines.length = 0;
     expect(await executeCli(["--version"], {}, { stdout: stdout.write, stderr: stderr.write })).toBe(0);
@@ -233,6 +234,34 @@ it("provisions exact project roles through the authenticated admin command", asy
 });
 
 
+it("dumps the evidence bundle, certifications, and report as one artifact", async () => {
+  const bundle = { bundleId: "77777777-7777-4777-8777-777777777777", goalId, hash: "a".repeat(64), content: { goalId, assembledAt: "2030-01-01T00:00:00.000Z" } };
+  const certifications = { certifications: [] };
+  const report = { reportId: "88888888-8888-4888-8888-888888888888", goalId, success: true, blockers: [], ceoRequest: "Ship", whatChanged: "A safe change", userVisibleBehaviorPassed: true, participatingDepartments: [], keyDecisions: [], dissent: [], independentValidation: [], costCents: 0, budgetCents: 10, incidents: [], knownLimitations: [], criticalActionAwaitingApproval: false, evidenceBundleId: bundle.bundleId };
+  const fetch = vi.fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(bundle), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify(certifications), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify(report), { status: 200 }));
+  const stdout = output();
+  await expect(executeCli(["evidence", "dump", "--goal-id", goalId, "--project-id", projectId, "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).resolves.toBe(0);
+  expect(JSON.parse(stdout.lines[0]!)).toEqual({ bundle, certifications, report });
+  expect(fetch).toHaveBeenCalledTimes(3);
+  expect(fetch).toHaveBeenNthCalledWith(1, `https://maestro.test/v1/goals/${goalId}/evidence-bundle?projectId=${projectId}`, expect.objectContaining({ headers: expect.anything() }));
+  expect(fetch).toHaveBeenNthCalledWith(2, `https://maestro.test/v1/goals/${goalId}/certifications?projectId=${projectId}`, expect.objectContaining({ headers: expect.anything() }));
+  expect(fetch).toHaveBeenNthCalledWith(3, `https://maestro.test/v1/goals/${goalId}/concertmaster-report?projectId=${projectId}`, expect.objectContaining({ headers: expect.anything() }));
+  for (const [, options] of fetch.mock.calls) expect(options?.method).toBeUndefined();
+});
+
+it("fails closed when the report points to a different evidence bundle", async () => {
+  const fetch = vi.fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ bundleId: "77777777-7777-4777-8777-777777777777", goalId, hash: "a".repeat(64), content: { goalId } }), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ certifications: [] }), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ reportId: "88888888-8888-4888-8888-888888888888", goalId, success: true, blockers: [], ceoRequest: "Ship", whatChanged: "A safe change", userVisibleBehaviorPassed: true, participatingDepartments: [], keyDecisions: [], dissent: [], independentValidation: [], costCents: 0, budgetCents: 10, incidents: [], knownLimitations: [], criticalActionAwaitingApproval: false, evidenceBundleId: "99999999-9999-4999-8999-999999999999" }), { status: 200 }));
+  const stderr = output();
+  await expect(executeCli(["evidence", "dump", "--goal-id", goalId, "--project-id", projectId, "--json"], env, { fetch, stdout: output().write, stderr: stderr.write })).resolves.toBe(2);
+  expect(stderr.lines[0]).toContain("identity mismatch");
+});
+
 describe("CLI entrypoint detection", () => {
   it("recognizes a symlinked executable by its resolved path", () => {
     const modulePath = "/work/apps/cli/dist/main.js";
@@ -261,6 +290,22 @@ describe("native conversation commands", () => {
     expect(await executeCli(["models", "list", "--json"], env, { fetch, stdout: stdout.write, stderr: stderr.write })).toBe(0);
     expect(await executeCli(["conversation", "create", "--project-id", projectId, "--goal-id", goalId, "--model", "openai/gpt-5", "--json"], env, { fetch, stdout: stdout.write, stderr: stderr.write })).toBe(0);
     expect(await executeCli(["conversation", "turn", "--conversation-id", conversationId, "--project-id", projectId, "--text", "hi", "--json"], env, { fetch, stdout: stdout.write, stderr: stderr.write })).toBe(0);
+    expect(stderr.lines).toEqual([]);
+  });
+});
+
+describe("release capability commands", () => {
+  it("selects full-access mode and captures evidence through the CLI", async () => {
+    const session = { sessionId: goalId, capabilityKind: "ipython", projectId, goalId, fullAccessMode: "skip_intermediate_approvals", selectedBy: "operator-1", selectedAt: "2025-01-01T00:00:00.000Z" };
+    const evidence = { evidenceId: "44444444-4444-4444-8444-444444444444", context: { correlationId: commandId, commandId, projectId, goalId, actorId: "operator-1" }, sha256: "a".repeat(64), byteLength: 4, kind: "test-result", mediaType: "text/plain", createdAt: "2025-01-01T00:00:00.000Z", retention: "project_lifetime" };
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(session), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(evidence), { status: 200 }));
+    const stdout = output(); const stderr = output();
+    await expect(executeCli(["capability", "select-full-access-mode", "--goal-id", goalId, "--project-id", projectId, "--capability-kind", "ipython", "--session-id", goalId, "--full-access-mode", "skip_intermediate_approvals", "--json"], env, { fetch, stdout: stdout.write, stderr: stderr.write })).resolves.toBe(0);
+    await expect(executeCli(["evidence", "capture", "--goal-id", goalId, "--project-id", projectId, "--correlation-id", commandId, "--command-id", commandId, "--kind", "test-result", "--media-type", "text/plain", "--content-base64", Buffer.from("test").toString("base64"), "--json"], env, { fetch, stdout: stdout.write, stderr: stderr.write })).resolves.toBe(0);
+    expect(JSON.parse(stdout.lines[0]!)).toEqual(session);
+    expect(JSON.parse(stdout.lines[1]!)).toEqual(evidence);
     expect(stderr.lines).toEqual([]);
   });
 });

@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { once } from "node:events";
 import { request as httpRequest, type IncomingMessage } from "node:http";
 import { buildServer, type EventService, type GoalService, type OperatorAuthenticator, type HeadParticipationService, type CouncilService, type EncoreService, type ProjectDiscoveryService } from "./server.js";
-import type { ReadStateService } from "./read-state-service.js";
+import { ReadStateGoalNotFoundError, type ReadStateService } from "./read-state-service.js";
 import type { WorkerService } from "./worker-service.js";
 import type { Worker } from "@maestro/contracts";
-import { ProjectMembershipRequiredError, ProjectAccessAdminRequiredError, StaleGoalLeaseError, HeadActivationRequesterInactiveError } from "@maestro/persistence";
+import { ProjectMembershipRequiredError, ProjectAccessAdminRequiredError, StaleGoalLeaseError, HeadActivationRequesterInactiveError, CapabilityApprovalConflictError } from "@maestro/persistence";
+import { CapabilityApprovalUnauthorizedError, CapabilityApprovalInvalidRequestError } from "./capability-approval-service.js";
+import { EvidenceCaptureError } from "./evidence-capture-service.js";
 
 const goal = { goalId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02", projectId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01", state: "draft" as const, version: 1 };
 
@@ -22,7 +24,7 @@ function buildAuthenticatedServer(goalService: GoalService, authenticator: Opera
 const event = { cursor: "9007199254740993", eventId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02", projectId: goal.projectId, goalId: goal.goalId, aggregateVersion: "1", eventType: "GoalCreated", schemaVersion: 1, payload: { state: "draft" }, occurredAt: "2025-01-01T00:00:00.000Z" };
 function fakeEvents(overrides: Partial<EventService> = {}): EventService { return { listEvents: async () => [event], ...overrides }; }
 
-const state: ReadStateService = { listGoals: async () => [goal], getBudgetSummary: async () => ({ goalId: goal.goalId, projectId: goal.projectId, budgetCents: 10, reservedCents: 4, costCents: 3 }), listMetronomeChallenges: async () => [{ challengeId: goal.goalId, goalId: goal.goalId, reason: "r", evidenceReferences: [], status: "open", correctionRequest: null, raisedBy: "metronome", resolvedBy: null, resolutionReason: null }], listEncoreCouncilRounds: async () => [], listCertifications: async () => [], getConcertmasterReport: async () => undefined };
+const state: ReadStateService = { listGoals: async () => [goal], getBudgetSummary: async () => ({ goalId: goal.goalId, projectId: goal.projectId, budgetCents: 10, reservedCents: 4, costCents: 3 }), listMetronomeChallenges: async () => [{ challengeId: goal.goalId, goalId: goal.goalId, reason: "r", evidenceReferences: [], status: "open", correctionRequest: null, raisedBy: "metronome", resolvedBy: null, resolutionReason: null }], listEncoreCouncilRounds: async () => [], listCertifications: async () => [], getConcertmasterReport: async () => undefined, getEvidenceBundle: async () => ({ bundleId: goal.goalId, goalId: goal.goalId, content: { goalId: goal.goalId }, hash: "a".repeat(64) }), getGitIntegrationState: async () => ({ goalId: goal.goalId, branch: null, latestRevision: null }), listWorkersForGoal: async () => [], listImprovementDigestsForGoal: async () => [] };
 
 function fakeService(overrides: Partial<GoalService> = {}): GoalService {
   return {
@@ -150,6 +152,18 @@ describe("read state routes", () => {
     expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/encore-council-rounds?projectId=${goal.projectId}`, headers })).json()).toEqual({ rounds: [] });
     expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/certifications?projectId=${goal.projectId}`, headers })).json()).toEqual({ certifications: [] });
     expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/concertmaster-report?projectId=${goal.projectId}`, headers })).statusCode).toBe(404);
+    expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/evidence-bundle?projectId=${goal.projectId}`, headers })).json()).toEqual({ bundleId: goal.goalId, goalId: goal.goalId, content: { goalId: goal.goalId }, hash: "a".repeat(64) });
+    await app.close();
+  });
+
+  it("does not serve an evidence bundle for a different project", async () => {
+    const guardedState: ReadStateService = { ...state, getEvidenceBundle: async (_goalId, projectId) => {
+      if (projectId !== goal.projectId) throw new ReadStateGoalNotFoundError("Goal was not found");
+      return state.getEvidenceBundle(goal.goalId, projectId);
+    } };
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readStateService: guardedState });
+    const response = await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/evidence-bundle?projectId=018f3c9b-7e71-7b44-ae23-3b5d4e8c9f07`, headers: { authorization: "Bearer test-secret" } });
+    expect(response.statusCode).toBe(404);
     await app.close();
   });
 });
@@ -601,6 +615,66 @@ describe("Goal control routes", () => {
       expect(response.statusCode).toBe(200);
       expect(operation).toHaveBeenCalledWith(goal.goalId, { projectId: goal.projectId, expectedVersion: 1 }, commandId, operator);
     }
+    await app.close();
+  });
+});
+
+describe("capability session route", () => {
+  it("selects a Goal-scoped full-access mode through the authenticated operator", async () => {
+    const session = { sessionId: goal.goalId, capabilityKind: "ipython", projectId: goal.projectId, goalId: goal.goalId, fullAccessMode: "skip_intermediate_approvals" as const, selectedBy: operator.operatorId, selectedAt: new Date("2025-01-01T00:00:00.000Z") };
+    const selectFullAccessMode = vi.fn(async () => session);
+    const app = buildServer({
+      goalService: fakeService(),
+      authenticator: authenticated(),
+      capabilityApprovalService: { selectFullAccessMode },
+    } as never);
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/goals/${goal.goalId}/capabilities/full-access-mode`,
+      headers: { authorization: "Bearer test-secret", "content-type": "application/json" },
+      payload: { projectId: goal.projectId, capabilityKind: "ipython", sessionId: goal.goalId, fullAccessMode: "skip_intermediate_approvals" },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ sessionId: goal.goalId, capabilityKind: "ipython", goalId: goal.goalId, fullAccessMode: "skip_intermediate_approvals" });
+    expect(selectFullAccessMode).toHaveBeenCalledWith({ capabilityKind: "ipython", projectId: goal.projectId, goalId: goal.goalId, sessionId: goal.goalId, fullAccessMode: "skip_intermediate_approvals" }, { actorId: operator.operatorId, kind: "user", projectId: goal.projectId, goalId: goal.goalId, active: true });
+    await app.close();
+  });
+
+  it("maps capability selection errors to stable client statuses", async () => {
+    for (const [error, expectedStatus] of [[new CapabilityApprovalUnauthorizedError(), 403], [new CapabilityApprovalInvalidRequestError("bad"), 400], [new CapabilityApprovalConflictError("replay"), 409]] as const) {
+      const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), capabilityApprovalService: { selectFullAccessMode: vi.fn(async () => { throw error; }) } } as never);
+      const response = await app.inject({ method: "POST", url: `/v1/goals/${goal.goalId}/capabilities/full-access-mode`, headers: { authorization: "Bearer test-secret", "content-type": "application/json" }, payload: { projectId: goal.projectId, capabilityKind: "ipython", sessionId: goal.goalId, fullAccessMode: "skip_intermediate_approvals" } });
+      expect(response.statusCode).toBe(expectedStatus);
+      await app.close();
+    }
+  });
+});
+
+describe("evidence capture route", () => {
+  it("creates a Goal-scoped durable evidence record from authenticated content", async () => {
+    const record = { evidenceId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f08", context: { correlationId: goal.goalId, commandId: goal.goalId, projectId: goal.projectId, goalId: goal.goalId, actorId: operator.operatorId }, sha256: "a".repeat(64), byteLength: 4, kind: "test-result", mediaType: "text/plain", createdAt: "2025-01-01T00:00:00.000Z", retention: "project_lifetime" as const };
+    const capture = vi.fn(async (input: unknown, actor: unknown) => {
+      expect(input).toEqual({ projectId: goal.projectId, goalId: goal.goalId, correlationId: goal.goalId, commandId: goal.goalId, kind: "test-result", mediaType: "text/plain", contentBase64: Buffer.from("test").toString("base64") });
+      expect(actor).toEqual(operator);
+      return record;
+    });
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), evidenceCaptureService: { capture } } as never);
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/goals/${goal.goalId}/evidence-records`,
+      headers: { authorization: "Bearer test-secret", "content-type": "application/json" },
+      payload: { projectId: goal.projectId, correlationId: goal.goalId, commandId: goal.goalId, kind: "test-result", mediaType: "text/plain", contentBase64: Buffer.from("test").toString("base64") },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(record);
+    expect(capture).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it("maps evidence capture validation errors to a client error", async () => {
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), evidenceCaptureService: { capture: vi.fn(async () => { throw new EvidenceCaptureError("invalid content"); }) } } as never);
+    const response = await app.inject({ method: "POST", url: `/v1/goals/${goal.goalId}/evidence-records`, headers: { authorization: "Bearer test-secret", "content-type": "application/json" }, payload: { projectId: goal.projectId, correlationId: goal.goalId, commandId: goal.goalId, kind: "test-result", mediaType: "text/plain", contentBase64: Buffer.from("test").toString("base64") } });
+    expect(response.statusCode).toBe(400);
     await app.close();
   });
 });
