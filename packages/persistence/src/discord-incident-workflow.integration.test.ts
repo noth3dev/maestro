@@ -28,7 +28,7 @@ import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, spawnWorker } from "./worker.js";
 import { acceptDepartmentWorkerOutput, certifyQuality } from "./certification.js";
-import { recordGoalIntegrationRevision, recordDepartmentBranch, recordGoalIntegrationBranch, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
+import { recordGoalIntegrationRevision, recordDepartmentBranch, recordGoalIntegrationBranch, recordWorkerWorktree } from "./git-integration.js";
 import { recordEvidenceBundle, verifyStoredEvidenceBundle } from "./evidence-bundle.js";
 import { generateConcertmasterFinalReport } from "./concertmaster-report.js";
 import { recordRoutingReportFixture } from "./routing-report-fixture.js";
@@ -213,9 +213,9 @@ describeDatabase("Phase 4 work-sequence step 8: Discord incident through Task Co
     const fs = await import("node:fs/promises");
     await fs.writeFile(join(worktreePath, "fix.txt"), "the incident remediation change");
     const commitResult = await localGitPort.commit(worktreePath, "mission: fix the health endpoint", "worker", "worker@example.com");
-    await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: fix the health endpoint", evidenceIds);
+    const integrationCommit = await advanceWorkerIntegration(pool, localGitPort, worker.workerId, "mission: fix the health endpoint", evidenceIds, proof, headContext("engineering"));
+    expect(integrationCommit.commitSha).toBe(commitResult.commitSha);
 
-    await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
     await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "Head reviewed the integrated fix" }, proof, headContext("engineering"));
     await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
     const quality = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: evidenceIds }, "quality", proof, headContext("quality"));

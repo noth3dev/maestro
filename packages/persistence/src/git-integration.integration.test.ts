@@ -13,8 +13,9 @@ import { acquireGoalLease, StaleGoalLeaseError } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
-import { spawnWorker } from "./worker.js";
-import { GitIntegrationError, getGoalGitIntegrationState, recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
+import { observeWorker, sendWorkerMessageUnderOwnerClaim, spawnWorker } from "./worker.js";
+import { GitIntegrationError, advanceWorkerIntegration, getGoalGitIntegrationState, recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordWorkerWorktree } from "./git-integration.js";
+import { acceptDepartmentWorkerOutput, certifyQuality } from "./certification.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -50,18 +51,32 @@ const bundleSubstance = (): MissionBundleSubstance => ({
   terminationConditions: ["deadline passed"],
 });
 
-function fakeKernel(): ExecutionKernelPort {
+function fakeKernel(status: "running" | "succeeded" = "running"): ExecutionKernelPort & { readonly admissions: readonly Record<string, unknown>[] } {
   let counter = 0;
+  const admissions: Record<string, unknown>[] = [];
+  const invocations = new Map<string, string>();
   return {
-    async spawn() { counter += 1; return { execution: `exec-${counter}` as never, invocation: `inv-${counter}` as never }; },
-    async prompt() {}, async sendMessage() {}, async observe() { return []; },
+    async spawn(request) {
+      admissions.push(request as Record<string, unknown>);
+      counter += 1;
+      const execution = `exec-${counter}`;
+      const invocation = `inv-${counter}`;
+      invocations.set(execution, invocation);
+      return { execution: execution as never, invocation: invocation as never };
+    },
+    async prompt() {}, async sendMessage() {},
+    async observe(execution) {
+      const invocation = invocations.get(execution as unknown as string);
+      return invocation === undefined ? [] : [{ invocation: invocation as never, name: "worker", status, toolEvents: { state: "empty", events: [] }, usage: { state: "available", totalTokens: 1 }, answer: status === "succeeded" ? { state: "available", text: "done" } : { state: "unavailable", reason: "running" } }];
+    },
     async cancel() { return { cancelled: true }; },
     async getModelIdentity() { return { provider: "fake", id: "fake" }; },
     async getToolEvents() { return { state: "empty", events: [] }; },
     async getUsage() { return { state: "available", totalTokens: 1 }; },
-    async getInvocationStatus() { return "running"; },
+    async getInvocationStatus() { return status; },
     async resume() { throw new Error("not supported"); },
     async reconnect() { throw new Error("not supported"); },
+    admissions,
   };
 }
 
@@ -82,7 +97,7 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     rmSync(repositoryPath, { recursive: true, force: true });
   });
 
-  async function setupPlan(departments = ["product"], ownedDepartments = departments) {
+  async function setupPlan(departments = ["product"], ownedDepartments = departments, targetBound = false) {
     const goalId = randomUUID(), contractId = randomUUID(), projectId = randomUUID();
     const contractContent = buildContractContent(projectId, repositoryPath);
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
@@ -107,9 +122,19 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     const resolved = await recordCouncilDecisionPacket(pool, council.councilId, packet, proof, context("decision"));
     const plan = await createDepartmentPlan(pool, { councilId: resolved.councilId, departmentId: "product", substance: planSubstance() }, proof, headContext("product"));
     await createMissionBundle(pool, { councilId: resolved.councilId, departmentId: "product", itemId: "exec-1", substance: bundleSubstance() }, proof, headContext("product"));
-    const kernel = fakeKernel();
-    const worker = await spawnWorker(pool, kernel, { councilId: resolved.councilId, departmentId: "product", planVersion: plan.version, itemId: "exec-1" }, proof, headContext("product"));
-    return { goalId, proof, council: resolved, worker };
+    const kernel = fakeKernel(targetBound ? "succeeded" : "running");
+    let targetWorktreePath: string | undefined;
+    if (targetBound) {
+      await recordGoalIntegrationBranch(pool, localGitPort, goalId, repositoryPath, "goal/integration", baseRevision, proof);
+      await recordDepartmentBranch(pool, localGitPort, resolved.councilId, "product", proof, headContext("product"));
+      targetWorktreePath = join(repositoryPath, "..", `maestro-target-worker-${randomUUID()}`);
+      worktreePaths.push(targetWorktreePath);
+    }
+    const worker = await spawnWorker(pool, kernel, {
+      councilId: resolved.councilId, departmentId: "product", planVersion: plan.version, itemId: "exec-1",
+      ...(targetWorktreePath === undefined ? {} : { prepareWorktree: (workerId: string) => recordWorkerWorktree(pool, localGitPort, workerId, targetWorktreePath!, proof, headContext("product")).then((result) => result.worktreePath) }),
+    }, proof, headContext("product"));
+    return { goalId, proof, council: resolved, worker, kernel, targetWorktreePath };
   }
 
   beforeAll(async () => {
@@ -139,10 +164,53 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     const fs = await import("node:fs/promises");
     await fs.writeFile(join(worktreePath, "change.txt"), "mission-only change");
     const commitResult = await localGitPort.commit(worktreePath, "mission: add change", "worker", "worker@example.com");
-    const recorded = await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: add change", [...evidence.references]);
+    const recorded = await advanceWorkerIntegration(pool, localGitPort, worker.workerId, "mission: add change", [...evidence.references], proof, headContext("product"));
     expect(recorded.commitSha).toBe(commitResult.commitSha);
-    const replayCommit = await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: add change", [...evidence.references]);
+    const replayCommit = await advanceWorkerIntegration(pool, localGitPort, worker.workerId, "mission: add change", [...evidence.references], proof, headContext("product"));
     expect(replayCommit).toEqual(recorded);
+  });
+
+  it("rejects a worker branch that diverged from the current Goal branch", async () => {
+    const { proof, worker, targetWorktreePath } = await setupPlan(["product"], ["product"], true);
+    const goalWorktreePath = join(repositoryPath, "..", `maestro-goal-divergence-${randomUUID()}`);
+    worktreePaths.push(goalWorktreePath);
+    await localGitPort.createWorktree(repositoryPath, goalWorktreePath, "goal/integration");
+    const fs = await import("node:fs/promises");
+    await fs.writeFile(join(goalWorktreePath, "goal-change.txt"), "goal");
+    await localGitPort.commit(goalWorktreePath, "goal: diverge", "goal", "goal@example.com");
+    await fs.writeFile(join(targetWorktreePath!, "worker-change.txt"), "worker");
+    await localGitPort.commit(targetWorktreePath!, "worker: diverge", "worker", "worker@example.com");
+    await expect(advanceWorkerIntegration(pool, localGitPort, worker.workerId, "worker: diverge", [...evidence.references], proof, headContext("product"))).rejects.toThrow();
+    expect((await pool.query("SELECT count(*)::int AS count FROM integration_commits WHERE worker_id = $1", [worker.workerId])).rows[0]!.count).toBe(0);
+  });
+
+  it("rejects a worker branch with no new commit", async () => {
+    const { proof, worker } = await setupPlan(["product"], ["product"], true);
+    await expect(advanceWorkerIntegration(pool, localGitPort, worker.workerId, "repair: missing", [...evidence.references], proof, headContext("product"))).rejects.toThrow("no commit");
+  });
+
+  it("binds target worktree before admission and completes the real accept-to-certify lifecycle", async () => {
+    const { goalId, proof, worker, kernel, targetWorktreePath } = await setupPlan(["product", "quality"], ["product"], true);
+    expect(targetWorktreePath).toBeDefined();
+    expect(kernel.admissions[0]?.cwd).toBe(targetWorktreePath);
+    const widenedPath = join(repositoryPath, "..", `maestro-widened-worker-${randomUUID()}`);
+    await expect(recordWorkerWorktree(pool, localGitPort, worker.workerId, widenedPath, proof, headContext("product"))).rejects.toThrow(/different path/);
+    await expect(sendWorkerMessageUnderOwnerClaim(pool, kernel, worker.workerId, "repair the target defect", proof)).resolves.toBe(true);
+    const fs = await import("node:fs/promises");
+    await fs.writeFile(join(targetWorktreePath!, "repair.txt"), "repair");
+    const commit = await localGitPort.commit(targetWorktreePath!, "repair: apply fix", "worker", "worker@example.com");
+    const integrated = await advanceWorkerIntegration(pool, localGitPort, worker.workerId, "repair: apply fix", [...evidence.references], proof, headContext("product"));
+    expect(integrated.commitSha).toBe(commit.commitSha);
+    expect(execFileSync("git", ["rev-parse", "goal/integration"], { cwd: repositoryPath }).toString().trim()).toBe(commit.commitSha);
+    const stored = await pool.query<{ commit_sha: string }>("SELECT commit_sha FROM integration_commits WHERE worker_id = $1", [worker.workerId]);
+    expect(stored.rows[0]!.commit_sha.trim()).toBe(commit.commitSha);
+    const observed = await observeWorker(pool, kernel, worker.workerId, proof, headContext("product"));
+    expect(observed.status).toBe("succeeded");
+    const acceptance = await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "repair verified" }, proof, headContext("product"));
+    expect(acceptance.commitSha).toBe(commit.commitSha);
+    const revision = await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
+    const certification = await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [...evidence.references] }, "quality", proof, headContext("quality"));
+    expect(certification.integrationRevisionId).toBe(revision.revisionId);
   });
 
   it("rejects every Git integration write with a stale fencing token and leaves durable state unchanged", async () => {
@@ -215,7 +283,7 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     await fs.writeFile(join(worktreePath, "change.txt"), "mission-only change");
     const commitResult = await localGitPort.commit(worktreePath, "mission: add change", "worker", "worker@example.com");
     await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
-    await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: add change", [...evidence.references]);
+    await advanceWorkerIntegration(pool, localGitPort, worker.workerId, "mission: add change", [...evidence.references], proof, headContext("product"));
     const acceptanceId = randomUUID();
     await pool.query(
       "INSERT INTO department_acceptances (acceptance_id, worker_id, commit_sha, reason, accepted_by, session_ref, created_at) VALUES ($1, $2, $3, 'looks good', 'head:product', 'opaque:product', transaction_timestamp())",

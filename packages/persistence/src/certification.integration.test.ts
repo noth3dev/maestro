@@ -16,7 +16,7 @@ import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, su
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
 import { observeWorker, spawnWorker } from "./worker.js";
-import { recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
+import { recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordWorkerWorktree } from "./git-integration.js";
 import { acceptDepartmentWorkerOutput, CertificationError, certifyQuality, listQualityCertifications } from "./certification.js";
 import { StaleGoalLeaseError, type GoalLeaseProof } from "./commands.js";
 import { CouncilProtocolError } from "./council.js";
@@ -118,9 +118,9 @@ describeDatabase("Department acceptance and independent Quality certification wi
     const fs = await import("node:fs/promises");
     await fs.writeFile(join(worktreePath, "change.txt"), "the change");
     const commitResult = await localGitPort.commit(worktreePath, "mission: implement", "worker", "worker@example.com");
-    await recordIntegrationCommit(pool, worker.workerId, commitResult.commitSha, "mission: implement", evidenceIds);
+    const integrationCommit = await advanceWorkerIntegration(pool, localGitPort, worker.workerId, "mission: implement", evidenceIds, proof, headContext("product"));
+    expect(integrationCommit.commitSha).toBe(commitResult.commitSha);
     if (prepareCertification) {
-      await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
       await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, proof, headContext("product"));
       await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
     }

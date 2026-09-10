@@ -1,17 +1,21 @@
+import type { WorkerIntegrationInput } from "@maestro/contracts";
 import type { ActionRequest } from "@maestro/authority";
-import type { DepartmentBranch, GitPort, GoalIntegrationBranch, GoalIntegrationRevision, WorkerWorktree } from "@maestro/domain";
-import { assertProjectRole, recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordWorkerWorktree, readHeadCouncil, readWorker } from "@maestro/persistence";
+import { assertWorkspacePath } from "@maestro/git-adapter";
+import type { DepartmentBranch, GitPort, GoalIntegrationBranch, GoalIntegrationRevision, IntegrationCommit, WorkerWorktree } from "@maestro/domain";
+import { advanceWorkerIntegration, assertProjectRole, recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordWorkerWorktree, readHeadCouncil, readWorker } from "@maestro/persistence";
 import type { Pool } from "pg";
 
 export type GitPortFactory = (context: Omit<ActionRequest, "action" | "target">) => GitPort;
 export interface GitIntegrationService {
   createGoalBranch(goalId: string, input: { projectId: string; repositoryPath: string; branchName: string; baseRevision: string }, operatorId: string, commandId: string): Promise<GoalIntegrationBranch>;
   createDepartmentBranch(councilId: string, departmentId: string, projectId: string, operatorId: string, commandId: string): Promise<DepartmentBranch>;
-  createWorkerWorktree(workerId: string, input: { projectId: string; worktreePath: string }, operatorId: string, commandId: string): Promise<WorkerWorktree>;
+  createWorkerWorktree(workerId: string, input: { projectId: string; worktreePath: string; repositoryPath?: string | undefined }, operatorId: string, commandId: string): Promise<WorkerWorktree>;
+  advanceWorker(workerId: string, input: WorkerIntegrationInput, operatorId: string, commandId: string): Promise<IntegrationCommit>;
   freezeGoalRevision(goalId: string, projectId: string, operatorId: string, commandId: string): Promise<GoalIntegrationRevision>;
 }
 export interface GitIntegrationServiceDependencies {
   pool: Pool;
+  workspaceRoot?: string;
   withGoalLease: <T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
   createGitPort: GitPortFactory;
   getControlEpoch: (projectId: string, goalId: string) => Promise<string>;
@@ -53,10 +57,26 @@ export function createGitIntegrationService(deps: GitIntegrationServiceDependenc
       if (council.snapshot.projectId !== input.projectId) throw new GitProjectMismatchError();
       await assertProjectRole(deps.pool, operatorId, input.projectId, `head-${worker.departmentId}`);
       return deps.withGoalLease(council.goalId, async (proof) => {
+        const goalBranch = await deps.pool.query<{ repository_path: string }>("SELECT repository_path FROM goal_integration_branches WHERE goal_id = $1", [council.goalId]);
+        let requestedRepository: string | undefined;
+        try { requestedRepository = input.repositoryPath === undefined ? undefined : assertWorkspacePath(input.repositoryPath, "repositoryPath", deps.workspaceRoot); } catch { throw new GitProjectMismatchError(); }
+        if (goalBranch.rowCount !== 1 || (requestedRepository !== undefined && requestedRepository !== goalBranch.rows[0]!.repository_path)) throw new GitProjectMismatchError();
         const git = await port(input.projectId, council.goalId, operatorId, commandId);
         const participant = council.snapshot.participants.find((entry) => (entry.departmentId ?? entry.participantId) === worker.departmentId);
         if (participant === undefined || participant.headRoleId === undefined) throw new GitProjectMismatchError();
         return recordWorkerWorktree(deps.pool, git, workerId, input.worktreePath, proof, { actorId: participant.headRoleId, sessionRef: participant.sessionRef, commandId });
+      });
+    },
+    async advanceWorker(workerId, input, operatorId, commandId) {
+      const worker = await readWorker(deps.pool, workerId);
+      const council = await readHeadCouncil(deps.pool, worker.councilId);
+      if (council.snapshot.projectId !== input.projectId) throw new GitProjectMismatchError();
+      await assertProjectRole(deps.pool, operatorId, input.projectId, `head-${worker.departmentId}`);
+      return deps.withGoalLease(council.goalId, async (proof) => {
+        const git = await port(input.projectId, council.goalId, operatorId, commandId);
+        const participant = council.snapshot.participants.find((entry) => (entry.departmentId ?? entry.participantId) === worker.departmentId);
+        if (participant === undefined || participant.headRoleId === undefined) throw new GitProjectMismatchError();
+        return advanceWorkerIntegration(deps.pool, git, workerId, input.message, input.evidenceReferences, proof, { actorId: participant.headRoleId, sessionRef: participant.sessionRef, commandId });
       });
     },
     async freezeGoalRevision(goalId, projectId, operatorId, commandId) {

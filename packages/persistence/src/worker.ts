@@ -29,6 +29,11 @@ export interface SpawnWorkerRequest {
   readonly itemId: string;
   /** Validated owned worktree directory supplied by the orchestration layer. */
   readonly cwd?: string;
+  /** Declared target identity included in the replay hash when present. */
+  readonly repositoryPath?: string;
+  readonly worktreePath?: string;
+  /** Called after the durable reservation and before provider admission to create the owned target worktree. */
+  readonly prepareWorktree?: (workerId: string) => Promise<string>;
   /** Exact provider-qualified model selected by the host and checked against the Mission Bundle. */
   readonly modelRef?: string;
 }
@@ -62,6 +67,13 @@ export function selectWorkerModel(bundle: Awaited<ReturnType<typeof readMissionB
   if (!bundle.substance.approvedModels.includes(model)) throw new WorkerError(`Worker model is not approved by the Mission Bundle: ${model}`);
   if (!/^[^/\s]+\/[^/\s]+$/.test(model)) throw new WorkerError(`Worker model must use provider/model-id format: ${model}`);
   return model;
+}
+
+function assertWorkerPathScope(paths: readonly string[]): void {
+  for (const path of paths) {
+    const parts = path.trim().split(/[\\/]/u);
+    if (path.trim() === "" || path.startsWith("/") || /^[A-Za-z]:/u.test(path) || parts.includes("..")) throw new WorkerError("Mission Bundle path scope must be relative to the bound worker worktree");
+  }
 }
 
 export function missionTimeLimitMs(value: string): number {
@@ -179,6 +191,26 @@ export async function promptWorkerUnderOwnerClaim(
   return true;
 }
 
+export async function sendWorkerMessageUnderOwnerClaim(
+  pool: Pool,
+  kernel: ExecutionKernelPort,
+  workerId: string,
+  message: string,
+  proof: GoalLeaseProof,
+): Promise<boolean> {
+  const claimed = await withWorkerLease(pool, workerId, proof, async (_client, worker) => {
+    if (worker.owner_id !== proof.ownerId || worker.owner_fencing_token !== proof.fencingToken) return undefined;
+    if (worker.status === "succeeded" || worker.status === "failed" || worker.status === "cancelled" || worker.status === "unknown") return undefined;
+    if (worker.execution_ref.startsWith("pending:") || worker.invocation_ref.startsWith("pending:")) return undefined;
+    return { executionRef: worker.execution_ref, invocationRef: worker.invocation_ref };
+  });
+  if (claimed === undefined) return false;
+  // Use the refs captured under the owner/fence lock. Do not reread a
+  // potentially successor-owned row after releasing that lock.
+  await kernel.sendMessage(toExecutionRef(claimed.executionRef), toInvocationRef(claimed.invocationRef), message);
+  return true;
+}
+
 export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, request: SpawnWorkerRequest, proof: GoalLeaseProof, context: CouncilActorContext): Promise<Worker> {
   const client = await pool.connect(); let open = false;
   try {
@@ -202,9 +234,10 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
     if (active.rowCount !== 1) throw new WorkerError("Captured Head session is no longer authorized to spawn workers");
     const bundle = await readMissionBundle(pool, request.councilId, request.departmentId, request.planVersion, request.itemId);
     const modelRef = selectWorkerModel(bundle, request.modelRef);
+    assertWorkerPathScope(bundle.substance.allowedPaths);
     const requestHash = request.commandId === undefined ? undefined : createHash("sha256").update(JSON.stringify({
       councilId: request.councilId, departmentId: request.departmentId, planVersion: request.planVersion,
-      itemId: request.itemId, bundleContentHash: bundle.contentHash,
+      itemId: request.itemId, bundleContentHash: bundle.contentHash, repositoryPath: request.repositoryPath ?? null, worktreePath: request.worktreePath ?? null,
     })).digest("hex");
     if (request.commandId !== undefined) {
       const priorCommand = await client.query<{ worker_id: string; spawn_request_hash: string | null }>(
@@ -242,7 +275,9 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
     );
     await client.query("COMMIT"); open = false;
     let spawned: import("@maestro/domain").SpawnedInvocation;
+    let providerAttempted = false;
     try {
+      const preparedCwd = request.prepareWorktree === undefined ? request.cwd : await request.prepareWorktree(workerId);
       const providerAdmission: ExecutionAdmission = {
         context: {
           operatorId: context.actorId,
@@ -277,7 +312,7 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
       const providerRequest = {
         name: `${bundle.substance.role}:${request.itemId}:${nextAttempt}`,
         prompt: bundle.substance.goalBrief,
-        ...(request.cwd === undefined ? {} : { cwd: request.cwd }),
+        ...(preparedCwd === undefined ? {} : { cwd: preparedCwd }),
         // Keep the legacy capability projection for injected kernels while the
         // native fields carry the complete host-owned admission contract.
         capabilities: { allowedTools: bundle.substance.allowedTools, allowedSkills: bundle.substance.allowedSkills },
@@ -287,6 +322,7 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
       // live claim immediately before admission; any response is then bound
       // identity-only so a successor can retain the opaque refs after turnover.
       await assertCurrentWorkerLease(pool, workerId, proof);
+      providerAttempted = true;
       spawned = await kernel.spawn(providerRequest);
       await recordNativeExecutionBindingIfSupported(pool, kernel, {
         execution: spawned.execution,
@@ -301,6 +337,10 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
       // A transport timeout does not prove that the provider created nothing.
       // Keep the durable reservation ambiguous and block automatic retries
       // until reconciliation can establish the provider outcome.
+      if (!providerAttempted) {
+        await markWorkerTerminal(pool, workerId, "failed", proof).catch(() => undefined);
+        throw error;
+      }
       const unknown = await markUnboundWorkerUnknown(pool, workerId, proof).catch(() => undefined);
       if (unknown !== undefined) return unknown;
       throw error;
