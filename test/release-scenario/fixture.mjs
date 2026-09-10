@@ -1,19 +1,41 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join, resolve, sep } from "node:path";
+import { writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { lstat, mkdir, realpath } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFile = promisify(execFileCallback);
 
+
+export async function assertReleaseScenarioTarget(target, worktreeRoot = process.env.MAESTRO_WORKTREE_ROOT) {
+  if (typeof worktreeRoot !== "string" || worktreeRoot.trim() === "") throw new Error("MAESTRO_WORKTREE_ROOT is required");
+  const realWorktreeRoot = await realpath(worktreeRoot);
+  const realTarget = await realpath(target);
+  const rel = relative(realWorktreeRoot, realTarget);
+  if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error(`Release scenario target resolves outside MAESTRO_WORKTREE_ROOT: ${realTarget}`);
+  return realTarget;
+}
+
 /** Creates a disposable local Git target strictly below MAESTRO_WORKTREE_ROOT. */
 export async function createReleaseScenarioFixture(options = {}) {
-  const worktreeRoot = resolve(options.worktreeRoot ?? process.env.MAESTRO_WORKTREE_ROOT ?? "");
-  if (!worktreeRoot) throw new Error("MAESTRO_WORKTREE_ROOT is required");
+  const configuredWorktreeRoot = options.worktreeRoot ?? process.env.MAESTRO_WORKTREE_ROOT;
+  if (typeof configuredWorktreeRoot !== "string" || configuredWorktreeRoot.trim() === "") throw new Error("MAESTRO_WORKTREE_ROOT is required");
+  await mkdir(configuredWorktreeRoot, { recursive: true });
+  const worktreeRoot = await realpath(configuredWorktreeRoot);
   const root = resolve(options.root ?? join(worktreeRoot, `target-${randomUUID()}`));
-  if (root === worktreeRoot || !root.startsWith(`${worktreeRoot}${sep}`)) {
+  const lexicalRelative = relative(worktreeRoot, root);
+  if (root === worktreeRoot || lexicalRelative === "" || lexicalRelative === ".." || lexicalRelative.startsWith(`..${sep}`) || isAbsolute(lexicalRelative)) {
     throw new Error(`Release scenario target must be below MAESTRO_WORKTREE_ROOT: ${root}`);
   }
+  const parent = await realpath(dirname(root));
+  const parentRelative = relative(worktreeRoot, parent);
+  if (parentRelative === ".." || parentRelative.startsWith(`..${sep}`) || isAbsolute(parentRelative)) throw new Error(`Release scenario target parent escapes MAESTRO_WORKTREE_ROOT: ${parent}`);
+  try { if ((await lstat(root)).isSymbolicLink()) throw new Error(`Release scenario target cannot be a symlink: ${root}`); } catch (error) { if (error?.code !== "ENOENT") throw error; }
+  await mkdir(root, { recursive: true });
+  const realRoot = await realpath(root);
+  const realRelative = relative(worktreeRoot, realRoot);
+  if (realRelative === "" || realRelative === ".." || realRelative.startsWith(`..${sep}`) || isAbsolute(realRelative)) throw new Error(`Release scenario target resolves outside MAESTRO_WORKTREE_ROOT: ${realRoot}`);
   const src = join(root, "src");
   const test = join(root, "test");
   const fixtures = join(root, "fixtures");

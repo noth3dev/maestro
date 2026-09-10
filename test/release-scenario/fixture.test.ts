@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -21,6 +21,11 @@ describe("release scenario fixture", () => {
       expect(await readFile(fixture.ambiguousAction, "utf8")).toContain("ambiguous");
       expect(await readFile(fixture.remotePushAttempt, "utf8")).toContain("not-attempted");
       await expect(createReleaseScenarioFixture({ root: join(tmpdir(), "outside-release-target"), worktreeRoot })).rejects.toThrow("below MAESTRO_WORKTREE_ROOT");
+      await expect(createReleaseScenarioFixture({ worktreeRoot: "" })).rejects.toThrow("MAESTRO_WORKTREE_ROOT is required");
+      const outside = await mkdtemp(join(tmpdir(), "maestro-release-scenario-outside-"));
+      await symlink(outside, join(worktreeRoot, "escape"), "dir");
+      await expect(createReleaseScenarioFixture({ root: join(worktreeRoot, "escape", "target"), worktreeRoot })).rejects.toThrow("escapes MAESTRO_WORKTREE_ROOT");
+      await rm(outside, { recursive: true, force: true });
     } finally {
       await rm(worktreeRoot, { recursive: true, force: true });
     }
