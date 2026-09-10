@@ -65,8 +65,8 @@ import {
   MetronomeChallengeSchema,
   EncoreReviewInputSchema,
   EncoreCouncilResultSchema,
-  MetronomeChallengeListSchema, EncoreCouncilRoundListSchema, CertificationListSchema, ConcertmasterFinalReportSchema,
-  type MetronomeChallengeList, type EncoreCouncilRoundList, type CertificationList, type ConcertmasterFinalReport,
+  MetronomeChallengeListSchema, EncoreCouncilRoundListSchema, CertificationListSchema, ConcertmasterFinalReportSchema, EvidenceBundleReadSchema,
+  type MetronomeChallengeList, type EncoreCouncilRoundList, type CertificationList, type ConcertmasterFinalReport, type EvidenceBundleRead,
   GoalGitIntegrationStateSchema, type GoalGitIntegrationState,
   WorkerListSchema, type WorkerList,
   ImprovementDigestListSchema, type ImprovementDigestList,
@@ -227,6 +227,7 @@ export interface ApiClient {
   listEncoreCouncilRounds(goalId: string, query: GoalQuery): Promise<EncoreCouncilRoundList>;
   listCertifications(goalId: string, query: GoalQuery): Promise<CertificationList>;
   getConcertmasterReport(goalId: string, query: GoalQuery): Promise<ConcertmasterFinalReport>;
+  getEvidenceBundle(goalId: string, query: GoalQuery): Promise<EvidenceBundleRead>;
   getGitIntegrationState(goalId: string, query: GoalQuery): Promise<GoalGitIntegrationState>;
   listWorkersForGoal(goalId: string, query: GoalQuery): Promise<WorkerList>;
   listImprovementDigestsForGoal(goalId: string, query: GoalQuery): Promise<ImprovementDigestList>;
@@ -698,6 +699,10 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
       const parsed = GoalQuerySchema.parse(query);
       return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/concertmaster-report?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, ConcertmasterFinalReportSchema);
     },
+    getEvidenceBundle(goalId, query) {
+      const parsed = GoalQuerySchema.parse(query);
+      return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/evidence-bundle?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, EvidenceBundleReadSchema);
+    },
     getGitIntegrationState(goalId, query) {
       const parsed = GoalQuerySchema.parse(query);
       return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/git/integration-state?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, GoalGitIntegrationStateSchema);
@@ -720,4 +725,4 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
   };
 }
 
-export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, GoalGitIntegrationState, WorkerList, WorkerObservation, ImprovementDigestList };
+export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, EvidenceBundleRead, GoalGitIntegrationState, WorkerList, WorkerObservation, ImprovementDigestList };

@@ -20,7 +20,7 @@ function buildAuthenticatedServer(goalService: GoalService, authenticator: Opera
 const event = { cursor: "9007199254740993", eventId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02", projectId: goal.projectId, goalId: goal.goalId, aggregateVersion: "1", eventType: "GoalCreated", schemaVersion: 1, payload: { state: "draft" }, occurredAt: "2025-01-01T00:00:00.000Z" };
 function fakeEvents(overrides: Partial<EventService> = {}): EventService { return { listEvents: async () => [event], ...overrides }; }
 
-const state: ReadStateService = { listGoals: async () => [goal], getBudgetSummary: async () => ({ goalId: goal.goalId, projectId: goal.projectId, budgetCents: 10, reservedCents: 4, costCents: 3 }), listMetronomeChallenges: async () => [{ challengeId: goal.goalId, goalId: goal.goalId, reason: "r", evidenceReferences: [], status: "open", correctionRequest: null, raisedBy: "metronome", resolvedBy: null, resolutionReason: null }], listEncoreCouncilRounds: async () => [], listCertifications: async () => [], getConcertmasterReport: async () => undefined };
+const state: ReadStateService = { listGoals: async () => [goal], getBudgetSummary: async () => ({ goalId: goal.goalId, projectId: goal.projectId, budgetCents: 10, reservedCents: 4, costCents: 3 }), listMetronomeChallenges: async () => [{ challengeId: goal.goalId, goalId: goal.goalId, reason: "r", evidenceReferences: [], status: "open", correctionRequest: null, raisedBy: "metronome", resolvedBy: null, resolutionReason: null }], listEncoreCouncilRounds: async () => [], listCertifications: async () => [], getConcertmasterReport: async () => undefined, getEvidenceBundle: async () => ({ bundleId: goal.goalId, goalId: goal.goalId, content: { goalId: goal.goalId }, hash: "a".repeat(64) }), getGitIntegrationState: async () => ({ goalId: goal.goalId, branch: null, latestRevision: null }), listWorkersForGoal: async () => [], listImprovementDigestsForGoal: async () => [] };
 
 function fakeService(overrides: Partial<GoalService> = {}): GoalService {
   return {
@@ -132,6 +132,7 @@ describe("read state routes", () => {
     expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/encore-council-rounds?projectId=${goal.projectId}`, headers })).json()).toEqual({ rounds: [] });
     expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/certifications?projectId=${goal.projectId}`, headers })).json()).toEqual({ certifications: [] });
     expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/concertmaster-report?projectId=${goal.projectId}`, headers })).statusCode).toBe(404);
+    expect((await app.inject({ method: "GET", url: `/v1/goals/${goal.goalId}/evidence-bundle?projectId=${goal.projectId}`, headers })).json()).toEqual({ bundleId: goal.goalId, goalId: goal.goalId, content: { goalId: goal.goalId }, hash: "a".repeat(64) });
     await app.close();
   });
 });

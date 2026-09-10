@@ -21,6 +21,7 @@ describe("executeCli", () => {
     expect(stdout.lines[0]).toContain("metronome-challenges list");
     expect(stdout.lines[0]).toContain("encore-council list");
     expect(stdout.lines[0]).toContain("concertmaster-report get");
+    expect(stdout.lines[0]).toContain("evidence dump");
     expect(stderr.lines).toEqual([]);
     stdout.lines.length = 0;
     expect(await executeCli(["--version"], {}, { stdout: stdout.write, stderr: stderr.write })).toBe(0);
@@ -232,6 +233,20 @@ it("provisions exact project roles through the authenticated admin command", asy
   expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/admin/project-access", expect.objectContaining({ method: "POST" }));
 });
 
+
+it("dumps the evidence bundle, certifications, and report as one artifact", async () => {
+  const bundle = { bundleId: "77777777-7777-4777-8777-777777777777", goalId, hash: "a".repeat(64), content: { goalId, assembledAt: "2030-01-01T00:00:00.000Z" } };
+  const certifications = { certifications: [] };
+  const report = { reportId: "88888888-8888-4888-8888-888888888888", goalId, success: true, blockers: [], ceoRequest: "Ship", whatChanged: "A safe change", userVisibleBehaviorPassed: true, participatingDepartments: [], keyDecisions: [], dissent: [], independentValidation: [], costCents: 0, budgetCents: 10, incidents: [], knownLimitations: [], criticalActionAwaitingApproval: false, evidenceBundleId: bundle.bundleId };
+  const fetch = vi.fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(bundle), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify(certifications), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify(report), { status: 200 }));
+  const stdout = output();
+  await expect(executeCli(["evidence", "dump", "--goal-id", goalId, "--project-id", projectId, "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).resolves.toBe(0);
+  expect(JSON.parse(stdout.lines[0]!)).toEqual({ bundle, certifications, report });
+  expect(fetch).toHaveBeenNthCalledWith(1, `https://maestro.test/v1/goals/${goalId}/evidence-bundle?projectId=${projectId}`, expect.anything());
+});
 
 describe("CLI entrypoint detection", () => {
   it("recognizes a symlinked executable by its resolved path", () => {
