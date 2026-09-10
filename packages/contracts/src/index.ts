@@ -738,6 +738,8 @@ export type CertifyWorkerInput = z.infer<typeof CertifyWorkerInputSchema>;
 const ConcertmasterFinalReportSchema = z.object({ reportId: UuidSchema, goalId: UuidSchema, success: z.boolean(), blockers: z.array(z.object({ reason: z.string(), detail: z.string() }).strict()), ceoRequest: z.string(), whatChanged: z.string(), userVisibleBehaviorPassed: z.boolean(), participatingDepartments: z.array(z.string()), keyDecisions: z.array(z.string()), dissent: z.array(z.string()), independentValidation: z.array(z.string()), costCents: z.number().int(), budgetCents: z.number().int(), incidents: z.array(z.string()), knownLimitations: z.array(z.string()), criticalActionAwaitingApproval: z.boolean(), evidenceBundleId: UuidSchema }).strict();
 export { ConcertmasterFinalReportSchema };
 export type ConcertmasterFinalReport = z.infer<typeof ConcertmasterFinalReportSchema>;
+export const EvidenceBundleReadSchema = z.object({ bundleId: UuidSchema, goalId: UuidSchema, content: z.record(z.string(), z.unknown()), hash: z.string().regex(/^[0-9a-f]{64}$/) }).strict();
+export type EvidenceBundleRead = z.infer<typeof EvidenceBundleReadSchema>;
 
 export const ImprovementDigestMetricSchema = z.object({ name: z.string().min(1), value: z.number().finite(), unit: z.string().min(1) }).strict();
 export const ImprovementDigestSourceRefSchema = z.object({

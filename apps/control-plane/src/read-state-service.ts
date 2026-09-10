@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 import type { GoalBudgetSummary, GoalResult } from "@maestro/contracts";
-import { listMetronomeChallenges, listEncoreCouncilRounds, listQualityCertifications, listConditionalCertifications, readConcertmasterFinalReport, getGoalGitIntegrationState, listWorkersForGoal, listImprovementDigests, type MetronomeChallenge, type EncoreCouncilRound, type QualityCertification, type ConditionalCertification, type ConcertmasterFinalReport } from "@maestro/persistence";
-import type { GoalGitIntegrationState } from "@maestro/contracts";
+import { listMetronomeChallenges, listEncoreCouncilRounds, listQualityCertifications, listConditionalCertifications, readConcertmasterFinalReport, readEvidenceBundle, getGoalGitIntegrationState, listWorkersForGoal, listImprovementDigests, type MetronomeChallenge, type EncoreCouncilRound, type QualityCertification, type ConditionalCertification, type ConcertmasterFinalReport } from "@maestro/persistence";
+import type { EvidenceBundleRead, GoalGitIntegrationState } from "@maestro/contracts";
 import type { ImprovementDigest, Worker } from "@maestro/domain";
 
 export class ReadStateGoalNotFoundError extends Error {}
@@ -12,6 +12,7 @@ export interface ReadStateService {
   listEncoreCouncilRounds(goalId: string, projectId: string): Promise<readonly EncoreCouncilRound[]>;
   listCertifications(goalId: string, projectId: string): Promise<readonly (QualityCertification & { kind: "quality" } | ConditionalCertification)[]>;
   getConcertmasterReport(goalId: string, projectId: string): Promise<ConcertmasterFinalReport | undefined>;
+  getEvidenceBundle(goalId: string, projectId: string): Promise<EvidenceBundleRead>;
   getGitIntegrationState(goalId: string, projectId: string): Promise<GoalGitIntegrationState>;
   listWorkersForGoal(goalId: string, projectId: string): Promise<readonly Worker[]>;
   listImprovementDigestsForGoal(goalId: string, projectId: string, operatorId: string): Promise<readonly ImprovementDigest[]>;
@@ -48,6 +49,12 @@ export function createReadStateService(pool: Pool): ReadStateService {
       await assertGoalProject(goalId, projectId);
       const row = await pool.query<{ report_id: string }>("SELECT report_id FROM concertmaster_final_reports WHERE goal_id = $1 ORDER BY created_at DESC, report_id DESC LIMIT 1", [goalId]);
       return row.rowCount === 1 ? readConcertmasterFinalReport(pool, row.rows[0]!.report_id) : undefined;
+    },
+    async getEvidenceBundle(goalId, projectId) {
+      await assertGoalProject(goalId, projectId);
+      const row = await pool.query<{ bundle_id: string }>("SELECT bundle_id FROM evidence_bundles WHERE goal_id = $1 ORDER BY created_at DESC, bundle_id DESC LIMIT 1", [goalId]);
+      if (row.rowCount !== 1) throw new ReadStateGoalNotFoundError("Evidence bundle not found for Goal");
+      return readEvidenceBundle(pool, row.rows[0]!.bundle_id);
     },
     async getGitIntegrationState(goalId, projectId) {
       await assertGoalProject(goalId, projectId);

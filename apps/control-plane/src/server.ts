@@ -47,6 +47,7 @@ import {
   EncoreCouncilRoundListSchema,
   CertificationListSchema,
   ConcertmasterFinalReportSchema,
+  EvidenceBundleReadSchema,
   GoalGitIntegrationStateSchema,
   WorkerListSchema,
   ImprovementDigestListSchema,
@@ -312,6 +313,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
     listEncoreCouncilRounds: async () => { throw new DurableStoreUnavailableError(); },
     listCertifications: async () => { throw new DurableStoreUnavailableError(); },
     getConcertmasterReport: async () => { throw new DurableStoreUnavailableError(); },
+    getEvidenceBundle: async () => { throw new DurableStoreUnavailableError(); },
     getGitIntegrationState: async () => { throw new DurableStoreUnavailableError(); },
     listWorkersForGoal: async () => { throw new DurableStoreUnavailableError(); },
     listImprovementDigestsForGoal: async () => { throw new DurableStoreUnavailableError(); },
@@ -1118,6 +1120,11 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const report = await readState.getConcertmasterReport(goalId, query.projectId);
     if (!report) throw new GoalNotFoundError();
     return reply.send(ConcertmasterFinalReportSchema.parse(report));
+  });
+  app.get("/v1/goals/:goalId/evidence-bundle", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const query = parse(GoalQuerySchema, request.query);
+    return reply.send(EvidenceBundleReadSchema.parse(await readState.getEvidenceBundle(goalId, query.projectId)));
   });
   app.get("/v1/goals/:goalId/git/integration-state", async (request, reply) => {
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
