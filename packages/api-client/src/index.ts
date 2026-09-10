@@ -78,6 +78,10 @@ import {
   ProjectAccessProvisionResultSchema,
   TransitionGoalInputSchema,
   GoalControlInputSchema,
+  CapabilitySessionSelectionInputSchema,
+  CapabilitySessionSchema,
+  EvidenceCaptureInputSchema,
+  EvidenceRecordSchema,
   UuidSchema,
   type CreateGoalInput,
   type CreateTaskContractInput,
@@ -152,6 +156,10 @@ import {
   type ProjectAccessProvisionInput,
   type ProjectAccessProvisionResult,
   type GoalControlInput,
+  type CapabilitySessionSelectionInput,
+  type CapabilitySession,
+  type EvidenceCaptureInput,
+  type EvidenceRecord,
 } from "@maestro/contracts";
 
 export class ApiError extends Error {
@@ -198,6 +206,8 @@ export interface ApiClient {
   emergencyStopGoal(goalId: string, input: GoalControlInput, commandId: string): Promise<GoalResult>;
   requestCriticalAction(goalId: string, input: CriticalActionInput, commandId: string): Promise<CriticalActionResult>;
   approveAndRunCriticalAction(goalId: string, input: CriticalActionApprovalInput, commandId: string): Promise<CriticalActionResult>;
+  selectFullAccessMode(goalId: string, input: CapabilitySessionSelectionInput): Promise<CapabilitySession>;
+  captureEvidence(goalId: string, input: EvidenceCaptureInput): Promise<EvidenceRecord>;
   activateHead(goalId: string, input: HeadParticipationInput, commandId: string): Promise<HeadParticipation>;
   createCouncil(goalId: string, input: CreateHeadCouncilInput, commandId: string): Promise<HeadCouncil>;
   getCouncil(councilId: string, projectId: string): Promise<HeadCouncil>;
@@ -528,6 +538,16 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
         headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
         body: JSON.stringify(CriticalActionApprovalInputSchema.parse(input)),
       }, CriticalActionResultSchema);
+    },
+    selectFullAccessMode(goalId, input) {
+      return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/capabilities/full-access-mode`, {
+        method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(CapabilitySessionSelectionInputSchema.parse(input)),
+      }, CapabilitySessionSchema);
+    },
+    captureEvidence(goalId, input) {
+      return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/evidence-records`, {
+        method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(EvidenceCaptureInputSchema.parse(input)),
+      }, EvidenceRecordSchema);
     },
     activateHead(goalId, input, commandId) {
       const parsedGoalId = UuidSchema.parse(goalId);

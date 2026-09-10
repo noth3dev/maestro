@@ -331,3 +331,16 @@ it("streams conversation events from a durable reconnect cursor", async () => {
   expect(received).toEqual([event]);
   expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/conversations/${conversationId}/events/stream?projectId=${projectId}&after=1`, expect.objectContaining({ headers: { authorization: "Bearer secret", "last-event-id": "1" }, redirect: "error" }));
 });
+
+it("selects full-access mode and captures Goal-scoped evidence", async () => {
+    const session = { sessionId: goalId, capabilityKind: "ipython", projectId, goalId, fullAccessMode: "retain_intermediate_approvals", selectedBy: "operator-1", selectedAt: "2025-01-01T00:00:00.000Z" };
+    const evidence = { evidenceId: "44444444-4444-4444-8444-444444444444", context: { correlationId: commandId, commandId, projectId, goalId, actorId: "operator-1" }, sha256: "a".repeat(64), byteLength: 4, kind: "test-result", mediaType: "text/plain", createdAt: "2025-01-01T00:00:00.000Z", retention: "project_lifetime" };
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(session), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(evidence), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test/", token: "top-secret", fetch });
+    await expect(client.selectFullAccessMode(goalId, { projectId, capabilityKind: "ipython", sessionId: goalId, fullAccessMode: "retain_intermediate_approvals" })).resolves.toEqual(session);
+    await expect(client.captureEvidence(goalId, { projectId, correlationId: commandId, commandId, kind: "test-result", mediaType: "text/plain", contentBase64: Buffer.from("test").toString("base64") })).resolves.toEqual(evidence);
+    expect(fetch).toHaveBeenNthCalledWith(1, `https://maestro.test/v1/goals/${goalId}/capabilities/full-access-mode`, expect.objectContaining({ method: "POST" }));
+    expect(fetch).toHaveBeenNthCalledWith(2, `https://maestro.test/v1/goals/${goalId}/evidence-records`, expect.objectContaining({ method: "POST" }));
+  });
