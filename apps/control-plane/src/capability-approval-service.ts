@@ -3,6 +3,9 @@ import {
   consumeCapabilityApproval,
   createCapabilityApproval,
   getCapabilitySession,
+  getCapabilityApproval,
+  findCapabilityApproval,
+  revokeCapabilityApproval,
   setCapabilitySession,
   type CapabilityApproval,
   type CapabilityApprovalInput,
@@ -12,7 +15,7 @@ import {
   type CapabilitySessionInput,
 } from "@maestro/persistence";
 import type { CapabilityTier, FullAccessMode } from "@maestro/persistence";
-import { classifyHostEffects } from "@maestro/domain";
+import { classifyHostEffects, isExternalCapabilityKind, type ExternalCapabilityActivation, type ExternalCapabilityKind, type ExternalCapabilityRepetitionScope } from "@maestro/domain";
 
 export type ApprovalActorKind = "department_head" | "encore_council" | "user";
 
@@ -30,6 +33,9 @@ export interface CapabilityApprovalLedger {
   setSession(input: CapabilitySessionInput): Promise<CapabilitySession>;
   getSession(capabilityKind: string, projectId: string, goalId: string): Promise<CapabilitySession | undefined>;
   consumeApproval(input: CapabilityConsumptionInput): Promise<CapabilityConsumptionResult>;
+  getApproval?(approvalId: string): Promise<CapabilityApproval | undefined>;
+  findApproval?(capabilityKind: string, projectId: string, goalId: string, commandId: string): Promise<CapabilityApproval | undefined>;
+  revokeApproval?(approvalId: string, resolvedBy: string): Promise<void>;
 }
 
 export interface CapabilityApprovalEffect {
@@ -46,6 +52,17 @@ export interface CapabilityApprovalRequest extends Omit<CapabilityApprovalInput,
   readonly saferAlternative: string;
   readonly sessionId?: string;
   readonly fullAccessMode?: FullAccessMode;
+}
+
+export interface ExternalCapabilityActivationRequest {
+  readonly activationId: string; readonly capabilityKind: ExternalCapabilityKind; readonly projectId: string; readonly goalId: string;
+  readonly expiresAt: Date; readonly repetitionScope: ExternalCapabilityRepetitionScope;
+}
+export interface ExternalCapabilityReference { readonly capabilityKind: ExternalCapabilityKind; readonly projectId: string; readonly goalId: string; }
+export interface ExternalCapabilityConsumptionRequest extends ExternalCapabilityReference { readonly commandId: string; readonly budgetEffectCents?: number; }
+export class ExternalCapabilityDeniedError extends Error {
+  readonly reason: "not_activated" | "expired" | "revoked" | "repetition_exhausted";
+  constructor(reason: ExternalCapabilityDeniedError["reason"]) { super(`External capability denied: ${reason}`); this.name = "ExternalCapabilityDeniedError"; this.reason = reason; }
 }
 
 export interface CapabilityApprovalServiceDependencies {
@@ -82,6 +99,10 @@ export interface CapabilityApprovalService {
   reject(request: CapabilityApprovalRequest, actor: ApprovalActor): Promise<CapabilityRejectionResult>;
   selectFullAccessMode(request: Pick<CapabilityApprovalRequest, "capabilityKind" | "projectId" | "goalId" | "sessionId" | "fullAccessMode">, actor: ApprovalActor): Promise<CapabilitySession>;
   consume(input: CapabilityConsumptionInput): Promise<CapabilityConsumptionResult>;
+  activateExternalCapability(request: ExternalCapabilityActivationRequest, actor: ApprovalActor): Promise<ExternalCapabilityActivation>;
+  isExternalCapabilityActive(reference: ExternalCapabilityReference): Promise<boolean>;
+  revokeExternalCapability(reference: ExternalCapabilityReference, actor: ApprovalActor): Promise<void>;
+  consumeExternalCapability(request: ExternalCapabilityConsumptionRequest): Promise<CapabilityConsumptionResult>;
 }
 
 function postgresLedger(pool: Pool): CapabilityApprovalLedger {
@@ -90,6 +111,9 @@ function postgresLedger(pool: Pool): CapabilityApprovalLedger {
     setSession: (input) => setCapabilitySession(pool, input),
     getSession: (kind, projectId, goalId) => getCapabilitySession(pool, kind, projectId, goalId),
     consumeApproval: (input) => consumeCapabilityApproval(pool, input),
+    getApproval: (approvalId) => getCapabilityApproval(pool, approvalId),
+    findApproval: (kind, projectId, goalId, commandId) => findCapabilityApproval(pool, kind, projectId, goalId, commandId),
+    revokeApproval: (approvalId, resolvedBy) => revokeCapabilityApproval(pool, approvalId, resolvedBy),
   };
 }
 
@@ -128,6 +152,8 @@ export function createCapabilityApprovalService(deps: CapabilityApprovalServiceD
   if (ledgerCandidate === undefined) throw new CapabilityApprovalInvalidRequestError("Capability approval ledger is required");
   const ledger: CapabilityApprovalLedger = ledgerCandidate;
   const clock = deps.clock ?? (() => new Date());
+  const localExternalActivations = new Map<string, ExternalCapabilityActivation>();
+  const externalKey = (kind: string, projectId: string, goalId: string) => `${kind}:${projectId}:${goalId}`;
 
   async function sessionFor(request: CapabilityApprovalRequest): Promise<CapabilitySession | undefined> {
     return ledger.getSession(request.capabilityKind, request.projectId, request.goalId);
@@ -230,10 +256,63 @@ export function createCapabilityApprovalService(deps: CapabilityApprovalServiceD
     return ledger.setSession({ sessionId, capabilityKind: request.capabilityKind, projectId: request.projectId, goalId: request.goalId, fullAccessMode: request.fullAccessMode, selectedBy: actor.actorId });
   }
 
+  async function activateExternalCapability(request: ExternalCapabilityActivationRequest, actor: ApprovalActor): Promise<ExternalCapabilityActivation> {
+    if (!isExternalCapabilityKind(request.capabilityKind)) throw new CapabilityApprovalInvalidRequestError("capabilityKind must be an external capability");
+    if (actor.kind !== "user" || actor.projectId !== request.projectId || actor.goalId !== request.goalId || !actor.active) throw new CapabilityApprovalUnauthorizedError("Only an active Goal-scoped user may activate an external capability");
+    if (!(await deps.authorizeActor({ actor, projectId: request.projectId, goalId: request.goalId }))) throw new CapabilityApprovalUnauthorizedError("User authentication or project membership failed");
+    if (!(request.expiresAt instanceof Date) || request.expiresAt <= clock()) throw new CapabilityApprovalInvalidRequestError("expiresAt must be in the future");
+    const action = "external-capability.activate"; const target = request.capabilityKind; const commandId = `external-capability:${request.capabilityKind}`;
+    const approval = await ledger.createApproval({ approvalId: request.activationId, capabilityKind: request.capabilityKind, projectId: request.projectId, goalId: request.goalId, commandId, action, target, policyVersion: 1, controlEpoch: "external-capability-v1", budgetEffectCents: 0, tier: "user", approverId: actor.actorId, decision: "approved", reason: "User explicitly activated this external capability for the Goal.", consequence: "Only the named external capability may be used until expiry, revocation, or repetition exhaustion.", expiresAt: request.expiresAt, repetitionScope: request.repetitionScope });
+    const activation = toExternalActivation(approval);
+    localExternalActivations.set(externalKey(request.capabilityKind, request.projectId, request.goalId), activation);
+    return activation;
+  }
+  function toExternalActivation(approval: CapabilityApproval): ExternalCapabilityActivation {
+    if (!isExternalCapabilityKind(approval.capabilityKind)) throw new CapabilityApprovalInvalidRequestError("Stored approval is not an external capability");
+    return { activationId: approval.approvalId, capabilityKind: approval.capabilityKind, projectId: approval.projectId, goalId: approval.goalId, activatedBy: approval.approverId, expiresAt: approval.expiresAt, repetitionScope: approval.repetitionScope as ExternalCapabilityRepetitionScope, revokedAt: approval.revokedAt, createdAt: approval.createdAt, repetitionRemainingCount: approval.repetitionRemainingCount, repetitionRemainingBudgetCents: approval.repetitionRemainingBudgetCents, repetitionExpiresAt: approval.repetitionExpiresAt };
+  }
+  async function findExternalActivation(reference: ExternalCapabilityReference): Promise<ExternalCapabilityActivation | undefined> {
+    if (!isExternalCapabilityKind(reference.capabilityKind)) return undefined;
+    if (ledger.findApproval) {
+      const approval = await ledger.findApproval(reference.capabilityKind, reference.projectId, reference.goalId, `external-capability:${reference.capabilityKind}`);
+      return approval !== undefined && approval.capabilityKind === reference.capabilityKind && approval.projectId === reference.projectId && approval.goalId === reference.goalId ? toExternalActivation(approval) : undefined;
+    }
+    return localExternalActivations.get(externalKey(reference.capabilityKind, reference.projectId, reference.goalId));
+  }
+  async function isExternalCapabilityActive(reference: ExternalCapabilityReference): Promise<boolean> {
+    const activation = await findExternalActivation(reference);
+    if (activation === undefined || activation.revokedAt !== null || activation.expiresAt <= clock()) return false;
+    if (activation.repetitionExpiresAt !== null && activation.repetitionExpiresAt <= clock()) return false;
+    if (activation.repetitionRemainingCount !== null && activation.repetitionRemainingCount <= 0) return false;
+    if (activation.repetitionRemainingBudgetCents !== null && activation.repetitionRemainingBudgetCents <= 0) return false;
+    return true;
+  }
+  async function revokeExternalCapability(reference: ExternalCapabilityReference, actor: ApprovalActor): Promise<void> {
+    if (!isExternalCapabilityKind(reference.capabilityKind)) throw new CapabilityApprovalInvalidRequestError("capabilityKind must be an external capability");
+    if (actor.kind !== "user" || actor.projectId !== reference.projectId || actor.goalId !== reference.goalId || !actor.active) throw new CapabilityApprovalUnauthorizedError("Only an active Goal-scoped user may revoke an external capability");
+    if (!(await deps.authorizeActor({ actor, projectId: reference.projectId, goalId: reference.goalId }))) throw new CapabilityApprovalUnauthorizedError("User authentication or project membership failed");
+    const activation = await findExternalActivation(reference);
+    if (activation === undefined) throw new ExternalCapabilityDeniedError("not_activated");
+    if (ledger.revokeApproval) await ledger.revokeApproval(activation.activationId, actor.actorId);
+    localExternalActivations.set(externalKey(reference.capabilityKind, reference.projectId, reference.goalId), { ...activation, revokedAt: clock() });
+  }
+  async function consumeExternalCapability(request: ExternalCapabilityConsumptionRequest): Promise<CapabilityConsumptionResult> {
+    const activation = await findExternalActivation(request);
+    if (activation === undefined) throw new ExternalCapabilityDeniedError("not_activated");
+    if (activation.revokedAt !== null) throw new ExternalCapabilityDeniedError("revoked");
+    if (activation.expiresAt <= clock() || (activation.repetitionExpiresAt !== null && activation.repetitionExpiresAt <= clock())) throw new ExternalCapabilityDeniedError("expired");
+    if ((activation.repetitionRemainingCount !== null && activation.repetitionRemainingCount <= 0) || (activation.repetitionRemainingBudgetCents !== null && activation.repetitionRemainingBudgetCents < (request.budgetEffectCents ?? 0))) throw new ExternalCapabilityDeniedError("repetition_exhausted");
+    const result = await ledger.consumeApproval({ approvalId: activation.activationId, capabilityKind: request.capabilityKind, projectId: request.projectId, goalId: request.goalId, commandId: request.commandId, action: "external-capability.activate", target: request.capabilityKind, policyVersion: 1, controlEpoch: "external-capability-v1", budgetEffectCents: request.budgetEffectCents ?? 0 });
+    if (result.consumed) {
+      const current = localExternalActivations.get(externalKey(request.capabilityKind, request.projectId, request.goalId));
+      if (current !== undefined) localExternalActivations.set(externalKey(request.capabilityKind, request.projectId, request.goalId), { ...current, repetitionRemainingCount: result.remainingCount, repetitionRemainingBudgetCents: result.remainingBudgetCents });
+    }
+    return result;
+  }
+
   return {
-    approve,
-    reject,
-    selectFullAccessMode,
+    approve, reject, selectFullAccessMode,
     consume: (input) => ledger.consumeApproval(input),
+    activateExternalCapability, isExternalCapabilityActive, revokeExternalCapability, consumeExternalCapability,
   };
 }

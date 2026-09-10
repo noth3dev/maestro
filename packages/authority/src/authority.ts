@@ -168,7 +168,7 @@ export class AuthorizedEffectExecutor {
     }
   }
 
-  async execute(request: ActionRequest, effect: () => Promise<unknown>): Promise<AuthorityDecision> {
+  async execute(request: ActionRequest, effect: () => Promise<unknown>, beforeClaim?: () => Promise<void>): Promise<AuthorityDecision> {
     let decision: AuthorityDecision;
     try {
       const records = await this.repository.load(request);
@@ -202,6 +202,11 @@ export class AuthorizedEffectExecutor {
     }
 
     if (final.effect !== "allow") return final;
+
+    // Capability gates run after authority/control decisions but before the
+    // durable effect claim. A rejected capability must not burn the command
+    // idempotency claim, so a retry after explicit activation can proceed.
+    if (beforeClaim !== undefined) await beforeClaim();
 
     // A provider effect cannot be rolled back with the surrounding audit
     // write. Claim the command durably first so a lost HTTP response or

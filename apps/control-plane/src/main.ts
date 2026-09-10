@@ -649,6 +649,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   const authenticator: OperatorAuthenticator = {
     authenticateBearerSecret: (secret) => authenticateLocalOperator(pool, secret),
   };
+  const externalDeploymentGate: { require?: (input: { projectId: string; goalId: string; commandId: string; budgetEffectCents: number }) => Promise<void> } = {};
   const criticalActionService = createCriticalActionService({
     pool,
     ...(config.ceoOperatorId === undefined ? {} : { ceoOperatorId: config.ceoOperatorId }),
@@ -663,8 +664,12 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     // A missing production adapter fails closed instead of returning allow for
     // a no-op callback. Tests may inject a real observable effect.
     effect: overrides.criticalActionEffect ?? (async () => { throw new Error("No critical-action effect adapter is configured"); }),
+    requireExternalCapability: async (input) => {
+      if (externalDeploymentGate.require === undefined) throw new Error("External deployment capability gate is not configured");
+      await externalDeploymentGate.require(input);
+    },
   });
-    const capabilityApprovalService = createCapabilityApprovalService({
+  const capabilityApprovalService = createCapabilityApprovalService({
     pool,
     resolveDepartmentHead: async () => undefined,
     resolveEncoreCouncil: async () => undefined,
@@ -675,6 +680,9 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       return goal.rowCount === 1 && goal.rows[0]!.project_id === projectId;
     },
   });
+  externalDeploymentGate.require = async ({ projectId, goalId, commandId, budgetEffectCents }) => {
+    await capabilityApprovalService.consumeExternalCapability({ capabilityKind: "deployment", projectId, goalId, commandId, budgetEffectCents });
+  };
   const evidenceCaptureService = createEvidenceCaptureService({
     pool,
     store: new FileEvidenceStore(config.evidenceDir),

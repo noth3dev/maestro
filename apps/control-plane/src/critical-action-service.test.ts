@@ -64,6 +64,7 @@ describe("critical action service", () => {
       repository: fakeRepository({ load: async () => [approval] }),
       effect,
       getControlEpoch: async () => "1",
+      requireExternalCapability: async () => {},
     });
 
     const decision = await service.performCriticalAction(
@@ -112,6 +113,28 @@ describe("critical action service", () => {
     );
 
     expect(decision).toMatchObject({ effect: "deny", reason: "emergency_stop" });
+    expect(effect).not.toHaveBeenCalled();
+  });
+
+  it("requires the deployment external capability before executing remote push", async () => {
+    const effect = vi.fn(async () => {});
+    const requireExternalCapability = vi.fn(async () => { throw new Error("External capability denied: not_activated"); });
+    const claimEffect = vi.fn(async () => true);
+    const projectId = randomUUID(); const goalId = randomUUID(); const commandId = randomUUID();
+    const approval: AuthorityRecord = { recordId: randomUUID(), kind: "approval", commandId, projectId, actorId: operator.operatorId, goalId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0, expiresAt: new Date("2999-01-01T00:00:00Z") };
+    const service = createCriticalActionService({ repository: fakeRepository({ load: async () => [approval], claimEffect }), effect, getControlEpoch: async () => "1", requireExternalCapability });
+    await expect(service.performCriticalAction(goalId, { projectId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0 }, commandId, operator)).rejects.toThrow("External capability denied");
+    expect(requireExternalCapability).toHaveBeenCalledWith({ projectId, goalId, commandId, budgetEffectCents: 0 });
+    expect(claimEffect).not.toHaveBeenCalled();
+    expect(effect).not.toHaveBeenCalled();
+  });
+
+  it("fails closed for deployment.release when no external gate is composed", async () => {
+    const effect = vi.fn(async () => {});
+    const projectId = randomUUID(); const goalId = randomUUID(); const commandId = randomUUID();
+    const approval: AuthorityRecord = { recordId: randomUUID(), kind: "approval", commandId, projectId, actorId: operator.operatorId, goalId, action: "deployment.release", target: "production", policyVersion: 1, budgetEffectCents: 0, expiresAt: new Date("2999-01-01T00:00:00Z") };
+    const service = createCriticalActionService({ repository: fakeRepository({ load: async () => [approval] }), effect, getControlEpoch: async () => "1" });
+    await expect(service.performCriticalAction(goalId, { projectId, action: "deployment.release", target: "production", policyVersion: 1, budgetEffectCents: 0 }, commandId, operator)).rejects.toThrow("External deployment capability gate is not configured");
     expect(effect).not.toHaveBeenCalled();
   });
 

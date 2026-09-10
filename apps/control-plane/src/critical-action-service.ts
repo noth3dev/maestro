@@ -30,6 +30,8 @@ export interface CriticalActionServiceDependencies {
   ceoOperatorId?: string;
   /** The only externally observable side effect. Never invoked unless the durable gateway allows the action. */
   effect: (request: ActionRequest) => Promise<void>;
+  /** Deployment effects, including remote push, must consume an external deployment activation first. */
+  requireExternalCapability?: (input: { projectId: string; goalId: string; commandId: string; budgetEffectCents: number }) => Promise<void>;
   /** Current durable Goal control epoch, read the same way the rest of the control plane reads it. */
   getControlEpoch: (projectId: string, goalId: string) => Promise<string>;
   /** Production composition must verify the Goal exists and belongs to the stated project. */
@@ -77,6 +79,7 @@ export class CriticalActionProjectMismatchError extends Error {
  */
 export function createCriticalActionService(deps: CriticalActionServiceDependencies): CriticalActionService {
   const executor = new AuthorizedEffectExecutor(deps.repository, deps.clock);
+  const requireExternalCapability = deps.requireExternalCapability ?? (async () => { throw new Error("External deployment capability gate is not configured"); });
   return {
     async performCriticalAction(goalId, input, commandId, operator) {
       await deps.assertGoalProjectBinding?.(input.projectId, goalId);
@@ -97,7 +100,11 @@ export function createCriticalActionService(deps: CriticalActionServiceDependenc
         budgetEffectCents: input.budgetEffectCents,
         controlEpoch,
       };
-      return executor.execute(request, () => deps.effect(request));
+      return executor.execute(request, () => deps.effect(request), async () => {
+        if (input.action === "git.remote.push" || input.action.startsWith("deployment.")) {
+          await requireExternalCapability({ projectId: input.projectId, goalId, commandId, budgetEffectCents: input.budgetEffectCents });
+        }
+      });
     },
     async approveAndPerformCriticalAction(goalId, input, commandId, operator) {
       if (deps.ceoOperatorId === undefined || operator.operatorId !== deps.ceoOperatorId) {

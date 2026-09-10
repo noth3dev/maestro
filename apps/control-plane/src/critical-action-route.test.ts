@@ -117,6 +117,7 @@ describe("critical-action route wired to the real durable authority gateway", ()
       repository: fakeRepository({ load: async () => [approval] }),
       effect,
       getControlEpoch: async () => "1",
+      requireExternalCapability: async () => {},
     });
     const app = buildServer({ goalService: fakeGoalService(), authenticator: authenticated(), criticalActionService });
 
