@@ -3839,3 +3839,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 Plan 3 S4 runbook correction pass: bound Goal creation to the Task Contract, made Head activation explicitly contract-bound, forced the live CLI to the just-started local Control Plane port, added goal/department/worker Git setup commands, removed suppressed Quality certification errors, and executed/asserted the remote-block fixture. RED runbook assertions failed before the edits and then passed with build/lint plus focused S4 verification.
 
 - 2026-09-10 Plan 3 S4 correction-pass verification: full no-DB `npm run lint && npm test` passed (145/208 files, 1017/1434 tests); 63 PostgreSQL integration files and 417 tests remained skipped because PostgreSQL is unavailable. The current worktree is clean at `76ceace`.
+
+- 2026-09-10 Plan 3 S4 correction pass 2: corrected the remaining Goal/Task Contract lifecycle order so the contract is confirmed/launched before Goal creation; Step 3 now creates the contract-bound Goal and CEO conversation. Build/lint and the runbook test pass.

@@ -51,12 +51,6 @@ Create the Task Contract first so the Goal is durably bound to the launched scen
 node "$TOOLS/write-input.mjs" --kind contract --project "$PROJECT_ID" --repository "$TARGET" --base "$BASE_REVISION" --out "$SCENARIO_DIR/contract-substance.json"
 export CONTRACT_ID="$(uuid)"
 $MAESTRO task-contract create --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --substance-json "$(cat "$SCENARIO_DIR/contract-substance.json")" --json > "$SCENARIO_DIR/contract.json"
-export COMMAND_ID="$(uuid)"
-$MAESTRO goal create --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --command-id "$COMMAND_ID" --json > "$SCENARIO_DIR/goal.json"
-export GOAL_ID="$(json_value "$SCENARIO_DIR/goal.json" goalId)"
-$MAESTRO conversation create --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --model "$MAESTRO_MODEL" --json > "$SCENARIO_DIR/conversation.json"
-export CONVERSATION_ID="$(json_value "$SCENARIO_DIR/conversation.json" conversationId)"
-$MAESTRO conversation turn --conversation-id "$CONVERSATION_ID" --project-id "$PROJECT_ID" --text "Repair the discount calculation in $TARGET; do not push remotely." --json > "$SCENARIO_DIR/ceo-request.json"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -65,7 +59,7 @@ CI fake-provider command (the CI path uses its own disposable target):
 node "$TOOLS/run-fake-scenario.mjs" --step 1 --target "$FAKE_TARGET" --state "$FAKE_STATE"
 ```
 
-Observable: `contract.json` and `goal.json` share `$CONTRACT_ID`; the Goal has a non-null contract binding, one conversation exists, and no worker or effect exists.
+Observable: the draft contract records the disposable target and immutable base revision; no Goal, worker, or effect exists yet.
 
 ## Step 2 — Contract readback
 
@@ -81,7 +75,7 @@ CI fake-provider command (the CI path uses its own disposable target):
 node "$TOOLS/run-fake-scenario.mjs" --step 2 --target "$FAKE_TARGET" --state "$FAKE_STATE"
 ```
 
-Observable: the contract binds `$TARGET`, the immutable base revision, desired outcome, scope, non-goals, and test evidence, and the Goal still reports `$CONTRACT_ID`.
+Observable: the contract binds `$TARGET`, the immutable base revision, desired outcome, scope, non-goals, and test evidence; it remains in the exact state required for Step 3 confirmation.
 
 ## Step 3 — Exact launch confirmation
 
@@ -92,6 +86,12 @@ export CONTRACT_VERSION="$(json_value "$SCENARIO_DIR/contract.json" version)"
 export CONTRACT_HASH="$(json_value "$SCENARIO_DIR/contract.json" contentHash)"
 $MAESTRO task-contract confirm --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --version "$CONTRACT_VERSION" --content-hash "$CONTRACT_HASH" --command-id "$(uuid)" --json > "$SCENARIO_DIR/confirmation.json"
 $MAESTRO task-contract launch --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/launch.json"
+export COMMAND_ID="$(uuid)"
+$MAESTRO goal create --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --command-id "$COMMAND_ID" --json > "$SCENARIO_DIR/goal.json"
+export GOAL_ID="$(json_value "$SCENARIO_DIR/goal.json" goalId)"
+$MAESTRO conversation create --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --model "$MAESTRO_MODEL" --json > "$SCENARIO_DIR/conversation.json"
+export CONVERSATION_ID="$(json_value "$SCENARIO_DIR/conversation.json" conversationId)"
+$MAESTRO conversation turn --conversation-id "$CONVERSATION_ID" --project-id "$PROJECT_ID" --text "Repair the discount calculation in $TARGET; do not push remotely." --json > "$SCENARIO_DIR/ceo-request.json"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -100,7 +100,7 @@ CI fake-provider command (the CI path uses its own disposable target):
 node "$TOOLS/run-fake-scenario.mjs" --step 3 --target "$FAKE_TARGET" --state "$FAKE_STATE"
 ```
 
-Observable: confirmation is durable before launch; a changed `contentHash` makes the command fail and no worker starts.
+Observable: confirmation is durable before launch; a changed `contentHash` makes the command fail; the launched contract is then bound to the newly created Goal and CEO conversation.
 
 ## Step 4 — Necessary Heads only
 
