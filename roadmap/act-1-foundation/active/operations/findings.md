@@ -1813,3 +1813,14 @@ All downstream routing documentation must use this contract and must not restore
 
 
 - 2026-09-10 CI gate resolution: run `34486161844` completed green with no failing job or test. The previous gate blocker is cleared. The remaining blocker is the unfinished Plan 3 S4 exit evidence documented in the active S4 worktree; S5 and live acceptance remain out of scope until S4 closes.
+
+
+- 2026-09-10 S4 finding: the prior runbook used fictional `MAESTRO_ACCESS_MODE=full-access-read/full-access-write` values. Production defines only `CapabilityApprovalService.selectFullAccessMode()` with Goal-scoped session modes `retain_intermediate_approvals` and `skip_intermediate_approvals`, but `buildServer`, the production Control Plane composition, and the CLI expose no route/command that invokes it. The runbook now fails closed and names this as a live Step 13 blocker; the fake harness uses the real mode values only. Do not merge S4 or hand off live acceptance until an authenticated selection surface exists or the production owner explicitly resolves this plan contradiction.
+
+- 2026-09-10 S4 verification finding: no regression appeared in the full no-DB suite after target-bound worker input, repair messaging, guarded integration, and canonical fake modes were updated. This does not replace PostgreSQL/provider evidence; the public `selectFullAccessMode()` surface remains the only known release-gate blocker.
+
+- 2026-09-10 S4 review remediation finding: the fake filenames previously supplied as integration/certification evidence were invalid because production requires UUID evidence records scoped to this Goal. The runbook now requires `INTEGRATION_EVIDENCE_ID` and fails closed with an explicit note that the public CLI has no evidence-capture command. This is an unresolved production-surface blocker, not evidence of a successful live gate.
+
+- 2026-09-10 S4 final verification finding: the latest full no-DB and PostgreSQL runs are green, but green tests do not satisfy the live exit gate. The runbook now correctly fails closed for two production-surface gaps: no authenticated `selectFullAccessMode()` route/command and no public evidence-capture operation to produce Goal-scoped UUID evidence records required by `worker-advance` and passed Quality certification.
+
+- 2026-09-10 S4 unresolved execution blocker: `spawnWorker` awaits the provider prompt, and a normal no-tool native turn can reach `succeeded` before the runbook sends its repair message. `sendWorkerMessageUnderOwnerClaim` rejects `succeeded`, `failed`, `cancelled`, and `unknown`; no production hold, follow-up wait, or requeue operation exists. Therefore the Step 9/10 live repair sequence is not deterministic on the current surface. Do not merge, push, hand off, or start S5 until this lifecycle gap is resolved.

@@ -3889,3 +3889,14 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 
 - 2026-09-10 S6b push CI completion: run `34486161844` for commit `0fd02f5` completed successfully. Build and lint passed, and the PostgreSQL 17 Vitest job passed. The Plan 3 S4 worktree at `37220a0` is now eligible to resume; no S5 or live acceptance work has started.
+
+
+- 2026-09-10 Plan 3 S4 continuation: re-authored the release runbook against S6b worker interfaces. The runbook now requires `MAESTRO_API_TOKEN`, binds `repositoryPath` and `worktreePath` before `worker spawn`, uses `worker message` for repair delivery, and records guarded `git worker-advance` evidence before freezing the Goal revision. Fake-provider mode checks now use the production values `retain_intermediate_approvals` and `skip_intermediate_approvals`. Focused release tests passed (2 files / 5 tests); build, lint, and modified-module syntax checks passed. S4 is not closed because the live capability-mode selection surface is still absent.
+
+- 2026-09-10 S4 verification: after the runbook and fake-harness re-authoring, `npm run build`, `npm run lint`, modified-module syntax checks, focused release tests (5/5), and full no-DB Vitest (146 passed / 63 skipped files; 1025 passed / 422 skipped tests) all passed. Real PostgreSQL and independent review are still required, and the live Step 13 capability-selection surface blocks the slice.
+
+- 2026-09-10 S4 review remediation: independent review found and the worktree corrected the worker-advance/accept ordering, Quality authority activation and certification fixture, bound-worktree command paths, and invalid Mission Bundle fields. The passed certification now requires an explicit durable Goal evidence UUID instead of fake filenames. Focused release tests remain green.
+
+- 2026-09-10 S4 current verification: root recheck confirmed main `c22938d` clean, build green, and latest CI `34486714616` successful. After review remediation, the worktree passed build, lint, full no-DB Vitest (146 passed / 63 skipped files; 1025 passed / 422 skipped tests), focused release tests (5/5), fixture-shape checks, and serial PostgreSQL Vitest (209 files / 1457 tests). S4 remains open pending public evidence capture and capability-mode selection surfaces.
+
+- 2026-09-10 S4 final review status: current review remains `REVIEW: BLOCK` only because production worker execution has no deterministic hold/requeue state. A normal `worker spawn` can await a completed prompt and become `succeeded` before Step 9/10; `worker message` then correctly rejects terminal workers. The runbook now accepts the valid `spawned|running` states and fails closed otherwise, rather than pretending repair evidence exists.
