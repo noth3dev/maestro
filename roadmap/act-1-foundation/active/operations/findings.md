@@ -1667,3 +1667,9 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 S1 CI gate: remediation commit `f383328d` CI run `34424613492` is red. Build/lint passed, but PostgreSQL Vitest had 9 failures: first actionable failure `packages/persistence/src/evidence-bundle.ts:252` (`Routing evidence identity or canonical payload mismatch`) in the report-success integration scenarios; `ensemble-router-artifacts.integration.test.ts:257` also rejects the updated routing fixture as invalid. S1 is blocked; do not merge or advance to S2 until the PostgreSQL failures are fixed and CI is green.
 
 - 2026-09-10 S1 CI follow-up: independent review found the same PostgreSQL `int8` normalization gap in `concertmaster-report.ts` (report lineage expected payload), after the first fix handled only `evidence-bundle.ts`. Normalize `overlay_version` in report row binding as well; rerun focused and CI.
+
+- 2026-09-10 S1 independent review (commit 27401e5): **FAIL**. High: below-requirement report certification accepts a same-goal/project approval claim without binding it to the selected admission or checking repetition expiry/budget at claim time. Medium: nested `candidateRefs`, `rejections`, `pressureCalculation`, and `approvalIdentity` validation does not reject all extra own keys/accessors. Medium: durable evidence bundles omit `capability_repetition_claims`, so below-requirement lineage cannot be reconstructed from the bundle alone.
+
+- 2026-09-10 S1 review-remediation verification: local build/lint/full suite passed (138 files, 963 tests; 62 files, 409 tests skipped). Local Docker PostgreSQL is unavailable; fresh CI is required before acceptance.
+
+- 2026-09-10 S1 review-remediation final local check passed (138 files/963 tests; 62 files/409 tests skipped). PostgreSQL evidence remains CI-only because the local Docker daemon is unavailable.

@@ -59,6 +59,20 @@ describe("routing evidence boundary", () => {
     expect(() => assertValidRoutingEvidence({ ...evidence(), pressure: 201 })).toThrow(RoutingEvidenceValidationError);
     expect(() => assertValidRoutingEvidence({ ...evidence(), pressureBand: "low" as never })).toThrow(RoutingEvidenceValidationError);
   });
+  it("rejects extra own properties and accessors on nested arrays and objects", () => {
+    const candidateRefs = ["candidate-1"] as unknown as string[];
+    Object.defineProperty(candidateRefs, "extra", { enumerable: true, value: "unexpected" });
+    expect(() => assertValidRoutingEvidence({ ...evidence(), candidateRefs })).toThrow(RoutingEvidenceValidationError);
+
+    const pressureCalculation = { ...evidence().pressureCalculation };
+    Object.defineProperty(pressureCalculation, "pressure", { enumerable: true, get: () => 100 });
+    expect(() => assertValidRoutingEvidence({ ...evidence(), pressureCalculation })).toThrow(RoutingEvidenceValidationError);
+
+    const approvalIdentity = { capabilityKind: "ipython", commandId: "command-1", action: "edit", target: "src/server.ts" };
+    Object.defineProperty(approvalIdentity, "target", { enumerable: true, get: () => "src/server.ts" });
+    expect(() => assertValidRoutingEvidence({ ...evidence(), approvalRef: "approval-1", approvalIdentity })).toThrow(RoutingEvidenceValidationError);
+  });
+
 });
 
 it("accepts selector-compatible malformed-candidate rejection records", () => {

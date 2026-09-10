@@ -3744,3 +3744,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 S1 remediation: fixed the final review fixture defect by deriving the integration routing `taskDemandHash` from its per-test sealed TaskDemand (including fresh contract provenance), and aligned domain `createdAt` validation with the wire contract's UTC RFC3339 format. Focused checks: 30 passed; root and Secretary builds/lint/diff-check passed.
 
 - 2026-09-10 S1 CI follow-up: fixed the report lineage's PostgreSQL `bigint overlay_version` comparison and added a regression test for textual `"1"`; the prior post-CI-fix full non-PG suite passed 138/62 and 959/409, but this latest report normalization requires a fresh focused/full/CI gate.
+
+- 2026-09-10 S1 review gate: remediation CI `34425699118` for `27401e5` passed (build/lint and PostgreSQL Vitest), but fresh independent review returned **FAIL** with one high and two medium blockers: admission-bound approval claims/repetition validity, nested strict-value validation, and durable repetition-claim snapshots. S1 remains open; S2 is prohibited.
+
+- 2026-09-10 S1 review remediation: RED tests reproduced unrelated-admission claims, expired repetition windows, and hostile nested routing values. Implemented admission/budget/expiry lineage checks, immutable claim snapshots in the effect journal, strict nested array/object validation, and durable repetition-claim bundle retention. Full local `npm run build && npm run lint && npm test` passed: 138 files/963 tests passed, 62 files/409 tests skipped; PostgreSQL unavailable locally, pending fresh CI.
+
+- 2026-09-10 S1 review-remediation final local verification: `npm run build && npm run lint && npm test` passed with 138 files/963 tests passed and 62 files/409 tests skipped; exit 0. The remediation is ready for independent review and fresh PostgreSQL CI.
