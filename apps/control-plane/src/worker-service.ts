@@ -1,5 +1,6 @@
 import type { SpawnWorkerInput, Worker, WorkerMessageInput, WorkerObservation } from "@maestro/contracts";
 import { toInvocationRef, type ToolEvents, type ExecutionKernelPort } from "@maestro/domain";
+import { assertWorkspacePath } from "@maestro/git-adapter";
 import { assertProjectRole, cancelWorker, countActiveWorkersForProject, getGoalControl, listCapabilityJournal, listIpPythonSessionJournalForGoal, observeWorker, readDepartmentPlan, readHeadCouncil, readWorker, sendWorkerMessageUnderOwnerClaim, spawnWorker, WorkerError, type CouncilActorContext, type OperatorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
 
@@ -17,6 +18,7 @@ export interface WorkerServiceDependencies {
   /** Host-owned fixed model for the explicit pin mode. */
   nativeModelRef?: string;
   kernel: ExecutionKernelPort;
+  workspaceRoot?: string;
   withGoalLease: <T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
   prepareWorkerWorktree?: (workerId: string, input: { projectId: string; repositoryPath: string; worktreePath: string }, operatorId: string, commandId: string) => Promise<{ worktreePath: string }>;
   /**
@@ -100,13 +102,19 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
       if ((input.repositoryPath === undefined) !== (input.worktreePath === undefined)) throw new WorkerProjectMismatchError();
       const contractProject = council.snapshot.contract.content.project;
       const contractRepository = typeof contractProject === "object" && contractProject !== null && "repository" in contractProject && typeof contractProject.repository === "string" ? contractProject.repository : undefined;
-      if (input.repositoryPath !== undefined && contractRepository !== input.repositoryPath) throw new WorkerProjectMismatchError();
+      let canonicalRepositoryPath: string | undefined;
+      if (input.repositoryPath !== undefined) {
+        try {
+          canonicalRepositoryPath = assertWorkspacePath(input.repositoryPath, "repositoryPath", deps.workspaceRoot);
+          if (contractRepository === undefined || assertWorkspacePath(contractRepository, "contract repository", deps.workspaceRoot) !== canonicalRepositoryPath) throw new Error("repository mismatch");
+        } catch { throw new WorkerProjectMismatchError(); }
+      }
       const targetPreparation = input.worktreePath === undefined
         ? undefined
         : deps.prepareWorkerWorktree === undefined
           ? (() => { throw new WorkerError("Target-scoped worker preparation is not configured"); })
           : (workerId: string) => deps.prepareWorkerWorktree!(workerId, { projectId: input.projectId, repositoryPath: input.repositoryPath!, worktreePath: input.worktreePath! }, operator.operatorId, commandId).then((result) => result.worktreePath);
-      return deps.withGoalLease(council.goalId, (proof) => spawnWorker(deps.pool, deps.kernel, { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, commandId, ...(fixedModelRef === undefined ? {} : { modelRef: fixedModelRef }), ...(input.repositoryPath === undefined ? {} : { repositoryPath: input.repositoryPath, worktreePath: input.worktreePath! }), ...(targetPreparation === undefined ? {} : { prepareWorktree: targetPreparation }) }, proof, context).then(toApiWorker));
+      return deps.withGoalLease(council.goalId, (proof) => spawnWorker(deps.pool, deps.kernel, { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, commandId, ...(fixedModelRef === undefined ? {} : { modelRef: fixedModelRef }), ...(input.repositoryPath === undefined ? {} : { repositoryPath: canonicalRepositoryPath!, worktreePath: input.worktreePath! }), ...(targetPreparation === undefined ? {} : { prepareWorktree: targetPreparation }) }, proof, context).then(toApiWorker));
     },
     async get(workerId, projectId) {
       const worker = await readWorker(deps.pool, workerId);

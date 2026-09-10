@@ -267,8 +267,10 @@ export async function advanceWorkerIntegration(
     if (!/^[0-9a-f]{40}$/.test(workerHead)) throw new GitIntegrationError("Git returned an invalid worker branch revision SHA");
     const existing = await client.query<{ commit_sha: string; message: string; evidence_references: string[] }>("SELECT commit_sha, message, evidence_references FROM integration_commits WHERE worker_id = $1 AND commit_sha = $2 FOR SHARE", [workerId, workerHead]);
     if ((existing.rowCount ?? 0) > 0) {
+      const prior = existing.rows[0]!;
+      if (prior.message !== message.trim() || JSON.stringify(prior.evidence_references) !== JSON.stringify(uniqueEvidenceReferences)) throw new GitIntegrationError("Integration commit identity was reused with different content");
       await client.query("COMMIT"); open = false;
-      return { workerId, commitSha: existing.rows[0]!.commit_sha.trim(), message: existing.rows[0]!.message, evidenceReferences: existing.rows[0]!.evidence_references };
+      return { workerId, commitSha: prior.commit_sha.trim(), message: prior.message, evidenceReferences: prior.evidence_references };
     }
     const departmentHead = (await git.headRevision(repositoryPath, worktree.rows[0]!.base_branch_name)).trim();
     if (workerHead === departmentHead) throw new GitIntegrationError("Worker branch has no commit to integrate");

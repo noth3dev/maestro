@@ -671,11 +671,11 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   const departmentPlanService = createDepartmentPlanService({ pool, withGoalLease: goalService.withGoalLease! });
   const missionBundleService = createMissionBundleService({ pool, withGoalLease: goalService.withGoalLease! });
   const gitIntegrationService = createGitIntegrationService({
-    pool, withGoalLease: goalService.withGoalLease!,
+    pool, workspaceRoot: config.worktreeRoot, withGoalLease: goalService.withGoalLease!,
     createGitPort: (context) => overrides.gitPort ?? createLocalGitPort({ authority: authorityExecutor, context, workspaceRoot: config.worktreeRoot }),
     getControlEpoch: async (projectId, goalId) => (await getGoalControl(pool, projectId, goalId)).controlEpoch,
   });
-  const workerService = createWorkerService({ modelRoutingMode: config.modelRoutingMode, ...(config.nativeModelRef === undefined ? {} : { nativeModelRef: config.nativeModelRef }), pool, kernel: executionKernel, withGoalLease: goalService.withGoalLease!, prepareWorkerWorktree: (workerId, input, operatorId, commandId) => gitIntegrationService.createWorkerWorktree(workerId, input, operatorId, commandId), ...(config.maxConcurrentWorkersPerProject === undefined ? {} : { maxConcurrentWorkersPerProject: config.maxConcurrentWorkersPerProject }) });
+  const workerService = createWorkerService({ modelRoutingMode: config.modelRoutingMode, ...(config.nativeModelRef === undefined ? {} : { nativeModelRef: config.nativeModelRef }), pool, kernel: executionKernel, workspaceRoot: config.worktreeRoot, withGoalLease: goalService.withGoalLease!, prepareWorkerWorktree: (workerId, input, operatorId, commandId) => gitIntegrationService.createWorkerWorktree(workerId, input, operatorId, commandId), ...(config.maxConcurrentWorkersPerProject === undefined ? {} : { maxConcurrentWorkersPerProject: config.maxConcurrentWorkersPerProject }) });
   const certificationService = createCertificationService({ pool, withGoalLease: goalService.withGoalLease! });
   const metronomeService = createMetronomeService({ pool, withGoalLease: goalService.withGoalLease! });
   const encoreService = createEncoreService({
