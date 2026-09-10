@@ -89,6 +89,8 @@ import {
   WorkerIntegrationInputSchema,
   CapabilitySessionSelectionInputSchema,
   CapabilitySessionSchema,
+  EvidenceCaptureInputSchema,
+  EvidenceRecordSchema,
   IntegrationCommitSchema,
   GoalIntegrationBranchInputSchema,
   GoalIntegrationBranchSchema,
@@ -162,8 +164,10 @@ export type { TaskContractService } from "./task-contract-service.js";
 export type { HeadParticipationService } from "./head-participation-service.js";
 export type { CouncilService } from "./council-service.js";
 export type { CapabilityApprovalService } from "./capability-approval-service.js";
+export type { EvidenceCaptureService } from "./evidence-capture-service.js";
 import { DepartmentPlanProjectMismatchError, type DepartmentPlanService } from "./department-plan-service.js";
 import type { CapabilityApprovalService } from "./capability-approval-service.js";
+import type { EvidenceCaptureService } from "./evidence-capture-service.js";
 import { MissionBundleProjectMismatchError, type MissionBundleService } from "./mission-bundle-service.js";
 import { WorkerMessageRejectedError, WorkerProjectMismatchError, WorkerCapacityExceededError, type WorkerService } from "./worker-service.js";
 import { ConversationConflictError, ConversationModelNotAllowedError, ConversationNotFoundError, ConversationUnavailableError, type ConversationService } from "./conversation-service.js";
@@ -263,12 +267,13 @@ async function waitForAccountLoginStart(store: AccountLoginStore, operatorId: st
   throw new Error("account login start is still in progress");
 }
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, evidenceCaptureService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
   criticalActionService?: CriticalActionService;
   capabilityApprovalService?: CapabilityApprovalService;
+  evidenceCaptureService?: EvidenceCaptureService;
   pollingScheduler?: PollingScheduler;
   readStateService?: ReadStateService;
   taskContractService?: TaskContractService;
@@ -333,6 +338,9 @@ export function buildServer({ goalService, authenticator, eventService, critical
   const capabilityApprovals = capabilityApprovalService ?? {
     selectFullAccessMode: async () => { throw new DurableStoreUnavailableError(); },
   } satisfies Pick<CapabilityApprovalService, "selectFullAccessMode">;
+  const evidenceCapture = evidenceCaptureService ?? {
+    capture: async () => { throw new DurableStoreUnavailableError(); },
+  } satisfies EvidenceCaptureService;
   const taskContracts = taskContractService ?? {
     createTaskContract: async () => { throw new DurableStoreUnavailableError(); },
     getTaskContract: async () => { throw new DurableStoreUnavailableError(); },
@@ -447,6 +455,13 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const operatorContext = requestOperator(request as { operator?: OperatorContext });
     const session = await capabilityApprovals.selectFullAccessMode({ ...input, goalId }, { actorId: operatorContext.operatorId, kind: "user", projectId: input.projectId, goalId, active: true });
     return reply.status(200).send(CapabilitySessionSchema.parse({ ...session, selectedAt: session.selectedAt.toISOString() }));
+  });
+
+  app.post("/v1/goals/:goalId/evidence-records", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const input = parse(EvidenceCaptureInputSchema, request.body);
+    const record = await evidenceCapture.capture({ ...input, goalId }, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(EvidenceRecordSchema.parse(record));
   });
 
   app.setErrorHandler((error, _request, reply) => {
