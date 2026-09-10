@@ -42,6 +42,8 @@ describeDatabase("capability approval ledger", () => {
     tier: "Department Head",
     approverId: "head-1",
     decision: "approved",
+    reason: "The action is required for the approved Goal outcome.",
+    consequence: "The bounded effect may change the project state within the recorded scope.",
     expiresAt: new Date("2030-01-01T00:00:00Z"),
     repetitionScope: { kind: "bounded_count", count: 2 },
     ...overrides,
