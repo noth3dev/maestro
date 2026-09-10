@@ -1753,3 +1753,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 S6b continuation recheck: the environment still cannot provide PostgreSQL lifecycle execution; the mandatory integration gate remains unresolved. S6b remains open, and Plan 3 S4/S5 remain blocked.
 
 - 2026-09-10 repeated S6b blocker confirmation: no TS2307/dependency failure exists; the only unresolved gate remains unavailable real PostgreSQL execution for the 48 persistence lifecycle tests. Continuing to Plan 3 without this evidence would violate the execution order and exit criteria.
+
+- 2026-09-10 S6b environment blocker resolved: Windows Docker Desktop was startable through its installed executable even though WSL integration was initially unavailable. A disposable PostgreSQL 17 container provided `MAESTRO_TEST_DATABASE_URL`; the mandatory 48 persistence tests passed. The only failure was a test-fixture defect in the real lifecycle fake kernel, where `observe()` returned `[]`; `dd6c9e1` now returns the bound invocation and terminal observation, and the focused gate is green.
