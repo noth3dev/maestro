@@ -3939,3 +3939,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 S1 final review remediation: added an AuthorizedEffectExecutor pre-claim hook. External deployment/remote-push activation is checked after authority and Goal-control decisions but before durable command claiming, so denied attempts do not consume idempotency claims. Added the regression assertion.
 
 - 2026-09-10 Plan 4 S1 CI remediation: the PostgreSQL CI failure was reproduced as the composition-root authority test receiving 503 after the new deployment gate. Updated the integration fixture to seed a Goal-scoped deployment activation through the shared capability approval ledger before the approved remote-push step.
+
+- 2026-09-10 Plan 4 S2 `browser-device-narrow-grant`: created the isolated worktree and RED-tested browser execution without a Goal-scoped browser activation (the adapter previously reached the driver). Added an explicit fail-closed external capability gate to browser and device runtime boundaries; device-agent production wiring consumes the durable device activation/repetition claim before command claim/effect.
+
+- 2026-09-10 S2 review remediation: the real device-agent mTLS integration fixture now seeds an explicit durable `device` activation with bounded repetition before its first successful command, matching the production callback in `apps/device-agent/src/main.ts`.
+
+- 2026-09-10 S2 review remediation: moved the browser activation callback from pre-authority execution to `AuthorizedEffectExecutor` `beforeClaim`, preserving S1 ordering so a denied authority decision, page-ceiling rejection, or boundary failure cannot consume the external repetition budget.
