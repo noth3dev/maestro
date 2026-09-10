@@ -3,6 +3,8 @@ import { ConversationViewport } from "./conversation-viewport.js";
 
 const originalNoColor = process.env.NO_COLOR;
 const originalColorTerm = process.env.COLORTERM;
+const ansiEscapePattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+const stripAnsi = (value: string): string => value.replace(ansiEscapePattern, "");
 
 afterEach(() => {
   if (originalNoColor === undefined) delete process.env.NO_COLOR;
@@ -20,7 +22,7 @@ describe("ConversationViewport", () => {
       content: { heading: "**Maestro**", content: "Use **bold** safely", kind: "success" },
     }]);
 
-    const output = viewport.render(80).join("\n");
+    const output = stripAnsi(viewport.render(80).join("\n"));
 
     expect(output).toContain("Use bold safely");
     expect(output).not.toContain("**bold**");
