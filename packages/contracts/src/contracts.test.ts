@@ -239,6 +239,10 @@ describe("Ensemble Router artifact wire contracts", () => {
     expect(RoutingEvidenceSchema.safeParse({ ...evidence, pressureCalculation: { pressureFloor: 1, pressure: 100, explicitHeadUplift: 100 } }).success).toBe(false);
     expect(RoutingEvidenceSchema.safeParse({ ...evidence, taskKindRecipeVersions: { coding: 999 } }).success).toBe(false);
     expect(RoutingEvidenceSchema.safeParse({ ...evidence, createdAt: "now" }).success).toBe(false);
+    const hostileCandidateRefs = ["candidate-1"] as string[];
+    Object.defineProperty(hostileCandidateRefs, "extra", { enumerable: true, value: "unexpected" });
+    expect(RoutingEvidenceSchema.safeParse({ ...evidence, candidateRefs: hostileCandidateRefs }).success).toBe(false);
+
   });
 
   it("fails closed on missing facts, forbidden identity fields, and unavailable bindings", () => {
