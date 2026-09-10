@@ -22,8 +22,13 @@ export json_field='node -e'
 json_value() { node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8"))[process.argv[2]])' "$1" "$2"; }
 uuid() { node -e 'console.log(crypto.randomUUID())'; }
 export BASE_REVISION="$(git -C "$TARGET" rev-parse HEAD)"
-export FAKE_STATE="$SCENARIO_DIR/fake-state.json"
 npm run build
+# For a local live run, start and readiness-check the real Control Plane before Step 1.
+( cd apps/control-plane && node dist/main.js ) > "$SCENARIO_DIR/control-plane.log" 2>&1 &
+export CONTROL_PLANE_PID=$!
+export CONTROL_PLANE_URL="${MAESTRO_API_URL:-http://127.0.0.1:3000}"
+until curl -fsS "$CONTROL_PLANE_URL/readyz" >/dev/null; do kill -0 "$CONTROL_PLANE_PID" 2>/dev/null || { cat "$SCENARIO_DIR/control-plane.log"; exit 1; }; done
+export FAKE_STATE="$SCENARIO_DIR/fake-state.json"
 ```
 
 The initial target test is expected to fail because the target contains the seeded defect:
@@ -147,6 +152,9 @@ node "$TOOLS/write-input.mjs" --kind worker --project "$PROJECT_ID" --item "$ITE
 $MAESTRO worker spawn --council-id "$COUNCIL_ID" --department-id engineering --worker-json "$(cat "$SCENARIO_DIR/worker.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker.json.out"
 export WORKER_ID="$(json_value "$SCENARIO_DIR/worker.json.out" workerId)"
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-observation.json"
+$MAESTRO worker accept --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --reason "Native disposable target execution observed" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-accepted.json"
+$MAESTRO git goal-revision --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/integration-revision.json"
+$MAESTRO git status --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/git-status.json"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -220,9 +228,9 @@ Observable: Quality records `failed` or `blocked` for the seeded defect; the fin
 Commands:
 
 ```bash
-node "$TARGET/scripts/repair-seeded-defect.mjs"
+$MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-after-repair.json"
 npm test --prefix "$TARGET"
-export INTEGRATED_REVISION="$(git -C "$TARGET" rev-parse HEAD)"
+export INTEGRATED_REVISION="$(json_value "$SCENARIO_DIR/integration-revision.json" commitSha)"
 node "$TOOLS/write-input.mjs" --kind certification --project "$PROJECT_ID" --verdict passed --out "$SCENARIO_DIR/passing-quality-certification.json"
 $MAESTRO worker certify --worker-id "$WORKER_ID" --certification-json "$(cat "$SCENARIO_DIR/passing-quality-certification.json")" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/passing-certification.json"
 ```
