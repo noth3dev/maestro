@@ -3750,3 +3750,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 S1 review remediation: RED tests reproduced unrelated-admission claims, expired repetition windows, and hostile nested routing values. Implemented admission/budget/expiry lineage checks, immutable claim snapshots in the effect journal, strict nested array/object validation, and durable repetition-claim bundle retention. Full local `npm run build && npm run lint && npm test` passed: 138 files/963 tests passed, 62 files/409 tests skipped; PostgreSQL unavailable locally, pending fresh CI.
 
 - 2026-09-10 S1 review-remediation final local verification: `npm run build && npm run lint && npm test` passed with 138 files/963 tests passed and 62 files/409 tests skipped; exit 0. The remediation is ready for independent review and fresh PostgreSQL CI.
+
+- 2026-09-10 S1 remediation CI `34427399920` exposed a misplaced regression assertion (`ReferenceError: admissionCommandId is not defined`); moved it to the correct capability-approval test. The CI gate remains open and requires a fresh local/CI verification.
+
+- 2026-09-10 S1 review gate: CI `34427399920` failed only because a new integration assertion was misplaced (`ReferenceError: admissionCommandId is not defined`); after recording the correction, fresh review found additional strict admission/snapshot/model-profile/contracts gaps. S1 remains open and requires another RED-first remediation.
+
+- 2026-09-10 S1 second review remediation: added RED coverage for missing admission identity, duplicate claim snapshots, model-profile nested hostility, and contract-level hostile arrays; focused domain/report/contracts tests now pass 34/34, build/lint/diff-check pass. The prior CI failure was a test-placement defect; fresh CI is still required for the corrected tree.

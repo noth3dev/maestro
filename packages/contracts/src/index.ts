@@ -515,7 +515,44 @@ const RoutingCandidateRefSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]*
 const RoutingApprovalIdentitySchema = z.object({
   capabilityKind: RoutingRefSchema, commandId: RoutingRefSchema, action: RoutingRefSchema, target: RoutingRefSchema,
 }).strict();
-export const RoutingEvidenceSchema = z.object({
+function assertOrdinaryRoutingShape(value: unknown, seen = new Set<object>()): void {
+  if (value === null || typeof value !== "object") return;
+  if (seen.has(value)) throw new Error("routing evidence must not contain cycles");
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      if (Object.getPrototypeOf(value) !== Array.prototype) throw new Error("routing evidence arrays must use the standard prototype");
+      for (const key of Reflect.ownKeys(value)) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (key === "length") {
+          if (!descriptor || descriptor.enumerable || !("value" in descriptor) || descriptor.value !== value.length) throw new Error("routing evidence array length is invalid");
+        } else if (typeof key !== "string" || !/^(?:0|[1-9]\d*)$/.test(key) || Number(key) >= value.length || !descriptor?.enumerable || !("value" in descriptor)) {
+          throw new Error("routing evidence array contains an extra or accessor property");
+        }
+      }
+      for (let index = 0; index < value.length; index += 1) {
+        if (!Object.hasOwn(value, index)) throw new Error("routing evidence arrays must not be sparse");
+        assertOrdinaryRoutingShape(value[index], seen);
+      }
+      return;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) throw new Error("routing evidence objects must be plain");
+    for (const key of Reflect.ownKeys(value)) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (typeof key !== "string" || !descriptor?.enumerable || !("value" in descriptor)) throw new Error("routing evidence object contains an extra or accessor property");
+      assertOrdinaryRoutingShape(descriptor.value, seen);
+    }
+  } finally {
+    seen.delete(value);
+  }
+}
+
+const RoutingEvidenceHostileShapeGuard = z.unknown().superRefine((value, context) => {
+  try { assertOrdinaryRoutingShape(value); } catch (error) { context.addIssue({ code: "custom", message: error instanceof Error ? error.message : "routing evidence shape is invalid" }); }
+});
+
+const RoutingEvidencePayloadSchema = z.object({
   schemaVersion: z.literal(1), evidenceId: RoutingRefSchema, goalRef: RoutingRefSchema, projectRef: RoutingRefSchema,
   routeRef: RoutingRefSchema, mode: z.enum(["ensemble", "pin"]), selectedModelRef: z.string().regex(/^[^/\s]+\/[^/\s]+$/),
   accountBinding: RoutingRefSchema, candidateRefs: z.array(RoutingCandidateRefSchema).min(1).refine((values) => new Set(values).size === values.length, "candidateRefs must not contain duplicates"),
@@ -555,6 +592,7 @@ export const RoutingEvidenceSchema = z.object({
     context.addIssue({ code: "custom", path: ["operationalOverlaySnapshot"], message: "overlay snapshot identity must match routing evidence" });
   if (value.modelProfile.modelRef !== value.selectedModelRef) context.addIssue({ code: "custom", path: ["modelProfile", "modelRef"], message: "model profile identity must match selected model" });
 });
+export const RoutingEvidenceSchema = RoutingEvidenceHostileShapeGuard.pipe(RoutingEvidencePayloadSchema);
 export type RoutingEvidence = z.infer<typeof RoutingEvidenceSchema>;
 
 export const MissionBundleSubstanceSchema = z.object({

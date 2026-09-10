@@ -59,6 +59,12 @@ describe("routing evidence boundary", () => {
     expect(() => assertValidRoutingEvidence({ ...evidence(), pressure: 201 })).toThrow(RoutingEvidenceValidationError);
     expect(() => assertValidRoutingEvidence({ ...evidence(), pressureBand: "low" as never })).toThrow(RoutingEvidenceValidationError);
   });
+  it("rejects accessor-backed model profile evidence arrays", () => {
+    const modelProfile = structuredClone(evidence().modelProfile) as { capability: { axes: Record<string, { evidence: string[] }> } };
+    Object.defineProperty(modelProfile.capability.axes.reasoning.evidence, "extra", { enumerable: true, value: "unexpected" });
+    expect(() => assertValidRoutingEvidence({ ...evidence(), modelProfile })).toThrow(RoutingEvidenceValidationError);
+  });
+
   it("rejects extra own properties and accessors on nested arrays and objects", () => {
     const candidateRefs = ["candidate-1"] as unknown as string[];
     Object.defineProperty(candidateRefs, "extra", { enumerable: true, value: "unexpected" });
