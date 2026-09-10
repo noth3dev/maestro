@@ -616,3 +616,25 @@ describe("Goal control routes", () => {
     await app.close();
   });
 });
+
+describe("capability session route", () => {
+  it("selects a Goal-scoped full-access mode through the authenticated operator", async () => {
+    const session = { sessionId: goal.goalId, capabilityKind: "ipython", projectId: goal.projectId, goalId: goal.goalId, fullAccessMode: "skip_intermediate_approvals" as const, selectedBy: operator.operatorId, selectedAt: new Date("2025-01-01T00:00:00.000Z") };
+    const selectFullAccessMode = vi.fn(async () => session);
+    const app = buildServer({
+      goalService: fakeService(),
+      authenticator: authenticated(),
+      capabilityApprovalService: { selectFullAccessMode },
+    } as never);
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/goals/${goal.goalId}/capabilities/full-access-mode`,
+      headers: { authorization: "Bearer test-secret", "content-type": "application/json" },
+      payload: { projectId: goal.projectId, capabilityKind: "ipython", sessionId: goal.goalId, fullAccessMode: "skip_intermediate_approvals" },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ sessionId: goal.goalId, capabilityKind: "ipython", goalId: goal.goalId, fullAccessMode: "skip_intermediate_approvals" });
+    expect(selectFullAccessMode).toHaveBeenCalledWith({ capabilityKind: "ipython", projectId: goal.projectId, goalId: goal.goalId, sessionId: goal.goalId, fullAccessMode: "skip_intermediate_approvals" }, { actorId: operator.operatorId, kind: "user", projectId: goal.projectId, goalId: goal.goalId, active: true });
+    await app.close();
+  });
+});
