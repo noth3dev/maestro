@@ -3764,3 +3764,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 S1 final review found a multi-effect fail-open gap: report lineage selected only the first matching claim and could certify while another effect lacked unique snapshot evidence. Review verdict remains FAIL; a RED regression and same-worktree repair are required.
 
 - 2026-09-10 S1 review remediation: added a RED regression for two legitimate effect-index claims sharing one approval where the second snapshot is missing; confirmed the old evaluator failed to block, then added fail-closed validation across every matching claim plus deterministic SQL ordering. Focused report tests pass 16/16; fresh full no-DB and PostgreSQL checks remain pending.
+
+- 2026-09-10 S1 final self-verification evidence: multi-claim remediation `aa59e21` passed focused 16/16, no-DB `npm run check` at 968 passed / 410 skipped, lint exit 0, and dedicated PostgreSQL 17 suite at 200/200 files and 1388/1388 tests. Independent review is blocked by GPT-5.6 Luna provider limits (Codex 429, OpenRouter 402), so no acceptance verdict is recorded.
