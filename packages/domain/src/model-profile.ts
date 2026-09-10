@@ -49,7 +49,9 @@ function object(value: unknown, name: string): asserts value is Record<string, u
 
 function onlyKeys(value: Record<string, unknown>, allowed: readonly string[], name: string): void {
   for (const key of Reflect.ownKeys(value)) {
-    if (typeof key !== "string" || !allowed.includes(key)) throw new ModelCapabilityValidationError(`${name} has unknown field ${String(key)}`);
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (typeof key !== "string" || !allowed.includes(key) || !descriptor?.enumerable || !("value" in descriptor))
+      throw new ModelCapabilityValidationError(`${name} has an unknown, hidden, or accessor field ${String(key)}`);
   }
 }
 
@@ -66,14 +68,22 @@ function nonemptyLine(value: unknown, field: string): asserts value is string {
 }
 
 function evidence(value: unknown, field: string): asserts value is readonly string[] {
-  if (!Array.isArray(value) || value.length === 0) {
+  if (!Array.isArray(value) || value.length === 0 || Object.getPrototypeOf(value) !== Array.prototype)
     throw new ModelCapabilityValidationError(`${field} must contain at least one single-line reference`);
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (key === "length") {
+      if (!descriptor || descriptor.enumerable || !("value" in descriptor) || descriptor.value !== value.length)
+        throw new ModelCapabilityValidationError(`${field} has an invalid length property`);
+      continue;
+    }
+    if (typeof key !== "string" || !/^(?:0|[1-9]\d*)$/.test(key) || Number(key) >= value.length || !descriptor?.enumerable || !("value" in descriptor))
+      throw new ModelCapabilityValidationError(`${field} contains an extra or accessor property`);
   }
   for (let index = 0; index < value.length; index += 1) {
     const item = value[index];
-    if (!Object.hasOwn(value, index) || typeof item !== "string" || item.trim() === "" || /[\r\n]/.test(item)) {
+    if (!Object.hasOwn(value, index) || typeof item !== "string" || item.trim() === "" || /[\r\n]/.test(item))
       throw new ModelCapabilityValidationError(`${field} must contain at least one single-line reference`);
-    }
   }
 }
 

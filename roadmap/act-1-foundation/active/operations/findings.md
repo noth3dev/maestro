@@ -1673,3 +1673,9 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 S1 review-remediation verification: local build/lint/full suite passed (138 files, 963 tests; 62 files, 409 tests skipped). Local Docker PostgreSQL is unavailable; fresh CI is required before acceptance.
 
 - 2026-09-10 S1 review-remediation final local check passed (138 files/963 tests; 62 files/409 tests skipped). PostgreSQL evidence remains CI-only because the local Docker daemon is unavailable.
+
+- 2026-09-10 S1 remediation CI `34427399920` failed in `packages/persistence/src/capability-approval.integration.test.ts:203` because a new snapshot assertion was inserted into the wrong test and referenced an out-of-scope `admissionCommandId`. This is a test fixture placement defect, not a production failure; moved the assertion into the admission-aware pending-effect test.
+
+- 2026-09-10 S1 review after `866e14e`: **FAIL**. High: admission binding still has a fallback that accepts missing `admissionCommandId` when claim command equals binding idempotency; claim snapshot query is not correlated by `effectIndex` and does not fail closed on missing/duplicate journal evidence. Medium: count/budget snapshots lack exact claim-time consistency checks; model-profile nested arrays/objects and exported contracts `RoutingEvidenceSchema` still accept hostile accessors/extra array keys.
+
+- 2026-09-10 S1 second review remediation: RED tests reproduced command-id admission fallback, ambiguous multi-effect snapshots, accessor-backed model-profile evidence, and hostile routing contract arrays. Implemented explicit admission identity requirement, effect-index/count-correlated journal snapshots with fail-closed checks, strict model-profile descriptor validation, and a recursive ordinary-shape guard before `RoutingEvidenceSchema` parsing.
