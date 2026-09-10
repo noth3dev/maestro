@@ -262,6 +262,7 @@ export const StableApiErrorCodeSchema = z.enum([
   "task_contract_not_found", "task_contract_conflict", "task_contract_version_conflict",
   "exact_confirmation_required", "task_contract_integrity_error", "discord_signal_rejected", "worker_capacity_exceeded", "worker_message_rejected",
   "conversation_not_found", "conversation_conflict", "conversation_unavailable", "model_not_allowed", "provider_unavailable", "account_login_session_unknown",
+  "capability_unauthorized", "replay_conflict",
 ]);
 export const StableApiErrorSchema = z.object({
   error: z.object({ code: StableApiErrorCodeSchema, message: z.string().min(1) }).strict(),

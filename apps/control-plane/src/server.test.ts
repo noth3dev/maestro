@@ -5,7 +5,9 @@ import { buildServer, type EventService, type GoalService, type OperatorAuthenti
 import { ReadStateGoalNotFoundError, type ReadStateService } from "./read-state-service.js";
 import type { WorkerService } from "./worker-service.js";
 import type { Worker } from "@maestro/contracts";
-import { ProjectMembershipRequiredError, ProjectAccessAdminRequiredError, StaleGoalLeaseError, HeadActivationRequesterInactiveError } from "@maestro/persistence";
+import { ProjectMembershipRequiredError, ProjectAccessAdminRequiredError, StaleGoalLeaseError, HeadActivationRequesterInactiveError, CapabilityApprovalConflictError } from "@maestro/persistence";
+import { CapabilityApprovalUnauthorizedError, CapabilityApprovalInvalidRequestError } from "./capability-approval-service.js";
+import { EvidenceCaptureError } from "./evidence-capture-service.js";
 
 const goal = { goalId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02", projectId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01", state: "draft" as const, version: 1 };
 
@@ -637,6 +639,15 @@ describe("capability session route", () => {
     expect(selectFullAccessMode).toHaveBeenCalledWith({ capabilityKind: "ipython", projectId: goal.projectId, goalId: goal.goalId, sessionId: goal.goalId, fullAccessMode: "skip_intermediate_approvals" }, { actorId: operator.operatorId, kind: "user", projectId: goal.projectId, goalId: goal.goalId, active: true });
     await app.close();
   });
+
+  it("maps capability selection errors to stable client statuses", async () => {
+    for (const [error, expectedStatus] of [[new CapabilityApprovalUnauthorizedError(), 403], [new CapabilityApprovalInvalidRequestError("bad"), 400], [new CapabilityApprovalConflictError("replay"), 409]] as const) {
+      const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), capabilityApprovalService: { selectFullAccessMode: vi.fn(async () => { throw error; }) } } as never);
+      const response = await app.inject({ method: "POST", url: `/v1/goals/${goal.goalId}/capabilities/full-access-mode`, headers: { authorization: "Bearer test-secret", "content-type": "application/json" }, payload: { projectId: goal.projectId, capabilityKind: "ipython", sessionId: goal.goalId, fullAccessMode: "skip_intermediate_approvals" } });
+      expect(response.statusCode).toBe(expectedStatus);
+      await app.close();
+    }
+  });
 });
 
 describe("evidence capture route", () => {
@@ -657,6 +668,13 @@ describe("evidence capture route", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(record);
     expect(capture).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it("maps evidence capture validation errors to a client error", async () => {
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), evidenceCaptureService: { capture: vi.fn(async () => { throw new EvidenceCaptureError("invalid content"); }) } } as never);
+    const response = await app.inject({ method: "POST", url: `/v1/goals/${goal.goalId}/evidence-records`, headers: { authorization: "Bearer test-secret", "content-type": "application/json" }, payload: { projectId: goal.projectId, correlationId: goal.goalId, commandId: goal.goalId, kind: "test-result", mediaType: "text/plain", contentBase64: Buffer.from("test").toString("base64") } });
+    expect(response.statusCode).toBe(400);
     await app.close();
   });
 });

@@ -12,7 +12,7 @@ import { appendCapabilityJournal, appendIpPythonSessionJournal, assertProjectMem
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
 import { createCapabilityApprovalService } from "./capability-approval-service.js";
-import { createEvidenceCaptureService } from "./evidence-capture-service.js";
+import { createEvidenceCaptureService, EvidenceCaptureGoalBindingError } from "./evidence-capture-service.js";
 import { createDurableGoalService } from "./goal-service.js";
 import { createReadStateService } from "./read-state-service.js";
 import { createDurableTaskContractService } from "./task-contract-service.js";
@@ -680,7 +680,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     store: new FileEvidenceStore(config.evidenceDir),
     assertGoalProjectBinding: async (projectId, goalId) => {
       const goal = await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId]);
-      if (goal.rowCount !== 1 || goal.rows[0]!.project_id !== projectId) throw new Error("Goal project binding is invalid");
+      if (goal.rowCount !== 1 || goal.rows[0]!.project_id !== projectId) throw new EvidenceCaptureGoalBindingError();
     },
   });
   const headParticipationService = createHeadParticipationService({

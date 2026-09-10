@@ -13,6 +13,8 @@ import {
   DepartmentPlanNotFoundError,
   MissionBundleError,
   MissionBundleNotFoundError,
+  CapabilityApprovalConflictError,
+  EvidenceMetadataConflictError,
 } from "@maestro/persistence";
 import {
   ProjectAccessAdminRequiredError,
@@ -166,8 +168,8 @@ export type { CouncilService } from "./council-service.js";
 export type { CapabilityApprovalService } from "./capability-approval-service.js";
 export type { EvidenceCaptureService } from "./evidence-capture-service.js";
 import { DepartmentPlanProjectMismatchError, type DepartmentPlanService } from "./department-plan-service.js";
-import type { CapabilityApprovalService } from "./capability-approval-service.js";
-import type { EvidenceCaptureService } from "./evidence-capture-service.js";
+import { CapabilityApprovalUnauthorizedError, CapabilityApprovalInvalidRequestError, type CapabilityApprovalService } from "./capability-approval-service.js";
+import { EvidenceCaptureError, EvidenceCaptureGoalBindingError, type EvidenceCaptureService } from "./evidence-capture-service.js";
 import { MissionBundleProjectMismatchError, type MissionBundleService } from "./mission-bundle-service.js";
 import { WorkerMessageRejectedError, WorkerProjectMismatchError, WorkerCapacityExceededError, type WorkerService } from "./worker-service.js";
 import { ConversationConflictError, ConversationModelNotAllowedError, ConversationNotFoundError, ConversationUnavailableError, type ConversationService } from "./conversation-service.js";
@@ -1325,6 +1327,9 @@ function mapError(error: unknown): { status: number; body: StableApiError } {
   if (isMalformedJsonError(error) || error instanceof RequestValidationError) return apiError(400, "validation_error", "Invalid request");
   if (error instanceof AuthenticationRequiredError) return apiError(401, "authentication_required", "Authentication is required");
   if (error instanceof CredentialForbiddenError) return apiError(403, "credential_forbidden", "Credential is not active");
+  if (error instanceof CapabilityApprovalUnauthorizedError) return apiError(403, "capability_unauthorized", error.message);
+  if (error instanceof CapabilityApprovalInvalidRequestError || error instanceof EvidenceCaptureError || error instanceof EvidenceCaptureGoalBindingError) return apiError(400, "validation_error", error.message);
+  if (error instanceof CapabilityApprovalConflictError || error instanceof EvidenceMetadataConflictError) return apiError(409, "replay_conflict", error.message);
   if (error instanceof AuthenticationUnavailableError) return apiError(429, "authentication_unavailable", "Authentication is temporarily unavailable");
   if (error instanceof TaskContractProjectMismatchError || error instanceof TaskContractProjectBoundaryError || error instanceof CriticalActionProjectMismatchError) return apiError(400, "validation_error", error.message);
   if (error instanceof CriticalActionGoalNotFoundError) return apiError(404, "goal_not_found", error.message);
