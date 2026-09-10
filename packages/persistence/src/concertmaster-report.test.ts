@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { MODEL_CAPABILITY_AXES, type RoutingEvidence } from "@maestro/domain";
-import { evaluateRoutingEvidenceLineage, type RoutingEvidenceCertificationRow } from "./concertmaster-report.js";
+import { evaluateRoutingEvidenceLineage, renderRoutingApprovalDecision, renderRoutingReportSections, type RoutingCapabilityApproval, type RoutingEvidenceCertificationRow } from "./concertmaster-report.js";
 
 const route = (overrides: Partial<RoutingEvidence> = {}): RoutingEvidence => ({
   schemaVersion: 1, evidenceId: "evidence-1", goalRef: "goal-1", projectRef: "project-1", routeRef: "route-1", mode: "pin",
   selectedModelRef: "provider/model", accountBinding: "account-1", candidateRefs: ["candidate-1"], rejections: [],
   taskDemandHash: "a".repeat(64), pressure: 100, pressureBand: "high", decisionLayer: "Encore Council", overlayVersion: 1,
-  admissionBindingRef: "binding-1", rationale: "recorded route", createdAt: "2026-09-08T12:00:00Z", approvalRef: null,
+  admissionBindingRef: "binding-1", rationale: "recorded route", createdAt: "2026-09-08T12:00:00Z",
+  pressureCalculation: { pressureFloor: 200 / 3, pressure: 100, explicitHeadUplift: 100 },
+        approvalIdentity: null, approvalRef: null,
   taskKindRecipeVersions: { coding: 1 },
   taskDemand: { schemaVersion: 1, taskKinds: ["coding"], requirements: Object.fromEntries(MODEL_CAPABILITY_AXES.map((axis) => [axis, { level: 80, rationale: "Head requirement" }])), provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" } },
   workCharacter: { schemaVersion: 1, risk: 40, reversibility: 120, verificationAttachment: 80, materialScale: 20, timePressure: 30, budgetHeadroom: 150, provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" } },
@@ -20,22 +22,46 @@ const row = (value: RoutingEvidence, overrides: Partial<RoutingEvidenceCertifica
   task_demand_hash: value.taskDemandHash, pressure: value.pressure, pressure_band: value.pressureBand, decision_layer: value.decisionLayer,
   overlay_version: value.overlayVersion, admission_binding_ref: value.admissionBindingRef, rationale: value.rationale, evidence: value, ...overrides,
 });
-const binding = { binding_id: "binding-1", execution_ref: "exec-1", invocation_ref: "inv-1", selected_model_provider: "provider", selected_model_id: "model", actual_model_provider: "provider", actual_model_id: "model" };
+const binding = { binding_id: "binding-1", execution_ref: "exec-1", invocation_ref: "inv-1", goal_id: "goal-1", project_id: "project-1", selected_model_provider: "provider", selected_model_id: "model", actual_model_provider: "provider", actual_model_id: "model", account_ref: "account-1", created_at: "2026-09-08T12:00:00Z" };
 
 describe("routing evidence certification lineage", () => {
   it("blocks certification when routing evidence is missing", () => {
-    expect(evaluateRoutingEvidenceLineage({ goalId: "goal-1", projectId: "project-1", routingRows: [], nativeBindings: [], approvals: [] }).blockers).toContainEqual(expect.objectContaining({ reason: "routing_evidence_missing" }));
+    expect(evaluateRoutingEvidenceLineage({ goalId: "goal-1", projectId: "project-1", routingRows: [], nativeBindings: [], approvals: [], claims: [] }).blockers).toContainEqual(expect.objectContaining({ reason: "routing_evidence_missing" }));
   });
   it("blocks a below-requirement model without an approval decision", () => {
     const value = route({ modelProfile: { ...route().modelProfile, capability: { ...route().modelProfile.capability, axes: Object.fromEntries(MODEL_CAPABILITY_AXES.map((axis) => [axis, { status: "scored", score: 1, rationale: "low", evidence: ["review-1"] }])) } } });
-    expect(evaluateRoutingEvidenceLineage({ goalId: "goal-1", projectId: "project-1", routingRows: [row(value)], nativeBindings: [binding], approvals: [] }).blockers).toContainEqual(expect.objectContaining({ reason: "routing_evidence_unapproved_below_requirement" }));
+    expect(evaluateRoutingEvidenceLineage({ goalId: "goal-1", projectId: "project-1", routingRows: [row(value)], nativeBindings: [binding], approvals: [], claims: [] }).blockers).toContainEqual(expect.objectContaining({ reason: "routing_evidence_unapproved_below_requirement" }));
   });
+  it("accepts a below-requirement route only with an exact, in-window approval and consumed claim", () => {
+    const value = route({
+      modelProfile: { ...route().modelProfile, capability: { ...route().modelProfile.capability, axes: Object.fromEntries(MODEL_CAPABILITY_AXES.map((axis) => [axis, { status: "scored", score: 1, rationale: "low", evidence: ["review-1"] }])) } },
+      approvalRef: "approval-1", approvalIdentity: { capabilityKind: "ipython", commandId: "command-1", action: "project.file.edit", target: "src/server.ts" },
+    });
+    const approval = { approval_id: "approval-1", goal_id: "goal-1", project_id: "project-1", capability_kind: "ipython", command_id: "command-1", action: "project.file.edit", target: "src/server.ts", tier: "Encore Council", approver_id: "council-1", decision: "approved", reason: "Required for the approved outcome.", consequence: "Only the recorded file is changed.", created_at: "2026-09-08T11:00:00Z", expires_at: "2026-09-09T00:00:00Z", revoked_at: null, scope_kind: "bounded_count", remaining_count: "1", remaining_budget_cents: null, repetition_expires_at: null };
+    const claim = { claim_id: "claim-1", approval_id: "approval-1", capability_kind: "ipython", project_id: "project-1", goal_id: "goal-1", command_id: "command-1", action: "project.file.edit", target: "src/server.ts", policy_version: 1, consumed_at: "2026-09-08T12:00:00Z" };
+    expect(evaluateRoutingEvidenceLineage({ goalId: "goal-1", projectId: "project-1", routingRows: [row(value)], nativeBindings: [binding], approvals: [approval], claims: [claim] }).blockers).toEqual([]);
+  });
+
+  it("blocks an account binding mismatch even when provider and model identities match", () => {
+    const value = route();
+    expect(evaluateRoutingEvidenceLineage({ goalId: "goal-1", projectId: "project-1", routingRows: [row(value)], nativeBindings: [{ ...binding, account_ref: "other-account" }], approvals: [], claims: [] }).blockers).toContainEqual(expect.objectContaining({ reason: "routing_evidence_identity_mismatch" }));
+  });
+
+  it("renders approval scope, dissent, interruptions, and limitations", () => {
+    const approval: RoutingCapabilityApproval = { approval_id: "approval-1", goal_id: "goal-1", project_id: "project-1", capability_kind: "ipython", command_id: "command-1", action: "project.file.edit", target: "src/server.ts", tier: "Encore Council", approver_id: "council-1", decision: "approved", reason: "Required for the approved outcome.", consequence: "Only the recorded file is changed.", created_at: "2026-09-08T11:00:00Z", expires_at: "2026-09-09T00:00:00Z", revoked_at: null, scope_kind: "bounded_count", remaining_count: "1", remaining_budget_cents: null, repetition_expires_at: null };
+    expect(renderRoutingApprovalDecision(approval, [])).toContain("actor=council-1; tier=Encore Council; scope=bounded_count(1 remaining); reason=Required for the approved outcome.; consequence=Only the recorded file is changed.");
+    const sections = renderRoutingReportSections({ routingEvidence: [route({ approvalRef: "approval-1", approvalIdentity: { capabilityKind: "ipython", commandId: "command-1", action: "project.file.edit", target: "src/server.ts" } })], approvals: new Map([[approval.approval_id, approval]]), journalByApproval: new Map(), journal: [{ event: "interruption", details: { didRun: "edit", didNotRun: "push" } }, { event: "safer_alternative", details: { dissent: "Use a review-only patch." } }], packetDissent: ["Council dissent"], limitations: ["unresolved: missing user acceptance"] });
+    expect(sections.dissent).toEqual(["Council dissent", "Use a review-only patch."]);
+    expect(sections.interruptionIncidents[0]).toContain("didNotRun");
+    expect(sections.knownLimitations).toEqual(["unresolved: missing user acceptance", expect.stringContaining("interruption:")]);
+  });
+
   it("blocks a provider identity mismatch against the admission binding", () => {
     const value = route();
-    expect(evaluateRoutingEvidenceLineage({ goalId: "goal-1", projectId: "project-1", routingRows: [row(value)], nativeBindings: [{ ...binding, actual_model_id: "other" }], approvals: [] }).blockers).toContainEqual(expect.objectContaining({ reason: "routing_evidence_identity_mismatch" }));
+    expect(evaluateRoutingEvidenceLineage({ goalId: "goal-1", projectId: "project-1", routingRows: [row(value)], nativeBindings: [{ ...binding, actual_model_id: "other" }], approvals: [], claims: [] }).blockers).toContainEqual(expect.objectContaining({ reason: "routing_evidence_identity_mismatch" }));
   });
   it("blocks a mismatch between duplicated row identity and its canonical payload", () => {
     const value = route();
-    expect(evaluateRoutingEvidenceLineage({ goalId: "goal-1", projectId: "project-1", routingRows: [row(value, { pressure: 1 })], nativeBindings: [binding], approvals: [] }).blockers).toContainEqual(expect.objectContaining({ reason: "routing_evidence_identity_mismatch" }));
+    expect(evaluateRoutingEvidenceLineage({ goalId: "goal-1", projectId: "project-1", routingRows: [row(value, { pressure: 1 })], nativeBindings: [binding], approvals: [], claims: [] }).blockers).toContainEqual(expect.objectContaining({ reason: "routing_evidence_identity_mismatch" }));
   });
 });

@@ -51,6 +51,38 @@ function repetitionScopeText(row: { scope_kind: string | null; remaining_count: 
   return row.scope_kind ?? "unknown";
 }
 
+export function renderRoutingApprovalDecision(approval: RoutingCapabilityApproval, journal: readonly { event: string; details: Record<string, unknown> }[]): string {
+  const approvalEvent = journal.find((entry) => entry.event === "approval");
+  const reason = approval.reason ?? (typeof approvalEvent?.details.reason === "string" ? approvalEvent.details.reason : "not recorded");
+  const consequence = approval.consequence ?? (typeof approvalEvent?.details.consequence === "string" ? approvalEvent.details.consequence : "not recorded");
+  return `routing approval: actor=${approval.approver_id}; tier=${approval.tier}; scope=${repetitionScopeText(approval)}; reason=${reason}; consequence=${consequence}`;
+}
+
+export interface RoutingReportSections {
+  readonly approvalDecisions: readonly string[];
+  readonly dissent: readonly string[];
+  readonly interruptionIncidents: readonly string[];
+  readonly knownLimitations: readonly string[];
+}
+export function renderRoutingReportSections(input: {
+  readonly routingEvidence: readonly RoutingEvidence[];
+  readonly approvals: ReadonlyMap<string, RoutingCapabilityApproval>;
+  readonly journalByApproval: ReadonlyMap<string, readonly { event: string; details: Record<string, unknown> }[]>;
+  readonly journal: readonly { event: string; details: Record<string, unknown> }[];
+  readonly packetDissent: readonly string[];
+  readonly limitations: readonly string[];
+}): RoutingReportSections {
+  const approvalDecisions = input.routingEvidence.map((route) => {
+    const approval = route.approvalRef === null ? undefined : input.approvals.get(route.approvalRef);
+    return approval === undefined
+      ? `routing approval: none; model=${route.selectedModelRef}; pressure=${route.pressureBand}`
+      : renderRoutingApprovalDecision(approval, input.journalByApproval.get(approval.approval_id) ?? []);
+  });
+  const interruptionIncidents = input.journal.filter((entry) => entry.event === "interruption").map((entry) => `interruption: ${JSON.stringify(entry.details)}`);
+  const dissent = [...input.packetDissent, ...input.journal.filter((entry) => entry.event === "safer_alternative" && typeof entry.details.dissent === "string").map((entry) => String(entry.details.dissent))];
+  return { approvalDecisions, dissent, interruptionIncidents, knownLimitations: [...input.limitations, ...interruptionIncidents] };
+}
+
 export interface RoutingEvidenceCertificationRow {
   readonly evidence_id: string; readonly goal_ref: string; readonly project_ref: string; readonly route_ref: string; readonly mode: string;
   readonly selected_model_ref: string; readonly account_binding: string; readonly candidate_refs: unknown; readonly rejections: unknown;
@@ -58,18 +90,24 @@ export interface RoutingEvidenceCertificationRow {
   readonly overlay_version: number | null; readonly admission_binding_ref: string; readonly rationale: string; readonly evidence: Record<string, unknown>;
 }
 export interface RoutingNativeBinding {
-  readonly binding_id: string; readonly execution_ref: string; readonly invocation_ref: string;
+  readonly binding_id: string; readonly execution_ref: string; readonly invocation_ref: string; readonly goal_id: string; readonly project_id: string;
   readonly selected_model_provider: string; readonly selected_model_id: string; readonly actual_model_provider: string; readonly actual_model_id: string;
+  readonly account_ref: string | null; readonly created_at: Date | string;
 }
 export interface RoutingCapabilityApproval {
   readonly approval_id: string; readonly goal_id: string; readonly project_id: string; readonly tier: string; readonly approver_id: string;
-  readonly decision: string; readonly expires_at: Date | string; readonly revoked_at: Date | string | null;
-  readonly action: string; readonly target: string; readonly scope_kind: string | null; readonly remaining_count: string | null;
+  readonly decision: string; readonly created_at: Date | string; readonly expires_at: Date | string; readonly revoked_at: Date | string | null;
+  readonly capability_kind: string; readonly command_id: string; readonly action: string; readonly target: string; readonly reason: string | null; readonly consequence: string | null;
+  readonly scope_kind: string | null; readonly remaining_count: string | null;
   readonly remaining_budget_cents: string | null; readonly repetition_expires_at: Date | string | null;
+}
+export interface RoutingCapabilityClaim {
+  readonly claim_id: string; readonly approval_id: string; readonly capability_kind: string; readonly project_id: string; readonly goal_id: string;
+  readonly command_id: string; readonly action: string; readonly target: string; readonly policy_version: number; readonly consumed_at: Date | string;
 }
 export function evaluateRoutingEvidenceLineage(input: {
   readonly goalId: string; readonly projectId: string; readonly routingRows: readonly RoutingEvidenceCertificationRow[];
-  readonly nativeBindings: readonly RoutingNativeBinding[]; readonly approvals: readonly RoutingCapabilityApproval[]; readonly now?: number;
+  readonly nativeBindings: readonly RoutingNativeBinding[]; readonly approvals: readonly RoutingCapabilityApproval[]; readonly claims: readonly RoutingCapabilityClaim[];
 }): { readonly validRoutingEvidence: readonly RoutingEvidence[]; readonly blockers: readonly { reason: string; detail: string }[] } {
   const blockers: { reason: string; detail: string }[] = [];
   const validRoutingEvidence: RoutingEvidence[] = [];
@@ -86,18 +124,20 @@ export function evaluateRoutingEvidenceLineage(input: {
   const bindingsByRef = new Map<string, RoutingNativeBinding>();
   for (const binding of input.nativeBindings) { bindingsByRef.set(binding.binding_id, binding); bindingsByRef.set(binding.execution_ref, binding); bindingsByRef.set(binding.invocation_ref, binding); }
   const approvalById = new Map(input.approvals.map((approval) => [approval.approval_id, approval] as const));
-  const now = input.now ?? Date.now();
   for (const route of validRoutingEvidence) {
     const binding = bindingsByRef.get(route.admissionBindingRef);
     if (!binding) { blockers.push({ reason: "routing_evidence_binding_missing", detail: `Routing evidence ${route.evidenceId} has no matching native admission binding` }); continue; }
     const selected = `${binding.selected_model_provider}/${binding.selected_model_id}`;
     const actual = `${binding.actual_model_provider}/${binding.actual_model_id}`;
-    if (selected !== route.selectedModelRef || actual !== route.selectedModelRef) blockers.push({ reason: "routing_evidence_identity_mismatch", detail: `Routing evidence ${route.evidenceId} does not match the provider result identity` });
+    if (binding.goal_id !== input.goalId || binding.project_id !== input.projectId || binding.account_ref !== route.accountBinding || selected !== route.selectedModelRef || actual !== route.selectedModelRef) blockers.push({ reason: "routing_evidence_identity_mismatch", detail: `Routing evidence ${route.evidenceId} does not match the provider result identity or account binding` });
     const below = MODEL_CAPABILITY_AXES.some((axis) => { const requirement = route.taskDemand.requirements[axis].level; const score = route.modelProfile.capability.axes[axis]; return score.status !== "scored" || score.score === null || score.score < requirement; });
     if (below) {
       const approval = route.approvalRef === null ? undefined : approvalById.get(route.approvalRef);
-      const validApproval = approval !== undefined && approval.goal_id === input.goalId && approval.project_id === input.projectId && approval.decision === "approved" && approval.tier === route.decisionLayer && approval.revoked_at === null && new Date(approval.expires_at).getTime() > now;
-      if (!validApproval) blockers.push({ reason: "routing_evidence_unapproved_below_requirement", detail: `Below-requirement model ${route.selectedModelRef} has no current approval` });
+      const identity = route.approvalIdentity;
+      const executionAt = new Date(binding.created_at).getTime();
+      const claim = approval === undefined || identity === null ? undefined : input.claims.find((candidate) => candidate.approval_id === approval.approval_id && candidate.goal_id === input.goalId && candidate.project_id === input.projectId && candidate.capability_kind === identity.capabilityKind && candidate.command_id === identity.commandId && candidate.action === identity.action && candidate.target === identity.target);
+      const validApproval = approval !== undefined && identity !== null && Number.isFinite(executionAt) && approval.goal_id === input.goalId && approval.project_id === input.projectId && approval.capability_kind === identity.capabilityKind && approval.command_id === identity.commandId && approval.action === identity.action && approval.target === identity.target && approval.decision === "approved" && approval.tier === route.decisionLayer && new Date(approval.created_at).getTime() <= executionAt && new Date(approval.expires_at).getTime() > executionAt && (approval.revoked_at === null || new Date(approval.revoked_at).getTime() > executionAt) && typeof approval.reason === "string" && approval.reason.trim() !== "" && typeof approval.consequence === "string" && approval.consequence.trim() !== "" && claim !== undefined && new Date(claim.consumed_at).getTime() >= new Date(approval.created_at).getTime();
+      if (!validApproval) blockers.push({ reason: "routing_evidence_unapproved_below_requirement", detail: `Below-requirement model ${route.selectedModelRef} has no approval bound to the execution identity and time` });
     }
   }
   return { validRoutingEvidence, blockers };
@@ -246,16 +286,19 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
              pressure_band, decision_layer, overlay_version, admission_binding_ref,
              rationale, evidence
         FROM ensemble_router_routing_evidence WHERE goal_ref = $1 ORDER BY created_at, evidence_id`, [goalId]);
-  const nativeBindings = await pool.query<RoutingNativeBinding>(`SELECT binding_id, execution_ref, invocation_ref, selected_model_provider,
-             selected_model_id, actual_model_provider, actual_model_id
+  const nativeBindings = await pool.query<RoutingNativeBinding>(`SELECT binding_id, execution_ref, invocation_ref, goal_id, project_id, selected_model_provider,
+             selected_model_id, actual_model_provider, actual_model_id, account_ref, created_at
         FROM native_execution_bindings WHERE goal_id = $1`, [goalId]);
-  const capabilityApprovals = await pool.query<RoutingCapabilityApproval>(`SELECT approval.approval_id, approval.goal_id, approval.project_id, approval.tier,
-             approval.approver_id, approval.decision, approval.expires_at, approval.revoked_at,
-             approval.action, approval.target, budget.scope_kind, budget.remaining_count,
+  const capabilityApprovals = await pool.query<RoutingCapabilityApproval>(`SELECT approval.approval_id, approval.goal_id, approval.project_id, approval.capability_kind,
+             approval.command_id, approval.action, approval.target, approval.tier, approval.approver_id,
+             approval.decision, approval.created_at, approval.expires_at, approval.revoked_at, approval.reason, approval.consequence,
+             budget.scope_kind, budget.remaining_count,
              budget.remaining_budget_cents, budget.expires_at AS repetition_expires_at
         FROM capability_approvals approval
         LEFT JOIN capability_repetition_budgets budget ON budget.approval_id = approval.approval_id
        WHERE approval.goal_id = $1`, [goalId]);
+  const capabilityClaims = await pool.query<RoutingCapabilityClaim>(`SELECT claim_id, approval_id, capability_kind, project_id, goal_id, command_id, action, target, policy_version, consumed_at
+        FROM capability_repetition_claims WHERE goal_id = $1`, [goalId]);
   const capabilityJournal = await pool.query<{ approval_id: string | null; event: string; details: Record<string, unknown> }>(
     `SELECT approval_id, event, details FROM capability_decision_journal WHERE goal_id = $1 ORDER BY recorded_at, journal_id`, [goalId],
   );
@@ -269,7 +312,7 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
   }
   const routingLineage = evaluateRoutingEvidenceLineage({
     goalId, projectId: String(goalProjectId), routingRows: routingEvidence.rows,
-    nativeBindings: nativeBindings.rows, approvals: capabilityApprovals.rows,
+    nativeBindings: nativeBindings.rows, approvals: capabilityApprovals.rows, claims: capabilityClaims.rows,
   });
   const validRoutingEvidence = routingLineage.validRoutingEvidence;
   const lineageBlockers = [...routingLineage.blockers];
@@ -315,23 +358,19 @@ async function generateConcertmasterFinalReportWithClient(pool: PoolClient, goal
   const findings = await pool.query<{ rule_id: string; evidence_identity: string; resolved_at: Date | null }>("SELECT rule_id, evidence_identity, resolved_at FROM metronome_findings WHERE goal_id = $1", [goalId]);
   const incidents = findings.rows.map((row) => `${row.rule_id}: ${row.evidence_identity}`);
   const unresolvedLimitations = findings.rows.filter((row) => row.resolved_at === null).map((row) => `unresolved: ${row.rule_id} (${row.evidence_identity})`);
-  const approvalDecisions = validRoutingEvidence.flatMap((route) => {
-    const approval = route.approvalRef === null ? undefined : approvalById.get(route.approvalRef);
-    if (approval === undefined) return [`routing approval: none; model=${route.selectedModelRef}; pressure=${route.pressureBand}`];
-    const journal = approvalJournalById.get(approval.approval_id) ?? [];
-    const approvalEvent = journal.find((entry) => entry.event === "approval");
-    const reason = typeof approvalEvent?.details.reason === "string" ? approvalEvent.details.reason : "not recorded";
-    const consequence = typeof approvalEvent?.details.consequence === "string" ? approvalEvent.details.consequence : "not recorded";
-    return [`routing approval: actor=${approval.approver_id}; tier=${approval.tier}; scope=${repetitionScopeText(approval)}; reason=${reason}; consequence=${consequence}`];
+  const reportSections = renderRoutingReportSections({
+    routingEvidence: validRoutingEvidence, approvals: approvalById, journalByApproval: approvalJournalById,
+    journal: capabilityJournal.rows, packetDissent: packet?.dissent ?? [], limitations: unresolvedLimitations,
   });
-  const interruptionIncidents = capabilityJournal.rows.filter((row) => row.event === "interruption").map((row) => `interruption: ${JSON.stringify(row.details)}`);
-  const dissent = [...(packet?.dissent ?? []), ...capabilityJournal.rows.filter((row) => row.event === "safer_alternative" && typeof row.details.dissent === "string").map((row) => String(row.details.dissent))];
+  const approvalDecisions = reportSections.approvalDecisions;
+  const interruptionIncidents = reportSections.interruptionIncidents;
+  const dissent = reportSections.dissent;
   const waiverRows = await pool.query<{ reason: string; follow_up: string }>(
     `SELECT reason, follow_up FROM certification_waivers
       WHERE (certification_table = 'quality_certifications' AND certification_id IN (SELECT certification_id FROM quality_certifications WHERE goal_id = $1))
          OR (certification_table = 'conditional_certifications' AND certification_id IN (SELECT certification_id FROM conditional_certifications WHERE goal_id = $1))`, [goalId],
   );
-  const knownLimitations = [...unresolvedLimitations, ...waiverRows.rows.map((row) => `waived: ${row.reason} (follow-up: ${row.follow_up})`), ...interruptionIncidents]
+  const knownLimitations = [...reportSections.knownLimitations, ...waiverRows.rows.map((row) => `waived: ${row.reason} (follow-up: ${row.follow_up})`)]
     .concat(conflict && !conflictResolved ? ["unresolved: conflicting certifications"] : []);
   const criticalActionAwaitingApproval = records.some((record) => record.hasUnwaivedCriticalFinding);
 
