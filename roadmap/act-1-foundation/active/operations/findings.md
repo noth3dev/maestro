@@ -1847,3 +1847,6 @@ All downstream routing documentation must use this contract and must not restore
 
 
 - 2026-09-10 verification resolution: the clean-DB full PostgreSQL rerun passed 209/209 files and 1,464/1,464 tests. The earlier reconciliation property failure was transient under the full-suite scheduler; its focused rerun and full rerun both passed. No S4 remediation test or migration failure remains. S4 is still not closable because live user acceptance is pending and the production worker lifecycle has no deterministic hold/requeue state for Step 9→10.
+
+
+- 2026-09-10 S4 lifecycle verification: the merged implementation and main PostgreSQL revalidation are green, but this is not live acceptance evidence. The remaining blockers are unchanged: the user must run the real-provider fourteen-step scenario using `testbed/README.md` projects #1–#4, and production still has no deterministic worker hold/requeue operation for the Step 9→10 repair sequence. Do not close S4 or begin `phase3-status-sync` until those exit conditions are satisfied.
