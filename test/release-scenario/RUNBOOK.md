@@ -13,6 +13,8 @@ test -d "$MAESTRO_WORKTREE_ROOT"
 export PROJECT_ID="${PROJECT_ID:?Set the project UUID}"
 export MAESTRO_MODEL="${MAESTRO_MODEL:?Set an allowed model reference}"
 export MAESTRO_NATIVE_MODEL="${MAESTRO_NATIVE_MODEL:?Set the configured native model reference}"
+export MAESTRO_PORT="${MAESTRO_PORT:-4310}"
+export MAESTRO_API_URL="http://127.0.0.1:$MAESTRO_PORT"
 export MAESTRO="node apps/cli/dist/main.js"
 export TOOLS="$PWD/test/release-scenario"
 export SCENARIO_DIR="$MAESTRO_WORKTREE_ROOT/release-run-$(date +%s)"
@@ -26,9 +28,9 @@ uuid() { node -e 'console.log(crypto.randomUUID())'; }
 export BASE_REVISION="$(git -C "$TARGET" rev-parse HEAD)"
 npm run build
 # For a local live run, start and readiness-check the real Control Plane before Step 1.
-( cd apps/control-plane && node dist/main.js ) > "$SCENARIO_DIR/control-plane.log" 2>&1 &
+( cd apps/control-plane && MAESTRO_PORT="$MAESTRO_PORT" node dist/main.js ) > "$SCENARIO_DIR/control-plane.log" 2>&1 &
 export CONTROL_PLANE_PID=$!
-export CONTROL_PLANE_URL="${MAESTRO_API_URL:-http://127.0.0.1:3000}"
+export CONTROL_PLANE_URL="$MAESTRO_API_URL"
 until curl -fsS "$CONTROL_PLANE_URL/readyz" >/dev/null; do kill -0 "$CONTROL_PLANE_PID" 2>/dev/null || { cat "$SCENARIO_DIR/control-plane.log"; exit 1; }; done
 export FAKE_STATE="$SCENARIO_DIR/fake-state.json"
 ```
@@ -41,13 +43,16 @@ npm test --prefix "$TARGET"; test $? -ne 0
 
 Keep the same `TARGET`, Goal, Control Plane process, and provider session for every step. Save every JSON output in `SCENARIO_DIR`.
 
-## Step 1 — CEO request
+## Step 1 — CEO request and contract intake
 
-Commands:
+Create the Task Contract first so the Goal is durably bound to the launched scenario contract. Keep the same identifiers for every later step:
 
 ```bash
+node "$TOOLS/write-input.mjs" --kind contract --project "$PROJECT_ID" --repository "$TARGET" --base "$BASE_REVISION" --out "$SCENARIO_DIR/contract-substance.json"
+export CONTRACT_ID="$(uuid)"
+$MAESTRO task-contract create --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --substance-json "$(cat "$SCENARIO_DIR/contract-substance.json")" --json > "$SCENARIO_DIR/contract.json"
 export COMMAND_ID="$(uuid)"
-$MAESTRO goal create --project-id "$PROJECT_ID" --command-id "$COMMAND_ID" --json > "$SCENARIO_DIR/goal.json"
+$MAESTRO goal create --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --command-id "$COMMAND_ID" --json > "$SCENARIO_DIR/goal.json"
 export GOAL_ID="$(json_value "$SCENARIO_DIR/goal.json" goalId)"
 $MAESTRO conversation create --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --model "$MAESTRO_MODEL" --json > "$SCENARIO_DIR/conversation.json"
 export CONVERSATION_ID="$(json_value "$SCENARIO_DIR/conversation.json" conversationId)"
@@ -60,16 +65,13 @@ CI fake-provider command (the CI path uses its own disposable target):
 node "$TOOLS/run-fake-scenario.mjs" --step 1 --target "$FAKE_TARGET" --state "$FAKE_STATE"
 ```
 
-Observable: `goal.json` has one Goal, `conversation.json` has one conversation, and no worker or effect exists.
+Observable: `contract.json` and `goal.json` share `$CONTRACT_ID`; the Goal has a non-null contract binding, one conversation exists, and no worker or effect exists.
 
-## Step 2 — Minimal Task Contract intake
+## Step 2 — Contract readback
 
-Command:
+Read back the exact contract created in Step 1:
 
 ```bash
-node "$TOOLS/write-input.mjs" --kind contract --project "$PROJECT_ID" --repository "$TARGET" --base "$BASE_REVISION" --out "$SCENARIO_DIR/contract-substance.json"
-export CONTRACT_ID="$(uuid)"
-$MAESTRO task-contract create --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --substance-json "$(cat "$SCENARIO_DIR/contract-substance.json")" --json > "$SCENARIO_DIR/contract.json"
 $MAESTRO task-contract get --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --json > "$SCENARIO_DIR/contract-read.json"
 ```
 
@@ -79,7 +81,7 @@ CI fake-provider command (the CI path uses its own disposable target):
 node "$TOOLS/run-fake-scenario.mjs" --step 2 --target "$FAKE_TARGET" --state "$FAKE_STATE"
 ```
 
-Observable: the contract binds `$TARGET`, the immutable base revision, desired outcome, scope, non-goals, and test evidence.
+Observable: the contract binds `$TARGET`, the immutable base revision, desired outcome, scope, non-goals, and test evidence, and the Goal still reports `$CONTRACT_ID`.
 
 ## Step 3 — Exact launch confirmation
 
@@ -105,7 +107,7 @@ Observable: confirmation is durable before launch; a changed `contentHash` makes
 Command:
 
 ```bash
-node "$TOOLS/write-input.mjs" --kind head --project "$PROJECT_ID" --out "$SCENARIO_DIR/head-activation.json"
+node "$TOOLS/write-input.mjs" --kind head --project "$PROJECT_ID" --contract "$CONTRACT_ID" --out "$SCENARIO_DIR/head-activation.json"
 $MAESTRO head activate --goal-id "$GOAL_ID" --activation-json "$(cat "$SCENARIO_DIR/head-activation.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/head.json"
 ```
 
@@ -127,11 +129,13 @@ node "$TOOLS/write-input.mjs" --kind brief --project "$PROJECT_ID" --out "$SCENA
 node "$TOOLS/write-input.mjs" --kind packet --project "$PROJECT_ID" --out "$SCENARIO_DIR/decision-packet.json"
 node "$TOOLS/write-input.mjs" --kind plan --project "$PROJECT_ID" --target "$TARGET" --item discount-repair --out "$SCENARIO_DIR/department-plan.json"
 node "$TOOLS/write-input.mjs" --kind mission --project "$PROJECT_ID" --contract "$CONTRACT_ID" --target "$TARGET" --out "$SCENARIO_DIR/mission-bundle.json"
+$MAESTRO git goal-branch --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --repository-path "$TARGET" --branch-name goal/integration --base-revision "$BASE_REVISION" --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-branch.json"
 $MAESTRO council create --goal-id "$GOAL_ID" --council-json "$(cat "$SCENARIO_DIR/council.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/council-created.json"
 export COUNCIL_ID="$(json_value "$SCENARIO_DIR/council-created.json" councilId)"
 $MAESTRO council submit-brief --council-id "$COUNCIL_ID" --department-id engineering --brief-json "$(cat "$SCENARIO_DIR/engineering-brief.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/brief-submitted.json"
 $MAESTRO council reveal --council-id "$COUNCIL_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/council-revealed.json"
 $MAESTRO council decide --council-id "$COUNCIL_ID" --packet-json "$(cat "$SCENARIO_DIR/decision-packet.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/council-decision.json"
+$MAESTRO git department-branch --council-id "$COUNCIL_ID" --department-id engineering --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/department-branch.json"
 $MAESTRO department-plan create --council-id "$COUNCIL_ID" --department-id engineering --plan-json "$(cat "$SCENARIO_DIR/department-plan.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/department-plan.json.out"
 export ITEM_ID="discount-repair"
 $MAESTRO mission-bundle create --council-id "$COUNCIL_ID" --department-id engineering --item-id "$ITEM_ID" --bundle-json "$(cat "$SCENARIO_DIR/mission-bundle.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/mission-bundle.json.out"
@@ -153,6 +157,8 @@ Command:
 node "$TOOLS/write-input.mjs" --kind worker --project "$PROJECT_ID" --item "$ITEM_ID" --out "$SCENARIO_DIR/worker.json"
 $MAESTRO worker spawn --council-id "$COUNCIL_ID" --department-id engineering --worker-json "$(cat "$SCENARIO_DIR/worker.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker.json.out"
 export WORKER_ID="$(json_value "$SCENARIO_DIR/worker.json.out" workerId)"
+export WORKER_WORKTREE="$MAESTRO_WORKTREE_ROOT/worker-$WORKER_ID"
+$MAESTRO git worker-worktree --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --worktree-path "$WORKER_WORKTREE" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-worktree.json"
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-observation.json"
 $MAESTRO workers list --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/workers-after-execution.json"
 ```
@@ -211,7 +217,8 @@ Commands:
 ```bash
 set +e; npm test --prefix "$TARGET" > "$SCENARIO_DIR/seeded-defect.log" 2>&1; export DEFECT_EXIT=$?; set -e
 node "$TOOLS/write-input.mjs" --kind certification --project "$PROJECT_ID" --verdict failed --out "$SCENARIO_DIR/failed-quality-certification.json"
-$MAESTRO worker certify --worker-id "$WORKER_ID" --certification-json "$(cat "$SCENARIO_DIR/failed-quality-certification.json")" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/failed-certification.out" || true
+$MAESTRO worker certify --worker-id "$WORKER_ID" --certification-json "$(cat "$SCENARIO_DIR/failed-quality-certification.json")" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/failed-certification.out"
+test -s "$SCENARIO_DIR/failed-certification.out"
 test "$DEFECT_EXIT" -ne 0
 ```
 
@@ -277,9 +284,11 @@ Commands:
 
 ```bash
 cat "$TARGET/fixtures/ambiguous-action.json"
+node "$TARGET/scripts/attempt-remote-push.mjs"
 $MAESTRO critical-action request --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --command-id "$(uuid)" --json > "$SCENARIO_DIR/ambiguous-action.json.out"
 set +e; $MAESTRO critical-action approve-and-run --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --expires-at "$(date -u -d '+5 minutes' +%Y-%m-%dT%H:%M:%SZ)" --command-id "$(uuid)" --json > "$SCENARIO_DIR/remote-approval.out"; export REMOTE_APPROVAL_EXIT=$?; set -e
 test "$REMOTE_APPROVAL_EXIT" -ne 0
+node -e 'const fs=require("node:fs"); const x=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (x.attempted !== true || x.status !== "blocked" || x.networkInvoked !== false) throw new Error("remote push evidence is not blocked fail-closed");' "$TARGET/fixtures/remote-push-attempt.json"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):

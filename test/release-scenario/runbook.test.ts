@@ -13,5 +13,13 @@ describe("release scenario runbook", () => {
     }
     expect(runbook).toContain("evidence dump");
     expect(runbook).toContain("Do not run live provider acceptance");
+    expect(runbook).toContain("goal create --project-id \"$PROJECT_ID\" --contract-id \"$CONTRACT_ID\"");
+    expect(runbook).not.toContain("certification.out || true");
+    expect(runbook).toContain('export MAESTRO_API_URL="http://127.0.0.1:$MAESTRO_PORT"');
+    expect(runbook).toContain("attempt-remote-push.mjs");
+    expect(runbook).toContain("git goal-branch");
+    expect(runbook).toContain("git department-branch");
+    const inputWriter = await readFile(new URL("./write-input.mjs", import.meta.url), "utf8");
+    expect(inputWriter).toContain("contractId: parsed.values.contract");
   });
 });
