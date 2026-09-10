@@ -254,6 +254,7 @@ export async function executeIpPythonBlockInTwoStages(options: IpPythonTwoStageE
   const requestBinding = options.request.binding;
   const requestDigest = (effects: readonly IpPythonHostRequest[]) => blockDigest(options.request, effects);
   let journalFailed = false;
+  let stopCheckFailed = false;
   const boundary = async (value: IpPythonStageBoundary): Promise<boolean> => {
     try { await options.recordStageBoundary(value, requestBinding); return true; }
     catch { journalFailed = true; return false; }
@@ -264,7 +265,7 @@ export async function executeIpPythonBlockInTwoStages(options: IpPythonTwoStageE
   };
   const stopRequested = async (): Promise<boolean> => {
     try { return await options.isStopRequested(); }
-    catch { return true; }
+    catch { stopCheckFailed = true; return true; }
   };
   const fenceCurrent = async (): Promise<boolean> => {
     try { return await options.isFencingCurrent(options.fencingToken); }
@@ -304,16 +305,28 @@ export async function executeIpPythonBlockInTwoStages(options: IpPythonTwoStageE
     return unknownResult("stage_one_failed", error instanceof Error ? error.message : String(error));
   }
   const collectedDigest = requestDigest(collected);
-  const stageOneStopped = stageOne.state !== "ok" || await stopRequested();
-  const collectBoundaryWritten = await boundary({ stage: "collect", outcome: stageOneStopped ? "stopped" : "completed", sessionId: options.request.sessionId, fencingToken: options.fencingToken, blockDigest: collectedDigest, intentCount: collected.length, appliedCount: 0, skippedCount: stageOneStopped ? collected.length : 0, ...(stageOneStopped ? { reason: stageOne.reason ?? "stop_requested" } : {}) });
+  let stageOneStopRequested = false;
+  try { stageOneStopRequested = await options.isStopRequested(); }
+  catch { stopCheckFailed = true; }
+  const stageOneInterrupted = !stopCheckFailed
+    && (stageOneStopRequested || stageOne.reason === "stop_requested" || stageOne.reason === "user_stop")
+    && (stageOne.state === "ok" || stageOne.state === "cancelled");
+  const collectBoundaryOutcome = stopCheckFailed ? "failed" : stageOneInterrupted ? "stopped" : stageOne.state === "ok" ? "completed" : "failed";
+  const collectBoundaryWritten = await boundary({ stage: "collect", outcome: collectBoundaryOutcome, sessionId: options.request.sessionId, fencingToken: options.fencingToken, blockDigest: collectedDigest, intentCount: collected.length, appliedCount: 0, skippedCount: stageOneInterrupted || stopCheckFailed || stageOne.state !== "ok" ? collected.length : 0, ...((stageOneInterrupted || stopCheckFailed || stageOne.state !== "ok") ? { reason: stopCheckFailed ? "stop_check_failed" : stageOne.reason ?? (stageOneInterrupted ? "stop_requested" : "stage_one_failed") } : {}) });
   if (!collectBoundaryWritten) {
     await skip(collected, "journal_failed");
     return unknownResult("journal_failed");
   }
-  if (stageOneStopped) {
-    const skipped = await skip(collected, stageOne.state === "ok" ? "stop_requested" : "stage_one_stopped");
+  if (stageOne.state !== "ok" || stopCheckFailed) {
+    const reason = stopCheckFailed ? "stop_check_failed" : stageOneInterrupted ? "stop_requested" : "stage_one_failed";
+    const skipped = await skip(collected, reason);
     if (!skipped) return unknownResult("journal_failed");
-    return stageOne.state === "ok" ? { state: "cancelled", dataClass: "workspace", content: "IPython block stopped after collect", reason: "stop_requested" } : stageOne;
+    return stopCheckFailed ? unknownResult(reason) : stageOne;
+  }
+  if (stageOneInterrupted) {
+    const skipped = await skip(collected, "stop_requested");
+    if (!skipped) return unknownResult("journal_failed");
+    return { state: "cancelled", dataClass: "workspace", content: "IPython block stopped after collect", reason: "stop_requested" };
   }
 
   let approval: IpPythonBlockApproval | false;
@@ -350,13 +363,13 @@ export async function executeIpPythonBlockInTwoStages(options: IpPythonTwoStageE
   }
 
   let stageTwo: IpPythonExecutionResult;
-  let stageTwoAbortReason: "stop_requested" | "stale_fencing_token" | undefined;
+  let stageTwoAbortReason: "stop_requested" | "stop_check_failed" | "stale_fencing_token" | undefined;
   try {
     stageTwo = await options.runBlock(options.request, "execute", async (request) => {
       const index = queued.length;
       queued.push(request);
       prepared.push(undefined);
-      if (await stopRequested()) { stageTwoAbortReason = "stop_requested"; throw new Error(stageTwoAbortReason); }
+      if (await stopRequested()) { stageTwoAbortReason = stopCheckFailed ? "stop_check_failed" : "stop_requested"; throw new Error(stageTwoAbortReason); }
       if (!(await fenceCurrent())) { stageTwoAbortReason = "stale_fencing_token"; throw new Error(stageTwoAbortReason); }
       const transaction = await options.prepareEffect(request);
       if (transaction.result.state !== "ok") throw new Error(transaction.result.reason ?? "prepared effect was not successful");
@@ -367,16 +380,18 @@ export async function executeIpPythonBlockInTwoStages(options: IpPythonTwoStageE
     const reason = stageTwoAbortReason ?? "stage_two_failed";
     const rolledBack = await rollback();
     const skipped = await skip(queued, rolledBack ? reason : "rollback_failed");
-    const boundaryWritten = await boundary({ stage: "execute", outcome: rolledBack && reason !== "stage_two_failed" ? (reason === "stop_requested" ? "stopped" : "stale") : "failed", sessionId: options.request.sessionId, fencingToken: options.fencingToken, blockDigest: requestDigest(queued), approvedBlockDigest: approved.blockDigest, intentCount: queued.length, appliedCount: 0, skippedCount: queued.length, reason: rolledBack ? reason : "rollback_failed" });
+    const boundaryWritten = await boundary({ stage: "execute", outcome: rolledBack ? (reason === "stop_requested" ? "stopped" : reason === "stale_fencing_token" ? "stale" : "failed") : "failed", sessionId: options.request.sessionId, fencingToken: options.fencingToken, blockDigest: requestDigest(queued), approvedBlockDigest: approved.blockDigest, intentCount: queued.length, appliedCount: 0, skippedCount: queued.length, reason: rolledBack ? reason : "rollback_failed" });
     if (!skipped || !boundaryWritten) return unknownResult("journal_failed");
     return unknownResult(rolledBack ? reason : "rollback_failed", error instanceof Error ? error.message : String(error));
   }
   const stageTwoDigest = requestDigest(queued);
   if (stageTwo.state !== "ok") {
-    const reason = stageTwoAbortReason ?? stageTwo.reason ?? "stage_two_stopped";
+    const reason = stageTwoAbortReason ?? stageTwo.reason ?? "stage_two_failed";
     const rolledBack = await rollback();
+    const stageTwoInterrupted = stageTwo.state === "cancelled" && (reason === "stop_requested" || reason === "user_stop");
+    const stageTwoStale = reason === "stale_fencing_token";
+    const boundaryWritten = await boundary({ stage: "execute", outcome: rolledBack ? (stageTwoStale ? "stale" : stageTwoInterrupted ? "stopped" : "failed") : "failed", sessionId: options.request.sessionId, fencingToken: options.fencingToken, blockDigest: stageTwoDigest, approvedBlockDigest: approved.blockDigest, intentCount: queued.length, appliedCount: 0, skippedCount: queued.length, reason: rolledBack ? reason : "rollback_failed" });
     const skipped = await skip(queued, rolledBack ? reason : "rollback_failed");
-    const boundaryWritten = await boundary({ stage: "execute", outcome: rolledBack ? (reason === "stale_fencing_token" ? "stale" : "stopped") : "failed", sessionId: options.request.sessionId, fencingToken: options.fencingToken, blockDigest: stageTwoDigest, approvedBlockDigest: approved.blockDigest, intentCount: queued.length, appliedCount: 0, skippedCount: queued.length, reason: rolledBack ? reason : "rollback_failed" });
     if (!skipped || !boundaryWritten) return unknownResult("journal_failed");
     return rolledBack ? stageTwo : unknownResult("rollback_failed");
   }
@@ -400,13 +415,13 @@ export async function executeIpPythonBlockInTwoStages(options: IpPythonTwoStageE
     const stop = await stopRequested();
     const fence = await fenceCurrent();
     if (stop || !fence) {
-      const reason = stop ? "stop_requested" : "stale_fencing_token";
+      const reason = stop ? (stopCheckFailed ? "stop_check_failed" : "stop_requested") : "stale_fencing_token";
       const rolledBack = await rollback();
       const skipped = await skip(queued, rolledBack ? reason : "rollback_failed", index);
-      const boundaryWritten = await boundary({ stage: "commit", outcome: rolledBack ? (stop ? "stopped" : "stale") : "failed", sessionId: options.request.sessionId, fencingToken: options.fencingToken, blockDigest: stageTwoDigest, approvedBlockDigest: approved.blockDigest, intentCount: queued.length, appliedCount, skippedCount: queued.length - index, reason: rolledBack ? reason : "rollback_failed" });
+      const boundaryWritten = await boundary({ stage: "commit", outcome: rolledBack ? (reason === "stop_requested" ? "stopped" : reason === "stale_fencing_token" ? "stale" : "failed") : "failed", sessionId: options.request.sessionId, fencingToken: options.fencingToken, blockDigest: stageTwoDigest, approvedBlockDigest: approved.blockDigest, intentCount: queued.length, appliedCount, skippedCount: queued.length - index, reason: rolledBack ? reason : "rollback_failed" });
       if (!skipped || !boundaryWritten) return unknownResult("journal_failed");
       if (!rolledBack) return unknownResult("rollback_failed");
-      return appliedCount > 0 ? partialCommitResult(appliedCount, reason) : (stop ? { state: "cancelled", dataClass: "workspace", content: `IPython effect queue stopped after ${appliedCount} effect(s)`, reason } : unknownResult(reason, `IPython effect queue stopped after ${appliedCount} effect(s)`));
+      return appliedCount > 0 ? partialCommitResult(appliedCount, reason) : (reason === "stop_requested" ? { state: "cancelled", dataClass: "workspace", content: `IPython effect queue stopped after ${appliedCount} effect(s)`, reason } : unknownResult(reason, `IPython effect queue stopped after ${appliedCount} effect(s)`));
     }
     if (!approvalConsumed) {
       let consumed = false;

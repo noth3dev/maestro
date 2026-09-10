@@ -2,7 +2,8 @@ export type MetronomeRuleId =
   | "stale_worker_superseded_plan"
   | "worker_missing_plan_item"
   | "missing_evidence_reference"
-  | "device_command_unknown_outcome";
+  | "device_command_unknown_outcome"
+  | "below_requirement_routing";
 
 /** A finding is deduplicated by (goalId, ruleId, evidenceIdentity, planVersion) -- a durable, stable key, not a random id. */
 export interface MetronomeFinding {

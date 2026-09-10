@@ -103,4 +103,36 @@ describe("createMetronomeLoop", () => {
 
     expect(scanGoal).toHaveBeenCalledTimes(1);
   });
+
+
+  it("surfaces approval, interruption, effect, and failure observations without adding a ledger writer", async () => {
+    const pool = fakePool([{ goal_id: "goal-1", state: "active" }]);
+    const scanGoal = vi.fn(async () => []);
+    const observeGoal = vi.fn(async () => ({
+      findings: [],
+      approvalObservation: {
+        decisions: [
+          { journalId: "j1", goalId: "goal-1", capabilityKind: "ipython", event: "approval", details: {}, recordedAt: new Date() },
+          { journalId: "j2", goalId: "goal-1", capabilityKind: "ipython", event: "interruption", details: { didRun: ["edit"], didNotRun: ["push"] }, recordedAt: new Date() },
+          { journalId: "j3", goalId: "goal-1", capabilityKind: "ipython", event: "effect_result", details: { outcome: "confirmed" }, recordedAt: new Date() },
+          { journalId: "j4", goalId: "goal-1", capabilityKind: "ipython", event: "failure", details: { error: "provider unavailable" }, recordedAt: new Date() },
+        ],
+        pendingEffects: [],
+      },
+      challenges: [],
+    }));
+    const ticks: unknown[] = [];
+    const loop = createMetronomeLoop({
+      pool, withGoalLease: passthroughLease, scanGoal: scanGoal as never, observeGoal: observeGoal as never, intervalMs: 60_000,
+      onTick: (result) => ticks.push(result),
+    } as never);
+
+    await loop.runOnce();
+
+    expect(observeGoal).toHaveBeenCalledTimes(1);
+    expect((ticks[0] as { approvalObservation: unknown }).approvalObservation).toEqual(expect.objectContaining({ pendingEffects: [] }));
+    expect((ticks[0] as { approvalObservation: { decisions: Array<{ event: string; details: Record<string, unknown> }> } }).approvalObservation.decisions.map((entry) => entry.event)).toEqual(["approval", "interruption", "effect_result", "failure"]);
+    expect(scanGoal).not.toHaveBeenCalled();
+  });
+
 });

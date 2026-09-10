@@ -221,7 +221,14 @@ export async function raiseMetronomeChallenge(
       "SELECT evidence_id, sha256 FROM evidence_records WHERE goal_id = $1 AND project_id = $2",
       [normalizedGoalId, projectId],
     );
-    const durableIds = new Set(durable.rows.flatMap((row) => [normalizeMetronomeIdentity(row.evidence_id), normalizeMetronomeIdentity(row.sha256)]));
+    const routing = await client.query<{ evidence_id: string }>(
+      "SELECT evidence_id FROM ensemble_router_routing_evidence WHERE goal_ref = $1 AND project_ref = $2",
+      [normalizedGoalId, projectId],
+    );
+    const durableIds = new Set([
+      ...durable.rows.flatMap((row) => [normalizeMetronomeIdentity(row.evidence_id), normalizeMetronomeIdentity(row.sha256)]),
+      ...routing.rows.map((row) => normalizeMetronomeIdentity(row.evidence_id)),
+    ]);
     for (const reference of normalizedEvidenceReferences) if (!durableIds.has(reference)) throw new MetronomeChallengeError(`Metronome challenge evidence reference is not a durable goal-scoped record: ${reference}`);
 
     const found = normalizedFindingIds.length === 0

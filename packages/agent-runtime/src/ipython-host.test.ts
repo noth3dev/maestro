@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createIpPythonKernel, createIpPythonParentWatchdog, createReadOnlyHostRequestHandler, parseIpPythonFrame, type IpPythonTransport } from "./ipython-host.js";
+import { createIpPythonKernel, createIpPythonParentWatchdog, createReadOnlyHostRequestHandler, executeIpPythonBlockInTwoStages, parseIpPythonFrame, type IpPythonStageBoundary, type IpPythonTransport, type IpPythonTwoStageExecutionOptions } from "./ipython-host.js";
 
 class FakeTransport implements IpPythonTransport {
   readonly sent: unknown[] = [];
@@ -17,7 +17,41 @@ class FakeTransport implements IpPythonTransport {
 
 const done = (requestId: string, content = "read-only") => ({ version: 1, type: "done", requestId, state: "ok", dataClass: "workspace", content });
 
+function stageResult(state: "ok" | "error" | "unknown", reason?: string) {
+  return { state, dataClass: "workspace" as const, content: state === "ok" ? "ok" : "failed", ...(reason === undefined ? {} : { reason }) };
+}
+
+function twoStageOptions(
+  runBlock: IpPythonTwoStageExecutionOptions["runBlock"],
+  boundaries: IpPythonStageBoundary[],
+): IpPythonTwoStageExecutionOptions {
+  return {
+    request: { sessionId: "session-1", code: "code" }, fencingToken: "fence-1", runBlock,
+    approve: async (_effects, blockDigest) => ({ approvalId: "approval-1", blockDigest, fencingToken: "fence-1" }),
+    isFencingCurrent: async () => true, isStopRequested: async () => false,
+    prepareEffect: async () => ({ result: stageResult("ok"), commit: async () => stageResult("ok"), rollback: async () => {} }),
+    recordEffectResult: async () => {}, recordStageBoundary: async (boundary) => { boundaries.push(boundary); },
+  };
+}
+
 describe("IPython host protocol", () => {
+  it.each(["error", "unknown"] as const)("journals a collect %s as failed rather than stopped", async (state) => {
+    const boundaries: IpPythonStageBoundary[] = [];
+    const result = await executeIpPythonBlockInTwoStages(twoStageOptions(async (_request, stage) => stage === "collect" ? stageResult(state, "provider_error") : stageResult("ok"), boundaries));
+    expect(result).toMatchObject({ state, reason: "provider_error" });
+    expect(boundaries[0]).toMatchObject({ stage: "collect", outcome: "failed", reason: "provider_error" });
+  });
+
+  it.each(["error", "unknown"] as const)("journals an execute %s as failed rather than stopped", async (state) => {
+    const boundaries: IpPythonStageBoundary[] = [];
+    const result = await executeIpPythonBlockInTwoStages(twoStageOptions(async (_request, stage, hostRequest) => {
+      if (stage === "collect") { await hostRequest({ requestId: "request-1", hostRequestId: "host-1", method: "read_file", payload: { path: "README.md" } }); return stageResult("ok"); }
+      return stageResult(state, "provider_error");
+    }, boundaries));
+    expect(result).toMatchObject({ state, reason: "provider_error" });
+    expect(boundaries.find((boundary) => boundary.stage === "execute")).toMatchObject({ outcome: "failed", reason: "provider_error" });
+  });
+
   it("rejects unknown protocol versions and frame types", () => {
     expect(() => parseIpPythonFrame({ version: 2, type: "done" })).toThrow("protocol version");
     expect(parseIpPythonFrame({ version: 1, type: "ready", runtime: "python" })).toEqual({ version: 1, type: "ready", runtime: "python" });
