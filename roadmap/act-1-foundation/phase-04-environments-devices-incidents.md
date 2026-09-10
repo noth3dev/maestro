@@ -1,6 +1,6 @@
 # Phase 4 — Isolated Environments, Enrolled Devices, and Discord Incidents
 
-> **Current status (2026-09-08):** Environment, Discord, and separately running device-agent live-gate evidence exists on `main`. Phase 4 remains the separate external-capability boundary for browser, device, external-service, and deployment access. Each capability must be activated individually with a Goal-scoped grant and selectable expiry/repetition scope; independent no-edit review and production deployment/operations evidence remain open.
+> **Current status (2026-09-10):** Plan 4 S1–S4 implementation evidence is merged on `main` through `2631ed4`, including Goal-scoped external-capability gates, restart deduplication, and the disposable two-scenario harness ([`test/phase4-scenario/RUNBOOK.md`](../../test/phase4-scenario/RUNBOOK.md)). The user-owned live handoff was explicitly skipped, so Phase 4 remains **incomplete and unaccepted**; no live activation, provider/device effect, outage/restart delivery, or certification evidence is claimed.
 
 
 ## Outcome

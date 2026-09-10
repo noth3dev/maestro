@@ -1873,3 +1873,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 Plan 4 S3 finding: Discord buffer recovery restored pending signals but did not remember delivered nonces, so an identical signed signal emitted after restart was delivered twice. The append-only `delivered` records are now loaded into a durable in-memory dedupe set before accepting new emission.
 
 - 2026-09-10 Plan 4 S4 finding: the harness can prepare and verify both scenarios but cannot certify live behavior. PostgreSQL-backed enrollment, capability activation, real Control Plane outage/restart, provider/device effects, and independent certification remain user-owned HANDOFF steps. The generated fixture deliberately writes only to a disposable caller-provided root and rejects `testbed/`.
+
+- 2026-09-10 Plan 4 S5 finding: live acceptance was intentionally skipped. Documentation now marks Phase 4 implementation complete but live acceptance incomplete/unaccepted; S5 status text must not be read as activation certification.
