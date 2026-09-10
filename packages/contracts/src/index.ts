@@ -260,7 +260,7 @@ export const StableApiErrorCodeSchema = z.enum([
   "authentication_required", "authentication_unavailable", "credential_forbidden",
   "critical_action_denied", "authority_denied", "critical_action_requires_approval", "critical_action_approval_forbidden", "head_activation_cycle", "head_activation_conflict", "council_not_found", "council_conflict", "council_briefs_sealed", "department_plan_not_found", "department_plan_conflict", "mission_bundle_not_found", "mission_bundle_conflict", "worker_not_found", "worker_conflict", "git_integration_not_found", "git_integration_conflict", "certification_not_found", "certification_conflict", "metronome_not_found", "metronome_conflict", "encore_not_found", "encore_conflict", "project_access_forbidden",
   "task_contract_not_found", "task_contract_conflict", "task_contract_version_conflict",
-  "exact_confirmation_required", "task_contract_integrity_error", "discord_signal_rejected", "worker_capacity_exceeded",
+  "exact_confirmation_required", "task_contract_integrity_error", "discord_signal_rejected", "worker_capacity_exceeded", "worker_message_rejected",
   "conversation_not_found", "conversation_conflict", "conversation_unavailable", "model_not_allowed", "provider_unavailable", "account_login_session_unknown",
 ]);
 export const StableApiErrorSchema = z.object({
@@ -653,10 +653,21 @@ export const WorkerObservationSchema = WorkerSchema.extend({
 export type WorkerObservation = z.infer<typeof WorkerObservationSchema>;
 export const WorkerListSchema = z.object({ workers: z.array(WorkerSchema) }).strict();
 export type WorkerList = z.infer<typeof WorkerListSchema>;
-export const SpawnWorkerInputSchema = z.object({ projectId: UuidSchema, planVersion: z.number().int().positive(), itemId: z.string().min(1), model: ModelRefSchema.optional() }).strict();
+const TargetPathSchema = z.string().min(1).max(4_096);
+export const SpawnWorkerInputSchema = z.object({
+  projectId: UuidSchema, planVersion: z.number().int().positive(), itemId: z.string().min(1), model: ModelRefSchema.optional(),
+  /** Target repository and owned worktree are bound before the provider is admitted. */
+  repositoryPath: TargetPathSchema.optional(), worktreePath: TargetPathSchema.optional(),
+}).superRefine((value, context) => {
+  if ((value.repositoryPath === undefined) !== (value.worktreePath === undefined)) context.addIssue({ code: z.ZodIssueCode.custom, path: [value.repositoryPath === undefined ? "repositoryPath" : "worktreePath"], message: "repositoryPath and worktreePath must be supplied together" });
+}).strict();
 export type SpawnWorkerInput = z.infer<typeof SpawnWorkerInputSchema>;
 export const WorkerActionInputSchema = z.object({ projectId: UuidSchema }).strict();
 export type WorkerActionInput = z.infer<typeof WorkerActionInputSchema>;
+export const WorkerMessageInputSchema = z.object({ projectId: UuidSchema, message: z.string().trim().min(1).max(32_000) }).strict();
+export type WorkerMessageInput = z.infer<typeof WorkerMessageInputSchema>;
+export const WorkerIntegrationInputSchema = z.object({ projectId: UuidSchema, message: z.string().trim().min(1).max(4_096), evidenceReferences: z.array(z.string().min(1).max(4_096)).max(100).readonly() }).strict();
+export type WorkerIntegrationInput = z.infer<typeof WorkerIntegrationInputSchema>;
 export const GoalIntegrationBranchInputSchema = z.object({ projectId: UuidSchema, repositoryPath: z.string().min(1), branchName: z.string().min(1), baseRevision: z.string().min(1) }).strict();
 export type GoalIntegrationBranchInput = z.infer<typeof GoalIntegrationBranchInputSchema>;
 export const DepartmentBranchInputSchema = z.object({ projectId: UuidSchema }).strict();
@@ -673,6 +684,8 @@ export const GoalGitIntegrationStateSchema = z.object({ goalId: UuidSchema, bran
 export type GoalGitIntegrationState = z.infer<typeof GoalGitIntegrationStateSchema>;
 export const WorkerWorktreeSchema = z.object({ workerId: UuidSchema, repositoryPath: z.string().min(1), worktreePath: z.string().min(1), branchName: z.string().min(1), baseBranchName: z.string().min(1) }).strict();
 export type WorkerWorktree = z.infer<typeof WorkerWorktreeSchema>;
+export const IntegrationCommitSchema = z.object({ workerId: UuidSchema, commitSha: z.string().regex(/^[a-f0-9]{40}$/), message: z.string().min(1), evidenceReferences: z.array(z.string().min(1)).readonly() }).strict();
+export type IntegrationCommit = z.infer<typeof IntegrationCommitSchema>;
 /** CEO approval is explicit, time-bounded, and carries the exact action scope. */
 export const CriticalActionApprovalInputSchema = CriticalActionInputSchema.extend({
   expiresAt: z.string().datetime(),

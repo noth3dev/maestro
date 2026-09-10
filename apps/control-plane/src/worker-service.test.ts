@@ -47,6 +47,10 @@ describe("target-bound worker lifecycle", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("rejects a partial target binding instead of allowing a later worktree", () => {
+    expect(SpawnWorkerInputSchema.safeParse({ projectId: "00000000-0000-4000-8000-000000000001", planVersion: 1, itemId: "repair", repositoryPath: "/workspace/project" }).success).toBe(false);
+  });
+
   it("exposes a worker follow-up message operation", () => {
     const kernel = { spawn: vi.fn() } as unknown as ExecutionKernelPort;
     const pool = { query: vi.fn(async () => ({ rowCount: 1, rows: [{}] })) } as unknown as Pool;
@@ -54,10 +58,4 @@ describe("target-bound worker lifecycle", () => {
     expect("sendMessage" in service).toBe(true);
   });
 
-  it("keeps target binding part of spawn rather than a later worktree-only call", () => {
-    const kernel = { spawn: vi.fn() } as unknown as ExecutionKernelPort;
-    const pool = { query: vi.fn(async () => ({ rowCount: 1, rows: [{}] })) } as unknown as Pool;
-    const service = createWorkerService({ modelRoutingMode: "pin", nativeModelRef: "test/model-a", pool, kernel, withGoalLease: vi.fn() });
-    expect("prepareTargetWorktree" in service).toBe(true);
-  });
 });

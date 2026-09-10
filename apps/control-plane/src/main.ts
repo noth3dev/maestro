@@ -670,12 +670,12 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   const councilService = createCouncilService({ pool, withGoalLease: goalService.withGoalLease! });
   const departmentPlanService = createDepartmentPlanService({ pool, withGoalLease: goalService.withGoalLease! });
   const missionBundleService = createMissionBundleService({ pool, withGoalLease: goalService.withGoalLease! });
-  const workerService = createWorkerService({ modelRoutingMode: config.modelRoutingMode, ...(config.nativeModelRef === undefined ? {} : { nativeModelRef: config.nativeModelRef }), pool, kernel: executionKernel, withGoalLease: goalService.withGoalLease!, ...(config.maxConcurrentWorkersPerProject === undefined ? {} : { maxConcurrentWorkersPerProject: config.maxConcurrentWorkersPerProject }) });
   const gitIntegrationService = createGitIntegrationService({
     pool, withGoalLease: goalService.withGoalLease!,
     createGitPort: (context) => overrides.gitPort ?? createLocalGitPort({ authority: authorityExecutor, context, workspaceRoot: config.worktreeRoot }),
     getControlEpoch: async (projectId, goalId) => (await getGoalControl(pool, projectId, goalId)).controlEpoch,
   });
+  const workerService = createWorkerService({ modelRoutingMode: config.modelRoutingMode, ...(config.nativeModelRef === undefined ? {} : { nativeModelRef: config.nativeModelRef }), pool, kernel: executionKernel, withGoalLease: goalService.withGoalLease!, prepareWorkerWorktree: (workerId, input, operatorId, commandId) => gitIntegrationService.createWorkerWorktree(workerId, input, operatorId, commandId), ...(config.maxConcurrentWorkersPerProject === undefined ? {} : { maxConcurrentWorkersPerProject: config.maxConcurrentWorkersPerProject }) });
   const certificationService = createCertificationService({ pool, withGoalLease: goalService.withGoalLease! });
   const metronomeService = createMetronomeService({ pool, withGoalLease: goalService.withGoalLease! });
   const encoreService = createEncoreService({

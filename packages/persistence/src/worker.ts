@@ -29,6 +29,8 @@ export interface SpawnWorkerRequest {
   readonly itemId: string;
   /** Validated owned worktree directory supplied by the orchestration layer. */
   readonly cwd?: string;
+  /** Called after the durable reservation and before provider admission to create the owned target worktree. */
+  readonly prepareWorktree?: (workerId: string) => Promise<string>;
   /** Exact provider-qualified model selected by the host and checked against the Mission Bundle. */
   readonly modelRef?: string;
 }
@@ -179,6 +181,25 @@ export async function promptWorkerUnderOwnerClaim(
   return true;
 }
 
+export async function sendWorkerMessageUnderOwnerClaim(
+  pool: Pool,
+  kernel: ExecutionKernelPort,
+  workerId: string,
+  message: string,
+  proof: GoalLeaseProof,
+): Promise<boolean> {
+  const claimed = await withWorkerLease(pool, workerId, proof, async (_client, worker) => {
+    if (worker.owner_id !== proof.ownerId || worker.owner_fencing_token !== proof.fencingToken) return false;
+    if (worker.status === "succeeded" || worker.status === "failed" || worker.status === "cancelled" || worker.status === "unknown") return false;
+    if (worker.execution_ref.startsWith("pending:") || worker.invocation_ref.startsWith("pending:")) return false;
+    return true;
+  });
+  if (!claimed) return false;
+  const worker = await readWorker(pool, workerId);
+  await kernel.sendMessage(toExecutionRef(worker.executionRef), toInvocationRef(worker.invocationRef), message);
+  return true;
+}
+
 export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, request: SpawnWorkerRequest, proof: GoalLeaseProof, context: CouncilActorContext): Promise<Worker> {
   const client = await pool.connect(); let open = false;
   try {
@@ -243,6 +264,7 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
     await client.query("COMMIT"); open = false;
     let spawned: import("@maestro/domain").SpawnedInvocation;
     try {
+      const preparedCwd = request.prepareWorktree === undefined ? request.cwd : await request.prepareWorktree(workerId);
       const providerAdmission: ExecutionAdmission = {
         context: {
           operatorId: context.actorId,
@@ -277,7 +299,7 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
       const providerRequest = {
         name: `${bundle.substance.role}:${request.itemId}:${nextAttempt}`,
         prompt: bundle.substance.goalBrief,
-        ...(request.cwd === undefined ? {} : { cwd: request.cwd }),
+        ...(preparedCwd === undefined ? {} : { cwd: preparedCwd }),
         // Keep the legacy capability projection for injected kernels while the
         // native fields carry the complete host-owned admission contract.
         capabilities: { allowedTools: bundle.substance.allowedTools, allowedSkills: bundle.substance.allowedSkills },

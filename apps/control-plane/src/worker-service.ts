@@ -1,12 +1,13 @@
-import type { SpawnWorkerInput, Worker, WorkerObservation } from "@maestro/contracts";
+import type { SpawnWorkerInput, Worker, WorkerMessageInput, WorkerObservation } from "@maestro/contracts";
 import { toInvocationRef, type ToolEvents, type ExecutionKernelPort } from "@maestro/domain";
-import { assertProjectRole, cancelWorker, countActiveWorkersForProject, getGoalControl, listCapabilityJournal, listIpPythonSessionJournalForGoal, observeWorker, readDepartmentPlan, readHeadCouncil, readWorker, spawnWorker, type CouncilActorContext, type OperatorContext } from "@maestro/persistence";
+import { assertProjectRole, cancelWorker, countActiveWorkersForProject, getGoalControl, listCapabilityJournal, listIpPythonSessionJournalForGoal, observeWorker, readDepartmentPlan, readHeadCouncil, readWorker, sendWorkerMessageUnderOwnerClaim, spawnWorker, WorkerError, type CouncilActorContext, type OperatorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
 
 export interface WorkerService {
   spawn(councilId: string, departmentId: string, input: SpawnWorkerInput, commandId: string, operator: OperatorContext): Promise<Worker>;
   get(workerId: string, projectId: string): Promise<Worker>;
   observe(workerId: string, projectId: string, commandId: string, operator: OperatorContext): Promise<WorkerObservation>;
+  sendMessage(workerId: string, input: WorkerMessageInput, commandId: string, operator: OperatorContext): Promise<Worker>;
   cancel(workerId: string, projectId: string, commandId: string, operator: OperatorContext): Promise<Worker>;
 }
 export interface WorkerServiceDependencies {
@@ -17,6 +18,7 @@ export interface WorkerServiceDependencies {
   nativeModelRef?: string;
   kernel: ExecutionKernelPort;
   withGoalLease: <T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
+  prepareWorkerWorktree?: (workerId: string, input: { projectId: string; worktreePath: string }, operatorId: string, commandId: string) => Promise<{ worktreePath: string }>;
   /**
    * Phase 5 capacity-model first slice: a project-wide worker-slot ceiling. Absent by default
    * (unlimited, matching current behavior); set to enable admission control. A future revision
@@ -26,6 +28,9 @@ export interface WorkerServiceDependencies {
 }
 export class WorkerProjectMismatchError extends Error {
   constructor() { super("Worker project does not match the Council project"); this.name = "WorkerProjectMismatchError"; }
+}
+export class WorkerMessageRejectedError extends Error {
+  constructor() { super("Worker cannot receive a follow-up message in its current state"); this.name = "WorkerMessageRejectedError"; }
 }
 export class WorkerCapacityExceededError extends Error {
   constructor(limit: number) { super(`Project worker capacity is exhausted (limit ${limit}); queue and retry once a worker slot frees`); this.name = "WorkerCapacityExceededError"; }
@@ -92,7 +97,16 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
       const participant = council.snapshot.participants.find((entry) => (entry.departmentId ?? entry.participantId) === departmentId);
       if (participant === undefined || participant.headRoleId === undefined || participant.departmentId === undefined) throw new Error("Department is not a captured Head Council participant");
       const context: CouncilActorContext = { actorId: participant.headRoleId, sessionRef: participant.sessionRef, commandId };
-      return deps.withGoalLease(council.goalId, (proof) => spawnWorker(deps.pool, deps.kernel, { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, commandId, ...(fixedModelRef === undefined ? {} : { modelRef: fixedModelRef }) }, proof, context).then(toApiWorker));
+      if ((input.repositoryPath === undefined) !== (input.worktreePath === undefined)) throw new WorkerProjectMismatchError();
+      const contractProject = council.snapshot.contract.content.project;
+      const contractRepository = typeof contractProject === "object" && contractProject !== null && "repository" in contractProject && typeof contractProject.repository === "string" ? contractProject.repository : undefined;
+      if (input.repositoryPath !== undefined && contractRepository !== input.repositoryPath) throw new WorkerProjectMismatchError();
+      const targetPreparation = input.worktreePath === undefined
+        ? undefined
+        : deps.prepareWorkerWorktree === undefined
+          ? (() => { throw new WorkerError("Target-scoped worker preparation is not configured"); })
+          : (workerId: string) => deps.prepareWorkerWorktree!(workerId, { projectId: input.projectId, worktreePath: input.worktreePath! }, operator.operatorId, commandId).then((result) => result.worktreePath);
+      return deps.withGoalLease(council.goalId, (proof) => spawnWorker(deps.pool, deps.kernel, { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, commandId, ...(fixedModelRef === undefined ? {} : { modelRef: fixedModelRef }), ...(targetPreparation === undefined ? {} : { prepareWorktree: targetPreparation }) }, proof, context).then(toApiWorker));
     },
     async get(workerId, projectId) {
       const worker = await readWorker(deps.pool, workerId);
@@ -129,6 +143,17 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
           },
         } satisfies WorkerObservation;
       });
+    },
+    async sendMessage(workerId, input, commandId, operator) {
+      const worker = await readWorker(deps.pool, workerId);
+      const council = await readHeadCouncil(deps.pool, worker.councilId);
+      if (council.snapshot.projectId !== input.projectId) throw new WorkerProjectMismatchError();
+      await assertProjectRole(deps.pool, operator.operatorId, input.projectId, `head-${worker.departmentId}`);
+      const participant = council.snapshot.participants.find((entry) => (entry.departmentId ?? entry.participantId) === worker.departmentId);
+      if (participant === undefined || participant.headRoleId === undefined || participant.departmentId === undefined) throw new Error("Department is not a captured Head participant");
+      const delivered = await deps.withGoalLease(council.goalId, (proof) => sendWorkerMessageUnderOwnerClaim(deps.pool, deps.kernel, workerId, input.message, proof));
+      if (!delivered) throw new WorkerMessageRejectedError();
+      return toApiWorker(await readWorker(deps.pool, workerId));
     },
     async cancel(workerId, projectId, commandId, operator) {
       const worker = await readWorker(deps.pool, workerId);
