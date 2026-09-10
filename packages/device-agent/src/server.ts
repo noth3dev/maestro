@@ -2,7 +2,7 @@ import { randomUUID, X509Certificate } from "node:crypto";
 import { createServer, type Server } from "node:https";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { TLSSocket } from "node:tls";
-import { deviceIdentityFingerprint, type DeviceEnrollment, type DeviceGrantEnvelope, type DeviceGrantScope, type LocalDevicePolicy } from "@maestro/domain";
+import { deviceIdentityFingerprint, type DeviceEnrollment, type DeviceGrantEnvelope, type DeviceGrantScope, type ExternalCapabilityGate, type LocalDevicePolicy } from "@maestro/domain";
 import { assertLocallyExecutableDeviceGrant, type LocalDeviceGrantContext, LocalDeviceGrantDeniedError } from "./local.js";
 import { DeviceFenceState } from "./fence-state.js";
 import type { DeviceFileExecutor } from "./file-executor.js";
@@ -37,6 +37,8 @@ export interface DeviceAgentServerOptions {
   readonly issuerPublicKey: string | Buffer;
   readonly fenceState: DeviceFenceState;
   readonly authority: DeviceAgentAuthority;
+  /** Durable Goal-scoped device activation; omitted is fail-closed. */
+  readonly externalCapability?: ExternalCapabilityGate;
   readonly sessions: DeviceAgentSessionStore;
   readonly executor: DeviceFileExecutor;
   /** Testable crash-window hook; production leaves this undefined. */
@@ -81,6 +83,9 @@ function requestSession(request: IncomingMessage): Session | undefined {
 
 export function createDeviceAgentServer(options: DeviceAgentServerOptions): Server {
   const maxBodyBytes = options.maxBodyBytes ?? 64 * 1024;
+  const externalCapability = options.externalCapability ?? {
+    require: async () => { throw new Error("External device capability is not activated"); },
+  };
   const server = createServer({ ...options.tls, requestCert: true, rejectUnauthorized: true }, async (request, response) => {
     const session = requestSession(request);
     if (session === undefined) return json(response, 401, { error: "device_session_required" });
@@ -98,9 +103,10 @@ export function createDeviceAgentServer(options: DeviceAgentServerOptions): Serv
         enrollment: authorization.enrollment, policy: authorization.policy, scope: authorization.scope,
         expectedGoalId: authorization.goalId, expectedProjectId: authorization.projectId, expectedGrantId: authorization.grantId,
         issuerKeyId: options.issuerKeyId, issuerPublicKey: options.issuerPublicKey,
-        previousGoalFencingToken: prior.fence, previousSequence: prior.sequence, now: options.now?.() ?? new Date(),
+        previousGoalFencingToken: prior.fence, previousSequence: prior.sequence, externalCapabilityActive: true, now: options.now?.() ?? new Date(),
       };
       assertLocallyExecutableDeviceGrant(envelope, localContext);
+      await externalCapability.require({ capabilityKind: "device", projectId: authorization.projectId, goalId: authorization.goalId, commandId: envelope.commandId, budgetEffectCents: 0 });
       await options.authority.claimCommand({ envelope, capabilityToken, sessionId: session.sessionId });
       await options.fenceState.advance(envelope.grantId, envelope.goalFencingToken, envelope.sequence);
       await options.beforeEffect?.();
