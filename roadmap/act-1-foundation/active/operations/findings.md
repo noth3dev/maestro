@@ -1952,3 +1952,7 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 S1 review finding resolved: independent review rejected the first revision because `consumeExternalCapability` had no production call site and remote push could bypass it. `main.ts` now composes the shared capability service into `critical-action-service`, and remote push is fail-closed without deployment activation. PostgreSQL integration remains unavailable because MAESTRO_TEST_DATABASE_URL is unset.
 
 - 2026-09-10 S1 final finding resolved: review caught that gating inside the effect callback would claim a denied command before activation. The gate now runs through the executor pre-claim hook; retries remain possible after activation.
+
+- 2026-09-10 Plan 4 S1 CI finding: `apps/control-plane/src/main.integration.test.ts` expected an approved remote push to run without seeding the newly required deployment external capability, producing HTTP 503 in PostgreSQL CI. The code gate is intentional; the fixture was incomplete.
+
+- 2026-09-10 CI-fix local validation note: build and lint passed and the targeted main integration file was skipped without MAESTRO_TEST_DATABASE_URL. The full no-DB suite had one unrelated process-group timing failure in `packages/agent-runtime/src/ipython-process-adapter.test.ts` (`process.kill(-pid, 0)` did not throw), with 1,040 passed and 423 skipped; this is not caused by the integration fixture change.

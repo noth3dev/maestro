@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExecutionKernelPort } from "@maestro/domain";
-import { bootstrapLocalOperator, revokeAuthorityRecord } from "@maestro/persistence";
+import { bootstrapLocalOperator, createCapabilityApproval, revokeAuthorityRecord } from "@maestro/persistence";
 import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
 import { createControlPlane } from "./main.js";
@@ -358,6 +358,17 @@ if (!databaseUrl) {
       expect(auditedPending.rows).toEqual([{ outcome: "require_approval" }]);
 
       // (b) A configured CEO can approve and run through the user-facing route.
+      // Remote push also requires a separately activated deployment capability;
+      // seed that Goal-scoped activation through the shared approval ledger.
+      await createCapabilityApproval(setupPool, {
+        approvalId: randomUUID(), capabilityKind: "deployment", projectId, goalId,
+        commandId: "external-capability:deployment", action: "external-capability.activate", target: "deployment",
+        policyVersion: 1, controlEpoch: "external-capability-v1", budgetEffectCents: 0, tier: "user",
+        approverId: operatorId, decision: "approved",
+        reason: "User explicitly activated deployment for this Goal.",
+        consequence: "Deployment remains bounded by expiry and repetition scope.",
+        expiresAt: new Date(Date.now() + 3_600_000), repetitionScope: { kind: "bounded_count", count: 3 },
+      });
       // The route creates the exact command-bound approval and then invokes the
       // same gateway as the ordinary critical-action route.
       const approvedCommandId = randomUUID();
