@@ -103,7 +103,7 @@ export async function recordNativeExecutionBinding(pool: Pool, input: NativeExec
     const inserted = await client.query(
       `INSERT INTO native_execution_bindings
         (binding_id, execution_ref, invocation_ref, worker_id, goal_id, project_id, admission_kind, operator_id, mission_bundle_id, policy_version, idempotency_key, fencing_token, selected_model_provider, selected_model_id, actual_model_provider, actual_model_id, account_ref, gateway_instance_id, gateway_binding_id, data_policy_hash)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::bigint, $12, $13, $14, $15, $16, $17, $18, $19)
+       VALUES (gen_random_uuid(), $1, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11::bigint, $12, $13, $14, $15, $16, $17, $18, $19)
        ON CONFLICT DO NOTHING
        RETURNING binding_id`,
       values,
@@ -112,9 +112,9 @@ export async function recordNativeExecutionBinding(pool: Pool, input: NativeExec
       const existing = await client.query<Record<string, unknown>>(
         `SELECT execution_ref, invocation_ref, worker_id, goal_id, project_id, admission_kind, operator_id, mission_bundle_id, policy_version, idempotency_key, fencing_token, selected_model_provider, selected_model_id, actual_model_provider, actual_model_id, account_ref, gateway_instance_id, gateway_binding_id, data_policy_hash
            FROM native_execution_bindings
-          WHERE execution_ref = $1 OR invocation_ref = $2 OR (admission_kind = $6 AND idempotency_key = $10)
+          WHERE execution_ref = $1 OR invocation_ref = $2 OR (admission_kind = $3 AND idempotency_key = $4)
           FOR SHARE`,
-        values,
+        [input.execution, input.invocation, input.admissionKind, input.admission.idempotencyKey],
       );
       if (existing.rowCount !== 1 || !compareExisting(existing.rows[0]!, input, selectedIdentity, input.binding))
         throw new NativeExecutionBindingError("native execution binding identity conflict");

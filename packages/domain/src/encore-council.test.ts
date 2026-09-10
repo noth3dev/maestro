@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateEncoreTriggers, InvalidEncoreJudgmentError, synthesizeEncoreJudgments, type EncoreJudgmentSubstance } from "./encore-council.js";
+import { evaluateEncoreTriggers, InvalidEncoreJudgmentError, measureEncoreModelDiversity, synthesizeEncoreJudgments, type EncoreJudgmentSubstance } from "./encore-council.js";
 
 const judgment = (overrides: Partial<EncoreJudgmentSubstance> = {}): EncoreJudgmentSubstance => ({
   modelProvider: "test", modelId: "kimi", verdict: "proceed", confidence: "high", reasoning: "evidence supports proceeding",
@@ -30,6 +30,14 @@ describe("Encore Council synthesis", () => {
     expect(synthesis.sameModelOnly).toBe(false);
     expect(synthesis.dissentNotes).toHaveLength(0);
   });
+  it("measures diversity from the actual provider identities supplied by reviewers", () => {
+    expect(measureEncoreModelDiversity([
+      { provider: "test", id: "kimi" },
+      { provider: "openai", id: "gpt" },
+      { provider: "test", id: "kimi" },
+    ])).toEqual({ reviewerCount: 3, distinctModelCount: 2, distinctModelRefs: ["test/kimi", "openai/gpt"], sameModelOnly: false });
+  });
+
   it("labels a same-model-only synthesis honestly", () => {
     const synthesis = synthesizeEncoreJudgments([judgment(), judgment()]);
     expect(synthesis.sameModelOnly).toBe(true);

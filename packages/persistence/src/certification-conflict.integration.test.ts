@@ -119,7 +119,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
     await localGitPort.advanceBranch(repositoryPath, "goal/integration", baseRevision, commitResult.commitSha);
     await acceptDepartmentWorkerOutput(pool, worker.workerId, { reason: "diff reviewed, tests pass" }, proof, headContext("product"));
     await recordGoalIntegrationRevision(pool, localGitPort, goalId, proof);
-    return { goalId, council: resolved, worker, evidenceIds, proof };
+    return { goalId, projectId, council: resolved, worker, evidenceIds, proof };
   }
 
   beforeAll(async () => {
@@ -183,7 +183,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
   });
 
   it("detects no conflict when certifications agree, detects a conflict when they disagree, and routes the conflict to Encore Council", async () => {
-    const { goalId, worker, proof, evidenceIds } = await setupWorkerWithCommit();
+    const { goalId, projectId, worker, proof, evidenceIds } = await setupWorkerWithCommit();
     await certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] }, "quality", proof, headContext("quality"));
     expect(await detectCertificationConflict(pool, goalId)).toBe(false);
     await certifyConditional(pool, "security", worker.workerId, { verdict: "failed", findings: [{ findingId: "f1", severity: "critical", description: "vulnerability" }], testEvidenceIds: [] }, "security", proof, headContext("security"));
@@ -195,13 +195,18 @@ describeDatabase("Department acceptance and independent Quality certification wi
       async observe() { return [{ invocation: "inv-1" as never, name: "reviewer", status: "succeeded", toolEvents: { state: "empty", events: [] }, usage: { state: "available", totalTokens: 1 }, answer: { state: "available", text: JSON.stringify({ verdict: "escalate", confidence: "high", reasoning: "certifications disagree", conditions: [], dissentNote: null, citedEvidenceIds: [evidenceIds[0]] }) } }]; },
       async cancel() { return { cancelled: true }; },
       async getModelIdentity() { return { provider: "fake", id: "fake" }; },
+      async getExecutionBinding() { return { model: { provider: "fake", id: "fake" }, accountRef: "account-1" }; },
       async getToolEvents() { return { state: "empty", events: [] }; },
       async getUsage() { return { state: "available", totalTokens: 1 }; },
       async getInvocationStatus() { return "succeeded"; },
       async resume() { throw new Error("not supported"); },
       async reconnect() { throw new Error("not supported"); },
     };
-    const round = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "Quality and Security certifications disagree; how should we proceed?", criteria: [{ criterionId: "safety", description: "does this preserve safety" }], evidenceIds: [evidenceIds[0]!], reviewerCount: 1 });
+    const round = await runEncoreCouncilReview(pool, kernel, { goalId, proof, question: "Quality and Security certifications disagree; how should we proceed?", criteria: [{ criterionId: "safety", description: "does this preserve safety" }], evidenceIds: [evidenceIds[0]!], reviewerCount: 1, admission: {
+       context: { operatorId: "operator-1", projectId, goalId, missionBundleId: "encore-bundle", policyVersion: "encore-policy", fencingToken: proof.fencingToken, accountRef: "account-1" },
+       grant: { grantId: "certification-conflict-encore-grant", allowedTools: [], allowedSkills: ["review"], modelPolicy: ["fake/fake"], pathScope: [], outboundDataClasses: ["repository files only"], remaining: { modelTurns: 2, toolCalls: 0, childCalls: 0, outputTokens: 2048, wallTimeMs: 20_000, retryCount: 0 } },
+       modelPolicy: ["fake/fake"], idempotencyKey: "certification-conflict-encore",
+     } });
     const resolution = await adjudicateCertificationConflict(pool, round, goalId, ["passed", "failed"], proof);
     expect(resolution.roundId).toBe(round.roundId);
     await expect(adjudicateCertificationConflict(pool, round, goalId, ["passed", "passed"], proof)).rejects.toBeInstanceOf(CertificationError);

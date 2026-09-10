@@ -9,7 +9,7 @@ import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as gitAdapter from "@maestro/git-adapter";
 import { localGitPort } from "../../../test/git-port.js";
-import { type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance } from "@maestro/domain";
+import { type DecisionPacket, type DepartmentPlanSubstance, type ExecutionAdmission, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";
 import { createDurableTaskContract, launchConfirmedTaskContract, recordExactTaskContractConfirmation } from "./task-contract.js";
@@ -50,8 +50,17 @@ const criteria = [{ criterionId: "safety", description: "preserve the safety inv
 type KernelAnswer = { provider: string; id: string; text: string };
 
 /** Deterministic model boundary; all state under test remains real PostgreSQL and real Git. */
-function kernelWithAnswers(answers: readonly KernelAnswer[]): ExecutionKernelPort {
+function encoreAdmission(goalId: string, projectId: string, fencingToken: string, commandId: string, index: number, model: string): ExecutionAdmission {
+  return {
+    context: { operatorId: "operator-1", projectId, goalId, missionBundleId: "encore-bundle", policyVersion: "encore-policy", fencingToken, accountRef: "account-1" },
+    grant: { grantId: `encore-grant-${commandId}-${index}`, allowedTools: [], allowedSkills: ["review"], modelPolicy: [model], pathScope: [], outboundDataClasses: ["repository files only"], remaining: { modelTurns: 2, toolCalls: 0, childCalls: 0, outputTokens: 2048, wallTimeMs: 20_000, retryCount: 0 } },
+    modelPolicy: [model], idempotencyKey: `encore-command-${commandId}-${index}`,
+  };
+}
+
+function kernelWithAnswers(answers: readonly KernelAnswer[], durableBinding = true): ExecutionKernelPort {
   let counter = 0;
+  const namespace = randomUUID();
   const invocations = new Map<string, KernelAnswer & { invocation: string }>();
   return {
     async spawn() {
@@ -59,8 +68,8 @@ function kernelWithAnswers(answers: readonly KernelAnswer[]): ExecutionKernelPor
       counter += 1;
       const answer = answers[index];
       if (answer === undefined) throw new Error(`No deterministic answer for invocation ${index}`);
-      const execution = `exec-${index}`;
-      const invocation = `inv-${index}`;
+      const execution = `${namespace}-exec-${index}`;
+      const invocation = `${namespace}-inv-${index}`;
       invocations.set(execution, { ...answer, invocation });
       return { execution: execution as never, invocation: invocation as never };
     },
@@ -84,6 +93,13 @@ function kernelWithAnswers(answers: readonly KernelAnswer[]): ExecutionKernelPor
       if (answer === undefined) throw new Error("Unknown deterministic execution");
       return { provider: answer.provider, id: answer.id };
     },
+    ...(durableBinding ? {
+      async getExecutionBinding(execution: Parameters<NonNullable<ExecutionKernelPort["getExecutionBinding"]>>[0]) {
+        const answer = invocations.get(execution as unknown as string);
+        if (answer === undefined) throw new Error("Unknown deterministic execution");
+        return { model: { provider: answer.provider, id: answer.id }, accountRef: "account-1" };
+      },
+    } : {}),
     async getToolEvents() { return { state: "empty" as const, events: [] }; },
     async getUsage() { return { state: "available" as const, totalTokens: 1 }; },
     async getInvocationStatus() { return "succeeded" as const; },
@@ -151,7 +167,7 @@ async function setupWorkerWithRealCommit(pool: Pool, repositoryPath: string, bas
     deliverable: "a change", evidenceRequirements: ["diff"], validationCriteria: ["tests pass"], terminationConditions: ["deadline passed"],
   };
   await createMissionBundle(pool, { councilId: resolvedCouncil.councilId, departmentId: "product", itemId: "exec-1", substance: bundleSubstance }, proof, headContext("product"));
-  const workerKernel = kernelWithAnswers([{ provider: "worker-provider", id: "worker-model", text: "worker output" }]);
+  const workerKernel = kernelWithAnswers([{ provider: "worker-provider", id: "worker-model", text: "worker output" }], false);
   const spawnedWorker = await spawnWorker(pool, workerKernel, { councilId: resolvedCouncil.councilId, departmentId: "product", planVersion: plan.version, itemId: "exec-1" }, proof, headContext("product"));
   const worker = await observeWorker(pool, workerKernel, spawnedWorker.workerId, proof, headContext("product"));
   await recordGoalIntegrationBranch(pool, localGitPort, goalId, repositoryPath, "goal/integration", baseRevision, proof);
@@ -205,13 +221,13 @@ describeDatabase("Phase 3 adversarial fixtures with PostgreSQL", () => {
   });
 
   it("labels same-model agreement honestly and escalates disagreement while preserving dissent", async () => {
-    const { goalId, evidenceIds } = await insertGoalWithEvidence(pool);
+    const { goalId, projectId, evidenceIds } = await insertGoalWithEvidence(pool);
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "encore-test", leaseDurationMs: 60_000 });
     const sameModelAnswer = JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: evidenceIds });
     const sameModel = await runEncoreCouncilReview(pool, kernelWithAnswers([
       { provider: "same-provider", id: "same-model", text: sameModelAnswer },
       { provider: "same-provider", id: "same-model", text: sameModelAnswer },
-    ]), { goalId, question: "should we proceed?", criteria, evidenceIds, reviewerCount: 2, proof });
+    ]), { goalId, question: "should we proceed?", criteria, evidenceIds, reviewerCount: 2, proof, admission: (index) => encoreAdmission(goalId, projectId, proof.fencingToken, "same-model", index, "same-provider/same-model") });
     expect(sameModel.synthesis.sameModelOnly).toBe(true);
     expect(sameModel.synthesis.finalVerdict).toBe("proceed");
     expect(sameModel.synthesis.escalated).toBe(false);
@@ -222,7 +238,7 @@ describeDatabase("Phase 3 adversarial fixtures with PostgreSQL", () => {
     const disagreement = await runEncoreCouncilReview(pool, kernelWithAnswers([
       { provider: "same-provider", id: "same-model", text: sameModelAnswer },
       { provider: "same-provider", id: "same-model", text: JSON.stringify({ verdict: "do_not_proceed", confidence: "high", reasoning: "unsafe", conditions: [], dissentNote: dissent, citedEvidenceIds: evidenceIds }) },
-    ]), { goalId, question: "should we proceed despite the concern?", criteria, evidenceIds, reviewerCount: 2, proof });
+    ]), { goalId, question: "should we proceed despite the concern?", criteria, evidenceIds, reviewerCount: 2, proof, admission: (index) => encoreAdmission(goalId, projectId, proof.fencingToken, "disagreement", index, "same-provider/same-model") });
     expect(disagreement.synthesis.sameModelOnly).toBe(true);
     expect(disagreement.synthesis.escalated).toBe(true);
     expect(disagreement.synthesis.finalVerdict).toBe("escalate");
