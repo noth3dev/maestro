@@ -1735,3 +1735,7 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 Main post-merge gate exposed an environment-boundary issue, not an S3b code defect: ignored `testbed/` is present in the root checkout and was still collected by ESLint/Vitest. The root lint boundary was fixed in `6d870e0`; the test boundary fix `5975fbd` excludes `testbed/**` from Vitest without editing or deleting any testbed file.
 
 - 2026-09-10 CI failure `34457086182`: color-enabled Markdown output inserted ANSI sequences between words, making a plain substring assertion fail; default local environment masked it. Test-only ANSI normalization fixes the portability issue without changing runtime rendering. The first fix hit ESLint `no-control-regex`; the constructed regex correction now passes.
+
+- 2026-09-10 Plan 3 S4 `release-scenario-harness` finding: the existing persistence layer already exposes `readEvidenceBundle`, but no project-scoped read route or CLI aggregation existed. The route now validates project ownership before selecting the newest durable bundle and returns the existing stored hash/content without creating new authority. The fixture initializes a local Git repository and never invokes a provider or remote; live acceptance must remain outside CI and be handed to the user with testbed projects #1–#4.
+
+- 2026-09-10 Plan 3 S4 verification finding: no code or test failure remains in the no-PostgreSQL surface. The skipped 63 files / 417 tests are the existing real PostgreSQL gate; no live provider acceptance was attempted.
