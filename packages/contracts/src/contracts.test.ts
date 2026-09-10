@@ -223,6 +223,8 @@ describe("Ensemble Router artifact wire contracts", () => {
       admissionBindingRef: "binding-1",
       rationale: "selected",
       createdAt: "2026-09-08T12:00:00Z",
+      pressureCalculation: { pressureFloor: 200 / 3, pressure: 100, explicitHeadUplift: 100 },
+            approvalIdentity: null,
       taskKindRecipeVersions: { coding: 1 },
       taskDemand: { schemaVersion: 1, taskKinds: ["coding"], requirements: Object.fromEntries(capabilityAxes.map((axis) => [axis, { level: 80, rationale: "Head requirement" }])), provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" } },
       workCharacter: { schemaVersion: 1, risk: 40, reversibility: 120, verificationAttachment: 80, materialScale: 20, timePressure: 30, budgetHeadroom: 150, provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" } },
@@ -231,6 +233,8 @@ describe("Ensemble Router artifact wire contracts", () => {
       approvalRef: null,
     };
     expect(RoutingEvidenceSchema.parse(evidence)).toEqual(evidence);
+    expect(RoutingEvidenceSchema.safeParse({ ...evidence, modelProfile: { ...evidence.modelProfile, capability: {}, providerFacts: {}, provenance: {} } }).success).toBe(false);
+    expect(RoutingEvidenceSchema.safeParse({ ...evidence, operationalOverlaySnapshot: {} }).success).toBe(false);
   });
 
   it("fails closed on missing facts, forbidden identity fields, and unavailable bindings", () => {

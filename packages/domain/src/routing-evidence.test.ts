@@ -25,6 +25,8 @@ const evidence = (): RoutingEvidence => ({
   admissionBindingRef: "binding-1",
   rationale: "selected after hard filters and matching",
   createdAt: "2026-09-08T12:00:00Z",
+  pressureCalculation: { pressureFloor: 200 / 3, pressure: 100, explicitHeadUplift: 100 },
+        approvalIdentity: null,
   taskKindRecipeVersions: { coding: 1 },
   taskDemand: { schemaVersion: 1, taskKinds: ["coding"], requirements: Object.fromEntries(MODEL_CAPABILITY_AXES.map((axis) => [axis, { level: 80, rationale: "Head requirement" }])), provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" } },
   workCharacter: { schemaVersion: 1, risk: 40, reversibility: 120, verificationAttachment: 80, materialScale: 20, timePressure: 30, budgetHeadroom: 150, provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" } },
@@ -43,6 +45,11 @@ describe("routing evidence boundary", () => {
     expect(() => assertValidRoutingEvidence({ ...evidence(), taskDemandHash: "bad" })).toThrow(RoutingEvidenceValidationError);
     expect(() => assertValidRoutingEvidence({ ...evidence(), authority: "ceo" })).toThrow(RoutingEvidenceValidationError);
   });
+  it("requires replayable E pressure and known recipe versions", () => {
+    expect(() => assertValidRoutingEvidence({ ...evidence(), pressureCalculation: { pressureFloor: 1, pressure: 100, explicitHeadUplift: 100 } })).toThrow(RoutingEvidenceValidationError);
+    expect(() => assertValidRoutingEvidence({ ...evidence(), taskKindRecipeVersions: { coding: 999 } })).toThrow(RoutingEvidenceValidationError);
+  });
+
   it("rejects hostile object shapes and invalid pressure/band pairs at the value boundary", () => {
     const hostile = evidence() as Record<string, unknown>;
     Object.defineProperty(hostile, "provider", { value: "openai", enumerable: false });

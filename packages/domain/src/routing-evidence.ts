@@ -1,6 +1,6 @@
 import { classifyPressureBand } from "./pressure-band.js";
-import { assertValidTaskDemand, type TaskDemand } from "./task-demand.js";
-import { assertValidWorkCharacter, type WorkCharacter } from "./work-character.js";
+import { assertValidTaskDemand, TASK_KIND_RECIPES, type TaskDemand } from "./task-demand.js";
+import { assertValidWorkCharacter, calculatePressure, type PressureCalculation, type WorkCharacter } from "./work-character.js";
 import { assertValidModelMap, type ModelMapEntry } from "./model-map.js";
 import { assertValidOperationalOverlaySnapshot, type OperationalOverlaySnapshot } from "./operational-overlay.js";
 
@@ -13,6 +13,13 @@ export type RoutingEvidenceBand = (typeof ROUTING_EVIDENCE_BANDS)[number];
 export interface RoutingEvidenceRejection {
   readonly candidateRef: string;
   readonly reason: string;
+}
+
+export interface RoutingApprovalIdentity {
+  readonly capabilityKind: string;
+  readonly commandId: string;
+  readonly action: string;
+  readonly target: string;
 }
 
 export interface RoutingEvidence {
@@ -30,16 +37,18 @@ export interface RoutingEvidence {
   readonly pressure: number;
   readonly pressureBand: RoutingEvidenceBand;
   readonly decisionLayer: "automatic progress" | "Department Head" | "Encore Council" | "user";
-  readonly overlayVersion: number | null;
+  readonly overlayVersion: number;
   readonly admissionBindingRef: string;
   readonly rationale: string;
   readonly createdAt: string;
+  readonly pressureCalculation: PressureCalculation;
   readonly taskKindRecipeVersions: Readonly<Record<string, number>>;
   readonly taskDemand: TaskDemand;
   readonly workCharacter: WorkCharacter;
   readonly modelProfile: ModelMapEntry;
   readonly operationalOverlaySnapshot: OperationalOverlaySnapshot;
   readonly approvalRef: string | null;
+  readonly approvalIdentity: RoutingApprovalIdentity | null;
 }
 
 export class RoutingEvidenceValidationError extends Error {
@@ -143,13 +152,36 @@ function recipeVersions(value: unknown, taskKinds: readonly string[]): asserts v
   for (const key of keys) {
     if (typeof key !== "string" || !taskKinds.includes(key)) throw new RoutingEvidenceValidationError("taskKindRecipeVersions contains an undeclared task kind");
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (!descriptor?.enumerable || !("value" in descriptor) || typeof descriptor.value !== "number" || !Number.isSafeInteger(descriptor.value) || descriptor.value < 1)
-      throw new RoutingEvidenceValidationError(`taskKindRecipeVersions.${key} must be a positive version`);
+    const recipe = TASK_KIND_RECIPES.find((candidate) => candidate.kind === key);
+    if (!descriptor?.enumerable || !("value" in descriptor) || typeof descriptor.value !== "number" || !Number.isSafeInteger(descriptor.value) || descriptor.value < 1 || recipe === undefined || descriptor.value !== recipe.schemaVersion)
+      throw new RoutingEvidenceValidationError(`taskKindRecipeVersions.${key} must match the known recipe version`);
   }
 }
 function modelProfile(value: unknown, selectedModelRef: string): asserts value is ModelMapEntry {
   try { assertValidModelMap({ schemaVersion: 1, entries: [value] }); } catch { throw new RoutingEvidenceValidationError("modelProfile is invalid"); }
   if ((value as ModelMapEntry).modelRef !== selectedModelRef) throw new RoutingEvidenceValidationError("modelProfile.modelRef must match selectedModelRef");
+}
+
+function pressureCalculation(value: unknown, character: WorkCharacter, pressure: number): asserts value is PressureCalculation {
+  object(value, "pressureCalculation");
+  const keys = ["pressureFloor", "pressure", "explicitHeadUplift"] as const;
+  if (Reflect.ownKeys(value).some((key) => typeof key !== "string" || !keys.includes(key as typeof keys[number]))) throw new RoutingEvidenceValidationError("pressureCalculation has unknown fields");
+  if (keys.some((key) => !Object.hasOwn(value, key))) throw new RoutingEvidenceValidationError("pressureCalculation is missing a required field");
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.pressureFloor !== "number" || !Number.isFinite(candidate.pressureFloor) || candidate.pressureFloor < 0 || candidate.pressureFloor > 200) throw new RoutingEvidenceValidationError("pressureCalculation.pressureFloor is invalid");
+  if (typeof candidate.pressure !== "number" || !Number.isFinite(candidate.pressure) || candidate.pressure !== pressure) throw new RoutingEvidenceValidationError("pressureCalculation.pressure does not match routing pressure");
+  if (typeof candidate.explicitHeadUplift !== "number" || !Number.isSafeInteger(candidate.explicitHeadUplift) || candidate.explicitHeadUplift < 0 || candidate.explicitHeadUplift > 200) throw new RoutingEvidenceValidationError("pressureCalculation.explicitHeadUplift is invalid");
+  const expected = calculatePressure(character, candidate.explicitHeadUplift);
+  if (expected.pressureFloor !== candidate.pressureFloor || expected.pressure !== candidate.pressure) throw new RoutingEvidenceValidationError("pressureCalculation cannot be replayed from WorkCharacter");
+}
+
+function approvalIdentity(value: unknown): asserts value is RoutingApprovalIdentity | null {
+  if (value === null) return;
+  object(value, "approvalIdentity");
+  const keys = ["capabilityKind", "commandId", "action", "target"] as const;
+  if (Reflect.ownKeys(value).some((key) => typeof key !== "string" || !keys.includes(key as typeof keys[number]))) throw new RoutingEvidenceValidationError("approvalIdentity has unknown fields");
+  if (keys.some((key) => !Object.hasOwn(value, key))) throw new RoutingEvidenceValidationError("approvalIdentity is missing a required field");
+  for (const key of keys) ref(value[key], `approvalIdentity.${key}`);
 }
 
 export function assertValidRoutingEvidence(value: unknown): asserts value is RoutingEvidence {
@@ -174,12 +206,14 @@ export function assertValidRoutingEvidence(value: unknown): asserts value is Rou
       "admissionBindingRef",
       "rationale",
       "createdAt",
+      "pressureCalculation",
       "taskKindRecipeVersions",
       "taskDemand",
       "workCharacter",
       "modelProfile",
       "operationalOverlaySnapshot",
       "approvalRef",
+      "approvalIdentity",
     ],
     "Routing evidence",
   );
@@ -210,6 +244,7 @@ export function assertValidRoutingEvidence(value: unknown): asserts value is Rou
       "modelProfile",
       "operationalOverlaySnapshot",
       "approvalRef",
+      "approvalIdentity",
     ],
     "Routing evidence",
   );
@@ -239,16 +274,20 @@ export function assertValidRoutingEvidence(value: unknown): asserts value is Rou
   const projection = classifyPressureBand(record.pressure);
   if (projection.band !== record.pressureBand || projection.decisionLayer !== record.decisionLayer)
     throw new RoutingEvidenceValidationError("Routing evidence pressure projection does not match band or decision layer");
-  if (
-    record.overlayVersion !== null &&
-    (typeof record.overlayVersion !== "number" || !Number.isSafeInteger(record.overlayVersion) || record.overlayVersion < 1)
-  )
+  if (typeof record.overlayVersion !== "number" || !Number.isSafeInteger(record.overlayVersion) || record.overlayVersion < 1)
     throw new RoutingEvidenceValidationError("Routing evidence overlayVersion is invalid");
   timestamp(record.createdAt, "Routing evidence createdAt");
+  if (record.approvalRef !== null && record.approvalIdentity === null) throw new RoutingEvidenceValidationError("approvalIdentity is required when approvalRef is present");
+  if (record.approvalRef === null && record.approvalIdentity !== null) throw new RoutingEvidenceValidationError("approvalIdentity requires approvalRef");
+  approvalIdentity(record.approvalIdentity);
   try { assertValidTaskDemand(record.taskDemand); } catch { throw new RoutingEvidenceValidationError("Routing evidence taskDemand is invalid"); }
   const taskDemand = record.taskDemand as TaskDemand;
   recipeVersions(record.taskKindRecipeVersions, taskDemand.taskKinds);
   try { assertValidWorkCharacter(record.workCharacter); } catch { throw new RoutingEvidenceValidationError("Routing evidence workCharacter is invalid"); }
+  const workCharacter = record.workCharacter as WorkCharacter;
+  if (workCharacter.provenance.taskContractRef !== taskDemand.provenance.taskContractRef || workCharacter.provenance.headDecisionRef !== taskDemand.provenance.headDecisionRef)
+    throw new RoutingEvidenceValidationError("TaskDemand and WorkCharacter provenance must agree");
+  pressureCalculation(record.pressureCalculation, workCharacter, record.pressure);
   modelProfile(record.modelProfile, record.selectedModelRef);
   try { assertValidOperationalOverlaySnapshot(record.operationalOverlaySnapshot); } catch { throw new RoutingEvidenceValidationError("Routing evidence operationalOverlaySnapshot is invalid"); }
   const overlay = record.operationalOverlaySnapshot as OperationalOverlaySnapshot;

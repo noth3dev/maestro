@@ -471,40 +471,62 @@ export const PressureBandProjectionSchema = z.object({
 }).strict();
 export type PressureBandProjection = z.infer<typeof PressureBandProjectionSchema>;
 
-export const RoutingEvidenceSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    evidenceId: NonEmptyLineSchema,
-    goalRef: NonEmptyLineSchema,
-    projectRef: NonEmptyLineSchema,
-    routeRef: NonEmptyLineSchema,
-    mode: z.enum(["ensemble", "pin"]),
-    selectedModelRef: z.string().regex(/^[^/\s]+\/[^/\s]+$/),
-    accountBinding: NonEmptyLineSchema,
-    candidateRefs: z
-      .array(NonEmptyLineSchema)
-      .min(1)
-      .refine((values) => new Set(values).size === values.length, "candidateRefs must not contain duplicates"),
-    rejections: z.array(z.object({ candidateRef: NonEmptyLineSchema, reason: NonEmptyLineSchema }).strict()),
-    taskDemandHash: z.string().regex(/^[a-f0-9]{64}$/),
-    pressure: z.number().finite().min(0).max(200),
-    pressureBand: z.enum(["low", "medium", "high", "critical"]),
-    decisionLayer: z.enum(["automatic progress", "Department Head", "Encore Council", "user"]),
-    overlayVersion: z.number().int().positive().nullable(),
-    admissionBindingRef: NonEmptyLineSchema,
-    rationale: NonEmptyLineSchema,
-    createdAt: NonEmptyLineSchema,
-    taskKindRecipeVersions: z.record(z.string().min(1), z.number().int().positive()),
-    taskDemand: TaskDemandSchema,
-    workCharacter: z.object({
-      schemaVersion: z.literal(1), risk: z.number().int().min(0).max(200), reversibility: z.number().int().min(0).max(200), verificationAttachment: z.number().int().min(0).max(200), materialScale: z.number().int().min(0).max(200), timePressure: z.number().int().min(0).max(200), budgetHeadroom: z.number().int().min(0).max(200),
-      provenance: z.object({ taskContractRef: NonEmptyLineSchema, headDecisionRef: NonEmptyLineSchema }).strict(),
-    }).strict(),
-    modelProfile: z.object({ modelRef: z.string().regex(/^[^/\s]+\/[^/\s]+$/), capability: z.record(z.string(), z.unknown()), providerFacts: z.record(z.string(), z.unknown()), provenance: z.record(z.string(), z.unknown()) }).strict(),
-    operationalOverlaySnapshot: z.record(z.string(), z.unknown()),
-    approvalRef: NonEmptyLineSchema.nullable(),
-  })
-  .strict();
+const ModelCapabilityScoreSchema = z.object({
+  status: z.enum(["scored", "unproven"]),
+  score: z.number().int().min(0).max(200).nullable(),
+  rationale: NonEmptyLineSchema,
+  evidence: NonEmptyStringListSchema,
+}).strict().superRefine((value, context) => {
+  if (value.status === "scored" && value.score === null) context.addIssue({ code: "custom", path: ["score"], message: "scored capability requires a score" });
+  if (value.status === "unproven" && value.score !== null) context.addIssue({ code: "custom", path: ["score"], message: "unproven capability must have a null score" });
+});
+const ModelCapabilityVectorSchema = z.object({
+  schemaVersion: z.literal(2),
+  axes: z.object({
+    reasoning: ModelCapabilityScoreSchema, coding: ModelCapabilityScoreSchema, verification: ModelCapabilityScoreSchema,
+    "instruction-fidelity": ModelCapabilityScoreSchema, "tool-use": ModelCapabilityScoreSchema, "long-context": ModelCapabilityScoreSchema,
+    knowledge: ModelCapabilityScoreSchema, "refusal-calibration": ModelCapabilityScoreSchema,
+  }).strict(),
+}).strict();
+const ModelProfileSchema = z.object({
+  modelRef: z.string().regex(/^[^/\s]+\/[^/\s]+$/),
+  capability: ModelCapabilityVectorSchema,
+  providerFacts: ProviderFactsSchema,
+  provenance: z.object({ owner: z.literal("human"), sourceRefs: NonEmptyStringListSchema, reviewedAt: NonEmptyLineSchema }).strict(),
+}).strict();
+const PressureCalculationSchema = z.object({
+  pressureFloor: z.number().finite().min(0).max(200),
+  pressure: z.number().finite().min(0).max(200),
+  explicitHeadUplift: z.number().int().min(0).max(200),
+}).strict();
+const RoutingApprovalIdentitySchema = z.object({
+  capabilityKind: NonEmptyLineSchema, commandId: NonEmptyLineSchema, action: NonEmptyLineSchema, target: NonEmptyLineSchema,
+}).strict();
+export const RoutingEvidenceSchema = z.object({
+  schemaVersion: z.literal(1), evidenceId: NonEmptyLineSchema, goalRef: NonEmptyLineSchema, projectRef: NonEmptyLineSchema,
+  routeRef: NonEmptyLineSchema, mode: z.enum(["ensemble", "pin"]), selectedModelRef: z.string().regex(/^[^/\s]+\/[^/\s]+$/),
+  accountBinding: NonEmptyLineSchema, candidateRefs: z.array(NonEmptyLineSchema).min(1).refine((values) => new Set(values).size === values.length, "candidateRefs must not contain duplicates"),
+  rejections: z.array(z.object({ candidateRef: NonEmptyLineSchema, reason: NonEmptyLineSchema }).strict()), taskDemandHash: z.string().regex(/^[a-f0-9]{64}$/),
+  pressure: z.number().finite().min(0).max(200), pressureBand: z.enum(["low", "medium", "high", "critical"]),
+  decisionLayer: z.enum(["automatic progress", "Department Head", "Encore Council", "user"]), overlayVersion: z.number().int().positive(),
+  admissionBindingRef: NonEmptyLineSchema, rationale: NonEmptyLineSchema, createdAt: NonEmptyLineSchema,
+  pressureCalculation: PressureCalculationSchema, taskKindRecipeVersions: z.record(z.string().min(1), z.number().int().positive()),
+  taskDemand: TaskDemandSchema,
+  workCharacter: z.object({
+    schemaVersion: z.literal(1), risk: z.number().int().min(0).max(200), reversibility: z.number().int().min(0).max(200), verificationAttachment: z.number().int().min(0).max(200), materialScale: z.number().int().min(0).max(200), timePressure: z.number().int().min(0).max(200), budgetHeadroom: z.number().int().min(0).max(200),
+    provenance: z.object({ taskContractRef: NonEmptyLineSchema, headDecisionRef: NonEmptyLineSchema }).strict(),
+  }).strict(),
+  modelProfile: ModelProfileSchema,
+  operationalOverlaySnapshot: OperationalOverlaySnapshotSchema,
+  approvalRef: NonEmptyLineSchema.nullable(), approvalIdentity: RoutingApprovalIdentitySchema.nullable(),
+}).strict().superRefine((value, context) => {
+  if ((value.approvalRef === null) !== (value.approvalIdentity === null)) context.addIssue({ code: "custom", path: ["approvalIdentity"], message: "approvalRef and approvalIdentity must be supplied together" });
+  if (value.taskDemand.provenance.taskContractRef !== value.workCharacter.provenance.taskContractRef || value.taskDemand.provenance.headDecisionRef !== value.workCharacter.provenance.headDecisionRef)
+    context.addIssue({ code: "custom", path: ["workCharacter", "provenance"], message: "TaskDemand and WorkCharacter provenance must agree" });
+  if (value.operationalOverlaySnapshot.projectRef !== value.projectRef || value.operationalOverlaySnapshot.goalRef !== value.goalRef || value.operationalOverlaySnapshot.overlayVersion !== value.overlayVersion)
+    context.addIssue({ code: "custom", path: ["operationalOverlaySnapshot"], message: "overlay snapshot identity must match routing evidence" });
+  if (value.modelProfile.modelRef !== value.selectedModelRef) context.addIssue({ code: "custom", path: ["modelProfile", "modelRef"], message: "model profile identity must match selected model" });
+});
 export type RoutingEvidence = z.infer<typeof RoutingEvidenceSchema>;
 
 export const MissionBundleSubstanceSchema = z.object({
