@@ -20,6 +20,7 @@ import { observeWorker, spawnWorker } from "./worker.js";
 import { assembleEvidenceBundle, EvidenceBundleNotFoundError, readEvidenceBundle, recordEvidenceBundle, verifyStoredEvidenceBundle } from "./evidence-bundle.js";
 import { recordDepartmentBranch, recordGoalIntegrationBranch, recordIntegrationCommit, recordWorkerWorktree } from "./git-integration.js";
 import { reserveDepartmentBudget, reserveGoalBudget, reserveMissionBudget } from "./budget-reservation.js";
+import { consumeCapabilityApproval, createCapabilityApproval } from "./capability-approval.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -66,11 +67,11 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
   });
 
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS evidence_bundles, certification_conflict_resolution_members, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, goal_integration_revision_commits, goal_integration_revisions, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
+    await pool.query("DROP TABLE IF EXISTS capability_effect_resolutions, capability_decision_journal, capability_repetition_claims, capability_repetition_budgets, capability_sessions, capability_approvals, evidence_bundles, certification_conflict_resolution_members, certification_conflict_resolutions, certification_waivers, conditional_certifications, quality_certifications, goal_integration_revision_commits, goal_integration_revisions, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
     await applyAllMigrations(pool);
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE evidence_bundles, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE");
+    await pool.query("TRUNCATE capability_effect_resolutions, capability_decision_journal, capability_repetition_claims, capability_repetition_budgets, capability_sessions, capability_approvals, evidence_bundles, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE");
     await bootstrapPermanentOrganization(pool);
   });
   afterAll(async () => { await pool.end(); });
@@ -180,6 +181,22 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     const finalGoal = await pool.query<{ state: string }>("SELECT state FROM goals WHERE goal_id = $1", [goalId]);
     expect(finalGoal.rows[0]!.state).toBe("certifying");
 
+    // A below-requirement capability effect must be replayable from the bundle's durable claim rows.
+    const approvalId = randomUUID();
+    const claimCommandId = `claim:${randomUUID()}`;
+    await createCapabilityApproval(pool, {
+      approvalId, capabilityKind: "ipython", projectId, goalId, commandId: claimCommandId,
+      action: "project.file.edit", target: "packages/product/change.txt", policyVersion: 1,
+      controlEpoch: "1", budgetEffectCents: 0, tier: "Encore Council", approverId: "council-1",
+      decision: "approved", reason: "Required for the bounded mission.", consequence: "Only the recorded file changes.",
+      expiresAt: new Date(Date.now() + 60_000), repetitionScope: { kind: "bounded_count", count: 1 },
+    });
+    await consumeCapabilityApproval(pool, {
+      approvalId, capabilityKind: "ipython", projectId, goalId, commandId: claimCommandId,
+      admissionCommandId: "worker-admission-claim", action: "project.file.edit", target: "packages/product/change.txt",
+      policyVersion: 1, controlEpoch: "1", budgetEffectCents: 0,
+    });
+
     // Assemble and durably record the evidence bundle spanning everything above.
     const { bundleId, hash } = await recordEvidenceBundle(pool, goalId, proof);
     await verifyStoredEvidenceBundle(pool, bundleId);
@@ -194,6 +211,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     expect(read.content.councilBriefs.length).toBeGreaterThan(0);
     expect(read.content.headParticipation.participations.length).toBeGreaterThan(0);
     expect(read.content.councilBriefs[0]).toHaveProperty("payload");
+    expect((read.content as unknown as { capabilityRepetitionClaims: readonly unknown[] }).capabilityRepetitionClaims.length).toBeGreaterThan(0);
 
     // A live re-assembly right now reflects the same durable state and hashes identically.
     const reassembled = await assembleEvidenceBundle(pool, goalId, proof);

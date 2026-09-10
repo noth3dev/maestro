@@ -200,5 +200,6 @@ describeDatabase("capability approval ledger", () => {
     await expect(consumeCapabilityApproval(pool, input)).resolves.toMatchObject({ consumed: false, remainingCount: 1 });
     await expect(pool.query("SELECT count(*)::int AS count FROM capability_repetition_claims WHERE approval_id = $1", [created.approvalId])).resolves.toMatchObject({ rows: [{ count: 1 }] });
     await expect(pool.query("SELECT details->>'outcome' AS outcome FROM capability_decision_journal WHERE approval_id = $1 AND command_id = $2 AND event = 'effect_result' ORDER BY recorded_at ASC LIMIT 1", [created.approvalId, commandId])).resolves.toMatchObject({ rows: [{ outcome: "pending_unknown" }] });
+    await expect(pool.query("SELECT details->>'remainingCount' AS remaining_count, details->>'remainingBudgetCents' AS remaining_budget, details->>'repetitionExpiresAt' AS repetition_expires_at, details->>'admissionCommandId' AS admission_command_id FROM capability_decision_journal WHERE approval_id = $1 AND command_id = $2 AND event = 'effect_result' ORDER BY recorded_at ASC LIMIT 1", [created.approvalId, commandId])).resolves.toMatchObject({ rows: [{ remaining_count: "0", remaining_budget: null, repetition_expires_at: null, admission_command_id: admissionCommandId }] });
   });
 });

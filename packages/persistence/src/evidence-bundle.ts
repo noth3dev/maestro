@@ -199,6 +199,11 @@ async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string
        LEFT JOIN capability_repetition_budgets budget ON budget.approval_id = approval.approval_id
       WHERE approval.goal_id = $1 ORDER BY approval.created_at, approval.approval_id`, [goalId],
   )).rows;
+  const capabilityRepetitionClaims = (await pool.query<Record<string, unknown>>(
+    `SELECT claim_id, approval_id, capability_kind, project_id, goal_id, command_id,
+            effect_index, action, target, policy_version, budget_effect_cents, consumed_at
+       FROM capability_repetition_claims WHERE goal_id = $1 ORDER BY consumed_at, claim_id`, [goalId],
+  )).rows;
   const capabilityDecisionJournal = (await pool.query<Record<string, unknown>>(
     `SELECT journal_id, capability_kind, project_id, goal_id, approval_id, command_id,
             event, details, recorded_at
@@ -304,6 +309,7 @@ async function assembleEvidenceBundleWithClient(pool: PoolClient, goalId: string
     evidenceRecords,
     actualCosts,
     capabilityApprovals,
+    capabilityRepetitionClaims,
     capabilityDecisionJournal,
     authorityRecords,
     authorityDecisions,

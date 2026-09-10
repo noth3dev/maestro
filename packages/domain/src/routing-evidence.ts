@@ -99,20 +99,35 @@ function opaqueCandidateRef(value: unknown, field: string): asserts value is str
   if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/.test(value)) throw new RoutingEvidenceValidationError(`${field} must be an opaque candidate reference`);
 }
 
+function strictArray(value: unknown, field: string, allowEmpty: boolean): asserts value is readonly unknown[] {
+  if (!Array.isArray(value) || (!allowEmpty && value.length === 0) || Object.getPrototypeOf(value) !== Array.prototype)
+    throw new RoutingEvidenceValidationError(`${field} must be a ${allowEmpty ? "standard" : "non-empty"} Array`);
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (key === "length") {
+      if (!descriptor || descriptor.enumerable || !("value" in descriptor) || descriptor.value !== value.length)
+        throw new RoutingEvidenceValidationError(`${field} length must be an ordinary array length`);
+      continue;
+    }
+    if (typeof key !== "string" || !/^(?:0|[1-9]\d*)$/.test(key) || Number(key) >= value.length || !descriptor?.enumerable || !("value" in descriptor))
+      throw new RoutingEvidenceValidationError(`${field} contains an extra or accessor property`);
+  }
+  for (let index = 0; index < value.length; index += 1)
+    if (!Object.hasOwn(value, index)) throw new RoutingEvidenceValidationError(`${field} must not be sparse`);
+}
 function list(value: unknown, field: string): asserts value is readonly string[] {
-  if (!Array.isArray(value) || value.length === 0 || Object.getPrototypeOf(value) !== Array.prototype)
-    throw new RoutingEvidenceValidationError(`${field} must be a non-empty array`);
+  strictArray(value, field, false);
   const seen = new Set<string>();
   for (let i = 0; i < value.length; i += 1) {
-    if (!Object.hasOwn(value, i) || typeof value[i] !== "string" || value[i].trim() === "" || /[\r\n]/.test(value[i]))
+    const item = value[i];
+    if (typeof item !== "string" || item.trim() === "" || /[\r\n]/.test(item))
       throw new RoutingEvidenceValidationError(`${field} contains an invalid value`);
-    if (seen.has(value[i])) throw new RoutingEvidenceValidationError(`${field} must not contain duplicates`);
-    seen.add(value[i]);
+    if (seen.has(item)) throw new RoutingEvidenceValidationError(`${field} must not contain duplicates`);
+    seen.add(item);
   }
 }
 function rejectionList(value: unknown, field: string): asserts value is readonly RoutingEvidenceRejection[] {
-  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype)
-    throw new RoutingEvidenceValidationError(`${field} must be a standard Array`);
+  strictArray(value, field, true);
   for (let index = 0; index < value.length; index += 1) {
     if (!Object.hasOwn(value, index)) throw new RoutingEvidenceValidationError(`${field} must not be sparse`);
     const item = value[index];
@@ -170,11 +185,9 @@ function modelProfile(value: unknown, selectedModelRef: string): asserts value i
 }
 
 function pressureCalculation(value: unknown, character: WorkCharacter, pressure: number): asserts value is PressureCalculation {
-  object(value, "pressureCalculation");
   const keys = ["pressureFloor", "pressure", "explicitHeadUplift"] as const;
-  if (Reflect.ownKeys(value).some((key) => typeof key !== "string" || !keys.includes(key as typeof keys[number]))) throw new RoutingEvidenceValidationError("pressureCalculation has unknown fields");
-  if (keys.some((key) => !Object.hasOwn(value, key))) throw new RoutingEvidenceValidationError("pressureCalculation is missing a required field");
-  const candidate = value as Record<string, unknown>;
+  const candidate = own(value, keys, "pressureCalculation");
+  required(candidate, keys, "pressureCalculation");
   if (typeof candidate.pressureFloor !== "number" || !Number.isFinite(candidate.pressureFloor) || candidate.pressureFloor < 0 || candidate.pressureFloor > 200) throw new RoutingEvidenceValidationError("pressureCalculation.pressureFloor is invalid");
   if (typeof candidate.pressure !== "number" || !Number.isFinite(candidate.pressure) || candidate.pressure !== pressure) throw new RoutingEvidenceValidationError("pressureCalculation.pressure does not match routing pressure");
   if (typeof candidate.explicitHeadUplift !== "number" || !Number.isSafeInteger(candidate.explicitHeadUplift) || candidate.explicitHeadUplift < 0 || candidate.explicitHeadUplift > 200) throw new RoutingEvidenceValidationError("pressureCalculation.explicitHeadUplift is invalid");
@@ -184,11 +197,10 @@ function pressureCalculation(value: unknown, character: WorkCharacter, pressure:
 
 function approvalIdentity(value: unknown): asserts value is RoutingApprovalIdentity | null {
   if (value === null) return;
-  object(value, "approvalIdentity");
   const keys = ["capabilityKind", "commandId", "action", "target"] as const;
-  if (Reflect.ownKeys(value).some((key) => typeof key !== "string" || !keys.includes(key as typeof keys[number]))) throw new RoutingEvidenceValidationError("approvalIdentity has unknown fields");
-  if (keys.some((key) => !Object.hasOwn(value, key))) throw new RoutingEvidenceValidationError("approvalIdentity is missing a required field");
-  for (const key of keys) ref(value[key], `approvalIdentity.${key}`);
+  const candidate = own(value, keys, "approvalIdentity");
+  required(candidate, keys, "approvalIdentity");
+  for (const key of keys) ref(candidate[key], `approvalIdentity.${key}`);
 }
 
 export function assertValidRoutingEvidence(value: unknown): asserts value is RoutingEvidence {
