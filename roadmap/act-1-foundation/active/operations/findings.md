@@ -1649,3 +1649,8 @@ All downstream routing documentation must use this contract and must not restore
 
 ## 2026-09-10 — Plan 3 S1 remediation
 - Resolved the prior S1 review blockers in parent-owned commits `9afd55b`, `9a0737f`, and `9eae03e`. Docker is unavailable in this environment, so real PostgreSQL validation remains an explicit gate before merge.
+
+## 2026-09-10 — S1 independent remediation review
+- `review-plan3-s1-remediation`: `REVIEW: FAIL`. High findings: missing exact native `account_ref` binding check; approval identity/time/repetition is not bound to execution; E inputs do not yield replayable pressure; contracts accept incomplete model/overlay payloads; normal approval journal entries omit durable reason/consequence. Medium findings: recipe/provenance integrity, contradictory nullable overlay version, and legacy 0072/0073 rows rejected without explicit migration/blocker handling. PostgreSQL tests remain unavailable (`MAESTRO_TEST_DATABASE_URL` unset).
+
+- Remediation now preserves legacy routing rows in bundles as explicit malformed blockers instead of throwing before the final report can be stored; new approval decisions require durable reason/consequence fields and a new additive migration `0081`.
