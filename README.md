@@ -5,7 +5,7 @@
 </p>
 
 <h3 align="center">
-Maestro: Self-Improving &amp; Durable Agent Orchestration for Versatile Tasks
+Maestro: Self-Improving &amp; Durable Governed Agent Orchestration for Versatile Tasks
 </h3>
 <p align="center">
   <a href="docs/ko/README.md"><b>한국어 (ko)</b></a> &bull;
