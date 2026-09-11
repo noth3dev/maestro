@@ -24,6 +24,7 @@ describeDatabase("Concertmaster report command idempotency", () => {
   const pool = new Pool({ connectionString: databaseUrl });
   beforeAll(async () => { await applyAllMigrations(pool); });
   beforeEach(async () => {
+    mockGenerate.mockReset();
     await pool.query("TRUNCATE command_receipts, goals, goal_controls, operator_project_roles, operator_project_memberships, local_operator_credentials, local_operators CASCADE");
   });
   afterAll(async () => { await pool.end(); });
@@ -49,5 +50,26 @@ describeDatabase("Concertmaster report command idempotency", () => {
     await grantProjectMembership(pool, operatorId, otherProjectId);
     await grantProjectRole(pool, operatorId, otherProjectId, "concertmaster");
     await expect(service.generate(goalId, otherProjectId, commandId, { operatorId, credentialId: randomUUID() })).rejects.toThrow(/reused|mismatch/i);
+  });
+
+  it("serializes concurrent command retries and stores one receipt", async () => {
+    const projectId = randomUUID();
+    const goalId = randomUUID();
+    const commandId = randomUUID();
+    const { operatorId } = await bootstrapLocalOperator(pool, { secret: "concurrent-report-secret" });
+    await grantProjectMembership(pool, operatorId, projectId);
+    await grantProjectRole(pool, operatorId, projectId, "concertmaster");
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
+    const generated = report(goalId);
+    mockGenerate.mockImplementation(async () => { await new Promise((resolve) => setTimeout(resolve, 25)); return generated; });
+    const withGoalLease = async <T>(_id: string, operation: (proof: GoalLeaseProof) => Promise<T>): Promise<T> => operation({ goalId, ownerId: "report-test", fencingToken: "1" });
+    const service = createConcertmasterReportService({ pool, withGoalLease });
+    const [first, second] = await Promise.all([
+      service.generate(goalId, projectId, commandId, { operatorId, credentialId: randomUUID() }),
+      service.generate(goalId, projectId, commandId, { operatorId, credentialId: randomUUID() }),
+    ]);
+    expect(second).toEqual(first);
+    expect(mockGenerate).toHaveBeenCalledOnce();
+    expect((await pool.query("SELECT count(*)::int AS count FROM command_receipts WHERE command_id = $1", [commandId])).rows[0]!.count).toBe(1);
   });
 });
