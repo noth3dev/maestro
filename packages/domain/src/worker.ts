@@ -1,4 +1,4 @@
-export type WorkerStatus = "spawned" | "running" | "succeeded" | "failed" | "cancelled" | "unknown";
+export type WorkerStatus = "spawned" | "running" | "awaiting_repair" | "succeeded" | "failed" | "cancelled" | "unknown";
 
 /** Every identity field is derived from the Mission Bundle it fulfills; never caller-supplied. */
 export interface Worker {
@@ -29,6 +29,8 @@ export class InvalidWorkerTransitionError extends Error {
 }
 
 const TERMINAL_STATUSES: readonly WorkerStatus[] = ["succeeded", "failed", "cancelled"];
+
+export function isTerminalWorkerStatus(status: WorkerStatus): boolean { return TERMINAL_STATUSES.includes(status); }
 
 /** A worker's durable status only ever advances toward a terminal state; once terminal, it is immutable. */
 export function assertValidWorkerTransition(current: WorkerStatus, next: WorkerStatus): void {
