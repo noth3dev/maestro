@@ -80,7 +80,7 @@ export interface PortfolioRoutingEscalation {
   readonly reason: string;
 }
 
-export interface PortfolioAction extends PortfolioActionInput {}
+export type PortfolioAction = PortfolioActionInput;
 
 export interface PortfolioCouncilDecision {
   readonly schemaVersion: 1;
@@ -135,10 +135,6 @@ function probability(value: unknown, field: string): asserts value is number {
 
 function allocation(value: PortfolioAllocation, field: string): void {
   for (const key of ["providerRate", "spendCents", "workerSlots"] as const) nonnegativeInteger(value[key], `${field}.${key}`);
-}
-
-function sameAllocation(left: PortfolioAllocation, right: PortfolioAllocation): boolean {
-  return left.providerRate === right.providerRate && left.spendCents === right.spendCents && left.workerSlots === right.workerSlots;
 }
 
 function routingMeetsDemand(routing: PortfolioRouting, taskDemand: TaskDemand): boolean {
