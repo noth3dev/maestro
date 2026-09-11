@@ -449,6 +449,36 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     }
   });
 
+  it("forces a genuinely orphaned awaiting-repair worker to unknown through the real orphan-journal reconcileOnStartup path", async () => {
+    const { council, plan, proof, goalId } = await setupBundle(["product"], repairHold);
+    const preRestartKernel = fakeKernel("succeeded");
+    const worker = await spawnWorker(pool, preRestartKernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    const held = await observeWorker(pool, preRestartKernel, worker.workerId, proof, headContext("product"));
+    expect(held.status).toBe("awaiting_repair");
+    expect(preRestartKernel.releasedInvocations).toEqual([]);
+
+    // The Goal's lease has genuinely expired -- no other live process could
+    // still hold the real session -- so a fresh restarted process reconciles
+    // it through the real orphan-journal reconcileOnStartup path, not a
+    // direct call to the lower-level fencing helper.
+    await pool.query("UPDATE goal_leases SET expires_at = clock_timestamp() - interval '1 millisecond' WHERE goal_id = $1", [goalId]);
+
+    const restartedPool = new Pool({ connectionString: databaseUrl });
+    const freshKernel = fakeKernel("succeeded");
+    try {
+      const recovery = await reconcileOnStartup(restartedPool, {
+        ownerId: "restarted-control-plane-repair", leaderLeaseDurationMs: 60_000, goalLeaseDurationMs: 60_000, kernel: freshKernel,
+      });
+      const result = recovery.results.find((entry) => entry.goalId === goalId);
+      expect(result?.reconciledWorkerIds).toEqual([worker.workerId]);
+
+      const reconciledWorker = await readWorker(restartedPool, worker.workerId);
+      expect(reconciledWorker.status).toBe("unknown");
+    } finally {
+      await restartedPool.end();
+    }
+  });
+
   it("does not touch a worker whose Goal lease is still live (protects, rather than prematurely reconciles, active execution)", async () => {
     const { council, plan, proof, goalId } = await setupBundle();
     const kernel = fakeKernel("running");
