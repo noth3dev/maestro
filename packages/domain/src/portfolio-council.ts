@@ -5,7 +5,8 @@ import {
 } from "./model-profile.js";
 import { assertValidTaskDemand, type TaskDemand } from "./task-demand.js";
 import { assertValidPressure, classifyPressureBand, type PressureBandProjection } from "./pressure-band.js";
-import { requiresImmediateSafePause, type DiscordSeverity } from "./discord-incident.js";
+import { requiresImmediateSafePause } from "./discord-incident.js";
+import type { DiscordSeverity } from "./discord.js";
 
 export type PortfolioCouncilTrigger = "capacity_conflict" | "incident_preemption" | "reconsideration";
 export type PortfolioGoalDisposition = "continue" | "queue" | "pause" | "preempt";
@@ -89,6 +90,8 @@ export interface PortfolioCouncilDecision {
   readonly status: "decided" | "escalated";
   readonly executionDisposition: "executable" | "non_executable";
   readonly precedence: PortfolioDecisionPrecedence;
+  /** Immutable Goal/project bindings captured by this Council round. */
+  readonly goals: readonly PortfolioGoalInput[];
   readonly pressure: PressureBandProjection;
   readonly actions: readonly PortfolioAction[];
   readonly routingEscalations: readonly PortfolioRoutingEscalation[];
@@ -234,6 +237,7 @@ export function decidePortfolioCouncil(input: PortfolioCouncilInput): PortfolioC
       status: "escalated",
       executionDisposition: "non_executable",
       precedence: "portfolio_council",
+      goals: input.goals.map((goal) => ({ ...goal })),
       pressure,
       actions: [],
       routingEscalations,
@@ -266,6 +270,7 @@ export function decidePortfolioCouncil(input: PortfolioCouncilInput): PortfolioC
     status: "decided",
     executionDisposition: "executable",
     precedence: safety ? "discord_safety_preemption" : "portfolio_council",
+    goals: input.goals.map((goal) => ({ ...goal })),
     pressure,
     actions,
     routingEscalations: [],
