@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS concertmaster_final_reports (
   -- Success can never be reported alongside a recorded blocker.
   CHECK (NOT success OR jsonb_array_length(blockers) = 0)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS concertmaster_final_reports_one_per_goal_idx ON concertmaster_final_reports (goal_id);
 CREATE INDEX IF NOT EXISTS concertmaster_final_reports_goal_idx ON concertmaster_final_reports (goal_id, created_at);
 
 CREATE OR REPLACE FUNCTION reject_concertmaster_final_report_mutation()
