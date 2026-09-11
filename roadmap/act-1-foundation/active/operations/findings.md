@@ -1992,3 +1992,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-11 structural refactor review: server error-mapping extraction had no findings; route section was byte-for-byte unchanged and all mappings/type imports passed independent review.
 
 - 2026-09-11 TUI refactor review initially required extraction-specific coverage; added `startup.test.ts` (3 tests), after which build/lint/TUI suite and final review evidence passed.
+
+- 2026-09-11 contracts refactor: provider/model schema extraction is standalone and has no cross-module cycle; existing barrel tests plus 3 new extraction tests pass.
