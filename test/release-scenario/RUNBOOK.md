@@ -310,18 +310,26 @@ node "$TOOLS/run-fake-scenario.mjs" --step 11 --target "$FAKE_TARGET" --state "$
 
 Observable: this is the same real production recovery mechanism proven end-to-end by
 `test/release-scenario/worker-restart-recovery.integration.test.ts`, which spawns a real
-Control Plane process and a real provider process over TCP, issues a real HTTP worker-spawn
-request, SIGKILLs the Control Plane after the provider has been invoked but before the
-response is durably bound, restarts a second real Control Plane process against the same
-database, and asserts recovery is exactly-once: one `worker_recovery_decisions` row for the
-worker, one provider spawn (no duplicate invocation), the worker fenced to the new
-reconciler owner, and a `409 council_conflict` on any retry of the same council/plan/item
-(no stale authority reuse). In the live run, confirm the same shape: `worker-after-restart.json`
-reports `status:"unknown"` with `recoveryState:"fenced"`, the original `executionRef`/`invocationRef`
-are preserved (not regenerated), and a second worker-spawn attempt for the same item is rejected
-rather than silently duplicating the provider invocation. The fake-provider CI command above
-exercises the equivalent in-memory checkpoint/resume path for the disposable CI target and must
-report `boundary:"mid-execution"`, `resumed:true`, and `duplicateWrites:0`.
+Control Plane process and a real provider process over TCP and restarts a second real
+Control Plane process against the same database. It covers two distinct restart windows:
+
+1. An "already-bound ref" case, where the worker-spawn HTTP request completes (201,
+   `executionRef`/`invocationRef` already `provider-*`) before the SIGKILL lands.
+2. The harder "pre-bind race" case, where `MAESTRO_TEST_SPAWN_RETURN_DELAY_MS` delays the
+   provider's reply so the SIGKILL lands strictly between "provider invocation issued" and
+   "provider ref durably bound to the worker row" -- confirmed by reading `pending:`-prefixed
+   `execution_ref`/`invocation_ref` directly from the database before the kill.
+
+In both cases, recovery is exactly-once: one `worker_recovery_decisions` row for the worker,
+one provider spawn (no duplicate invocation), the worker fenced to the new reconciler owner
+with its refs preserved (not regenerated, whether `provider-*` or still `pending:*`), and a
+`409 council_conflict` on any retry of the same council/plan/item (no stale authority reuse).
+In the live run, confirm the same shape: `worker-after-restart.json` reports `status:"unknown"`
+with `recoveryState:"fenced"`, the original `executionRef`/`invocationRef` are preserved (not
+regenerated), and a second worker-spawn attempt for the same item is rejected rather than
+silently duplicating the provider invocation. The fake-provider CI command above exercises the
+equivalent in-memory checkpoint/resume path for the disposable CI target and must report
+`boundary:"mid-execution"`, `resumed:true`, and `duplicateWrites:0`.
 
 ## Step 12 — Ambiguous action and remote push
 

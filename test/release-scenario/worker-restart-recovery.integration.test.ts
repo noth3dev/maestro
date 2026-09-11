@@ -22,22 +22,31 @@ import {
 import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 
 /**
- * P0 fix: the release-scenario runbook Step 11 ("Forced restart") claims a
- * mid-execution restart recovers an in-flight provider operation exactly
- * once. Before this test existed, that claim was only exercised by
- * `fake-control-plane-process.mjs` (an in-memory fake with its own
- * checkpoint/resume semantics) or by the native acceptance test, which only
- * restarts *after* a worker completes. Neither proves the real production
- * recovery path: a real Control Plane HTTP process, a real provider process
- * over TCP, a SIGKILL landing strictly between "provider invocation issued"
- * and "provider ref durably bound to the worker row", and a second real
- * Control Plane process recovering that worker exactly once.
+ * Release-scenario runbook Step 11 ("Forced restart") claims a mid-execution
+ * restart recovers an in-flight provider operation exactly once. Before this
+ * file existed, that claim was only exercised by `fake-control-plane-process.mjs`
+ * (an in-memory fake with its own checkpoint/resume semantics) or by the
+ * native acceptance test, which only restarts *after* a worker completes.
+ * Neither proves the real production recovery path.
  *
- * This test reuses the exact harness pair
- * (`process-provider-tcp-harness.mjs` / `process-control-plane-harness.mjs`)
- * that `apps/control-plane/src/worker.kill-restart.integration.test.ts`
- * introduced, run here against the release-scenario worker/provider path so
- * the runbook's Step 11 claim has real, reproducible evidence behind it.
+ * This file reuses the exact harness pair (`process-provider-tcp-harness.mjs`
+ * / `process-control-plane-harness.mjs`) that
+ * `apps/control-plane/src/worker.kill-restart.integration.test.ts` introduced,
+ * run here against the release-scenario worker/provider path, with two
+ * distinct restart windows:
+ *
+ * 1. "already-bound ref" (below): the worker-spawn HTTP request completes
+ *    (201, `executionRef`/`invocationRef` already `provider-*`) before the
+ *    SIGKILL lands. This proves recovery is exactly-once even when the ref
+ *    was already durably bound at kill time -- it does NOT exercise the
+ *    pending/pre-bind race window.
+ * 2. "pre-bind race" (second test below): `MAESTRO_TEST_SPAWN_RETURN_DELAY_MS`
+ *    delays the provider's reply so the SIGKILL lands strictly between
+ *    "provider invocation issued" and "provider ref durably bound to the
+ *    worker row" -- confirmed by reading `pending:`-prefixed
+ *    execution_ref/invocation_ref directly from the database before the kill.
+ *    This is the harder case and the one Step 11's "before the response is
+ *    durably bound" language actually describes.
  */
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -150,6 +159,16 @@ async function waitForExit(child: ChildProcessWithoutNullStreams): Promise<{ cod
   return await new Promise((resolve) => child.once("exit", (code, signal) => resolve({ code, signal })));
 }
 
+async function waitForProviderSpawn(port: number, expected: number): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const stats = await providerRequest(port, "stats");
+    if (stats.spawnCount === expected) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`provider did not report spawn count ${expected}`);
+}
+
 async function setupWorkerGraph(pool: Pool, projectId: string) {
   const goalId = randomUUID();
   const contractId = randomUUID();
@@ -188,7 +207,7 @@ describeDatabase("release-scenario Step 11: real production mid-execution restar
   });
   afterAll(async () => { await pool.end(); await basePool.query(`DROP SCHEMA ${schema} CASCADE`); await basePool.end(); });
 
-  it("recovers a real spawned worker exactly once when SIGKILL lands mid-execution, with no duplicate provider invocation and no lost evidence", async () => {
+  it("recovers a real spawned worker exactly once when SIGKILL lands after the ref is already durably bound, with no duplicate provider invocation and no lost evidence", async () => {
     const secret = `release-scenario-restart-${randomUUID()}`;
     const { credentialId, operatorId } = await bootstrapLocalOperator(pool, { secret });
     const projectId = randomUUID();
@@ -247,6 +266,82 @@ describeDatabase("release-scenario Step 11: real production mid-execution restar
 
       // No stale authority reuse: retrying the same council/plan/item after
       // recovery is rejected as a conflict, not silently re-spawned.
+      const retry = await fetch(`http://127.0.0.1:${controlPlaneB.port}/v1/councils/${graph.councilId}/departments/product/workers`, {
+        method: "POST", headers: { ...auth, "idempotency-key": randomUUID() }, body: JSON.stringify({ projectId, planVersion: graph.planVersion, itemId: "scout-1" }),
+      });
+      expect(retry.status).toBe(409);
+      expect((await retry.json()).error.code).toBe("council_conflict");
+    } finally {
+      if (controlPlaneA !== undefined && controlPlaneA.child.exitCode === null) { controlPlaneA.child.kill("SIGKILL"); await waitForExit(controlPlaneA.child); }
+      if (controlPlaneB !== undefined && controlPlaneB.child.exitCode === null) { controlPlaneB.child.kill("SIGTERM"); await waitForExit(controlPlaneB.child); }
+      if (provider.child.exitCode === null) { provider.child.kill("SIGTERM"); await waitForExit(provider.child); }
+    }
+  });
+
+  it("fences a reservation when SIGKILL lands after provider spawn but before ref binding (the harder pre-bind race)", async () => {
+    const secret = `release-scenario-bind-window-${randomUUID()}`;
+    const { credentialId, operatorId } = await bootstrapLocalOperator(pool, { secret });
+    const projectId = randomUUID();
+    await grantProjectMembership(pool, operatorId, projectId);
+    await grantProjectRole(pool, operatorId, projectId, "head-product");
+    const graph = await setupWorkerGraph(pool, projectId);
+    const provider = await startProvider();
+    let controlPlaneA: { child: ChildProcessWithoutNullStreams; port: number } | undefined;
+    let controlPlaneB: { child: ChildProcessWithoutNullStreams; port: number } | undefined;
+    const auth = { authorization: `Bearer ${credentialId}.${secret}`, "content-type": "application/json" };
+    try {
+      const ownerA = `owner-bind-window-${randomUUID()}`;
+      controlPlaneA = await startControlPlane({
+        databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0,
+        actorId: "maestro-control-plane", leaseOwnerId: ownerA, reconcilerLeaseDurationMs: 30_000, shutdownDrainTimeoutMs: 100, modelRoutingMode: "pin", nativeModelRef: "test/model-a",
+      }, provider.port, { MAESTRO_TEST_SPAWN_RETURN_DELAY_MS: "5000" });
+
+      // The provider's reply is delayed 5s, so this request is still
+      // in-flight (not yet durably bound) when we SIGKILL below. We must
+      // not await it here or the delay would block the race window open.
+      const request = fetch(`http://127.0.0.1:${controlPlaneA.port}/v1/councils/${graph.councilId}/departments/product/workers`, {
+        method: "POST", headers: { ...auth, "idempotency-key": randomUUID() }, body: JSON.stringify({ projectId, planVersion: graph.planVersion, itemId: "scout-1" }),
+      }).catch(() => undefined);
+      await waitForProviderSpawn(provider.port, 1);
+
+      // Confirm the pre-bind window directly from the database: the
+      // provider has been invoked (spawnCount === 1) but the worker row
+      // still carries placeholder `pending:` refs, not `provider-*` refs.
+      // This is what distinguishes the harder race from the already-bound
+      // case above.
+      const pending = await pool.query<{ worker_id: string; execution_ref: string; invocation_ref: string; status: string }>(
+        "SELECT worker_id, execution_ref, invocation_ref, status FROM workers WHERE council_id = $1", [graph.councilId],
+      );
+      expect(pending.rows).toHaveLength(1);
+      expect(pending.rows[0]).toMatchObject({ status: "spawned", execution_ref: expect.stringMatching(/^pending:/), invocation_ref: expect.stringMatching(/^pending:/) });
+      const workerId = pending.rows[0]!.worker_id;
+
+      // The real OS SIGKILL lands strictly inside the pre-bind window.
+      controlPlaneA.child.kill("SIGKILL");
+      await waitForExit(controlPlaneA.child);
+      controlPlaneA = undefined;
+      await request;
+
+      await pool.query("UPDATE goal_leases SET expires_at = clock_timestamp() - interval '1 millisecond' WHERE goal_id = $1", [graph.goalId]);
+      await pool.query("UPDATE reconciler_leader_lease SET expires_at = clock_timestamp() - interval '1 millisecond' WHERE lease_key = 'singleton'");
+      const ownerB = `owner-bind-successor-${randomUUID()}`;
+      controlPlaneB = await startControlPlane({
+        databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0,
+        actorId: "maestro-control-plane", leaseOwnerId: ownerB, reconcilerLeaseDurationMs: 30_000, shutdownDrainTimeoutMs: 100, modelRoutingMode: "pin", nativeModelRef: "test/model-a",
+      }, provider.port);
+
+      // Recovery is exactly-once even though the ref was never bound: the
+      // worker is fenced to the new reconciler owner with the placeholder
+      // `pending:` refs still intact (not regenerated), one recovery
+      // decision is recorded, and the provider was never invoked twice.
+      await expect(readWorker(pool, workerId)).resolves.toMatchObject({
+        status: "unknown", recoveryState: "fenced", executionRef: expect.stringMatching(/^pending:/), invocationRef: expect.stringMatching(/^pending:/), ownerId: `reconciler:${ownerB}`,
+      });
+      const decisions = await pool.query<{ count: number }>("SELECT count(*)::int AS count FROM worker_recovery_decisions WHERE worker_id = $1", [workerId]);
+      expect(decisions.rows[0]!.count).toBe(1);
+      const stats = await providerRequest(provider.port, "stats");
+      expect(stats.spawnCount).toBe(1);
+
       const retry = await fetch(`http://127.0.0.1:${controlPlaneB.port}/v1/councils/${graph.councilId}/departments/product/workers`, {
         method: "POST", headers: { ...auth, "idempotency-key": randomUUID() }, body: JSON.stringify({ projectId, planVersion: graph.planVersion, itemId: "scout-1" }),
       });
