@@ -9,6 +9,20 @@ export class InvalidMissionBundleError extends Error {
 
 export type MissionRole = "head" | "scout" | "execution";
 
+/** Reuses the approval-ledger repetition vocabulary for bounded repair requeues. */
+export type MissionRepairRepetitionScope =
+  | { readonly kind: "bounded_count"; readonly count: number }
+  | { readonly kind: "bounded_time"; readonly expiresAt: string };
+
+export interface MissionRepairHold {
+  /** Goal-scoped capability approval whose S2 repetition budget funds requeues. */
+  readonly approvalId: string;
+  /** Duration for which a completed provider session may await one repair request. */
+  readonly window: string;
+  /** Bounded requeue budget; no unbounded repair session is representable. */
+  readonly repetitionScope: MissionRepairRepetitionScope;
+}
+
 /** Every field is an explicit, least-privilege grant. Installed capability is not automatically assigned capability. */
 export interface MissionBundleSubstance {
   readonly role: MissionRole;
@@ -31,6 +45,8 @@ export interface MissionBundleSubstance {
   readonly evidenceRequirements: readonly string[];
   readonly validationCriteria: readonly string[];
   readonly terminationConditions: readonly string[];
+  /** Optional explicit hold/requeue contract for test-failure repair rounds. */
+  readonly repairHold?: MissionRepairHold | undefined;
 }
 
 /** Every identity/binding field is derived from the active Department Plan item; never caller-supplied. */
@@ -74,9 +90,9 @@ function requiredKeys(value: Record<string, unknown>, required: readonly string[
 
 export function assertValidMissionBundleSubstance(value: unknown): asserts value is MissionBundleSubstance {
   object(value, "Mission bundle substance");
-  const fields = ["role", "profileRef", "goalBrief", "taskDemand", "approvedModels", "allowedSkills", "allowedTools", "allowedPaths", "environment", "authorityBoundary", "externalServiceBoundary", "dataBoundary", "costCeiling", "timeCeiling", "retryCeiling", "workerCeiling", "deliverable", "evidenceRequirements", "validationCriteria", "terminationConditions"] as const;
+  const fields = ["role", "profileRef", "goalBrief", "taskDemand", "approvedModels", "allowedSkills", "allowedTools", "allowedPaths", "environment", "authorityBoundary", "externalServiceBoundary", "dataBoundary", "costCeiling", "timeCeiling", "retryCeiling", "workerCeiling", "deliverable", "evidenceRequirements", "validationCriteria", "terminationConditions", "repairHold"] as const;
   onlyKeys(value, fields, "Mission bundle substance");
-  requiredKeys(value, fields, "Mission bundle substance");
+  requiredKeys(value, fields.filter((field) => field !== "repairHold"), "Mission bundle substance");
   if (value.role !== "head" && value.role !== "scout" && value.role !== "execution") throw new InvalidMissionBundleError("Mission bundle role must be head, scout, or execution");
   text(value.profileRef, "Mission bundle profileRef");
   text(value.goalBrief, "Mission bundle goalBrief");
@@ -110,6 +126,23 @@ export function assertValidMissionBundleSubstance(value: unknown): asserts value
   if ((value.validationCriteria as readonly string[]).length === 0) throw new InvalidMissionBundleError("Mission bundle requires at least one validation criterion");
   texts(value.terminationConditions, "Mission bundle terminationConditions");
   if ((value.terminationConditions as readonly string[]).length === 0) throw new InvalidMissionBundleError("Mission bundle requires at least one termination condition");
+  if (value.repairHold !== undefined) {
+    object(value.repairHold, "Mission bundle repairHold");
+    onlyKeys(value.repairHold, ["approvalId", "window", "repetitionScope"], "Mission bundle repairHold");
+    text(value.repairHold.approvalId, "Mission bundle repairHold approvalId");
+    text(value.repairHold.window, "Mission bundle repairHold window");
+    object(value.repairHold.repetitionScope, "Mission bundle repairHold repetitionScope");
+    const repetitionScope = value.repairHold.repetitionScope as Record<string, unknown>;
+    if (repetitionScope.kind === "bounded_count") {
+      onlyKeys(repetitionScope, ["kind", "count"], "Mission bundle repairHold repetitionScope");
+      if (!Number.isSafeInteger(repetitionScope.count as number) || (repetitionScope.count as number) <= 0) throw new InvalidMissionBundleError("Mission bundle repairHold count must be a positive safe integer");
+    } else if (repetitionScope.kind === "bounded_time") {
+      onlyKeys(repetitionScope, ["kind", "expiresAt"], "Mission bundle repairHold repetitionScope");
+      if (typeof repetitionScope.expiresAt !== "string" || Number.isNaN(Date.parse(repetitionScope.expiresAt))) throw new InvalidMissionBundleError("Mission bundle repairHold expiresAt must be an ISO date");
+    } else {
+      throw new InvalidMissionBundleError("Mission bundle repairHold repetitionScope kind is invalid");
+    }
+  }
 }
 
 export function missionBundleSubstanceContentHash(substance: MissionBundleSubstance): string {

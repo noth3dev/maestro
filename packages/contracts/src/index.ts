@@ -604,6 +604,14 @@ export const MissionBundleSubstanceSchema = z.object({
   timeCeiling: z.string().min(1), retryCeiling: z.number().int().nonnegative(), workerCeiling: z.number().int().nonnegative(),
   deliverable: z.string().min(1), evidenceRequirements: NonEmptyStringListSchema, validationCriteria: NonEmptyStringListSchema,
   terminationConditions: NonEmptyStringListSchema,
+  repairHold: z.object({
+    approvalId: UuidSchema,
+    window: z.string().min(1),
+    repetitionScope: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("bounded_count"), count: z.number().int().positive() }).strict(),
+      z.object({ kind: z.literal("bounded_time"), expiresAt: z.string().datetime() }).strict(),
+    ]),
+  }).strict().optional(),
 }).strict();
 type MissionBundleSubstanceSchemaOutput = z.infer<typeof MissionBundleSubstanceSchema>;
 export type MissionBundleSubstance = Omit<MissionBundleSubstanceSchemaOutput, "taskDemand"> & { readonly taskDemand: TaskDemand };
@@ -620,7 +628,7 @@ export type CreateMissionBundleInput = Omit<CreateMissionBundleInputSchemaOutput
 export const WorkerSchema = z.object({
   workerId: UuidSchema, councilId: UuidSchema, departmentId: z.string().min(1), planVersion: z.number().int().positive(), itemId: z.string().min(1),
   bundleContentHash: z.string().regex(/^[a-f0-9]{64}$/), attempt: z.number().int().positive(), executionRef: z.string().min(1), invocationRef: z.string().min(1),
-  status: z.enum(["spawned", "running", "succeeded", "failed", "cancelled", "unknown"]), answerText: z.string().nullable(), usageTotalTokens: z.number().int().nonnegative().nullable(),
+  status: z.enum(["spawned", "running", "awaiting_repair", "succeeded", "failed", "cancelled", "unknown"]), answerText: z.string().nullable(), usageTotalTokens: z.number().int().nonnegative().nullable(),
 }).strict();
 export type Worker = z.infer<typeof WorkerSchema>;
 const WorkerCapabilityJournalEntrySchema = z.object({

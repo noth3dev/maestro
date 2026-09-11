@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { assertValidWorkerTransition, InvalidWorkerTransitionError } from "./worker.js";
+import { assertValidWorkerTransition, InvalidWorkerTransitionError, isTerminalWorkerStatus } from "./worker.js";
 
 describe("Worker lifecycle transitions", () => {
   it("allows non-terminal to non-terminal or terminal transitions", () => {
     expect(() => assertValidWorkerTransition("spawned", "running")).not.toThrow();
     expect(() => assertValidWorkerTransition("running", "succeeded")).not.toThrow();
     expect(() => assertValidWorkerTransition("spawned", "cancelled")).not.toThrow();
+  });
+
+  it("treats awaiting_repair as a non-terminal held state", () => {
+    expect(isTerminalWorkerStatus("awaiting_repair")).toBe(false);
+    expect(() => assertValidWorkerTransition("running", "awaiting_repair")).not.toThrow();
+    expect(() => assertValidWorkerTransition("awaiting_repair", "running")).not.toThrow();
+    expect(() => assertValidWorkerTransition("awaiting_repair", "succeeded")).not.toThrow();
   });
 
   it("allows a terminal state to repeat itself (idempotent observation)", () => {
