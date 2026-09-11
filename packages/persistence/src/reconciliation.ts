@@ -512,7 +512,7 @@ async function reconcileOrphanedWorkers(
        FROM workers w
        JOIN head_councils hc ON hc.council_id = w.council_id
        LEFT JOIN pending_effect_workers ON pending_effect_workers.worker_id = w.worker_id
-      WHERE hc.goal_id = $1::uuid AND (w.status IN ('spawned', 'running', 'unknown') OR pending_effect_workers.worker_id IS NOT NULL)`,
+      WHERE hc.goal_id = $1::uuid AND (w.status IN ('spawned', 'running', 'awaiting_repair', 'unknown') OR pending_effect_workers.worker_id IS NOT NULL)`,
     [goalId],
   );
   if (workersResult.rowCount === 0) return [];
