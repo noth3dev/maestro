@@ -7,7 +7,7 @@ import {
   GitIntegrationError, GitIntegrationNotFoundError, CertificationError, CertificationNotFoundError,
   MetronomeChallengeError, MetronomeChallengeNotFoundError, MetronomeAuthorizationError,
   EncoreCouncilError, StaleGoalLeaseError, HeadActivationRequesterInactiveError, DiscordPersistenceError,
-  WorkerError, WorkerNotFoundError,
+  WorkerError, WorkerNotFoundError, CapacityReservationError,
   ProjectAccessAdminRequiredError, ProjectAccessRoleNotFoundError, ProjectAccessTargetNotFoundError,
   ProjectMembershipRequiredError, ProjectRoleRequiredError,
 } from "@maestro/persistence";
@@ -75,6 +75,7 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   if (error instanceof MissionBundleProjectMismatchError) return apiError(400, "validation_error", error.message);
   if (error instanceof MissionBundleNotFoundError) return apiError(404, "mission_bundle_not_found", error.message);
   if (error instanceof MissionBundleError) return apiError(409, "mission_bundle_conflict", error.message);
+  if (error instanceof CapacityReservationError) return apiError(409, "replay_conflict", error.message);
   if (error instanceof WorkerProjectMismatchError) return apiError(400, "validation_error", error.message);
   if (error instanceof WorkerCapacityExceededError) return apiError(429, "worker_capacity_exceeded", error.message);
   if (error instanceof WorkerMessageRejectedError) return apiError(409, "worker_message_rejected", error.message);
