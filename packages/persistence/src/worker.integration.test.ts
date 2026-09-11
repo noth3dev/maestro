@@ -8,7 +8,7 @@ import { acquireGoalLease, executeGoalCommand } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
 import { createDepartmentPlan } from "./department-plan.js";
 import { createMissionBundle } from "./mission-bundle.js";
-import { bindWorkerInvocation, cancelUnboundWorkerAfterBindingFailure, cancelWorker, countActiveWorkersForProject, listWorkersForGoal, markWorkerTerminal, markWorkerUnknown, observeWorker, promptWorkerUnderOwnerClaim, readWorker, recoverWorkerAfterRestart, sendWorkerMessageUnderOwnerClaim, spawnWorker, WorkerError, WorkerNotFoundError } from "./worker.js";
+import { bindWorkerInvocation, cancelUnboundWorkerAfterBindingFailure, cancelWorker, countActiveWorkersForProject, expireAwaitingRepairWorker, listWorkersForGoal, markWorkerTerminal, markWorkerUnknown, observeWorker, promptWorkerUnderOwnerClaim, readWorker, recoverWorkerAfterRestart, sendWorkerMessageUnderOwnerClaim, spawnWorker, WorkerError, WorkerNotFoundError } from "./worker.js";
 import { reconcileOnStartup } from "./reconciliation.js";
 import { consumeCapabilityApproval, createCapabilityApproval } from "./capability-approval.js";
 
@@ -91,7 +91,7 @@ function fakeKernel(finalStatus: InvocationObservation["status"] = "succeeded"):
 describeDatabase("Worker lifecycle with PostgreSQL", () => {
   const pool = new Pool({ connectionString: databaseUrl });
 
-  async function setupBundle(departments = ["product"]) {
+  async function setupBundle(departments = ["product"], bundleOverrides: Partial<MissionBundleSubstance> = {}) {
     const goalId = randomUUID(), contractId = randomUUID(), projectId = randomUUID();
     const contractContent = buildContractContent(projectId);
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
@@ -115,7 +115,7 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     };
     const resolved = await recordCouncilDecisionPacket(pool, council.councilId, packet, proof, context("decision"));
     const plan = await createDepartmentPlan(pool, { councilId: resolved.councilId, departmentId: "product", substance: planSubstance() }, proof, headContext("product"));
-    const bundle = await createMissionBundle(pool, { councilId: resolved.councilId, departmentId: "product", itemId: "scout-1", substance: bundleSubstance() }, proof, headContext("product"));
+    const bundle = await createMissionBundle(pool, { councilId: resolved.councilId, departmentId: "product", itemId: "scout-1", substance: bundleSubstance(bundleOverrides) }, proof, headContext("product"));
     return { goalId, contractId, projectId, proof, council: resolved, plan, bundle };
   }
 
@@ -135,6 +135,20 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
   beforeEach(async () => { await pool.query("TRUNCATE reconciler_leader_lease, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
   afterAll(async () => { await pool.end(); });
 
+  const repairHold = {
+    repairHold: { approvalId: randomUUID(), window: "1 minute", repetitionScope: { kind: "bounded_count", count: 1 } },
+  } as unknown as Partial<MissionBundleSubstance>;
+
+  it("holds a completed worker for repair without releasing its bound session", async () => {
+    const { council, plan, proof } = await setupBundle(["product"], repairHold);
+    const kernel = fakeKernel("succeeded");
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    const held = await observeWorker(pool, kernel, worker.workerId, proof, headContext("product"));
+    expect(held.status).toBe("awaiting_repair");
+    expect(held.executionRef).toBe(worker.executionRef);
+    expect(kernel.releasedInvocations).toEqual([]);
+  });
+
   it("spawns a worker for a real Mission Bundle by the captured Head and observes it to a terminal state", async () => {
     const { council, plan, proof } = await setupBundle();
     const kernel = fakeKernel("succeeded");
@@ -149,8 +163,69 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     expect(observed.status).toBe("succeeded");
     expect(observed.answerText).toBe("done");
     expect(observed.usageTotalTokens).toBe(42);
+    expect(kernel.releasedInvocations).toEqual([worker.invocationRef]);
     const reobserved = await observeWorker(pool, kernel, worker.workerId, proof, headContext("product"));
     expect(reobserved).toEqual(observed);
+  });
+
+  it("requeues an awaiting-repair worker through the same execution and consumes one repair unit", async () => {
+    const { council, plan, proof } = await setupBundle(["product"], repairHold);
+    const kernel = fakeKernel("succeeded");
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    const held = await observeWorker(pool, kernel, worker.workerId, proof, headContext("product"));
+    await expect(sendWorkerMessageUnderOwnerClaim(pool, kernel, worker.workerId, "repair the defect", proof)).resolves.toBe(true);
+    const resumed = await readWorker(pool, worker.workerId);
+    expect(held.status).toBe("awaiting_repair");
+    expect(resumed.status).toBe("running");
+    expect(resumed.executionRef).toBe(worker.executionRef);
+    expect(resumed.invocationRef).toBe(worker.invocationRef);
+    expect(kernel.spawnedCount).toBe(1);
+    expect(kernel.messages).toEqual([{ execution: "exec-1", invocation: "inv-1", message: "repair the defect" }]);
+  });
+
+  it("expires an unused repair hold and releases the session", async () => {
+    const { council, plan, proof } = await setupBundle(["product"], { repairHold: { approvalId: randomUUID(), window: "1 millisecond", repetitionScope: { kind: "bounded_count", count: 1 } } } as unknown as Partial<MissionBundleSubstance>);
+    const kernel = fakeKernel("succeeded");
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    await observeWorker(pool, kernel, worker.workerId, proof, headContext("product"));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await expect(expireAwaitingRepairWorker(pool, kernel, worker.workerId, proof)).resolves.toBe(true);
+    expect((await readWorker(pool, worker.workerId)).status).toBe("succeeded");
+    expect(kernel.releasedInvocations).toEqual([worker.invocationRef]);
+  });
+
+  it("denies a second repair requeue after the bounded budget is exhausted", async () => {
+    const { council, plan, proof } = await setupBundle(["product"], repairHold);
+    const kernel = fakeKernel("succeeded");
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    await observeWorker(pool, kernel, worker.workerId, proof, headContext("product"));
+    await expect(sendWorkerMessageUnderOwnerClaim(pool, kernel, worker.workerId, "first repair", proof)).resolves.toBe(true);
+    await observeWorker(pool, kernel, worker.workerId, proof, headContext("product"));
+    await expect(sendWorkerMessageUnderOwnerClaim(pool, kernel, worker.workerId, "second repair", proof)).resolves.toBe(false);
+    expect((await readWorker(pool, worker.workerId)).status).toBe("succeeded");
+    expect(kernel.messages).toHaveLength(1);
+  });
+
+  it("rejects a follow-up after a repair hold expires", async () => {
+    const { council, plan, proof } = await setupBundle(["product"], { repairHold: { approvalId: randomUUID(), window: "1 millisecond", repetitionScope: { kind: "bounded_count", count: 1 } } } as unknown as Partial<MissionBundleSubstance>);
+    const kernel = fakeKernel("succeeded");
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    await observeWorker(pool, kernel, worker.workerId, proof, headContext("product"));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await expect(sendWorkerMessageUnderOwnerClaim(pool, kernel, worker.workerId, "too late", proof)).resolves.toBe(false);
+    expect(kernel.messages).toHaveLength(0);
+    expect((await readWorker(pool, worker.workerId)).status).toBe("succeeded");
+  });
+
+  it("fences an awaiting-repair worker once recovery starts after a control-plane restart", async () => {
+    const { council, plan, proof } = await setupBundle(["product"], repairHold);
+    const kernel = fakeKernel("succeeded");
+    const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1" }, proof, headContext("product"));
+    await observeWorker(pool, kernel, worker.workerId, proof, headContext("product"));
+    const recovered = await recoverWorkerAfterRestart(pool, worker.workerId, proof, "control plane restarted during repair hold");
+    expect(recovered.status).toBe("unknown");
+    await expect(recoverWorkerAfterRestart(pool, worker.workerId, proof, "replayed restart reconciliation")).resolves.toEqual(recovered);
+    expect(kernel.releasedInvocations).toEqual([]);
   });
 
   it("delivers a repair message to the worker's bound execution and invocation", async () => {
