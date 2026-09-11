@@ -1,10 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
-import type {
-  PortfolioCouncilDecision,
-  PortfolioExecutionFence,
-} from "@maestro/domain";
-import { canonicalJson } from "@maestro/domain";
+import { assertValidPortfolioCouncilDecision, canonicalJson, requiresImmediateSafePause, type PortfolioCouncilDecision, type PortfolioExecutionFence } from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
+import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
+import { assertGoalControlOpen } from "./council.js";
 
 export class PortfolioCouncilPersistenceError extends Error {
   constructor(message: string) {
@@ -20,11 +18,14 @@ export interface RecordPortfolioCouncilDecisionInput {
   readonly decision: PortfolioCouncilDecision;
   readonly actorId: string;
   readonly sessionRef: string;
+  /** One current lease proof for every captured Goal. */
+  readonly goalProofs: readonly GoalLeaseProof[];
 }
 
 export interface PortfolioCouncilDecisionRecord extends PortfolioCouncilDecision {
   readonly roundId: string;
   readonly projectId: string;
+  readonly projectIds: readonly string[];
   readonly actorId: string;
   readonly sessionRef: string;
   readonly contentHash: string;
@@ -34,6 +35,7 @@ export interface PortfolioCouncilDecisionRecord extends PortfolioCouncilDecision
 interface RoundRow {
   round_id: string;
   project_id: string;
+  project_ids: string[];
   council_id: string;
   command_id: string;
   trigger: PortfolioCouncilDecision["trigger"];
@@ -66,6 +68,20 @@ function assertRecordable(input: RecordPortfolioCouncilDecisionInput): string {
   if (decision.councilId.trim() === "" || decision.commandId.trim() === "") {
     throw new PortfolioCouncilPersistenceError("Portfolio Council identity is required");
   }
+  try {
+    assertValidPortfolioCouncilDecision(decision);
+  } catch (error) {
+    throw new PortfolioCouncilPersistenceError(`Portfolio Council decision is invalid: ${error instanceof Error ? error.message : "unknown validation error"}`);
+  }
+  const goalIds = new Set(decision.goals.map((goal) => goal.goalId));
+  const proofs = new Map(input.goalProofs.map((proof) => [proof.goalId, proof]));
+  if (proofs.size !== decision.goals.length || [...goalIds].some((goalId) => !proofs.has(goalId))) {
+    throw new PortfolioCouncilPersistenceError("Portfolio Council requires one lease proof for every captured Goal");
+  }
+  for (const proof of proofs.values()) if (!isValidFencingToken(proof.fencingToken)) throw new PortfolioCouncilPersistenceError(`Invalid Goal fencing proof: ${proof.goalId}`);
+  if (![...proofs.values()].some((proof) => proof.ownerId === input.actorId)) throw new PortfolioCouncilPersistenceError("Portfolio Council actor is not bound to a captured Goal lease");
+  const projectIds = [...new Set(decision.goals.map((goal) => goal.projectId))];
+  if (!projectIds.includes(input.projectId)) throw new PortfolioCouncilPersistenceError("Portfolio Council primary project must be one of the captured projects");
   const hash = contentHash(decision);
   if (hash.length !== 64) throw new PortfolioCouncilPersistenceError("Portfolio Council content hash could not be computed");
   return hash;
@@ -81,6 +97,7 @@ function mapRound(row: RoundRow): PortfolioCouncilDecisionRecord {
     ...row.decision,
     roundId: row.round_id,
     projectId: row.project_id,
+    projectIds: [...row.project_ids],
     actorId: row.actor_id,
     sessionRef: row.session_ref,
     contentHash: storedHash,
@@ -88,7 +105,7 @@ function mapRound(row: RoundRow): PortfolioCouncilDecisionRecord {
   };
 }
 
-const ROUND_COLUMNS = `round_id, project_id, council_id, command_id, trigger, status,
+const ROUND_COLUMNS = `round_id, project_id, project_ids, council_id, command_id, trigger, status,
   execution_disposition, precedence, confidence, decision, content_hash, actor_id,
   session_ref, created_at`;
 
@@ -107,16 +124,74 @@ function sameReplayIdentity(row: RoundRow, input: RecordPortfolioCouncilDecision
     && row.session_ref === input.sessionRef;
 }
 
+async function lockPortfolioGoals(client: PoolClient, input: RecordPortfolioCouncilDecisionInput): Promise<void> {
+  const proofs = new Map(input.goalProofs.map((proof) => [proof.goalId, proof]));
+  for (const goal of [...input.decision.goals].sort((left, right) => left.goalId.localeCompare(right.goalId))) {
+    const proof = proofs.get(goal.goalId)!;
+    if (proof.goalId !== goal.goalId || proof.ownerId.trim() === "") throw new StaleGoalLeaseError(goal.goalId);
+    const lease = await client.query(
+      `SELECT 1 FROM goal_leases WHERE goal_id = $1 AND owner_id = $2 AND fencing_token = $3::bigint
+       AND expires_at > clock_timestamp() FOR UPDATE`,
+      [proof.goalId, proof.ownerId, proof.fencingToken],
+    );
+    if (lease.rowCount !== 1) throw new StaleGoalLeaseError(goal.goalId);
+    const goalRow = await client.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1 FOR KEY SHARE", [goal.goalId]);
+    if (goalRow.rowCount !== 1 || goalRow.rows[0]!.project_id !== goal.projectId) throw new PortfolioCouncilPersistenceError(`Portfolio Council Goal/project binding is invalid: ${goal.goalId}`);
+    await assertGoalControlOpen(client, goal.goalId);
+    const fence = input.decision.actions.find((action) => action.goalId === goal.goalId)?.executionFence;
+    if (fence !== undefined) {
+      if (fence.previousFencingToken !== proof.fencingToken) throw new PortfolioCouncilPersistenceError(`Execution fence does not match the current Goal lease: ${goal.goalId}`);
+      if (!isValidFencingToken(fence.nextFencingToken) || BigInt(fence.nextFencingToken) <= BigInt(fence.previousFencingToken)) throw new PortfolioCouncilPersistenceError(`Execution fence must advance the Goal lease: ${goal.goalId}`);
+    }
+  }
+}
+
+async function assertDurablePortfolioEvidence(client: PoolClient, decision: PortfolioCouncilDecision): Promise<void> {
+  const goalIds = decision.goals.map((goal) => goal.goalId);
+  const projectIds = [...new Set(decision.goals.map((goal) => goal.projectId))];
+  for (const reference of decision.evidenceReferences) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(reference)) {
+      throw new PortfolioCouncilPersistenceError(`Portfolio Council evidence reference is not a durable evidence UUID: ${reference}`);
+    }
+    const result = await client.query(
+      `SELECT 1 FROM evidence_records
+       WHERE evidence_id = $1::uuid AND goal_id = ANY($2::uuid[]) AND project_id = ANY($3::uuid[])
+       LIMIT 1`,
+      [reference, goalIds, projectIds],
+    );
+    if (result.rowCount !== 1) throw new PortfolioCouncilPersistenceError(`Portfolio Council evidence reference is not bound to a captured Goal: ${reference}`);
+  }
+}
+
+async function assertDurableDiscordPreemption(client: PoolClient, decision: PortfolioCouncilDecision): Promise<void> {
+  const preemption = decision.discordPreemption;
+  if (preemption === null) return;
+  const result = await client.query<{ linked_goal_id: string | null; severity: string; confidence: number | string }>(
+    "SELECT linked_goal_id, severity, confidence FROM discord_incidents WHERE incident_id = $1 FOR KEY SHARE",
+    [preemption.incidentId],
+  );
+  if (result.rowCount !== 1) throw new PortfolioCouncilPersistenceError(`Discord incident is not durable: ${preemption.incidentId}`);
+  const incident = result.rows[0]!;
+  if (incident.linked_goal_id !== preemption.goalId || incident.severity !== preemption.severity || Number(incident.confidence) < preemption.confidence) {
+    throw new PortfolioCouncilPersistenceError(`Discord preemption is not bound to the durable incident: ${preemption.incidentId}`);
+  }
+  if (requiresImmediateSafePause(preemption.severity, preemption.confidence) && !requiresImmediateSafePause(incident.severity as "info" | "warning" | "critical", Number(incident.confidence))) {
+    throw new PortfolioCouncilPersistenceError(`Discord incident does not meet the durable safety threshold: ${preemption.incidentId}`);
+  }
+}
+
 async function insertFences(client: PoolClient, round: PortfolioCouncilDecisionRecord): Promise<void> {
   for (const action of round.actions) {
     const fence = action.executionFence;
     if (fence === undefined) continue;
+    const goal = round.goals.find((candidate) => candidate.goalId === action.goalId);
+    if (goal === undefined) throw new PortfolioCouncilPersistenceError(`Execution fence names an uncaptured Goal: ${action.goalId}`);
     await client.query(
       `INSERT INTO portfolio_execution_fences
        (fence_id, round_id, project_id, goal_id, previous_execution_ref,
         previous_fencing_token, next_fencing_token)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [randomUUID(), round.roundId, round.projectId, action.goalId, fence.previousExecutionRef, fence.previousFencingToken, fence.nextFencingToken],
+      [randomUUID(), round.roundId, goal.projectId, action.goalId, fence.previousExecutionRef, fence.previousFencingToken, fence.nextFencingToken],
     );
   }
 }
@@ -132,6 +207,9 @@ export async function recordPortfolioCouncilDecision(
   try {
     await client.query("BEGIN");
     open = true;
+    await lockPortfolioGoals(client, input);
+    await assertDurablePortfolioEvidence(client, input.decision);
+    await assertDurableDiscordPreemption(client, input.decision);
     // Serialise retries for a command identity. The identity is text so this
     // also preserves the repository's existing command-id conventions.
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [input.decision.commandId]);
@@ -150,12 +228,12 @@ export async function recordPortfolioCouncilDecision(
     const roundId = randomUUID();
     const inserted = await client.query<RoundRow>(
       `INSERT INTO portfolio_council_rounds
-       (round_id, project_id, council_id, command_id, trigger, status,
+       (round_id, project_id, project_ids, council_id, command_id, trigger, status,
         execution_disposition, precedence, confidence, decision, content_hash,
         actor_id, session_ref)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14)
        RETURNING ${ROUND_COLUMNS}`,
-      [roundId, input.projectId, input.decision.councilId, input.decision.commandId,
+      [roundId, input.projectId, [...new Set(input.decision.goals.map((goal) => goal.projectId))], input.decision.councilId, input.decision.commandId,
         input.decision.trigger, input.decision.status, input.decision.executionDisposition,
         input.decision.precedence, input.decision.confidence, JSON.stringify(input.decision),
         hash, input.actorId, input.sessionRef],

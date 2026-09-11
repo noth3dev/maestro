@@ -21,7 +21,7 @@ export class PressureBandValidationError extends Error {
 
 /** Validate continuous pressure before projecting its organizational label. */
 export function assertValidPressure(value: unknown): asserts value is number {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < PRESSURE_BAND_PRESSURE_MIN || value > PRESSURE_BAND_PRESSURE_MAX) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < PRESSURE_BAND_PRESSURE_MIN || value > PRESSURE_BAND_PRESSURE_MAX || (value !== 0 && value < 0.000001)) {
     throw new PressureBandValidationError(
       `Pressure must be a finite number in [${PRESSURE_BAND_PRESSURE_MIN},${PRESSURE_BAND_PRESSURE_MAX}]`,
     );

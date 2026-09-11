@@ -34,9 +34,11 @@ describe("portfolio council decision policy", () => {
   });
 
   it("allows reorder, pause, and reallocation within approved ceilings", () => {
-    expect(decidePortfolioCouncil(base({ actions: [{ ...base().actions[0]!, disposition: "pause" }] })).actions[0]!.disposition).toBe("pause");
+    expect(decidePortfolioCouncil(base({ actions: [{ ...base().actions[0]!, disposition: "pause", allocation: { providerRate: 0, spendCents: 0, workerSlots: 0 } }] })).actions[0]!.disposition).toBe("pause");
     expect(decidePortfolioCouncil(base({ actions: [{ ...base().actions[0]!, order: 0, allocation: { providerRate: 30, spendCents: 300, workerSlots: 2 } }] })).actions[0]!.order).toBe(0);
     expect(() => decidePortfolioCouncil(base({ actions: [{ ...base().actions[0]!, allocation: { providerRate: 101, spendCents: 100, workerSlots: 1 } }] }))).toThrow(/approved ceiling/i);
+    expect(() => decidePortfolioCouncil(base({ actions: [{ ...base().actions[0]!, disposition: "pause", allocation: { providerRate: 1, spendCents: 0, workerSlots: 0 } }] }))).toThrow(/release allocation/i);
+    expect(() => decidePortfolioCouncil(base({ actions: [{ ...base().actions[0]!, executionFence: { previousExecutionRef: "execution-1", previousFencingToken: "same", nextFencingToken: "same" } }] }))).toThrow(/advance its fencing token/i);
   });
 
   it("escalates rather than authorizing a model below the Goal A↔D requirement", () => {
@@ -47,7 +49,9 @@ describe("portfolio council decision policy", () => {
   });
 
   it("never pauses or deprioritizes a CEO-pinned Goal", () => {
-    expect(() => decidePortfolioCouncil(base({ goals: [{ ...base().goals[0]!, ceoPinned: true }], actions: [{ ...base().actions[0]!, disposition: "pause" }] }))).toThrow(/CEO-pinned/);
+    const pinned = { ...base().goals[0]!, ceoPinned: true };
+    expect(() => decidePortfolioCouncil(base({ goals: [pinned], actions: [{ ...base().actions[0]!, disposition: "pause", allocation: { providerRate: 0, spendCents: 0, workerSlots: 0 } }] }))).toThrow(/CEO-pinned/);
+    expect(() => decidePortfolioCouncil(base({ goals: [pinned], actions: [{ ...base().actions[0]!, disposition: "preempt", allocation: { providerRate: 0, spendCents: 0, workerSlots: 0 } }] }))).toThrow(/CEO-pinned/);
   });
 
   it("gives a Discord safety preemption precedence over a Council decision", () => {
@@ -55,6 +59,20 @@ describe("portfolio council decision policy", () => {
     expect(decision.precedence).toBe("discord_safety_preemption");
     expect(decision.actions[0]!.disposition).toBe("preempt");
     expect(decision.evidenceReferences).toContain("evidence-capacity-1");
+  });
+
+  it("scopes Discord safety override to the incident Goal and keeps it through routing escalation", () => {
+    const pinned = { ...base().goals[0]!, goalId: "goal-2", ceoPinned: true };
+    const pinnedAction = { ...base().actions[0]!, goalId: "goal-2", order: 0, rationale: "keep CEO-pinned work" };
+    const safety = { incidentId: "incident-1", goalId: "goal-1", severity: "critical" as const, confidence: 0.99, reason: "safety event" };
+    const normal = decidePortfolioCouncil(base({ goals: [base().goals[0]!, pinned], actions: [base().actions[0]!, pinnedAction], discordPreemption: safety }));
+    expect(normal.actions.find((action) => action.goalId === "goal-1")!.disposition).toBe("preempt");
+    expect(normal.actions.find((action) => action.goalId === "goal-2")!.disposition).toBe("continue");
+
+    const escalated = decidePortfolioCouncil(base({ goals: [{ ...base().goals[0]!, currentRouting: routing(40) }], discordPreemption: safety }));
+    expect(escalated.status).toBe("escalated");
+    expect(escalated.actions[0]!.disposition).toBe("preempt");
+    expect(escalated.actions[0]!.allocation).toEqual({ providerRate: 0, spendCents: 0, workerSlots: 0 });
   });
 
   it("keeps council evidence append-only in the decision packet and carries the old execution fence", () => {

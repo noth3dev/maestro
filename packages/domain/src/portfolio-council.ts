@@ -4,6 +4,7 @@ import {
   type ModelCapabilityVector,
 } from "./model-profile.js";
 import { assertValidTaskDemand, type TaskDemand } from "./task-demand.js";
+import { canonicalJson } from "./task-contract.js";
 import { assertValidPressure, classifyPressureBand, type PressureBandProjection } from "./pressure-band.js";
 import { requiresImmediateSafePause } from "./discord-incident.js";
 import type { DiscordSeverity } from "./discord.js";
@@ -128,7 +129,7 @@ function nonnegativeInteger(value: unknown, field: string): asserts value is num
 }
 
 function probability(value: unknown, field: string): asserts value is number {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1 || (value !== 0 && value < 0.000001)) {
     throw new PortfolioCouncilValidationError(`${field} must be between 0 and 1`);
   }
 }
@@ -193,8 +194,12 @@ function validateInput(input: PortfolioCouncilInput): void {
       line(action.executionFence.previousExecutionRef, `action ${action.goalId} previousExecutionRef`);
       line(action.executionFence.previousFencingToken, `action ${action.goalId} previousFencingToken`);
       line(action.executionFence.nextFencingToken, `action ${action.goalId} nextFencingToken`);
+      if (action.executionFence.previousFencingToken === action.executionFence.nextFencingToken) {
+        throw new PortfolioCouncilValidationError(`action ${action.goalId} execution fence must advance its fencing token`);
+      }
     }
   }
+  if (actionIds.size !== goalIds.size) throw new PortfolioCouncilValidationError("actions must contain one action for every Goal");
   list(input.evidenceReferences, "evidenceReferences");
   list(input.dissent, "dissent", true);
   list(input.reconsiderationTriggers, "reconsiderationTriggers");
@@ -224,6 +229,30 @@ export function decidePortfolioCouncil(input: PortfolioCouncilInput): PortfolioC
     decisionLayer: classifyPressureBand(goal.pressure).decisionLayer,
     reason: "The current routing candidate is below the Goal's immutable A↔D requirement",
   }]);
+  const safety = input.discordPreemption !== undefined && requiresImmediateSafePause(input.discordPreemption.severity, input.discordPreemption.confidence);
+  const safetyTarget = safety ? input.discordPreemption!.goalId : undefined;
+  const goals = new Map(input.goals.map((goal) => [goal.goalId, goal]));
+  const actions = input.actions.map((action) => {
+    const goal = goals.get(action.goalId)!;
+    if (safetyTarget !== action.goalId && goal.ceoPinned && (action.disposition !== "continue" || action.order !== 0
+      || action.allocation.providerRate < goal.currentAllocation.providerRate
+      || action.allocation.spendCents < goal.currentAllocation.spendCents
+      || action.allocation.workerSlots < goal.currentAllocation.workerSlots)) {
+      throw new PortfolioCouncilValidationError(`CEO-pinned Goal ${goal.goalId} cannot be paused or deprioritized by the Council`);
+    }
+    if ((action.disposition === "pause" || action.disposition === "preempt") && goal.safePausePoint === undefined) {
+      throw new PortfolioCouncilValidationError(`Goal ${goal.goalId} has no declared safe pause point`);
+    }
+    if ((action.disposition === "pause" || action.disposition === "preempt")
+      && (action.allocation.providerRate !== 0 || action.allocation.spendCents !== 0 || action.allocation.workerSlots !== 0)) {
+      throw new PortfolioCouncilValidationError(`Goal ${goal.goalId} must release allocation when ${action.disposition}d`);
+    }
+    if (safetyTarget === action.goalId) {
+      if (action.executionFence === undefined) throw new PortfolioCouncilValidationError(`Discord safety preemption for ${action.goalId} requires an execution fence`);
+      return { ...action, disposition: "preempt" as const, allocation: { providerRate: 0, spendCents: 0, workerSlots: 0 }, rationale: input.discordPreemption!.reason };
+    }
+    return { ...action };
+  }).sort((left, right) => left.order - right.order || left.goalId.localeCompare(right.goalId));
   if (routingEscalations.length > 0) {
     return {
       schemaVersion: 1,
@@ -232,10 +261,10 @@ export function decidePortfolioCouncil(input: PortfolioCouncilInput): PortfolioC
       trigger: input.trigger,
       status: "escalated",
       executionDisposition: "non_executable",
-      precedence: "portfolio_council",
+      precedence: safety ? "discord_safety_preemption" : "portfolio_council",
       goals: input.goals.map((goal) => ({ ...goal })),
       pressure,
-      actions: [],
+      actions: safety ? actions : [],
       routingEscalations,
       evidenceReferences: [...input.evidenceReferences],
       dissent: [...input.dissent],
@@ -244,20 +273,6 @@ export function decidePortfolioCouncil(input: PortfolioCouncilInput): PortfolioC
       discordPreemption: input.discordPreemption ?? null,
     };
   }
-  const goals = new Map(input.goals.map((goal) => [goal.goalId, goal]));
-  const safety = input.discordPreemption !== undefined && requiresImmediateSafePause(input.discordPreemption.severity, input.discordPreemption.confidence);
-  const actions = input.actions.map((action) => {
-    const goal = goals.get(action.goalId)!;
-    if (!safety && goal.ceoPinned && (action.disposition === "queue" || action.disposition === "pause")) {
-      throw new PortfolioCouncilValidationError(`CEO-pinned Goal ${goal.goalId} cannot be paused or deprioritized by the Council`);
-    }
-    if (safety && input.discordPreemption!.goalId === action.goalId) {
-      if (action.executionFence === undefined) throw new PortfolioCouncilValidationError(`Discord safety preemption for ${action.goalId} requires an execution fence`);
-      return { ...action, disposition: "preempt" as const, allocation: { providerRate: 0, spendCents: 0, workerSlots: 0 }, rationale: input.discordPreemption!.reason };
-    }
-    if (action.disposition === "pause" && goal.safePausePoint === undefined) throw new PortfolioCouncilValidationError(`Goal ${goal.goalId} has no declared safe pause point`);
-    return { ...action };
-  }).sort((left, right) => left.order - right.order || left.goalId.localeCompare(right.goalId));
   return {
     schemaVersion: 1,
     councilId: input.councilId,
@@ -276,4 +291,47 @@ export function decidePortfolioCouncil(input: PortfolioCouncilInput): PortfolioC
     reconsiderationTriggers: [...input.reconsiderationTriggers],
     discordPreemption: input.discordPreemption ?? null,
   };
+}
+
+/** Validate a sealed decision packet before it crosses into persistence. */
+export function assertValidPortfolioCouncilDecision(value: unknown): asserts value is PortfolioCouncilDecision {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new PortfolioCouncilValidationError("Portfolio Council decision must be an object");
+  }
+  const candidate = value as Partial<PortfolioCouncilDecision>;
+  if (candidate.schemaVersion !== 1 || (candidate.status !== "decided" && candidate.status !== "escalated")) {
+    throw new PortfolioCouncilValidationError("Portfolio Council decision schema or status is invalid");
+  }
+  if (!Array.isArray(candidate.goals) || !Array.isArray(candidate.actions) || !Array.isArray(candidate.routingEscalations)) {
+    throw new PortfolioCouncilValidationError("Portfolio Council decision arrays are required");
+  }
+  const syntheticActions = candidate.status === "escalated" && candidate.actions.length === 0
+    ? candidate.goals.map((goal) => ({
+      goalId: goal.goalId,
+      disposition: "continue" as const,
+      order: 0,
+      allocation: { providerRate: 0, spendCents: 0, workerSlots: 0 },
+      rationale: "routing escalation placeholder",
+    }))
+    : candidate.actions;
+  const reconstructed = {
+    councilId: candidate.councilId!,
+    commandId: candidate.commandId!,
+    trigger: candidate.trigger!,
+    goals: candidate.goals,
+    actions: candidate.status === "escalated" ? syntheticActions : candidate.actions,
+    evidenceReferences: candidate.evidenceReferences!,
+    dissent: candidate.dissent!,
+    confidence: candidate.confidence!,
+    reconsiderationTriggers: candidate.reconsiderationTriggers!,
+    ...(candidate.discordPreemption === null ? {} : { discordPreemption: candidate.discordPreemption }),
+  } satisfies PortfolioCouncilInput;
+  validateInput(reconstructed);
+  if (candidate.status === "decided" && candidate.actions.length !== candidate.goals.length) {
+    throw new PortfolioCouncilValidationError("A decided Portfolio Council packet requires one action for every Goal");
+  }
+  const expected = decidePortfolioCouncil(reconstructed);
+  if (canonicalJson(expected) !== canonicalJson(candidate)) {
+    throw new PortfolioCouncilValidationError("Portfolio Council decision packet is not the deterministic result of its input");
+  }
 }
