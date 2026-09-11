@@ -62,8 +62,8 @@ function fakeProviderPlugin(pool: Pool): ProviderPlugin {
           : undefined;
         const worktreePath = JSON.stringify(worktreeResult?.rows[0]?.worktree_path ?? "");
         const code = repairRequested
-          ? `write_file(\"src/discount.js\", \"module.exports = (amount, rate) => Math.round(amount * (1 - rate));\\n\")\nprint(\"worker local effect complete\")\nprint(git_commit(${worktreePath}, \"repair seeded discount defect\", \"worker\", \"worker@example.com\"))`
-          : `write_file(\"src/worker-observation.txt\", \"worker observed seeded defect\")\nprint(\"worker local effect complete\")`;
+          ? `write_file("src/discount.js", "module.exports = (amount, rate) => Math.round(amount * (1 - rate));\\n")\nprint("worker local effect complete")\nprint(git_commit(${worktreePath}, "repair seeded discount defect", "worker", "worker@example.com"))`
+          : `write_file("src/worker-observation.txt", "worker observed seeded defect")\nprint("worker local effect complete")`;
         return { requestId: request.requestId, model: identity, text: "", toolCalls: [{ id: repairRequested ? "acceptance-ipython-repair" : "acceptance-ipython-test", name: "ipython", arguments: { state: "valid", value: { code } } }], stopReason: "tool_use", usage: { state: "unknown" } };
       }
       const toolText = request.messages.filter((message) => message.role === "tool").map((message) => JSON.stringify(message.content)).join("\n");
