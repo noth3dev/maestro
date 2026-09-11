@@ -1850,3 +1850,6 @@ All downstream routing documentation must use this contract and must not restore
 
 
 - 2026-09-10 S4 lifecycle verification: the merged implementation and main PostgreSQL revalidation are green, but this is not live acceptance evidence. The remaining blockers are unchanged: the user must run the real-provider fourteen-step scenario using `testbed/README.md` projects #1–#4, and production still has no deterministic worker hold/requeue operation for the Step 9→10 repair sequence. Do not close S4 or begin `phase3-status-sync` until those exit conditions are satisfied.
+
+
+- 2026-09-11 squash cleanup: ~24 consecutive continuation-finding entries (2026-09-11, following the S4 lifecycle verification above through `7859e04`) repeated the same two open blockers — the user-owned real-provider fourteen-step run and the still-missing deterministic worker hold/requeue operation for Step 9→10 repair delivery — with no new evidence between checks. Consolidated into this entry; original range preserved at branch `backup-2026-09-11-pre-squash`. Both blockers remain open and unchanged by this cleanup.
