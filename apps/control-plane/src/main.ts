@@ -780,7 +780,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   });
   const metronomeLoop = config.metronomeIntervalMs === undefined
     ? undefined
-    : createMetronomeLoop({ pool, withGoalLease: goalService.withGoalLease!, intervalMs: config.metronomeIntervalMs });
+    : createMetronomeLoop({ pool, kernel: executionKernel, withGoalLease: goalService.withGoalLease!, intervalMs: config.metronomeIntervalMs });
   let closed = false;
 
   return {

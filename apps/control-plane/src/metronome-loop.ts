@@ -1,8 +1,9 @@
 import type { Pool } from "pg";
-import { isTerminalGoalState, METRONOME_ACTOR_ID, type GoalState } from "@maestro/domain";
+import { isTerminalGoalState, METRONOME_ACTOR_ID, type ExecutionKernelPort, type GoalState } from "@maestro/domain";
 import {
   observeGoalForMetronome,
   scanGoalForMetronomeFindings,
+  expireAwaitingRepairWorkersForGoal,
   type GoalLeaseProof,
   type MetronomeActorContext,
   type MetronomeApprovalObservation,
@@ -22,6 +23,8 @@ const systemScheduler: MetronomeLoopScheduler = {
 
 export interface MetronomeLoopDependencies {
   pool: Pool;
+  /** Optional native kernel used to release expired repair-hold sessions. */
+  kernel?: ExecutionKernelPort;
   withGoalLease: <T>(goalId: string, operation: (proof: GoalLeaseProof) => Promise<T>) => Promise<T>;
   intervalMs: number;
   scheduler?: MetronomeLoopScheduler;
@@ -61,6 +64,7 @@ export function createMetronomeLoop(deps: MetronomeLoopDependencies): MetronomeL
   async function scanOneGoal(goalId: string): Promise<void> {
     const context: MetronomeActorContext = { actorId: METRONOME_ACTOR_ID, sessionRef: `metronome-loop:${goalId}`, commandId: crypto.randomUUID() };
     try {
+      if (deps.kernel !== undefined) await deps.withGoalLease(goalId, (proof) => expireAwaitingRepairWorkersForGoal(deps.pool, deps.kernel!, goalId, proof).then(() => undefined));
       const observation: MetronomeGoalObservation | undefined = observeGoal === undefined
         ? undefined
         : await deps.withGoalLease(goalId, (proof) => observeGoal(deps.pool, goalId, proof, context));
