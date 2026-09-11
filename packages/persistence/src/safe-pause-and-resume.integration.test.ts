@@ -14,7 +14,12 @@ import {
   resolveCapabilityEffect,
   type CapabilityApprovalInput,
 } from "./capability-approval.js";
-import { PostgresAuthorityRepository, getGoalControl } from "./authority.js";
+import { AuthorizedEffectExecutor } from "../../authority/src/authority.js";
+import { PostgresAuthorityRepository, bootstrapAuthorityRecord, getGoalControl } from "./authority.js";
+import { setCapabilitySession } from "./capability-approval.js";
+import { listIpPythonSessionJournal, recordIpPythonSessionStarted } from "./ipython-session-journal.js";
+import { recordOperationalOverlay, readGoalOperationalOverlaySnapshot, snapshotOperationalOverlayForGoalDurably } from "./ensemble-router-artifacts.js";
+import type { OperationalOverlay } from "@maestro/domain";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -81,6 +86,11 @@ describeDatabase("safe pause and resume (Plan 5 S3)", () => {
   // in-flight IPython effect's durable journal state is preserved untouched. ---
   it("refuses to complete a pause while an IPython effect is still pending durable resolution", async () => {
     const { projectId, goalId, command } = await activeGoal();
+    const sessionId = randomUUID();
+    await setCapabilitySession(pool, { sessionId, capabilityKind: "ipython", projectId, goalId, fullAccessMode: "skip_intermediate_approvals", selectedBy: "operator" });
+    await recordIpPythonSessionStarted(pool, { sessionId, processRef: randomUUID(), projectId, goalId, processPid: 42, details: { state: "active", pausePolicy: "safe_point" } });
+    const sessionBefore = await listIpPythonSessionJournal(pool, sessionId);
+    expect(sessionBefore).toHaveLength(1);
     const commandId = randomUUID();
     const created = await createCapabilityApproval(pool, approvalInput(projectId, goalId, commandId));
     // Consuming the approval durably records a 'pending_unknown' effect_result
@@ -114,6 +124,9 @@ describeDatabase("safe pause and resume (Plan 5 S3)", () => {
     });
     expect(await listPendingCapabilityEffects(pool, "ipython", projectId, goalId)).toHaveLength(0);
     await expect(command("paused", 5)).resolves.toMatchObject({ state: "paused" });
+    // The active session lifecycle remains durably journaled across the pause;
+    // the refused mid-effect pause never invents a partial terminal outcome.
+    await expect(listIpPythonSessionJournal(pool, sessionId)).resolves.toEqual(sessionBefore);
   });
 
   // --- 2: pause fences the current execution; the old fencing token cannot
@@ -127,6 +140,16 @@ describeDatabase("safe pause and resume (Plan 5 S3)", () => {
     const repository = new PostgresAuthorityRepository(pool);
     const control = await getGoalControl(pool, projectId, goalId);
     const staleControlEpoch = control.controlEpoch;
+    const effectRequest = () => ({
+      commandId: randomUUID(), projectId, goalId, actorId: "worker",
+      action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, budgetEffectCents: 0,
+      controlEpoch: staleControlEpoch,
+    });
+    await bootstrapAuthorityRecord(pool, { ...effectRequest(), recordId: randomUUID(), kind: "grant", commandId: null, expiresAt: new Date("2030-01-01T00:00:00Z") });
+    const executor = new AuthorizedEffectExecutor(repository, () => new Date("2029-01-01T00:00:00Z"));
+    let effectWrites = 0;
+    await expect(executor.execute(effectRequest(), async () => { effectWrites += 1; })).resolves.toMatchObject({ effect: "allow" });
+    expect(effectWrites).toBe(1);
     const requestAt = (controlEpoch: string) => ({
       commandId: randomUUID(), projectId, goalId, actorId: "worker",
       action: "project.file.edit", target: "/workspace/a.txt", policyVersion: 1, budgetEffectCents: 0,
@@ -143,6 +166,11 @@ describeDatabase("safe pause and resume (Plan 5 S3)", () => {
     const stillPending = await pool.query<{ control_epoch: string }>("SELECT control_epoch FROM goal_controls WHERE project_id = $1 AND goal_id = $2", [projectId, goalId]);
     expect(stillPending.rows[0]!.control_epoch).not.toBe(staleControlEpoch);
     await expect(repository.recheckControl(requestAt(staleControlEpoch))).resolves.toMatchObject({ effect: "deny", reason: "goal_not_executable" });
+    // Exercise the real authorized-effect gateway: the stale pre-pause token
+    // must prevent the callback/write, not merely return a denial from a
+    // standalone control probe.
+    await expect(executor.execute(effectRequest(), async () => { effectWrites += 1; })).resolves.toMatchObject({ effect: "deny", reason: "goal_not_executable" });
+    expect(effectWrites).toBe(1);
     // Even the current epoch cannot write while paused; the fence is the
     // lifecycle state itself, not merely the epoch counter.
     await expect(repository.recheckControl(requestAt(stillPending.rows[0]!.control_epoch))).resolves.toMatchObject({ effect: "deny", reason: "goal_not_executable" });
@@ -196,6 +224,15 @@ describeDatabase("safe pause and resume (Plan 5 S3)", () => {
   // specifically across a pause/resume cycle. ---
   it("cannot reuse a pre-pause capability approval after resume advances the control_epoch", async () => {
     const { projectId, goalId, command } = await activeGoal();
+    const overlay: OperationalOverlay = {
+      schemaVersion: 1,
+      installationRef: `installation-${randomUUID()}`,
+      projectRef: projectId,
+      version: 1,
+      observations: [{ candidateRef: "candidate-1", measuredLatencyMs: 10, measuredCost: 1, failureRate: 0, timeoutRate: 0, providerErrorRate: 0, currentAvailability: true, accountBinding: "account-1", observedAt: "2026-09-08T12:00:00Z" }],
+    };
+    await recordOperationalOverlay(pool, overlay);
+    const goalSnapshot = await snapshotOperationalOverlayForGoalDurably(pool, overlay, goalId);
     const preComandId = randomUUID();
     const preApproval = await createCapabilityApproval(pool, approvalInput(projectId, goalId, preComandId, { controlEpoch: "1" }));
 
@@ -206,6 +243,11 @@ describeDatabase("safe pause and resume (Plan 5 S3)", () => {
 
     const controlEpochAfterResume = (await pool.query<{ control_epoch: string }>("SELECT control_epoch FROM goal_controls WHERE project_id = $1 AND goal_id = $2", [projectId, goalId])).rows[0]!.control_epoch;
     expect(controlEpochAfterResume).not.toBe("1");
+    // Resume must use the immutable Goal-owned snapshot, not a mutable latest
+    // operational overlay. A newer overlay cannot replace the pre-pause input.
+    const latestOverlay: OperationalOverlay = { ...overlay, version: 2, observations: [{ ...overlay.observations[0]!, measuredLatencyMs: 999 }] };
+    await recordOperationalOverlay(pool, latestOverlay);
+    await expect(readGoalOperationalOverlaySnapshot(pool, goalId)).resolves.toEqual(goalSnapshot);
 
     // The approval issued before pause was scoped to control_epoch "1"; it
     // cannot silently authorize work under the post-resume epoch.
