@@ -203,6 +203,7 @@ describeDatabase("real Control Plane + PostgreSQL + Model Gateway Worker accepta
         allowedSkills: ["testing"], allowedTools: ["ipython"], allowedPaths: ["src"], environment: [environmentId], authorityBoundary: ["local"],
         externalServiceBoundary: ["none"], dataBoundary: ["repository only"], costCeiling: "20 USD", timeCeiling: "30 minutes", retryCeiling: 1,
         workerCeiling: 0, deliverable: "bounded result", evidenceRequirements: ["test result"], validationCriteria: ["bound result returned"], terminationConditions: ["done"],
+        repairHold: { approvalId: randomUUID(), window: "1 minute", repetitionScope: { kind: "bounded_count", count: 1 } },
       };
       expect((await send(`/v1/councils/${council.councilId}/departments/product/mission-bundles/exec-1`, "POST", { projectId, substance: bundle })).status).toBe(201);
 
@@ -215,7 +216,7 @@ describeDatabase("real Control Plane + PostgreSQL + Model Gateway Worker accepta
       const observed = await send(`/v1/workers/${worker.workerId}/observe`, "POST", { projectId });
       expect(observed.status).toBe(200);
       const observedBody = await observed.json() as { status: string; answerText: string | null; observability: { toolEvents: { state: string; events?: ReadonlyArray<{ toolName?: string }> } } };
-      expect(observedBody.status).toBe("succeeded");
+      expect(observedBody.status).toBe("awaiting_repair");
       expect(observedBody.observability.toolEvents.state).toBe("available");
       expect(observedBody.observability.toolEvents.events?.some((event) => event.toolName === "ipython")).toBe(true);
       expect(observedBody.answerText).toBe("worker ipython local effect complete");
@@ -235,6 +236,18 @@ describeDatabase("real Control Plane + PostgreSQL + Model Gateway Worker accepta
       expect(capabilityJournalText).toContain('"appliedCount":1');
       expect(capabilityJournalText).not.toContain("must not write");
       expect(observability.ipythonSessionJournal.length).toBeGreaterThan(0);
+      const workerBeforeRepair = await pool.query<{ execution_ref: string; invocation_ref: string }>("SELECT execution_ref, invocation_ref FROM workers WHERE worker_id = $1", [worker.workerId]);
+      const repairResponse = await send(`/v1/workers/${worker.workerId}/messages`, "POST", { projectId, message: "tests failed; repair the defect before re-testing" });
+      expect(repairResponse.status).toBe(200);
+      const resumed = await repairResponse.json() as { status: string; executionRef: string; invocationRef: string };
+      expect(resumed.status).toBe("running");
+      expect(resumed.executionRef).toBe(workerBeforeRepair.rows[0]!.execution_ref);
+      expect(resumed.invocationRef).toBe(workerBeforeRepair.rows[0]!.invocation_ref);
+      const repaired = await send(`/v1/workers/${worker.workerId}/observe`, "POST", { projectId });
+      expect(repaired.status).toBe(200);
+      expect((await repaired.json() as { status: string }).status).toBe("succeeded");
+      const workerAfterRepair = await pool.query<{ execution_ref: string; invocation_ref: string }>("SELECT execution_ref, invocation_ref FROM workers WHERE worker_id = $1", [worker.workerId]);
+      expect(workerAfterRepair.rows).toEqual(workerBeforeRepair.rows);
       const workerBinding = await pool.query<{ selected_model_provider: string; selected_model_id: string; actual_model_provider: string; actual_model_id: string; account_ref: string }>(
         "SELECT selected_model_provider, selected_model_id, actual_model_provider, actual_model_id, account_ref FROM native_execution_bindings WHERE admission_kind = 'worker'",
       );
