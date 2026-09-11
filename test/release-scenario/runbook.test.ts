@@ -20,6 +20,7 @@ describe("release scenario runbook", () => {
     expect(runbook).toContain("git goal-branch");
     expect(runbook).toContain("git department-branch");
     const inputWriter = await readFile(new URL("./write-input.mjs", import.meta.url), "utf8");
+    expect(inputWriter).toContain("repairHold");
     expect(inputWriter).toContain("contractId: parsed.values.contract");
     expect(inputWriter).toContain('"evidence-id"');
     expect(inputWriter).toContain('dataBoundary: ["target only"]');
@@ -28,6 +29,7 @@ describe("release scenario runbook", () => {
     expect(inputWriter).toContain('certifyingDepartmentId: "quality"');
     expect(inputWriter).not.toContain('testEvidenceIds: ["target-test"]');
     expect(inputWriter).not.toContain("release-scenario-runbook");
+    expect(inputWriter).toContain("repairHold");
   });
 
   it("uses the S6b target-bound worker and real approval surfaces", async () => {
@@ -37,7 +39,7 @@ describe("release scenario runbook", () => {
     expect(runbook).toContain('--worktree "$WORKER_WORKTREE"');
     expect(runbook).not.toContain('git worker-worktree --worker-id "$WORKER_ID"');
     expect(runbook).toContain('$MAESTRO worker message --worker-id "$WORKER_ID"');
-    expect(runbook).toContain('spawned|running');
+    expect(runbook).toContain("spawned|running|awaiting_repair");
     expect(runbook).toContain('set +e; $MAESTRO critical-action request');
     expect(runbook).toContain('$MAESTRO git worker-advance --worker-id "$WORKER_ID"');
     expect(runbook).not.toContain('SCENARIO_EVIDENCE_ID="${SCENARIO_EVIDENCE_ID:?');

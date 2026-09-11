@@ -1,8 +1,14 @@
+import { execFile as execFileCallback } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
+import { MissionBundleSubstanceSchema } from "@maestro/contracts";
 import { describe, expect, it } from "vitest";
 import { createReleaseScenarioFixture } from "./fixture.mjs";
+
+const execFile = promisify(execFileCallback);
 
 describe("release scenario fixture", () => {
   it("creates a disposable real project strictly below the configured worktree root", async () => {
@@ -31,6 +37,20 @@ describe("release scenario fixture", () => {
       await symlink(outside, join(worktreeRoot, "escape"), "dir");
       await expect(createReleaseScenarioFixture({ root: join(worktreeRoot, "escape", "target"), worktreeRoot })).rejects.toThrow("escapes MAESTRO_WORKTREE_ROOT");
       await rm(outside, { recursive: true, force: true });
+    } finally {
+      await rm(worktreeRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("emits a Mission Bundle repair hold accepted by the production schema", async () => {
+    const worktreeRoot = await mkdtemp(join(tmpdir(), "maestro-release-scenario-input-"));
+    const output = join(worktreeRoot, "mission.json");
+    try {
+      await execFile(process.execPath, ["test/release-scenario/write-input.mjs", "--kind", "mission", "--project", randomUUID(), "--contract", randomUUID(), "--out", output], { cwd: process.cwd() });
+      const generated = JSON.parse(await readFile(output, "utf8")) as { substance: unknown };
+      expect(() => MissionBundleSubstanceSchema.parse(generated.substance)).not.toThrow();
+      const substance = MissionBundleSubstanceSchema.parse(generated.substance);
+      expect(substance.repairHold?.repetitionScope).toEqual({ kind: "bounded_count", count: 1 });
     } finally {
       await rm(worktreeRoot, { recursive: true, force: true });
     }

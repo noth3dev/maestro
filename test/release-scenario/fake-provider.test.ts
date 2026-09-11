@@ -18,13 +18,15 @@ describe("release scenario fake-provider harness", () => {
       for (let step = 1; step <= 14; step += 1) {
         await execFile("node", ["test/release-scenario/run-fake-scenario.mjs", "--step", String(step), "--target", root, "--state", state], { cwd: process.cwd() });
       }
-      const result = JSON.parse(await readFile(state, "utf8")) as { lastStep: number; provider: string; providerCalls: number; events: Array<{ name: string; modelIdentities?: string[]; integratedRevision?: string; modeResults?: Array<{ mode: string; status: string; networkInvoked: boolean }>; duplicateWrites?: number; bundleReportMatch?: boolean }>; certifications: Array<{ verdict: string; revision: string | null }>; lastEvidence: { bundle: { bundleId: string; goalId: string; content: { provider: { calls: unknown[]; remoteAttempts: unknown[]; modeChanges: string[] } } }; report: { evidenceBundleId: string; goalId: string } }; processPids: number[] };
+      const result = JSON.parse(await readFile(state, "utf8")) as { lastStep: number; provider: string; providerCalls: number; events: Array<{ name: string; modelIdentities?: string[]; integratedRevision?: string; modeResults?: Array<{ mode: string; status: string; networkInvoked: boolean }>; duplicateWrites?: number; bundleReportMatch?: boolean; workerStatus?: string; executionRef?: string; invocationRef?: string; workerStatusBefore?: string; workerStatusAfter?: string; sameExecution?: boolean; sameInvocation?: boolean }>; certifications: Array<{ verdict: string; revision: string | null }>; lastEvidence: { bundle: { bundleId: string; goalId: string; content: { provider: { calls: unknown[]; remoteAttempts: unknown[]; modeChanges: string[] } } }; report: { evidenceBundleId: string; goalId: string } }; processPids: number[] };
       expect(result.lastStep).toBe(14);
       expect(result.provider).toBe("fake");
       expect(result.providerCalls).toBeGreaterThan(0);
       expect(new Set(result.processPids).size).toBeGreaterThan(1);
       expect(result.events.map(({ name }) => name)).toEqual(["ceo_request", "contract_intake", "launch_confirmed", "necessary_heads", "department_plan", "native_execution", "metronome_observation", "unsupported_assertion", "quality_failed", "repair_requested_through_maestro", "quality_certified", "restart_reconciled", "ambiguous_action", "forbidden_effect", "evidence_dump"]);
       expect(result.events.find(({ name }) => name === "unsupported_assertion")?.modelIdentities).toEqual(["fake/provider-a", "fake/provider-b"]);
+      expect(result.events.find(({ name }) => name === "quality_failed")).toMatchObject({ workerStatus: "awaiting_repair", executionRef: expect.any(String), invocationRef: expect.any(String) });
+      expect(result.events.find(({ name }) => name === "repair_requested_through_maestro")).toMatchObject({ workerStatusBefore: "awaiting_repair", workerStatusAfter: "running", sameExecution: true, sameInvocation: true });
       const certified = result.certifications.find(({ verdict }) => verdict === "passed");
       expect(certified?.revision).toBe(result.events.find(({ name }) => name === "quality_certified")?.integratedRevision);
       expect(result.events.find(({ name }) => name === "restart_reconciled")?.duplicateWrites).toBe(0);
