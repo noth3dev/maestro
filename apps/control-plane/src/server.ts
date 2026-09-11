@@ -69,7 +69,7 @@ import {
   CreateMissionBundleInputSchema,
   MissionBundleSchema,
   SpawnWorkerInputSchema,
-  WorkerSchema,
+  WorkerSchema, QueuedWorkerAdmissionSchema,
   WorkerObservationSchema,
   WorkerActionInputSchema,
   WorkerMessageInputSchema,
@@ -715,6 +715,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const input = parse(SpawnWorkerInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
     const worker = await workers.spawn(councilId, departmentId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    if ("kind" in worker && worker.kind === "queued") return reply.status(202).send(QueuedWorkerAdmissionSchema.parse(worker));
     return reply.status(201).send(WorkerSchema.parse(worker));
   });
 

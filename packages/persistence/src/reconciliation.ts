@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { isTerminalGoalState, toExecutionRef, toInvocationRef, type ExecutionKernelPort, type GoalState } from "@maestro/domain";
+import { recoverStaleCapacityReservations } from "./capacity-reservation.js";
 import type { Pool } from "pg";
 import {
   LeaseUnavailableError,
@@ -225,6 +226,7 @@ export async function reconcileOnStartup(
     leaderProof = await renewReconcilerLeaderLease(pool, leaderProof, leaderLeaseDurationMs);
   };
 
+  await recoverStaleCapacityReservations(pool, 15 * 60 * 1000);
   const goalsResult = await pool.query<{ goal_id: string; project_id: string; state: GoalState; version: string }>(
     `SELECT goal_id, project_id, state, version FROM goals ORDER BY goal_id`,
   );

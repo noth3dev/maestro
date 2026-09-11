@@ -1,15 +1,16 @@
-import type { SpawnWorkerInput, Worker, WorkerMessageInput, WorkerObservation } from "@maestro/contracts";
-import { toInvocationRef, type ToolEvents, type ExecutionKernelPort } from "@maestro/domain";
+import type { QueuedWorkerAdmission, SpawnWorkerInput, Worker, WorkerMessageInput, WorkerObservation } from "@maestro/contracts";
+import { toInvocationRef, type CapacityDemand, type ToolEvents, type ExecutionKernelPort } from "@maestro/domain";
 import { assertWorkspacePath } from "@maestro/git-adapter";
-import { assertProjectRole, cancelWorker, countActiveWorkersForProject, getGoalControl, listCapabilityJournal, listIpPythonSessionJournalForGoal, observeWorker, readDepartmentPlan, readHeadCouncil, readWorker, sendWorkerMessageUnderOwnerClaim, spawnWorker, WorkerError, type CouncilActorContext, type OperatorContext } from "@maestro/persistence";
+import { assertProjectRole, cancelWorker, countActiveWorkersForProject, getGoalControl, listCapabilityJournal, listIpPythonSessionJournalForGoal, observeWorker, readDepartmentPlan, readHeadCouncil, readWorker, sendWorkerMessageUnderOwnerClaim, spawnWorker, WorkerError, WorkerProviderOutcomeUnknownError, LeaseUnavailableError, StaleGoalLeaseError, claimQueuedCapacity, listCapacityInventoryProjects, type CouncilActorContext, type OperatorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
 
 export interface WorkerService {
-  spawn(councilId: string, departmentId: string, input: SpawnWorkerInput, commandId: string, operator: OperatorContext): Promise<Worker>;
+  spawn(councilId: string, departmentId: string, input: SpawnWorkerInput, commandId: string, operator: OperatorContext): Promise<Worker | QueuedWorkerAdmission>;
   get(workerId: string, projectId: string): Promise<Worker>;
   observe(workerId: string, projectId: string, commandId: string, operator: OperatorContext): Promise<WorkerObservation>;
   sendMessage(workerId: string, input: WorkerMessageInput, commandId: string, operator: OperatorContext): Promise<Worker>;
   cancel(workerId: string, projectId: string, commandId: string, operator: OperatorContext): Promise<Worker>;
+  readonly drainCapacityQueues?: () => Promise<void>;
 }
 export interface WorkerServiceDependencies {
   pool: Pool;
@@ -27,6 +28,12 @@ export interface WorkerServiceDependencies {
    * may partition this by risk class per roadmap/act-1-foundation/phase-05-concurrent-goals-portfolio.md's capacity model instead of one flat cap.
    */
   maxConcurrentWorkersPerProject?: number;
+  /** Durable reserve-or-queue boundary. The provider is never called for queued admissions. */
+  capacity?: {
+    reserve: (demand: CapacityDemand, proof: import("@maestro/persistence").GoalLeaseProof) => Promise<{ kind: "reserved"; reservationId: string } | { kind: "queued"; queueId: string; reason: "provider_rate" | "spend_cents" | "worker_slots" }>;
+    release: (reservationId: string) => Promise<void>;
+    requeue: (reservationId: string) => Promise<void>;
+  };
 }
 export class WorkerProjectMismatchError extends Error {
   constructor() { super("Worker project does not match the Council project"); this.name = "WorkerProjectMismatchError"; }
@@ -88,7 +95,7 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
     async spawn(councilId, departmentId, input, commandId, operator) {
       await assertProjectRole(deps.pool, operator.operatorId, input.projectId, `head-${departmentId}`);
       const fixedModelRef = resolveWorkerModelForRouting(deps.modelRoutingMode, deps.nativeModelRef, input.model);
-      if (deps.maxConcurrentWorkersPerProject !== undefined) {
+      if (deps.maxConcurrentWorkersPerProject !== undefined && deps.capacity === undefined) {
         const active = await countActiveWorkersForProject(deps.pool, input.projectId);
         if (active >= deps.maxConcurrentWorkersPerProject) throw new WorkerCapacityExceededError(deps.maxConcurrentWorkersPerProject);
       }
@@ -114,7 +121,34 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
         : deps.prepareWorkerWorktree === undefined
           ? (() => { throw new WorkerError("Target-scoped worker preparation is not configured"); })
           : (workerId: string) => deps.prepareWorkerWorktree!(workerId, { projectId: input.projectId, repositoryPath: input.repositoryPath!, worktreePath: input.worktreePath! }, operator.operatorId, commandId).then((result) => result.worktreePath);
-      return deps.withGoalLease(council.goalId, (proof) => spawnWorker(deps.pool, deps.kernel, { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, commandId, ...(fixedModelRef === undefined ? {} : { modelRef: fixedModelRef }), ...(input.repositoryPath === undefined ? {} : { repositoryPath: canonicalRepositoryPath!, worktreePath: input.worktreePath! }), ...(targetPreparation === undefined ? {} : { prepareWorktree: targetPreparation }) }, proof, context).then(toApiWorker));
+      return deps.withGoalLease(council.goalId, async (proof) => {
+        const capacityDemand: CapacityDemand = { goalId: council.goalId, projectId: input.projectId, commandId, providerRate: input.capacityDemand?.providerRate ?? 1, spendCents: input.capacityDemand?.spendCents ?? 1, workerSlots: input.capacityDemand?.workerSlots ?? 1, requirement: input.capacityDemand?.requirement ?? "medium", pressure: input.capacityDemand?.pressure ?? "normal", actorId: proof.ownerId, sessionRef: context.sessionRef, fencingToken: proof.fencingToken, admission: { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, operatorId: operator.operatorId, credentialId: operator.credentialId, ...(fixedModelRef === undefined ? {} : { model: fixedModelRef }), ...(input.repositoryPath === undefined ? {} : { repositoryPath: canonicalRepositoryPath!, worktreePath: input.worktreePath! }) }, ...(input.capacityDemand?.priority === undefined ? {} : { priority: input.capacityDemand.priority }) };
+        const admission = deps.capacity === undefined ? { kind: "reserved" as const, reservationId: `legacy:${commandId}` } : await deps.capacity.reserve(capacityDemand, proof);
+        if (admission.kind === "queued") return { kind: "queued", queueId: admission.queueId, reason: admission.reason, projectId: input.projectId, goalId: council.goalId, commandId, requirement: capacityDemand.requirement, pressure: capacityDemand.pressure } satisfies QueuedWorkerAdmission;
+        try {
+          const worker = await spawnWorker(deps.pool, deps.kernel, { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, commandId, ...(fixedModelRef === undefined ? {} : { modelRef: fixedModelRef }), ...(input.repositoryPath === undefined ? {} : { repositoryPath: canonicalRepositoryPath!, worktreePath: input.worktreePath! }), ...(targetPreparation === undefined ? {} : { prepareWorktree: targetPreparation }) }, proof, context);
+          return toApiWorker(worker);
+        } catch (error) { if (deps.capacity !== undefined && !(error instanceof WorkerProviderOutcomeUnknownError)) await deps.capacity.release(admission.reservationId).catch(() => {}); throw error; }
+      });
+    },
+    async drainCapacityQueues() {
+      if (deps.capacity === undefined) return;
+      for (const projectId of await listCapacityInventoryProjects(deps.pool)) {
+        for (const reservation of await claimQueuedCapacity(deps.pool, projectId)) {
+          const admission = reservation.admission;
+          if (admission === undefined) {
+            await Promise.resolve(deps.capacity.release(reservation.reservationId)).catch(() => {});
+            continue;
+          }
+          try {
+            await this.spawn(admission.councilId, admission.departmentId, { projectId: reservation.projectId, planVersion: admission.planVersion, itemId: admission.itemId, capacityDemand: { providerRate: reservation.providerRate, spendCents: reservation.spendCents, workerSlots: reservation.workerSlots, requirement: reservation.requirement, pressure: reservation.pressure, ...(reservation.priority === undefined ? {} : { priority: reservation.priority }) }, ...(admission.model === undefined ? {} : { model: admission.model }), ...(admission.repositoryPath === undefined ? {} : { repositoryPath: admission.repositoryPath, worktreePath: admission.worktreePath! }) }, reservation.commandId, { operatorId: admission.operatorId, credentialId: admission.credentialId });
+          } catch (error) {
+            // Ordinary failures release in spawn; lease/replay failures must release here. Unknown provider outcomes remain reserved for reconciliation.
+            if (error instanceof LeaseUnavailableError || error instanceof StaleGoalLeaseError) await Promise.resolve(deps.capacity.requeue(reservation.reservationId)).catch(() => {});
+            else if (!(error instanceof WorkerProviderOutcomeUnknownError)) await Promise.resolve(deps.capacity.release(reservation.reservationId)).catch(() => {});
+          }
+        }
+      }
     },
     async get(workerId, projectId) {
       const worker = await readWorker(deps.pool, workerId);

@@ -585,6 +585,9 @@ export const WorkerSchema = z.object({
   status: z.enum(["spawned", "running", "awaiting_repair", "succeeded", "failed", "cancelled", "unknown"]), answerText: z.string().nullable(), usageTotalTokens: z.number().int().nonnegative().nullable(),
 }).strict();
 export type Worker = z.infer<typeof WorkerSchema>;
+export const QueuedWorkerAdmissionSchema = z.object({ kind: z.literal("queued"), queueId: z.string().min(1), reason: z.enum(["provider_rate", "spend_cents", "worker_slots"]), projectId: UuidSchema, goalId: UuidSchema, commandId: UuidSchema, requirement: z.enum(["low", "medium", "high"]), pressure: z.enum(["normal", "elevated", "critical"]) }).strict();
+export type QueuedWorkerAdmission = z.infer<typeof QueuedWorkerAdmissionSchema>;
+
 const WorkerCapabilityJournalEntrySchema = z.object({
   journalId: UuidSchema, capabilityKind: z.string().min(1), projectId: UuidSchema, goalId: UuidSchema,
   approvalId: UuidSchema.optional(), commandId: UuidSchema.optional(),
@@ -621,6 +624,7 @@ export const SpawnWorkerInputSchema = z.object({
   projectId: UuidSchema, planVersion: z.number().int().positive(), itemId: z.string().min(1), model: ModelRefSchema.optional(),
   /** Target repository and owned worktree are bound before the provider is admitted. */
   repositoryPath: TargetPathSchema.optional(), worktreePath: TargetPathSchema.optional(),
+  capacityDemand: z.object({ providerRate: z.number().int().positive(), spendCents: z.number().int().positive(), workerSlots: z.number().int().positive(), requirement: z.enum(["low", "medium", "high"]), pressure: z.enum(["normal", "elevated", "critical"]), priority: z.number().int().nonnegative().optional() }).strict().optional(),
 }).superRefine((value, context) => {
   if ((value.repositoryPath === undefined) !== (value.worktreePath === undefined)) context.addIssue({ code: z.ZodIssueCode.custom, path: [value.repositoryPath === undefined ? "repositoryPath" : "worktreePath"], message: "repositoryPath and worktreePath must be supplied together" });
 }).strict();

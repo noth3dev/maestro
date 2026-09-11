@@ -16,7 +16,7 @@ const expectedTables = [
   "task_contract_decisions", "task_contracts", "permanent_head_roles", "role_persona_axes", "permanent_roles", "departments", "organization_groups",
   "reconciler_leader_lease", "goal_controls", "authority_decisions", "authority_records", "local_operator_credentials", "local_operators", "goal_leases",
   "outbox", "goal_events", "command_receipts", "goals", "head_activation_edges", "head_activation_attempts", "evidence_records",
-  "conversations", "conversation_events", "conversation_turns",
+  "conversations", "conversation_events", "conversation_turns", "capacity_inventories", "capacity_reservations",
 ];
 
 describeDatabase("shared PostgreSQL migration runner", () => {

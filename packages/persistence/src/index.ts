@@ -56,3 +56,4 @@ export * from "./ensemble-router-artifacts.js";
 export * from "./ipython-session-journal.js";
 
 export * from "./capability-approval.js";
+export * from "./capacity-reservation.js";

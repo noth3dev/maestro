@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { InvalidGoalTransitionError, assertValidTaskContractSubstance, taskContractContentHash, transitionGoal, type GoalState, type TaskContractSubstance } from "@maestro/domain";
+import { InvalidGoalTransitionError, isTerminalGoalState, assertValidTaskContractSubstance, taskContractContentHash, transitionGoal, type GoalState, type TaskContractSubstance } from "@maestro/domain";
 import type { Pool } from "pg";
 import { assertProjectRole } from "./project-membership.js";
 
@@ -307,6 +307,10 @@ export async function executeGoalCommand(
         [nextState, nextVersion, command.goalId, command.projectId, command.expectedVersion],
       );
       if (updated.rowCount !== 1) throw new Error("Goal projection invariant violated");
+    }
+
+    if (isTerminalGoalState(nextState)) {
+      await client.query(`UPDATE capacity_reservations SET status = 'released', released_at = transaction_timestamp(), queue_reason = NULL WHERE goal_id = $1 AND status = 'queued'`, [command.goalId]);
     }
 
     await client.query(
