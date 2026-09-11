@@ -4064,3 +4064,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-11 structural refactor: extracted TUI startup/workspace/connection initialization from `entry.ts` into `apps/cli/src/tui/startup.ts`; added `startup.test.ts` for bootstrap gating. `entry.ts` reduced by 77 lines. Build, lint, 31 TUI test files / 167 tests, and independent review passed.
 
 - 2026-09-11 structural refactor: split provider/model contract schemas from `packages/contracts/src/index.ts` into `provider-credentials.ts`, preserving barrel re-exports; added 3 extraction tests. Barrel reduced by 46 lines; build/lint and 23 contract tests pass.
+
+- 2026-09-11 Plan 3 execution gate: root `main` is clean at `5497d42`; structural refactor CI `34568861938` is green. Plan 3 S1–S3/S3b evidence is present and S4 repair-hold/runbook patch is merged. Per `execution/plan-3.md` §4, work stops at the user-owned first-usable-release HANDOFF; no next execution slice starts until the user runs the fourteen-step real-provider scenario and records the evidence dump.

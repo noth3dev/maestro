@@ -1994,3 +1994,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-11 TUI refactor review initially required extraction-specific coverage; added `startup.test.ts` (3 tests), after which build/lint/TUI suite and final review evidence passed.
 
 - 2026-09-11 contracts refactor: provider/model schema extraction is standalone and has no cross-module cycle; existing barrel tests plus 3 new extraction tests pass.
+
+- 2026-09-11 Plan 3 HANDOFF is now reached after the merged S4 patch and green CI. Live provider acceptance remains unexecuted and user-owned; do not claim Phase 3 complete or start S5/status sync until the one-sitting fourteen-step runbook and evidence dump are supplied.
