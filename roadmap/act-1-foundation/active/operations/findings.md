@@ -1988,3 +1988,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-11 Plan 3 §S4 repair-hold patch review: initial no-edit review found the fixture approval ID was not UUID-valid and the fake 9→10 event lacked transition metadata. The patch now uses `randomUUID()`, records `executionRef`/`invocationRef`, models `awaiting_repair` → `running` → `succeeded`, and asserts the transition.
 
 - Final no-edit review PASS for the repair-hold patch. Non-blocking note: fake step 10 emits the repair-request event without assigning it to the response observation, so both step-10 events share a step number; the harness still records the transition and tests pass.
+
+- 2026-09-11 structural refactor review: server error-mapping extraction had no findings; route section was byte-for-byte unchanged and all mappings/type imports passed independent review.
