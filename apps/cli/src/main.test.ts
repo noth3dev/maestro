@@ -20,7 +20,7 @@ describe("executeCli", () => {
     expect(stdout.lines[0]).toContain("goal create");
     expect(stdout.lines[0]).toContain("metronome-challenges list");
     expect(stdout.lines[0]).toContain("encore-council list");
-    expect(stdout.lines[0]).toContain("concertmaster-report get");
+    expect(stdout.lines[0]).toContain("concertmaster-report generate|get");
     expect(stdout.lines[0]).toContain("evidence dump");
     expect(stderr.lines).toEqual([]);
     stdout.lines.length = 0;

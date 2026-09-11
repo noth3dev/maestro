@@ -47,6 +47,7 @@ import { EncoreProjectMismatchError } from "./encore-service.js";
 import { EvidenceCaptureError, EvidenceCaptureGoalBindingError } from "./evidence-capture-service.js";
 import { CapabilityApprovalUnauthorizedError, CapabilityApprovalInvalidRequestError } from "./capability-approval-service.js";
 import { GitProjectMismatchError } from "./git-integration-service.js";
+import { ConcertmasterReportCommandReuseError, ConcertmasterReportGoalNotFoundError, ConcertmasterReportProjectMismatchError } from "./concertmaster-report-service.js";
 import { GitAuthorizationError } from "@maestro/git-adapter";
 import { AuthenticationRequiredError, AuthenticationUnavailableError, CredentialForbiddenError, CriticalActionDeniedError, CriticalActionRequiresApprovalError, RequestValidationError, isMalformedJsonError } from "./server-input.js";
 
@@ -82,6 +83,9 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   if (error instanceof WorkerNotFoundError) return apiError(404, "worker_not_found", error.message);
   if (error instanceof WorkerError) return apiError(409, "worker_conflict", error.message);
   if (error instanceof GitProjectMismatchError) return apiError(400, "validation_error", error.message);
+  if (error instanceof ConcertmasterReportProjectMismatchError) return apiError(400, "validation_error", error.message);
+  if (error instanceof ConcertmasterReportGoalNotFoundError) return apiError(404, "goal_not_found", error.message);
+  if (error instanceof ConcertmasterReportCommandReuseError) return apiError(409, "command_id_reused", error.message);
   if (error instanceof GitIntegrationNotFoundError) return apiError(404, "git_integration_not_found", error.message);
   if (error instanceof GitIntegrationError) return apiError(409, "git_integration_conflict", error.message);
   if (error instanceof GitAuthorizationError) return apiError(403, "authority_denied", error.message);

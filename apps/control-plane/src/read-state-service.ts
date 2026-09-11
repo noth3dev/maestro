@@ -52,7 +52,7 @@ export function createReadStateService(pool: Pool): ReadStateService {
     },
     async getEvidenceBundle(goalId, projectId) {
       await assertGoalProject(goalId, projectId);
-      const row = await pool.query<{ bundle_id: string }>("SELECT bundle_id FROM evidence_bundles WHERE goal_id = $1 ORDER BY created_at DESC, bundle_id DESC LIMIT 1", [goalId]);
+      const row = await pool.query<{ bundle_id: string }>("SELECT bundle_id FROM evidence_bundles WHERE goal_id = $1 ORDER BY assembled_at DESC, bundle_id DESC LIMIT 1", [goalId]);
       if (row.rowCount !== 1) throw new ReadStateGoalNotFoundError("Evidence bundle not found for Goal");
       return readEvidenceBundle(pool, row.rows[0]!.bundle_id);
     },

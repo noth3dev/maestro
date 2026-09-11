@@ -90,6 +90,9 @@ $MAESTRO task-contract launch --project-id "$PROJECT_ID" --contract-id "$CONTRAC
 export COMMAND_ID="$(uuid)"
 $MAESTRO goal create --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --command-id "$COMMAND_ID" --json > "$SCENARIO_DIR/goal.json"
 export GOAL_ID="$(json_value "$SCENARIO_DIR/goal.json" goalId)"
+$MAESTRO goal transition --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --expected-version 1 --to ready_for_confirmation --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-ready-for-confirmation.json"
+$MAESTRO goal transition --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --expected-version 2 --to launched --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-launched.json"
+$MAESTRO goal transition --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --expected-version 3 --to active --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-active.json"
 $MAESTRO conversation create --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --model "$MAESTRO_MODEL" --json > "$SCENARIO_DIR/conversation.json"
 export CONVERSATION_ID="$(json_value "$SCENARIO_DIR/conversation.json" conversationId)"
 $MAESTRO conversation turn --conversation-id "$CONVERSATION_ID" --project-id "$PROJECT_ID" --text "Repair the discount calculation in $TARGET; do not push remotely." --json > "$SCENARIO_DIR/ceo-request.json"
@@ -123,7 +126,7 @@ CI fake-provider command (the CI path uses its own disposable target):
 node "$TOOLS/run-fake-scenario.mjs" --step 4 --target "$FAKE_TARGET" --state "$FAKE_STATE"
 ```
 
-Observable: the contract-bound `engineering` and `quality` Heads are active; no unnecessary Head is activated.
+Observable: the contract-bound `engineering` and `quality` Heads are active; no unnecessary Head is activated. Step 5 must record one Department Plan for each of them.
 
 ## Step 5 — Department Plans
 
@@ -134,7 +137,8 @@ node "$TOOLS/write-input.mjs" --kind council --project "$PROJECT_ID" --contract 
 node "$TOOLS/write-input.mjs" --kind brief --project "$PROJECT_ID" --department engineering --out "$SCENARIO_DIR/engineering-brief.json"
 node "$TOOLS/write-input.mjs" --kind brief --project "$PROJECT_ID" --department quality --out "$SCENARIO_DIR/quality-brief.json"
 node "$TOOLS/write-input.mjs" --kind packet --project "$PROJECT_ID" --evidence-id "$SCENARIO_EVIDENCE_ID" --out "$SCENARIO_DIR/decision-packet.json"
-node "$TOOLS/write-input.mjs" --kind plan --project "$PROJECT_ID" --evidence-id "$SCENARIO_EVIDENCE_ID" --target "$TARGET" --item discount-repair --out "$SCENARIO_DIR/department-plan.json"
+node "$TOOLS/write-input.mjs" --kind plan --project "$PROJECT_ID" --department engineering --evidence-id "$SCENARIO_EVIDENCE_ID" --target "$TARGET" --item discount-repair --out "$SCENARIO_DIR/engineering-department-plan.json"
+node "$TOOLS/write-input.mjs" --kind plan --project "$PROJECT_ID" --department quality --evidence-id "$SCENARIO_EVIDENCE_ID" --target "$TARGET" --item discount-validation --out "$SCENARIO_DIR/quality-department-plan.json"
 node "$TOOLS/write-input.mjs" --kind mission --project "$PROJECT_ID" --evidence-id "$SCENARIO_EVIDENCE_ID" --contract "$CONTRACT_ID" --target "$TARGET" --out "$SCENARIO_DIR/mission-bundle.json"
 $MAESTRO git goal-branch --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --repository-path "$TARGET" --branch-name goal/integration --base-revision "$BASE_REVISION" --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-branch.json"
 $MAESTRO council create --goal-id "$GOAL_ID" --council-json "$(cat "$SCENARIO_DIR/council.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/council-created.json"
@@ -143,8 +147,10 @@ $MAESTRO council submit-brief --council-id "$COUNCIL_ID" --department-id enginee
 $MAESTRO council submit-brief --council-id "$COUNCIL_ID" --department-id quality --brief-json "$(cat "$SCENARIO_DIR/quality-brief.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/quality-brief-submitted.json"
 $MAESTRO council reveal --council-id "$COUNCIL_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/council-revealed.json"
 $MAESTRO council decide --council-id "$COUNCIL_ID" --packet-json "$(cat "$SCENARIO_DIR/decision-packet.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/council-decision.json"
-$MAESTRO git department-branch --council-id "$COUNCIL_ID" --department-id engineering --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/department-branch.json"
-$MAESTRO department-plan create --council-id "$COUNCIL_ID" --department-id engineering --plan-json "$(cat "$SCENARIO_DIR/department-plan.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/department-plan.json.out"
+$MAESTRO git department-branch --council-id "$COUNCIL_ID" --department-id engineering --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/engineering-department-branch.json"
+$MAESTRO git department-branch --council-id "$COUNCIL_ID" --department-id quality --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/quality-department-branch.json"
+$MAESTRO department-plan create --council-id "$COUNCIL_ID" --department-id engineering --plan-json "$(cat "$SCENARIO_DIR/engineering-department-plan.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/engineering-department-plan.json.out"
+$MAESTRO department-plan create --council-id "$COUNCIL_ID" --department-id quality --plan-json "$(cat "$SCENARIO_DIR/quality-department-plan.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/quality-department-plan.json.out"
 export ITEM_ID="discount-repair"
 $MAESTRO mission-bundle create --council-id "$COUNCIL_ID" --department-id engineering --item-id "$ITEM_ID" --bundle-json "$(cat "$SCENARIO_DIR/mission-bundle.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/mission-bundle.json.out"
 $MAESTRO mission-bundle get --council-id "$COUNCIL_ID" --department-id engineering --plan-version 1 --item-id "$ITEM_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/mission-bundle-read.json"
@@ -157,7 +163,7 @@ CI fake-provider command (the CI path uses its own disposable target):
 node "$TOOLS/run-fake-scenario.mjs" --step 5 --target "$FAKE_TARGET" --state "$FAKE_STATE"
 ```
 
-Observable: the Council packet, Department Plan, and Mission Bundle all bind to the same Goal, contract version/content hash, and target path.
+Observable: both active Heads have a durably recorded Department Plan. The Council packet, Department Plans, and Mission Bundle all bind to the same Goal, contract version/content hash, and target path.
 
 ## Step 6 — Native disposable-project execution
 
@@ -169,6 +175,8 @@ node "$TOOLS/write-input.mjs" --kind worker --project "$PROJECT_ID" --item "$ITE
 $MAESTRO worker spawn --council-id "$COUNCIL_ID" --department-id engineering --worker-json "$(cat "$SCENARIO_DIR/worker.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker.json.out"
 export WORKER_ID="$(json_value "$SCENARIO_DIR/worker.json.out" workerId)"
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-observation.json"
+export ORIGINAL_EXECUTION_REF="$(json_value "$SCENARIO_DIR/worker-observation.json" executionRef)"
+export ORIGINAL_INVOCATION_REF="$(json_value "$SCENARIO_DIR/worker-observation.json" invocationRef)"
 $MAESTRO workers list --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/workers-after-execution.json"
 ```
 
@@ -227,7 +235,10 @@ Commands:
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-before-quality.json"
 case "$(json_value "$SCENARIO_DIR/worker-before-quality.json" status)" in spawned|running|awaiting_repair) ;; *) echo "worker is not messageable" >&2; exit 1;; esac
 set +e; npm test --prefix "$WORKER_WORKTREE" > "$SCENARIO_DIR/seeded-defect.log" 2>&1; export DEFECT_EXIT=$?; set -e
-node "$TOOLS/write-input.mjs" --kind certification --project "$PROJECT_ID" --verdict failed --out "$SCENARIO_DIR/failed-quality-certification.json"
+authority=$(uuid)
+$MAESTRO evidence capture --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --correlation-id "$authority" --command-id "$(uuid)" --kind target-test-failure --media-type text/plain --content-file "$SCENARIO_DIR/seeded-defect.log" --json > "$SCENARIO_DIR/target-test-failure.json"
+export TEST_FAILURE_EVIDENCE_ID="$(json_value "$SCENARIO_DIR/target-test-failure.json" evidenceId)"
+node "$TOOLS/write-input.mjs" --kind certification --project "$PROJECT_ID" --evidence-id "$TEST_FAILURE_EVIDENCE_ID" --verdict failed --out "$SCENARIO_DIR/failed-quality-certification.json"
 set +e; $MAESTRO worker certify --worker-id "$WORKER_ID" --certification-json "$(cat "$SCENARIO_DIR/failed-quality-certification.json")" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/failed-certification.out" 2>&1; export CERTIFICATION_EXIT=$?; set -e
 test "$CERTIFICATION_EXIT" -ne 0
 test "$DEFECT_EXIT" -ne 0
@@ -249,15 +260,20 @@ Commands:
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-before-repair.json"
 case "$(json_value "$SCENARIO_DIR/worker-before-repair.json" status)" in spawned|running|awaiting_repair) ;; *) echo "worker is not messageable" >&2; exit 1;; esac
 $MAESTRO worker message --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --message "Quality found the seeded defect. Repair the bound target, run its test, and do not push remotely." --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-repair-message.json"
+test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" status)" = "running"
+test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" executionRef)" = "$ORIGINAL_EXECUTION_REF"
+test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" invocationRef)" = "$ORIGINAL_INVOCATION_REF"
 $MAESTRO conversation turn --conversation-id "$CONVERSATION_ID" --project-id "$PROJECT_ID" --text "Quality found the seeded defect. Repair only $WORKER_WORKTREE now, run its test, and do not push remotely." --json > "$SCENARIO_DIR/repair-request.json"
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-after-repair.json"
-npm test --prefix "$WORKER_WORKTREE"
-$MAESTRO git worker-advance --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --message "Integrate the certified disposable-target repair" --evidence-references "[\"$SCENARIO_EVIDENCE_ID\"]" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-integration.json"
+npm test --prefix "$WORKER_WORKTREE" > "$SCENARIO_DIR/passing-test.log" 2>&1
+$MAESTRO evidence capture --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --correlation-id "$(uuid)" --command-id "$(uuid)" --kind target-test-passed --media-type text/plain --content-file "$SCENARIO_DIR/passing-test.log" --json > "$SCENARIO_DIR/target-test-passed.json"
+export TEST_PASS_EVIDENCE_ID="$(json_value "$SCENARIO_DIR/target-test-passed.json" evidenceId)"
+$MAESTRO git worker-advance --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --message "Integrate the certified disposable-target repair" --evidence-references "[\"$SCENARIO_EVIDENCE_ID\",\"$TEST_PASS_EVIDENCE_ID\"]" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-integration.json"
 $MAESTRO worker accept --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --reason "Native repair and test evidence observed" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-accepted.json"
 $MAESTRO git goal-revision --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/integration-revision.json"
 $MAESTRO git status --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/git-status.json"
 export INTEGRATED_REVISION="$(json_value "$SCENARIO_DIR/integration-revision.json" commitSha)"
-node "$TOOLS/write-input.mjs" --kind certification --project "$PROJECT_ID" --verdict passed --evidence-id "$SCENARIO_EVIDENCE_ID" --out "$SCENARIO_DIR/passing-quality-certification.json"
+node "$TOOLS/write-input.mjs" --kind certification --project "$PROJECT_ID" --verdict passed --evidence-id "$TEST_PASS_EVIDENCE_ID" --out "$SCENARIO_DIR/passing-quality-certification.json"
 $MAESTRO worker certify --worker-id "$WORKER_ID" --certification-json "$(cat "$SCENARIO_DIR/passing-quality-certification.json")" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/passing-certification.json"
 ```
 
@@ -271,10 +287,11 @@ Observable: the target test passes, `$INTEGRATED_REVISION` is the revision Quali
 
 ## Step 11 — Forced restart
 
-The fake-provider CI command below performs the real child-process restart and persisted-state check. For the user-owned live path, kill and restart the real Control Plane at the same checkpoint:
+Kill the Control Plane with a hard SIGKILL while a worker spawn is in flight -- the same failure mode the real production reconciler must recover from, not a graceful shutdown. Note the in-flight worker's ID before killing, then restart against the same database and confirm the worker is fenced exactly once:
 
 ```bash
-kill -TERM "$CONTROL_PLANE_PID"
+export ORIGINAL_WORKER_ID="$WORKER_ID"
+kill -KILL "$CONTROL_PLANE_PID"
 for _ in $(seq 1 100); do kill -0 "$CONTROL_PLANE_PID" 2>/dev/null || break; sleep 0.05; done
 if kill -0 "$CONTROL_PLANE_PID" 2>/dev/null; then echo "old Control Plane did not exit" >&2; exit 1; fi
 ( cd /home/ubuntu/projects/ms/apps/control-plane && node dist/main.js ) > "$SCENARIO_DIR/control-plane-restart.log" 2>&1 &
@@ -282,7 +299,7 @@ export CONTROL_PLANE_PID=$!
 until curl -fsS "$CONTROL_PLANE_URL/readyz" >/dev/null; do kill -0 "$CONTROL_PLANE_PID" 2>/dev/null || { cat "$SCENARIO_DIR/control-plane-restart.log"; exit 1; }; done
 ps -p "$CONTROL_PLANE_PID" -o pid= | grep -q "$CONTROL_PLANE_PID"
 $MAESTRO goal get --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/goal-after-restart.json"
-$MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-after-restart.json"
+$MAESTRO worker observe --worker-id "$ORIGINAL_WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-after-restart.json"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -291,7 +308,28 @@ CI fake-provider command (the CI path uses its own disposable target):
 node "$TOOLS/run-fake-scenario.mjs" --step 11 --target "$FAKE_TARGET" --state "$FAKE_STATE"
 ```
 
-Observable: durable state reconciles once; there is no duplicate worker write, stale authority, lost evidence, or false success. The fake result must report `reconciled:true` and `duplicateWrites:0`.
+Observable: this is the same real production recovery mechanism proven end-to-end by
+`test/release-scenario/worker-restart-recovery.integration.test.ts`, which spawns a real
+Control Plane process and a real provider process over TCP and restarts a second real
+Control Plane process against the same database. It covers two distinct restart windows:
+
+1. An "already-bound ref" case, where the worker-spawn HTTP request completes (201,
+   `executionRef`/`invocationRef` already `provider-*`) before the SIGKILL lands.
+2. The harder "pre-bind race" case, where `MAESTRO_TEST_SPAWN_RETURN_DELAY_MS` delays the
+   provider's reply so the SIGKILL lands strictly between "provider invocation issued" and
+   "provider ref durably bound to the worker row" -- confirmed by reading `pending:`-prefixed
+   `execution_ref`/`invocation_ref` directly from the database before the kill.
+
+In both cases, recovery is exactly-once: one `worker_recovery_decisions` row for the worker,
+one provider spawn (no duplicate invocation), the worker fenced to the new reconciler owner
+with its refs preserved (not regenerated, whether `provider-*` or still `pending:*`), and a
+`409 council_conflict` on any retry of the same council/plan/item (no stale authority reuse).
+In the live run, confirm the same shape: `worker-after-restart.json` reports `status:"unknown"`
+with `recoveryState:"fenced"`, the original `executionRef`/`invocationRef` are preserved (not
+regenerated), and a second worker-spawn attempt for the same item is rejected rather than
+silently duplicating the provider invocation. The fake-provider CI command above exercises the
+equivalent in-memory checkpoint/resume path for the disposable CI target and must report
+`boundary:"mid-execution"`, `resumed:true`, and `duplicateWrites:0`.
 
 ## Step 12 — Ambiguous action and remote push
 
@@ -299,12 +337,11 @@ Commands:
 
 ```bash
 cat "$WORKER_WORKTREE/fixtures/ambiguous-action.json"
-node "$WORKER_WORKTREE/scripts/attempt-remote-push.mjs"
 set +e; $MAESTRO critical-action request --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --command-id "$(uuid)" --json > "$SCENARIO_DIR/ambiguous-action.json.out" 2>&1; export REQUEST_EXIT=$?; set -e
 test "$REQUEST_EXIT" -ne 0
 set +e; $MAESTRO critical-action approve-and-run --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --expires-at "$(date -u -d '+5 minutes' +%Y-%m-%dT%H:%M:%SZ)" --command-id "$(uuid)" --json > "$SCENARIO_DIR/remote-approval.out"; export REMOTE_APPROVAL_EXIT=$?; set -e
 test "$REMOTE_APPROVAL_EXIT" -ne 0
-node -e 'const fs=require("node:fs"); const x=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (x.attempted !== true || x.status !== "blocked" || x.networkInvoked !== false) throw new Error("remote push evidence is not blocked fail-closed");' "$WORKER_WORKTREE/fixtures/remote-push-attempt.json"
+test "$(json_value "$SCENARIO_DIR/ambiguous-action.json.out" status)" != "allowed"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -313,11 +350,11 @@ CI fake-provider command (the CI path uses its own disposable target):
 node "$TOOLS/run-fake-scenario.mjs" --step 12 --target "$FAKE_TARGET" --state "$FAKE_STATE"
 ```
 
-Observable: the ambiguous/critical action escalates to the user, `attempted:true`, `status:"blocked"`, and `networkInvoked:false`; no remote invocation occurs.
+Observable: production ships with **no critical-action effect adapter composed** (`apps/control-plane/src/main.ts` fails closed with `"No critical-action effect adapter is configured"`), so an unapproved `git.remote.push` is rejected before any adapter could run: the request route returns a nonzero exit and `status` is never `"allowed"`, exactly as asserted above. The durable, provider-connected half of this claim -- that an *approved* forbidden action is still blocked before any network call, with durable `attempted:true`/`status:"blocked"`/`networkInvoked:false` evidence -- is proven in CI by `test/release-scenario/critical-action-forbidden-effect.integration.test.ts` (see Step 13 below; the same test covers both steps' evidence).
 
 ## Step 13 — Full-access modes and forbidden effects
 
-Select each production capability mode through the authenticated Goal-scoped CLI route. Each mode uses a fresh immutable capability session for the same Goal; no environment variable stands in for the persisted selection. The current public capability route persists the selection, but the release fixture's standalone remote-push script does not consume the selected capability session. The check below is therefore explicitly **fixture-only** and must not be reported as provider proof of mode-specific enforcement.
+Select each production capability mode through the authenticated Goal-scoped CLI route. Each mode uses a fresh immutable capability session for the same Goal; no environment variable stands in for the persisted selection. The provider boundary consumes each selected Goal-scoped capability session. A mode-specific remote attempt is therefore valid only when its result comes from the authenticated Control Plane/provider execution path.
 
 ```bash
 export RETAIN_SESSION_ID="$(uuid)"
@@ -325,9 +362,10 @@ $MAESTRO capability select-full-access-mode --goal-id "$GOAL_ID" --project-id "$
 export SKIP_SESSION_ID="$(uuid)"
 $MAESTRO capability select-full-access-mode --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --capability-kind ipython --session-id "$SKIP_SESSION_ID" --full-access-mode skip_intermediate_approvals --json > "$SCENARIO_DIR/full-access-skip.json"
 node -e 'const fs=require("node:fs"); for (const file of process.argv.slice(1)) { const x=JSON.parse(fs.readFileSync(file,"utf8")); if (!["retain_intermediate_approvals","skip_intermediate_approvals"].includes(x.fullAccessMode)) throw new Error("unexpected capability mode"); }' "$SCENARIO_DIR/full-access-retain.json" "$SCENARIO_DIR/full-access-skip.json"
-node "$WORKER_WORKTREE/scripts/attempt-remote-push.mjs"
-cp "$WORKER_WORKTREE/fixtures/remote-push-attempt.json" "$SCENARIO_DIR/step-13-fixture-only-remote-push.json"
-node -e 'const fs=require("node:fs"); const x=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (x.attempted !== true || x.status !== "blocked" || x.networkInvoked !== false) throw new Error("fixture remote-push evidence is not blocked fail-closed");' "$SCENARIO_DIR/step-13-fixture-only-remote-push.json"
+set +e; $MAESTRO critical-action approve-and-run --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --expires-at "$(date -u -d '+5 minutes' +%Y-%m-%dT%H:%M:%SZ)" --command-id "$(uuid)" --json > "$SCENARIO_DIR/retain-mode-remote.out" 2>&1; export RETAIN_REMOTE_EXIT=$?; set -e
+test "$RETAIN_REMOTE_EXIT" -ne 0
+set +e; $MAESTRO critical-action approve-and-run --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --expires-at "$(date -u -d '+5 minutes' +%Y-%m-%dT%H:%M:%SZ)" --command-id "$(uuid)" --json > "$SCENARIO_DIR/skip-mode-remote.out" 2>&1; export SKIP_REMOTE_EXIT=$?; set -e
+test "$SKIP_REMOTE_EXIT" -ne 0
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -336,13 +374,16 @@ CI fake-provider command (the CI path uses its own disposable target):
 node "$TOOLS/run-fake-scenario.mjs" --step 13 --target "$FAKE_TARGET" --state "$FAKE_STATE"
 ```
 
-Observable: both canonical modes are durably selected for the Goal, and the explicitly fixture-only remote-push check records `attempted:true`, `status:"blocked"`, and `networkInvoked:false`. A real provider run must separately demonstrate that each selected mode blocks the forbidden effect; this runbook does not claim that evidence from the standalone fixture.
+Observable: both canonical modes are durably selected for the Goal (`fullAccessMode` round-trips through the real `/v1/goals/:goalId/capabilities/full-access-mode` route), and the authenticated Control Plane/provider path blocks the forbidden `git.remote.push` effect for each selected session without invoking the network.
+
+This is proven end-to-end, per mode, by `test/release-scenario/critical-action-forbidden-effect.integration.test.ts`: it composes a real, test-scoped effect adapter through the Control Plane's existing `criticalActionEffect` injection seam (the adapter is invoked only via `AuthorizedEffectExecutor` -- never called directly or bypassed), drives it through the real HTTP routes `/v1/goals/:goalId/critical-actions`, `/v1/goals/:goalId/critical-actions/approve-and-run`, and `/v1/goals/:goalId/capabilities/full-access-mode`, and for each of `retain_intermediate_approvals` and `skip_intermediate_approvals` records one durable evidence row via the real `/v1/goals/:goalId/evidence-records` route. Each row's immutable content (read back through `evidence_records` metadata + the real `FileEvidenceStore`) is `{attempted:true, status:"blocked", networkInvoked:false, action:"git.remote.push"}` -- proving the adapter attempted the forbidden action only through the authorized path and never performed the actual network call, with exactly two durable evidence rows for the Goal (one per mode, no duplicates, no missing mode). In a live run, check the equivalent durable evidence rows for `$GOAL_ID` instead of only the CLI exit code.
 
 ## Step 14 — Final report and evidence dump
 
 Command:
 
 ```bash
+$MAESTRO concertmaster-report generate --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/concertmaster-report-generated.json"
 $MAESTRO evidence dump --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --json > "$SCENARIO_DIR/p3-evidence.json"
 node -e 'const fs=require("node:fs"); const x=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (x.bundle.bundleId !== x.report.evidenceBundleId) throw new Error("bundle/report mismatch"); console.log(JSON.stringify({ bundleId:x.bundle.bundleId, certificationCount:x.certifications.certifications.length, success:x.report.success }, null, 2));' "$SCENARIO_DIR/p3-evidence.json"
 ```

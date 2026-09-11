@@ -96,6 +96,37 @@ describe("createApiClient", () => {
     }));
   });
 
+  it("generates a Goal-scoped Concertmaster report with an idempotency key", async () => {
+    const report = {
+      reportId: goalId,
+      goalId,
+      success: true,
+      blockers: [],
+      ceoRequest: "ship",
+      whatChanged: "report",
+      userVisibleBehaviorPassed: true,
+      participatingDepartments: ["quality"],
+      keyDecisions: [],
+      dissent: [],
+      independentValidation: ["postgres"],
+      costCents: 1,
+      budgetCents: 2,
+      incidents: [],
+      knownLimitations: [],
+      criticalActionAwaitingApproval: false,
+      evidenceBundleId: commandId,
+    };
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(report), { status: 201 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+
+    await expect(client.generateConcertmasterReport(goalId, { projectId }, commandId)).resolves.toEqual(report);
+    expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/concertmaster-report`, expect.objectContaining({
+      method: "POST",
+      headers: { authorization: "Bearer top-secret", "content-type": "application/json", "idempotency-key": commandId },
+      body: JSON.stringify({ projectId }),
+    }));
+  });
+
   it("fails closed on an oversized unterminated conversation SSE record", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response("x".repeat(128_001), { status: 200, headers: { "content-type": "text/event-stream" } }));
     const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });

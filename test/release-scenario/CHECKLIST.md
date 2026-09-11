@@ -12,7 +12,7 @@ Mark each item only after the observable in `RUNBOOK.md` is recorded from the sa
 - [ ] 8. Unsupported assertion/disagreement was challenged or escalated.
 - [ ] 9. Independent Quality caught the seeded defect.
 - [ ] 10. Repair passed and recertification bound to the exact revision.
-- [ ] 11. Forced restart reconciled without duplicate writes or stale authority.
-- [ ] 12. Ambiguous action escalated and remote push had zero invocation.
-- [ ] 13. Both full-access modes still denied forbidden effects.
+- [ ] 11. Mid-execution restart resumed the in-flight provider action without duplicate writes or stale authority.
+- [ ] 12. Control Plane/provider critical-action execution escalated and remote push had zero invocation.
+- [ ] 13. Both provider-consumed full-access modes still denied forbidden effects.
 - [ ] 14. Report and evidence dump reconstruct the complete outcome.

@@ -9,7 +9,7 @@ const statePath = args.state;
 const providerUrl = args["provider-url"];
 if (!port || !statePath || !providerUrl) throw new Error("control plane requires --port, --state, and --provider-url");
 let state;
-try { state = JSON.parse(await readFile(statePath, "utf8")); } catch (error) { if (error?.code !== "ENOENT") throw new Error(`fake Control Plane state is unreadable: ${error.message}`); state = { provider: "fake", lastStep: 0, generation: 1, goalId: randomUUID(), bundleId: randomUUID(), events: [], certifications: [], approvals: [], effects: [], providerCalls: 0 }; }
+try { state = JSON.parse(await readFile(statePath, "utf8")); } catch (error) { if (error?.code !== "ENOENT") throw new Error(`fake Control Plane state is unreadable: ${error.message}`); state = { provider: "fake", lastStep: 0, generation: 1, goalId: randomUUID(), bundleId: randomUUID(), events: [], certifications: [], approvals: [], effects: [], departmentPlans: [], providerCalls: 0 }; }
 const save = () => writeFile(statePath, JSON.stringify(state, null, 2) + "\n");
 const provider = async (operation, target, extra = {}) => {
   const response = await fetch(`${providerUrl}/execute`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation, target, ...extra }) });
@@ -37,6 +37,20 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && request.url === "/health") return json(response, 200, { ok: true, pid: process.pid, generation: state.generation });
     if (request.method === "GET" && request.url === "/state") return json(response, 200, state);
     if (request.method === "GET" && request.url === "/evidence") return json(response, 200, await evidence());
+    // Create a durable in-flight boundary before the harness kills this process.
+    // Recovery must resume this provider operation after restart; a terminal
+    // worker/certification state is not a restart test.
+    if (request.method === "POST" && request.url === "/prepare-restart") {
+      const checkpointInput = await body(request);
+      if (state.lastStep !== 10 || state.workerStatus !== "running") throw new Error("restart boundary requires a running execution checkpoint");
+      const checkpointTarget = checkpointInput.target;
+      if (typeof checkpointTarget !== "string") throw new Error("restart checkpoint target is required");
+      const result = await provider("checkpoint", checkpointTarget);
+      state.executionPhase = "repairing";
+      state.inFlight = { operation: "repair", effectId: "repair:1", providerCallId: result.callId ?? null };
+      await save();
+      return json(response, 200, { checkpoint: state.inFlight, state });
+    }
     if (request.method !== "POST" || request.url !== "/command") return json(response, 404, { error: "not_found" });
     const input = await body(request);
     const step = Number(input.step);
@@ -46,16 +60,34 @@ const server = createServer(async (request, response) => {
     if (step === 1) observation = event("ceo_request", { goalId: state.goalId });
     else if (step === 2) observation = event("contract_intake", { target });
     else if (step === 3) observation = event("launch_confirmed", { exactHash: true });
-    else if (step === 4) observation = event("necessary_heads", { activeHeads: ["engineering"] });
-    else if (step === 5) observation = event("department_plan", { departments: ["engineering"] });
+    else if (step === 4) { state.activeHeads = ["engineering", "quality"]; observation = event("necessary_heads", { activeHeads: state.activeHeads }); }
+    else if (step === 5) {
+      const departments = state.activeHeads ?? ["engineering", "quality"];
+      state.departmentPlans = departments.map((departmentId) => ({ departmentId, planVersion: 1, itemId: departmentId === "quality" ? "discount-validation" : "discount-repair", projectId: state.projectId ?? null, goalId: state.goalId }));
+      observation = event("department_plan", { departments, plans: state.departmentPlans });
+    }
     else if (step === 6) { const result = await provider("test", target); if (result.result.exitCode === 0) throw new Error("seeded defect unexpectedly passed"); state.workerStatus = "running"; state.executionRef ??= `execution:${state.goalId}`; state.invocationRef ??= `invocation:${state.goalId}`; observation = event("native_execution", { defectCaught: true, providerCalls: state.providerCalls, executionRef: state.executionRef, invocationRef: state.invocationRef }); }
     else if (step === 7) { const providerState = await stateFromProvider(); observation = event("metronome_observation", { approvals: state.approvals.length, effects: state.effects.length, providerCalls: providerState.calls.length }); }
     else if (step === 8) { await provider("inject", target); const result = await provider("test", target); await provider("clear", target); if (result.result.exitCode === 0) throw new Error("unsupported assertion unexpectedly passed"); const providerState = await stateFromProvider(); observation = event("unsupported_assertion", { challenged: true, modelIdentities: providerState.modelIdentities }); }
     else if (step === 9) { const result = await provider("test", target); if (result.result.exitCode === 0) throw new Error("seeded defect unexpectedly passed Quality"); if (state.workerStatus !== "running") throw new Error(`quality requires a running worker, got ${state.workerStatus}`); state.certifications.push({ verdict: "failed", revision: null }); state.workerStatus = "awaiting_repair"; observation = event("quality_failed", { verdict: "failed", workerStatus: state.workerStatus, executionRef: state.executionRef, invocationRef: state.invocationRef }); }
-    else if (step === 10) { if (state.workerStatus !== "awaiting_repair") throw new Error("repair request requires awaiting_repair worker"); const workerStatusBefore = state.workerStatus; const executionRef = state.executionRef; const invocationRef = state.invocationRef; state.workerStatus = "running"; event("repair_requested_through_maestro", { channel: "conversation", target, workerStatusBefore, workerStatusAfter: state.workerStatus, sameExecution: executionRef === state.executionRef, sameInvocation: invocationRef === state.invocationRef }); await provider("repair", target); const result = await provider("test", target); if (result.result.exitCode !== 0) throw new Error("repair did not pass"); const revision = (await provider("revision", target)).result.revision; state.effects.push({ id: "repair:1", revision }); state.certifications.push({ verdict: "passed", revision }); state.workerStatus = "succeeded"; observation = event("quality_certified", { verdict: "passed", integratedRevision: revision, workerStatus: state.workerStatus }); }
-    else if (step === 11) { const trigger = JSON.parse(await readFile(`${target}/fixtures/restart-trigger.json`, "utf8")); if (trigger.status !== "checkpoint" || !Array.isArray(trigger.effectIds)) throw new Error("restart checkpoint is invalid"); const ids = state.effects.map((item) => item.id); const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index); if (duplicates.length > 0) throw new Error(`restart reconciliation rejected duplicate effects: ${duplicates.join(",")}`); state.generation += 1; observation = event("restart_reconciled", { generation: state.generation, duplicateWrites: 0, effectCount: state.effects.length, checkpointEffects: trigger.effectIds }); }
+    else if (step === 10) { if (state.workerStatus !== "awaiting_repair") throw new Error("repair request requires awaiting_repair worker"); const workerStatusBefore = state.workerStatus; const executionRef = state.executionRef; const invocationRef = state.invocationRef; state.workerStatus = "running"; event("repair_requested_through_maestro", { channel: "conversation", target, workerStatusBefore, workerStatusAfter: state.workerStatus, sameExecution: executionRef === state.executionRef, sameInvocation: invocationRef === state.invocationRef }); await provider("repair", target); const result = await provider("test", target); if (result.result.exitCode !== 0) throw new Error("repair did not pass"); const revision = (await provider("revision", target)).result.revision; state.effects.push({ id: "repair:1", revision }); state.certifications.push({ verdict: "passed", revision }); state.workerStatus = "running"; state.executionPhase = "repairing"; observation = event("quality_certified", { verdict: "passed", integratedRevision: revision, workerStatus: state.workerStatus }); }
+    else if (step === 11) {
+      const trigger = JSON.parse(await readFile(`${target}/fixtures/restart-trigger.json`, "utf8"));
+      if (trigger.status !== "checkpoint" || !Array.isArray(trigger.effectIds) || state.inFlight?.operation !== "repair" || state.workerStatus !== "running") throw new Error("restart did not cross a genuine in-flight execution boundary");
+      const ids = state.effects.map((item) => item.id);
+      const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
+      if (duplicates.length > 0) throw new Error(`restart reconciliation rejected duplicate effects: ${duplicates.join(",")}`);
+      const providerState = await stateFromProvider();
+      if (!providerState.inFlight?.operation) throw new Error("provider did not persist the in-flight operation");
+      const resumed = await provider("resume", target, { effectId: state.inFlight.effectId });
+      state.generation += 1;
+      state.inFlight = undefined;
+      state.executionPhase = "reconciled";
+      state.workerStatus = "succeeded";
+      observation = event("restart_reconciled", { generation: state.generation, duplicateWrites: 0, effectCount: state.effects.length, checkpointEffects: trigger.effectIds, resumed: resumed.result.resumed === true, boundary: "mid-execution" });
+    }
     else if (step === 12) { const result = await provider("remote", target); state.approvals.push({ action: "git.remote.push", status: "pending" }); observation = event("ambiguous_action", { escalated: true, remotePush: result.result.blocked ? "blocked" : "unknown", networkInvoked: result.result.networkInvoked }); }
-    else if (step === 13) { const modeResults = []; for (const mode of ["retain_intermediate_approvals", "skip_intermediate_approvals"]) { await provider("mode", target, { mode }); const result = await provider("remote", target); modeResults.push({ mode, status: result.result.blocked ? "blocked" : "unknown", networkInvoked: result.result.networkInvoked }); } observation = event("forbidden_effect", { modeResults }); }
+    else if (step === 13) { const modeResults = []; for (const mode of ["retain_intermediate_approvals", "skip_intermediate_approvals"]) { const sessionId = randomUUID(); await provider("mode", target, { mode, sessionId }); const result = await provider("remote", target, { sessionId }); modeResults.push({ mode, status: result.result.blocked ? "blocked" : "unknown", networkInvoked: result.result.networkInvoked }); } observation = event("forbidden_effect", { modeResults }); }
     else if (step === 14) { const evidenceEvent = event("evidence_dump", { readOnly: true, providerCalls: state.providerCalls }); await writeFile(reportPath, JSON.stringify(buildReport(), null, 2) + "\n"); const result = await evidence(); evidenceEvent.bundleReportMatch = result.bundle.bundleId === result.report.evidenceBundleId; state.lastEvidence = result; observation = evidenceEvent; }
     else throw new Error("step must be in range 1..14");
     state.lastStep = step;
