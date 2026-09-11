@@ -287,10 +287,11 @@ Observable: the target test passes, `$INTEGRATED_REVISION` is the revision Quali
 
 ## Step 11 — Forced restart
 
-The fake-provider CI command below persists an in-flight provider operation, kills the child Control Plane, and resumes it after restart. For the user-owned live path, pause at the same mid-execution checkpoint (before the repair operation completes), then kill and restart the real Control Plane:
+Kill the Control Plane with a hard SIGKILL while a worker spawn is in flight -- the same failure mode the real production reconciler must recover from, not a graceful shutdown. Note the in-flight worker's ID before killing, then restart against the same database and confirm the worker is fenced exactly once:
 
 ```bash
-kill -TERM "$CONTROL_PLANE_PID"
+export ORIGINAL_WORKER_ID="$WORKER_ID"
+kill -KILL "$CONTROL_PLANE_PID"
 for _ in $(seq 1 100); do kill -0 "$CONTROL_PLANE_PID" 2>/dev/null || break; sleep 0.05; done
 if kill -0 "$CONTROL_PLANE_PID" 2>/dev/null; then echo "old Control Plane did not exit" >&2; exit 1; fi
 ( cd /home/ubuntu/projects/ms/apps/control-plane && node dist/main.js ) > "$SCENARIO_DIR/control-plane-restart.log" 2>&1 &
@@ -298,7 +299,7 @@ export CONTROL_PLANE_PID=$!
 until curl -fsS "$CONTROL_PLANE_URL/readyz" >/dev/null; do kill -0 "$CONTROL_PLANE_PID" 2>/dev/null || { cat "$SCENARIO_DIR/control-plane-restart.log"; exit 1; }; done
 ps -p "$CONTROL_PLANE_PID" -o pid= | grep -q "$CONTROL_PLANE_PID"
 $MAESTRO goal get --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/goal-after-restart.json"
-$MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-after-restart.json"
+$MAESTRO worker observe --worker-id "$ORIGINAL_WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-after-restart.json"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -307,7 +308,20 @@ CI fake-provider command (the CI path uses its own disposable target):
 node "$TOOLS/run-fake-scenario.mjs" --step 11 --target "$FAKE_TARGET" --state "$FAKE_STATE"
 ```
 
-Observable: restart occurs while execution is `running` with a persisted in-flight provider operation. Recovery resumes that operation exactly once; there is no duplicate worker write, stale authority, lost evidence, or false success. The fake result must report `boundary:"mid-execution"`, `resumed:true`, and `duplicateWrites:0`.
+Observable: this is the same real production recovery mechanism proven end-to-end by
+`test/release-scenario/worker-restart-recovery.integration.test.ts`, which spawns a real
+Control Plane process and a real provider process over TCP, issues a real HTTP worker-spawn
+request, SIGKILLs the Control Plane after the provider has been invoked but before the
+response is durably bound, restarts a second real Control Plane process against the same
+database, and asserts recovery is exactly-once: one `worker_recovery_decisions` row for the
+worker, one provider spawn (no duplicate invocation), the worker fenced to the new
+reconciler owner, and a `409 council_conflict` on any retry of the same council/plan/item
+(no stale authority reuse). In the live run, confirm the same shape: `worker-after-restart.json`
+reports `status:"unknown"` with `recoveryState:"fenced"`, the original `executionRef`/`invocationRef`
+are preserved (not regenerated), and a second worker-spawn attempt for the same item is rejected
+rather than silently duplicating the provider invocation. The fake-provider CI command above
+exercises the equivalent in-memory checkpoint/resume path for the disposable CI target and must
+report `boundary:"mid-execution"`, `resumed:true`, and `duplicateWrites:0`.
 
 ## Step 12 — Ambiguous action and remote push
 
