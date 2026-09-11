@@ -62,6 +62,8 @@ describeDatabase("Portfolio Council persistence", () => {
     expect(await listPortfolioCouncilDecisions(pool, decision.councilId)).toHaveLength(1);
     await expect(pool.query("UPDATE portfolio_council_rounds SET confidence = 0.1 WHERE round_id = $1", [first.roundId])).rejects.toThrow(/append-only/);
     await expect(pool.query("DELETE FROM portfolio_council_rounds WHERE round_id = $1", [first.roundId])).rejects.toThrow(/append-only/);
+    await expect(pool.query("TRUNCATE portfolio_council_rounds CASCADE")).rejects.toThrow(/append-only/);
+    await expect(pool.query("TRUNCATE portfolio_execution_fences")).rejects.toThrow(/append-only/);
     const changed = { ...decision, confidence: 0.9 };
     await expect(recordPortfolioCouncilDecision(pool, { projectId, decision: changed, actorId: "concertmaster", sessionRef: "session:portfolio" })).rejects.toThrow(/reused/);
     expect((await readPortfolioCouncilDecision(pool, first.roundId)).contentHash).toBe(first.contentHash);

@@ -40,6 +40,9 @@ CREATE INDEX IF NOT EXISTS portfolio_execution_fences_goal_idx
 CREATE OR REPLACE FUNCTION validate_portfolio_council_round() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE goal_entry jsonb; action_entry jsonb; goal_uuid uuid;
 BEGIN
+  IF TG_OP = 'TRUNCATE' THEN
+    RAISE EXCEPTION 'Portfolio Council rounds are append-only';
+  END IF;
   IF TG_OP = 'UPDATE' OR TG_OP = 'DELETE' THEN
     RAISE EXCEPTION 'Portfolio Council rounds are append-only';
   END IF;
@@ -75,9 +78,16 @@ DROP TRIGGER IF EXISTS portfolio_council_round_guard ON portfolio_council_rounds
 CREATE TRIGGER portfolio_council_round_guard
   BEFORE INSERT OR UPDATE OR DELETE ON portfolio_council_rounds
   FOR EACH ROW EXECUTE FUNCTION validate_portfolio_council_round();
+DROP TRIGGER IF EXISTS portfolio_council_round_no_truncate ON portfolio_council_rounds;
+CREATE TRIGGER portfolio_council_round_no_truncate
+  BEFORE TRUNCATE ON portfolio_council_rounds
+  FOR EACH STATEMENT EXECUTE FUNCTION validate_portfolio_council_round();
 
 CREATE OR REPLACE FUNCTION validate_portfolio_execution_fence() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+  IF TG_OP = 'TRUNCATE' THEN
+    RAISE EXCEPTION 'Portfolio execution fences are append-only';
+  END IF;
   IF TG_OP = 'UPDATE' OR TG_OP = 'DELETE' THEN
     RAISE EXCEPTION 'Portfolio execution fences are append-only';
   END IF;
@@ -100,3 +110,7 @@ DROP TRIGGER IF EXISTS portfolio_execution_fence_guard ON portfolio_execution_fe
 CREATE TRIGGER portfolio_execution_fence_guard
   BEFORE INSERT OR UPDATE OR DELETE ON portfolio_execution_fences
   FOR EACH ROW EXECUTE FUNCTION validate_portfolio_execution_fence();
+DROP TRIGGER IF EXISTS portfolio_execution_fences_no_truncate ON portfolio_execution_fences;
+CREATE TRIGGER portfolio_execution_fences_no_truncate
+  BEFORE TRUNCATE ON portfolio_execution_fences
+  FOR EACH STATEMENT EXECUTE FUNCTION validate_portfolio_execution_fence();
