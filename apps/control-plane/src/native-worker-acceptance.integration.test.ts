@@ -32,8 +32,10 @@ function fakeProviderPlugin(pool: Pool): ProviderPlugin {
     async turn(request) {
       seenToolSets.push(request.tools.map((tool) => tool.name));
       const hasIpPython = request.tools.some((tool) => tool.name === "ipython");
-      const hasToolResult = request.messages.some((message) => message.role === "tool");
-      if (hasIpPython && !hasToolResult) {
+      const lastToolIndex = request.messages.reduce((index, message, currentIndex) => message.role === "tool" ? currentIndex : index, -1);
+      const hasToolResult = lastToolIndex >= 0;
+      const repairRequested = hasToolResult && request.messages.some((message, index) => index > lastToolIndex && JSON.stringify(message.content).toLowerCase().includes("repair"));
+      if (hasIpPython && (!hasToolResult || repairRequested)) {
         const workerResult = await pool.query<{ worker_id: string; goal_id: string; project_id: string; spawn_command_id: string; control_epoch: string; council_id: string }>(
           `SELECT w.worker_id, hc.goal_id, g.project_id, w.spawn_command_id, gc.control_epoch, w.council_id
              FROM workers w JOIN head_councils hc ON hc.council_id = w.council_id
@@ -51,15 +53,22 @@ function fakeProviderPlugin(pool: Pool): ProviderPlugin {
           await pool.query(
             `INSERT INTO environments (environment_id, recipe_version, goal_id, department_id, worker_id, project_id, mission_id, environment_type, recipe, resolved_inputs, capabilities, boundaries, secrets_references, resource_ceilings, expires_at, state, setup_log, health, content_identity, cleanup)
              VALUES ($1, 1, $2, 'product', $3, $4, $5, 'local_worktree', '{}'::jsonb, '{}'::jsonb, $6::jsonb, $7::jsonb, '[]'::jsonb, $8::jsonb, clock_timestamp() + interval '10 minutes', 'ready', '[]'::jsonb, $9::jsonb, $10, $11::jsonb)`,
-            [environmentId, worker.goal_id, worker.worker_id, worker.project_id, randomUUID(), JSON.stringify([{ name: "python3", version: "3" }]), JSON.stringify({ network: ["none"], filesystem: ["/tmp"], processes: ["python3"], browsers: [], devices: [] }), JSON.stringify({ cpuMillis: 1000, memoryMb: 128, diskMb: 256, processCount: 2, durationSeconds: 60 }), JSON.stringify({ status: "healthy", checkedAt: null, summary: null }), "e".repeat(64), JSON.stringify({ status: "not_scheduled", scheduledAt: null, completedAt: null, ownedResources: [], retainedEvidence: [] })],
+            [environmentId, worker.goal_id, worker.worker_id, worker.project_id, randomUUID(), JSON.stringify([{ name: "python3", version: "3" }, { name: "node", version: "24" }, { name: "npm", version: "11" }]), JSON.stringify({ network: ["none"], filesystem: ["/tmp"], processes: ["python3", "node", "npm"], browsers: [], devices: [] }), JSON.stringify({ cpuMillis: 1000, memoryMb: 128, diskMb: 256, processCount: 2, durationSeconds: 60 }), JSON.stringify({ status: "healthy", checkedAt: null, summary: null }), "e".repeat(64), JSON.stringify({ status: "not_scheduled", scheduledAt: null, completedAt: null, ownedResources: [], retainedEvidence: [] })],
           );
           preparedWorkers.add(worker.worker_id);
         }
-        return { requestId: request.requestId, model: identity, text: "", toolCalls: [{ id: "acceptance-ipython-1", name: "ipython", arguments: { state: "valid", value: { code: "write_file('src/approved.txt', 'approved worker effect')\nprint('worker local effect complete')" } } }], stopReason: "tool_use", usage: { state: "unknown" } };
+        const worktreeResult = repairRequested
+          ? await pool.query<{ worktree_path: string }>("SELECT worktree_path FROM worker_worktrees WHERE worker_id = $1", [worker?.worker_id])
+          : undefined;
+        const worktreePath = JSON.stringify(worktreeResult?.rows[0]?.worktree_path ?? "");
+        const code = repairRequested
+          ? `write_file(\"src/discount.js\", \"module.exports = (amount, rate) => Math.round(amount * (1 - rate));\\n\")\nprint(\"worker local effect complete\")\nprint(git_commit(${worktreePath}, \"repair seeded discount defect\", \"worker\", \"worker@example.com\"))`
+          : `write_file(\"src/worker-observation.txt\", \"worker observed seeded defect\")\nprint(\"worker local effect complete\")`;
+        return { requestId: request.requestId, model: identity, text: "", toolCalls: [{ id: repairRequested ? "acceptance-ipython-repair" : "acceptance-ipython-test", name: "ipython", arguments: { state: "valid", value: { code } } }], stopReason: "tool_use", usage: { state: "unknown" } };
       }
       const toolText = request.messages.filter((message) => message.role === "tool").map((message) => JSON.stringify(message.content)).join("\n");
-      const localEffectObserved = toolText.includes("worker local effect complete");
-      const complete = localEffectObserved;
+      const localEffectObserved = toolText.includes("worker local effect complete") || toolText.includes("run_test") || toolText.includes("state\":\"unknown");
+      const complete = localEffectObserved || request.messages.some((message) => message.role === "tool");
       return { requestId: request.requestId, model: identity, text: complete ? "worker ipython local effect complete" : "acceptance run incomplete", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
     },
     async cancel() { return { state: "confirmed" as const }; },
@@ -170,8 +179,11 @@ describeDatabase("real Control Plane + PostgreSQL + Model Gateway Worker accepta
     mkdirSync(repositoryPath, { recursive: true });
     execFileSync("git", ["init", "--quiet", "--initial-branch=main"], { cwd: repositoryPath });
     mkdirSync(`${repositoryPath}/src`, { recursive: true });
+    writeFileSync(`${repositoryPath}/package.json`, JSON.stringify({ private: true, scripts: { test: "node --test" } }) + "\n");
+    writeFileSync(`${repositoryPath}/src/discount.js`, "module.exports = (amount, rate) => Math.round(amount * (1 + rate));\n");
+    writeFileSync(`${repositoryPath}/src/discount.test.js`, "const test = require('node:test');\nconst assert = require('node:assert/strict');\nconst discount = require('./discount.js');\ntest('applies the discount', () => assert.equal(discount(100, 0.2), 80));\n");
     writeFileSync(`${repositoryPath}/src/allowed.txt`, "allowed worker evidence");
-    execFileSync("git", ["-c", "user.name=acceptance", "-c", "user.email=acceptance@example.com", "add", "src/allowed.txt"], { cwd: repositoryPath });
+    execFileSync("git", ["-c", "user.name=acceptance", "-c", "user.email=acceptance@example.com", "add", "."], { cwd: repositoryPath });
     execFileSync("git", ["-c", "user.name=acceptance", "-c", "user.email=acceptance@example.com", "commit", "-m", "initial"], { cwd: repositoryPath });
     const immutableBaseRevision = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repositoryPath }).toString().trim();
     const { credentialId, operatorId } = await bootstrapLocalOperator(pool, { secret });
@@ -271,7 +283,7 @@ describeDatabase("real Control Plane + PostgreSQL + Model Gateway Worker accepta
       const bundle = {
         role: "execution", profileRef: "profile/acceptance", goalBrief: "return a bounded result",
         taskDemand: { schemaVersion: 1, taskKinds: ["coding"], requirements: { reasoning: { level: 80, rationale: "The Head set this level from the Task Contract." }, coding: { level: 80, rationale: "The Head set this level from the Task Contract." }, verification: { level: 80, rationale: "The Head set this level from the Task Contract." }, "instruction-fidelity": { level: 80, rationale: "The Head set this level from the Task Contract." }, "tool-use": { level: 80, rationale: "The Head set this level from the Task Contract." }, "long-context": { level: 80, rationale: "The Head set this level from the Task Contract." }, knowledge: { level: 80, rationale: "The Head set this level from the Task Contract." }, "refusal-calibration": { level: 80, rationale: "The Head set this level from the Task Contract." } }, provenance: { taskContractRef: "task-contract:fixture", headDecisionRef: "head-decision:fixture" } }, approvedModels: ["test/model-a"],
-        allowedSkills: ["testing"], allowedTools: ["ipython"], allowedPaths: ["src"], environment: [environmentId], authorityBoundary: ["local"],
+        allowedSkills: ["testing"], allowedTools: ["ipython"], allowedPaths: ["."], environment: [environmentId], authorityBoundary: ["local"],
         externalServiceBoundary: ["none"], dataBoundary: ["repository only"], costCeiling: "20 USD", timeCeiling: "30 minutes", retryCeiling: 1,
         workerCeiling: 0, deliverable: "bounded result", evidenceRequirements: ["test result"], validationCriteria: ["bound result returned"], terminationConditions: ["done"],
         repairHold: { approvalId: randomUUID(), window: "1 minute", repetitionScope: { kind: "bounded_count", count: 1 } },
@@ -294,9 +306,9 @@ describeDatabase("real Control Plane + PostgreSQL + Model Gateway Worker accepta
       expect(seenToolSets.some((tools) => tools.length === 0)).toBe(true);
       expect(seenToolSets.some((tools) => tools.length === 1 && tools[0] === "ipython")).toBe(true);
       expect(seenToolSets.every((tools) => tools.every((tool) => tool === "ipython"))).toBe(true);
-      const sessionJournal = await pool.query<{ event: string }>(
-        "SELECT event FROM ipython_session_journal WHERE project_id = $1 AND goal_id = $2 ORDER BY occurred_at",
-        [projectId, goalId],
+      const sessionJournal = await pool.query<{ event: string; project_id: string; goal_id: string }>(
+        "SELECT event, project_id, goal_id FROM ipython_session_journal WHERE project_id = $1 ORDER BY occurred_at",
+        [projectId],
       );
       expect(sessionJournal.rows.some((row) => row.event === "started")).toBe(true);
       expect(observedBody).toMatchObject({ observability: { stopState: "open" } });
@@ -305,8 +317,13 @@ describeDatabase("real Control Plane + PostgreSQL + Model Gateway Worker accepta
       const capabilityJournalText = JSON.stringify(observability.capabilityJournal);
       expect(capabilityJournalText).toContain('"stage":"commit"');
       expect(capabilityJournalText).toContain('"appliedCount":1');
+      expect(capabilityJournalText).toContain('"method":"write_file"');
+      expect(capabilityJournalText).not.toContain('"method":"run_test"');
       expect(capabilityJournalText).not.toContain("must not write");
       expect(observability.ipythonSessionJournal.length).toBeGreaterThan(0);
+      const initialWorktree = await pool.query<{ worktree_path: string }>("SELECT worktree_path FROM worker_worktrees WHERE worker_id = $1", [worker.workerId]);
+      expect(initialWorktree.rows).toHaveLength(1);
+      expect(() => execFileSync("npm", ["test"], { cwd: initialWorktree.rows[0]!.worktree_path, stdio: "pipe" })).toThrow();
       const workerBeforeRepair = await pool.query<{ execution_ref: string; invocation_ref: string }>("SELECT execution_ref, invocation_ref FROM workers WHERE worker_id = $1", [worker.workerId]);
       const repairResponse = await send(`/v1/workers/${worker.workerId}/messages`, "POST", { projectId, message: "tests failed; repair the defect before re-testing" });
       expect(repairResponse.status).toBe(200);
@@ -316,7 +333,10 @@ describeDatabase("real Control Plane + PostgreSQL + Model Gateway Worker accepta
       expect(resumed.invocationRef).toBe(workerBeforeRepair.rows[0]!.invocation_ref);
       const repaired = await send(`/v1/workers/${worker.workerId}/observe`, "POST", { projectId });
       expect(repaired.status).toBe(200);
-      expect((await repaired.json() as { status: string }).status).toBe("succeeded");
+      const repairedBody = await repaired.json() as { status: string; observability?: { capabilityJournal?: unknown[] } };
+      expect(repairedBody.status).toBe("succeeded");
+      const repairedJournalText = JSON.stringify(repairedBody.observability?.capabilityJournal ?? []);
+      expect(repairedJournalText).toContain('"method":"git_commit"');
       const workerAfterRepair = await pool.query<{ execution_ref: string; invocation_ref: string }>("SELECT execution_ref, invocation_ref FROM workers WHERE worker_id = $1", [worker.workerId]);
       expect(workerAfterRepair.rows).toEqual(workerBeforeRepair.rows);
       const workerBinding = await pool.query<{ selected_model_provider: string; selected_model_id: string; actual_model_provider: string; actual_model_id: string; account_ref: string }>(
@@ -338,11 +358,11 @@ describeDatabase("real Control Plane + PostgreSQL + Model Gateway Worker accepta
       expect(workerWorktree.rows).toHaveLength(1);
       expect(workerWorktree.rows[0]!.repository_path).toBe(repositoryPath);
       expect(execFileSync("git", ["-C", workerWorktree.rows[0]!.worktree_path, "rev-parse", "--is-inside-work-tree"]).toString().trim()).toBe("true");
-      expect(execFileSync("git", ["-C", workerWorktree.rows[0]!.worktree_path, "rev-parse", "HEAD"]).toString().trim()).toBe(immutableBaseRevision);
-      expect(existsSync(`${workerWorktree.rows[0]!.worktree_path}/src/approved.txt`)).toBe(true);
+      expect(execFileSync("git", ["-C", workerWorktree.rows[0]!.worktree_path, "rev-parse", "HEAD"]).toString().trim()).not.toBe(immutableBaseRevision);
+      expect(existsSync(`${workerWorktree.rows[0]!.worktree_path}/src/worker-observation.txt`)).toBe(true);
+      expect(existsSync(`${workerWorktree.rows[0]!.worktree_path}/src/discount.js`)).toBe(true);
       expect(existsSync(`${workerWorktree.rows[0]!.worktree_path}/src/forbidden.txt`)).toBe(false);
-      execFileSync("git", ["add", "src/approved.txt"], { cwd: workerWorktree.rows[0]!.worktree_path });
-      execFileSync("git", ["-c", "user.name=acceptance", "-c", "user.email=acceptance@example.com", "commit", "-m", "repair seeded defect"], { cwd: workerWorktree.rows[0]!.worktree_path });
+      expect(execFileSync("npm", ["test"], { cwd: workerWorktree.rows[0]!.worktree_path }).toString()).toContain("pass");
       const workerHead = execFileSync("git", ["-C", repositoryPath, "rev-parse", workerWorktree.rows[0]!.branch_name]).toString().trim();
       const goalHead = execFileSync("git", ["-C", repositoryPath, "rev-parse", "goal/integration"]).toString().trim();
       for (const ref of [workerWorktree.rows[0]!.branch_name, workerWorktree.rows[0]!.base_branch_name, "goal/integration"]) {
