@@ -1968,3 +1968,9 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-10 Plan 4 S4 finding: the harness can prepare and verify both scenarios but cannot certify live behavior. PostgreSQL-backed enrollment, capability activation, real Control Plane outage/restart, provider/device effects, and independent certification remain user-owned HANDOFF steps. The generated fixture deliberately writes only to a disposable caller-provided root and rejects `testbed/`.
 
 - 2026-09-10 Plan 4 S5 finding: live acceptance was intentionally skipped. Documentation now marks Phase 4 implementation complete but live acceptance incomplete/unaccepted; S5 status text must not be read as activation certification.
+
+- 2026-09-10 Plan 5 S1 finding: Plan 5's declared hard dependency on closed Plan 3/4 was overridden by the user for this test pass, but Phase 4 remains unaccepted. The new isolation proof cannot be certified locally without a real PostgreSQL URL; CI PostgreSQL evidence is required.
+
+- 2026-09-11 Plan 5 S1 full local PostgreSQL run: 211/212 test files and 1483/1484 tests passed. `packages/persistence/src/worker.integration.test.ts` test `reconciles an unknown provider spawn after restart and records the successor fence` failed with `lease_contended` instead of `recovering`; this is a worker reconciliation race outside the S1 diff. S1 remains open until the focused reproduction/rerun is green.
+
+- 2026-09-11 Plan 5 S1 final finding: the prior full PostgreSQL run passed 212/212 files and 1484/1484 tests; an earlier isolated full run exposed a non-reproducible worker lease-contended race, then the worker file passed 38/38 alone and the full suite passed on rerun. The final incremental proof tests pass in serialized PostgreSQL runs.
