@@ -1,0 +1,40 @@
+{
+  "capacityInventory": {
+    "note": "Tight enough that three Goals' combined demand (3 worker slots, 3 provider-rate units) exceeds the single-project ceiling (2 slots) used per-project below, forcing real queueing.",
+    "perProject": { "providerRate": 2, "spendCents": 200, "workerSlots": 2 }
+  },
+  "goals": [
+    {
+      "goalKey": "goal-alpha-1",
+      "projectKey": "project-alpha",
+      "priority": 1,
+      "ceoPinned": false,
+      "role": "contends for capacity in project-alpha alongside goal-alpha-2; the Portfolio Council must queue or pause one of them rather than degrade either A\u2194D requirement.",
+      "demand": { "providerRate": 1, "spendCents": 80, "workerSlots": 1 }
+    },
+    {
+      "goalKey": "goal-alpha-2",
+      "projectKey": "project-alpha",
+      "priority": 1,
+      "ceoPinned": false,
+      "role": "the safe-pause/resume subject: paused at a declared safe point, resumed later, and its durable evidence count is compared before/after to prove no duplicate work.",
+      "demand": { "providerRate": 1, "spendCents": 80, "workerSlots": 1 },
+      "safePausePoint": "after-scout-handoff"
+    },
+    {
+      "goalKey": "goal-beta-1",
+      "projectKey": "project-beta",
+      "priority": 2,
+      "ceoPinned": true,
+      "role": "CEO-pinned Goal in the second project: the Portfolio Council must never pause or deprioritize it, and it is also the target of the seeded Discord safety event, whose preemption takes precedence over the pin.",
+      "demand": { "providerRate": 1, "spendCents": 60, "workerSlots": 1 }
+    }
+  ],
+  "discordSafetyEvent": {
+    "note": "Seeded as a durable discord_incidents row linked to goal-beta-1, at critical severity/confidence above the immediate-safe-pause threshold, so preemption fires deterministically.",
+    "severity": "critical",
+    "confidence": 0.97,
+    "affectedComponent": "goal-beta-1-execution",
+    "reason": "Discord reported an unsafe live action in progress; safety preemption takes precedence over both the CEO pin and any Council reallocation."
+  }
+}
