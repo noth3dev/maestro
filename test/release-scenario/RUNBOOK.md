@@ -90,6 +90,9 @@ $MAESTRO task-contract launch --project-id "$PROJECT_ID" --contract-id "$CONTRAC
 export COMMAND_ID="$(uuid)"
 $MAESTRO goal create --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --command-id "$COMMAND_ID" --json > "$SCENARIO_DIR/goal.json"
 export GOAL_ID="$(json_value "$SCENARIO_DIR/goal.json" goalId)"
+$MAESTRO goal transition --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --expected-version 1 --to ready_for_confirmation --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-ready-for-confirmation.json"
+$MAESTRO goal transition --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --expected-version 2 --to launched --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-launched.json"
+$MAESTRO goal transition --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --expected-version 3 --to active --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-active.json"
 $MAESTRO conversation create --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --model "$MAESTRO_MODEL" --json > "$SCENARIO_DIR/conversation.json"
 export CONVERSATION_ID="$(json_value "$SCENARIO_DIR/conversation.json" conversationId)"
 $MAESTRO conversation turn --conversation-id "$CONVERSATION_ID" --project-id "$PROJECT_ID" --text "Repair the discount calculation in $TARGET; do not push remotely." --json > "$SCENARIO_DIR/ceo-request.json"
@@ -169,6 +172,8 @@ node "$TOOLS/write-input.mjs" --kind worker --project "$PROJECT_ID" --item "$ITE
 $MAESTRO worker spawn --council-id "$COUNCIL_ID" --department-id engineering --worker-json "$(cat "$SCENARIO_DIR/worker.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker.json.out"
 export WORKER_ID="$(json_value "$SCENARIO_DIR/worker.json.out" workerId)"
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-observation.json"
+export ORIGINAL_EXECUTION_REF="$(json_value "$SCENARIO_DIR/worker-observation.json" executionRef)"
+export ORIGINAL_INVOCATION_REF="$(json_value "$SCENARIO_DIR/worker-observation.json" invocationRef)"
 $MAESTRO workers list --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/workers-after-execution.json"
 ```
 
@@ -227,7 +232,10 @@ Commands:
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-before-quality.json"
 case "$(json_value "$SCENARIO_DIR/worker-before-quality.json" status)" in spawned|running|awaiting_repair) ;; *) echo "worker is not messageable" >&2; exit 1;; esac
 set +e; npm test --prefix "$WORKER_WORKTREE" > "$SCENARIO_DIR/seeded-defect.log" 2>&1; export DEFECT_EXIT=$?; set -e
-node "$TOOLS/write-input.mjs" --kind certification --project "$PROJECT_ID" --verdict failed --out "$SCENARIO_DIR/failed-quality-certification.json"
+authority=$(uuid)
+$MAESTRO evidence capture --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --correlation-id "$authority" --command-id "$(uuid)" --kind target-test-failure --media-type text/plain --content-file "$SCENARIO_DIR/seeded-defect.log" --json > "$SCENARIO_DIR/target-test-failure.json"
+export TEST_FAILURE_EVIDENCE_ID="$(json_value "$SCENARIO_DIR/target-test-failure.json" evidenceId)"
+node "$TOOLS/write-input.mjs" --kind certification --project "$PROJECT_ID" --evidence-id "$TEST_FAILURE_EVIDENCE_ID" --verdict failed --out "$SCENARIO_DIR/failed-quality-certification.json"
 set +e; $MAESTRO worker certify --worker-id "$WORKER_ID" --certification-json "$(cat "$SCENARIO_DIR/failed-quality-certification.json")" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/failed-certification.out" 2>&1; export CERTIFICATION_EXIT=$?; set -e
 test "$CERTIFICATION_EXIT" -ne 0
 test "$DEFECT_EXIT" -ne 0
@@ -249,15 +257,20 @@ Commands:
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-before-repair.json"
 case "$(json_value "$SCENARIO_DIR/worker-before-repair.json" status)" in spawned|running|awaiting_repair) ;; *) echo "worker is not messageable" >&2; exit 1;; esac
 $MAESTRO worker message --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --message "Quality found the seeded defect. Repair the bound target, run its test, and do not push remotely." --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-repair-message.json"
+test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" status)" = "running"
+test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" executionRef)" = "$ORIGINAL_EXECUTION_REF"
+test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" invocationRef)" = "$ORIGINAL_INVOCATION_REF"
 $MAESTRO conversation turn --conversation-id "$CONVERSATION_ID" --project-id "$PROJECT_ID" --text "Quality found the seeded defect. Repair only $WORKER_WORKTREE now, run its test, and do not push remotely." --json > "$SCENARIO_DIR/repair-request.json"
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-after-repair.json"
-npm test --prefix "$WORKER_WORKTREE"
-$MAESTRO git worker-advance --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --message "Integrate the certified disposable-target repair" --evidence-references "[\"$SCENARIO_EVIDENCE_ID\"]" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-integration.json"
+npm test --prefix "$WORKER_WORKTREE" > "$SCENARIO_DIR/passing-test.log" 2>&1
+$MAESTRO evidence capture --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --correlation-id "$(uuid)" --command-id "$(uuid)" --kind target-test-passed --media-type text/plain --content-file "$SCENARIO_DIR/passing-test.log" --json > "$SCENARIO_DIR/target-test-passed.json"
+export TEST_PASS_EVIDENCE_ID="$(json_value "$SCENARIO_DIR/target-test-passed.json" evidenceId)"
+$MAESTRO git worker-advance --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --message "Integrate the certified disposable-target repair" --evidence-references "[\"$SCENARIO_EVIDENCE_ID\",\"$TEST_PASS_EVIDENCE_ID\"]" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-integration.json"
 $MAESTRO worker accept --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --reason "Native repair and test evidence observed" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-accepted.json"
 $MAESTRO git goal-revision --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/integration-revision.json"
 $MAESTRO git status --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/git-status.json"
 export INTEGRATED_REVISION="$(json_value "$SCENARIO_DIR/integration-revision.json" commitSha)"
-node "$TOOLS/write-input.mjs" --kind certification --project "$PROJECT_ID" --verdict passed --evidence-id "$SCENARIO_EVIDENCE_ID" --out "$SCENARIO_DIR/passing-quality-certification.json"
+node "$TOOLS/write-input.mjs" --kind certification --project "$PROJECT_ID" --verdict passed --evidence-id "$TEST_PASS_EVIDENCE_ID" --out "$SCENARIO_DIR/passing-quality-certification.json"
 $MAESTRO worker certify --worker-id "$WORKER_ID" --certification-json "$(cat "$SCENARIO_DIR/passing-quality-certification.json")" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/passing-certification.json"
 ```
 
@@ -343,6 +356,7 @@ Observable: both canonical modes are durably selected for the Goal, and the expl
 Command:
 
 ```bash
+$MAESTRO concertmaster-report generate --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/concertmaster-report-generated.json"
 $MAESTRO evidence dump --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --json > "$SCENARIO_DIR/p3-evidence.json"
 node -e 'const fs=require("node:fs"); const x=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (x.bundle.bundleId !== x.report.evidenceBundleId) throw new Error("bundle/report mismatch"); console.log(JSON.stringify({ bundleId:x.bundle.bundleId, certificationCount:x.certifications.certifications.length, success:x.report.success }, null, 2));' "$SCENARIO_DIR/p3-evidence.json"
 ```

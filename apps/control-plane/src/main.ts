@@ -23,6 +23,7 @@ import { createMissionBundleService } from "./mission-bundle-service.js";
 import { createWorkerService } from "./worker-service.js";
 import { createGitIntegrationService } from "./git-integration-service.js";
 import { createCertificationService } from "./certification-service.js";
+import { createConcertmasterReportService } from "./concertmaster-report-service.js";
 import { createMetronomeService } from "./metronome-service.js";
 import { createEncoreService } from "./encore-service.js";
 import { buildServer, type OperatorAuthenticator } from "./server.js";
@@ -446,7 +447,11 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
             inserted = await pool.query(
               `INSERT INTO worker_worktrees (worker_id, repository_path, worktree_path, branch_name, base_branch_name)
                VALUES ($1, $2, $3, $4, $5) ON CONFLICT (worker_id) DO NOTHING RETURNING worker_id`,
-              [composition.workerId, repositoryPath, derivedWorkspaceRoot, branchName, "immutable-base"],
+              // Native workers are created from the contract's immutable
+              // revision, not a separately named branch. Store that commit
+              // SHA as the durable base ref so integration can verify the
+              // worker changed from the exact immutable starting point.
+              [composition.workerId, repositoryPath, derivedWorkspaceRoot, branchName, baseRevision],
             );
           } catch (error) {
             // A lost database response makes resource ownership ambiguous; retain
@@ -707,6 +712,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   });
   const workerService = createWorkerService({ modelRoutingMode: config.modelRoutingMode, ...(config.nativeModelRef === undefined ? {} : { nativeModelRef: config.nativeModelRef }), pool, kernel: executionKernel, workspaceRoot: config.worktreeRoot, withGoalLease: goalService.withGoalLease!, prepareWorkerWorktree: (workerId, input, operatorId, commandId) => gitIntegrationService.createWorkerWorktree(workerId, input, operatorId, commandId), ...(config.maxConcurrentWorkersPerProject === undefined ? {} : { maxConcurrentWorkersPerProject: config.maxConcurrentWorkersPerProject }) });
   const certificationService = createCertificationService({ pool, withGoalLease: goalService.withGoalLease! });
+  const concertmasterReportService = createConcertmasterReportService({ pool, withGoalLease: goalService.withGoalLease! });
   const metronomeService = createMetronomeService({ pool, withGoalLease: goalService.withGoalLease! });
   const encoreService = createEncoreService({
     pool, kernel: executionKernel, withGoalLease: goalService.withGoalLease!,
@@ -721,6 +727,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     workerService,
     gitIntegrationService,
     certificationService,
+    concertmasterReportService,
     metronomeService,
     encoreService,
     authenticator,

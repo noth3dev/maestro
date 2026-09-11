@@ -167,6 +167,7 @@ export type { HeadParticipationService } from "./head-participation-service.js";
 export type { CouncilService } from "./council-service.js";
 export type { CapabilityApprovalService } from "./capability-approval-service.js";
 export type { EvidenceCaptureService } from "./evidence-capture-service.js";
+export type { ConcertmasterReportService } from "./concertmaster-report-service.js";
 import { DepartmentPlanProjectMismatchError, type DepartmentPlanService } from "./department-plan-service.js";
 import { CapabilityApprovalUnauthorizedError, CapabilityApprovalInvalidRequestError, type CapabilityApprovalService } from "./capability-approval-service.js";
 import { EvidenceCaptureError, EvidenceCaptureGoalBindingError, type EvidenceCaptureService } from "./evidence-capture-service.js";
@@ -177,6 +178,7 @@ import { ModelGatewayClientError } from "./model-gateway-client.js";
 import { WorkerError, WorkerNotFoundError } from "@maestro/persistence";
 import { GitProjectMismatchError, type GitIntegrationService } from "./git-integration-service.js";
 import type { CertificationService } from "./certification-service.js";
+import type { ConcertmasterReportService } from "./concertmaster-report-service.js";
 import type { MetronomeService } from "./metronome-service.js";
 import { EncoreProjectMismatchError, type EncoreService } from "./encore-service.js";
 import { GitIntegrationError, GitIntegrationNotFoundError, CertificationError, CertificationNotFoundError, MetronomeChallengeError, MetronomeChallengeNotFoundError, MetronomeAuthorizationError, EncoreCouncilError, StaleGoalLeaseError, HeadActivationRequesterInactiveError, DiscordPersistenceError, type StoredDiscordSignal } from "@maestro/persistence";
@@ -269,13 +271,14 @@ async function waitForAccountLoginStart(store: AccountLoginStore, operatorId: st
   throw new Error("account login start is still in progress");
 }
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, evidenceCaptureService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, evidenceCaptureService, concertmasterReportService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
   criticalActionService?: CriticalActionService;
   capabilityApprovalService?: CapabilityApprovalService;
   evidenceCaptureService?: EvidenceCaptureService;
+  concertmasterReportService?: ConcertmasterReportService;
   pollingScheduler?: PollingScheduler;
   readStateService?: ReadStateService;
   taskContractService?: TaskContractService;
@@ -343,6 +346,9 @@ export function buildServer({ goalService, authenticator, eventService, critical
   const evidenceCapture = evidenceCaptureService ?? {
     capture: async () => { throw new DurableStoreUnavailableError(); },
   } satisfies EvidenceCaptureService;
+  const concertmasterReports = concertmasterReportService ?? {
+    generate: async () => { throw new DurableStoreUnavailableError(); },
+  } satisfies ConcertmasterReportService;
   const taskContracts = taskContractService ?? {
     createTaskContract: async () => { throw new DurableStoreUnavailableError(); },
     getTaskContract: async () => { throw new DurableStoreUnavailableError(); },
@@ -1168,6 +1174,14 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const query = parse(GoalQuerySchema, request.query);
     return reply.send(CertificationListSchema.parse({ certifications: await readState.listCertifications(goalId, query.projectId) }));
   });
+  app.post("/v1/goals/:goalId/concertmaster-report", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const input = parse(GoalQuerySchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const report = await concertmasterReports.generate(goalId, input.projectId, commandId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(201).send(ConcertmasterFinalReportSchema.parse(report));
+  });
+
   app.get("/v1/goals/:goalId/concertmaster-report", async (request, reply) => {
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
     const query = parse(GoalQuerySchema, request.query);

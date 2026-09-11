@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { once } from "node:events";
 import { request as httpRequest, type IncomingMessage } from "node:http";
-import { buildServer, type EventService, type GoalService, type OperatorAuthenticator, type HeadParticipationService, type CouncilService, type EncoreService, type ProjectDiscoveryService } from "./server.js";
+import { buildServer, type EventService, type GoalService, type OperatorAuthenticator, type HeadParticipationService, type CouncilService, type EncoreService, type ProjectDiscoveryService, type ConcertmasterReportService } from "./server.js";
 import { ReadStateGoalNotFoundError, type ReadStateService } from "./read-state-service.js";
 import type { WorkerService } from "./worker-service.js";
 import type { Worker } from "@maestro/contracts";
@@ -647,6 +647,41 @@ describe("capability session route", () => {
       expect(response.statusCode).toBe(expectedStatus);
       await app.close();
     }
+  });
+});
+
+describe("Concertmaster report generation route", () => {
+  it("generates a Goal-scoped report through the authenticated service", async () => {
+    const report = {
+      reportId: goal.goalId,
+      goalId: goal.goalId,
+      success: true,
+      blockers: [],
+      ceoRequest: "ship",
+      whatChanged: "report",
+      userVisibleBehaviorPassed: true,
+      participatingDepartments: ["quality"],
+      keyDecisions: [],
+      dissent: [],
+      independentValidation: ["postgres"],
+      costCents: 1,
+      budgetCents: 2,
+      incidents: [],
+      knownLimitations: [],
+      criticalActionAwaitingApproval: false,
+      evidenceBundleId: goal.goalId,
+    } as const;
+    const generate = vi.fn(async (goalId: string, projectId: string, commandId: string, actor: typeof operator) => {
+      expect({ goalId, projectId, commandId, actor }).toEqual({ goalId: goal.goalId, projectId: goal.projectId, commandId: goal.goalId, actor: operator });
+      return report;
+    });
+    const service: ConcertmasterReportService = { generate };
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), concertmasterReportService: service });
+    const response = await app.inject({ method: "POST", url: `/v1/goals/${goal.goalId}/concertmaster-report`, headers: { authorization: "Bearer test-secret", "idempotency-key": goal.goalId, "content-type": "application/json" }, payload: { projectId: goal.projectId } });
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toEqual(report);
+    expect(generate).toHaveBeenCalledOnce();
+    await app.close();
   });
 });
 

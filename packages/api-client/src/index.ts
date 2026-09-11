@@ -244,6 +244,7 @@ export interface ApiClient {
   listMetronomeChallenges(goalId: string, query: GoalQuery): Promise<MetronomeChallengeList>;
   listEncoreCouncilRounds(goalId: string, query: GoalQuery): Promise<EncoreCouncilRoundList>;
   listCertifications(goalId: string, query: GoalQuery): Promise<CertificationList>;
+  generateConcertmasterReport(goalId: string, query: GoalQuery, commandId: string): Promise<ConcertmasterFinalReport>;
   getConcertmasterReport(goalId: string, query: GoalQuery): Promise<ConcertmasterFinalReport>;
   getEvidenceBundle(goalId: string, query: GoalQuery): Promise<EvidenceBundleRead>;
   getGitIntegrationState(goalId: string, query: GoalQuery): Promise<GoalGitIntegrationState>;
@@ -732,6 +733,14 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
     listCertifications(goalId, query) {
       const parsed = GoalQuerySchema.parse(query);
       return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/certifications?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, CertificationListSchema);
+    },
+    generateConcertmasterReport(goalId, query, commandId) {
+      const parsed = GoalQuerySchema.parse(query);
+      return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/concertmaster-report`, {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
+        body: JSON.stringify(parsed),
+      }, ConcertmasterFinalReportSchema);
     },
     getConcertmasterReport(goalId, query) {
       const parsed = GoalQuerySchema.parse(query);
