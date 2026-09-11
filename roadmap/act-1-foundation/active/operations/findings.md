@@ -1990,3 +1990,5 @@ All downstream routing documentation must use this contract and must not restore
 - Final no-edit review PASS for the repair-hold patch. Non-blocking note: fake step 10 emits the repair-request event without assigning it to the response observation, so both step-10 events share a step number; the harness still records the transition and tests pass.
 
 - 2026-09-11 structural refactor review: server error-mapping extraction had no findings; route section was byte-for-byte unchanged and all mappings/type imports passed independent review.
+
+- 2026-09-11 TUI refactor review initially required extraction-specific coverage; added `startup.test.ts` (3 tests), after which build/lint/TUI suite and final review evidence passed.

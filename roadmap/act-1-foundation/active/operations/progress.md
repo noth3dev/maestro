@@ -4060,3 +4060,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-11 Plan 3 §S4 repair-hold fixture patch: added UUID-valid Mission Bundle `repairHold`, updated live runbook guards for `awaiting_repair`, and strengthened the CI fake harness/tests to prove the Step 9→10 same-session transition. Worktree build/lint and release-scenario tests pass; final no-edit review pending.
 
 - 2026-09-11 structural refactor: extracted Control Plane `mapError`/`apiError` into `apps/control-plane/src/api-error.ts`, reducing `server.ts` by 80 lines without route/control-flow changes. Build, lint, 76 focused route/server tests, and independent no-edit review passed.
+
+- 2026-09-11 structural refactor: extracted TUI startup/workspace/connection initialization from `entry.ts` into `apps/cli/src/tui/startup.ts`; added `startup.test.ts` for bootstrap gating. `entry.ts` reduced by 77 lines. Build, lint, 31 TUI test files / 167 tests, and independent review passed.
