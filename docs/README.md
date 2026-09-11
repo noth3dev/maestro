@@ -1,6 +1,9 @@
 <p align="center">
   <a href="../README.md">
-    <img alt="Maestro" src="assets/logo.svg" width="280" style="max-width: 100%;">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="assets/logo.svg">
+      <img alt="Maestro" src="assets/logo-light.svg" width="280" style="max-width: 100%;">
+    </picture>
   </a>
 </p>
 
