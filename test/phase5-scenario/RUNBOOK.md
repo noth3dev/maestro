@@ -52,7 +52,7 @@ provider/Discord integration the live environment actually has configured
    queued row is unchanged from what the Goal declared (never silently
    lowered to fit).
    *Offline proof: same "E1" test asserts `{ kind: "queued", reason:
-   "worker_slots" }` with `requirement: "high"` preserved end to end.*
+   "provider_rate" }` with `requirement: "high"` preserved end to end.*
 
 3. **Confirm the Portfolio Council records an evidence-backed decision.**
    Trigger a `capacity_conflict` or `incident_preemption` Portfolio Council
