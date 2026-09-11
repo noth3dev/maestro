@@ -131,20 +131,24 @@ Create the exact contract-derived inputs, then run each Council boundary explici
 
 ```bash
 node "$TOOLS/write-input.mjs" --kind council --project "$PROJECT_ID" --contract "$CONTRACT_ID" --evidence-id "$SCENARIO_EVIDENCE_ID" --out "$SCENARIO_DIR/council.json"
-node "$TOOLS/write-input.mjs" --kind brief --project "$PROJECT_ID" --out "$SCENARIO_DIR/engineering-brief.json"
+node "$TOOLS/write-input.mjs" --kind brief --project "$PROJECT_ID" --department engineering --out "$SCENARIO_DIR/engineering-brief.json"
+node "$TOOLS/write-input.mjs" --kind brief --project "$PROJECT_ID" --department quality --out "$SCENARIO_DIR/quality-brief.json"
 node "$TOOLS/write-input.mjs" --kind packet --project "$PROJECT_ID" --evidence-id "$SCENARIO_EVIDENCE_ID" --out "$SCENARIO_DIR/decision-packet.json"
 node "$TOOLS/write-input.mjs" --kind plan --project "$PROJECT_ID" --evidence-id "$SCENARIO_EVIDENCE_ID" --target "$TARGET" --item discount-repair --out "$SCENARIO_DIR/department-plan.json"
 node "$TOOLS/write-input.mjs" --kind mission --project "$PROJECT_ID" --evidence-id "$SCENARIO_EVIDENCE_ID" --contract "$CONTRACT_ID" --target "$TARGET" --out "$SCENARIO_DIR/mission-bundle.json"
 $MAESTRO git goal-branch --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --repository-path "$TARGET" --branch-name goal/integration --base-revision "$BASE_REVISION" --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-branch.json"
 $MAESTRO council create --goal-id "$GOAL_ID" --council-json "$(cat "$SCENARIO_DIR/council.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/council-created.json"
 export COUNCIL_ID="$(json_value "$SCENARIO_DIR/council-created.json" councilId)"
-$MAESTRO council submit-brief --council-id "$COUNCIL_ID" --department-id engineering --brief-json "$(cat "$SCENARIO_DIR/engineering-brief.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/brief-submitted.json"
+$MAESTRO council submit-brief --council-id "$COUNCIL_ID" --department-id engineering --brief-json "$(cat "$SCENARIO_DIR/engineering-brief.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/engineering-brief-submitted.json"
+$MAESTRO council submit-brief --council-id "$COUNCIL_ID" --department-id quality --brief-json "$(cat "$SCENARIO_DIR/quality-brief.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/quality-brief-submitted.json"
 $MAESTRO council reveal --council-id "$COUNCIL_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/council-revealed.json"
 $MAESTRO council decide --council-id "$COUNCIL_ID" --packet-json "$(cat "$SCENARIO_DIR/decision-packet.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/council-decision.json"
 $MAESTRO git department-branch --council-id "$COUNCIL_ID" --department-id engineering --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/department-branch.json"
 $MAESTRO department-plan create --council-id "$COUNCIL_ID" --department-id engineering --plan-json "$(cat "$SCENARIO_DIR/department-plan.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/department-plan.json.out"
 export ITEM_ID="discount-repair"
 $MAESTRO mission-bundle create --council-id "$COUNCIL_ID" --department-id engineering --item-id "$ITEM_ID" --bundle-json "$(cat "$SCENARIO_DIR/mission-bundle.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/mission-bundle.json.out"
+$MAESTRO mission-bundle get --council-id "$COUNCIL_ID" --department-id engineering --plan-version 1 --item-id "$ITEM_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/mission-bundle-read.json"
+node -e 'const fs=require("node:fs"); const x=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); const hold=x.substance?.repairHold; if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(hold?.approvalId ?? "") || hold?.repetitionScope?.kind !== "bounded_count" || hold?.repetitionScope?.count !== 1) throw new Error("Mission Bundle repair hold is not valid or durable");' "$SCENARIO_DIR/mission-bundle-read.json"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -221,7 +225,7 @@ Commands:
 
 ```bash
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-before-quality.json"
-case "$(json_value "$SCENARIO_DIR/worker-before-quality.json" status)" in spawned|running) ;; *) echo "worker is not messageable" >&2; exit 1;; esac
+case "$(json_value "$SCENARIO_DIR/worker-before-quality.json" status)" in spawned|running|awaiting_repair) ;; *) echo "worker is not messageable" >&2; exit 1;; esac
 set +e; npm test --prefix "$WORKER_WORKTREE" > "$SCENARIO_DIR/seeded-defect.log" 2>&1; export DEFECT_EXIT=$?; set -e
 node "$TOOLS/write-input.mjs" --kind certification --project "$PROJECT_ID" --verdict failed --out "$SCENARIO_DIR/failed-quality-certification.json"
 set +e; $MAESTRO worker certify --worker-id "$WORKER_ID" --certification-json "$(cat "$SCENARIO_DIR/failed-quality-certification.json")" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/failed-certification.out" 2>&1; export CERTIFICATION_EXIT=$?; set -e
@@ -243,7 +247,7 @@ Commands:
 
 ```bash
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-before-repair.json"
-case "$(json_value "$SCENARIO_DIR/worker-before-repair.json" status)" in spawned|running) ;; *) echo "worker is not messageable" >&2; exit 1;; esac
+case "$(json_value "$SCENARIO_DIR/worker-before-repair.json" status)" in spawned|running|awaiting_repair) ;; *) echo "worker is not messageable" >&2; exit 1;; esac
 $MAESTRO worker message --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --message "Quality found the seeded defect. Repair the bound target, run its test, and do not push remotely." --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-repair-message.json"
 $MAESTRO conversation turn --conversation-id "$CONVERSATION_ID" --project-id "$PROJECT_ID" --text "Quality found the seeded defect. Repair only $WORKER_WORKTREE now, run its test, and do not push remotely." --json > "$SCENARIO_DIR/repair-request.json"
 $MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-after-repair.json"
