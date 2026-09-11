@@ -21,7 +21,7 @@ describe("release scenario runbook", () => {
     expect(runbook).toContain('concertmaster-report generate');
     expect(runbook).not.toContain("certification.out || true");
     expect(runbook).toContain('export MAESTRO_API_URL="http://127.0.0.1:$MAESTRO_PORT"');
-    expect(runbook).toContain("attempt-remote-push.mjs");
+    expect(runbook).not.toContain("attempt-remote-push.mjs");
     expect(runbook).toContain("git goal-branch");
     expect(runbook).toContain("git department-branch");
     const inputWriter = await readFile(new URL("./write-input.mjs", import.meta.url), "utf8");
@@ -50,6 +50,9 @@ describe("release scenario runbook", () => {
     expect(runbook).toContain('test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" executionRef)" = "$ORIGINAL_EXECUTION_REF"');
     expect(runbook).toContain('test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" invocationRef)" = "$ORIGINAL_INVOCATION_REF"');
     expect(runbook).toContain("spawned|running|awaiting_repair");
+    expect(runbook).toContain('boundary:"mid-execution"');
+    expect(runbook).toContain('resumed:true');
+    expect(runbook).toContain('department-id quality --plan-json');
     expect(runbook).toContain('set +e; $MAESTRO critical-action request');
     expect(runbook).toContain('$MAESTRO git worker-advance --worker-id "$WORKER_ID"');
     expect(runbook).not.toContain('SCENARIO_EVIDENCE_ID="${SCENARIO_EVIDENCE_ID:?');
@@ -59,8 +62,11 @@ describe("release scenario runbook", () => {
     expect(runbook).toContain('TEST_FAILURE_EVIDENCE_ID');
     expect(runbook).toContain('TEST_PASS_EVIDENCE_ID');
     expect(runbook).toContain('$MAESTRO capability select-full-access-mode');
-    expect(runbook).toContain("fixture-only");
-    expect(runbook).toContain("does not consume the selected capability session");
+    expect(runbook).toContain("provider boundary consumes each selected Goal-scoped capability session");
+    expect(runbook).toContain('retain-mode-remote.out');
+    expect(runbook).toContain('skip-mode-remote.out');
+    expect(runbook).not.toContain("fixture-only");
+    expect(runbook).not.toContain("attempt-remote-push.mjs");
     expect(runbook.indexOf("git worker-advance")).toBeLessThan(runbook.indexOf("worker accept"));
     expect(runbook).toContain("retain_intermediate_approvals");
     expect(runbook).toContain("skip_intermediate_approvals");

@@ -29,7 +29,13 @@ describe("release scenario fake-provider harness", () => {
       expect(result.events.find(({ name }) => name === "repair_requested_through_maestro")).toMatchObject({ workerStatusBefore: "awaiting_repair", workerStatusAfter: "running", sameExecution: true, sameInvocation: true });
       const certified = result.certifications.find(({ verdict }) => verdict === "passed");
       expect(certified?.revision).toBe(result.events.find(({ name }) => name === "quality_certified")?.integratedRevision);
-      expect(result.events.find(({ name }) => name === "restart_reconciled")?.duplicateWrites).toBe(0);
+      expect(result.events.find(({ name }) => name === "restart_reconciled")).toMatchObject({ duplicateWrites: 0, boundary: "mid-execution", resumed: true });
+      expect(result.events.find(({ name }) => name === "necessary_heads")?.activeHeads).toEqual(["engineering", "quality"]);
+      expect(result.events.find(({ name }) => name === "department_plan")?.departments).toEqual(["engineering", "quality"]);
+      expect(result.departmentPlans).toEqual(expect.arrayContaining([
+        expect.objectContaining({ departmentId: "engineering", planVersion: 1 }),
+        expect.objectContaining({ departmentId: "quality", planVersion: 1 }),
+      ]));
       expect(result.events.find(({ name }) => name === "forbidden_effect")?.modeResults).toEqual([
         { mode: "retain_intermediate_approvals", status: "blocked", networkInvoked: false },
         { mode: "skip_intermediate_approvals", status: "blocked", networkInvoked: false },
@@ -38,7 +44,10 @@ describe("release scenario fake-provider harness", () => {
       expect(result.lastEvidence.bundle.goalId).toBe(result.lastEvidence.report.goalId);
       expect(result.lastEvidence.bundle.content.provider.calls.length).toBeGreaterThan(0);
       expect(result.lastEvidence.bundle.content.provider.remoteAttempts.length).toBeGreaterThan(0);
+      expect(result.lastEvidence.bundle.content.provider.inFlight.status).toBe("resumed");
       expect(result.lastEvidence.bundle.content.provider.modeChanges).toEqual(["retain_intermediate_approvals", "skip_intermediate_approvals"]);
+      expect(result.lastEvidence.bundle.content.provider.capabilitySessions).toHaveLength(2);
+      expect(result.lastEvidence.bundle.content.provider.remoteAttempts.every((attempt: { sessionId: string | null }) => attempt.sessionId === null || typeof attempt.sessionId === "string")).toBe(true);
     } finally {
       await rm(worktreeRoot, { recursive: true, force: true });
     }

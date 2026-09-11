@@ -30,6 +30,10 @@ await waitReady(controlUrl);
 let controlHealth = await (await fetch(`${controlUrl}/health`)).json();
 try {
   if (step === 11) {
+    // Ask the live fake Control Plane to persist an in-flight provider action
+    // before killing it. This is a real recovery boundary, not a restart after
+    // terminal completion.
+    await post(`${controlUrl}/prepare-restart`, { target: realTarget });
     await stop(control);
     controlPort = await getPort();
     control = await start(new URL("./fake-control-plane-process.mjs", import.meta.url).pathname, ["--port", String(controlPort), "--state", statePath, "--provider-url", providerUrl]);

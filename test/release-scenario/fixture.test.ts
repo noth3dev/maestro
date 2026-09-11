@@ -42,6 +42,22 @@ describe("release scenario fixture", () => {
     }
   });
 
+  it("writes distinct bound plans for every active Head", async () => {
+    const worktreeRoot = await mkdtemp(join(tmpdir(), "maestro-release-scenario-plans-"));
+    try {
+      const outputs = await Promise.all(["engineering", "quality"].map(async (department) => {
+        const out = join(worktreeRoot, `${department}-plan.json`);
+        await execFile(process.execPath, ["test/release-scenario/write-input.mjs", "--kind", "plan", "--project", randomUUID(), "--department", department, "--target", join(worktreeRoot, "target"), "--out", out], { cwd: process.cwd() });
+        return JSON.parse(await readFile(out, "utf8")) as { substance: { contribution: string; items: Array<{ kind: string; itemId: string }> } };
+      }));
+      expect(outputs[0]?.substance.items[0]).toMatchObject({ kind: "execution", itemId: "discount-repair" });
+      expect(outputs[1]?.substance.items[0]).toMatchObject({ kind: "scout", itemId: "discount-validation" });
+      expect(outputs[1]?.substance.contribution).toContain("Independently validate");
+    } finally {
+      await rm(worktreeRoot, { recursive: true, force: true });
+    }
+  });
+
   it("emits a Mission Bundle repair hold accepted by the production schema", async () => {
     const worktreeRoot = await mkdtemp(join(tmpdir(), "maestro-release-scenario-input-"));
     const output = join(worktreeRoot, "mission.json");

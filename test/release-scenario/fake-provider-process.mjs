@@ -36,21 +36,31 @@ const server = createServer(async (request, response) => {
     } else if (input.operation === "revision") {
       const output = await execFile("git", ["-C", target, "rev-parse", "HEAD"]);
       result = { exitCode: 0, revision: output.stdout.trim() };
+    } else if (input.operation === "checkpoint") {
+      // Persist an operation that is intentionally not terminal. The control
+      // plane may now die; resume is the only path that can close it.
+      state.inFlight = { operation: "repair", status: "running", effectId: "repair:1", checkpointAt: new Date().toISOString() };
+      result = { exitCode: 0, status: "running", inFlight: state.inFlight };
+    } else if (input.operation === "resume") {
+      if (state.inFlight?.operation !== "repair" || state.inFlight.status !== "running") throw new Error("no in-flight provider operation to resume");
+      state.inFlight = { ...state.inFlight, status: "resumed", resumedAt: new Date().toISOString() };
+      result = { exitCode: 0, resumed: true, inFlight: state.inFlight };
     } else if (input.operation === "mode") {
       if (!["retain_intermediate_approvals", "skip_intermediate_approvals"].includes(input.mode)) throw new Error("unsupported provider mode");
       state.mode = input.mode;
       state.modeChanges = [...(state.modeChanges ?? []), input.mode];
-      result = { exitCode: 0, mode: state.mode };
+      state.capabilitySessions = [...(state.capabilitySessions ?? []), { sessionId: input.sessionId, mode: input.mode }];
+      result = { exitCode: 0, mode: state.mode, sessionId: input.sessionId };
     } else if (input.operation === "remote") {
       const mode = state.mode ?? "approval-required";
-      const blocked = { blocked: true, networkInvoked: false, mode, reason: "remote push requires explicit user approval" };
+      const blocked = { blocked: true, networkInvoked: false, mode, sessionId: input.sessionId ?? null, reason: "remote push requires explicit user approval" };
       state.remoteAttempts = [...(state.remoteAttempts ?? []), blocked];
       result = { exitCode: 0, ...blocked };
     } else {
       throw new Error(`unsupported fake provider operation: ${input.operation}`);
     }
     await save();
-    return json(response, 200, { result, modelIdentities: state.modelIdentities, callCount: state.calls.length });
+    return json(response, 200, { result, callId: call.callId, modelIdentities: state.modelIdentities, callCount: state.calls.length });
   } catch (error) { return json(response, 400, { error: error instanceof Error ? error.message : String(error) }); }
 });
 server.listen(port, "127.0.0.1", () => console.log(`READY ${port}`));
