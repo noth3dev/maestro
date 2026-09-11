@@ -342,7 +342,7 @@ CI fake-provider command (the CI path uses its own disposable target):
 node "$TOOLS/run-fake-scenario.mjs" --step 12 --target "$FAKE_TARGET" --state "$FAKE_STATE"
 ```
 
-Observable: the authenticated Control Plane critical-action gateway records the escalation and invokes the provider boundary in fail-closed mode: `attempted:true`, `status:"blocked"`, and `networkInvoked:false`; no remote invocation occurs.
+Observable: production ships with **no critical-action effect adapter composed** (`apps/control-plane/src/main.ts` fails closed with `"No critical-action effect adapter is configured"`), so an unapproved `git.remote.push` is rejected before any adapter could run: the request route returns a nonzero exit and `status` is never `"allowed"`, exactly as asserted above. The durable, provider-connected half of this claim -- that an *approved* forbidden action is still blocked before any network call, with durable `attempted:true`/`status:"blocked"`/`networkInvoked:false` evidence -- is proven in CI by `test/release-scenario/critical-action-forbidden-effect.integration.test.ts` (see Step 13 below; the same test covers both steps' evidence).
 
 ## Step 13 — Full-access modes and forbidden effects
 
@@ -366,7 +366,9 @@ CI fake-provider command (the CI path uses its own disposable target):
 node "$TOOLS/run-fake-scenario.mjs" --step 13 --target "$FAKE_TARGET" --state "$FAKE_STATE"
 ```
 
-Observable: both canonical modes are durably selected for the Goal, and the authenticated Control Plane/provider path blocks the forbidden effect for each selected session without invoking the network. The evidence is provider/control-plane evidence, not a standalone fixture claim.
+Observable: both canonical modes are durably selected for the Goal (`fullAccessMode` round-trips through the real `/v1/goals/:goalId/capabilities/full-access-mode` route), and the authenticated Control Plane/provider path blocks the forbidden `git.remote.push` effect for each selected session without invoking the network.
+
+This is proven end-to-end, per mode, by `test/release-scenario/critical-action-forbidden-effect.integration.test.ts`: it composes a real, test-scoped effect adapter through the Control Plane's existing `criticalActionEffect` injection seam (the adapter is invoked only via `AuthorizedEffectExecutor` -- never called directly or bypassed), drives it through the real HTTP routes `/v1/goals/:goalId/critical-actions`, `/v1/goals/:goalId/critical-actions/approve-and-run`, and `/v1/goals/:goalId/capabilities/full-access-mode`, and for each of `retain_intermediate_approvals` and `skip_intermediate_approvals` records one durable evidence row via the real `/v1/goals/:goalId/evidence-records` route. Each row's immutable content (read back through `evidence_records` metadata + the real `FileEvidenceStore`) is `{attempted:true, status:"blocked", networkInvoked:false, action:"git.remote.push"}` -- proving the adapter attempted the forbidden action only through the authorized path and never performed the actual network call, with exactly two durable evidence rows for the Goal (one per mode, no duplicates, no missing mode). In a live run, check the equivalent durable evidence rows for `$GOAL_ID` instead of only the CLI exit code.
 
 ## Step 14 — Final report and evidence dump
 
