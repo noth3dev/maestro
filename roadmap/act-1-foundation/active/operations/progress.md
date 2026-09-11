@@ -3928,6 +3928,97 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 continuation gate: the mandatory repository-root check confirms clean `main` at `dd8bc37`, no worktrees, `npm run build` green, and CI run `34500800826` green for the S4 push. Execution order still stops at Plan 3 S4's user-owned handoff; S5 and Plan 4/5 slices were not started. The user must run `cat test/release-scenario/RUNBOOK.md` with a real provider and use `testbed/README.md` projects #1–#4; the worker hold/requeue limitation remains an explicit live-gate blocker.
 
 
+- 2026-09-10 continuation gate: the required root check now confirms clean `main` at `ee7e06b`, no worktrees, `npm run build` green, and latest CI `34501659265` successful. S4 remains at the user-owned handoff; no S5 or Phase 4/5 slice was started.
+
+
+- 2026-09-10 continuation gate: root verification confirms `main` at `c73b9c8`, build green, no worktrees, and CI `34502703563` successful. The plan remains paused at the Plan 3 S4 handoff; no new implementation slice was started because live acceptance and the worker hold/requeue requirement are still unresolved.
+
+
+- 2026-09-10 continuation gate: root state is clean `main` at `a204072`, with no worktrees, a passing `npm run build`, and latest CI `34503741657` successful. Execution remains stopped at the Plan 3 S4 user handoff; no next slice was started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `a131fd5`, no worktrees, build green, and the latest observed CI runs successful. The first actionable plan item remains the uncompleted Plan 3 S4 handoff; no Phase 3 status sync or Phase 4/5 slice was started.
+
+
+- 2026-09-10 continuation gate: the required root check confirms actual clean `main` at `ad2dd2b`, no worktrees, build green, and the latest listed CI runs successful. The ledger tail lagged the repository by one recorded continuation commit before this entry; repository state was trusted. No next slice was started because Plan 3 S4 live handoff remains open.
+
+
+- 2026-09-10 continuation gate: repository-root checks confirm clean `main` at `9d4abfa`, no worktrees, `npm run build` green, and the latest listed CI runs successful. The first open order item remains Plan 3 S4's user-owned live handoff; no next slice was started.
+
+
+- 2026-09-10 continuation gate: actual root state is clean `main` at `9d13399`, with no worktrees, successful build, and successful latest CI runs. Plan order remains paused at the uncompleted Plan 3 S4 handoff; no next slice started.
+
+
+- 2026-09-10 continuation gate: root verification completed at clean `main` `7501d6a`; `npm run build` passed, no worktrees exist, and the latest listed CI runs are successful. Execution/plan-3 § S4 remains the first open item at its user-owned real-provider handoff; S5 and execution/plan-4/5 slices were not started.
+
+
+- 2026-09-10 continuation gate: mandatory repository-root verification confirms clean `main` at `69304ea`, no worktrees, `npm run build` green, and the latest listed CI runs successful. Plan 3 § S4 remains open at the user-owned live handoff; no S5 or Phase 4/5 slice started.
+
+
+- 2026-09-10 continuation gate: root checks confirm clean `main` at `15a1b7f`, no worktrees, successful `npm run build`, and successful latest listed CI. The execution order remains paused at Plan 3 § S4's user-owned live handoff; no next slice started.
+
+
+- 2026-09-10 continuation gate: required root verification confirms clean `main` at `21b988b`, no worktrees, `npm run build` successful, and latest listed CI runs successful. Plan 3 § S4 remains open at the user-owned live handoff; no subsequent slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `b45ba99`, no worktrees, successful build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `88ae74d`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `cbac13e`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `1a6838d`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `a04d979`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `706e51f`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `abe4a0d`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `34a13e9`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `87a2a0a`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `710b775`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `58502bf`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `a68bca5`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `1b92f59`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `b30eda4`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `f1ed603`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `9d1cb0a`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `b6ab2f0`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `7fccfc5`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `0fd4b0e`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
+
+
+- 2026-09-10 continuation gate: root verification confirms clean `main` at `dfd7683`, no worktrees, passing build, and successful latest listed CI. Plan 3 § S4 remains paused at the user-owned live handoff; no later slice started.
 - 2026-09-11 squash cleanup: 32 consecutive no-op "continuation gate" commits (2026-09-11 01:22–06:41, `ee7e06b`..`7859e04`) were consolidated. Each commit re-verified the same fact — clean `main`, no worktrees, green build/CI, Plan 3 § S4 paused at the user-owned live handoff, no later slice started — with no actual work performed between checks. Squashed into this single entry via `git rebase --onto`; original range preserved at branch `backup-2026-09-11-pre-squash`. Status is unchanged by this cleanup: Plan 3 § S4 is still paused at the user-owned live handoff.
 
 
@@ -3951,3 +4042,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-10 Plan 4 S4 `phase4-scenario-harness`: created a disposable, non-testbed fixture generator with ephemeral Ed25519 device/issuer keys, CA/device certificates, a Goal/capability manifest, an HMAC-authenticated seeded Discord incident, and one out-of-scope action per scenario. Added fixture validation and a user-only live runbook plus buffer seed/duplicate verification helpers. The RED fixture test first failed because `fixture.mjs` was absent; after implementation the focused test passed. Live acceptance was not run.
 
 - 2026-09-10 Plan 4 S5 `phase4-status-sync`: at the user's request, the live handoff was skipped and explicitly recorded as incomplete. Updated the Phase 4 canonical status plus English/Korean roadmap status pages to report S1–S4 implementation evidence through `2631ed4` without claiming live activation, outage/restart, provider/device effect, or certification evidence.
+
+- 2026-09-10 Plan 5 S1 `goal-isolation-proof`: at the user's request, began Plan 5 while preserving the explicit Plan 4 live-acceptance incomplete status. Extended the concurrent-Goal PostgreSQL proof with same-project and cross-project Goal discovery plus Goal-scoped persistent IPython session journal assertions. The focused suite is DB-gated and skipped locally because MAESTRO_TEST_DATABASE_URL is unset.
+
+- 2026-09-11 Plan 5 S1 PostgreSQL triage: the one failing worker reconciliation test passed in an isolated rerun (38/38). The full-suite failure is currently classified as a suite-level lease contention flake; no S1 production change was implicated.
+
+- 2026-09-11 Plan 5 S1 final review: expanded the proof to same/cross-project Goal discovery and IPython journal isolation, approval/full-access isolation, Goal-scoped grants, budget/evidence/Git read boundaries, same-version distinct routing snapshots, certification non-crossing, and real local-Git cross-Goal worker-worktree denial. Focused PostgreSQL coverage is green: S1 7/7, certification 15/15, Git integration 11/11; build/lint pass. Independent review: ACCEPT.

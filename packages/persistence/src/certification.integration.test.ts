@@ -232,6 +232,28 @@ describeDatabase("Department acceptance and independent Quality certification wi
     expect(certified.integratedCommitSha).toMatch(/^[0-9a-f]{40}$/);
   });
 
+  it("does not expose a Goal certification to another Goal in the same project", async () => {
+    const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit(true);
+    const certified = await certifyQuality(
+      pool,
+      worker.workerId,
+      { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[0]!] },
+      "quality",
+      proof,
+      headContext("quality"),
+    );
+    const project = await pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId]);
+    const otherGoalId = randomUUID();
+    await pool.query(
+      "INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())",
+      [otherGoalId, project.rows[0]!.project_id],
+    );
+
+    expect((await listQualityCertifications(pool, goalId)).map((item) => item.certificationId)).toContain(certified.certificationId);
+    await expect(listQualityCertifications(pool, otherGoalId)).resolves.toEqual([]);
+  });
+
+
   it("certifies an accepted worker when the frozen revision head advances beyond its commit", async () => {
     const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit();
     const workerCommit = (await pool.query<{ commit_sha: string }>("SELECT commit_sha FROM integration_commits WHERE worker_id = $1", [worker.workerId])).rows[0]!.commit_sha.trim();

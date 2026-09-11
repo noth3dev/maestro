@@ -170,6 +170,34 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     expect(replayCommit).toEqual(recorded);
   });
 
+  it("rejects a different Goal's proof from writing an existing worker worktree", async () => {
+    const { worker } = await setupPlan(["product"], ["product"], true);
+    const otherGoalId = randomUUID();
+    const otherProjectId = randomUUID();
+    await pool.query(
+      "INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())",
+      [otherGoalId, otherProjectId],
+    );
+    const otherProof = await acquireGoalLease(pool, { goalId: otherGoalId, ownerId: "other-goal-worker", leaseDurationMs: 60_000 });
+    const beforeBranches = execFileSync("git", ["branch", "--list"], { cwd: repositoryPath }).toString();
+    const beforeRows = await pool.query<{ count: string }>("SELECT count(*)::text AS count FROM worker_worktrees WHERE worker_id = $1", [
+      worker.workerId,
+    ]);
+    const attemptedWorktreePath = join(repositoryPath, "..", `maestro-cross-goal-worker-${randomUUID()}`);
+
+    await expect(
+      recordWorkerWorktree(pool, localGitPort, worker.workerId, attemptedWorktreePath, otherProof, headContext("product")),
+    ).rejects.toBeInstanceOf(StaleGoalLeaseError);
+    expect(execFileSync("git", ["branch", "--list"], { cwd: repositoryPath }).toString()).toBe(beforeBranches);
+    await expect(
+      pool.query<{ count: string }>("SELECT count(*)::text AS count FROM worker_worktrees WHERE worker_id = $1", [worker.workerId]),
+    ).resolves.toMatchObject({ rows: [{ count: beforeRows.rows[0]!.count }] });
+    await expect(pool.query("SELECT 1 FROM goal_integration_branches WHERE goal_id = $1", [otherGoalId])).resolves.toMatchObject({
+      rowCount: 0,
+    });
+  });
+
+
   it("rejects a worker branch that diverged from the current Goal branch", async () => {
     const { proof, worker, targetWorktreePath } = await setupPlan(["product"], ["product"], true);
     const goalWorktreePath = join(repositoryPath, "..", `maestro-goal-divergence-${randomUUID()}`);
