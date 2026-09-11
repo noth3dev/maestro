@@ -14,6 +14,11 @@ describe("release scenario runbook", () => {
     expect(runbook).toContain("evidence dump");
     expect(runbook).toContain("Do not run live provider acceptance");
     expect(runbook).toContain("goal create --project-id \"$PROJECT_ID\" --contract-id \"$CONTRACT_ID\"");
+    expect(runbook).toContain('goal transition --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --expected-version 1 --to ready_for_confirmation');
+    expect(runbook).toContain('goal transition --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --expected-version 2 --to launched');
+    expect(runbook).toContain('goal transition --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --expected-version 3 --to active');
+    expect(runbook).toContain('department-id quality --brief-json');
+    expect(runbook).toContain('concertmaster-report generate');
     expect(runbook).not.toContain("certification.out || true");
     expect(runbook).toContain('export MAESTRO_API_URL="http://127.0.0.1:$MAESTRO_PORT"');
     expect(runbook).toContain("attempt-remote-push.mjs");
@@ -30,6 +35,8 @@ describe("release scenario runbook", () => {
     expect(inputWriter).not.toContain('testEvidenceIds: ["target-test"]');
     expect(inputWriter).not.toContain("release-scenario-runbook");
     expect(inputWriter).toContain("repairHold");
+    const apiClient = await readFile(new URL("../../packages/api-client/src/index.ts", import.meta.url), "utf8");
+    expect(apiClient).toContain("generateConcertmasterReport");
   });
 
   it("uses the S6b target-bound worker and real approval surfaces", async () => {
@@ -39,11 +46,18 @@ describe("release scenario runbook", () => {
     expect(runbook).toContain('--worktree "$WORKER_WORKTREE"');
     expect(runbook).not.toContain('git worker-worktree --worker-id "$WORKER_ID"');
     expect(runbook).toContain('$MAESTRO worker message --worker-id "$WORKER_ID"');
+    expect(runbook).toContain('test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" status)" = "running"');
+    expect(runbook).toContain('test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" executionRef)" = "$ORIGINAL_EXECUTION_REF"');
+    expect(runbook).toContain('test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" invocationRef)" = "$ORIGINAL_INVOCATION_REF"');
     expect(runbook).toContain("spawned|running|awaiting_repair");
     expect(runbook).toContain('set +e; $MAESTRO critical-action request');
     expect(runbook).toContain('$MAESTRO git worker-advance --worker-id "$WORKER_ID"');
     expect(runbook).not.toContain('SCENARIO_EVIDENCE_ID="${SCENARIO_EVIDENCE_ID:?');
     expect(runbook).toContain('$MAESTRO evidence capture');
+    expect(runbook).toContain('target-test-failure');
+    expect(runbook).toContain('target-test-passed');
+    expect(runbook).toContain('TEST_FAILURE_EVIDENCE_ID');
+    expect(runbook).toContain('TEST_PASS_EVIDENCE_ID');
     expect(runbook).toContain('$MAESTRO capability select-full-access-mode');
     expect(runbook).toContain("fixture-only");
     expect(runbook).toContain("does not consume the selected capability session");
