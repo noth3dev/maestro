@@ -1,0 +1,12 @@
+{
+  "projects": [
+    {
+      "projectKey": "project-alpha",
+      "description": "Disposable fixture project A — hosts two contending Goals."
+    },
+    {
+      "projectKey": "project-beta",
+      "description": "Disposable fixture project B — hosts the CEO-pinned and Discord-preempted Goals."
+    }
+  ]
+}
