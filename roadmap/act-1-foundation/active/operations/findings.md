@@ -1988,3 +1988,23 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-11 Plan 3 §S4 repair-hold patch review: initial no-edit review found the fixture approval ID was not UUID-valid and the fake 9→10 event lacked transition metadata. The patch now uses `randomUUID()`, records `executionRef`/`invocationRef`, models `awaiting_repair` → `running` → `succeeded`, and asserts the transition.
 
 - Final no-edit review PASS for the repair-hold patch. Non-blocking note: fake step 10 emits the repair-request event without assigning it to the response observation, so both step-10 events share a step number; the harness still records the transition and tests pass.
+
+- 2026-09-11 structural refactor review: server error-mapping extraction had no findings; route section was byte-for-byte unchanged and all mappings/type imports passed independent review.
+
+- 2026-09-11 TUI refactor review initially required extraction-specific coverage; added `startup.test.ts` (3 tests), after which build/lint/TUI suite and final review evidence passed.
+
+- 2026-09-11 contracts refactor: provider/model schema extraction is standalone and has no cross-module cycle; existing barrel tests plus 3 new extraction tests pass.
+
+- 2026-09-11 Plan 3 HANDOFF is now reached after the merged S4 patch and green CI. Live provider acceptance remains unexecuted and user-owned; do not claim Phase 3 complete or start S5/status sync until the one-sitting fourteen-step runbook and evidence dump are supplied.
+
+- 2026-09-11 Plan 5 S2 implementation finding: the existing flat worker-slot count was not sufficient for the Phase 5 gate because it threw on exhaustion and could not preserve a durable queue. The new bounded inventory serializes all three resource dimensions under the inventory row lock. Protected floors intentionally leave validation/recovery capacity unavailable to ordinary admissions. Queue rows remain durable across replay and are claimed in deterministic FIFO order after release; no routing requirement or pressure field is changed to fit.
+
+- 2026-09-11 Plan 5 S2 review finding/remediation: queue claiming initially assumed every project had an inventory, which broke existing Goal lifecycle and reconciliation tests for projects that never opted into capacity. Queue claim is now a no-op when no inventory exists, preserving the unlimited baseline while still enforcing configured inventories. The first full PostgreSQL run then passed 215/217 files before this fix; the final rerun passed 217/217 files and 1517/1517 tests.
+
+- 2026-09-11 Plan 5 S2 final review finding: the first queue-drain remediation missed the automatic awaiting-repair expiry path. Replaced its direct reservation update with `releaseCapacityForWorker`, which both releases exactly once and claims the next queued reservation.
+
+- 2026-09-11 Plan 5 S2 final review/validation: queue draining is provider-backed and bound in production, transient lease contention safely requeues reservations, unknown provider outcomes retain reservations for reconciliation, terminal Goals release queued work without freeing active/unknown provider capacity, replay identities are project-scoped and canonicalized, and worker release/recovery queries are project-isolated. Final independent review PASS. Full serialized PostgreSQL validation passed **217/217 files and 1521/1521 tests**.
+
+- 2026-09-11 Plan 5 S3 finding: the only genuine gap was that a portfolio pause (`pausing -> paused`) did not check for pending durable IPython capability effects before completing, unlike the existing `recovering -> active` restart guard. Refactored the existing inline query in `applyGoalControlTransition` into a shared `assertNoPendingCapabilityEffects` helper and applied it to both transitions, so a pause can no longer land mid-effect. No other gap was found: the `control_epoch` fence, the approval ledger's per-epoch scoping, and command-id replay idempotency already covered pause/resume correctly at the persistence layer, and the control-plane `goal-service.ts` pause/resume methods are pure pass-throughs with no separate logic to fix.
+
+- 2026-09-11 Plan 5 S3 review remediation: the initial review correctly blocked acceptance because the first test only modeled a pending capability effect, the fencing test only probed `recheckControl`, and the routing test did not set up a Goal-owned routing snapshot. Those gaps are now covered with active `ipython_session_journal`/`capability_sessions` state, an actual `AuthorizedEffectExecutor` effect callback, and immutable operational-overlay snapshot assertions across resume.

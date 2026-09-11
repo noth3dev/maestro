@@ -8,7 +8,7 @@ import { createLocalGitPort } from "@maestro/git-adapter";
 import { FileEvidenceStore } from "@maestro/evidence";
 import { classifyHostEffects, type EnvironmentRecord, type ExecutionAdmission, type ExecutionKernelPort, type GitPort } from "@maestro/domain";
 import { createIpPythonSessionManager, createIpPythonTool, createUnavailableIpPythonKernel, reapIpPythonProcessGroup, ToolRegistry, type IpPythonBlockApproval, type IpPythonHostRequest, type IpPythonKernel, type IpPythonSessionBinding, type IpPythonSessionManager, type IpPythonStageBoundary } from "@maestro/agent-runtime";
-import { appendCapabilityJournal, appendIpPythonSessionJournal, assertProjectMembership, consumeCapabilityApprovals, authenticateLocalOperator, bootstrapAuthorityRecord, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, readEnvironment, reconcileIpPythonOrphans, reconcileOnStartup, recordDiscordSignal, recordIpPythonSessionStarted, runMigrations, type IpPythonSessionJournalEntry } from "@maestro/persistence";
+import { appendCapabilityJournal, appendIpPythonSessionJournal, assertProjectMembership, consumeCapabilityApprovals, authenticateLocalOperator, bootstrapAuthorityRecord, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, readEnvironment, reconcileIpPythonOrphans, reconcileOnStartup, recordDiscordSignal, recordIpPythonSessionStarted, runMigrations, ensureCapacityInventory, reserveCapacity, releaseCapacityReservation, requeueCapacityReservation, readWorkerBySpawnCommand, type IpPythonSessionJournalEntry } from "@maestro/persistence";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
 import { createCapabilityApprovalService } from "./capability-approval-service.js";
@@ -710,7 +710,28 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     createGitPort: (context) => overrides.gitPort ?? createLocalGitPort({ authority: authorityExecutor, context, workspaceRoot: config.worktreeRoot }),
     getControlEpoch: async (projectId, goalId) => (await getGoalControl(pool, projectId, goalId)).controlEpoch,
   });
-  const workerService = createWorkerService({ modelRoutingMode: config.modelRoutingMode, ...(config.nativeModelRef === undefined ? {} : { nativeModelRef: config.nativeModelRef }), pool, kernel: executionKernel, workspaceRoot: config.worktreeRoot, withGoalLease: goalService.withGoalLease!, prepareWorkerWorktree: (workerId, input, operatorId, commandId) => gitIntegrationService.createWorkerWorktree(workerId, input, operatorId, commandId), ...(config.maxConcurrentWorkersPerProject === undefined ? {} : { maxConcurrentWorkersPerProject: config.maxConcurrentWorkersPerProject }) });
+  const capacityEnabled = config.maxConcurrentWorkersPerProject !== undefined
+    || config.capacityProviderRate !== undefined
+    || config.capacitySpendCents !== undefined
+    || config.capacityProviderRateFloor !== undefined
+    || config.capacitySpendCentsFloor !== undefined
+    || config.capacityWorkerSlotsFloor !== undefined;
+  const capacity = capacityEnabled ? {
+    reserve: async (demand: import("@maestro/domain").CapacityDemand) => {
+      await ensureCapacityInventory(pool, { projectId: demand.projectId, providerRate: config.capacityProviderRate ?? 2_147_483_647, spendCents: config.capacitySpendCents ?? 2_147_483_647, workerSlots: config.maxConcurrentWorkersPerProject ?? 2_147_483_647, ...(config.capacityProviderRateFloor === undefined ? {} : { providerRateFloor: config.capacityProviderRateFloor }), ...(config.capacitySpendCentsFloor === undefined ? {} : { spendCentsFloor: config.capacitySpendCentsFloor }), ...(config.capacityWorkerSlotsFloor === undefined ? {} : { workerSlotsFloor: config.capacityWorkerSlotsFloor }) });
+      const admission = await reserveCapacity(pool, demand);
+      if (admission.kind === "reserved") return { kind: "reserved" as const, reservationId: admission.reservation.reservationId };
+      if (admission.kind === "queued") return { kind: "queued" as const, queueId: admission.reservationId, reason: admission.reason };
+      if (admission.reservation.status === "released") {
+        const worker = await readWorkerBySpawnCommand(pool, demand.commandId);
+        if (worker === undefined) throw new Error("Capacity command was already released");
+      }
+      return { kind: "reserved" as const, reservationId: admission.reservation.reservationId };
+    },
+    release: (reservationId: string) => releaseCapacityReservation(pool, reservationId).then(() => undefined),
+    requeue: (reservationId: string) => requeueCapacityReservation(pool, reservationId).then(() => undefined),
+  } : undefined;
+  const workerService = createWorkerService({ modelRoutingMode: config.modelRoutingMode, ...(config.nativeModelRef === undefined ? {} : { nativeModelRef: config.nativeModelRef }), pool, kernel: executionKernel, workspaceRoot: config.worktreeRoot, withGoalLease: goalService.withGoalLease!, prepareWorkerWorktree: (workerId, input, operatorId, commandId) => gitIntegrationService.createWorkerWorktree(workerId, input, operatorId, commandId), ...(config.maxConcurrentWorkersPerProject === undefined ? {} : { maxConcurrentWorkersPerProject: config.maxConcurrentWorkersPerProject }), ...(capacity === undefined ? {} : { capacity }) });
   const certificationService = createCertificationService({ pool, withGoalLease: goalService.withGoalLease! });
   const concertmasterReportService = createConcertmasterReportService({ pool, withGoalLease: goalService.withGoalLease! });
   const metronomeService = createMetronomeService({ pool, withGoalLease: goalService.withGoalLease! });
@@ -785,9 +806,13 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     readinessCheck: async () => { await pool.query("SELECT 1"); },
     ...(https ? { https } : {}),
   });
+  const drainCapacityQueues = workerService.drainCapacityQueues?.bind(workerService);
   const metronomeLoop = config.metronomeIntervalMs === undefined
     ? undefined
-    : createMetronomeLoop({ pool, kernel: executionKernel, withGoalLease: goalService.withGoalLease!, intervalMs: config.metronomeIntervalMs });
+    : createMetronomeLoop({ pool, kernel: executionKernel, withGoalLease: goalService.withGoalLease!, intervalMs: config.metronomeIntervalMs, ...(drainCapacityQueues === undefined ? {} : { drainCapacityQueues }) });
+  const capacityQueueLoop = metronomeLoop === undefined && drainCapacityQueues !== undefined
+    ? createMetronomeLoop({ pool, withGoalLease: goalService.withGoalLease!, intervalMs: 1_000, scanGoals: false, drainCapacityQueues })
+    : undefined;
   let closed = false;
 
   return {
@@ -837,11 +862,13 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       await conversationService?.recover?.();
       await app.listen({ host: config.host, port: config.port });
       metronomeLoop?.start();
+      capacityQueueLoop?.start();
     },
     async close() {
       if (closed) return;
       closed = true;
       metronomeLoop?.stop();
+      capacityQueueLoop?.stop();
       const timeoutMs = config.shutdownDrainTimeoutMs ?? 5_000;
       try {
         // Stop provider work before releasing the HTTP and database resources.

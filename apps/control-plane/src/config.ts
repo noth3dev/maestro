@@ -25,6 +25,11 @@ export interface MaestroConfig {
   metronomeIntervalMs?: number;
   /** Phase 5 capacity-model first slice: project-wide worker-slot ceiling. Absent by default: unlimited, matching current behavior. */
   maxConcurrentWorkersPerProject?: number;
+  capacityProviderRate?: number;
+  capacitySpendCents?: number;
+  capacityProviderRateFloor?: number;
+  capacitySpendCentsFloor?: number;
+  capacityWorkerSlotsFloor?: number;
   /** Duration of the startup-only reconciliation-leader lease; never renewed after startup. */
   reconcilerLeaseDurationMs: number;
   /** Maximum time allowed for provider/application shutdown drains. */
@@ -75,6 +80,11 @@ const schema = z.object({
   MAESTRO_DISCORD_SIGNAL_CREDENTIAL: z.string().min(1).optional(),
   MAESTRO_METRONOME_INTERVAL_MS: z.coerce.number().int().positive().optional(),
   MAESTRO_MAX_CONCURRENT_WORKERS_PER_PROJECT: z.coerce.number().int().positive().optional(),
+  MAESTRO_CAPACITY_PROVIDER_RATE: z.coerce.number().int().nonnegative().optional(),
+  MAESTRO_CAPACITY_SPEND_CENTS: z.coerce.number().int().nonnegative().optional(),
+  MAESTRO_CAPACITY_PROVIDER_RATE_FLOOR: z.coerce.number().int().nonnegative().optional(),
+  MAESTRO_CAPACITY_SPEND_CENTS_FLOOR: z.coerce.number().int().nonnegative().optional(),
+  MAESTRO_CAPACITY_WORKER_SLOTS_FLOOR: z.coerce.number().int().nonnegative().optional(),
   MAESTRO_IPYTHON_PYTHON: z.string().regex(/^\/.+/).optional(),
 });
 
@@ -108,6 +118,11 @@ export function parseConfig(env: Record<string, string | undefined>): MaestroCon
     MAESTRO_DISCORD_SIGNAL_CREDENTIAL: discordSignalCredential,
     MAESTRO_METRONOME_INTERVAL_MS: metronomeIntervalMs,
     MAESTRO_MAX_CONCURRENT_WORKERS_PER_PROJECT: maxConcurrentWorkersPerProject,
+    MAESTRO_CAPACITY_PROVIDER_RATE: capacityProviderRate,
+    MAESTRO_CAPACITY_SPEND_CENTS: capacitySpendCents,
+    MAESTRO_CAPACITY_PROVIDER_RATE_FLOOR: capacityProviderRateFloor,
+    MAESTRO_CAPACITY_SPEND_CENTS_FLOOR: capacitySpendCentsFloor,
+    MAESTRO_CAPACITY_WORKER_SLOTS_FLOOR: capacityWorkerSlotsFloor,
     MAESTRO_IPYTHON_PYTHON: ipythonPythonExecutable,
   } = parsed.data;
 
@@ -163,6 +178,11 @@ export function parseConfig(env: Record<string, string | undefined>): MaestroCon
     ...(discordSignalCredential === undefined ? {} : { discordSignalCredential }),
     ...(metronomeIntervalMs === undefined ? {} : { metronomeIntervalMs }),
     ...(maxConcurrentWorkersPerProject === undefined ? {} : { maxConcurrentWorkersPerProject }),
+    ...(capacityProviderRate === undefined ? {} : { capacityProviderRate }),
+    ...(capacitySpendCents === undefined ? {} : { capacitySpendCents }),
+    ...(capacityProviderRateFloor === undefined ? {} : { capacityProviderRateFloor }),
+    ...(capacitySpendCentsFloor === undefined ? {} : { capacitySpendCentsFloor }),
+    ...(capacityWorkerSlotsFloor === undefined ? {} : { capacityWorkerSlotsFloor }),
     ...(ipythonPythonExecutable === undefined ? {} : { ipythonPythonExecutable }),
     ...(isRemoteBind ? { tls: { certFile: certFile!, keyFile: keyFile! } } : {}),
   };

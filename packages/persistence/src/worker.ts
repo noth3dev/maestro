@@ -1,3 +1,4 @@
+import { releaseCapacityForWorker } from "./capacity-reservation.js";
 import { createHash, randomUUID } from "node:crypto";
 import {
   assertValidWorkerTransition,
@@ -20,6 +21,9 @@ import { recordNativeExecutionBindingIfSupported } from "./native-execution-bind
 import { CapabilityApprovalError, CapabilityApprovalExpiredError, consumeCapabilityApprovals, createCapabilityApproval, getCapabilityApproval, RepetitionBudgetExhaustedError, type RepetitionScope } from "./capability-approval.js";
 
 export class WorkerError extends Error {}
+export class WorkerProviderOutcomeUnknownError extends WorkerError {
+  constructor(message = "Provider outcome is unknown; capacity remains reserved until reconciliation") { super(message); this.name = "WorkerProviderOutcomeUnknownError"; }
+}
 export class WorkerNotFoundError extends WorkerError {}
 
 export interface SpawnWorkerRequest {
@@ -271,6 +275,7 @@ export async function expireAwaitingRepairWorker(
     return updated.rowCount === 1 ? updated.rows[0]!.invocation_ref : undefined;
   });
   if (expired !== undefined) {
+    await releaseCapacityForWorker(pool, workerId);
     await kernel.release?.(toInvocationRef(expired)).catch(() => {});
     return true;
   }
@@ -490,7 +495,7 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
       }
       const unknown = await markUnboundWorkerUnknown(pool, workerId, proof).catch(() => undefined);
       if (unknown !== undefined) return unknown;
-      throw error;
+      throw new WorkerProviderOutcomeUnknownError(error instanceof Error ? error.message : "Provider outcome is unknown");
     }
     let boundWorker: Worker;
     try {
@@ -498,8 +503,9 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
     } catch (error) {
       // Compensation holds the same Goal/worker owner claim through the
       // provider cancel. A stale owner cannot cancel after takeover.
-      await cancelUnboundWorkerAfterBindingFailure(pool, kernel, workerId, spawned.invocation, proof).catch(() => {});
-      throw error;
+      const cancelled = await cancelUnboundWorkerAfterBindingFailure(pool, kernel, workerId, spawned.invocation, proof).catch(() => false);
+      if (cancelled) throw error;
+      throw new WorkerProviderOutcomeUnknownError(error instanceof Error ? error.message : "Provider binding outcome is unknown");
     }
     try {
       await promptWorkerUnderOwnerClaim(pool, kernel, workerId, spawned.execution, bundle.substance.goalBrief, proof);
@@ -530,6 +536,7 @@ export async function markWorkerTerminal(pool: Pool, workerId: string, status: "
       [workerId, status, proof.ownerId, proof.fencingToken],
     );
   });
+  await releaseCapacityForWorker(pool, workerId);
 }
 
 export async function markWorkerUnknown(pool: Pool, workerId: string, proof: GoalLeaseProof): Promise<void> {
@@ -549,9 +556,9 @@ export async function cancelUnboundWorkerAfterBindingFailure(
   workerId: string,
   invocation: InvocationRef,
   proof: GoalLeaseProof,
-): Promise<void> {
-  await withWorkerLease(pool, workerId, proof, async (client, worker) => {
-    if (worker.status === "succeeded" || worker.status === "failed" || worker.status === "cancelled") return;
+): Promise<boolean> {
+  const cancelled = await withWorkerLease(pool, workerId, proof, async (client, worker) => {
+    if (worker.status === "succeeded" || worker.status === "failed" || worker.status === "cancelled") return true;
     if (worker.owner_id !== proof.ownerId || worker.owner_fencing_token !== proof.fencingToken) throw new WorkerError("Worker owner proof is stale or fenced");
     if (!worker.execution_ref.startsWith("pending:") || !worker.invocation_ref.startsWith("pending:")) throw new WorkerError("Worker provider binding was already completed");
     const cancellation = await kernel.cancel(invocation);
@@ -566,7 +573,9 @@ export async function cancelUnboundWorkerAfterBindingFailure(
           AND execution_ref LIKE 'pending:%' AND invocation_ref LIKE 'pending:%'`,
       [workerId, status, "Provider binding compensation could not confirm cancellation; reconciliation is required", proof.ownerId, proof.fencingToken],
     );
+    return cancellation.cancelled;
   });
+  return cancelled;
 }
 
 export async function bindWorkerInvocation(
@@ -610,6 +619,11 @@ export async function readWorker(pool: Pool, workerId: string): Promise<Worker> 
   const result = await pool.query<WorkerRow>(workerSelectSql() + " WHERE worker_id = $1", [workerId]);
   if (result.rowCount !== 1) throw new WorkerNotFoundError(`Worker not found: ${workerId}`);
   return mapWorker(result.rows[0]!);
+}
+
+export async function readWorkerBySpawnCommand(pool: Pool, commandId: string): Promise<Worker | undefined> {
+  const result = await pool.query<WorkerRow>(workerSelectSql() + " WHERE spawn_command_id = $1", [commandId]);
+  return result.rowCount === 1 ? mapWorker(result.rows[0]!) : undefined;
 }
 
 export async function listWorkersForMission(pool: Pool, councilId: string, departmentId: string, planVersion: number, itemId: string): Promise<readonly Worker[]> {
@@ -780,6 +794,7 @@ export async function observeWorker(pool: Pool, kernel: ExecutionKernelPort, wor
     );
     await client.query("COMMIT"); open = false;
     const result = mapWorker(updated.rows[0] ?? row);
+    if (result.status === "succeeded" || result.status === "failed" || result.status === "cancelled") await releaseCapacityForWorker(pool, workerId);
     if (result.status === "succeeded" || result.status === "failed" || result.status === "cancelled") await kernel.release?.(toInvocationRef(result.invocationRef)).catch(() => {});
     return result;
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
@@ -871,6 +886,7 @@ export async function cancelWorker(pool: Pool, kernel: ExecutionKernelPort, work
     );
     await client.query("COMMIT"); open = false;
     const result = mapWorker(updated.rows[0] ?? row);
+    if (nextStatus === "succeeded" || nextStatus === "failed" || nextStatus === "cancelled") await releaseCapacityForWorker(pool, workerId);
     if (nextStatus === "succeeded" || nextStatus === "failed" || nextStatus === "cancelled") await kernel.release?.(toInvocationRef(result.invocationRef)).catch(() => {});
     return result;
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }

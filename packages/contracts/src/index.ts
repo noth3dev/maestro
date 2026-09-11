@@ -96,53 +96,7 @@ export const ConversationEventSchema = z.object({
 export type ConversationEvent = z.infer<typeof ConversationEventSchema>;
 export const ConversationEventQuerySchema = z.object({ projectId: UuidSchema, after: z.string().regex(/^(0|[1-9][0-9]*)$/).default("0") }).strict();
 export type ConversationEventQuery = z.infer<typeof ConversationEventQuerySchema>;
-export const ModelCatalogEntrySchema = z.object({
-  identity: z.object({ provider: z.string().min(1), id: z.string().min(1) }).strict(),
-  capabilities: z.array(z.string().min(1)),
-  authModes: z.array(z.enum(["api-key", "managed-subscription"])),
-  dataPolicy: z.object({
-    allowedDataClasses: z.array(z.enum(["public", "workspace", "private", "pii", "phi", "secret"])),
-    retention: z.enum(["none", "provider-policy", "durable"]),
-    trainsOnCustomerData: z.boolean(),
-    regions: z.array(z.string().min(1)),
-  }).strict(),
-}).strict();
-export type ModelCatalogEntry = z.infer<typeof ModelCatalogEntrySchema>;
-
-/** Provider login accepts only the two statically registered API-key adapters. */
-export const ProviderCredentialLoginInputSchema = z.object({
-  providerId: z.enum(["openai", "anthropic"]),
-  authMode: z.literal("api-key"),
-  secret: z.string().min(1).max(512),
-}).strict();
-export type ProviderCredentialLoginInput = z.infer<typeof ProviderCredentialLoginInputSchema>;
-const ProviderCredentialBindingCommonSchema = {
-  bindingId: z.string().min(1).max(128),
-  accountRef: z.string().min(1).max(256),
-  configuredAt: z.string().datetime(),
-} as const;
-export const ProviderCredentialBindingSchema = z.union([
-  z.object({ ...ProviderCredentialBindingCommonSchema, providerId: z.enum(["openai", "anthropic"]), authMode: z.literal("api-key") }).strict(),
-  z.object({ ...ProviderCredentialBindingCommonSchema, providerId: z.literal("openai-codex"), authMode: z.literal("managed-subscription") }).strict(),
-]);
-export type ProviderCredentialBinding = z.infer<typeof ProviderCredentialBindingSchema>;
-
-/** Browser-based account login is deliberately limited to the public Codex app-server boundary. */
-export const ProviderAccountLoginStartInputSchema = z.object({ providerId: z.literal("openai-codex") }).strict();
-export type ProviderAccountLoginStartInput = z.infer<typeof ProviderAccountLoginStartInputSchema>;
-export const ProviderAccountLoginStartResultSchema = z.object({
-  providerId: z.literal("openai-codex"),
-  loginId: z.string().min(1).max(256),
-  authUrl: z.string().url().max(2048),
-}).strict();
-export type ProviderAccountLoginStartResult = z.infer<typeof ProviderAccountLoginStartResultSchema>;
-export const ProviderAccountLoginStatusSchema = z.object({
-  providerId: z.literal("openai-codex"),
-  loginId: z.string().min(1).max(256),
-  state: z.enum(["pending", "succeeded", "failed", "cancelled", "unknown"]),
-  message: z.string().max(512).optional(),
-}).strict();
-export type ProviderAccountLoginStatus = z.infer<typeof ProviderAccountLoginStatusSchema>;
+export * from "./provider-credentials.js";
 
 /** Project identities visible to the authenticated operator for workspace attachment. */
 export const ProjectListSchema = z.object({ projects: z.array(UuidSchema) }).strict();
@@ -631,6 +585,9 @@ export const WorkerSchema = z.object({
   status: z.enum(["spawned", "running", "awaiting_repair", "succeeded", "failed", "cancelled", "unknown"]), answerText: z.string().nullable(), usageTotalTokens: z.number().int().nonnegative().nullable(),
 }).strict();
 export type Worker = z.infer<typeof WorkerSchema>;
+export const QueuedWorkerAdmissionSchema = z.object({ kind: z.literal("queued"), queueId: z.string().min(1), reason: z.enum(["provider_rate", "spend_cents", "worker_slots"]), projectId: UuidSchema, goalId: UuidSchema, commandId: UuidSchema, requirement: z.enum(["low", "medium", "high"]), pressure: z.enum(["normal", "elevated", "critical"]) }).strict();
+export type QueuedWorkerAdmission = z.infer<typeof QueuedWorkerAdmissionSchema>;
+
 const WorkerCapabilityJournalEntrySchema = z.object({
   journalId: UuidSchema, capabilityKind: z.string().min(1), projectId: UuidSchema, goalId: UuidSchema,
   approvalId: UuidSchema.optional(), commandId: UuidSchema.optional(),
@@ -667,6 +624,7 @@ export const SpawnWorkerInputSchema = z.object({
   projectId: UuidSchema, planVersion: z.number().int().positive(), itemId: z.string().min(1), model: ModelRefSchema.optional(),
   /** Target repository and owned worktree are bound before the provider is admitted. */
   repositoryPath: TargetPathSchema.optional(), worktreePath: TargetPathSchema.optional(),
+  capacityDemand: z.object({ providerRate: z.number().int().positive(), spendCents: z.number().int().positive(), workerSlots: z.number().int().positive(), requirement: z.enum(["low", "medium", "high"]), pressure: z.enum(["normal", "elevated", "critical"]), priority: z.number().int().nonnegative().optional() }).strict().optional(),
 }).superRefine((value, context) => {
   if ((value.repositoryPath === undefined) !== (value.worktreePath === undefined)) context.addIssue({ code: z.ZodIssueCode.custom, path: [value.repositoryPath === undefined ? "repositoryPath" : "worktreePath"], message: "repositoryPath and worktreePath must be supplied together" });
 }).strict();

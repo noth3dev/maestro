@@ -27,6 +27,10 @@ export interface MetronomeLoopDependencies {
   kernel?: ExecutionKernelPort;
   withGoalLease: <T>(goalId: string, operation: (proof: GoalLeaseProof) => Promise<T>) => Promise<T>;
   intervalMs: number;
+  /** Drains durable queued capacity after terminal/recovery releases. */
+  drainCapacityQueues?: () => Promise<void>;
+  /** Capacity-only loop mode skips Goal observation while retaining queue draining. */
+  scanGoals?: boolean;
   scheduler?: MetronomeLoopScheduler;
   /** Test-only injection point; production uses the complete durable observation pass. */
   observeGoal?: typeof observeGoalForMetronome;
@@ -87,15 +91,18 @@ export function createMetronomeLoop(deps: MetronomeLoopDependencies): MetronomeL
     if (running) return;
     running = true;
     try {
-      const nonTerminalStates: GoalState[] = ["draft", "ready_for_confirmation", "launched", "active", "pausing", "paused", "resuming", "stopping", "blocked", "certifying", "recovering"];
-      const result = await deps.pool.query<{ goal_id: string; state: GoalState }>(
-        "SELECT goal_id, state FROM goals WHERE state = ANY($1::text[]) ORDER BY created_at, goal_id",
-        [nonTerminalStates],
-      );
-      for (const row of result.rows) {
-        if (isTerminalGoalState(row.state)) continue;
-        await scanOneGoal(row.goal_id);
+      if (deps.scanGoals !== false) {
+        const nonTerminalStates: GoalState[] = ["draft", "ready_for_confirmation", "launched", "active", "pausing", "paused", "resuming", "stopping", "blocked", "certifying", "recovering"];
+        const result = await deps.pool.query<{ goal_id: string; state: GoalState }>(
+          "SELECT goal_id, state FROM goals WHERE state = ANY($1::text[]) ORDER BY created_at, goal_id",
+          [nonTerminalStates],
+        );
+        for (const row of result.rows) {
+          if (isTerminalGoalState(row.state)) continue;
+          await scanOneGoal(row.goal_id);
+        }
       }
+      await deps.drainCapacityQueues?.();
     } finally {
       running = false;
     }
