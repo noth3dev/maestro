@@ -42,3 +42,4 @@ export * from "./routing-evidence.js";
 export * from "./routing-selector.js";
 export * from "./external-capability.js";
 export * from "./capacity.js";
+export * from "./portfolio-council.js";
