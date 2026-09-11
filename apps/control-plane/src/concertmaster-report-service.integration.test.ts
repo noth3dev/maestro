@@ -21,13 +21,27 @@ const report = (goalId: string): ConcertmasterFinalReport => ({
 });
 
 describeDatabase("Concertmaster report command idempotency", () => {
-  const pool = new Pool({ connectionString: databaseUrl });
-  beforeAll(async () => { await applyAllMigrations(pool); });
+  const basePool = new Pool({ connectionString: databaseUrl });
+  const schema = `concertmaster_report_${randomUUID().replaceAll("-", "")}`;
+  const scopedUrl = (() => {
+    const url = new URL(databaseUrl!);
+    url.searchParams.set("options", `-c search_path=${schema}`);
+    return url.toString();
+  })();
+  const pool = new Pool({ connectionString: scopedUrl });
+  beforeAll(async () => {
+    await basePool.query(`CREATE SCHEMA "${schema}"`);
+    await applyAllMigrations(pool);
+  });
   beforeEach(async () => {
     mockGenerate.mockReset();
     await pool.query("TRUNCATE command_receipts, goals, goal_controls, operator_project_roles, operator_project_memberships, local_operator_credentials, local_operators CASCADE");
   });
-  afterAll(async () => { await pool.end(); });
+  afterAll(async () => {
+    await pool.end();
+    await basePool.query(`DROP SCHEMA "${schema}" CASCADE`);
+    await basePool.end();
+  });
 
   it("records and replays the exact report command, rejecting changed reuse", async () => {
     const projectId = randomUUID();
