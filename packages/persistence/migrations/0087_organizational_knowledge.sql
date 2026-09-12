@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS organizational_knowledge (
   created_by text NOT NULL CHECK (btrim(created_by) <> '' AND length(created_by) <= 256),
   source_session_ref text NOT NULL CHECK (btrim(source_session_ref) <> '' AND length(source_session_ref) <= 256),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  retention retention_class NOT NULL DEFAULT 'project_lifetime',
   PRIMARY KEY (knowledge_id, revision),
   CHECK ((scope = 'global' AND project_id IS NULL AND generalized AND council_round_id IS NOT NULL AND generalized_statement IS NOT NULL AND curator_role_id IS NOT NULL AND jsonb_array_length(episode_ids) >= 2)
       OR (scope <> 'global' AND project_id IS NOT NULL)),
@@ -44,7 +45,8 @@ CREATE TABLE IF NOT EXISTS knowledge_promotion_authorizations (
   scope text NOT NULL CHECK (scope IN ('project_department', 'global')),
   role_id text NOT NULL,
   department_id text NOT NULL REFERENCES departments(department_id),
-  created_at timestamptz NOT NULL DEFAULT transaction_timestamp()
+  created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  retention retention_class NOT NULL DEFAULT 'project_lifetime'
 );
 
 CREATE OR REPLACE FUNCTION validate_organizational_knowledge_insert() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
@@ -175,7 +177,8 @@ CREATE TABLE IF NOT EXISTS source_evidence_loss_events (
   fencing_token bigint NOT NULL CHECK (fencing_token > 0),
   reason text NOT NULL CHECK (btrim(reason) <> '' AND length(reason) <= 1024),
   recorded_by text NOT NULL CHECK (btrim(recorded_by) <> '' AND length(recorded_by) <= 256),
-  created_at timestamptz NOT NULL DEFAULT transaction_timestamp()
+  created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  retention retention_class NOT NULL DEFAULT 'project_lifetime'
 );
 CREATE OR REPLACE FUNCTION validate_source_evidence_loss_event_binding() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -231,7 +234,8 @@ CREATE TABLE IF NOT EXISTS source_evidence_loss_authorizations (
   fencing_token bigint NOT NULL CHECK (fencing_token > 0),
   reason text NOT NULL CHECK (btrim(reason) <> '' AND length(reason) <= 1024),
   recorded_by text NOT NULL CHECK (btrim(recorded_by) <> '' AND length(recorded_by) <= 256),
-  created_at timestamptz NOT NULL DEFAULT transaction_timestamp()
+  created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  retention retention_class NOT NULL DEFAULT 'project_lifetime'
 );
 
 CREATE OR REPLACE FUNCTION validate_source_evidence_loss_authorization_binding() RETURNS trigger LANGUAGE plpgsql AS $$

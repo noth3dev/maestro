@@ -3,7 +3,7 @@ import { verifyEvidenceRecord, type EvidenceContentReader, type EvidenceRecord }
 import type { Pool } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
 import { withGoalAuthority } from "./goal-authority.js";
-import { assertProjectMembership } from "./project-membership.js";
+import { assertProjectMembership, assertProjectRole } from "./project-membership.js";
 
 export type EvidenceMetadataInput = Omit<EvidenceRecord, "createdAt">;
 
@@ -84,7 +84,7 @@ function validate(input: EvidenceMetadataInput): void {
  * forbidden; this boundary records the loss and lets the database append an
  * unsupported knowledge revision before deleting the artifact metadata.
  */
-export async function deleteEvidenceSource(pool: Pool, evidenceId: string, reason: string, recordedBy: string, proof: GoalLeaseProof): Promise<void> {
+export async function deleteEvidenceSource(pool: Pool, evidenceId: string, reason: string, recordedBy: string, proof: GoalLeaseProof, operatorRoleId: string): Promise<void> {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(evidenceId) || reason.trim() === "" || reason.length > 1024 || recordedBy.trim() === "" || recordedBy.length > 256) throw new Error("source evidence loss request is invalid");
   await withGoalAuthority(pool, proof, 87, async (client) => {
     const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [recordedBy]);
@@ -92,6 +92,7 @@ export async function deleteEvidenceSource(pool: Pool, evidenceId: string, reaso
     const source = await client.query<{ goal_id: string; project_id: string; goal_project_id: string }>("SELECT e.goal_id, e.project_id, g.project_id AS goal_project_id FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = $1", [evidenceId.toLowerCase()]);
     if (source.rowCount !== 1 || source.rows[0]!.goal_id !== proof.goalId || source.rows[0]!.project_id !== source.rows[0]!.goal_project_id) throw new Error("source evidence is outside the Goal lease/project");
     await assertProjectMembership(client, recordedBy, source.rows[0]!.project_id);
+    await assertProjectRole(client, recordedBy, source.rows[0]!.project_id, operatorRoleId);
     const token = randomUUID();
     const tokenHash = createHash("sha256").update(token, "utf8").digest("hex");
     await client.query("INSERT INTO source_evidence_loss_authorizations (token_hash, evidence_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by) VALUES ($1, $2, $3, $4, $5, $6::bigint, $7, $8)", [tokenHash, evidenceId.toLowerCase(), source.rows[0]!.goal_id, source.rows[0]!.project_id, proof.ownerId, proof.fencingToken, reason, recordedBy]);

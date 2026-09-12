@@ -10,7 +10,7 @@ import { withGoalAuthority } from "./goal-authority.js";
 import { assertProjectMembership, assertProjectRole } from "./project-membership.js";
 
 export type OrganizationalKnowledgeProposalRecord = OrganizationalKnowledgeProposal;
-export interface OrganizationalKnowledgeAuthor { readonly actorId: string; readonly sessionRef: string; readonly operatorId: string; }
+export interface OrganizationalKnowledgeAuthor { readonly actorId: string; readonly sessionRef: string; readonly operatorId: string; readonly operatorRoleId: string; }
 export interface OrganizationalKnowledgeReadAuthorization { readonly operatorId: string; readonly projectId: string; readonly departmentId: string; }
 export class OrganizationalKnowledgeError extends Error {}
 export class OrganizationalKnowledgeNotFoundError extends OrganizationalKnowledgeError {}
@@ -24,10 +24,10 @@ interface KnowledgeRow {
   knowledge_id: string; revision: number; schema_version: number; source_project_id: string; project_id: string | null; source_goal_id: string;
   department_id: string; scope: OrganizationalKnowledge["scope"]; status: OrganizationalKnowledgeStatus; statement: string; rationale: string;
   source_evidence_ids: string[]; source_digest_ids: string[]; episode_ids: string[]; confidence: number; freshness: number; generalized: boolean;
-  council_round_id: string | null; generalized_statement: string | null; curator_role_id: string | null; promotion_marker: string; reason: string | null; created_by: string; source_session_ref: string; created_at: Date;
+  council_round_id: string | null; generalized_statement: string | null; curator_role_id: string | null; promotion_marker: string; reason: string | null; created_by: string; source_session_ref: string; created_at: Date; retention?: string;
 }
-const COLUMNS = "knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, promotion_marker, reason, created_by, source_session_ref, created_at";
-const INSERT_COLUMNS = COLUMNS.replace(", created_at", "");
+const COLUMNS = "knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, promotion_marker, reason, created_by, source_session_ref, created_at, retention";
+const INSERT_COLUMNS = COLUMNS.replace(", created_at, retention", "");
 
 function marker(lesson: OrganizationalKnowledge): string {
   if (lesson.scope === "worker_proposed") return "worker-proposal";
@@ -84,7 +84,7 @@ export async function proposeOrganizationalKnowledge(pool: Pool, input: Organiza
     const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [author.operatorId]);
     if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("proposal requires an active operator");
     await assertProjectMembership(client, author.operatorId, input.projectId);
-    await assertProjectRole(client, author.operatorId, input.projectId, input.departmentId);
+    await assertProjectRole(client, author.operatorId, input.projectId, author.operatorRoleId);
     return insertRevision(client, proposal, author.actorId.trim(), author.sessionRef.trim());
   });
 }
@@ -147,10 +147,13 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
       `SELECT s.final_verdict FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id
         WHERE r.round_id = $1 AND r.goal_id = $2 AND s.final_verdict = 'proceed' AND s.same_model_only = false
           AND (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text(r.evidence_ids)) = (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text($3::jsonb))
-          AND (SELECT count(*) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
+          AND (SELECT count(*) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = r.reviewer_count
+          AND (SELECT min(j.reviewer_index) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = 0
+          AND (SELECT max(j.reviewer_index) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = r.reviewer_count - 1
+          AND NOT EXISTS (SELECT 1 FROM encore_council_judgments j WHERE j.round_id = r.round_id AND j.verdict <> 'proceed')
           AND NOT EXISTS (SELECT 1 FROM encore_council_judgments j WHERE j.round_id = r.round_id AND (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text(j.cited_evidence_ids)) IS DISTINCT FROM (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text($3::jsonb)))
           AND (SELECT count(DISTINCT (j.model_provider || ':' || j.model_id)) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
-          AND (SELECT count(*) FROM encore_council_judgments j JOIN native_execution_bindings b ON b.execution_ref = j.execution_ref AND b.invocation_ref = j.invocation_ref AND b.goal_id = r.goal_id AND b.project_id = $4 AND b.admission_kind = 'encore_reviewer' AND b.actual_model_provider = j.model_provider AND b.actual_model_id = j.model_id WHERE j.round_id = r.round_id) >= 2`,
+          AND (SELECT count(DISTINCT j.judgment_id) FROM encore_council_judgments j JOIN native_execution_bindings b ON b.execution_ref = j.execution_ref AND b.invocation_ref = j.invocation_ref AND b.goal_id = r.goal_id AND b.project_id = $4 AND b.admission_kind = 'encore_reviewer' AND b.actual_model_provider = j.model_provider AND b.actual_model_id = j.model_id WHERE j.round_id = r.round_id) = r.reviewer_count`,
       [request.encoreCouncilRoundId, current.sourceGoalId, JSON.stringify(sourceIds), current.sourceProjectId],
     );
     for (const sourceId of sourceIds) {
@@ -211,7 +214,7 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
   });
 }
 
-export async function markKnowledgeUnsupportedForEvidence(pool: Pool, evidenceId: string, reason: string, proof: GoalLeaseProof, operatorId: string): Promise<readonly string[]> {
+export async function markKnowledgeUnsupportedForEvidence(pool: Pool, evidenceId: string, reason: string, proof: GoalLeaseProof, operatorId: string, operatorRoleId: string): Promise<readonly string[]> {
   if (!/^[0-9a-f-]{36}$/i.test(evidenceId) || reason.trim() === "" || operatorId.trim() === "") throw new OrganizationalKnowledgeError("evidence source loss request is invalid");
   return withGoalAuthority(pool, proof, 88, async (client) => {
     const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [operatorId]);
@@ -219,6 +222,7 @@ export async function markKnowledgeUnsupportedForEvidence(pool: Pool, evidenceId
     const source = await client.query<{ goal_id: string; project_id: string; goal_project_id: string }>("SELECT e.goal_id, e.project_id, g.project_id AS goal_project_id FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = $1", [evidenceId.toLowerCase()]);
     if (source.rowCount !== 1 || source.rows[0]!.goal_id !== proof.goalId || source.rows[0]!.project_id !== source.rows[0]!.goal_project_id) throw new OrganizationalKnowledgeError("evidence source is outside the Goal lease/project");
     await assertProjectMembership(client, operatorId, source.rows[0]!.project_id);
+    for (const _row of (await client.query<{ department_id: string }>("SELECT DISTINCT department_id FROM organizational_knowledge WHERE source_project_id = $1 AND source_goal_id = $2 AND source_evidence_ids @> $3::jsonb", [source.rows[0]!.project_id, source.rows[0]!.goal_id, JSON.stringify([evidenceId.toLowerCase()])])).rows) await assertProjectRole(client, operatorId, source.rows[0]!.project_id, operatorRoleId);
     const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_evidence_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([evidenceId.toLowerCase()])]);
     const ids: string[] = [];
     for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await insertRevision(client, unsupported, operatorId, `evidence:${evidenceId}`); ids.push(current.knowledgeId); }
@@ -226,7 +230,7 @@ export async function markKnowledgeUnsupportedForEvidence(pool: Pool, evidenceId
   });
 }
 
-export async function markKnowledgeUnsupportedForDigest(pool: Pool, digestId: string, reason: string, proof: GoalLeaseProof, operatorId: string): Promise<readonly string[]> {
+export async function markKnowledgeUnsupportedForDigest(pool: Pool, digestId: string, reason: string, proof: GoalLeaseProof, operatorId: string, operatorRoleId: string): Promise<readonly string[]> {
   if (!/^[-0-9a-f]{36}$/i.test(digestId) || reason.trim() === "") throw new OrganizationalKnowledgeError("digest source loss request is invalid");
   return withGoalAuthority(pool, proof, 88, async (client) => {
     const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [operatorId]);
@@ -234,6 +238,7 @@ export async function markKnowledgeUnsupportedForDigest(pool: Pool, digestId: st
     const digest = await client.query<{ goal_id: string; project_id: string; goal_project_id: string }>("SELECT d.goal_id, d.project_id, g.project_id AS goal_project_id FROM improvement_digests d JOIN goals g ON g.goal_id = d.goal_id WHERE d.digest_id = $1", [digestId.toLowerCase()]);
     if (digest.rowCount !== 1 || digest.rows[0]!.goal_id !== proof.goalId || digest.rows[0]!.project_id !== digest.rows[0]!.goal_project_id) throw new OrganizationalKnowledgeError("digest source is outside the Goal lease/project");
     await assertProjectMembership(client, operatorId, digest.rows[0]!.project_id);
+    await assertProjectRole(client, operatorId, digest.rows[0]!.project_id, operatorRoleId);
     const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_digest_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([digestId.toLowerCase()])]);
     const ids: string[] = [];
     for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await insertRevision(client, unsupported, operatorId, `digest:${digestId}`); ids.push(current.knowledgeId); }
