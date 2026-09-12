@@ -21,5 +21,6 @@ describe("organizational knowledge persistence SQL shape", () => {
     const migration = readFileSync(fileURLToPath(new URL("../migrations/0087_organizational_knowledge.sql", import.meta.url)), "utf8");
     expect(migration).toContain("b.operator_id IS DISTINCT FROM NEW.author_operator_id::text");
     expect(migration).toContain("a.role_id = NEW.promotion_role_id");
+    expect(migration).toContain("INSERT INTO knowledge_proposal_authorizations (revision,");
   });
 });
