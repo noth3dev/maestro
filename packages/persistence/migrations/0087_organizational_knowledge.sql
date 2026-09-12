@@ -144,6 +144,7 @@ DROP TRIGGER IF EXISTS organizational_knowledge_no_truncate ON organizational_kn
 
 -- Raw current-row SQL access is intentionally not exposed. Callers must use the
 -- project-authorized application read API, which redacts global provenance.
+DROP FUNCTION IF EXISTS current_organizational_knowledge(uuid);
 
 
 -- Evidence metadata is immutable during ordinary operation. An explicit
