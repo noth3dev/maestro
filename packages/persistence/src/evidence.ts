@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import { verifyEvidenceRecord, type EvidenceContentReader, type EvidenceRecord } from "@maestro/evidence";
-import type { Pool, PoolClient } from "pg";
+import type { Pool } from "pg";
+import type { GoalLeaseProof } from "./commands.js";
+import { withGoalAuthority } from "./goal-authority.js";
 
 export type EvidenceMetadataInput = Omit<EvidenceRecord, "createdAt">;
 
@@ -81,21 +83,18 @@ function validate(input: EvidenceMetadataInput): void {
  * forbidden; this boundary records the loss and lets the database append an
  * unsupported knowledge revision before deleting the artifact metadata.
  */
-export async function deleteEvidenceSource(pool: Pool, evidenceId: string, reason: string, recordedBy: string): Promise<void> {
+export async function deleteEvidenceSource(pool: Pool, evidenceId: string, reason: string, recordedBy: string, proof: GoalLeaseProof): Promise<void> {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(evidenceId) || reason.trim() === "" || reason.length > 1024 || recordedBy.trim() === "" || recordedBy.length > 256) throw new Error("source evidence loss request is invalid");
-  const client: PoolClient = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  await withGoalAuthority(pool, proof, 87, async (client) => {
     const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1", [recordedBy]);
     if (operator.rowCount !== 1) throw new Error("source evidence loss requires an authorized operator");
+    const source = await client.query<{ goal_id: string; project_id: string }>("SELECT goal_id, project_id FROM evidence_records WHERE evidence_id = $1", [evidenceId.toLowerCase()]);
+    if (source.rowCount !== 1 || source.rows[0]!.goal_id !== proof.goalId) throw new Error("source evidence is outside the Goal lease");
     const token = randomUUID();
     const tokenHash = createHash("sha256").update(token, "utf8").digest("hex");
-    await client.query("INSERT INTO source_evidence_loss_authorizations (token_hash, evidence_id, reason, recorded_by) VALUES ($1, $2, $3, $4)", [tokenHash, evidenceId.toLowerCase(), reason, recordedBy]);
+    await client.query("INSERT INTO source_evidence_loss_authorizations (token_hash, evidence_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by) VALUES ($1, $2, $3, $4, $5, $6::bigint, $7, $8)", [tokenHash, evidenceId.toLowerCase(), source.rows[0]!.goal_id, source.rows[0]!.project_id, proof.ownerId, proof.fencingToken, reason, recordedBy]);
     await client.query("SELECT set_config('maestro.source_evidence_loss_token', $1, true)", [token]);
-    const event = await client.query("INSERT INTO source_evidence_loss_events (event_id, evidence_id, reason, recorded_by) VALUES ($1, $2, $3, $4) RETURNING event_id", [randomUUID(), evidenceId.toLowerCase(), reason, recordedBy]);
-    if (event.rowCount !== 1) throw new Error("source evidence loss event was not recorded");
     const deleted = await client.query("DELETE FROM evidence_records WHERE evidence_id = $1", [evidenceId.toLowerCase()]);
     if (deleted.rowCount !== 1) throw new Error("source evidence was not found");
-    await client.query("COMMIT");
-  } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+  });
 }

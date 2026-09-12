@@ -107,10 +107,13 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
     const approval = await client.query<{ final_verdict: string }>(
       `SELECT s.final_verdict FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id
         WHERE r.round_id = $1 AND r.goal_id = $2 AND s.final_verdict = 'proceed' AND s.same_model_only = false
-          AND r.evidence_ids @> $3::jsonb`,
+          AND r.evidence_ids @> $3::jsonb
+          AND (SELECT count(*) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
+          AND (SELECT count(DISTINCT (j.model_provider || ':' || j.model_id)) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2`,
       [request.encoreCouncilRoundId, current.sourceGoalId, JSON.stringify([...current.sourceEvidenceIds, ...current.sourceDigestIds])],
     );
-    const sourceIds = request.corroboratingSourceIds ?? [];
+    const sourceIds = request.corroboratingSourceIds;
+    if (!Array.isArray(sourceIds) || !Array.isArray(request.corroboratingEpisodeIds) || sourceIds.length < 2 || sourceIds.some((id) => !current.sourceDigestIds.includes(id.toLowerCase()))) throw new OrganizationalKnowledgeError("global corroboration must use bound Improvement Digest sources");
     for (const sourceId of sourceIds) {
       if (current.sourceEvidenceIds.includes(sourceId.toLowerCase())) {
         const evidence = await client.query("SELECT 1 FROM evidence_records WHERE evidence_id = $1 AND project_id = $2 AND goal_id = $3", [sourceId, current.sourceProjectId, current.sourceGoalId]);

@@ -80,6 +80,10 @@ BEGIN
   IF NEW.scope = 'global' AND NEW.status = 'active' AND (SELECT count(DISTINCT d.episode_id) FROM improvement_digests d WHERE d.digest_id::text IN (SELECT value #>> '{}' FROM jsonb_array_elements(NEW.source_digest_ids))) < 2 THEN
     RAISE EXCEPTION 'global organizational knowledge requires distinct durable digest episodes';
   END IF;
+  IF NEW.scope = 'global' AND NEW.status = 'active' AND EXISTS (
+    SELECT 1 FROM jsonb_array_elements_text(NEW.episode_ids) episode
+     WHERE NOT EXISTS (SELECT 1 FROM improvement_digests d WHERE d.digest_id::text IN (SELECT value #>> '{}' FROM jsonb_array_elements(NEW.source_digest_ids)) AND d.goal_id = NEW.source_goal_id AND d.episode_id = episode)
+  ) THEN RAISE EXCEPTION 'global organizational knowledge episode is not bound to a durable digest'; END IF;
   IF NEW.scope = 'global' AND NEW.status = 'active' AND NOT EXISTS (
     SELECT 1 FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id
      WHERE r.round_id = NEW.council_round_id AND r.goal_id = NEW.source_goal_id AND s.final_verdict = 'proceed'
@@ -114,6 +118,10 @@ $$;
 CREATE TABLE IF NOT EXISTS source_evidence_loss_events (
   event_id uuid PRIMARY KEY,
   evidence_id uuid NOT NULL,
+  goal_id uuid NOT NULL REFERENCES goals(goal_id),
+  project_id uuid NOT NULL,
+  owner_id text NOT NULL CHECK (btrim(owner_id) <> '' AND length(owner_id) <= 256),
+  fencing_token bigint NOT NULL CHECK (fencing_token > 0),
   reason text NOT NULL CHECK (btrim(reason) <> '' AND length(reason) <= 1024),
   recorded_by text NOT NULL CHECK (btrim(recorded_by) <> '' AND length(recorded_by) <= 256),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp()
@@ -148,6 +156,10 @@ $$;
 CREATE TABLE IF NOT EXISTS source_evidence_loss_authorizations (
   token_hash char(64) PRIMARY KEY CHECK (token_hash ~ '^[0-9a-f]{64}$'),
   evidence_id uuid NOT NULL,
+  goal_id uuid NOT NULL REFERENCES goals(goal_id),
+  project_id uuid NOT NULL,
+  owner_id text NOT NULL CHECK (btrim(owner_id) <> '' AND length(owner_id) <= 256),
+  fencing_token bigint NOT NULL CHECK (fencing_token > 0),
   reason text NOT NULL CHECK (btrim(reason) <> '' AND length(reason) <= 1024),
   recorded_by text NOT NULL CHECK (btrim(recorded_by) <> '' AND length(recorded_by) <= 256),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp()
@@ -157,7 +169,7 @@ CREATE OR REPLACE FUNCTION reject_evidence_record_mutation() RETURNS trigger LAN
 BEGIN
   IF TG_OP = 'DELETE' AND EXISTS (
     SELECT 1 FROM source_evidence_loss_authorizations a
-     WHERE a.evidence_id = OLD.evidence_id
+     WHERE a.evidence_id = OLD.evidence_id AND a.goal_id = OLD.goal_id AND a.project_id = OLD.project_id
        AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')
   ) THEN
     PERFORM propagate_organizational_knowledge_evidence_loss(OLD.evidence_id, (SELECT a.reason FROM source_evidence_loss_authorizations a WHERE a.evidence_id = OLD.evidence_id AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')));
