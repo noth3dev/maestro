@@ -13,4 +13,10 @@ describe("organizational knowledge persistence SQL shape", () => {
     expect(Math.max(...placeholders)).toBe(insertColumns);
     expect(new Set(placeholders).size).toBe(insertColumns);
   });
+
+  it("binds council author exclusion through SQL parameters", () => {
+    const source = readFileSync(fileURLToPath(new URL("./organizational-knowledge.ts", import.meta.url)), "utf8");
+    expect(source).not.toContain("b.operator_id IS DISTINCT FROM current.authorOperatorId");
+    expect(source).toContain("b.operator_id IS DISTINCT FROM $5::uuid");
+  });
 });
