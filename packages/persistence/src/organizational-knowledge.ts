@@ -142,7 +142,7 @@ export async function promoteOrganizationalKnowledgeToProject(pool: Pool, reques
     const operationRef = `promotion:${request.idempotencyKey.trim()}`;
     if (operationRef.length > 256) throw new OrganizationalKnowledgeError("promotion idempotency key is invalid");
     if (current.scope === "project_department" && current.status === "active") {
-      if ((request.idempotencyKey !== undefined && current.sourceSessionRef !== operationRef) || current.createdBy?.trim() !== request.promoterRoleId.trim() || current.promotionOperatorId?.toLowerCase() !== request.promoterOperatorId.toLowerCase() || current.sourceProjectId.toLowerCase() !== current.projectId?.toLowerCase() || current.departmentId !== request.departmentId) throw new OrganizationalKnowledgeError("conflicting project promotion retry");
+      if ((request.idempotencyKey !== undefined && current.sourceSessionRef !== operationRef) || current.promotionRoleId?.toLowerCase() !== request.promoterRoleId.toLowerCase() || current.promotionOperatorId?.toLowerCase() !== request.promoterOperatorId.toLowerCase() || current.sourceProjectId.toLowerCase() !== current.projectId?.toLowerCase() || current.departmentId !== request.departmentId) throw new OrganizationalKnowledgeError("conflicting project promotion retry");
       return current;
     }
     const promoted = promoteKnowledgeToProject(current, { promoterRoleKind: "department_head", promoterDepartmentId: request.departmentId });
@@ -193,7 +193,7 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
           AND NOT EXISTS (SELECT 1 FROM encore_council_judgments j WHERE j.round_id = r.round_id AND j.verdict <> 'proceed')
           AND NOT EXISTS (SELECT 1 FROM encore_council_judgments j WHERE j.round_id = r.round_id AND (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text(j.cited_evidence_ids)) IS DISTINCT FROM (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text($3::jsonb)))
           AND (SELECT count(DISTINCT (j.model_provider || ':' || j.model_id)) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
-          AND (SELECT count(DISTINCT j.judgment_id) FROM encore_council_judgments j JOIN native_execution_bindings b ON b.execution_ref = j.execution_ref AND b.invocation_ref = j.invocation_ref AND b.goal_id = r.goal_id AND b.project_id = $4 AND b.admission_kind = 'encore_reviewer' AND b.operator_id IS DISTINCT FROM $5::uuid AND b.actual_model_provider = j.model_provider AND b.actual_model_id = j.model_id WHERE j.round_id = r.round_id) = r.reviewer_count`,
+          AND (SELECT count(DISTINCT j.judgment_id) FROM encore_council_judgments j JOIN native_execution_bindings b ON b.execution_ref = j.execution_ref AND b.invocation_ref = j.invocation_ref AND b.goal_id = r.goal_id AND b.project_id = $4 AND b.admission_kind = 'encore_reviewer' AND b.operator_id IS DISTINCT FROM $5::text AND b.actual_model_provider = j.model_provider AND b.actual_model_id = j.model_id WHERE j.round_id = r.round_id) = r.reviewer_count`,
       [request.encoreCouncilRoundId, current.sourceGoalId, JSON.stringify(sourceIds), current.sourceProjectId, current.authorOperatorId],
     );
     for (const sourceId of sourceIds) {
