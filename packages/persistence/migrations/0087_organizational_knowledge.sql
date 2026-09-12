@@ -71,6 +71,7 @@ BEGIN
   IF NEW.scope = 'global' AND (NEW.statement ~* '\m(raw|project-specific|source project|private project)\M' OR NEW.rationale ~* '\m(raw|project-specific|source project|private project)\M' OR COALESCE(NEW.generalized_statement, '') ~* '\m(raw|project-specific|source project|private project)\M') THEN RAISE EXCEPTION 'global organizational knowledge contains raw project content'; END IF;
   SELECT COALESCE(max(revision), 0) + 1 INTO expected_revision FROM organizational_knowledge WHERE knowledge_id = NEW.knowledge_id;
   IF NEW.revision <> expected_revision THEN RAISE EXCEPTION 'organizational knowledge revisions must be append-only and contiguous'; END IF;
+  IF NEW.revision > 1 AND EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND (prior.source_project_id IS DISTINCT FROM NEW.source_project_id OR prior.source_goal_id IS DISTINCT FROM NEW.source_goal_id OR prior.department_id IS DISTINCT FROM NEW.department_id)) THEN RAISE EXCEPTION 'organizational knowledge core provenance is immutable'; END IF;
   IF NEW.revision = 1 AND NEW.scope <> 'worker_proposed' THEN
     RAISE EXCEPTION 'organizational knowledge must be proposed before promotion';
   END IF;
@@ -179,6 +180,7 @@ CREATE TABLE IF NOT EXISTS source_evidence_loss_events (
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   retention retention_class NOT NULL DEFAULT 'project_lifetime'
 );
+CREATE UNIQUE INDEX IF NOT EXISTS source_evidence_loss_events_evidence_unique ON source_evidence_loss_events (evidence_id);
 CREATE OR REPLACE FUNCTION validate_source_evidence_loss_event_binding() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = NEW.evidence_id AND e.goal_id = NEW.goal_id AND e.project_id = NEW.project_id AND g.project_id = NEW.project_id) THEN
@@ -213,9 +215,9 @@ BEGIN
      FOR UPDATE
   LOOP
     INSERT INTO organizational_knowledge
-      (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, promotion_marker, reason, created_by, source_session_ref)
+      (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, promotion_marker, reason, created_by, source_session_ref, retention)
     VALUES
-      (k.knowledge_id, k.revision + 1, k.schema_version, k.source_project_id, k.project_id, k.source_goal_id, k.department_id, k.scope, 'unsupported', k.statement, k.rationale, k.source_evidence_ids, k.source_digest_ids, k.episode_ids, k.confidence, k.freshness, k.generalized, k.council_round_id, k.generalized_statement, k.curator_role_id, 'source-loss', p_reason, p_actor, 'evidence:' || p_evidence_id::text);
+      (k.knowledge_id, k.revision + 1, k.schema_version, k.source_project_id, k.project_id, k.source_goal_id, k.department_id, k.scope, 'unsupported', k.statement, k.rationale, k.source_evidence_ids, k.source_digest_ids, k.episode_ids, k.confidence, k.freshness, k.generalized, k.council_round_id, k.generalized_statement, k.curator_role_id, 'source-loss', p_reason, p_actor, 'evidence:' || p_evidence_id::text, k.retention);
   END LOOP;
 END;
 $$;

@@ -231,6 +231,8 @@ export async function markKnowledgeUnsupportedForEvidence(pool: Pool, evidenceId
     if (source.rowCount !== 1 || source.rows[0]!.goal_id !== proof.goalId || source.rows[0]!.project_id !== source.rows[0]!.goal_project_id) throw new OrganizationalKnowledgeError("evidence source is outside the Goal lease/project");
     await assertProjectMembership(client, operatorId, source.rows[0]!.project_id);
     await assertProjectRole(client, operatorId, source.rows[0]!.project_id, operatorRoleId);
+    const criticalRole = await client.query("SELECT 1 FROM permanent_roles WHERE role_id = $1 AND role_kind IN ('department_head', 'ceo') AND status = 'standing'", [operatorRoleId]);
+    if (criticalRole.rowCount !== 1) throw new OrganizationalKnowledgeError("source loss requires a standing Department Head or CEO role");
     const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_evidence_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([evidenceId.toLowerCase()])]);
     const ids: string[] = [];
     for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await insertRevision(client, unsupported, operatorId, `evidence:${evidenceId}`); ids.push(current.knowledgeId); }
@@ -247,6 +249,8 @@ export async function markKnowledgeUnsupportedForDigest(pool: Pool, digestId: st
     if (digest.rowCount !== 1 || digest.rows[0]!.goal_id !== proof.goalId || digest.rows[0]!.project_id !== digest.rows[0]!.goal_project_id) throw new OrganizationalKnowledgeError("digest source is outside the Goal lease/project");
     await assertProjectMembership(client, operatorId, digest.rows[0]!.project_id);
     await assertProjectRole(client, operatorId, digest.rows[0]!.project_id, operatorRoleId);
+    const criticalRole = await client.query("SELECT 1 FROM permanent_roles WHERE role_id = $1 AND role_kind IN ('department_head', 'ceo') AND status = 'standing'", [operatorRoleId]);
+    if (criticalRole.rowCount !== 1) throw new OrganizationalKnowledgeError("source loss requires a standing Department Head or CEO role");
     const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_digest_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([digestId.toLowerCase()])]);
     const ids: string[] = [];
     for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await insertRevision(client, unsupported, operatorId, `digest:${digestId}`); ids.push(current.knowledgeId); }

@@ -93,6 +93,8 @@ export async function deleteEvidenceSource(pool: Pool, evidenceId: string, reaso
     if (source.rowCount !== 1 || source.rows[0]!.goal_id !== proof.goalId || source.rows[0]!.project_id !== source.rows[0]!.goal_project_id) throw new Error("source evidence is outside the Goal lease/project");
     await assertProjectMembership(client, recordedBy, source.rows[0]!.project_id);
     await assertProjectRole(client, recordedBy, source.rows[0]!.project_id, operatorRoleId);
+    const criticalRole = await client.query("SELECT 1 FROM permanent_roles WHERE role_id = $1 AND role_kind IN ('department_head', 'ceo') AND status = 'standing'", [operatorRoleId]);
+    if (criticalRole.rowCount !== 1) throw new Error("source evidence loss requires a standing Department Head or CEO role");
     const token = randomUUID();
     await client.query("SELECT authorize_source_evidence_loss($1, $2::uuid, $3::uuid, $4::uuid, $5, $6::bigint, $7, $8::uuid, $9)", [token, evidenceId.toLowerCase(), source.rows[0]!.goal_id, source.rows[0]!.project_id, proof.ownerId, proof.fencingToken, reason, recordedBy, operatorRoleId]);
     await client.query("INSERT INTO source_evidence_loss_events (event_id, evidence_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by) VALUES ($1, $2, $3, $4, $5, $6::bigint, $7, $8)", [randomUUID(), evidenceId.toLowerCase(), source.rows[0]!.goal_id, source.rows[0]!.project_id, proof.ownerId, proof.fencingToken, reason, recordedBy]);
