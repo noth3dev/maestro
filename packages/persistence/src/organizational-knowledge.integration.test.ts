@@ -45,6 +45,11 @@ describeDatabase("organizational knowledge persistence", () => {
     schemaVersion: 1, projectId, sourceGoalId: goalId, departmentId: "engineering", statement: "Use a bounded validation gate.", rationale: "It prevented recurrence.", sourceEvidenceIds: [evidenceId, evidenceId2], sourceDigestIds: [], episodeIds: ["episode-a"], confidence: 0.9, freshness: 1, generalized: false, ...overrides,
   });
 
+  it("keeps maintenance functions and marker tables closed to PUBLIC", async () => {
+    const privileges = await pool.query<{ propagate_execute: boolean; promotion_insert: boolean; source_insert: boolean; knowledge_retention: boolean; event_retention: boolean; auth_retention: boolean }>(`SELECT has_function_privilege('public', 'propagate_organizational_knowledge_evidence_loss(uuid,text,text)', 'EXECUTE') AS propagate_execute, has_table_privilege('public', 'knowledge_promotion_authorizations', 'INSERT') AS promotion_insert, has_table_privilege('public', 'source_evidence_loss_authorizations', 'INSERT') AS source_insert, EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'organizational_knowledge' AND column_name = 'retention') AS knowledge_retention, EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'source_evidence_loss_events' AND column_name = 'retention') AS event_retention, EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'source_evidence_loss_authorizations' AND column_name = 'retention') AS auth_retention`);
+    expect(privileges.rows[0]).toEqual({ propagate_execute: false, promotion_insert: false, source_insert: false, knowledge_retention: true, event_retention: true, auth_retention: true });
+  });
+
   it("persists worker proposals separately and only exposes promoted knowledge", async () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
     await expect(proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "other-worker", sessionRef: "session:other", operatorId, operatorRoleId: "engineering" })).rejects.toThrow(/author|owner/);
