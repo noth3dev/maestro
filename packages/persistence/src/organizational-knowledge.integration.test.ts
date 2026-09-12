@@ -72,6 +72,17 @@ describeDatabase("organizational knowledge persistence", () => {
     await expect(listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering", proof })).resolves.toMatchObject([{ knowledgeId: proposed.knowledgeId, projectId, departmentId: "engineering" }]);
   });
 
+  it("replays proposal and promotion identities exactly and rejects changed payloads", async () => {
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
+    const first = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:replay", operatorId, operatorRoleId: "engineering" }, "proposal-command");
+    await expect(proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:other", operatorId, operatorRoleId: "engineering" }, "proposal-command")).resolves.toEqual(first);
+    await expect(proposeOrganizationalKnowledge(pool, proposal({ statement: "Changed payload." }), proof, { actorId: "worker", sessionRef: "session:other", operatorId, operatorRoleId: "engineering" }, "proposal-command")).rejects.toThrow(/conflicting|replay/);
+    await expect(proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:other", operatorId, operatorRoleId: "engineering" }, "")).rejects.toThrow(/idempotency/);
+    const promoted = await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: first.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering", idempotencyKey: "project-command" });
+    await expect(promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: first.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering", idempotencyKey: "project-command" })).resolves.toEqual(promoted);
+    await expect(promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: first.knowledgeId, proof, promoterRoleId: "head-security", promoterOperatorId: operatorId, departmentId: "engineering", idempotencyKey: "project-command" })).rejects.toThrow(/conflicting|retry/);
+  });
+
   it("does not expose a project lesson in another project", async () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
     const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "engineering" });
@@ -140,6 +151,8 @@ describeDatabase("organizational knowledge persistence", () => {
     await expect(refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId: randomUUID(), idempotencyKey: "unauthorized" })).rejects.toThrow(/active|operator/);
     const stale = await refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId, idempotencyKey: "stale-refresh" });
     expect(stale.confidence).toBeLessThan(promoted.confidence);
+    await expect(pool.query("SELECT source_session_ref FROM organizational_knowledge WHERE knowledge_id = $1 AND revision = $2", [promoted.knowledgeId, promoted.revision + 1])).resolves.toMatchObject({ rows: [{ source_session_ref: "system:knowledge-decay:stale-refresh" }] });
+    await expect(refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId, idempotencyKey: "stale-refresh" })).resolves.toEqual(stale);
     const contradicted = await refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-21T00:00:00.000Z", lastSupportedAt: "2026-09-20T00:00:00.000Z", contradicted: true, proof, operatorId, idempotencyKey: "contradiction-refresh" });
     expect(contradicted.status).toBe("contradicted");
     await expect(listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering", proof })).resolves.toMatchObject([{ knowledgeId: promoted.knowledgeId, status: "contradicted" }]);
@@ -168,6 +181,7 @@ describeDatabase("organizational knowledge persistence", () => {
     await expect(deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId, { ...proof, fencingToken: "999999" }, "head-engineering")).rejects.toThrow(/stale|lease/);
     await deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId, proof, "head-engineering");
     await expect(deleteEvidenceSource(pool, evidenceId, "different reason", operatorId, proof, "head-engineering")).rejects.toThrow(/conflicting/);
+    await expect(deleteEvidenceSource(pool, evidenceId2, "password=should-not-persist", operatorId, proof, "head-engineering")).rejects.toThrow(/unsafe|secret|privacy|source/);
     await expect(deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId, proof, "head-engineering")).resolves.toBeUndefined();
     await expect(pool.query("SELECT count(*)::int AS count FROM source_evidence_loss_events WHERE evidence_id = $1 AND goal_id = $2 AND project_id = $3 AND owner_id = $4 AND fencing_token = $5 AND reason = $6", [evidenceId, goalId, projectId, proof.ownerId, proof.fencingToken, "source artifact was deleted"])).resolves.toMatchObject({ rows: [{ count: 1 }] });
     await expect(pool.query("SELECT count(*)::int AS count FROM evidence_source_tombstones WHERE evidence_id = $1 AND goal_id = $2 AND project_id = $3", [evidenceId, goalId, projectId])).resolves.toMatchObject({ rows: [{ count: 1 }] });
