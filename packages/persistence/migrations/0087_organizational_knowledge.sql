@@ -20,22 +20,28 @@ CREATE TABLE IF NOT EXISTS organizational_knowledge (
   freshness double precision NOT NULL CHECK (freshness >= 0 AND freshness <= 1),
   generalized boolean NOT NULL DEFAULT false,
   council_round_id uuid,
-  generalized_statement text,
-  curator_role_id text,
-  promotion_marker text NOT NULL,
+  generalized_statement text CHECK (generalized_statement IS NULL OR (btrim(generalized_statement) <> '' AND length(generalized_statement) <= 4096)),
+  curator_role_id text CHECK (curator_role_id IS NULL OR (btrim(curator_role_id) <> '' AND length(curator_role_id) <= 256)),
+  curator_operator_id uuid,
+  promotion_marker text NOT NULL CHECK (btrim(promotion_marker) <> '' AND length(promotion_marker) <= 64),
   reason text CHECK (reason IS NULL OR (btrim(reason) <> '' AND length(reason) <= 1024)),
   created_by text NOT NULL CHECK (btrim(created_by) <> '' AND length(created_by) <= 256),
   source_session_ref text NOT NULL CHECK (btrim(source_session_ref) <> '' AND length(source_session_ref) <= 256),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   retention retention_class NOT NULL DEFAULT 'project_lifetime',
   PRIMARY KEY (knowledge_id, revision),
-  CHECK ((scope = 'global' AND project_id IS NULL AND generalized AND council_round_id IS NOT NULL AND generalized_statement IS NOT NULL AND curator_role_id IS NOT NULL AND jsonb_array_length(episode_ids) >= 2)
+  CHECK ((scope = 'global' AND project_id IS NULL AND generalized AND council_round_id IS NOT NULL AND generalized_statement IS NOT NULL AND curator_role_id IS NOT NULL AND curator_operator_id IS NOT NULL AND jsonb_array_length(episode_ids) >= 2)
       OR (scope <> 'global' AND project_id IS NOT NULL)),
   CHECK ((scope = 'worker_proposed' AND status IN ('proposed', 'unsupported')) OR (scope <> 'worker_proposed' AND status <> 'proposed')),
   CHECK ((status IN ('unsupported', 'contradicted', 'retired') AND reason IS NOT NULL) OR status IN ('proposed', 'active')),
   CHECK ((scope = 'worker_proposed' AND promotion_marker = 'worker-proposal') OR (scope = 'project_department' AND status = 'active' AND promotion_marker = 'department-promotion') OR (scope = 'global' AND status = 'active' AND promotion_marker = 'global-promotion') OR (status IN ('unsupported', 'contradicted', 'retired') AND promotion_marker IN ('source-loss', 'knowledge-decay', 'adjudication')))
 
 );
+ALTER TABLE organizational_knowledge ADD COLUMN IF NOT EXISTS curator_operator_id uuid;
+ALTER TABLE organizational_knowledge DROP CONSTRAINT IF EXISTS organizational_knowledge_generalized_statement_bound;
+ALTER TABLE organizational_knowledge ADD CONSTRAINT organizational_knowledge_generalized_statement_bound CHECK (generalized_statement IS NULL OR (btrim(generalized_statement) <> '' AND length(generalized_statement) <= 4096));
+ALTER TABLE organizational_knowledge DROP CONSTRAINT IF EXISTS organizational_knowledge_text_bounds;
+ALTER TABLE organizational_knowledge ADD CONSTRAINT organizational_knowledge_text_bounds CHECK (btrim(statement) <> '' AND length(statement) <= 4096 AND btrim(rationale) <> '' AND length(rationale) <= 4096 AND (reason IS NULL OR (btrim(reason) <> '' AND length(reason) <= 1024)) AND btrim(created_by) <> '' AND length(created_by) <= 256 AND btrim(source_session_ref) <> '' AND length(source_session_ref) <= 256 AND (curator_role_id IS NULL OR (btrim(curator_role_id) <> '' AND length(curator_role_id) <= 256)) AND btrim(promotion_marker) <> '' AND length(promotion_marker) <= 64));
 CREATE INDEX IF NOT EXISTS organizational_knowledge_project_idx ON organizational_knowledge (project_id, department_id, created_at, knowledge_id, revision);
 CREATE INDEX IF NOT EXISTS organizational_knowledge_global_idx ON organizational_knowledge (scope, department_id, created_at, knowledge_id, revision) WHERE scope = 'global';
 CREATE TABLE IF NOT EXISTS knowledge_promotion_authorizations (
@@ -43,15 +49,27 @@ CREATE TABLE IF NOT EXISTS knowledge_promotion_authorizations (
   knowledge_id uuid NOT NULL,
   revision integer NOT NULL,
   scope text NOT NULL CHECK (scope IN ('project_department', 'global')),
-  role_id text NOT NULL,
-  department_id text NOT NULL REFERENCES departments(department_id),
+  role_id text NOT NULL CHECK (btrim(role_id) <> '' AND length(role_id) <= 256),
+  department_id text NOT NULL REFERENCES departments(department_id) CHECK (btrim(department_id) <> '' AND length(department_id) <= 256),
   operator_id uuid NOT NULL,
   goal_id uuid NOT NULL REFERENCES goals(goal_id),
-  owner_id text NOT NULL,
+  owner_id text NOT NULL CHECK (btrim(owner_id) <> '' AND length(owner_id) <= 256),
   fencing_token bigint NOT NULL CHECK (fencing_token > 0),
+  curator_operator_id uuid,
+  curator_role_id text CHECK (curator_role_id IS NULL OR (btrim(curator_role_id) <> '' AND length(curator_role_id) <= 256)),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   retention retention_class NOT NULL DEFAULT 'project_lifetime'
 );
+ALTER TABLE knowledge_promotion_authorizations ADD COLUMN IF NOT EXISTS curator_operator_id uuid;
+ALTER TABLE knowledge_promotion_authorizations ADD COLUMN IF NOT EXISTS curator_role_id text;
+ALTER TABLE knowledge_promotion_authorizations DROP CONSTRAINT IF EXISTS knowledge_promotion_authorizations_curator_role_check;
+ALTER TABLE knowledge_promotion_authorizations ADD CONSTRAINT knowledge_promotion_authorizations_curator_role_check CHECK (curator_role_id IS NULL OR (btrim(curator_role_id) <> '' AND length(curator_role_id) <= 256));
+ALTER TABLE knowledge_promotion_authorizations DROP CONSTRAINT IF EXISTS knowledge_promotion_authorizations_role_check;
+ALTER TABLE knowledge_promotion_authorizations ADD CONSTRAINT knowledge_promotion_authorizations_role_check CHECK (btrim(role_id) <> '' AND length(role_id) <= 256);
+ALTER TABLE knowledge_promotion_authorizations DROP CONSTRAINT IF EXISTS knowledge_promotion_authorizations_scope_check;
+ALTER TABLE knowledge_promotion_authorizations ADD CONSTRAINT knowledge_promotion_authorizations_scope_check CHECK (scope IN ('project_department', 'global'));
+ALTER TABLE knowledge_promotion_authorizations DROP CONSTRAINT IF EXISTS knowledge_promotion_authorizations_text_safety;
+ALTER TABLE knowledge_promotion_authorizations ADD CONSTRAINT knowledge_promotion_authorizations_text_safety CHECK (concat_ws('|', owner_id, role_id, department_id, curator_role_id) !~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----|(^|[^a-z])(email|phone|ssn|social security|home address|personal information)([^a-z]|$))');
 
 CREATE OR REPLACE FUNCTION validate_organizational_knowledge_insert() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE item jsonb; ref_id uuid; expected_revision integer;
@@ -68,10 +86,16 @@ BEGIN
   IF NEW.generalized_statement IS NOT NULL AND (NEW.generalized_statement ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----)' OR NEW.generalized_statement ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)' OR NEW.generalized_statement ~* '\m(raw|project-specific|source project|private project)\M') THEN
     RAISE EXCEPTION 'generalized organizational knowledge contains unsafe material';
   END IF;
+  IF concat_ws('|', NEW.reason, NEW.created_by, NEW.source_session_ref, NEW.curator_role_id, NEW.department_id, NEW.promotion_marker) ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----)' THEN
+    RAISE EXCEPTION 'organizational knowledge metadata contains secret-like material';
+  END IF;
+  IF concat_ws('|', NEW.reason, NEW.created_by, NEW.source_session_ref, NEW.curator_role_id, NEW.department_id, NEW.promotion_marker) ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)' THEN
+    RAISE EXCEPTION 'organizational knowledge metadata contains personal information';
+  END IF;
   IF NEW.scope = 'global' AND (NEW.statement ~* '\m(raw|project-specific|source project|private project)\M' OR NEW.rationale ~* '\m(raw|project-specific|source project|private project)\M' OR COALESCE(NEW.generalized_statement, '') ~* '\m(raw|project-specific|source project|private project)\M') THEN RAISE EXCEPTION 'global organizational knowledge contains raw project content'; END IF;
   SELECT COALESCE(max(revision), 0) + 1 INTO expected_revision FROM organizational_knowledge WHERE knowledge_id = NEW.knowledge_id;
   IF NEW.revision <> expected_revision THEN RAISE EXCEPTION 'organizational knowledge revisions must be append-only and contiguous'; END IF;
-  IF NEW.revision > 1 AND EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND (prior.source_project_id IS DISTINCT FROM NEW.source_project_id OR prior.source_goal_id IS DISTINCT FROM NEW.source_goal_id OR prior.department_id IS DISTINCT FROM NEW.department_id)) THEN RAISE EXCEPTION 'organizational knowledge core provenance is immutable'; END IF;
+  IF NEW.revision > 1 AND EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND (prior.schema_version IS DISTINCT FROM NEW.schema_version OR prior.source_project_id IS DISTINCT FROM NEW.source_project_id OR prior.source_goal_id IS DISTINCT FROM NEW.source_goal_id OR prior.department_id IS DISTINCT FROM NEW.department_id OR prior.retention IS DISTINCT FROM NEW.retention)) THEN RAISE EXCEPTION 'organizational knowledge core provenance is immutable'; END IF;
   IF NEW.revision = 1 AND NEW.scope <> 'worker_proposed' THEN
     RAISE EXCEPTION 'organizational knowledge must be proposed before promotion';
   END IF;
@@ -109,6 +133,12 @@ BEGIN
        AND a.goal_id = NEW.source_goal_id AND a.owner_id = current_setting('maestro.knowledge_promotion_owner', true)
        AND a.fencing_token = current_setting('maestro.knowledge_promotion_fence', true)::bigint
        AND a.token_hash = encode(public.digest(current_setting('maestro.knowledge_promotion_token', true), 'sha256'), 'hex')
+       AND (NEW.scope <> 'global' OR (a.curator_role_id = NEW.curator_role_id AND a.curator_operator_id = NEW.curator_operator_id AND a.curator_operator_id IS NOT NULL
+         AND a.curator_operator_id <> a.operator_id
+         AND EXISTS (SELECT 1 FROM local_operators co WHERE co.operator_id = a.curator_operator_id AND co.active = true)
+         AND EXISTS (SELECT 1 FROM permanent_roles cr WHERE cr.role_id = a.curator_role_id AND cr.role_kind = 'department_head' AND cr.department_id = NEW.department_id AND cr.status = 'standing')
+         AND EXISTS (SELECT 1 FROM operator_project_memberships cm WHERE cm.operator_id = a.curator_operator_id AND cm.project_id = NEW.source_project_id AND cm.active = true)
+         AND EXISTS (SELECT 1 FROM operator_project_roles crole JOIN operator_project_memberships cm ON cm.operator_id = crole.operator_id AND cm.project_id = crole.project_id AND cm.active = true WHERE crole.operator_id = a.curator_operator_id AND crole.project_id = NEW.source_project_id AND crole.role_id = a.curator_role_id AND crole.active = true)))
   ) THEN RAISE EXCEPTION 'organizational knowledge promotion authorization is missing or mismatched'; END IF;
   IF NEW.status = 'active' AND NEW.scope IN ('project_department', 'global') THEN
     DELETE FROM knowledge_promotion_authorizations WHERE knowledge_id = NEW.knowledge_id AND revision = NEW.revision;
@@ -171,8 +201,8 @@ DROP FUNCTION IF EXISTS current_organizational_knowledge(uuid);
 CREATE TABLE IF NOT EXISTS evidence_source_tombstones (
   evidence_id uuid PRIMARY KEY,
   goal_id uuid NOT NULL REFERENCES goals(goal_id), project_id uuid NOT NULL,
-  owner_id text NOT NULL, fencing_token bigint NOT NULL CHECK (fencing_token > 0),
-  reason text NOT NULL, recorded_by text NOT NULL,
+  owner_id text NOT NULL CHECK (btrim(owner_id) <> '' AND length(owner_id) <= 256), fencing_token bigint NOT NULL CHECK (fencing_token > 0),
+  reason text NOT NULL CHECK (btrim(reason) <> '' AND length(reason) <= 1024), recorded_by text NOT NULL CHECK (btrim(recorded_by) <> '' AND length(recorded_by) <= 256),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(), retention retention_class NOT NULL DEFAULT 'project_lifetime'
 );
 CREATE OR REPLACE FUNCTION reject_evidence_source_reuse() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -231,9 +261,9 @@ BEGIN
      FOR UPDATE
   LOOP
     INSERT INTO organizational_knowledge
-      (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, promotion_marker, reason, created_by, source_session_ref, retention)
+      (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, curator_operator_id, promotion_marker, reason, created_by, source_session_ref, retention)
     VALUES
-      (k.knowledge_id, k.revision + 1, k.schema_version, k.source_project_id, k.project_id, k.source_goal_id, k.department_id, k.scope, 'unsupported', k.statement, k.rationale, k.source_evidence_ids, k.source_digest_ids, k.episode_ids, k.confidence, k.freshness, k.generalized, k.council_round_id, k.generalized_statement, k.curator_role_id, 'source-loss', p_reason, p_actor, 'evidence:' || p_evidence_id::text, k.retention);
+      (k.knowledge_id, k.revision + 1, k.schema_version, k.source_project_id, k.project_id, k.source_goal_id, k.department_id, k.scope, 'unsupported', k.statement, k.rationale, k.source_evidence_ids, k.source_digest_ids, k.episode_ids, k.confidence, k.freshness, k.generalized, k.council_round_id, k.generalized_statement, k.curator_role_id, k.curator_operator_id, 'source-loss', p_reason, p_actor, 'evidence:' || p_evidence_id::text, k.retention);
   END LOOP;
 END;
 $$;
@@ -258,6 +288,10 @@ CREATE TABLE IF NOT EXISTS source_evidence_loss_authorizations (
   retention retention_class NOT NULL DEFAULT 'project_lifetime'
 );
 
+ALTER TABLE source_evidence_loss_events DROP CONSTRAINT IF EXISTS source_evidence_loss_events_text_safety;
+ALTER TABLE source_evidence_loss_events ADD CONSTRAINT source_evidence_loss_events_text_safety CHECK (concat_ws('|', owner_id, reason, recorded_by) !~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----|(^|[^a-z])(email|phone|ssn|social security|home address|personal information)([^a-z]|$))');
+ALTER TABLE source_evidence_loss_authorizations DROP CONSTRAINT IF EXISTS source_evidence_loss_authorizations_text_safety;
+ALTER TABLE source_evidence_loss_authorizations ADD CONSTRAINT source_evidence_loss_authorizations_text_safety CHECK (concat_ws('|', owner_id, reason, recorded_by, role_id) !~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----|(^|[^a-z])(email|phone|ssn|social security|home address|personal information)([^a-z]|$))');
 CREATE OR REPLACE FUNCTION validate_source_evidence_loss_authorization_binding() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = NEW.evidence_id AND e.goal_id = NEW.goal_id AND e.project_id = NEW.project_id AND g.project_id = NEW.project_id) THEN
@@ -295,14 +329,28 @@ CREATE TABLE IF NOT EXISTS knowledge_proposal_authorizations (
   payload_hash char(64) NOT NULL CHECK (payload_hash ~ '^[0-9a-f]{64}$'),
   knowledge_id uuid NOT NULL, revision integer NOT NULL CHECK (revision = 1),
   project_id uuid NOT NULL, goal_id uuid NOT NULL REFERENCES goals(goal_id),
-  operator_id uuid NOT NULL, role_id text NOT NULL, owner_id text NOT NULL,
-  fencing_token bigint NOT NULL CHECK (fencing_token > 0), actor_id text NOT NULL, session_ref text NOT NULL,
+  operator_id uuid NOT NULL, role_id text NOT NULL CHECK (btrim(role_id) <> '' AND length(role_id) <= 256), owner_id text NOT NULL CHECK (btrim(owner_id) <> '' AND length(owner_id) <= 256),
+  fencing_token bigint NOT NULL CHECK (fencing_token > 0), actor_id text NOT NULL CHECK (btrim(actor_id) <> '' AND length(actor_id) <= 256), session_ref text NOT NULL CHECK (btrim(session_ref) <> '' AND length(session_ref) <= 256),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(), retention retention_class NOT NULL DEFAULT 'project_lifetime'
 );
+-- Reapply-safe repair for schemas created by the earlier v13 payload mistake.
+ALTER TABLE knowledge_promotion_authorizations DROP COLUMN IF EXISTS payload_hash;
+ALTER TABLE knowledge_proposal_authorizations ADD COLUMN IF NOT EXISTS payload_hash char(64);
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM knowledge_proposal_authorizations WHERE payload_hash IS NULL) THEN
+    RAISE EXCEPTION 'knowledge proposal authorization payload hashes must be backfilled before migration 0087 can reapply';
+  END IF;
+END $$;
+ALTER TABLE knowledge_proposal_authorizations ALTER COLUMN payload_hash SET NOT NULL;
+ALTER TABLE knowledge_proposal_authorizations DROP CONSTRAINT IF EXISTS knowledge_proposal_authorizations_payload_hash_check;
+ALTER TABLE knowledge_proposal_authorizations ADD CONSTRAINT knowledge_proposal_authorizations_payload_hash_check CHECK (payload_hash ~ '^[0-9a-f]{64}$');
+ALTER TABLE knowledge_proposal_authorizations DROP CONSTRAINT IF EXISTS knowledge_proposal_authorizations_text_safety;
+ALTER TABLE knowledge_proposal_authorizations ADD CONSTRAINT knowledge_proposal_authorizations_text_safety CHECK (concat_ws('|', owner_id, role_id, actor_id, session_ref) !~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----|(^|[^a-z])(email|phone|ssn|social security|home address|personal information)([^a-z]|$))');
 
 DROP FUNCTION IF EXISTS authorize_knowledge_proposal(text, uuid, uuid, uuid, uuid, text, text, bigint, text, text);
 CREATE OR REPLACE FUNCTION authorize_knowledge_proposal(p_token text, p_knowledge_id uuid, p_project_id uuid, p_goal_id uuid, p_operator_id uuid, p_role_id text, p_owner_id text, p_fencing_token bigint, p_actor_id text, p_session_ref text, p_payload jsonb) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
+  IF concat_ws('|', p_owner_id, p_role_id, p_actor_id, p_session_ref) ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----|(^|[^a-z])(email|phone|ssn|social security|home address|personal information)([^a-z]|$))' THEN RAISE EXCEPTION 'knowledge proposal authorization contains unsafe text'; END IF;
   IF btrim(p_token) = '' OR p_actor_id <> p_owner_id OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_operator_id AND r.project_id = p_project_id AND r.role_id = p_role_id AND r.active = true) OR NOT EXISTS (SELECT 1 FROM goals WHERE goal_id = p_goal_id AND project_id = p_project_id) OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) THEN RAISE EXCEPTION 'knowledge proposal authorization context is invalid'; END IF;
   INSERT INTO knowledge_proposal_authorizations (token_hash, payload_hash, knowledge_id, project_id, goal_id, operator_id, role_id, owner_id, fencing_token, actor_id, session_ref) VALUES (encode(public.digest(p_token, 'sha256'), 'hex'), encode(public.digest(p_payload::text, 'sha256'), 'hex'), p_knowledge_id, p_project_id, p_goal_id, p_operator_id, p_role_id, p_owner_id, p_fencing_token, p_actor_id, p_session_ref);
   PERFORM set_config('maestro.knowledge_proposal_token', p_token, true); PERFORM set_config('maestro.knowledge_proposal_operator', p_operator_id::text, true); PERFORM set_config('maestro.knowledge_proposal_owner', p_owner_id, true); PERFORM set_config('maestro.knowledge_proposal_fence', p_fencing_token::text, true);
@@ -311,10 +359,6 @@ $$;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_proposal_authorizations FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION authorize_knowledge_proposal(text, uuid, uuid, uuid, uuid, text, text, bigint, text, text, jsonb) FROM PUBLIC;
 
-ALTER TABLE knowledge_promotion_authorizations DROP COLUMN IF EXISTS payload_hash;
-ALTER TABLE knowledge_proposal_authorizations ADD COLUMN IF NOT EXISTS payload_hash char(64);
-ALTER TABLE knowledge_proposal_authorizations DROP CONSTRAINT IF EXISTS knowledge_proposal_authorizations_payload_hash_check;
-ALTER TABLE knowledge_proposal_authorizations ADD CONSTRAINT knowledge_proposal_authorizations_payload_hash_check CHECK (payload_hash ~ '^[0-9a-f]{64}$');
 CREATE OR REPLACE FUNCTION reject_knowledge_proposal_authorization_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'DELETE' AND OLD.token_hash = encode(public.digest(current_setting('maestro.knowledge_proposal_token', true), 'sha256'), 'hex') THEN RETURN OLD; END IF;
@@ -324,10 +368,13 @@ $$;
 DROP TRIGGER IF EXISTS knowledge_proposal_authorizations_immutable ON knowledge_proposal_authorizations;
 CREATE TRIGGER knowledge_proposal_authorizations_immutable BEFORE UPDATE OR DELETE ON knowledge_proposal_authorizations FOR EACH ROW EXECUTE FUNCTION reject_knowledge_proposal_authorization_mutation();
 
-CREATE OR REPLACE FUNCTION authorize_knowledge_promotion(p_token text, p_knowledge_id uuid, p_revision integer, p_scope text, p_role_id text, p_department_id text, p_operator_id uuid, p_project_id uuid, p_goal_id uuid, p_owner_id text, p_fencing_token bigint) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+DROP FUNCTION IF EXISTS authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint);
+CREATE OR REPLACE FUNCTION authorize_knowledge_promotion(p_token text, p_knowledge_id uuid, p_revision integer, p_scope text, p_role_id text, p_department_id text, p_operator_id uuid, p_project_id uuid, p_goal_id uuid, p_owner_id text, p_fencing_token bigint, p_curator_operator_id uuid, p_curator_role_id text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-  IF btrim(p_token) = '' OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_operator_id AND r.project_id = p_project_id AND r.role_id = p_role_id AND r.active = true) OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) OR NOT EXISTS (SELECT 1 FROM organizational_knowledge WHERE knowledge_id = p_knowledge_id AND revision = p_revision - 1 AND source_project_id = p_project_id AND source_goal_id = p_goal_id) THEN RAISE EXCEPTION 'knowledge promotion authorization context is invalid'; END IF;
-  INSERT INTO knowledge_promotion_authorizations (token_hash, knowledge_id, revision, scope, role_id, department_id, operator_id, goal_id, owner_id, fencing_token) VALUES (encode(public.digest(p_token, 'sha256'), 'hex'), p_knowledge_id, p_revision, p_scope, p_role_id, p_department_id, p_operator_id, p_goal_id, p_owner_id, p_fencing_token);
+  IF concat_ws('|', p_role_id, p_department_id, p_owner_id, p_curator_role_id) ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----|(^|[^a-z])(email|phone|ssn|social security|home address|personal information)([^a-z]|$))' THEN RAISE EXCEPTION 'knowledge promotion authorization contains unsafe text'; END IF;
+  IF btrim(p_token) = '' OR p_scope NOT IN ('project_department', 'global') OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_operator_id AND r.project_id = p_project_id AND r.role_id = p_role_id AND r.active = true) OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) OR NOT EXISTS (SELECT 1 FROM organizational_knowledge WHERE knowledge_id = p_knowledge_id AND revision = p_revision - 1 AND source_project_id = p_project_id AND source_goal_id = p_goal_id) THEN RAISE EXCEPTION 'knowledge promotion authorization context is invalid'; END IF;
+  IF p_scope = 'global' AND (p_curator_operator_id IS NULL OR p_curator_role_id IS NULL OR p_curator_operator_id = p_operator_id OR p_curator_role_id = p_role_id OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_curator_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM permanent_roles WHERE role_id = p_curator_role_id AND role_kind = 'department_head' AND department_id = p_department_id AND status = 'standing') OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_curator_operator_id AND r.project_id = p_project_id AND r.role_id = p_curator_role_id AND r.active = true)) THEN RAISE EXCEPTION 'global knowledge curator authorization context is invalid'; END IF;
+  INSERT INTO knowledge_promotion_authorizations (token_hash, knowledge_id, revision, scope, role_id, department_id, operator_id, goal_id, owner_id, fencing_token, curator_operator_id, curator_role_id) VALUES (encode(public.digest(p_token, 'sha256'), 'hex'), p_knowledge_id, p_revision, p_scope, p_role_id, p_department_id, p_operator_id, p_goal_id, p_owner_id, p_fencing_token, p_curator_operator_id, p_curator_role_id);
   PERFORM set_config('maestro.knowledge_promotion_token', p_token, true); PERFORM set_config('maestro.knowledge_promotion_operator', p_operator_id::text, true); PERFORM set_config('maestro.knowledge_promotion_goal', p_goal_id::text, true); PERFORM set_config('maestro.knowledge_promotion_owner', p_owner_id, true); PERFORM set_config('maestro.knowledge_promotion_fence', p_fencing_token::text, true);
 END;
 $$;
@@ -345,7 +392,7 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON evidence_source_tombstones FROM PUBLI
 REVOKE TRUNCATE ON goals, evidence_records, organizational_knowledge, source_evidence_loss_events, source_evidence_loss_authorizations, knowledge_promotion_authorizations FROM PUBLIC;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_promotion_authorizations FROM PUBLIC;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON source_evidence_loss_authorizations FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint, uuid, text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION authorize_source_evidence_loss(text, uuid, uuid, uuid, text, bigint, text, uuid, text) FROM PUBLIC;
 
 CREATE OR REPLACE FUNCTION reject_evidence_record_mutation() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
@@ -412,7 +459,7 @@ BEGIN
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.maestro_goal_truncate_reset() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_unscoped_truncate() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_evidence_source_reuse() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
-  EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint, uuid, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_source_evidence_loss(text, uuid, uuid, uuid, text, bigint, text, uuid, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_proposal(text, uuid, uuid, uuid, uuid, text, text, bigint, text, text, jsonb) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_knowledge_proposal_authorization_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
