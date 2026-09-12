@@ -114,7 +114,52 @@ ALTER TABLE organizational_knowledge ADD CONSTRAINT organizational_knowledge_lif
 ALTER TABLE organizational_knowledge DROP CONSTRAINT IF EXISTS organizational_knowledge_marker_shape;
 ALTER TABLE organizational_knowledge ADD CONSTRAINT organizational_knowledge_marker_shape CHECK ((scope = 'worker_proposed' AND promotion_marker = 'worker-proposal') OR (scope = 'project_department' AND status = 'active' AND promotion_marker = 'department-promotion') OR (scope = 'global' AND status = 'active' AND promotion_marker = 'global-promotion') OR (status IN ('unsupported', 'contradicted', 'retired') AND promotion_marker IN ('source-loss', 'knowledge-decay', 'adjudication')));
 ALTER TABLE organizational_knowledge DROP CONSTRAINT IF EXISTS organizational_knowledge_author_shape;
-ALTER TABLE organizational_knowledge ADD CONSTRAINT organizational_knowledge_author_shape CHECK ((scope = 'worker_proposed' AND author_operator_id IS NOT NULL AND author_role_id IS NOT NULL) OR scope <> 'worker_proposed');
+ALTER TABLE organizational_knowledge ADD CONSTRAINT organizational_knowledge_author_shape CHECK (author_operator_id IS NOT NULL AND author_role_id IS NOT NULL);
+
+CREATE TABLE IF NOT EXISTS organizational_knowledge_digest_losses (
+  digest_id uuid PRIMARY KEY,
+  goal_id uuid NOT NULL REFERENCES goals(goal_id),
+  project_id uuid NOT NULL,
+  owner_id text NOT NULL CHECK (btrim(owner_id) <> '' AND length(owner_id) <= 256),
+  fencing_token bigint NOT NULL CHECK (fencing_token > 0),
+  reason text NOT NULL CHECK (btrim(reason) <> '' AND length(reason) <= 1024),
+  recorded_by uuid NOT NULL,
+  role_id text NOT NULL CHECK (btrim(role_id) <> '' AND length(role_id) <= 256),
+  token_hash char(64) NOT NULL CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+  created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  retention retention_class NOT NULL DEFAULT 'project_lifetime'
+);
+CREATE INDEX IF NOT EXISTS organizational_knowledge_digest_losses_project_idx ON organizational_knowledge_digest_losses (project_id, goal_id, digest_id);
+CREATE OR REPLACE FUNCTION reject_organizational_knowledge_digest_loss_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'organizational knowledge digest losses are append-only';
+END;
+$$;
+DROP TRIGGER IF EXISTS organizational_knowledge_digest_losses_immutable ON organizational_knowledge_digest_losses;
+CREATE TRIGGER organizational_knowledge_digest_losses_immutable BEFORE UPDATE OR DELETE ON organizational_knowledge_digest_losses FOR EACH ROW EXECUTE FUNCTION reject_organizational_knowledge_digest_loss_mutation();
+CREATE OR REPLACE FUNCTION authorize_knowledge_digest_loss(p_token text, p_digest_id uuid, p_goal_id uuid, p_project_id uuid, p_owner_id text, p_fencing_token bigint, p_reason text, p_recorded_by uuid, p_role_id text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF btrim(p_token) = '' OR btrim(p_reason) = '' OR length(p_reason) > 1024
+     OR NOT EXISTS (SELECT 1 FROM improvement_digests d WHERE d.digest_id = p_digest_id AND d.goal_id = p_goal_id AND d.project_id = p_project_id)
+     OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_recorded_by AND active = true)
+     OR NOT EXISTS (SELECT 1 FROM permanent_roles WHERE status = 'standing' AND ((role_id = p_role_id AND role_kind = 'department_head') OR (p_role_id = 'ceo' AND role_id = 'concertmaster' AND role_kind = 'concertmaster')))
+     OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_recorded_by AND r.project_id = p_project_id AND r.role_id = p_role_id AND r.active = true)
+     OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) THEN
+    RAISE EXCEPTION 'knowledge digest loss authorization context is invalid';
+  END IF;
+  INSERT INTO organizational_knowledge_digest_losses (digest_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by, role_id, token_hash, retention)
+    SELECT p_digest_id, p_goal_id, p_project_id, p_owner_id, p_fencing_token, p_reason, p_recorded_by, p_role_id, encode(public.digest(p_token, 'sha256'), 'hex'), d.retention
+    FROM improvement_digests d WHERE d.digest_id = p_digest_id
+    ON CONFLICT (digest_id) DO NOTHING;
+  IF EXISTS (SELECT 1 FROM organizational_knowledge_digest_losses l WHERE l.digest_id = p_digest_id AND (l.goal_id IS DISTINCT FROM p_goal_id OR l.project_id IS DISTINCT FROM p_project_id OR l.owner_id IS DISTINCT FROM p_owner_id OR l.fencing_token IS DISTINCT FROM p_fencing_token OR l.reason IS DISTINCT FROM p_reason OR l.recorded_by IS DISTINCT FROM p_recorded_by OR l.role_id IS DISTINCT FROM p_role_id)) THEN
+    RAISE EXCEPTION 'conflicting knowledge digest loss retry';
+  END IF;
+END;
+$$;
+REVOKE ALL ON organizational_knowledge_digest_losses FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION authorize_knowledge_digest_loss(text, uuid, uuid, uuid, text, bigint, text, uuid, text) FROM PUBLIC;
+CREATE INDEX IF NOT EXISTS organizational_knowledge_digest_losses_token_idx ON organizational_knowledge_digest_losses (token_hash);
+
 CREATE INDEX IF NOT EXISTS organizational_knowledge_project_idx ON organizational_knowledge (project_id, department_id, created_at, knowledge_id, revision);
 CREATE INDEX IF NOT EXISTS organizational_knowledge_global_idx ON organizational_knowledge (scope, department_id, created_at, knowledge_id, revision) WHERE scope = 'global';
 CREATE TABLE IF NOT EXISTS knowledge_promotion_authorizations (
@@ -169,7 +214,7 @@ CREATE TABLE IF NOT EXISTS knowledge_maintenance_authorizations (
 );
 CREATE OR REPLACE FUNCTION authorize_knowledge_maintenance(p_token text, p_knowledge_id uuid, p_revision integer, p_status text, p_operator_id uuid, p_role_id text, p_owner_id text, p_fencing_token bigint, p_reason text, p_source_session_ref text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-  IF btrim(p_token) = '' OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM permanent_roles WHERE role_id = p_role_id AND role_kind IN ('department_head', 'ceo') AND status = 'standing') OR NOT EXISTS (SELECT 1 FROM organizational_knowledge k JOIN operator_project_roles r ON r.project_id = k.source_project_id AND r.role_id = p_role_id AND r.operator_id = p_operator_id AND r.active = true JOIN operator_project_memberships m ON m.project_id = r.project_id AND m.operator_id = r.operator_id AND m.active = true WHERE k.knowledge_id = p_knowledge_id AND k.revision = p_revision - 1) OR NOT EXISTS (SELECT 1 FROM goal_leases l JOIN organizational_knowledge k ON k.source_goal_id = l.goal_id WHERE k.knowledge_id = p_knowledge_id AND k.revision = p_revision - 1 AND l.owner_id = p_owner_id AND l.fencing_token = p_fencing_token AND l.expires_at > clock_timestamp()) THEN RAISE EXCEPTION 'knowledge maintenance authorization context is invalid'; END IF;
+  IF btrim(p_token) = '' OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM permanent_roles WHERE status = 'standing' AND ((role_id = p_role_id AND role_kind = 'department_head') OR (p_role_id = 'ceo' AND role_id = 'concertmaster' AND role_kind = 'concertmaster'))) OR NOT EXISTS (SELECT 1 FROM organizational_knowledge k JOIN operator_project_roles r ON r.project_id = k.source_project_id AND r.role_id = p_role_id AND r.operator_id = p_operator_id AND r.active = true JOIN operator_project_memberships m ON m.project_id = r.project_id AND m.operator_id = r.operator_id AND m.active = true WHERE k.knowledge_id = p_knowledge_id AND k.revision = p_revision - 1) OR NOT EXISTS (SELECT 1 FROM goal_leases l JOIN organizational_knowledge k ON k.source_goal_id = l.goal_id WHERE k.knowledge_id = p_knowledge_id AND k.revision = p_revision - 1 AND l.owner_id = p_owner_id AND l.fencing_token = p_fencing_token AND l.expires_at > clock_timestamp()) THEN RAISE EXCEPTION 'knowledge maintenance authorization context is invalid'; END IF;
   INSERT INTO knowledge_maintenance_authorizations (token_hash, knowledge_id, revision, status, operator_id, role_id, owner_id, fencing_token, reason, source_session_ref, retention) SELECT encode(public.digest(p_token, 'sha256'), 'hex'), p_knowledge_id, p_revision, p_status, p_operator_id, p_role_id, p_owner_id, p_fencing_token, p_reason, p_source_session_ref, k.retention FROM organizational_knowledge k WHERE k.knowledge_id = p_knowledge_id AND k.revision = p_revision - 1;
   PERFORM set_config('maestro.knowledge_maintenance_token', p_token, true); PERFORM set_config('maestro.knowledge_maintenance_operator', p_operator_id::text, true); PERFORM set_config('maestro.knowledge_maintenance_role', p_role_id, true); PERFORM set_config('maestro.knowledge_maintenance_owner', p_owner_id, true); PERFORM set_config('maestro.knowledge_maintenance_fence', p_fencing_token::text, true);
 END;
@@ -212,6 +257,7 @@ BEGIN
   IF NEW.status IN ('unsupported', 'contradicted', 'retired') AND NEW.promotion_marker <> 'source-loss' AND EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND (to_jsonb(prior) - ARRAY['revision','status','reason','created_by','source_session_ref','created_at','confidence','freshness','operation_payload_hash','promotion_operator_id','promotion_role_id','promotion_marker']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['revision','status','reason','created_by','source_session_ref','created_at','confidence','freshness','operation_payload_hash','promotion_operator_id','promotion_role_id','promotion_marker'])) THEN RAISE EXCEPTION 'maintenance revision may only change lifecycle or decay metadata'; END IF;
   IF NEW.promotion_marker = 'source-loss' AND NEW.status = 'unsupported' AND EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND (prior.schema_version IS DISTINCT FROM NEW.schema_version OR prior.source_project_id IS DISTINCT FROM NEW.source_project_id OR prior.project_id IS DISTINCT FROM NEW.project_id OR prior.source_goal_id IS DISTINCT FROM NEW.source_goal_id OR prior.department_id IS DISTINCT FROM NEW.department_id OR prior.scope IS DISTINCT FROM NEW.scope OR prior.statement IS DISTINCT FROM NEW.statement OR prior.rationale IS DISTINCT FROM NEW.rationale OR prior.source_evidence_ids IS DISTINCT FROM NEW.source_evidence_ids OR prior.source_digest_ids IS DISTINCT FROM NEW.source_digest_ids OR prior.episode_ids IS DISTINCT FROM NEW.episode_ids OR prior.confidence IS DISTINCT FROM NEW.confidence OR prior.freshness IS DISTINCT FROM NEW.freshness OR prior.generalized IS DISTINCT FROM NEW.generalized OR prior.council_round_id IS DISTINCT FROM NEW.council_round_id OR prior.generalized_statement IS DISTINCT FROM NEW.generalized_statement OR prior.curator_role_id IS DISTINCT FROM NEW.curator_role_id OR prior.curator_operator_id IS DISTINCT FROM NEW.curator_operator_id OR prior.curator_department_id IS DISTINCT FROM NEW.curator_department_id OR prior.created_by IS DISTINCT FROM NEW.created_by OR prior.author_operator_id IS DISTINCT FROM NEW.author_operator_id OR prior.author_role_id IS DISTINCT FROM NEW.author_role_id OR prior.retention IS DISTINCT FROM NEW.retention)) THEN RAISE EXCEPTION 'source-loss revision may only change lifecycle metadata'; END IF;
   IF NEW.revision > 1 AND EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND (prior.schema_version IS DISTINCT FROM NEW.schema_version OR prior.source_project_id IS DISTINCT FROM NEW.source_project_id OR prior.source_goal_id IS DISTINCT FROM NEW.source_goal_id OR prior.department_id IS DISTINCT FROM NEW.department_id OR prior.retention IS DISTINCT FROM NEW.retention OR prior.author_operator_id IS DISTINCT FROM NEW.author_operator_id OR prior.author_role_id IS DISTINCT FROM NEW.author_role_id)) THEN RAISE EXCEPTION 'organizational knowledge core provenance is immutable'; END IF;
+  IF NEW.status = 'active' AND NEW.scope IN ('project_department', 'global') AND NEW.author_operator_id = NEW.promotion_operator_id THEN RAISE EXCEPTION 'organizational knowledge author and promotion operators must be distinct'; END IF;
   IF NEW.revision = 1 AND NEW.scope <> 'worker_proposed' THEN
     RAISE EXCEPTION 'organizational knowledge must be proposed before promotion';
   END IF;
@@ -276,7 +322,14 @@ BEGIN
   FOR item IN SELECT value FROM jsonb_array_elements(NEW.source_digest_ids) LOOP
     IF jsonb_typeof(item) <> 'string' OR item #>> '{}' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN RAISE EXCEPTION 'organizational knowledge digest reference is malformed'; END IF;
     ref_id := (item #>> '{}')::uuid;
-    IF NOT EXISTS (SELECT 1 FROM improvement_digests WHERE digest_id = ref_id AND project_id = NEW.source_project_id AND goal_id = NEW.source_goal_id) THEN RAISE EXCEPTION 'organizational knowledge digest reference is missing or outside source project'; END IF;
+    IF (NOT EXISTS (SELECT 1 FROM improvement_digests WHERE digest_id = ref_id AND project_id = NEW.source_project_id AND goal_id = NEW.source_goal_id)
+        OR EXISTS (SELECT 1 FROM organizational_knowledge_digest_losses l WHERE l.digest_id = ref_id AND l.goal_id = NEW.source_goal_id AND l.project_id = NEW.source_project_id))
+       AND NOT (
+         (NEW.status = 'unsupported' AND NEW.promotion_marker = 'source-loss' AND NEW.source_session_ref = 'digest:' || ref_id::text
+          AND EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND prior.status NOT IN ('unsupported', 'retired') AND prior.source_digest_ids @> jsonb_build_array(ref_id::text))
+          AND EXISTS (SELECT 1 FROM organizational_knowledge_digest_losses l WHERE l.digest_id = ref_id AND l.goal_id = NEW.source_goal_id AND l.project_id = NEW.source_project_id))
+         OR (NEW.status = 'retired' AND EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND prior.status = 'unsupported' AND prior.promotion_marker = 'source-loss' AND prior.source_project_id = NEW.source_project_id AND prior.source_goal_id = NEW.source_goal_id AND prior.source_digest_ids = NEW.source_digest_ids))
+       ) THEN RAISE EXCEPTION 'organizational knowledge digest reference is missing or outside source project'; END IF;
   END LOOP;
   IF NEW.scope = 'global' AND NEW.status = 'active' AND (jsonb_array_length(NEW.source_evidence_ids) <> 0 OR jsonb_array_length(NEW.source_digest_ids) < 2) THEN
     RAISE EXCEPTION 'global organizational knowledge requires two durable Improvement Digest sources';
@@ -512,7 +565,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION authorize_source_evidence_loss(p_token text, p_evidence_id uuid, p_goal_id uuid, p_project_id uuid, p_owner_id text, p_fencing_token bigint, p_reason text, p_recorded_by uuid, p_role_id text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-  IF btrim(p_token) = '' OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_recorded_by AND active = true) OR NOT EXISTS (SELECT 1 FROM permanent_roles WHERE role_id = p_role_id AND role_kind IN ('department_head', 'ceo') AND status = 'standing') OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_recorded_by AND r.project_id = p_project_id AND r.role_id = p_role_id AND r.active = true) OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) OR NOT EXISTS (SELECT 1 FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = p_evidence_id AND e.goal_id = p_goal_id AND e.project_id = p_project_id AND g.project_id = p_project_id) THEN RAISE EXCEPTION 'source evidence loss authorization context is invalid'; END IF;
+  IF btrim(p_token) = '' OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_recorded_by AND active = true) OR NOT EXISTS (SELECT 1 FROM permanent_roles WHERE status = 'standing' AND ((role_id = p_role_id AND role_kind = 'department_head') OR (p_role_id = 'ceo' AND role_id = 'concertmaster' AND role_kind = 'concertmaster'))) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_recorded_by AND r.project_id = p_project_id AND r.role_id = p_role_id AND r.active = true) OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) OR NOT EXISTS (SELECT 1 FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = p_evidence_id AND e.goal_id = p_goal_id AND e.project_id = p_project_id AND g.project_id = p_project_id) THEN RAISE EXCEPTION 'source evidence loss authorization context is invalid'; END IF;
   INSERT INTO source_evidence_loss_authorizations (token_hash, evidence_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by, role_id) VALUES (encode(public.digest(p_token, 'sha256'), 'hex'), p_evidence_id, p_goal_id, p_project_id, p_owner_id, p_fencing_token, p_reason, p_recorded_by::text, p_role_id);
   PERFORM set_config('maestro.source_evidence_loss_token', p_token, true); PERFORM set_config('maestro.source_loss_owner', p_owner_id, true); PERFORM set_config('maestro.source_loss_fence', p_fencing_token::text, true);
 END;

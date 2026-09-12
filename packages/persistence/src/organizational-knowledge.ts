@@ -88,26 +88,27 @@ async function insertRevision(client: Pick<PoolClient, "query">, lesson: Organiz
 export async function proposeOrganizationalKnowledge(pool: Pool, input: OrganizationalKnowledgeProposal, proof: GoalLeaseProof, author: OrganizationalKnowledgeAuthor, idempotencyKey?: string): Promise<OrganizationalKnowledge> {
   if (idempotencyKey === undefined || idempotencyKey.trim() === "") throw new OrganizationalKnowledgeError("proposal idempotency key is required");
   assertValidOrganizationalKnowledgeProposal(input); authorValue(author);
-  if (proof.goalId !== input.sourceGoalId) throw new OrganizationalKnowledgeError("knowledge source Goal does not match lease proof");
+  const normalizedInput: OrganizationalKnowledgeProposal = { ...input, projectId: input.projectId.toLowerCase(), sourceGoalId: input.sourceGoalId.toLowerCase(), sourceEvidenceIds: input.sourceEvidenceIds.map((id) => id.toLowerCase()), sourceDigestIds: input.sourceDigestIds.map((id) => id.toLowerCase()) };
+  if (proof.goalId.toLowerCase() !== normalizedInput.sourceGoalId) throw new OrganizationalKnowledgeError("knowledge source Goal does not match lease proof");
   if (author.operatorId.trim() === "") throw new OrganizationalKnowledgeError("proposal requires an operator identity");
   if (author.actorId.trim() !== proof.ownerId) throw new OrganizationalKnowledgeError("proposal author does not match Goal lease owner");
-  const proposal = createWorkerProposedKnowledge(input);
+  const proposal = createWorkerProposedKnowledge(normalizedInput);
   return withGoalAuthority(pool, proof, 63, async (client) => {
     const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [author.operatorId]);
     if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("proposal requires an active operator");
-    await assertProjectMembership(client, author.operatorId, input.projectId);
-    await assertProjectRole(client, author.operatorId, input.projectId, author.operatorRoleId);
+    await assertProjectMembership(client, author.operatorId, normalizedInput.projectId);
+    await assertProjectRole(client, author.operatorId, normalizedInput.projectId, author.operatorRoleId);
     const operationRef = `proposal:${idempotencyKey.trim()}`;
     if (operationRef.length === 0 || operationRef.length > 256) throw new OrganizationalKnowledgeError("proposal idempotency key is invalid");
-    const replay = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge WHERE source_session_ref = $1 AND source_project_id = $2 AND source_goal_id = $3 AND revision = 1`, [operationRef, input.projectId, input.sourceGoalId]);
+    const replay = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge WHERE source_session_ref = $1 AND source_project_id = $2 AND source_goal_id = $3 AND revision = 1`, [operationRef, normalizedInput.projectId, normalizedInput.sourceGoalId]);
     if (replay.rowCount === 1) {
       const prior = map(replay.rows[0]!);
       const same = prior.createdBy === author.actorId.trim() && prior.authorOperatorId === author.operatorId && prior.authorRoleId === author.operatorRoleId && prior.statement === proposal.statement && prior.rationale === proposal.rationale && JSON.stringify(prior.sourceEvidenceIds) === JSON.stringify(proposal.sourceEvidenceIds) && JSON.stringify(prior.sourceDigestIds) === JSON.stringify(proposal.sourceDigestIds) && JSON.stringify(prior.episodeIds) === JSON.stringify(proposal.episodeIds) && prior.departmentId === proposal.departmentId && prior.confidence === proposal.confidence && prior.freshness === proposal.freshness && prior.generalized === proposal.generalized;
       if (!same) throw new OrganizationalKnowledgeError("conflicting knowledge proposal replay");
       return prior;
     }
-    const payload = { projectId: input.projectId, goalId: input.sourceGoalId, departmentId: input.departmentId, statement: proposal.statement, rationale: proposal.rationale, sourceEvidenceIds: proposal.sourceEvidenceIds, sourceDigestIds: proposal.sourceDigestIds, episodeIds: proposal.episodeIds, confidence: proposal.confidence, freshness: proposal.freshness, generalized: proposal.generalized };
-    await client.query("SELECT authorize_knowledge_proposal($1, $2, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8::bigint, $9, $10, $11::jsonb)", [randomUUID(), proposal.knowledgeId, input.projectId, input.sourceGoalId, author.operatorId, author.operatorRoleId, proof.ownerId, proof.fencingToken, author.actorId.trim(), operationRef, JSON.stringify(payload)]);
+    const payload = { projectId: normalizedInput.projectId, goalId: normalizedInput.sourceGoalId, departmentId: normalizedInput.departmentId, statement: proposal.statement, rationale: proposal.rationale, sourceEvidenceIds: proposal.sourceEvidenceIds, sourceDigestIds: proposal.sourceDigestIds, episodeIds: proposal.episodeIds, confidence: proposal.confidence, freshness: proposal.freshness, generalized: proposal.generalized };
+    await client.query("SELECT authorize_knowledge_proposal($1, $2, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8::bigint, $9, $10, $11::jsonb)", [randomUUID(), proposal.knowledgeId, normalizedInput.projectId, normalizedInput.sourceGoalId, author.operatorId, author.operatorRoleId, proof.ownerId, proof.fencingToken, author.actorId.trim(), operationRef, JSON.stringify(payload)]);
     return insertRevision(client, proposal, author.actorId.trim(), operationRef, author.operatorId, author.operatorRoleId, operationHash(payload));
   });
 }
@@ -121,6 +122,15 @@ async function assertHead(client: Pick<PoolClient, "query">, roleId: string, dep
   const result = await client.query<{ role_kind: string; department_id: string | null; status: string }>("SELECT role_kind, department_id, status FROM permanent_roles WHERE role_id = $1", [roleId.trim()]);
   const role = result.rows[0];
   if (role === undefined || role.role_kind !== "department_head" || role.department_id !== departmentId || role.status !== "standing") throw new OrganizationalKnowledgeError("Department Head identity or department is invalid");
+}
+
+async function assertRetirementRole(client: Pick<PoolClient, "query">, roleId: string, departmentId: string): Promise<void> {
+  const normalizedRoleId = roleId.trim().toLowerCase();
+  const lookupRoleId = normalizedRoleId === "ceo" ? "concertmaster" : normalizedRoleId;
+  const result = await client.query<{ role_kind: string; department_id: string | null; status: string }>("SELECT role_kind, department_id, status FROM permanent_roles WHERE role_id = $1", [lookupRoleId]);
+  const role = result.rows[0];
+  const isCeo = normalizedRoleId === "ceo" && role?.role_kind === "concertmaster";
+  if (role === undefined || role.status !== "standing" || (!isCeo && (role.role_kind !== "department_head" || role.department_id !== departmentId))) throw new OrganizationalKnowledgeError("retirement requires a standing CEO or Department Head");
 }
 
 async function assertStandingHead(client: Pick<PoolClient, "query">, roleId: string): Promise<string> {
@@ -137,17 +147,19 @@ export async function promoteOrganizationalKnowledgeToProject(pool: Pool, reques
     await assertHead(client, request.promoterRoleId, request.departmentId);
     const current = await readCurrent(client, request.knowledgeId, true);
     if (current.sourceGoalId !== request.proof.goalId) throw new OrganizationalKnowledgeError("knowledge source Goal is outside the lease");
+    if (current.authorOperatorId?.toLowerCase() === request.promoterOperatorId.toLowerCase()) throw new OrganizationalKnowledgeError("knowledge promotion requires an operator distinct from the author");
     await assertProjectRole(client, request.promoterOperatorId, current.sourceProjectId, request.promoterRoleId);
     if (request.idempotencyKey === undefined || request.idempotencyKey.trim() === "") throw new OrganizationalKnowledgeError("promotion idempotency key is required");
     const operationRef = `promotion:${request.idempotencyKey.trim()}`;
     if (operationRef.length > 256) throw new OrganizationalKnowledgeError("promotion idempotency key is invalid");
+    const payloadHash = operationHash({ knowledgeId: request.knowledgeId.toLowerCase(), promoterRoleId: request.promoterRoleId.toLowerCase(), promoterOperatorId: request.promoterOperatorId.toLowerCase(), departmentId: request.departmentId.toLowerCase() });
     if (current.scope === "project_department" && current.status === "active") {
-      if ((request.idempotencyKey !== undefined && current.sourceSessionRef !== operationRef) || current.promotionRoleId?.toLowerCase() !== request.promoterRoleId.toLowerCase() || current.promotionOperatorId?.toLowerCase() !== request.promoterOperatorId.toLowerCase() || current.sourceProjectId.toLowerCase() !== current.projectId?.toLowerCase() || current.departmentId !== request.departmentId) throw new OrganizationalKnowledgeError("conflicting project promotion retry");
+      if ((request.idempotencyKey !== undefined && current.sourceSessionRef !== operationRef) || current.promotionRoleId?.toLowerCase() !== request.promoterRoleId.toLowerCase() || current.promotionOperatorId?.toLowerCase() !== request.promoterOperatorId.toLowerCase() || current.operationPayloadHash !== payloadHash || current.sourceProjectId.toLowerCase() !== current.projectId?.toLowerCase() || current.departmentId !== request.departmentId) throw new OrganizationalKnowledgeError("conflicting project promotion retry");
       return current;
     }
     const promoted = promoteKnowledgeToProject(current, { promoterRoleKind: "department_head", promoterDepartmentId: request.departmentId });
     await authorizePromotion(client, promoted, request.promoterRoleId, request.promoterOperatorId, request.proof);
-    return insertRevision(client, promoted, promoted.createdBy!, operationRef, undefined, undefined, undefined, request.promoterOperatorId, request.promoterRoleId);
+    return insertRevision(client, promoted, promoted.createdBy!, operationRef, undefined, undefined, payloadHash, request.promoterOperatorId, request.promoterRoleId);
   });
 }
 
@@ -160,6 +172,7 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
     await assertHead(client, request.promoterRoleId, request.departmentId);
     const current = await readCurrent(client, request.knowledgeId, true);
     if (current.sourceGoalId !== request.proof.goalId) throw new OrganizationalKnowledgeError("knowledge source Goal is outside the lease");
+    if (current.authorOperatorId?.toLowerCase() === request.promoterOperatorId.toLowerCase()) throw new OrganizationalKnowledgeError("knowledge promotion requires an operator distinct from the author");
     await assertProjectRole(client, request.promoterOperatorId, current.sourceProjectId, request.promoterRoleId);
     const curatorDepartmentId = await assertStandingHead(client, request.curatorRoleId);
     const retryCurator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [request.curatorOperatorId]);
@@ -169,8 +182,11 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
     if (request.idempotencyKey === undefined || request.idempotencyKey.trim() === "") throw new OrganizationalKnowledgeError("promotion idempotency key is required");
     const operationRef = `promotion:${request.idempotencyKey.trim()}`;
     if (operationRef.length > 256) throw new OrganizationalKnowledgeError("promotion idempotency key is invalid");
+    const sourceIds = request.corroboratingSourceIds.map((id) => id.toLowerCase());
+    const episodeIds = request.corroboratingEpisodeIds.map((id) => id.toLowerCase());
+    const payloadHash = operationHash({ knowledgeId: request.knowledgeId.toLowerCase(), promoterRoleId: request.promoterRoleId.toLowerCase(), promoterOperatorId: request.promoterOperatorId.toLowerCase(), departmentId: request.departmentId.toLowerCase(), encoreCouncilRoundId: request.encoreCouncilRoundId.toLowerCase(), corroboratingSourceIds: sourceIds, corroboratingEpisodeIds: episodeIds, generalizedStatement: request.generalizedStatement, curatorRoleId: request.curatorRoleId.toLowerCase(), curatorOperatorId: request.curatorOperatorId.toLowerCase(), curatorDepartmentId: curatorDepartmentId.toLowerCase() });
     if (current.scope === "global") {
-      const same = current.sourceSessionRef === operationRef && current.promotionOperatorId?.toLowerCase() === request.promoterOperatorId.toLowerCase() && current.promotionRoleId?.toLowerCase() === request.promoterRoleId.toLowerCase() && current.generalizedStatement === request.generalizedStatement && current.councilRoundId?.toLowerCase() === request.encoreCouncilRoundId.toLowerCase() && current.curatorRoleId?.toLowerCase() === request.curatorRoleId.toLowerCase() && current.curatorOperatorId?.toLowerCase() === request.curatorOperatorId.toLowerCase() && current.curatorDepartmentId?.toLowerCase() === curatorDepartmentId.toLowerCase() && JSON.stringify(current.sourceDigestIds) === JSON.stringify(request.corroboratingSourceIds.map((id) => id.toLowerCase())) && JSON.stringify(current.episodeIds) === JSON.stringify(request.corroboratingEpisodeIds.map((id) => id.toLowerCase()));
+      const same = current.sourceSessionRef === operationRef && current.promotionOperatorId?.toLowerCase() === request.promoterOperatorId.toLowerCase() && current.promotionRoleId?.toLowerCase() === request.promoterRoleId.toLowerCase() && current.operationPayloadHash === payloadHash && current.generalizedStatement === request.generalizedStatement && current.councilRoundId?.toLowerCase() === request.encoreCouncilRoundId.toLowerCase() && current.curatorRoleId?.toLowerCase() === request.curatorRoleId.toLowerCase() && current.curatorOperatorId?.toLowerCase() === request.curatorOperatorId.toLowerCase() && current.curatorDepartmentId?.toLowerCase() === curatorDepartmentId.toLowerCase() && JSON.stringify(current.sourceDigestIds) === JSON.stringify(sourceIds) && JSON.stringify(current.episodeIds) === JSON.stringify(episodeIds);
       if (!same) throw new OrganizationalKnowledgeError("conflicting global promotion retry");
       return publicProjection(current);
     }
@@ -180,8 +196,7 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
     await assertProjectMembership(client, request.curatorOperatorId, current.sourceProjectId);
     await assertProjectRole(client, request.curatorOperatorId, current.sourceProjectId, request.curatorRoleId);
     if (request.curatorRoleId === request.promoterRoleId) throw new OrganizationalKnowledgeError("global generalization requires an independent Department Head curator");
-    const sourceIds = request.corroboratingSourceIds;
-    if (!Array.isArray(sourceIds) || !Array.isArray(request.corroboratingEpisodeIds) || sourceIds.length < 2 || sourceIds.some((id) => !current.sourceDigestIds.includes(id.toLowerCase()))) throw new OrganizationalKnowledgeError("global corroboration must use bound Improvement Digest sources");
+    if (!Array.isArray(request.corroboratingSourceIds) || !Array.isArray(request.corroboratingEpisodeIds) || sourceIds.length < 2 || sourceIds.some((id) => !current.sourceDigestIds.includes(id))) throw new OrganizationalKnowledgeError("global corroboration must use bound Improvement Digest sources");
     const approval = await client.query<{ final_verdict: string }>(
       `SELECT s.final_verdict FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id
         WHERE r.round_id = $1 AND r.goal_id = $2 AND s.final_verdict = 'proceed' AND s.same_model_only = false
@@ -205,14 +220,14 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
         if (digest.rowCount !== 1) throw new OrganizationalKnowledgeError("corroborating digest is missing or outside source Goal");
       } else throw new OrganizationalKnowledgeError("corroborating source is not bound to the lesson");
     }
-    if (request.corroboratingSourceIds.length !== request.corroboratingEpisodeIds.length || new Set(request.corroboratingEpisodeIds.map((id) => id.toLowerCase())).size !== request.corroboratingEpisodeIds.length) throw new OrganizationalKnowledgeError("corroborating episodes must be distinct and paired with sources");
-    const episodes = await client.query<{ digest_id: string; episode_id: string }>("SELECT digest_id, episode_id FROM improvement_digests WHERE digest_id = ANY($1::uuid[]) AND project_id = $2 AND goal_id = $3", [request.corroboratingSourceIds, current.sourceProjectId, current.sourceGoalId]);
-    if (episodes.rowCount !== request.corroboratingSourceIds.length || episodes.rows.some((row) => !request.corroboratingSourceIds.some((id, index) => id.toLowerCase() === row.digest_id.toLowerCase() && request.corroboratingEpisodeIds[index]?.toLowerCase() === row.episode_id.toLowerCase()))) throw new OrganizationalKnowledgeError("corroborating episode is not bound to its durable digest source");
+    if (sourceIds.length !== episodeIds.length || new Set(episodeIds).size !== episodeIds.length) throw new OrganizationalKnowledgeError("corroborating episodes must be distinct and paired with sources");
+    const episodes = await client.query<{ digest_id: string; episode_id: string }>("SELECT digest_id, episode_id FROM improvement_digests WHERE digest_id = ANY($1::uuid[]) AND project_id = $2 AND goal_id = $3", [sourceIds, current.sourceProjectId, current.sourceGoalId]);
+    if (episodes.rowCount !== sourceIds.length || episodes.rows.some((row) => !sourceIds.some((id, index) => id === row.digest_id.toLowerCase() && episodeIds[index] === row.episode_id.toLowerCase()))) throw new OrganizationalKnowledgeError("corroborating episode is not bound to its durable digest source");
     const approved = approval.rowCount === 1;
-    const promotion: GlobalKnowledgePromotion = { encoreCouncilApproved: approved, corroboratingSourceIds: sourceIds, corroboratingEpisodeIds: request.corroboratingEpisodeIds, generalizedStatement: request.generalizedStatement, curatorRoleId: request.curatorRoleId, curatorOperatorId: request.curatorOperatorId, curatorDepartmentId, councilRoundId: request.encoreCouncilRoundId };
+    const promotion: GlobalKnowledgePromotion = { encoreCouncilApproved: approved, corroboratingSourceIds: sourceIds, corroboratingEpisodeIds: episodeIds, generalizedStatement: request.generalizedStatement, curatorRoleId: request.curatorRoleId, curatorOperatorId: request.curatorOperatorId, curatorDepartmentId, councilRoundId: request.encoreCouncilRoundId };
     const promoted = promoteKnowledgeToGlobal(current, promotion);
     await authorizePromotion(client, promoted, request.promoterRoleId, request.promoterOperatorId, request.proof, request.curatorOperatorId, request.curatorRoleId);
-    const stored = await insertRevision(client, promoted, promoted.createdBy!, operationRef, undefined, undefined, undefined, request.promoterOperatorId, request.promoterRoleId);
+    const stored = await insertRevision(client, promoted, promoted.createdBy!, operationRef, undefined, undefined, payloadHash, request.promoterOperatorId, request.promoterRoleId);
     return publicProjection(stored);
   });
 }
@@ -248,7 +263,8 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
     if (priorOperation.rowCount === 1 && (priorOperation.rows[0]!.payload_hash !== requestHash || priorOperation.rows[0]!.operator_id.toLowerCase() !== request.operatorId.toLowerCase())) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
     if (priorOperation.rowCount === 0) await client.query("INSERT INTO knowledge_refresh_operations (knowledge_id, operation_ref, payload_hash, operator_id, retention) VALUES ($1, $2, $3, $4::uuid, $5)", [current.knowledgeId, operationRef, requestHash, request.operatorId, current.retention]);
     if (current.sourceSessionRef === operationRef) {
-      if (current.promotionOperatorId?.toLowerCase() !== request.operatorId.toLowerCase() || current.promotionRoleId?.toLowerCase() !== request.operatorRoleId.toLowerCase() || current.operationPayloadHash !== requestHash) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
+      const maintenanceIdentityMatches = current.status === "active" || (current.promotionOperatorId?.toLowerCase() === request.operatorId.toLowerCase() && current.promotionRoleId?.toLowerCase() === request.operatorRoleId.toLowerCase());
+      if (!maintenanceIdentityMatches || current.operationPayloadHash !== requestHash) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
       return current.scope === "global" ? publicProjection(current) : current;
     }
     if (current.sourceSessionRef?.startsWith("system:knowledge-decay:") && current.status !== "retired" && !(request.contradicted === true && current.status === "active")) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
@@ -258,9 +274,14 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
     const maintenanceAuthor = current.createdBy;
     if (maintenanceAuthor === undefined) throw new OrganizationalKnowledgeError("knowledge maintenance requires durable source author");
     const maintained = { ...decayed, createdBy: maintenanceAuthor, sourceSessionRef: operationRef };
-    if (maintained.status === "active" && (maintained.scope === "project_department" || maintained.scope === "global")) await authorizePromotion(client, maintained, request.operatorRoleId, request.operatorId, request.proof, maintained.curatorOperatorId, maintained.curatorRoleId);
+    if (maintained.status === "active" && (maintained.scope === "project_department" || maintained.scope === "global")) {
+      if (maintained.promotionOperatorId === undefined || maintained.promotionRoleId === undefined) throw new OrganizationalKnowledgeError("knowledge maintenance requires durable promotion identity");
+      await authorizePromotion(client, maintained, maintained.promotionRoleId, maintained.promotionOperatorId, request.proof, maintained.curatorOperatorId, maintained.curatorRoleId);
+    }
     if (maintained.status === "unsupported" || maintained.status === "contradicted" || maintained.status === "retired") await authorizeMaintenance(client, maintained, maintained.status, request.operatorId, request.operatorRoleId, request.proof, maintained.reason!, operationRef);
-    const stored = await insertRevision(client, maintained, maintenanceAuthor, operationRef, undefined, undefined, requestHash, request.operatorId, request.operatorRoleId);
+    const maintenanceOperator = maintained.status === "active" ? undefined : request.operatorId;
+    const maintenanceRole = maintained.status === "active" ? undefined : request.operatorRoleId;
+    const stored = await insertRevision(client, maintained, maintenanceAuthor, operationRef, undefined, undefined, requestHash, maintenanceOperator, maintenanceRole);
     return stored.scope === "global" ? publicProjection(stored) : stored;
   });
 }
@@ -274,7 +295,7 @@ export async function markKnowledgeUnsupportedForEvidence(pool: Pool, evidenceId
     if (source.rowCount !== 1 || source.rows[0]!.goal_id !== proof.goalId || source.rows[0]!.project_id !== source.rows[0]!.goal_project_id) throw new OrganizationalKnowledgeError("evidence source is outside the Goal lease/project");
     await assertProjectMembership(client, operatorId, source.rows[0]!.project_id);
     await assertProjectRole(client, operatorId, source.rows[0]!.project_id, operatorRoleId);
-    const criticalRole = await client.query("SELECT 1 FROM permanent_roles WHERE role_id = $1 AND role_kind IN ('department_head', 'ceo') AND status = 'standing'", [operatorRoleId]);
+    const criticalRole = await client.query("SELECT 1 FROM permanent_roles WHERE status = 'standing' AND ((role_id = $1 AND role_kind = 'department_head') OR ($1 = 'ceo' AND role_id = 'concertmaster' AND role_kind = 'concertmaster'))", [operatorRoleId]);
     if (criticalRole.rowCount !== 1) throw new OrganizationalKnowledgeError("source loss requires a standing Department Head or CEO role");
     const replay = await client.query<{ knowledge_id: string; reason: string | null; created_by: string; promotion_operator_id: string | null; promotion_role_id: string | null }>("SELECT k.knowledge_id, k.reason, k.created_by, k.promotion_operator_id, k.promotion_role_id FROM organizational_knowledge k WHERE k.status = 'unsupported' AND k.source_session_ref = $1", [`evidence:${evidenceId.toLowerCase()}`]);
     if (replay.rowCount) { if (replay.rows.some((row) => row.reason !== reason || row.promotion_operator_id?.toLowerCase() !== operatorId.toLowerCase() || row.promotion_role_id?.toLowerCase() !== operatorRoleId.toLowerCase())) throw new OrganizationalKnowledgeError("conflicting evidence source-loss retry"); return replay.rows.map((row) => row.knowledge_id); }
@@ -294,8 +315,9 @@ export async function markKnowledgeUnsupportedForDigest(pool: Pool, digestId: st
     if (digest.rowCount !== 1 || digest.rows[0]!.goal_id !== proof.goalId || digest.rows[0]!.project_id !== digest.rows[0]!.goal_project_id) throw new OrganizationalKnowledgeError("digest source is outside the Goal lease/project");
     await assertProjectMembership(client, operatorId, digest.rows[0]!.project_id);
     await assertProjectRole(client, operatorId, digest.rows[0]!.project_id, operatorRoleId);
-    const criticalRole = await client.query("SELECT 1 FROM permanent_roles WHERE role_id = $1 AND role_kind IN ('department_head', 'ceo') AND status = 'standing'", [operatorRoleId]);
+    const criticalRole = await client.query("SELECT 1 FROM permanent_roles WHERE status = 'standing' AND ((role_id = $1 AND role_kind = 'department_head') OR ($1 = 'ceo' AND role_id = 'concertmaster' AND role_kind = 'concertmaster'))", [operatorRoleId]);
     if (criticalRole.rowCount !== 1) throw new OrganizationalKnowledgeError("source loss requires a standing Department Head or CEO role");
+    await client.query("SELECT authorize_knowledge_digest_loss($1, $2::uuid, $3::uuid, $4::uuid, $5, $6::bigint, $7, $8::uuid, $9)", [randomUUID(), digestId.toLowerCase(), digest.rows[0]!.goal_id, digest.rows[0]!.project_id, proof.ownerId, proof.fencingToken, reason, operatorId, operatorRoleId]);
     const replay = await client.query<{ knowledge_id: string; reason: string | null; created_by: string; promotion_operator_id: string | null; promotion_role_id: string | null }>("SELECT k.knowledge_id, k.reason, k.created_by, k.promotion_operator_id, k.promotion_role_id FROM organizational_knowledge k WHERE k.status = 'unsupported' AND k.source_session_ref = $1", [`digest:${digestId.toLowerCase()}`]);
     if (replay.rowCount) { if (replay.rows.some((row) => row.reason !== reason || row.promotion_operator_id?.toLowerCase() !== operatorId.toLowerCase() || row.promotion_role_id?.toLowerCase() !== operatorRoleId.toLowerCase())) throw new OrganizationalKnowledgeError("conflicting digest source-loss retry"); return replay.rows.map((row) => row.knowledge_id); }
     const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_digest_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([digestId.toLowerCase()])]);
@@ -314,7 +336,7 @@ export async function retireOrganizationalKnowledge(pool: Pool, request: { reado
     if (operationRef.length > 256) throw new OrganizationalKnowledgeError("retirement idempotency key is invalid");
     const current = await readCurrent(client, request.knowledgeId, true);
     if (current.sourceGoalId !== request.proof.goalId) throw new OrganizationalKnowledgeError("knowledge source Goal is outside the lease");
-    await assertHead(client, request.retiredBy, current.departmentId);
+    await assertRetirementRole(client, request.retiredBy, current.departmentId);
     await assertProjectRole(client, request.operatorId, current.sourceProjectId, request.retiredBy);
     // A retry acknowledges only the exact durable retirement command.
     if (current.status === "retired") {
