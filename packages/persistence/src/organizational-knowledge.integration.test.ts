@@ -192,10 +192,10 @@ describeDatabase("organizational knowledge persistence", () => {
     await expect(pool.query("SELECT count(*)::int AS count FROM evidence_records WHERE evidence_id = $1", [evidenceId])).resolves.toMatchObject({ rows: [{ count: 0 }] });
     await expect(listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering", proof })).resolves.toMatchObject([{ knowledgeId: proposed.knowledgeId, status: "unsupported" }]);
     await expect(retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "Superseded by reviewed guidance.", retiredBy: "worker", proof, operatorId, idempotencyKey: "unauthorized" })).rejects.toThrow(/Department Head/);
-    const retired = await retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "Superseded by reviewed guidance.", retiredBy: "head-engineering", proof, operatorId });
+    const retired = await retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "Superseded by reviewed guidance.", retiredBy: "head-engineering", proof, operatorId, idempotencyKey: "retirement-command" });
     expect(retired).toMatchObject({ status: "retired", knowledgeId: promoted.knowledgeId });
     expect(retired.sourceEvidenceIds).toContain(evidenceId);
-    await expect(retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "retry", retiredBy: "head-engineering", proof, operatorId })).resolves.toMatchObject({ status: "retired", knowledgeId: proposed.knowledgeId });
+    await expect(retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "retry", retiredBy: "head-engineering", proof, operatorId, idempotencyKey: "retirement-command" })).resolves.toMatchObject({ status: "retired", knowledgeId: proposed.knowledgeId });
     await expect(pool.query("SELECT count(*)::int AS count FROM organizational_knowledge WHERE knowledge_id = $1", [proposed.knowledgeId])).resolves.toMatchObject({ rows: [{ count: expect.any(Number) }] });
     await expect(pool.query("UPDATE organizational_knowledge SET reason = 'tampered' WHERE knowledge_id = $1", [proposed.knowledgeId])).rejects.toThrow();
     await expect(pool.query("TRUNCATE goals CASCADE")).resolves.toBeDefined();
