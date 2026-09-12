@@ -63,6 +63,7 @@ describeDatabase("organizational knowledge persistence", () => {
     expect(await listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering", proof })).toEqual([]);
     const promoted = await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering" });
     expect(promoted.scope).toBe("project_department");
+    await expect(promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering" })).resolves.toEqual(promoted);
     await expect(pool.query("SELECT array_agg(retention ORDER BY revision) AS retention FROM organizational_knowledge WHERE knowledge_id = $1", [proposed.knowledgeId])).resolves.toMatchObject({ rows: [{ retention: ["project_lifetime", "project_lifetime"] }] });
     await expect(listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering", proof })).resolves.toMatchObject([{ knowledgeId: proposed.knowledgeId, projectId, departmentId: "engineering" }]);
   });
@@ -162,6 +163,7 @@ describeDatabase("organizational knowledge persistence", () => {
     await pool.query("UPDATE local_operators SET active = true WHERE operator_id = $1", [operatorId]);
     await expect(deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId, { ...proof, fencingToken: "999999" }, "head-engineering")).rejects.toThrow(/stale|lease/);
     await deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId, proof, "head-engineering");
+    await expect(deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId, proof, "head-engineering")).resolves.toBeUndefined();
     await expect(pool.query("SELECT count(*)::int AS count FROM source_evidence_loss_events WHERE evidence_id = $1 AND goal_id = $2 AND project_id = $3 AND owner_id = $4 AND fencing_token = $5 AND reason = $6", [evidenceId, goalId, projectId, proof.ownerId, proof.fencingToken, "source artifact was deleted"])).resolves.toMatchObject({ rows: [{ count: 1 }] });
     await expect(pool.query("SELECT count(*)::int AS count FROM evidence_source_tombstones WHERE evidence_id = $1 AND goal_id = $2 AND project_id = $3", [evidenceId, goalId, projectId])).resolves.toMatchObject({ rows: [{ count: 1 }] });
     await expect(pool.query("SELECT count(*)::int AS count FROM evidence_records WHERE evidence_id = $1", [evidenceId])).resolves.toMatchObject({ rows: [{ count: 0 }] });
