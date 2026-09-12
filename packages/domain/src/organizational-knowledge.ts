@@ -33,6 +33,9 @@ export interface OrganizationalKnowledge extends Omit<OrganizationalKnowledgePro
   readonly generalizedStatement?: string;
   readonly curatorRoleId?: string;
   readonly curatorOperatorId?: string;
+  readonly curatorDepartmentId?: string;
+  readonly authorOperatorId?: string;
+  readonly authorRoleId?: string;
   readonly reason: string | null;
   readonly createdAt: string;
   readonly createdBy?: string;
@@ -51,6 +54,7 @@ export interface GlobalKnowledgePromotion {
   readonly generalizedStatement: string;
   readonly curatorRoleId: string;
   readonly curatorOperatorId?: string;
+  readonly curatorDepartmentId?: string;
   readonly councilRoundId?: string;
 }
 export interface KnowledgeDecayOptions {
@@ -137,7 +141,7 @@ export function promoteKnowledgeToGlobal(lesson: OrganizationalKnowledge, promot
   if (lesson.status !== "active") throw new InvalidOrganizationalKnowledgeError("only active project knowledge may be promoted globally");
   if (lesson.generalized !== true) throw new InvalidOrganizationalKnowledgeError("only generalized project knowledge may be promoted globally");
   assertGeneralizedSafe(lesson, promotion);
-  return copy({ ...lesson, revision: lesson.revision + 1, scope: "global", status: "active", projectId: null, generalized: true, statement: promotion.generalizedStatement, rationale: "Generalized organizational guidance.", generalizedStatement: promotion.generalizedStatement, curatorRoleId: promotion.curatorRoleId, ...(promotion.curatorOperatorId === undefined ? {} : { curatorOperatorId: promotion.curatorOperatorId }), episodeIds: Object.freeze([...promotion.corroboratingEpisodeIds]), councilRoundId: promotion.councilRoundId ?? null, createdAt: new Date().toISOString() });
+  return copy({ ...lesson, revision: lesson.revision + 1, scope: "global", status: "active", projectId: null, generalized: true, statement: promotion.generalizedStatement, rationale: "Generalized organizational guidance.", generalizedStatement: promotion.generalizedStatement, curatorRoleId: promotion.curatorRoleId, ...(promotion.curatorOperatorId === undefined ? {} : { curatorOperatorId: promotion.curatorOperatorId }), ...(promotion.curatorDepartmentId === undefined ? {} : { curatorDepartmentId: promotion.curatorDepartmentId }), episodeIds: Object.freeze([...promotion.corroboratingEpisodeIds]), councilRoundId: promotion.councilRoundId ?? null, createdAt: new Date().toISOString() });
 }
 
 export function decayOrganizationalKnowledge(lesson: OrganizationalKnowledge, options: KnowledgeDecayOptions): OrganizationalKnowledge {
