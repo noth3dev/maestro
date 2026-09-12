@@ -248,7 +248,7 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
       return current.scope === "global" ? publicProjection(current) : current;
     }
     if (current.sourceSessionRef?.startsWith("system:knowledge-decay:") && current.status !== "retired") throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
-    if (current.status === "retired") return current.scope === "global" ? publicProjection(current) : current;
+    if (current.status === "retired") throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
     const decayed = decayKnowledge(current, { now: request.now, lastSupportedAt: request.lastSupportedAt, ...(request.staleAfterMs === undefined ? {} : { staleAfterMs: request.staleAfterMs }), ...(request.contradicted === undefined ? {} : { contradicted: request.contradicted }) });
     if (decayed.revision === current.revision) return current.scope === "global" ? publicProjection(current) : current;
     const maintenanceAuthor = current.createdBy;
@@ -272,6 +272,8 @@ export async function markKnowledgeUnsupportedForEvidence(pool: Pool, evidenceId
     await assertProjectRole(client, operatorId, source.rows[0]!.project_id, operatorRoleId);
     const criticalRole = await client.query("SELECT 1 FROM permanent_roles WHERE role_id = $1 AND role_kind IN ('department_head', 'ceo') AND status = 'standing'", [operatorRoleId]);
     if (criticalRole.rowCount !== 1) throw new OrganizationalKnowledgeError("source loss requires a standing Department Head or CEO role");
+    const replay = await client.query<{ knowledge_id: string; reason: string | null }>("SELECT k.knowledge_id, k.reason FROM organizational_knowledge k WHERE k.status = 'unsupported' AND k.source_session_ref = $1 AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id)", [`evidence:${evidenceId.toLowerCase()}`]);
+    if (replay.rowCount) { if (replay.rows.some((row) => row.reason !== reason)) throw new OrganizationalKnowledgeError("conflicting evidence source-loss retry"); return replay.rows.map((row) => row.knowledge_id); }
     const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_evidence_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([evidenceId.toLowerCase()])]);
     const ids: string[] = [];
     for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await authorizeMaintenance(client, unsupported, "unsupported", operatorId, operatorRoleId, proof, reason, `evidence:${evidenceId}`); await insertRevision(client, unsupported, operatorId, `evidence:${evidenceId}`); ids.push(current.knowledgeId); }
@@ -290,6 +292,8 @@ export async function markKnowledgeUnsupportedForDigest(pool: Pool, digestId: st
     await assertProjectRole(client, operatorId, digest.rows[0]!.project_id, operatorRoleId);
     const criticalRole = await client.query("SELECT 1 FROM permanent_roles WHERE role_id = $1 AND role_kind IN ('department_head', 'ceo') AND status = 'standing'", [operatorRoleId]);
     if (criticalRole.rowCount !== 1) throw new OrganizationalKnowledgeError("source loss requires a standing Department Head or CEO role");
+    const replay = await client.query<{ knowledge_id: string; reason: string | null }>("SELECT k.knowledge_id, k.reason FROM organizational_knowledge k WHERE k.status = 'unsupported' AND k.source_session_ref = $1 AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id)", [`digest:${digestId.toLowerCase()}`]);
+    if (replay.rowCount) { if (replay.rows.some((row) => row.reason !== reason)) throw new OrganizationalKnowledgeError("conflicting digest source-loss retry"); return replay.rows.map((row) => row.knowledge_id); }
     const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_digest_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([digestId.toLowerCase()])]);
     const ids: string[] = [];
     for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await authorizeMaintenance(client, unsupported, "unsupported", operatorId, operatorRoleId, proof, reason, `digest:${digestId}`); await insertRevision(client, unsupported, operatorId, `digest:${digestId}`); ids.push(current.knowledgeId); }
