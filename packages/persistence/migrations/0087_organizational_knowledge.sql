@@ -106,6 +106,11 @@ BEGIN
     SELECT 1 FROM jsonb_array_elements_text(NEW.episode_ids) episode
      WHERE NOT EXISTS (SELECT 1 FROM improvement_digests d WHERE d.digest_id::text IN (SELECT value #>> '{}' FROM jsonb_array_elements(NEW.source_digest_ids)) AND d.goal_id = NEW.source_goal_id AND d.episode_id = episode)
   ) THEN RAISE EXCEPTION 'global organizational knowledge episode is not bound to a durable digest'; END IF;
+  IF NEW.scope = 'global' AND NEW.status = 'active' AND jsonb_array_length(NEW.source_digest_ids) <> jsonb_array_length(NEW.episode_ids) THEN RAISE EXCEPTION 'global knowledge source and episode lists must have equal length'; END IF;
+  IF NEW.scope = 'global' AND NEW.status = 'active' AND EXISTS (
+    SELECT 1 FROM generate_series(0, jsonb_array_length(NEW.source_digest_ids) - 1) AS pair(ordinal)
+     WHERE NOT EXISTS (SELECT 1 FROM improvement_digests d WHERE d.digest_id::text = NEW.source_digest_ids ->> pair.ordinal AND d.goal_id = NEW.source_goal_id AND d.episode_id = NEW.episode_ids ->> pair.ordinal)
+  ) THEN RAISE EXCEPTION 'global knowledge source and episode pairing is invalid'; END IF;
   IF NEW.scope = 'global' AND NEW.status = 'active' AND NOT EXISTS (
     SELECT 1 FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id
      WHERE r.round_id = NEW.council_round_id AND r.goal_id = NEW.source_goal_id AND s.final_verdict = 'proceed'
