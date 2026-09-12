@@ -36,6 +36,7 @@ export interface OrganizationalKnowledge extends Omit<OrganizationalKnowledgePro
   readonly curatorDepartmentId?: string;
   readonly authorOperatorId?: string;
   readonly authorRoleId?: string;
+  readonly operationPayloadHash?: string;
   readonly reason: string | null;
   readonly createdAt: string;
   readonly createdBy?: string;

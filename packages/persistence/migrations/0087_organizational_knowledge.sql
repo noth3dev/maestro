@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS organizational_knowledge (
   curator_department_id text CHECK (curator_department_id IS NULL OR (btrim(curator_department_id) <> '' AND length(curator_department_id) <= 256)),
   author_operator_id uuid,
   author_role_id text CHECK (author_role_id IS NULL OR (btrim(author_role_id) <> '' AND length(author_role_id) <= 256)),
+  operation_payload_hash char(64) CHECK (operation_payload_hash IS NULL OR operation_payload_hash ~ '^[0-9a-f]{64}$'),
   promotion_marker text NOT NULL CHECK (btrim(promotion_marker) <> '' AND length(promotion_marker) <= 64),
   reason text CHECK (reason IS NULL OR (btrim(reason) <> '' AND length(reason) <= 1024)),
   created_by text NOT NULL CHECK (btrim(created_by) <> '' AND length(created_by) <= 256),
@@ -75,6 +76,7 @@ ALTER TABLE organizational_knowledge ADD COLUMN IF NOT EXISTS curator_operator_i
 ALTER TABLE organizational_knowledge ADD COLUMN IF NOT EXISTS curator_department_id text;
 ALTER TABLE organizational_knowledge ADD COLUMN IF NOT EXISTS author_operator_id uuid;
 ALTER TABLE organizational_knowledge ADD COLUMN IF NOT EXISTS author_role_id text;
+ALTER TABLE organizational_knowledge ADD COLUMN IF NOT EXISTS operation_payload_hash char(64);
 ALTER TABLE organizational_knowledge DROP CONSTRAINT IF EXISTS organizational_knowledge_generalized_statement_bound;
 ALTER TABLE organizational_knowledge ADD CONSTRAINT organizational_knowledge_generalized_statement_bound CHECK (generalized_statement IS NULL OR (btrim(generalized_statement) <> '' AND length(generalized_statement) <= 4096));
 ALTER TABLE organizational_knowledge DROP CONSTRAINT IF EXISTS organizational_knowledge_text_bounds;
@@ -85,6 +87,8 @@ ALTER TABLE organizational_knowledge DROP CONSTRAINT IF EXISTS organizational_kn
 ALTER TABLE organizational_knowledge ADD CONSTRAINT organizational_knowledge_lifecycle_shape CHECK ((scope = 'worker_proposed' AND status IN ('proposed', 'unsupported')) OR (scope <> 'worker_proposed' AND status <> 'proposed'));
 ALTER TABLE organizational_knowledge DROP CONSTRAINT IF EXISTS organizational_knowledge_marker_shape;
 ALTER TABLE organizational_knowledge ADD CONSTRAINT organizational_knowledge_marker_shape CHECK ((scope = 'worker_proposed' AND promotion_marker = 'worker-proposal') OR (scope = 'project_department' AND status = 'active' AND promotion_marker = 'department-promotion') OR (scope = 'global' AND status = 'active' AND promotion_marker = 'global-promotion') OR (status IN ('unsupported', 'contradicted', 'retired') AND promotion_marker IN ('source-loss', 'knowledge-decay', 'adjudication')));
+ALTER TABLE organizational_knowledge DROP CONSTRAINT IF EXISTS organizational_knowledge_author_shape;
+ALTER TABLE organizational_knowledge ADD CONSTRAINT organizational_knowledge_author_shape CHECK ((scope = 'worker_proposed' AND author_operator_id IS NOT NULL AND author_role_id IS NOT NULL) OR scope <> 'worker_proposed');
 CREATE INDEX IF NOT EXISTS organizational_knowledge_project_idx ON organizational_knowledge (project_id, department_id, created_at, knowledge_id, revision);
 CREATE INDEX IF NOT EXISTS organizational_knowledge_global_idx ON organizational_knowledge (scope, department_id, created_at, knowledge_id, revision) WHERE scope = 'global';
 CREATE TABLE IF NOT EXISTS knowledge_promotion_authorizations (
@@ -142,7 +146,7 @@ BEGIN
   IF NEW.scope = 'global' AND (NEW.statement ~* '\m(raw|project-specific|source project|private project)\M' OR NEW.rationale ~* '\m(raw|project-specific|source project|private project)\M' OR COALESCE(NEW.generalized_statement, '') ~* '\m(raw|project-specific|source project|private project)\M') THEN RAISE EXCEPTION 'global organizational knowledge contains raw project content'; END IF;
   SELECT COALESCE(max(revision), 0) + 1 INTO expected_revision FROM organizational_knowledge WHERE knowledge_id = NEW.knowledge_id;
   IF NEW.revision <> expected_revision THEN RAISE EXCEPTION 'organizational knowledge revisions must be append-only and contiguous'; END IF;
-  IF NEW.revision > 1 AND EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND (prior.schema_version IS DISTINCT FROM NEW.schema_version OR prior.source_project_id IS DISTINCT FROM NEW.source_project_id OR prior.source_goal_id IS DISTINCT FROM NEW.source_goal_id OR prior.department_id IS DISTINCT FROM NEW.department_id OR prior.retention IS DISTINCT FROM NEW.retention)) THEN RAISE EXCEPTION 'organizational knowledge core provenance is immutable'; END IF;
+  IF NEW.revision > 1 AND EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND (prior.schema_version IS DISTINCT FROM NEW.schema_version OR prior.source_project_id IS DISTINCT FROM NEW.source_project_id OR prior.source_goal_id IS DISTINCT FROM NEW.source_goal_id OR prior.department_id IS DISTINCT FROM NEW.department_id OR prior.retention IS DISTINCT FROM NEW.retention OR prior.author_operator_id IS DISTINCT FROM NEW.author_operator_id OR prior.author_role_id IS DISTINCT FROM NEW.author_role_id OR prior.operation_payload_hash IS DISTINCT FROM NEW.operation_payload_hash)) THEN RAISE EXCEPTION 'organizational knowledge core provenance is immutable'; END IF;
   IF NEW.revision = 1 AND NEW.scope <> 'worker_proposed' THEN
     RAISE EXCEPTION 'organizational knowledge must be proposed before promotion';
   END IF;
@@ -308,9 +312,9 @@ BEGIN
      FOR UPDATE
   LOOP
     INSERT INTO organizational_knowledge
-      (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, curator_operator_id, curator_department_id, author_operator_id, author_role_id, promotion_marker, reason, created_by, source_session_ref, retention)
+      (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, curator_operator_id, curator_department_id, author_operator_id, author_role_id, operation_payload_hash, promotion_marker, reason, created_by, source_session_ref, retention)
     VALUES
-      (k.knowledge_id, k.revision + 1, k.schema_version, k.source_project_id, k.project_id, k.source_goal_id, k.department_id, k.scope, 'unsupported', k.statement, k.rationale, k.source_evidence_ids, k.source_digest_ids, k.episode_ids, k.confidence, k.freshness, k.generalized, k.council_round_id, k.generalized_statement, k.curator_role_id, k.curator_operator_id, k.curator_department_id, k.author_operator_id, k.author_role_id, 'source-loss', p_reason, p_actor, 'evidence:' || p_evidence_id::text, k.retention);
+      (k.knowledge_id, k.revision + 1, k.schema_version, k.source_project_id, k.project_id, k.source_goal_id, k.department_id, k.scope, 'unsupported', k.statement, k.rationale, k.source_evidence_ids, k.source_digest_ids, k.episode_ids, k.confidence, k.freshness, k.generalized, k.council_round_id, k.generalized_statement, k.curator_role_id, k.curator_operator_id, k.curator_department_id, k.author_operator_id, k.author_role_id, k.operation_payload_hash, 'source-loss', p_reason, p_actor, 'evidence:' || p_evidence_id::text, k.retention);
   END LOOP;
 END;
 $$;
