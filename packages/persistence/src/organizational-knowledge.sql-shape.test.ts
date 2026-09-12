@@ -9,7 +9,7 @@ describe("organizational knowledge persistence SQL shape", () => {
     const insertColumns = columns - 1;
     const values = source.match(/INSERT INTO organizational_knowledge \(\$\{INSERT_COLUMNS\}\) VALUES \(([^)]+)\)/)?.[1] ?? "";
     const placeholders = [...values.matchAll(/\$(\d+)/g)].map((match) => Number(match[1]));
-    expect(insertColumns).toBe(30);
+    expect(insertColumns).toBe(32);
     expect(Math.max(...placeholders)).toBe(insertColumns);
     expect(new Set(placeholders).size).toBe(insertColumns);
   });
