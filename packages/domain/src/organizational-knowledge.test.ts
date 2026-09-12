@@ -16,7 +16,7 @@ const base = (overrides: Partial<OrganizationalKnowledgeProposal> = {}): Organiz
   schemaVersion: 1, projectId, sourceGoalId: goalId, departmentId: "engineering",
   statement: "Keep the validation gate before applying a bounded change.",
   rationale: "The gate prevented a repeat failure.", sourceEvidenceIds: [evidenceId, evidenceId2], sourceDigestIds: [],
-  episodeIds: ["episode-a"], confidence: 0.9, freshness: 1, generalized: false, ...overrides,
+  episodeIds: ["episode-a", "episode-b"], confidence: 0.9, freshness: 1, generalized: false, ...overrides,
 });
 
 describe("organizational knowledge promotion gates", () => {
@@ -25,7 +25,7 @@ describe("organizational knowledge promotion gates", () => {
     expect(proposal.scope).toBe("worker_proposed");
     expect(proposal.status).toBe("proposed");
     expect(() => promoteKnowledgeToProject(proposal, { promoterRoleKind: "worker", promoterDepartmentId: "engineering" })).toThrow(/Department Head/);
-    expect(() => promoteKnowledgeToGlobal(proposal, { encoreCouncilApproved: true, corroboratingSourceIds: [evidenceId, evidenceId2], generalizedStatement: "Use bounded validation gates.", curatorRoleId: "head-security", noRawProjectContent: true, noPersonalInformation: true })).toThrow(/Department Head project/);
+    expect(() => promoteKnowledgeToGlobal(proposal, { encoreCouncilApproved: true, corroboratingSourceIds: [evidenceId, evidenceId2], corroboratingEpisodeIds: ["episode-a", "episode-b"], generalizedStatement: "Use bounded validation gates.", curatorRoleId: "head-security", noRawProjectContent: true, noPersonalInformation: true })).toThrow(/Department Head project/);
     expect(() => promoteKnowledgeToProject(proposal, { promoterRoleKind: "department_head", promoterDepartmentId: "security" })).toThrow(/department/);
     expect(promoteKnowledgeToProject(proposal, { promoterRoleKind: "department_head", promoterDepartmentId: "engineering" })).toMatchObject({ scope: "project_department", status: "active", projectId });
   });
@@ -39,10 +39,10 @@ describe("organizational knowledge promotion gates", () => {
 
   it("requires generalized safe content and Encore Council approval for global reuse", () => {
     const proposal = promoteKnowledgeToProject(createWorkerProposedKnowledge(base({ generalized: true, statement: "Use bounded validation gates for changes." })), { promoterRoleKind: "department_head", promoterDepartmentId: "engineering" });
-    expect(() => promoteKnowledgeToGlobal(proposal, { encoreCouncilApproved: false, corroboratingSourceIds: [evidenceId, evidenceId2], generalizedStatement: "Use bounded validation gates.", curatorRoleId: "head-security", noRawProjectContent: true, noPersonalInformation: true })).toThrow(/Council/);
-    expect(() => promoteKnowledgeToGlobal(proposal, { encoreCouncilApproved: true, corroboratingSourceIds: [evidenceId, evidenceId2], generalizedStatement: "Use bounded validation gates.", curatorRoleId: "head-security", noRawProjectContent: true, noPersonalInformation: false })).toThrow(/generalized|raw|safe/);
-    expect(() => promoteKnowledgeToGlobal(promoteKnowledgeToProject(createWorkerProposedKnowledge(base({ generalized: false })), { promoterRoleKind: "department_head", promoterDepartmentId: "engineering" }), { encoreCouncilApproved: true, corroboratingSourceIds: [evidenceId, evidenceId2], generalizedStatement: projectId, curatorRoleId: "head-security", noRawProjectContent: true, noPersonalInformation: true })).toThrow(/generalized|raw|safe/);
-    expect(promoteKnowledgeToGlobal(proposal, { encoreCouncilApproved: true, corroboratingSourceIds: [evidenceId, evidenceId2], generalizedStatement: "Use bounded validation gates.", curatorRoleId: "head-security", noRawProjectContent: true, noPersonalInformation: true })).toMatchObject({ scope: "global", status: "active", projectId: null });
+    expect(() => promoteKnowledgeToGlobal(proposal, { encoreCouncilApproved: false, corroboratingSourceIds: [evidenceId, evidenceId2], corroboratingEpisodeIds: ["episode-a", "episode-b"], generalizedStatement: "Use bounded validation gates.", curatorRoleId: "head-security", noRawProjectContent: true, noPersonalInformation: true })).toThrow(/Council/);
+    expect(() => promoteKnowledgeToGlobal(proposal, { encoreCouncilApproved: true, corroboratingSourceIds: [evidenceId, evidenceId2], corroboratingEpisodeIds: ["episode-a", "episode-b"], generalizedStatement: "Use bounded validation gates.", curatorRoleId: "head-security", noRawProjectContent: true, noPersonalInformation: false })).toThrow(/generalized|raw|safe/);
+    expect(() => promoteKnowledgeToGlobal(promoteKnowledgeToProject(createWorkerProposedKnowledge(base({ generalized: false })), { promoterRoleKind: "department_head", promoterDepartmentId: "engineering" }), { encoreCouncilApproved: true, corroboratingSourceIds: [evidenceId, evidenceId2], corroboratingEpisodeIds: ["episode-a", "episode-b"], generalizedStatement: projectId, curatorRoleId: "head-security", noRawProjectContent: true, noPersonalInformation: true })).toThrow(/generalized|raw|safe/);
+    expect(promoteKnowledgeToGlobal(proposal, { encoreCouncilApproved: true, corroboratingSourceIds: [evidenceId, evidenceId2], corroboratingEpisodeIds: ["episode-a", "episode-b"], generalizedStatement: "Use bounded validation gates.", curatorRoleId: "head-security", noRawProjectContent: true, noPersonalInformation: true })).toMatchObject({ scope: "global", status: "active", projectId: null });
   });
 
   it("rejects a single corroborating episode for global promotion", () => {
