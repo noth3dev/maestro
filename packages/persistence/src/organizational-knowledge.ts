@@ -126,6 +126,7 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
     const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [request.promoterOperatorId]);
     if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("promotion requires an active operator");
     if (request.curatorOperatorId.trim().toLowerCase() === request.promoterOperatorId.trim().toLowerCase()) throw new OrganizationalKnowledgeError("curator operator must be independent from promoter operator");
+    if (request.curatorRoleId.trim().toLowerCase() === request.promoterRoleId.trim().toLowerCase()) throw new OrganizationalKnowledgeError("curator role must be independent from promoter role");
     await assertHead(client, request.promoterRoleId, request.departmentId);
     const current = await readCurrent(client, request.knowledgeId, true);
     if (current.sourceGoalId !== request.proof.goalId) throw new OrganizationalKnowledgeError("knowledge source Goal is outside the lease");
@@ -136,7 +137,7 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
     await assertProjectMembership(client, request.curatorOperatorId, current.sourceProjectId);
     await assertProjectRole(client, request.curatorOperatorId, current.sourceProjectId, request.curatorRoleId);
     if (current.scope === "global") {
-      const same = current.generalizedStatement === request.generalizedStatement && current.councilRoundId?.toLowerCase() === request.encoreCouncilRoundId.toLowerCase() && JSON.stringify(current.sourceDigestIds) === JSON.stringify(request.corroboratingSourceIds.map((id) => id.toLowerCase())) && JSON.stringify(current.episodeIds) === JSON.stringify(request.corroboratingEpisodeIds.map((id) => id.toLowerCase()));
+      const same = current.generalizedStatement === request.generalizedStatement && current.councilRoundId?.toLowerCase() === request.encoreCouncilRoundId.toLowerCase() && current.curatorRoleId?.toLowerCase() === request.curatorRoleId.toLowerCase() && JSON.stringify(current.sourceDigestIds) === JSON.stringify(request.corroboratingSourceIds.map((id) => id.toLowerCase())) && JSON.stringify(current.episodeIds) === JSON.stringify(request.corroboratingEpisodeIds.map((id) => id.toLowerCase()));
       if (!same) throw new OrganizationalKnowledgeError("conflicting global promotion retry");
       return publicProjection(current);
     }
