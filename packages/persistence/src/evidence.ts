@@ -92,7 +92,8 @@ export async function deleteEvidenceSource(pool: Pool, evidenceId: string, reaso
     const tombstone = await client.query<{ goal_id: string; project_id: string; owner_id: string; fencing_token: string; reason: string; recorded_by: string }>("SELECT goal_id, project_id, owner_id, fencing_token, reason, recorded_by FROM evidence_source_tombstones WHERE evidence_id = $1", [evidenceId.toLowerCase()]);
     if (tombstone.rowCount === 1) {
       const tomb = tombstone.rows[0]!;
-      if (tomb.goal_id.toLowerCase() !== proof.goalId.toLowerCase() || tomb.owner_id !== proof.ownerId || tomb.fencing_token !== String(proof.fencingToken) || tomb.reason !== reason || tomb.recorded_by !== recordedBy) throw new Error("conflicting source evidence loss retry");
+      const goal = await client.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [proof.goalId]);
+      if (goal.rowCount !== 1 || tomb.project_id.toLowerCase() !== goal.rows[0]!.project_id.toLowerCase() || tomb.goal_id.toLowerCase() !== proof.goalId.toLowerCase() || tomb.owner_id !== proof.ownerId || tomb.fencing_token !== String(proof.fencingToken) || tomb.reason !== reason || tomb.recorded_by !== recordedBy) throw new Error("conflicting source evidence loss retry");
       return;
     }
     const source = await client.query<{ goal_id: string; project_id: string; goal_project_id: string }>("SELECT e.goal_id, e.project_id, g.project_id AS goal_project_id FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = $1", [evidenceId.toLowerCase()]);
