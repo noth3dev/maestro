@@ -2019,3 +2019,10 @@ All downstream routing documentation must use this contract and must not restore
 - Independent review found global metadata leakage, self-attested global generalization, arbitrary corroboration IDs, incomplete Council binding, direct SQL promotion bypass, missing Department read scope, helper-only source loss, and unguarded maintenance helpers.
 - Remediation adds a redacted global read projection; durable generalized statement and independent Department Head curator fields; source-bound corroborating evidence/digest checks; source Goal/evidence/independence Council checks; proposal-first and promotion-marker SQL checks; required Department read scope; an explicit `deleteEvidenceSource` transition that appends unsupported knowledge before deletion; and system/Head authorization for maintenance operations.
 - Focused domain tests pass; PostgreSQL integration tests are DB-gated because the configured disposable PostgreSQL endpoint is unavailable.
+
+
+## 2026-09-11 — Plan 6 S1 second review remediation
+- A follow-up independent review found that revision-2 direct SQL promotion, opaque episode labels, caller safety attestations, mutable/insufficient Council checks, caller-controlled source-loss GUCs, and raw global promotion returns still needed fail-closed boundaries.
+- RED-first tests now cover direct revision-2 SQL promotion, distinct durable digest episodes, same-model Council judgments, safe global projections, arbitrary source-loss actors/GUCs, and digest source-loss propagation.
+- Remediation uses durable generalized statements and independent curator roles; global rows require two distinct Improvement Digest episodes and source binding; Council checks source Goal/ref IDs and independent durable judgment identities; evidence deletion requires an application-generated token authorization row; PL/pgSQL search paths are pinned and source-loss propagation locks current rows.
+- Focused domain tests pass; PostgreSQL integration tests remain skipped because `MAESTRO_TEST_DATABASE_URL` is unset and `127.0.0.1:55432` is unavailable.
