@@ -56,8 +56,8 @@ describeDatabase("organizational knowledge persistence", () => {
     const forgedKnowledgeId = randomUUID();
     await pool.query("SELECT authorize_knowledge_proposal($1, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8::bigint, $9, $10, $11::jsonb)", [randomUUID(), forgedKnowledgeId, projectId, goalId, operatorId, "engineering", "worker", proof.fencingToken, "worker", "sql:wrong-payload", JSON.stringify({ statement: "wrong" })]);
     await expect(pool.query(`INSERT INTO organizational_knowledge (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, promotion_marker, reason, created_by, source_session_ref) VALUES ($1, 1, 1, $2, $2, $3, 'engineering', 'worker_proposed', 'proposed', 'bound', 'bound', $4::jsonb, '[]', '["episode-a"]', 0.5, 1, false, 'worker-proposal', NULL, 'worker', 'sql:wrong-payload')`, [forgedKnowledgeId, projectId, goalId, JSON.stringify([evidenceId]),])).rejects.toThrow(/authorization|payload|marker/);
-    await expect(proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "other-worker", sessionRef: "session:other", operatorId, operatorRoleId: "engineering" }, "proposal-default")).rejects.toThrow(/author|owner/);
-    const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "engineering" }, "proposal-default");
+    await expect(proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "other-worker", sessionRef: "session:other", operatorId, operatorRoleId: "head-engineering" }, "proposal-default")).rejects.toThrow(/author|owner/);
+    const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "head-engineering" }, "proposal-default");
     expect(proposed.status).toBe("proposed");
     await expect(pool.query(`INSERT INTO organizational_knowledge
       (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, promotion_marker, reason, created_by, source_session_ref)
@@ -77,10 +77,10 @@ describeDatabase("organizational knowledge persistence", () => {
 
   it("replays proposal and promotion identities exactly and rejects changed payloads", async () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
-    const first = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:replay", operatorId, operatorRoleId: "engineering" }, "proposal-command");
-    await expect(proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:other", operatorId, operatorRoleId: "engineering" }, "proposal-command")).resolves.toEqual(first);
-    await expect(proposeOrganizationalKnowledge(pool, proposal({ statement: "Changed payload." }), proof, { actorId: "worker", sessionRef: "session:other", operatorId, operatorRoleId: "engineering" }, "proposal-command")).rejects.toThrow(/conflicting|replay/);
-    await expect(proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:other", operatorId, operatorRoleId: "engineering" }, "")).rejects.toThrow(/idempotency/);
+    const first = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:replay", operatorId, operatorRoleId: "head-engineering" }, "proposal-command");
+    await expect(proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:other", operatorId, operatorRoleId: "head-engineering" }, "proposal-command")).resolves.toEqual(first);
+    await expect(proposeOrganizationalKnowledge(pool, proposal({ statement: "Changed payload." }), proof, { actorId: "worker", sessionRef: "session:other", operatorId, operatorRoleId: "head-engineering" }, "proposal-command")).rejects.toThrow(/conflicting|replay/);
+    await expect(proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:other", operatorId, operatorRoleId: "head-engineering" }, "")).rejects.toThrow(/idempotency/);
     const promoted = await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: first.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering", idempotencyKey: "project-command" });
     await expect(promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: first.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering", idempotencyKey: "project-command" })).resolves.toEqual(promoted);
     await expect(promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: first.knowledgeId, proof, promoterRoleId: "head-security", promoterOperatorId: operatorId, departmentId: "engineering", idempotencyKey: "project-command" })).rejects.toThrow(/conflicting|retry/);
@@ -88,7 +88,7 @@ describeDatabase("organizational knowledge persistence", () => {
 
   it("does not expose a project lesson in another project", async () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
-    const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "engineering" }, "proposal-default");
+    const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "head-engineering" }, "proposal-default");
     await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering", idempotencyKey: "project-default" });
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version) VALUES ($1, $2, 'active', 1)", [randomUUID(), otherProjectId]);
     await grantProjectMembership(pool, operatorId, otherProjectId);
@@ -102,7 +102,7 @@ describeDatabase("organizational knowledge persistence", () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
     const digestA = await recordImprovementDigest(pool, { schemaVersion: 1, projectId, goalId, episodeId: "episode-a", trigger: "goal_completed", situation: "A bounded task completed.", selectedDecision: "Keep the gate.", rejectedAlternatives: [], observedResult: "The gate held.", metrics: [], confidence: 0.8, sourceRefs: [{ kind: "goal", sourceId: goalId }] }, proof, { actorId: "worker", sessionRef: "session:worker", operatorId });
     const digestB = await recordImprovementDigest(pool, { schemaVersion: 1, projectId, goalId, episodeId: "episode-b", trigger: "goal_completed", situation: "A second bounded task completed.", selectedDecision: "Keep the gate.", rejectedAlternatives: [], observedResult: "The gate held again.", metrics: [], confidence: 0.8, sourceRefs: [{ kind: "goal", sourceId: goalId }] }, proof, { actorId: "worker", sessionRef: "session:worker", operatorId });
-    const proposed = await proposeOrganizationalKnowledge(pool, proposal({ generalized: true, statement: "Use bounded validation gates." , sourceEvidenceIds: [], sourceDigestIds: [digestA.digestId, digestB.digestId], episodeIds: ["episode-a", "episode-b"] }), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "engineering" }, "proposal-default");
+    const proposed = await proposeOrganizationalKnowledge(pool, proposal({ generalized: true, statement: "Use bounded validation gates." , sourceEvidenceIds: [], sourceDigestIds: [digestA.digestId, digestB.digestId], episodeIds: ["episode-a", "episode-b"] }), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "head-engineering" }, "proposal-default");
     await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering", idempotencyKey: "project-default" });
     await expect(promoteOrganizationalKnowledgeToGlobal(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering", encoreCouncilRoundId: randomUUID(), corroboratingSourceIds: [digestA.digestId, digestB.digestId], corroboratingEpisodeIds: ["episode-a", "episode-b"], generalizedStatement: "Use bounded validation gates.", curatorRoleId: "head-security", curatorOperatorId: curatorOperatorId, idempotencyKey: "global-default" })).rejects.toThrow(/Council|approval/);
     await expect(promoteOrganizationalKnowledgeToGlobal(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering", encoreCouncilRoundId: randomUUID(), corroboratingSourceIds: [digestA.digestId, digestB.digestId], corroboratingEpisodeIds: ["episode-a", "fabricated-episode"], generalizedStatement: "Use bounded validation gates.", curatorRoleId: "head-security", curatorOperatorId: curatorOperatorId, idempotencyKey: "global-default" })).rejects.toThrow(/episode|bound|source/);
@@ -149,14 +149,14 @@ describeDatabase("organizational knowledge persistence", () => {
 
   it("persists stale and contradicted decay as auditable revisions", async () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
-    const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "engineering" }, "proposal-default");
+    const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "head-engineering" }, "proposal-default");
     const promoted = await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering", idempotencyKey: "project-default" });
-    await expect(refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId: randomUUID(), operatorRoleId: "engineering", idempotencyKey: "unauthorized" })).rejects.toThrow(/active|operator/);
-    const stale = await refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId, operatorRoleId: "engineering", idempotencyKey: "stale-refresh" });
+    await expect(refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId: randomUUID(), operatorRoleId: "head-engineering", idempotencyKey: "unauthorized" })).rejects.toThrow(/active|operator/);
+    const stale = await refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId, operatorRoleId: "head-engineering", idempotencyKey: "stale-refresh" });
     expect(stale.confidence).toBeLessThan(promoted.confidence);
     await expect(pool.query("SELECT source_session_ref FROM organizational_knowledge WHERE knowledge_id = $1 AND revision = $2", [promoted.knowledgeId, promoted.revision + 1])).resolves.toMatchObject({ rows: [{ source_session_ref: "system:knowledge-decay:stale-refresh" }] });
-    await expect(refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId, operatorRoleId: "engineering", idempotencyKey: "stale-refresh" })).resolves.toEqual(stale);
-    const contradicted = await refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-21T00:00:00.000Z", lastSupportedAt: "2026-09-20T00:00:00.000Z", contradicted: true, proof, operatorId, operatorRoleId: "engineering", idempotencyKey: "contradiction-refresh" });
+    await expect(refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId, operatorRoleId: "head-engineering", idempotencyKey: "stale-refresh" })).resolves.toEqual(stale);
+    const contradicted = await refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-21T00:00:00.000Z", lastSupportedAt: "2026-09-20T00:00:00.000Z", contradicted: true, proof, operatorId, operatorRoleId: "head-engineering", idempotencyKey: "contradiction-refresh" });
     expect(contradicted.status).toBe("contradicted");
     await expect(listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering", proof })).resolves.toMatchObject([{ knowledgeId: promoted.knowledgeId, status: "contradicted" }]);
   });
@@ -164,7 +164,7 @@ describeDatabase("organizational knowledge persistence", () => {
   it("marks digest-sourced knowledge unsupported through the source-loss path", async () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
     const digest = await recordImprovementDigest(pool, { schemaVersion: 1, projectId, goalId, episodeId: "digest-episode", trigger: "goal_completed", situation: "A bounded task completed.", selectedDecision: "Keep the gate.", rejectedAlternatives: [], observedResult: "The gate held.", metrics: [], confidence: 0.8, sourceRefs: [{ kind: "goal", sourceId: goalId }] }, proof, { actorId: "worker", sessionRef: "session:worker", operatorId });
-    const proposed = await proposeOrganizationalKnowledge(pool, proposal({ sourceEvidenceIds: [], sourceDigestIds: [digest.digestId] }), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "engineering" }, "proposal-default");
+    const proposed = await proposeOrganizationalKnowledge(pool, proposal({ sourceEvidenceIds: [], sourceDigestIds: [digest.digestId] }), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "head-engineering" }, "proposal-default");
     await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering", idempotencyKey: "project-default" });
     const affected = await markKnowledgeUnsupportedForDigest(pool, digest.digestId, "digest provenance was withdrawn", proof, operatorId, "head-engineering");
     expect(affected).toContain(proposed.knowledgeId);
@@ -173,7 +173,7 @@ describeDatabase("organizational knowledge persistence", () => {
 
   it("marks source-evidence loss unsupported and retires without deleting provenance", async () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
-    const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "engineering" }, "proposal-default");
+    const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "head-engineering" }, "proposal-default");
     const promoted = await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering", idempotencyKey: "project-default" });
     await pool.query("SELECT set_config('maestro.source_evidence_loss', '1', true)");
     await expect(pool.query("DELETE FROM evidence_records WHERE evidence_id = $1", [evidenceId2])).rejects.toThrow(/immutable|authorization|invalid/);
@@ -194,11 +194,11 @@ describeDatabase("organizational knowledge persistence", () => {
 
     await expect(pool.query("SELECT count(*)::int AS count FROM evidence_records WHERE evidence_id = $1", [evidenceId])).resolves.toMatchObject({ rows: [{ count: 0 }] });
     await expect(listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering", proof })).resolves.toMatchObject([{ knowledgeId: proposed.knowledgeId, status: "unsupported" }]);
-    await expect(retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "Superseded by reviewed guidance.", retiredBy: "worker", proof, operatorId, operatorRoleId: "engineering", idempotencyKey: "unauthorized" })).rejects.toThrow(/Department Head/);
-    const retired = await retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "Superseded by reviewed guidance.", retiredBy: "head-engineering", proof, operatorId, operatorRoleId: "engineering", idempotencyKey: "retirement-command" });
+    await expect(retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "Superseded by reviewed guidance.", retiredBy: "worker", proof, operatorId, operatorRoleId: "head-engineering", idempotencyKey: "unauthorized" })).rejects.toThrow(/Department Head/);
+    const retired = await retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "Superseded by reviewed guidance.", retiredBy: "head-engineering", proof, operatorId, operatorRoleId: "head-engineering", idempotencyKey: "retirement-command" });
     expect(retired).toMatchObject({ status: "retired", knowledgeId: promoted.knowledgeId });
     expect(retired.sourceEvidenceIds).toContain(evidenceId);
-    await expect(retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "retry", retiredBy: "head-engineering", proof, operatorId, operatorRoleId: "engineering", idempotencyKey: "retirement-command" })).resolves.toMatchObject({ status: "retired", knowledgeId: proposed.knowledgeId });
+    await expect(retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "retry", retiredBy: "head-engineering", proof, operatorId, operatorRoleId: "head-engineering", idempotencyKey: "retirement-command" })).resolves.toMatchObject({ status: "retired", knowledgeId: proposed.knowledgeId });
     await expect(pool.query("SELECT count(*)::int AS count FROM organizational_knowledge WHERE knowledge_id = $1", [proposed.knowledgeId])).resolves.toMatchObject({ rows: [{ count: expect.any(Number) }] });
     await expect(pool.query("UPDATE organizational_knowledge SET reason = 'tampered' WHERE knowledge_id = $1", [proposed.knowledgeId])).rejects.toThrow();
     await expect(pool.query("TRUNCATE goals CASCADE")).resolves.toBeDefined();
