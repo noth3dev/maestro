@@ -228,6 +228,8 @@ BEGIN
   END LOOP;
 END;
 $$;
+REVOKE EXECUTE ON FUNCTION propagate_organizational_knowledge_evidence_loss(uuid, text, text) FROM PUBLIC;
+
 
 -- Replace the original evidence immutability trigger function while retaining
 -- its ordinary fail-closed behavior. The scoped GUC is set only by the
@@ -296,6 +298,7 @@ END;
 $$;
 
 -- Marker rows are not an application-role write surface. Promotion code runs as the migration owner; deployed app roles must use a narrowly scoped DB function or equivalent owner boundary.
+REVOKE TRUNCATE ON goals, evidence_records, organizational_knowledge, source_evidence_loss_events, source_evidence_loss_authorizations, knowledge_promotion_authorizations FROM PUBLIC;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_promotion_authorizations FROM PUBLIC;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON source_evidence_loss_authorizations FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint) FROM PUBLIC;
@@ -309,6 +312,7 @@ BEGIN
        AND a.owner_id = current_setting('maestro.source_loss_owner', true)
        AND a.fencing_token = current_setting('maestro.source_loss_fence', true)::bigint
        AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')
+       AND EXISTS (SELECT 1 FROM source_evidence_loss_events e WHERE e.evidence_id = OLD.evidence_id AND e.goal_id = OLD.goal_id AND e.project_id = OLD.project_id AND e.owner_id = a.owner_id AND e.fencing_token = a.fencing_token AND e.reason = a.reason AND e.recorded_by = a.recorded_by)
   ) THEN
     PERFORM propagate_organizational_knowledge_evidence_loss(OLD.evidence_id, (SELECT a.reason FROM source_evidence_loss_authorizations a WHERE a.evidence_id = OLD.evidence_id AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')), (SELECT a.recorded_by FROM source_evidence_loss_authorizations a WHERE a.evidence_id = OLD.evidence_id AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')));
     DELETE FROM source_evidence_loss_authorizations WHERE evidence_id = OLD.evidence_id AND token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex');
@@ -320,6 +324,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION maestro_goal_truncate_reset() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
+  IF session_user <> (SELECT tableowner FROM pg_catalog.pg_tables WHERE schemaname = TG_TABLE_SCHEMA AND tablename = TG_TABLE_NAME) THEN RAISE EXCEPTION 'schema cleanup reset requires the goals table owner'; END IF;
   PERFORM set_config('maestro.schema_cleanup_reset', '1', true);
   RETURN NULL;
 END;

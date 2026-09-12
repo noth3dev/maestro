@@ -11,7 +11,7 @@ import { assertProjectMembership, assertProjectRole } from "./project-membership
 
 export type OrganizationalKnowledgeProposalRecord = OrganizationalKnowledgeProposal;
 export interface OrganizationalKnowledgeAuthor { readonly actorId: string; readonly sessionRef: string; readonly operatorId: string; readonly operatorRoleId: string; }
-export interface OrganizationalKnowledgeReadAuthorization { readonly operatorId: string; readonly projectId: string; readonly departmentId: string; }
+export interface OrganizationalKnowledgeReadAuthorization { readonly operatorId: string; readonly projectId: string; readonly departmentId: string; readonly proof: GoalLeaseProof; }
 export class OrganizationalKnowledgeError extends Error {}
 export class OrganizationalKnowledgeNotFoundError extends OrganizationalKnowledgeError {}
 export interface OrganizationalKnowledgePublic {
@@ -177,14 +177,13 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
 
 export async function listOrganizationalKnowledge(pool: Pool, authorization: OrganizationalKnowledgeReadAuthorization): Promise<readonly (OrganizationalKnowledge | OrganizationalKnowledgePublic)[]> {
   if (!authorization || typeof authorization.operatorId !== "string" || typeof authorization.projectId !== "string" || typeof authorization.departmentId !== "string") throw new OrganizationalKnowledgeError("knowledge read authorization is required");
-  const client = await pool.connect();
-  try { await client.query("BEGIN");
+  return withGoalAuthority(pool, authorization.proof, 93, async (client) => {
     const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [authorization.operatorId]);
     if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("knowledge read requires an active operator");
     await assertProjectMembership(client, authorization.operatorId, authorization.projectId); await assertProjectRole(client, authorization.operatorId, authorization.projectId, authorization.departmentId);
     const result = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status <> 'retired' AND (k.scope = 'global' OR (k.project_id = $1 AND k.scope = 'project_department')) AND k.department_id = $2 AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) ORDER BY k.created_at, k.knowledge_id`, [authorization.projectId, authorization.departmentId]);
-    await client.query("COMMIT"); return result.rows.map((row) => { const lesson = map(row); return lesson.scope === "global" ? publicProjection(lesson) : lesson; });
-  } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+    return result.rows.map((row) => { const lesson = map(row); return lesson.scope === "global" ? publicProjection(lesson) : lesson; });
+  });
 }
 
 /** Appends a stale/contradicted score revision; the prior claim remains auditable. */
@@ -220,7 +219,7 @@ export async function markKnowledgeUnsupportedForEvidence(pool: Pool, evidenceId
     const source = await client.query<{ goal_id: string; project_id: string; goal_project_id: string }>("SELECT e.goal_id, e.project_id, g.project_id AS goal_project_id FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = $1", [evidenceId.toLowerCase()]);
     if (source.rowCount !== 1 || source.rows[0]!.goal_id !== proof.goalId || source.rows[0]!.project_id !== source.rows[0]!.goal_project_id) throw new OrganizationalKnowledgeError("evidence source is outside the Goal lease/project");
     await assertProjectMembership(client, operatorId, source.rows[0]!.project_id);
-    for (const _row of (await client.query<{ department_id: string }>("SELECT DISTINCT department_id FROM organizational_knowledge WHERE source_project_id = $1 AND source_goal_id = $2 AND source_evidence_ids @> $3::jsonb", [source.rows[0]!.project_id, source.rows[0]!.goal_id, JSON.stringify([evidenceId.toLowerCase()])])).rows) await assertProjectRole(client, operatorId, source.rows[0]!.project_id, operatorRoleId);
+    await assertProjectRole(client, operatorId, source.rows[0]!.project_id, operatorRoleId);
     const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_evidence_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([evidenceId.toLowerCase()])]);
     const ids: string[] = [];
     for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await insertRevision(client, unsupported, operatorId, `evidence:${evidenceId}`); ids.push(current.knowledgeId); }
