@@ -52,6 +52,7 @@ describeDatabase("organizational knowledge persistence", () => {
 
   it("persists worker proposals separately and only exposes promoted knowledge", async () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
+    await expect(pool.query(`INSERT INTO organizational_knowledge (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, promotion_marker, reason, created_by, source_session_ref) VALUES ($1, 1, 1, $2, $2, $3, 'engineering', 'worker_proposed', 'proposed', 'direct SQL', 'direct SQL', $4::jsonb, '[]', '["episode-a"]', 0.5, 1, false, NULL, NULL, NULL, 'worker-proposal', NULL, 'worker', 'sql:direct')`, [randomUUID(), projectId, goalId, JSON.stringify([evidenceId])])).rejects.toThrow(/authorization|marker/);
     await expect(proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "other-worker", sessionRef: "session:other", operatorId, operatorRoleId: "engineering" })).rejects.toThrow(/author|owner/);
     const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "engineering" });
     expect(proposed.status).toBe("proposed");
