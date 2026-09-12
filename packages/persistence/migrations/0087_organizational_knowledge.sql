@@ -43,6 +43,17 @@ BEGIN
   END IF;
 END $$;
 
+DO $$
+DECLARE has_promotion_operator boolean; has_promotion_role boolean; bad boolean;
+BEGIN
+  IF to_regclass('organizational_knowledge') IS NOT NULL THEN
+    SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'organizational_knowledge' AND column_name = 'promotion_operator_id') INTO has_promotion_operator;
+    SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'organizational_knowledge' AND column_name = 'promotion_role_id') INTO has_promotion_role;
+    IF has_promotion_operator AND has_promotion_role THEN EXECUTE 'SELECT EXISTS (SELECT 1 FROM organizational_knowledge WHERE scope IN (''project_department'', ''global'') AND status = ''active'' AND (promotion_operator_id IS NULL OR promotion_role_id IS NULL))' INTO bad; ELSE EXECUTE 'SELECT EXISTS (SELECT 1 FROM organizational_knowledge WHERE scope IN (''project_department'', ''global'') AND status = ''active'')' INTO bad; END IF;
+    IF bad THEN RAISE EXCEPTION 'migration 0087 requires existing active promotions to be reissued with durable mutation identity'; END IF;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS organizational_knowledge (
   knowledge_id uuid NOT NULL,
   revision integer NOT NULL CHECK (revision >= 1),
