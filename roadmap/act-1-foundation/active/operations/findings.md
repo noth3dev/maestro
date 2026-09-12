@@ -2026,3 +2026,9 @@ All downstream routing documentation must use this contract and must not restore
 - RED-first tests now cover direct revision-2 SQL promotion, distinct durable digest episodes, same-model Council judgments, safe global projections, arbitrary source-loss actors/GUCs, and digest source-loss propagation.
 - Remediation uses durable generalized statements and independent curator roles; global rows require two distinct Improvement Digest episodes and source binding; Council checks source Goal/ref IDs and independent durable judgment identities; evidence deletion requires an application-generated token authorization row; PL/pgSQL search paths are pinned and source-loss propagation locks current rows.
 - Focused domain tests pass; PostgreSQL integration tests remain skipped because `MAESTRO_TEST_DATABASE_URL` is unset and `127.0.0.1:55432` is unavailable.
+
+
+## 2026-09-11 — Plan 6 S1 third review remediation
+- Follow-up review required rev2 SQL promotion denial, durable digest episode pairing, fixed generalized output, judgment-identity Council checks, Goal-bound source-loss authorization, pinned search paths, and redacted promotion returns.
+- RED tests cover direct rev2 SQL insertion, fabricated episode pairing, wrong-Goal/same-model Council artifacts, direct GUC/delete bypass, arbitrary source-loss operator, and redacted global promotion. GREEN focused domain tests pass; PostgreSQL integration remains skipped because no database URL/endpoint is available.
+- Evidence source deletion now requires a valid `GoalLeaseProof`, an authorized local operator, and a transaction-local application-generated token whose DB authorization row binds evidence, Goal, project, owner, and fencing token.
