@@ -16,7 +16,7 @@ describe("organizational knowledge remediation gates", () => {
     expect(() => promoteKnowledgeToGlobal(project, { encoreCouncilApproved: true, corroboratingSourceIds: [evidenceA, evidenceB] } as never)).toThrow(/curat|generalized|source/i);
     expect(() => promoteKnowledgeToGlobal(project, { ...approved, generalizedStatement: "Project-specific raw detail" })).toThrow(/raw|safe/i);
     expect(promoteKnowledgeToGlobal(project, approved)).toMatchObject({ scope: "global", projectId: null, generalized: true, statement: approved.generalizedStatement });
-    expect(promoteKnowledgeToGlobal(project, { ...approved, corroboratingEpisodeIds: ["episode-b", "episode-a"] }).episodeIds).toEqual(["episode-b", "episode-a"]);
+    expect(() => promoteKnowledgeToGlobal(project, { ...approved, corroboratingEpisodeIds: ["episode-b", "episode-a"] })).toThrow(/episode|bound|corroborat/i);
   });
 
   it("requires distinct source-bound corroborating evidence, not arbitrary episode labels", () => {
