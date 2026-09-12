@@ -68,6 +68,7 @@ describeDatabase("organizational knowledge persistence", () => {
     const proposed = await proposeOrganizationalKnowledge(pool, proposal({ generalized: true, statement: "Use bounded validation gates." , sourceEvidenceIds: [], sourceDigestIds: [digestA.digestId, digestB.digestId], episodeIds: ["episode-a", "episode-b"] }), proof, { actorId: "worker", sessionRef: "session:worker" });
     await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, promoterRoleId: "head-engineering", departmentId: "engineering" });
     await expect(promoteOrganizationalKnowledgeToGlobal(pool, { knowledgeId: proposed.knowledgeId, promoterRoleId: "head-engineering", departmentId: "engineering", encoreCouncilRoundId: randomUUID(), corroboratingSourceIds: [digestA.digestId, digestB.digestId], corroboratingEpisodeIds: ["episode-a", "episode-b"], generalizedStatement: "Use bounded validation gates.", curatorRoleId: "head-security" })).rejects.toThrow(/Council|approval/);
+    await expect(promoteOrganizationalKnowledgeToGlobal(pool, { knowledgeId: proposed.knowledgeId, promoterRoleId: "head-engineering", departmentId: "engineering", encoreCouncilRoundId: randomUUID(), corroboratingSourceIds: [digestA.digestId, digestB.digestId], corroboratingEpisodeIds: ["episode-a", "fabricated-episode"], generalizedStatement: "Use bounded validation gates.", curatorRoleId: "head-security" })).rejects.toThrow(/episode|bound|source/);
     const wrongGoalId = randomUUID();
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version) VALUES ($1, $2, 'active', 1)", [wrongGoalId, projectId]);
     const wrongRoundId = randomUUID();
@@ -125,8 +126,9 @@ describeDatabase("organizational knowledge persistence", () => {
     const promoted = await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, promoterRoleId: "head-engineering", departmentId: "engineering" });
     await pool.query("SELECT set_config('maestro.source_evidence_loss', '1', true)");
     await expect(pool.query("DELETE FROM evidence_records WHERE evidence_id = $1", [evidenceId2])).rejects.toThrow(/immutable|authorization/);
-    await expect(deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", "worker")).rejects.toThrow(/operator|authorized/);
-    await deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId);
+    await expect(deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", "worker", proof)).rejects.toThrow(/operator|authorized/);
+    await expect(deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId, { ...proof, fencingToken: "999999" })).rejects.toThrow(/stale|lease/);
+    await deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId, proof);
     await expect(pool.query("SELECT count(*)::int AS count FROM evidence_records WHERE evidence_id = $1", [evidenceId])).resolves.toMatchObject({ rows: [{ count: 0 }] });
     await expect(listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering" })).resolves.toMatchObject([{ knowledgeId: proposed.knowledgeId, status: "unsupported" }]);
     await expect(retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "Superseded by reviewed guidance.", retiredBy: "worker" })).rejects.toThrow(/Department Head/);
