@@ -244,7 +244,7 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
     const requestHash = operationHash({ now: request.now, lastSupportedAt: request.lastSupportedAt, staleAfterMs: request.staleAfterMs ?? null, contradicted: request.contradicted ?? null });
     if (operationRef.length > 256) throw new OrganizationalKnowledgeError("knowledge maintenance idempotency key is invalid");
     if (current.sourceSessionRef === operationRef) {
-      if (current.authorOperatorId?.toLowerCase() !== request.operatorId.toLowerCase() || current.operationPayloadHash !== requestHash) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
+      if (current.promotionOperatorId?.toLowerCase() !== request.operatorId.toLowerCase() || current.promotionRoleId?.toLowerCase() !== current.departmentId.toLowerCase() || current.operationPayloadHash !== requestHash) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
       return current.scope === "global" ? publicProjection(current) : current;
     }
     if (current.sourceSessionRef?.startsWith("system:knowledge-decay:") && current.status !== "retired") throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
