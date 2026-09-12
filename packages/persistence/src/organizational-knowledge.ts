@@ -98,7 +98,7 @@ export async function promoteOrganizationalKnowledgeToProject(pool: Pool, reques
   });
 }
 
-export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request: { readonly knowledgeId: string; readonly promoterRoleId: string; readonly departmentId: string; readonly encoreCouncilRoundId: string; readonly corroboratingSourceIds: readonly string[]; readonly generalizedStatement: string; readonly curatorRoleId: string }): Promise<OrganizationalKnowledge> {
+export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request: { readonly knowledgeId: string; readonly promoterRoleId: string; readonly departmentId: string; readonly encoreCouncilRoundId: string; readonly corroboratingSourceIds: readonly string[]; readonly corroboratingEpisodeIds: readonly string[]; readonly generalizedStatement: string; readonly curatorRoleId: string }): Promise<OrganizationalKnowledge> {
   return withKnowledgeTransaction(pool, async (client) => {
     await assertHead(client, request.promoterRoleId, request.departmentId);
     const current = await readCurrent(client, request.knowledgeId, true);
@@ -121,7 +121,7 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
       } else throw new OrganizationalKnowledgeError("corroborating source is not bound to the lesson");
     }
     const approved = approval.rowCount === 1;
-    const promotion: GlobalKnowledgePromotion = { encoreCouncilApproved: approved, corroboratingSourceIds: sourceIds, generalizedStatement: request.generalizedStatement, curatorRoleId: request.curatorRoleId, noRawProjectContent: true, noPersonalInformation: true, councilRoundId: request.encoreCouncilRoundId };
+    const promotion: GlobalKnowledgePromotion = { encoreCouncilApproved: approved, corroboratingSourceIds: sourceIds, corroboratingEpisodeIds: request.corroboratingEpisodeIds, generalizedStatement: request.generalizedStatement, curatorRoleId: request.curatorRoleId, noRawProjectContent: true, noPersonalInformation: true, councilRoundId: request.encoreCouncilRoundId };
     const promoted = promoteKnowledgeToGlobal(current, promotion);
     return insertRevision(client, promoted, request.promoterRoleId, `promotion:${request.promoterRoleId}`);
   });

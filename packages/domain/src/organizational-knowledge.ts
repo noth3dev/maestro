@@ -46,6 +46,7 @@ export interface GlobalKnowledgePromotion {
   readonly encoreCouncilApproved: boolean;
   /** Durable source records, each independently checked against the source Goal. */
   readonly corroboratingSourceIds: readonly string[];
+  readonly corroboratingEpisodeIds: readonly string[];
   readonly generalizedStatement: string;
   readonly curatorRoleId: string;
   readonly noRawProjectContent: true;
@@ -127,7 +128,7 @@ function assertGeneralizedSafe(lesson: OrganizationalKnowledge, promotion: Globa
   if (promotion.noRawProjectContent !== true || promotion.noPersonalInformation !== true || PERSONAL.test(promotion.generalizedStatement) || SECRET.test(promotion.generalizedStatement) || promotion.generalizedStatement.toLowerCase().includes(lesson.sourceProjectId.toLowerCase()) || promotion.generalizedStatement.toLowerCase().includes(lesson.sourceGoalId.toLowerCase())) throw new InvalidOrganizationalKnowledgeError("global knowledge contains raw project content or personal information");
   if (PERSONAL.test(lesson.statement) || PERSONAL.test(lesson.rationale) || SECRET.test(lesson.statement) || SECRET.test(lesson.rationale)) throw new InvalidOrganizationalKnowledgeError("global knowledge contains unsafe source content");
   if (!promotion.encoreCouncilApproved) throw new InvalidOrganizationalKnowledgeError("Encore Council approval is required for global knowledge");
-  if (!Array.isArray(promotion.corroboratingSourceIds) || promotion.corroboratingSourceIds.length < 2 || new Set(promotion.corroboratingSourceIds.map((id) => id.toLowerCase())).size < 2 || promotion.corroboratingSourceIds.some((id) => !UUID.test(id) || !(lesson.sourceEvidenceIds.includes(id.toLowerCase()) || lesson.sourceDigestIds.includes(id.toLowerCase())))) throw new InvalidOrganizationalKnowledgeError("global knowledge requires distinct source-bound corroboration");
+  if (!Array.isArray(promotion.corroboratingSourceIds) || !Array.isArray(promotion.corroboratingEpisodeIds) || promotion.corroboratingSourceIds.length < 2 || promotion.corroboratingSourceIds.length !== promotion.corroboratingEpisodeIds.length || new Set(promotion.corroboratingSourceIds.map((id) => id.toLowerCase())).size !== promotion.corroboratingSourceIds.length || new Set(promotion.corroboratingEpisodeIds.map((id) => id.toLowerCase())).size !== promotion.corroboratingEpisodeIds.length || promotion.corroboratingSourceIds.some((id, index) => !UUID.test(id) || !(lesson.sourceEvidenceIds.includes(id.toLowerCase()) || lesson.sourceDigestIds.includes(id.toLowerCase())) || !lesson.episodeIds.some((episodeId) => episodeId.toLowerCase() === promotion.corroboratingEpisodeIds[index]!.toLowerCase()))) throw new InvalidOrganizationalKnowledgeError("global knowledge requires distinct source-bound corroboration across episodes");
 }
 export function promoteKnowledgeToGlobal(lesson: OrganizationalKnowledge, promotion: GlobalKnowledgePromotion): OrganizationalKnowledge {
   if (lesson.scope === "global") return lesson;
