@@ -32,7 +32,7 @@ function marker(lesson: OrganizationalKnowledge): string {
   if (lesson.scope === "worker_proposed") return "worker-proposal";
   if (lesson.status === "active" && lesson.scope === "project_department") return "department-promotion";
   if (lesson.status === "active" && lesson.scope === "global") return "global-promotion";
-  if (lesson.status === "unsupported") return lesson.sourceSessionRef?.startsWith("evidence:") ? "source-loss" : "knowledge-decay";
+  if (lesson.status === "unsupported") return lesson.sourceSessionRef?.startsWith("evidence:") || lesson.sourceSessionRef?.startsWith("digest:") ? "source-loss" : "knowledge-decay";
   if (lesson.status === "contradicted") return "knowledge-decay";
   return "adjudication";
 }
