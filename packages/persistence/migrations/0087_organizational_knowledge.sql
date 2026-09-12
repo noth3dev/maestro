@@ -142,9 +142,8 @@ DROP TRIGGER IF EXISTS organizational_knowledge_immutable ON organizational_know
 CREATE TRIGGER organizational_knowledge_immutable BEFORE UPDATE OR DELETE ON organizational_knowledge FOR EACH ROW EXECUTE FUNCTION reject_organizational_knowledge_mutation();
 DROP TRIGGER IF EXISTS organizational_knowledge_no_truncate ON organizational_knowledge;
 
-CREATE OR REPLACE FUNCTION current_organizational_knowledge(p_knowledge_id uuid) RETURNS SETOF organizational_knowledge LANGUAGE sql STABLE AS $$
-  SELECT k.* FROM organizational_knowledge k WHERE k.knowledge_id = p_knowledge_id ORDER BY k.revision DESC LIMIT 1;
-$$;
+-- Raw current-row SQL access is intentionally not exposed. Callers must use the
+-- project-authorized application read API, which redacts global provenance.
 
 
 -- Evidence metadata is immutable during ordinary operation. An explicit
@@ -179,10 +178,10 @@ CREATE OR REPLACE FUNCTION reject_source_evidence_loss_event_mutation() RETURNS 
 BEGIN RAISE EXCEPTION 'source evidence loss events are append-only'; END;
 $$;
 DROP TRIGGER IF EXISTS source_evidence_loss_events_immutable ON source_evidence_loss_events;
-CREATE TRIGGER source_evidence_loss_events_immutable BEFORE UPDATE OR DELETE OR TRUNCATE ON source_evidence_loss_events FOR EACH STATEMENT EXECUTE FUNCTION reject_source_evidence_loss_event_mutation();
+CREATE TRIGGER source_evidence_loss_events_immutable BEFORE UPDATE OR DELETE ON source_evidence_loss_events FOR EACH STATEMENT EXECUTE FUNCTION reject_source_evidence_loss_event_mutation();
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON source_evidence_loss_events FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION propagate_organizational_knowledge_evidence_loss(p_evidence_id uuid, p_reason text) RETURNS void LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION propagate_organizational_knowledge_evidence_loss(p_evidence_id uuid, p_reason text, p_actor text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE k record;
 BEGIN
   FOR k IN
@@ -195,7 +194,7 @@ BEGIN
     INSERT INTO organizational_knowledge
       (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, promotion_marker, reason, created_by, source_session_ref)
     VALUES
-      (k.knowledge_id, k.revision + 1, k.schema_version, k.source_project_id, k.project_id, k.source_goal_id, k.department_id, k.scope, 'unsupported', k.statement, k.rationale, k.source_evidence_ids, k.source_digest_ids, k.episode_ids, k.confidence, k.freshness, k.generalized, k.council_round_id, k.generalized_statement, k.curator_role_id, 'source-loss', p_reason, 'evidence-source-loss', 'system:evidence-source-loss');
+      (k.knowledge_id, k.revision + 1, k.schema_version, k.source_project_id, k.project_id, k.source_goal_id, k.department_id, k.scope, 'unsupported', k.statement, k.rationale, k.source_evidence_ids, k.source_digest_ids, k.episode_ids, k.confidence, k.freshness, k.generalized, k.council_round_id, k.generalized_statement, k.curator_role_id, 'source-loss', p_reason, p_actor, 'evidence:' || p_evidence_id::text);
   END LOOP;
 END;
 $$;
@@ -233,7 +232,7 @@ BEGIN
 END;
 $$;
 DROP TRIGGER IF EXISTS source_evidence_loss_authorizations_immutable ON source_evidence_loss_authorizations;
-CREATE TRIGGER source_evidence_loss_authorizations_immutable BEFORE UPDATE OR TRUNCATE ON source_evidence_loss_authorizations FOR EACH STATEMENT EXECUTE FUNCTION reject_source_evidence_loss_authorization_mutation();
+CREATE TRIGGER source_evidence_loss_authorizations_immutable BEFORE UPDATE ON source_evidence_loss_authorizations FOR EACH STATEMENT EXECUTE FUNCTION reject_source_evidence_loss_authorization_mutation();
 
 
 
@@ -244,9 +243,7 @@ BEGIN
 END;
 $$;
 DROP TRIGGER IF EXISTS knowledge_promotion_authorizations_immutable ON knowledge_promotion_authorizations;
-DROP TRIGGER IF EXISTS knowledge_promotion_authorizations_no_truncate ON knowledge_promotion_authorizations;
 CREATE TRIGGER knowledge_promotion_authorizations_immutable BEFORE UPDATE OR DELETE ON knowledge_promotion_authorizations FOR EACH ROW EXECUTE FUNCTION reject_knowledge_promotion_authorization_mutation();
-CREATE TRIGGER knowledge_promotion_authorizations_no_truncate BEFORE TRUNCATE ON knowledge_promotion_authorizations FOR EACH STATEMENT EXECUTE FUNCTION reject_knowledge_promotion_authorization_mutation();
 
 -- Marker rows are not an application-role write surface. Promotion code runs as the migration owner; deployed app roles must use a narrowly scoped DB function or equivalent owner boundary.
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_promotion_authorizations FROM PUBLIC;
@@ -261,7 +258,7 @@ BEGIN
        AND a.fencing_token = current_setting('maestro.source_loss_fence', true)::bigint
        AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')
   ) THEN
-    PERFORM propagate_organizational_knowledge_evidence_loss(OLD.evidence_id, (SELECT a.reason FROM source_evidence_loss_authorizations a WHERE a.evidence_id = OLD.evidence_id AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')));
+    PERFORM propagate_organizational_knowledge_evidence_loss(OLD.evidence_id, (SELECT a.reason FROM source_evidence_loss_authorizations a WHERE a.evidence_id = OLD.evidence_id AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')), (SELECT a.recorded_by FROM source_evidence_loss_authorizations a WHERE a.evidence_id = OLD.evidence_id AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')));
     DELETE FROM source_evidence_loss_authorizations WHERE evidence_id = OLD.evidence_id AND token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex');
     RETURN OLD;
   END IF;
@@ -274,9 +271,8 @@ DECLARE knowledge_schema text := current_schema();
 BEGIN
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.validate_organizational_knowledge_insert() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_organizational_knowledge_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
-  EXECUTE pg_catalog.format('ALTER FUNCTION %I.current_organizational_knowledge(uuid) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_source_evidence_loss_event_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
-  EXECUTE pg_catalog.format('ALTER FUNCTION %I.propagate_organizational_knowledge_evidence_loss(uuid, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.propagate_organizational_knowledge_evidence_loss(uuid, text, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_evidence_record_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.validate_source_evidence_loss_event_binding() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.validate_source_evidence_loss_authorization_binding() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
