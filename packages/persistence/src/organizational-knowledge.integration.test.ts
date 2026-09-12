@@ -29,7 +29,7 @@ describeDatabase("organizational knowledge persistence", () => {
   beforeEach(async () => {
     projectId = randomUUID(); otherProjectId = randomUUID(); goalId = randomUUID(); otherGoalId = randomUUID(); evidenceId = randomUUID(); evidenceId2 = randomUUID();
     await pool.query("INSERT INTO local_operators (operator_id) VALUES ($1), ($2) ON CONFLICT DO NOTHING", [operatorId, curatorOperatorId]);
-    await pool.query("INSERT INTO goals (goal_id, project_id, state, version) VALUES ($1, $2, 'active', 1), ($3, $4, 'active', 1)", [goalId, projectId, otherGoalId, otherProjectId]);
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at) VALUES ($1, $2, 'active', 1, transaction_timestamp()), ($3, $4, 'active', 1, transaction_timestamp())", [goalId, projectId, otherGoalId, otherProjectId]);
     await pool.query("INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type) VALUES ($1, $2, $3, $4, $5, 'worker', $6, 10, 'lesson', 'text/plain')", [evidenceId, randomUUID(), randomUUID(), projectId, goalId, "a".repeat(64)]);
     await pool.query("INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type) VALUES ($1, $2, $3, $4, $5, 'worker', $6, 10, 'lesson', 'text/plain')", [evidenceId2, randomUUID(), randomUUID(), projectId, goalId, "b".repeat(64)]);
     await grantProjectMembership(pool, operatorId, projectId);
@@ -90,7 +90,7 @@ describeDatabase("organizational knowledge persistence", () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
     const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "head-engineering" }, "proposal-default");
     await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering", idempotencyKey: "project-default" });
-    await pool.query("INSERT INTO goals (goal_id, project_id, state, version) VALUES ($1, $2, 'active', 1)", [randomUUID(), otherProjectId]);
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at) VALUES ($1, $2, 'active', 1, transaction_timestamp())", [randomUUID(), otherProjectId]);
     await grantProjectMembership(pool, operatorId, otherProjectId);
     await grantProjectRole(pool, operatorId, otherProjectId, "engineering");
     await expect(listOrganizationalKnowledge(pool, { operatorId, projectId: otherProjectId, departmentId: "engineering", proof })).rejects.toThrow(/project|Goal/);
@@ -108,7 +108,7 @@ describeDatabase("organizational knowledge persistence", () => {
     await expect(promoteOrganizationalKnowledgeToGlobal(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering", encoreCouncilRoundId: randomUUID(), corroboratingSourceIds: [digestA.digestId, digestB.digestId], corroboratingEpisodeIds: ["episode-a", "fabricated-episode"], generalizedStatement: "Use bounded validation gates.", curatorRoleId: "head-security", curatorOperatorId: curatorOperatorId, idempotencyKey: "global-default" })).rejects.toThrow(/episode|bound|source/);
     await expect(promoteOrganizationalKnowledgeToGlobal(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering", encoreCouncilRoundId: randomUUID(), corroboratingSourceIds: [digestA.digestId, digestB.digestId], corroboratingEpisodeIds: ["episode-b", "episode-a"], generalizedStatement: "Use bounded validation gates.", curatorRoleId: "head-security", curatorOperatorId: curatorOperatorId, idempotencyKey: "global-default" })).rejects.toThrow(/episode|bound|source/);
     const wrongGoalId = randomUUID();
-    await pool.query("INSERT INTO goals (goal_id, project_id, state, version) VALUES ($1, $2, 'active', 1)", [wrongGoalId, projectId]);
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at) VALUES ($1, $2, 'active', 1, transaction_timestamp())", [wrongGoalId, projectId]);
     const wrongRoundId = randomUUID();
     await pool.query("INSERT INTO encore_council_rounds (round_id, goal_id, question, criteria, evidence_ids, trigger_reasons, reviewer_count) VALUES ($1, $2, 'wrong goal', '[]', $3::jsonb, '[]', 2)", [wrongRoundId, wrongGoalId, JSON.stringify([digestA.digestId, digestB.digestId])]);
     await pool.query("INSERT INTO encore_council_syntheses (round_id, final_verdict, same_model_only, escalated, dissent_notes) VALUES ($1, 'proceed', true, false, '[]')", [wrongRoundId]);
