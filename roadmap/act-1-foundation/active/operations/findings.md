@@ -2013,3 +2013,9 @@ All downstream routing documentation must use this contract and must not restore
 ## 2026-09-11 — Plan 6 S1 knowledge store RED
 - Migration number `0087` is reserved in `roadmap/act-1-foundation/active/operations/progress.md` before the migration file is written.
 - Domain and PostgreSQL integration tests for worker proposals, Department Head project promotion, global Council/multi-episode gates, decay, unsupported evidence, and provenance-preserving retirement fail at module resolution because the implementation modules are intentionally absent.
+
+
+## 2026-09-11 — Plan 6 S1 review remediation
+- Independent review found global metadata leakage, self-attested global generalization, arbitrary corroboration IDs, incomplete Council binding, direct SQL promotion bypass, missing Department read scope, helper-only source loss, and unguarded maintenance helpers.
+- Remediation adds a redacted global read projection; durable generalized statement and independent Department Head curator fields; source-bound corroborating evidence/digest checks; source Goal/evidence/independence Council checks; proposal-first and promotion-marker SQL checks; required Department read scope; an explicit `deleteEvidenceSource` transition that appends unsupported knowledge before deletion; and system/Head authorization for maintenance operations.
+- Focused domain tests pass; PostgreSQL integration tests are DB-gated because the configured disposable PostgreSQL endpoint is unavailable.
