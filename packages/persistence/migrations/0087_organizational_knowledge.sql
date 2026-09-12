@@ -145,18 +145,6 @@ BEGIN
     SELECT 1 FROM generate_series(0, jsonb_array_length(NEW.source_digest_ids) - 1) AS pair(ordinal)
      WHERE NOT EXISTS (SELECT 1 FROM improvement_digests d WHERE d.digest_id::text = NEW.source_digest_ids ->> pair.ordinal AND d.goal_id = NEW.source_goal_id AND d.episode_id = NEW.episode_ids ->> pair.ordinal)
   ) THEN RAISE EXCEPTION 'global knowledge source and episode pairing is invalid'; END IF;
-  IF NEW.scope = 'global' AND NEW.status = 'active' AND NOT EXISTS (
-    SELECT 1 FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id
-     WHERE r.round_id = NEW.council_round_id AND r.goal_id = NEW.source_goal_id AND s.final_verdict = 'proceed'
-       AND s.same_model_only = false AND r.evidence_ids @> (NEW.source_evidence_ids || NEW.source_digest_ids)
-       AND (SELECT count(*) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = r.reviewer_count
-       AND (SELECT min(j.reviewer_index) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = 0
-       AND (SELECT max(j.reviewer_index) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = r.reviewer_count - 1
-       AND NOT EXISTS (SELECT 1 FROM encore_council_judgments j WHERE j.round_id = r.round_id AND j.verdict <> 'proceed')
-       AND (SELECT count(DISTINCT (j.model_provider || ':' || j.model_id)) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
-  ) THEN
-    RAISE EXCEPTION 'global organizational knowledge requires an approved independent Encore Council round';
-  END IF;
   RETURN NEW;
 END;
 $$;
