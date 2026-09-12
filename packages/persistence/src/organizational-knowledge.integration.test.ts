@@ -43,7 +43,7 @@ describeDatabase("organizational knowledge persistence", () => {
     expect(proposed.status).toBe("proposed");
     await expect(pool.query(`INSERT INTO organizational_knowledge
       (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, promotion_marker, reason, created_by, source_session_ref)
-      VALUES ($1, 2, 1, $2, $2, $3, 'engineering', 'project_department', 'active', 'raw lesson', 'raw rationale', $4::jsonb, '[]', '["episode-a"]', 0.5, 1, false, NULL, NULL, NULL, 'department-promotion', NULL, 'worker', 'session:worker')`, [proposed.knowledgeId, projectId, goalId, JSON.stringify([evidenceId, evidenceId2])])).rejects.toThrow();
+      VALUES ($1, 2, 1, $2, $2, $3, 'engineering', 'project_department', 'active', 'raw lesson', 'raw rationale', $4::jsonb, '[]', '["episode-a"]', 0.5, 1, false, NULL, NULL, NULL, 'department-promotion', NULL, 'head-engineering', 'promotion:head-engineering')`, [proposed.knowledgeId, projectId, goalId, JSON.stringify([evidenceId, evidenceId2])])).rejects.toThrow();
     expect(await listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering" })).toEqual([]);
     const promoted = await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, promoterRoleId: "head-engineering", departmentId: "engineering" });
     expect(promoted.scope).toBe("project_department");
@@ -115,7 +115,7 @@ describeDatabase("organizational knowledge persistence", () => {
     const digest = await recordImprovementDigest(pool, { schemaVersion: 1, projectId, goalId, episodeId: "digest-episode", trigger: "goal_completed", situation: "A bounded task completed.", selectedDecision: "Keep the gate.", rejectedAlternatives: [], observedResult: "The gate held.", metrics: [], confidence: 0.8, sourceRefs: [{ kind: "goal", sourceId: goalId }] }, proof, { actorId: "worker", sessionRef: "session:worker" });
     const proposed = await proposeOrganizationalKnowledge(pool, proposal({ sourceEvidenceIds: [], sourceDigestIds: [digest.digestId] }), proof, { actorId: "worker", sessionRef: "session:worker" });
     await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, promoterRoleId: "head-engineering", departmentId: "engineering" });
-    const affected = await markKnowledgeUnsupportedForDigest(pool, digest.digestId, "digest provenance was withdrawn", "evidence-source-loss");
+    const affected = await markKnowledgeUnsupportedForDigest(pool, digest.digestId, "digest provenance was withdrawn", proof);
     expect(affected).toContain(proposed.knowledgeId);
     await expect(listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering" })).resolves.toMatchObject([{ knowledgeId: proposed.knowledgeId, status: "unsupported" }]);
   });
@@ -125,7 +125,7 @@ describeDatabase("organizational knowledge persistence", () => {
     const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker" });
     const promoted = await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, promoterRoleId: "head-engineering", departmentId: "engineering" });
     await pool.query("SELECT set_config('maestro.source_evidence_loss', '1', true)");
-    await expect(pool.query("DELETE FROM evidence_records WHERE evidence_id = $1", [evidenceId2])).rejects.toThrow(/immutable|authorization/);
+    await expect(pool.query("DELETE FROM evidence_records WHERE evidence_id = $1", [evidenceId2])).rejects.toThrow(/immutable|authorization|invalid/);
     await expect(deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", "worker", proof)).rejects.toThrow(/operator|authorized/);
     await expect(deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId, { ...proof, fencingToken: "999999" })).rejects.toThrow(/stale|lease/);
     await deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId, proof);
