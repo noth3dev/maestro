@@ -24,9 +24,9 @@ interface KnowledgeRow {
   knowledge_id: string; revision: number; schema_version: number; source_project_id: string; project_id: string | null; source_goal_id: string;
   department_id: string; scope: OrganizationalKnowledge["scope"]; status: OrganizationalKnowledgeStatus; statement: string; rationale: string;
   source_evidence_ids: string[]; source_digest_ids: string[]; episode_ids: string[]; confidence: number; freshness: number; generalized: boolean;
-  council_round_id: string | null; generalized_statement: string | null; curator_role_id: string | null; curator_operator_id: string | null; curator_department_id: string | null; author_operator_id: string | null; author_role_id: string | null; operation_payload_hash: string | null; promotion_marker: string; reason: string | null; created_by: string; source_session_ref: string; created_at: Date; retention?: string;
+  council_round_id: string | null; generalized_statement: string | null; curator_role_id: string | null; curator_operator_id: string | null; curator_department_id: string | null; author_operator_id: string | null; author_role_id: string | null; operation_payload_hash: string | null; promotion_operator_id: string | null; promotion_role_id: string | null; promotion_marker: string; reason: string | null; created_by: string; source_session_ref: string; created_at: Date; retention?: string;
 }
-const COLUMNS = "knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, curator_operator_id, curator_department_id, author_operator_id, author_role_id, operation_payload_hash, promotion_marker, reason, created_by, source_session_ref, created_at, retention";
+const COLUMNS = "knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, curator_operator_id, curator_department_id, author_operator_id, author_role_id, operation_payload_hash, promotion_operator_id, promotion_role_id, promotion_marker, reason, created_by, source_session_ref, created_at, retention";
 const INSERT_COLUMNS = COLUMNS.replace(", created_at", "");
 
 function operationHash(value: unknown): string { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
@@ -52,6 +52,8 @@ function map(row: KnowledgeRow): OrganizationalKnowledge {
     ...(row.author_operator_id === null ? {} : { authorOperatorId: row.author_operator_id }),
     ...(row.author_role_id === null ? {} : { authorRoleId: row.author_role_id }),
     ...(row.operation_payload_hash === null ? {} : { operationPayloadHash: row.operation_payload_hash }),
+    ...(row.promotion_operator_id === null ? {} : { promotionOperatorId: row.promotion_operator_id }),
+    ...(row.promotion_role_id === null ? {} : { promotionRoleId: row.promotion_role_id }),
     createdAt: row.created_at.toISOString(), createdBy: row.created_by, sourceSessionRef: row.source_session_ref,
   };
   return Object.freeze({ ...value, sourceEvidenceIds: Object.freeze([...value.sourceEvidenceIds]), sourceDigestIds: Object.freeze([...value.sourceDigestIds]), episodeIds: Object.freeze([...value.episodeIds]) });
@@ -68,12 +70,16 @@ async function authorizePromotion(client: Pick<PoolClient, "query">, lesson: Org
   await client.query("SELECT authorize_knowledge_promotion($1, $2, $3, $4, $5, $6, $7::uuid, $8::uuid, $9::uuid, $10, $11::bigint, $12::uuid, $13)", [randomUUID(), lesson.knowledgeId, lesson.revision, lesson.scope, roleId, lesson.departmentId, operatorId, lesson.sourceProjectId, lesson.sourceGoalId, proof.ownerId, proof.fencingToken, curatorOperatorId ?? null, curatorRoleId ?? null]);
 }
 
-async function insertRevision(client: Pick<PoolClient, "query">, lesson: OrganizationalKnowledge, createdBy: string, sourceSessionRef: string, authorOperatorId?: string, authorRoleId?: string, operationPayloadHash?: string): Promise<OrganizationalKnowledge> {
+async function authorizeMaintenance(client: Pick<PoolClient, "query">, lesson: OrganizationalKnowledge, status: "unsupported" | "contradicted" | "retired", operatorId: string, roleId: string, proof: GoalLeaseProof, reason: string, sourceSessionRef: string): Promise<void> {
+  await client.query("SELECT authorize_knowledge_maintenance($1, $2, $3, $4, $5::uuid, $6, $7, $8::bigint, $9, $10)", [randomUUID(), lesson.knowledgeId, lesson.revision, status, operatorId, roleId, proof.ownerId, proof.fencingToken, reason, sourceSessionRef]);
+}
+
+async function insertRevision(client: Pick<PoolClient, "query">, lesson: OrganizationalKnowledge, createdBy: string, sourceSessionRef: string, authorOperatorId?: string, authorRoleId?: string, operationPayloadHash?: string, promotionOperatorId?: string, promotionRoleId?: string): Promise<OrganizationalKnowledge> {
   const prior = lesson.revision > 1 ? await client.query<{ retention: string }>("SELECT retention FROM organizational_knowledge WHERE knowledge_id = $1 AND revision = $2", [lesson.knowledgeId, lesson.revision - 1]) : { rows: [] as { retention: string }[] };
   const retention = prior.rows[0]?.retention ?? "project_lifetime";
   const result = await client.query<KnowledgeRow>(
-    `INSERT INTO organizational_knowledge (${INSERT_COLUMNS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30) RETURNING ${COLUMNS}`,
-    [lesson.knowledgeId, lesson.revision, lesson.schemaVersion, lesson.sourceProjectId, lesson.projectId, lesson.sourceGoalId, lesson.departmentId, lesson.scope, lesson.status, lesson.statement, lesson.rationale, JSON.stringify(lesson.sourceEvidenceIds), JSON.stringify(lesson.sourceDigestIds), JSON.stringify(lesson.episodeIds), lesson.confidence, lesson.freshness, lesson.generalized, lesson.councilRoundId, lesson.generalizedStatement ?? null, lesson.curatorRoleId ?? null, lesson.curatorOperatorId ?? null, lesson.curatorDepartmentId ?? null, authorOperatorId ?? lesson.authorOperatorId ?? null, authorRoleId ?? lesson.authorRoleId ?? null, operationPayloadHash ?? lesson.operationPayloadHash ?? null, marker(lesson), lesson.reason, createdBy, sourceSessionRef, retention],
+    `INSERT INTO organizational_knowledge (${INSERT_COLUMNS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32) RETURNING ${COLUMNS}`,
+    [lesson.knowledgeId, lesson.revision, lesson.schemaVersion, lesson.sourceProjectId, lesson.projectId, lesson.sourceGoalId, lesson.departmentId, lesson.scope, lesson.status, lesson.statement, lesson.rationale, JSON.stringify(lesson.sourceEvidenceIds), JSON.stringify(lesson.sourceDigestIds), JSON.stringify(lesson.episodeIds), lesson.confidence, lesson.freshness, lesson.generalized, lesson.councilRoundId, lesson.generalizedStatement ?? null, lesson.curatorRoleId ?? null, lesson.curatorOperatorId ?? null, lesson.curatorDepartmentId ?? null, authorOperatorId ?? lesson.authorOperatorId ?? null, authorRoleId ?? lesson.authorRoleId ?? null, operationPayloadHash ?? lesson.operationPayloadHash ?? null, promotionOperatorId ?? lesson.promotionOperatorId ?? null, promotionRoleId ?? lesson.promotionRoleId ?? null, marker(lesson), lesson.reason, createdBy, sourceSessionRef, retention],
   );
   return map(result.rows[0]!);
 }
@@ -136,12 +142,12 @@ export async function promoteOrganizationalKnowledgeToProject(pool: Pool, reques
     const operationRef = `promotion:${request.idempotencyKey.trim()}`;
     if (operationRef.length > 256) throw new OrganizationalKnowledgeError("promotion idempotency key is invalid");
     if (current.scope === "project_department" && current.status === "active") {
-      if ((request.idempotencyKey !== undefined && current.sourceSessionRef !== operationRef) || current.createdBy?.trim() !== request.promoterRoleId.trim() || current.authorOperatorId?.toLowerCase() !== request.promoterOperatorId.toLowerCase() || current.sourceProjectId.toLowerCase() !== current.projectId?.toLowerCase() || current.departmentId !== request.departmentId) throw new OrganizationalKnowledgeError("conflicting project promotion retry");
+      if ((request.idempotencyKey !== undefined && current.sourceSessionRef !== operationRef) || current.createdBy?.trim() !== request.promoterRoleId.trim() || current.promotionOperatorId?.toLowerCase() !== request.promoterOperatorId.toLowerCase() || current.sourceProjectId.toLowerCase() !== current.projectId?.toLowerCase() || current.departmentId !== request.departmentId) throw new OrganizationalKnowledgeError("conflicting project promotion retry");
       return current;
     }
     const promoted = promoteKnowledgeToProject(current, { promoterRoleKind: "department_head", promoterDepartmentId: request.departmentId });
     await authorizePromotion(client, promoted, request.promoterRoleId, request.promoterOperatorId, request.proof);
-    return insertRevision(client, promoted, request.promoterRoleId, operationRef, request.promoterOperatorId, request.promoterRoleId);
+    return insertRevision(client, promoted, request.promoterRoleId, operationRef, undefined, undefined, undefined, request.promoterOperatorId, request.promoterRoleId);
   });
 }
 
@@ -206,7 +212,7 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
     const promotion: GlobalKnowledgePromotion = { encoreCouncilApproved: approved, corroboratingSourceIds: sourceIds, corroboratingEpisodeIds: request.corroboratingEpisodeIds, generalizedStatement: request.generalizedStatement, curatorRoleId: request.curatorRoleId, curatorOperatorId: request.curatorOperatorId, curatorDepartmentId, councilRoundId: request.encoreCouncilRoundId };
     const promoted = promoteKnowledgeToGlobal(current, promotion);
     await authorizePromotion(client, promoted, request.promoterRoleId, request.promoterOperatorId, request.proof, request.curatorOperatorId, request.curatorRoleId);
-    const stored = await insertRevision(client, promoted, request.promoterRoleId, operationRef, request.promoterOperatorId, request.promoterRoleId);
+    const stored = await insertRevision(client, promoted, request.promoterRoleId, operationRef, undefined, undefined, undefined, request.promoterOperatorId, request.promoterRoleId);
     return publicProjection(stored);
   });
 }
@@ -249,7 +255,8 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
     if (maintenanceAuthor === undefined) throw new OrganizationalKnowledgeError("knowledge maintenance requires durable source author");
     const maintained = { ...decayed, createdBy: maintenanceAuthor, sourceSessionRef: operationRef };
     if (maintained.status === "active" && (maintained.scope === "project_department" || maintained.scope === "global")) await authorizePromotion(client, maintained, maintenanceAuthor, request.operatorId, request.proof, maintained.curatorOperatorId, maintained.curatorRoleId);
-    const stored = await insertRevision(client, maintained, maintenanceAuthor, operationRef, request.operatorId, current.departmentId, requestHash);
+    if (maintained.status === "unsupported" || maintained.status === "contradicted" || maintained.status === "retired") await authorizeMaintenance(client, maintained, maintained.status, request.operatorId, current.departmentId, request.proof, maintained.reason!, operationRef);
+    const stored = await insertRevision(client, maintained, maintenanceAuthor, operationRef, undefined, undefined, requestHash, request.operatorId, current.departmentId);
     return stored.scope === "global" ? publicProjection(stored) : stored;
   });
 }
@@ -267,7 +274,7 @@ export async function markKnowledgeUnsupportedForEvidence(pool: Pool, evidenceId
     if (criticalRole.rowCount !== 1) throw new OrganizationalKnowledgeError("source loss requires a standing Department Head or CEO role");
     const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_evidence_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([evidenceId.toLowerCase()])]);
     const ids: string[] = [];
-    for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await insertRevision(client, unsupported, operatorId, `evidence:${evidenceId}`); ids.push(current.knowledgeId); }
+    for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await authorizeMaintenance(client, unsupported, "unsupported", operatorId, operatorRoleId, proof, reason, `evidence:${evidenceId}`); await insertRevision(client, unsupported, operatorId, `evidence:${evidenceId}`); ids.push(current.knowledgeId); }
     return ids;
   });
 }
@@ -285,7 +292,7 @@ export async function markKnowledgeUnsupportedForDigest(pool: Pool, digestId: st
     if (criticalRole.rowCount !== 1) throw new OrganizationalKnowledgeError("source loss requires a standing Department Head or CEO role");
     const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_digest_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([digestId.toLowerCase()])]);
     const ids: string[] = [];
-    for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await insertRevision(client, unsupported, operatorId, `digest:${digestId}`); ids.push(current.knowledgeId); }
+    for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await authorizeMaintenance(client, unsupported, "unsupported", operatorId, operatorRoleId, proof, reason, `digest:${digestId}`); await insertRevision(client, unsupported, operatorId, `digest:${digestId}`); ids.push(current.knowledgeId); }
     return ids;
   });
 }
@@ -307,7 +314,8 @@ export async function retireOrganizationalKnowledge(pool: Pool, request: { reado
       return current.scope === "global" ? publicProjection(current) : current;
     }
     const retired = retireKnowledge(current, { status: "retired", reason: request.reason });
-    const stored = await insertRevision(client, retired, request.retiredBy, operationRef, request.operatorId, request.retiredBy);
+    await authorizeMaintenance(client, retired, "retired", request.operatorId, request.retiredBy, request.proof, retired.reason!, operationRef);
+    const stored = await insertRevision(client, retired, request.retiredBy, operationRef, undefined, undefined, undefined, request.operatorId, request.retiredBy);
     return stored.scope === "global" ? publicProjection(stored) : stored;
   });
 }
