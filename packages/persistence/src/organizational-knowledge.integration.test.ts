@@ -151,12 +151,12 @@ describeDatabase("organizational knowledge persistence", () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
     const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "engineering" }, "proposal-default");
     const promoted = await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering", idempotencyKey: "project-default" });
-    await expect(refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId: randomUUID(), idempotencyKey: "unauthorized" })).rejects.toThrow(/active|operator/);
-    const stale = await refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId, idempotencyKey: "stale-refresh" });
+    await expect(refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId: randomUUID(), operatorRoleId: "engineering", idempotencyKey: "unauthorized" })).rejects.toThrow(/active|operator/);
+    const stale = await refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId, operatorRoleId: "engineering", idempotencyKey: "stale-refresh" });
     expect(stale.confidence).toBeLessThan(promoted.confidence);
     await expect(pool.query("SELECT source_session_ref FROM organizational_knowledge WHERE knowledge_id = $1 AND revision = $2", [promoted.knowledgeId, promoted.revision + 1])).resolves.toMatchObject({ rows: [{ source_session_ref: "system:knowledge-decay:stale-refresh" }] });
-    await expect(refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId, idempotencyKey: "stale-refresh" })).resolves.toEqual(stale);
-    const contradicted = await refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-21T00:00:00.000Z", lastSupportedAt: "2026-09-20T00:00:00.000Z", contradicted: true, proof, operatorId, idempotencyKey: "contradiction-refresh" });
+    await expect(refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId, operatorRoleId: "engineering", idempotencyKey: "stale-refresh" })).resolves.toEqual(stale);
+    const contradicted = await refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-21T00:00:00.000Z", lastSupportedAt: "2026-09-20T00:00:00.000Z", contradicted: true, proof, operatorId, operatorRoleId: "engineering", idempotencyKey: "contradiction-refresh" });
     expect(contradicted.status).toBe("contradicted");
     await expect(listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering", proof })).resolves.toMatchObject([{ knowledgeId: promoted.knowledgeId, status: "contradicted" }]);
   });
@@ -194,11 +194,11 @@ describeDatabase("organizational knowledge persistence", () => {
 
     await expect(pool.query("SELECT count(*)::int AS count FROM evidence_records WHERE evidence_id = $1", [evidenceId])).resolves.toMatchObject({ rows: [{ count: 0 }] });
     await expect(listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering", proof })).resolves.toMatchObject([{ knowledgeId: proposed.knowledgeId, status: "unsupported" }]);
-    await expect(retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "Superseded by reviewed guidance.", retiredBy: "worker", proof, operatorId, idempotencyKey: "unauthorized" })).rejects.toThrow(/Department Head/);
-    const retired = await retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "Superseded by reviewed guidance.", retiredBy: "head-engineering", proof, operatorId, idempotencyKey: "retirement-command" });
+    await expect(retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "Superseded by reviewed guidance.", retiredBy: "worker", proof, operatorId, operatorRoleId: "engineering", idempotencyKey: "unauthorized" })).rejects.toThrow(/Department Head/);
+    const retired = await retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "Superseded by reviewed guidance.", retiredBy: "head-engineering", proof, operatorId, operatorRoleId: "engineering", idempotencyKey: "retirement-command" });
     expect(retired).toMatchObject({ status: "retired", knowledgeId: promoted.knowledgeId });
     expect(retired.sourceEvidenceIds).toContain(evidenceId);
-    await expect(retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "retry", retiredBy: "head-engineering", proof, operatorId, idempotencyKey: "retirement-command" })).resolves.toMatchObject({ status: "retired", knowledgeId: proposed.knowledgeId });
+    await expect(retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "retry", retiredBy: "head-engineering", proof, operatorId, operatorRoleId: "engineering", idempotencyKey: "retirement-command" })).resolves.toMatchObject({ status: "retired", knowledgeId: proposed.knowledgeId });
     await expect(pool.query("SELECT count(*)::int AS count FROM organizational_knowledge WHERE knowledge_id = $1", [proposed.knowledgeId])).resolves.toMatchObject({ rows: [{ count: expect.any(Number) }] });
     await expect(pool.query("UPDATE organizational_knowledge SET reason = 'tampered' WHERE knowledge_id = $1", [proposed.knowledgeId])).rejects.toThrow();
     await expect(pool.query("TRUNCATE goals CASCADE")).resolves.toBeDefined();

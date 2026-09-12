@@ -231,14 +231,14 @@ export async function listOrganizationalKnowledge(pool: Pool, authorization: Org
 }
 
 /** Appends a stale/contradicted score revision; the prior claim remains auditable. */
-export async function refreshOrganizationalKnowledge(pool: Pool, request: { readonly knowledgeId: string; readonly now: string; readonly lastSupportedAt: string; readonly staleAfterMs?: number; readonly contradicted?: boolean; readonly proof: GoalLeaseProof; readonly operatorId: string; readonly idempotencyKey: string }): Promise<OrganizationalKnowledge | OrganizationalKnowledgePublic> {
+export async function refreshOrganizationalKnowledge(pool: Pool, request: { readonly knowledgeId: string; readonly now: string; readonly lastSupportedAt: string; readonly staleAfterMs?: number; readonly contradicted?: boolean; readonly proof: GoalLeaseProof; readonly operatorId: string; readonly operatorRoleId: string; readonly idempotencyKey: string }): Promise<OrganizationalKnowledge | OrganizationalKnowledgePublic> {
   return withGoalAuthority(pool, request.proof, 89, async (client) => {
     const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [request.operatorId]);
     if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("knowledge maintenance requires an active operator");
     const current = await readCurrent(client, request.knowledgeId, true);
     if (current.sourceGoalId !== request.proof.goalId) throw new OrganizationalKnowledgeError("knowledge source Goal is outside the lease");
     await assertProjectMembership(client, request.operatorId, current.sourceProjectId);
-    await assertProjectRole(client, request.operatorId, current.sourceProjectId, current.departmentId);
+    await assertProjectRole(client, request.operatorId, current.sourceProjectId, request.operatorRoleId);
     if (request.idempotencyKey.trim() === "") throw new OrganizationalKnowledgeError("knowledge maintenance idempotency key is required");
     const operationRef = `system:knowledge-decay:${request.idempotencyKey.trim()}`;
     const requestHash = operationHash({ now: request.now, lastSupportedAt: request.lastSupportedAt, staleAfterMs: request.staleAfterMs ?? null, contradicted: request.contradicted ?? null });
@@ -259,7 +259,7 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
     if (maintenanceAuthor === undefined) throw new OrganizationalKnowledgeError("knowledge maintenance requires durable source author");
     const maintained = { ...decayed, createdBy: maintenanceAuthor, sourceSessionRef: operationRef };
     if (maintained.status === "active" && (maintained.scope === "project_department" || maintained.scope === "global")) await authorizePromotion(client, maintained, maintenanceAuthor, request.operatorId, request.proof, maintained.curatorOperatorId, maintained.curatorRoleId);
-    if (maintained.status === "unsupported" || maintained.status === "contradicted" || maintained.status === "retired") await authorizeMaintenance(client, maintained, maintained.status, request.operatorId, current.departmentId, request.proof, maintained.reason!, operationRef);
+    if (maintained.status === "unsupported" || maintained.status === "contradicted" || maintained.status === "retired") await authorizeMaintenance(client, maintained, maintained.status, request.operatorId, request.operatorRoleId, request.proof, maintained.reason!, operationRef);
     const stored = await insertRevision(client, maintained, maintenanceAuthor, operationRef, undefined, undefined, requestHash, request.operatorId, current.departmentId);
     return stored.scope === "global" ? publicProjection(stored) : stored;
   });
