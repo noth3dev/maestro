@@ -47,6 +47,10 @@ CREATE TABLE IF NOT EXISTS knowledge_promotion_authorizations (
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp()
 );
 
+-- Marker rows are not an application-role write surface. Promotion code runs as the migration owner; deployed app roles must use a narrowly scoped DB function or equivalent owner boundary.
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_promotion_authorizations FROM PUBLIC;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON source_evidence_loss_authorizations FROM PUBLIC;
+
 
 CREATE OR REPLACE FUNCTION validate_organizational_knowledge_insert() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE item jsonb; ref_id uuid; expected_revision integer;
@@ -132,7 +136,6 @@ $$;
 DROP TRIGGER IF EXISTS organizational_knowledge_immutable ON organizational_knowledge;
 CREATE TRIGGER organizational_knowledge_immutable BEFORE UPDATE OR DELETE ON organizational_knowledge FOR EACH ROW EXECUTE FUNCTION reject_organizational_knowledge_mutation();
 DROP TRIGGER IF EXISTS organizational_knowledge_no_truncate ON organizational_knowledge;
-CREATE TRIGGER organizational_knowledge_no_truncate BEFORE TRUNCATE ON organizational_knowledge FOR EACH STATEMENT EXECUTE FUNCTION reject_organizational_knowledge_mutation();
 
 CREATE OR REPLACE FUNCTION current_organizational_knowledge(p_knowledge_id uuid) RETURNS SETOF organizational_knowledge LANGUAGE sql STABLE AS $$
   SELECT k.* FROM organizational_knowledge k WHERE k.knowledge_id = p_knowledge_id ORDER BY k.revision DESC LIMIT 1;

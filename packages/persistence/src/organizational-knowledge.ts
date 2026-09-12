@@ -7,7 +7,7 @@ import {
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
 import { withGoalAuthority } from "./goal-authority.js";
-import { assertProjectMembership } from "./project-membership.js";
+import { assertProjectMembership, assertProjectRole } from "./project-membership.js";
 
 export type OrganizationalKnowledgeProposalRecord = OrganizationalKnowledgeProposal;
 export interface OrganizationalKnowledgeAuthor { readonly actorId: string; readonly sessionRef: string; }
@@ -147,7 +147,7 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
 export async function listOrganizationalKnowledge(pool: Pool, authorization: OrganizationalKnowledgeReadAuthorization): Promise<readonly (OrganizationalKnowledge | OrganizationalKnowledgePublic)[]> {
   if (!authorization || typeof authorization.operatorId !== "string" || typeof authorization.projectId !== "string" || typeof authorization.departmentId !== "string") throw new OrganizationalKnowledgeError("knowledge read authorization is required");
   const client = await pool.connect();
-  try { await client.query("BEGIN"); await assertProjectMembership(client, authorization.operatorId, authorization.projectId);
+  try { await client.query("BEGIN"); await assertProjectMembership(client, authorization.operatorId, authorization.projectId); await assertProjectRole(client, authorization.operatorId, authorization.projectId, authorization.departmentId);
     const result = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status <> 'retired' AND (k.scope = 'global' OR (k.project_id = $1 AND k.scope = 'project_department')) AND k.department_id = $2 AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) ORDER BY k.created_at, k.knowledge_id`, [authorization.projectId, authorization.departmentId]);
     await client.query("COMMIT"); return result.rows.map((row) => { const lesson = map(row); return lesson.scope === "global" ? publicProjection(lesson) : lesson; });
   } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
@@ -164,24 +164,30 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
   });
 }
 
-export async function markKnowledgeUnsupportedForEvidence(pool: Pool, evidenceId: string, reason: string, actorId: string): Promise<readonly string[]> {
-  if (actorId !== "evidence-source-loss" || !/^[-0-9a-f]{36}$/i.test(evidenceId) || reason.trim() === "") throw new OrganizationalKnowledgeError("evidence id and reason are required");
-  return withKnowledgeTransaction(pool, async (client) => {
+export async function markKnowledgeUnsupportedForEvidence(pool: Pool, evidenceId: string, reason: string, proof: GoalLeaseProof, operatorId: string): Promise<readonly string[]> {
+  if (!/^[0-9a-f-]{36}$/i.test(evidenceId) || reason.trim() === "" || operatorId.trim() === "") throw new OrganizationalKnowledgeError("evidence source loss request is invalid");
+  return withGoalAuthority(pool, proof, 88, async (client) => {
+    const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [operatorId]);
+    if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("source loss requires an active operator");
+    const source = await client.query<{ goal_id: string; project_id: string; goal_project_id: string }>("SELECT e.goal_id, e.project_id, g.project_id AS goal_project_id FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = $1", [evidenceId.toLowerCase()]);
+    if (source.rowCount !== 1 || source.rows[0]!.goal_id !== proof.goalId || source.rows[0]!.project_id !== source.rows[0]!.goal_project_id) throw new OrganizationalKnowledgeError("evidence source is outside the Goal lease/project");
     const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_evidence_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([evidenceId.toLowerCase()])]);
     const ids: string[] = [];
-    for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await insertRevision(client, unsupported, "evidence-system", `evidence:${evidenceId}`); ids.push(current.knowledgeId); }
+    for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await insertRevision(client, unsupported, operatorId, `evidence:${evidenceId}`); ids.push(current.knowledgeId); }
     return ids;
   });
 }
 
-export async function markKnowledgeUnsupportedForDigest(pool: Pool, digestId: string, reason: string, proof: GoalLeaseProof): Promise<readonly string[]> {
+export async function markKnowledgeUnsupportedForDigest(pool: Pool, digestId: string, reason: string, proof: GoalLeaseProof, operatorId: string): Promise<readonly string[]> {
   if (!/^[-0-9a-f]{36}$/i.test(digestId) || reason.trim() === "") throw new OrganizationalKnowledgeError("digest source loss request is invalid");
   return withGoalAuthority(pool, proof, 88, async (client) => {
-    const digest = await client.query<{ goal_id: string }>("SELECT goal_id FROM improvement_digests WHERE digest_id = $1", [digestId.toLowerCase()]);
-    if (digest.rowCount !== 1 || digest.rows[0]!.goal_id !== proof.goalId) throw new OrganizationalKnowledgeError("digest source is outside the Goal lease");
+    const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [operatorId]);
+    if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("source loss requires an active operator");
+    const digest = await client.query<{ goal_id: string; project_id: string; goal_project_id: string }>("SELECT d.goal_id, d.project_id, g.project_id AS goal_project_id FROM improvement_digests d JOIN goals g ON g.goal_id = d.goal_id WHERE d.digest_id = $1", [digestId.toLowerCase()]);
+    if (digest.rowCount !== 1 || digest.rows[0]!.goal_id !== proof.goalId || digest.rows[0]!.project_id !== digest.rows[0]!.goal_project_id) throw new OrganizationalKnowledgeError("digest source is outside the Goal lease/project");
     const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_digest_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([digestId.toLowerCase()])]);
     const ids: string[] = [];
-    for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await insertRevision(client, unsupported, "evidence-source-loss", `digest:${digestId}`); ids.push(current.knowledgeId); }
+    for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await insertRevision(client, unsupported, operatorId, `digest:${digestId}`); ids.push(current.knowledgeId); }
     return ids;
   });
 }
