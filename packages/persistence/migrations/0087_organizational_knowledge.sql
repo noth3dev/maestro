@@ -70,6 +70,16 @@ BEGIN
   IF NEW.scope = 'global' AND NEW.status = 'active' AND NOT EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND prior.scope = 'project_department' AND prior.status = 'active') THEN
     RAISE EXCEPTION 'global organizational knowledge requires project promotion lineage';
   END IF;
+  IF NEW.scope = 'global' AND NEW.status = 'active' AND jsonb_array_length(NEW.source_evidence_ids) <> 0 THEN RAISE EXCEPTION 'global organizational knowledge cannot retain raw evidence references'; END IF;
+  IF NEW.scope = 'global' AND NEW.status = 'active' AND NOT EXISTS (
+    SELECT 1 FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id
+     WHERE r.round_id = NEW.council_round_id AND r.goal_id = NEW.source_goal_id AND s.final_verdict = 'proceed' AND s.same_model_only = false
+       AND (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text(r.evidence_ids)) = (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text(NEW.source_digest_ids))
+       AND (SELECT count(*) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
+       AND NOT EXISTS (SELECT 1 FROM encore_council_judgments j WHERE j.round_id = r.round_id AND (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text(j.cited_evidence_ids)) IS DISTINCT FROM (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text(NEW.source_digest_ids)))
+       AND (SELECT count(DISTINCT (j.model_provider || ':' || j.model_id)) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
+       AND (SELECT count(*) FROM encore_council_judgments j JOIN native_execution_bindings b ON b.execution_ref = j.execution_ref AND b.invocation_ref = j.invocation_ref AND b.goal_id = r.goal_id AND b.project_id = NEW.source_project_id AND b.admission_kind = 'encore_reviewer' AND b.actual_model_provider = j.model_provider AND b.actual_model_id = j.model_id WHERE j.round_id = r.round_id) >= 2
+  ) THEN RAISE EXCEPTION 'global organizational knowledge requires exact durable Council review'; END IF;
   IF NEW.status = 'active' AND NEW.scope IN ('project_department', 'global') AND NOT EXISTS (SELECT 1 FROM permanent_roles WHERE role_id = NEW.created_by AND role_kind = 'department_head' AND department_id = NEW.department_id AND status = 'standing') THEN
     RAISE EXCEPTION 'active organizational knowledge requires a standing Department Head';
   END IF;
@@ -156,6 +166,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = NEW.evidence_id AND e.goal_id = NEW.goal_id AND e.project_id = NEW.project_id AND g.project_id = NEW.project_id) THEN
     RAISE EXCEPTION 'source evidence loss event Goal/project binding is invalid';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM source_evidence_loss_authorizations a WHERE a.evidence_id = NEW.evidence_id AND a.goal_id = NEW.goal_id AND a.project_id = NEW.project_id AND a.owner_id = NEW.owner_id AND a.fencing_token = NEW.fencing_token AND a.recorded_by = NEW.recorded_by AND a.reason = NEW.reason AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')) THEN
+    RAISE EXCEPTION 'source evidence loss event authorization is missing or mismatched';
+  END IF;
   RETURN NEW;
 END;
 $$;
@@ -167,6 +180,7 @@ BEGIN RAISE EXCEPTION 'source evidence loss events are append-only'; END;
 $$;
 DROP TRIGGER IF EXISTS source_evidence_loss_events_immutable ON source_evidence_loss_events;
 CREATE TRIGGER source_evidence_loss_events_immutable BEFORE UPDATE OR DELETE OR TRUNCATE ON source_evidence_loss_events FOR EACH STATEMENT EXECUTE FUNCTION reject_source_evidence_loss_event_mutation();
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON source_evidence_loss_events FROM PUBLIC;
 
 CREATE OR REPLACE FUNCTION propagate_organizational_knowledge_evidence_loss(p_evidence_id uuid, p_reason text) RETURNS void LANGUAGE plpgsql AS $$
 DECLARE k record;
@@ -223,9 +237,16 @@ CREATE TRIGGER source_evidence_loss_authorizations_immutable BEFORE UPDATE OR TR
 
 
 
--- Marker rows are not an application-role write surface. Promotion code runs as the migration owner; deployed app roles must use a narrowly scoped DB function or equivalent owner boundary.
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_promotion_authorizations FROM PUBLIC;
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON source_evidence_loss_authorizations FROM PUBLIC;
+CREATE OR REPLACE FUNCTION reject_knowledge_promotion_authorization_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' AND OLD.token_hash = encode(public.digest(current_setting('maestro.knowledge_promotion_token', true), 'sha256'), 'hex') THEN RETURN OLD; END IF;
+  RAISE EXCEPTION 'knowledge promotion authorizations are one-use';
+END;
+$$;
+DROP TRIGGER IF EXISTS knowledge_promotion_authorizations_immutable ON knowledge_promotion_authorizations;
+DROP TRIGGER IF EXISTS knowledge_promotion_authorizations_no_truncate ON knowledge_promotion_authorizations;
+CREATE TRIGGER knowledge_promotion_authorizations_immutable BEFORE UPDATE OR DELETE ON knowledge_promotion_authorizations FOR EACH ROW EXECUTE FUNCTION reject_knowledge_promotion_authorization_mutation();
+CREATE TRIGGER knowledge_promotion_authorizations_no_truncate BEFORE TRUNCATE ON knowledge_promotion_authorizations FOR EACH STATEMENT EXECUTE FUNCTION reject_knowledge_promotion_authorization_mutation();
 
 -- Marker rows are not an application-role write surface. Promotion code runs as the migration owner; deployed app roles must use a narrowly scoped DB function or equivalent owner boundary.
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_promotion_authorizations FROM PUBLIC;
@@ -260,5 +281,6 @@ BEGIN
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.validate_source_evidence_loss_event_binding() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.validate_source_evidence_loss_authorization_binding() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_source_evidence_loss_authorization_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_knowledge_promotion_authorization_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
 END;
 $$;

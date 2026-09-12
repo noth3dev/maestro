@@ -170,7 +170,9 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
     if (decayed.revision === current.revision) return current;
     const maintenanceAuthor = current.createdBy;
     if (maintenanceAuthor === undefined) throw new OrganizationalKnowledgeError("knowledge maintenance requires durable source author");
-    return insertRevision(client, { ...decayed, createdBy: maintenanceAuthor, sourceSessionRef: "system:knowledge-decay" }, maintenanceAuthor, "system:knowledge-decay");
+    const maintained = { ...decayed, createdBy: maintenanceAuthor, sourceSessionRef: "system:knowledge-decay" };
+    if (maintained.status === "active" && (maintained.scope === "project_department" || maintained.scope === "global")) await authorizePromotion(client, maintained, maintenanceAuthor);
+    return insertRevision(client, maintained, maintenanceAuthor, "system:knowledge-decay");
   });
 }
 

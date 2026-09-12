@@ -90,11 +90,11 @@ export async function deleteEvidenceSource(pool: Pool, evidenceId: string, reaso
     if (operator.rowCount !== 1) throw new Error("source evidence loss requires an authorized operator");
     const source = await client.query<{ goal_id: string; project_id: string; goal_project_id: string }>("SELECT e.goal_id, e.project_id, g.project_id AS goal_project_id FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = $1", [evidenceId.toLowerCase()]);
     if (source.rowCount !== 1 || source.rows[0]!.goal_id !== proof.goalId || source.rows[0]!.project_id !== source.rows[0]!.goal_project_id) throw new Error("source evidence is outside the Goal lease/project");
-    await client.query("INSERT INTO source_evidence_loss_events (event_id, evidence_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by) VALUES ($1, $2, $3, $4, $5, $6::bigint, $7, $8)", [randomUUID(), evidenceId.toLowerCase(), source.rows[0]!.goal_id, source.rows[0]!.project_id, proof.ownerId, proof.fencingToken, reason, recordedBy]);
     const token = randomUUID();
     const tokenHash = createHash("sha256").update(token, "utf8").digest("hex");
     await client.query("INSERT INTO source_evidence_loss_authorizations (token_hash, evidence_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by) VALUES ($1, $2, $3, $4, $5, $6::bigint, $7, $8)", [tokenHash, evidenceId.toLowerCase(), source.rows[0]!.goal_id, source.rows[0]!.project_id, proof.ownerId, proof.fencingToken, reason, recordedBy]);
     await client.query("SELECT set_config('maestro.source_evidence_loss_token', $1, true)", [token]);
+    await client.query("INSERT INTO source_evidence_loss_events (event_id, evidence_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by) VALUES ($1, $2, $3, $4, $5, $6::bigint, $7, $8)", [randomUUID(), evidenceId.toLowerCase(), source.rows[0]!.goal_id, source.rows[0]!.project_id, proof.ownerId, proof.fencingToken, reason, recordedBy]);
     await client.query("SELECT set_config('maestro.source_loss_owner', $1, true)", [proof.ownerId]);
     await client.query("SELECT set_config('maestro.source_loss_fence', $1, true)", [proof.fencingToken]);
     const deleted = await client.query("DELETE FROM evidence_records WHERE evidence_id = $1", [evidenceId.toLowerCase()]);
