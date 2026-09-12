@@ -59,6 +59,9 @@ BEGIN
   IF NEW.statement ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)' OR NEW.rationale ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)' THEN
     RAISE EXCEPTION 'organizational knowledge contains personal information';
   END IF;
+  IF NEW.generalized_statement IS NOT NULL AND (NEW.generalized_statement ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----)' OR NEW.generalized_statement ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)') THEN
+    RAISE EXCEPTION 'generalized organizational knowledge contains unsafe material';
+  END IF;
   SELECT COALESCE(max(revision), 0) + 1 INTO expected_revision FROM organizational_knowledge WHERE knowledge_id = NEW.knowledge_id;
   IF NEW.revision <> expected_revision THEN RAISE EXCEPTION 'organizational knowledge revisions must be append-only and contiguous'; END IF;
   IF NEW.revision = 1 AND NEW.scope <> 'worker_proposed' THEN
