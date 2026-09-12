@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { applyAllMigrations } from "./test-migrations.js";
 import { grantProjectMembership } from "./project-membership.js";
+import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";
 import {
   listOrganizationalKnowledge, markKnowledgeUnsupportedForEvidence, promoteOrganizationalKnowledgeToGlobal,
@@ -19,7 +20,7 @@ describeDatabase("organizational knowledge persistence", () => {
   const schema = `knowledge_${randomUUID().replaceAll("-", "")}`;
   const scopedUrl = (() => { const url = new URL(databaseUrl); url.searchParams.set("options", `-c search_path=${schema}`); return url.toString(); })();
   let pool: Pool; let projectId: string; let otherProjectId: string; let goalId: string; let evidenceId: string;
-  beforeAll(async () => { await basePool.query(`CREATE SCHEMA ${schema}`); pool = new Pool({ connectionString: scopedUrl }); await applyAllMigrations(pool); await applyAllMigrations(pool); });
+  beforeAll(async () => { await basePool.query(`CREATE SCHEMA ${schema}`); pool = new Pool({ connectionString: scopedUrl }); await applyAllMigrations(pool); await applyAllMigrations(pool); await bootstrapPermanentOrganization(pool); });
   beforeEach(async () => {
     projectId = randomUUID(); otherProjectId = randomUUID(); goalId = randomUUID(); evidenceId = randomUUID();
     await pool.query("INSERT INTO local_operators (operator_id) VALUES ($1) ON CONFLICT DO NOTHING", [operatorId]);
@@ -72,6 +73,6 @@ describeDatabase("organizational knowledge persistence", () => {
     const unsupported = await markKnowledgeUnsupportedForEvidence(pool, evidenceId, "source artifact was deleted");
     expect(unsupported).toContain(proposed.knowledgeId);
     await expect(retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "Superseded by reviewed guidance.", retiredBy: "head-engineering" })).resolves.toMatchObject({ status: "retired", knowledgeId: promoted.knowledgeId });
-    await expect(pool.query("SELECT count(*)::int AS count FROM organizational_knowledge WHERE knowledge_id = $1", [proposed.knowledgeId])).resolves.toMatchObject({ rows: [{ count: 3 }] });
+    await expect(pool.query("SELECT count(*)::int AS count FROM organizational_knowledge WHERE knowledge_id = $1", [proposed.knowledgeId])).resolves.toMatchObject({ rows: [{ count: 4 }] });
   });
 });
