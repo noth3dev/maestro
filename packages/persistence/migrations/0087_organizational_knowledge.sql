@@ -168,6 +168,22 @@ DROP FUNCTION IF EXISTS current_organizational_knowledge(uuid);
 -- Evidence metadata is immutable during ordinary operation. An explicit
 -- source-loss transition is the only supported delete path and first appends
 -- an unsupported knowledge revision in the same transaction.
+CREATE TABLE IF NOT EXISTS evidence_source_tombstones (
+  evidence_id uuid PRIMARY KEY,
+  goal_id uuid NOT NULL REFERENCES goals(goal_id), project_id uuid NOT NULL,
+  owner_id text NOT NULL, fencing_token bigint NOT NULL CHECK (fencing_token > 0),
+  reason text NOT NULL, recorded_by text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT transaction_timestamp(), retention retention_class NOT NULL DEFAULT 'project_lifetime'
+);
+CREATE OR REPLACE FUNCTION reject_evidence_source_reuse() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM evidence_source_tombstones WHERE evidence_id = NEW.evidence_id) THEN RAISE EXCEPTION 'evidence source was already retired and cannot be reused'; END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS evidence_source_reuse_guard ON evidence_records;
+CREATE TRIGGER evidence_source_reuse_guard BEFORE INSERT ON evidence_records FOR EACH ROW EXECUTE FUNCTION reject_evidence_source_reuse();
+
 CREATE TABLE IF NOT EXISTS source_evidence_loss_events (
   event_id uuid PRIMARY KEY,
   evidence_id uuid NOT NULL,
@@ -319,6 +335,7 @@ END;
 $$;
 
 -- Marker rows are not an application-role write surface. Promotion code runs as the migration owner; deployed app roles must use a narrowly scoped DB function or equivalent owner boundary.
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON evidence_source_tombstones FROM PUBLIC;
 REVOKE TRUNCATE ON goals, evidence_records, organizational_knowledge, source_evidence_loss_events, source_evidence_loss_authorizations, knowledge_promotion_authorizations FROM PUBLIC;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_promotion_authorizations FROM PUBLIC;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON source_evidence_loss_authorizations FROM PUBLIC;
@@ -363,6 +380,8 @@ DROP TRIGGER IF EXISTS organizational_knowledge_no_truncate ON organizational_kn
 CREATE TRIGGER organizational_knowledge_no_truncate BEFORE TRUNCATE ON organizational_knowledge FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
 DROP TRIGGER IF EXISTS evidence_records_no_truncate ON evidence_records;
 CREATE TRIGGER evidence_records_no_truncate BEFORE TRUNCATE ON evidence_records FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
+DROP TRIGGER IF EXISTS evidence_source_tombstones_no_truncate ON evidence_source_tombstones;
+CREATE TRIGGER evidence_source_tombstones_no_truncate BEFORE TRUNCATE ON evidence_source_tombstones FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
 DROP TRIGGER IF EXISTS source_evidence_loss_events_no_truncate ON source_evidence_loss_events;
 CREATE TRIGGER source_evidence_loss_events_no_truncate BEFORE TRUNCATE ON source_evidence_loss_events FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
 DROP TRIGGER IF EXISTS source_evidence_loss_authorizations_no_truncate ON source_evidence_loss_authorizations;
@@ -386,6 +405,7 @@ BEGIN
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_knowledge_promotion_authorization_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.maestro_goal_truncate_reset() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_unscoped_truncate() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_evidence_source_reuse() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_source_evidence_loss(text, uuid, uuid, uuid, text, bigint, text, uuid, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_proposal(text, uuid, uuid, uuid, uuid, text, text, bigint, text, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
