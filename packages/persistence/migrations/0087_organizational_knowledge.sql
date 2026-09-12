@@ -59,15 +59,16 @@ BEGIN
   IF NEW.scope = 'global' AND (NEW.statement ILIKE '%' || NEW.source_project_id::text || '%' OR NEW.rationale ILIKE '%' || NEW.source_project_id::text || '%' OR COALESCE(NEW.generalized_statement, '') ILIKE '%' || NEW.source_project_id::text || '%' OR COALESCE(NEW.generalized_statement, '') ILIKE '%' || NEW.source_goal_id::text || '%') THEN
     RAISE EXCEPTION 'global organizational knowledge cannot contain raw project identity';
   END IF;
-  IF NEW.statement ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----)' OR NEW.rationale ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----)' THEN
+  IF NEW.statement ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----)' OR NEW.rationale ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----)' OR COALESCE(NEW.generalized_statement, '') ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----)' THEN
     RAISE EXCEPTION 'organizational knowledge contains secret-like material';
   END IF;
-  IF NEW.statement ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)' OR NEW.rationale ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)' THEN
+  IF NEW.statement ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)' OR NEW.rationale ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)' OR COALESCE(NEW.generalized_statement, '') ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)' THEN
     RAISE EXCEPTION 'organizational knowledge contains personal information';
   END IF;
   IF NEW.generalized_statement IS NOT NULL AND (NEW.generalized_statement ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----)' OR NEW.generalized_statement ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)' OR NEW.generalized_statement ~* '\m(raw|project-specific|source project|private project)\M') THEN
     RAISE EXCEPTION 'generalized organizational knowledge contains unsafe material';
   END IF;
+  IF NEW.scope = 'global' AND (NEW.statement ~* '\m(raw|project-specific|source project|private project)\M' OR NEW.rationale ~* '\m(raw|project-specific|source project|private project)\M' OR COALESCE(NEW.generalized_statement, '') ~* '\m(raw|project-specific|source project|private project)\M') THEN RAISE EXCEPTION 'global organizational knowledge contains raw project content'; END IF;
   SELECT COALESCE(max(revision), 0) + 1 INTO expected_revision FROM organizational_knowledge WHERE knowledge_id = NEW.knowledge_id;
   IF NEW.revision <> expected_revision THEN RAISE EXCEPTION 'organizational knowledge revisions must be append-only and contiguous'; END IF;
   IF NEW.revision = 1 AND NEW.scope <> 'worker_proposed' THEN

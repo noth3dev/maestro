@@ -27,7 +27,7 @@ interface KnowledgeRow {
   council_round_id: string | null; generalized_statement: string | null; curator_role_id: string | null; promotion_marker: string; reason: string | null; created_by: string; source_session_ref: string; created_at: Date; retention?: string;
 }
 const COLUMNS = "knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, promotion_marker, reason, created_by, source_session_ref, created_at, retention";
-const INSERT_COLUMNS = COLUMNS.replace(", created_at, retention", "");
+const INSERT_COLUMNS = COLUMNS.replace(", created_at", "");
 
 function marker(lesson: OrganizationalKnowledge): string {
   if (lesson.scope === "worker_proposed") return "worker-proposal";
@@ -63,9 +63,11 @@ async function authorizePromotion(client: Pick<PoolClient, "query">, lesson: Org
 }
 
 async function insertRevision(client: Pick<PoolClient, "query">, lesson: OrganizationalKnowledge, createdBy: string, sourceSessionRef: string): Promise<OrganizationalKnowledge> {
+  const prior = lesson.revision > 1 ? await client.query<{ retention: string }>("SELECT retention FROM organizational_knowledge WHERE knowledge_id = $1 AND revision = $2", [lesson.knowledgeId, lesson.revision - 1]) : { rows: [] as { retention: string }[] };
+  const retention = prior.rows[0]?.retention ?? "project_lifetime";
   const result = await client.query<KnowledgeRow>(
-    `INSERT INTO organizational_knowledge (${INSERT_COLUMNS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24) RETURNING ${COLUMNS}`,
-    [lesson.knowledgeId, lesson.revision, lesson.schemaVersion, lesson.sourceProjectId, lesson.projectId, lesson.sourceGoalId, lesson.departmentId, lesson.scope, lesson.status, lesson.statement, lesson.rationale, JSON.stringify(lesson.sourceEvidenceIds), JSON.stringify(lesson.sourceDigestIds), JSON.stringify(lesson.episodeIds), lesson.confidence, lesson.freshness, lesson.generalized, lesson.councilRoundId, lesson.generalizedStatement ?? null, lesson.curatorRoleId ?? null, marker(lesson), lesson.reason, createdBy, sourceSessionRef],
+    `INSERT INTO organizational_knowledge (${INSERT_COLUMNS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING ${COLUMNS}`,
+    [lesson.knowledgeId, lesson.revision, lesson.schemaVersion, lesson.sourceProjectId, lesson.projectId, lesson.sourceGoalId, lesson.departmentId, lesson.scope, lesson.status, lesson.statement, lesson.rationale, JSON.stringify(lesson.sourceEvidenceIds), JSON.stringify(lesson.sourceDigestIds), JSON.stringify(lesson.episodeIds), lesson.confidence, lesson.freshness, lesson.generalized, lesson.councilRoundId, lesson.generalizedStatement ?? null, lesson.curatorRoleId ?? null, marker(lesson), lesson.reason, createdBy, sourceSessionRef, retention],
   );
   return map(result.rows[0]!);
 }
@@ -128,6 +130,11 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
     const current = await readCurrent(client, request.knowledgeId, true);
     if (current.sourceGoalId !== request.proof.goalId) throw new OrganizationalKnowledgeError("knowledge source Goal is outside the lease");
     await assertProjectRole(client, request.promoterOperatorId, current.sourceProjectId, request.promoterRoleId);
+    await assertStandingHead(client, request.curatorRoleId);
+    const retryCurator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [request.curatorOperatorId]);
+    if (retryCurator.rowCount !== 1) throw new OrganizationalKnowledgeError("curator requires an active operator");
+    await assertProjectMembership(client, request.curatorOperatorId, current.sourceProjectId);
+    await assertProjectRole(client, request.curatorOperatorId, current.sourceProjectId, request.curatorRoleId);
     if (current.scope === "global") {
       const same = current.generalizedStatement === request.generalizedStatement && current.councilRoundId?.toLowerCase() === request.encoreCouncilRoundId.toLowerCase() && JSON.stringify(current.sourceDigestIds) === JSON.stringify(request.corroboratingSourceIds.map((id) => id.toLowerCase())) && JSON.stringify(current.episodeIds) === JSON.stringify(request.corroboratingEpisodeIds.map((id) => id.toLowerCase()));
       if (!same) throw new OrganizationalKnowledgeError("conflicting global promotion retry");
@@ -179,6 +186,8 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
 export async function listOrganizationalKnowledge(pool: Pool, authorization: OrganizationalKnowledgeReadAuthorization): Promise<readonly (OrganizationalKnowledge | OrganizationalKnowledgePublic)[]> {
   if (!authorization || typeof authorization.operatorId !== "string" || typeof authorization.projectId !== "string" || typeof authorization.departmentId !== "string") throw new OrganizationalKnowledgeError("knowledge read authorization is required");
   return withGoalAuthority(pool, authorization.proof, 93, async (client) => {
+    const goal = await client.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [authorization.proof.goalId]);
+    if (goal.rowCount !== 1 || goal.rows[0]!.project_id !== authorization.projectId) throw new OrganizationalKnowledgeError("knowledge read Goal is outside requested project");
     const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [authorization.operatorId]);
     if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("knowledge read requires an active operator");
     await assertProjectMembership(client, authorization.operatorId, authorization.projectId); await assertProjectRole(client, authorization.operatorId, authorization.projectId, authorization.departmentId);
