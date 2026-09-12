@@ -17,6 +17,9 @@ describe("organizational knowledge persistence SQL shape", () => {
   it("binds council author exclusion through SQL parameters", () => {
     const source = readFileSync(fileURLToPath(new URL("./organizational-knowledge.ts", import.meta.url)), "utf8");
     expect(source).not.toContain("b.operator_id IS DISTINCT FROM current.authorOperatorId");
-    expect(source).toContain("b.operator_id IS DISTINCT FROM $5::uuid");
+    expect(source).toContain("b.operator_id IS DISTINCT FROM $5::text");
+    const migration = readFileSync(fileURLToPath(new URL("../migrations/0087_organizational_knowledge.sql", import.meta.url)), "utf8");
+    expect(migration).toContain("b.operator_id IS DISTINCT FROM NEW.author_operator_id::text");
+    expect(migration).toContain("a.role_id = NEW.promotion_role_id");
   });
 });
