@@ -30,6 +30,8 @@ export interface OrganizationalKnowledge extends Omit<OrganizationalKnowledgePro
   readonly projectId: string | null;
   readonly sourceProjectId: string;
   readonly councilRoundId: string | null;
+  readonly generalizedStatement?: string;
+  readonly curatorRoleId?: string;
   readonly reason: string | null;
   readonly createdAt: string;
   readonly createdBy?: string;
@@ -42,10 +44,12 @@ export interface DepartmentHeadPromotion {
 }
 export interface GlobalKnowledgePromotion {
   readonly encoreCouncilApproved: boolean;
-  readonly corroboratingEpisodeIds: readonly string[];
-  readonly generalized?: boolean;
-  readonly noRawProjectContent?: boolean;
-  readonly noPersonalInformation?: boolean;
+  /** Durable source records, each independently checked against the source Goal. */
+  readonly corroboratingSourceIds: readonly string[];
+  readonly generalizedStatement: string;
+  readonly curatorRoleId: string;
+  readonly noRawProjectContent: true;
+  readonly noPersonalInformation: true;
   readonly councilRoundId?: string;
 }
 export interface KnowledgeDecayOptions {
@@ -118,16 +122,18 @@ export function promoteKnowledgeToProject(lesson: OrganizationalKnowledge, promo
 }
 
 function assertGeneralizedSafe(lesson: OrganizationalKnowledge, promotion: GlobalKnowledgePromotion): void {
-  if (!lesson.generalized || promotion.generalized === false) throw new InvalidOrganizationalKnowledgeError("global knowledge must be generalized");
-  if (promotion.noRawProjectContent === false || promotion.noPersonalInformation === false || PERSONAL.test(lesson.statement) || PERSONAL.test(lesson.rationale) || SECRET.test(lesson.statement) || SECRET.test(lesson.rationale)) throw new InvalidOrganizationalKnowledgeError("global knowledge contains raw project content or personal information");
+  asText(promotion.generalizedStatement, "generalizedStatement");
+  asId(promotion.curatorRoleId, "curatorRoleId");
+  if (promotion.noRawProjectContent !== true || promotion.noPersonalInformation !== true || PERSONAL.test(promotion.generalizedStatement) || SECRET.test(promotion.generalizedStatement) || promotion.generalizedStatement.toLowerCase().includes(lesson.sourceProjectId.toLowerCase()) || promotion.generalizedStatement.toLowerCase().includes(lesson.sourceGoalId.toLowerCase())) throw new InvalidOrganizationalKnowledgeError("global knowledge contains raw project content or personal information");
+  if (PERSONAL.test(lesson.statement) || PERSONAL.test(lesson.rationale) || SECRET.test(lesson.statement) || SECRET.test(lesson.rationale)) throw new InvalidOrganizationalKnowledgeError("global knowledge contains unsafe source content");
   if (!promotion.encoreCouncilApproved) throw new InvalidOrganizationalKnowledgeError("Encore Council approval is required for global knowledge");
-  if (!Array.isArray(promotion.corroboratingEpisodeIds) || promotion.corroboratingEpisodeIds.some((id) => !SAFE_ID.test(id)) || promotion.corroboratingEpisodeIds.length < 2 || new Set(promotion.corroboratingEpisodeIds.map((id) => id.toLowerCase())).size < 2) throw new InvalidOrganizationalKnowledgeError("global knowledge requires corroboration across more than one episode");
+  if (!Array.isArray(promotion.corroboratingSourceIds) || promotion.corroboratingSourceIds.length < 2 || new Set(promotion.corroboratingSourceIds.map((id) => id.toLowerCase())).size < 2 || promotion.corroboratingSourceIds.some((id) => !UUID.test(id) || !(lesson.sourceEvidenceIds.includes(id.toLowerCase()) || lesson.sourceDigestIds.includes(id.toLowerCase())))) throw new InvalidOrganizationalKnowledgeError("global knowledge requires distinct source-bound corroboration");
 }
 export function promoteKnowledgeToGlobal(lesson: OrganizationalKnowledge, promotion: GlobalKnowledgePromotion): OrganizationalKnowledge {
   if (lesson.scope === "global") return lesson;
   if (lesson.scope !== "project_department") throw new InvalidOrganizationalKnowledgeError("only Department Head project knowledge may be promoted globally");
   assertGeneralizedSafe(lesson, promotion);
-  return copy({ ...lesson, revision: lesson.revision + 1, scope: "global", status: "active", projectId: null, councilRoundId: promotion.councilRoundId ?? null, episodeIds: Object.freeze([...new Set([...lesson.episodeIds, ...promotion.corroboratingEpisodeIds])]), createdAt: new Date().toISOString() });
+  return copy({ ...lesson, revision: lesson.revision + 1, scope: "global", status: "active", projectId: null, generalized: true, statement: promotion.generalizedStatement, generalizedStatement: promotion.generalizedStatement, curatorRoleId: promotion.curatorRoleId, councilRoundId: promotion.councilRoundId ?? null, createdAt: new Date().toISOString() });
 }
 
 export function decayOrganizationalKnowledge(lesson: OrganizationalKnowledge, options: KnowledgeDecayOptions): OrganizationalKnowledge {

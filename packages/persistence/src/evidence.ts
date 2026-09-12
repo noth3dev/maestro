@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { verifyEvidenceRecord, type EvidenceContentReader, type EvidenceRecord } from "@maestro/evidence";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 
 export type EvidenceMetadataInput = Omit<EvidenceRecord, "createdAt">;
 
@@ -72,4 +73,25 @@ function toEvidenceRecord(row: StoredEvidenceRecord): EvidenceRecord {
 function validate(input: EvidenceMetadataInput): void {
   if (!/^[a-f0-9]{64}$/.test(input.sha256)) throw new Error("Evidence SHA-256 must be lowercase hex");
   if (!Number.isSafeInteger(input.byteLength) || input.byteLength < 0) throw new Error("Evidence byteLength is invalid");
+}
+
+
+/**
+ * Supported source-loss transition. Ordinary evidence deletion remains
+ * forbidden; this boundary records the loss and lets the database append an
+ * unsupported knowledge revision before deleting the artifact metadata.
+ */
+export async function deleteEvidenceSource(pool: Pool, evidenceId: string, reason: string, recordedBy: string): Promise<void> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(evidenceId) || reason.trim() === "" || reason.length > 1024 || recordedBy.trim() === "" || recordedBy.length > 256) throw new Error("source evidence loss request is invalid");
+  const client: PoolClient = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT set_config('maestro.source_evidence_loss', '1', true)");
+    await client.query("SELECT set_config('maestro.source_evidence_loss_reason', $1, true)", [reason]);
+    const event = await client.query("INSERT INTO source_evidence_loss_events (event_id, evidence_id, reason, recorded_by) VALUES ($1, $2, $3, $4) RETURNING event_id", [randomUUID(), evidenceId.toLowerCase(), reason, recordedBy]);
+    if (event.rowCount !== 1) throw new Error("source evidence loss event was not recorded");
+    const deleted = await client.query("DELETE FROM evidence_records WHERE evidence_id = $1", [evidenceId.toLowerCase()]);
+    if (deleted.rowCount !== 1) throw new Error("source evidence was not found");
+    await client.query("COMMIT");
+  } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
