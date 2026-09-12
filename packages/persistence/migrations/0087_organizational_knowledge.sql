@@ -98,7 +98,14 @@ BEGIN
   FOR item IN SELECT value FROM jsonb_array_elements(NEW.source_evidence_ids) LOOP
     IF jsonb_typeof(item) <> 'string' OR item #>> '{}' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN RAISE EXCEPTION 'organizational knowledge evidence reference is malformed'; END IF;
     ref_id := (item #>> '{}')::uuid;
-    IF NOT EXISTS (SELECT 1 FROM evidence_records WHERE evidence_id = ref_id AND project_id = NEW.source_project_id AND goal_id = NEW.source_goal_id) THEN RAISE EXCEPTION 'organizational knowledge evidence reference is missing or outside source project'; END IF;
+    IF NOT EXISTS (SELECT 1 FROM evidence_records WHERE evidence_id = ref_id AND project_id = NEW.source_project_id AND goal_id = NEW.source_goal_id)
+       AND (NEW.status IN ('proposed', 'active') OR NOT EXISTS (
+         SELECT 1 FROM organizational_knowledge prior
+          WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1
+            AND prior.status = 'unsupported' AND prior.promotion_marker = 'source-loss'
+            AND prior.source_project_id = NEW.source_project_id AND prior.source_goal_id = NEW.source_goal_id
+            AND prior.source_evidence_ids = NEW.source_evidence_ids
+       )) THEN RAISE EXCEPTION 'organizational knowledge evidence reference is missing or outside source project'; END IF;
   END LOOP;
   FOR item IN SELECT value FROM jsonb_array_elements(NEW.source_digest_ids) LOOP
     IF jsonb_typeof(item) <> 'string' OR item #>> '{}' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN RAISE EXCEPTION 'organizational knowledge digest reference is malformed'; END IF;
