@@ -47,12 +47,7 @@ CREATE TABLE IF NOT EXISTS knowledge_promotion_authorizations (
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp()
 );
 
--- Marker rows are not an application-role write surface. Promotion code runs as the migration owner; deployed app roles must use a narrowly scoped DB function or equivalent owner boundary.
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_promotion_authorizations FROM PUBLIC;
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON source_evidence_loss_authorizations FROM PUBLIC;
-
-
-CREATE OR REPLACE FUNCTION validate_organizational_knowledge_insert() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION validate_organizational_knowledge_insert() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE item jsonb; ref_id uuid; expected_revision integer;
 BEGIN
   IF NEW.scope = 'global' AND (NEW.statement ILIKE '%' || NEW.source_project_id::text || '%' OR NEW.rationale ILIKE '%' || NEW.source_project_id::text || '%') THEN
@@ -156,6 +151,17 @@ CREATE TABLE IF NOT EXISTS source_evidence_loss_events (
   recorded_by text NOT NULL CHECK (btrim(recorded_by) <> '' AND length(recorded_by) <= 256),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp()
 );
+CREATE OR REPLACE FUNCTION validate_source_evidence_loss_event_binding() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = NEW.evidence_id AND e.goal_id = NEW.goal_id AND e.project_id = NEW.project_id AND g.project_id = NEW.project_id) THEN
+    RAISE EXCEPTION 'source evidence loss event Goal/project binding is invalid';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS source_evidence_loss_events_binding ON source_evidence_loss_events;
+CREATE TRIGGER source_evidence_loss_events_binding BEFORE INSERT ON source_evidence_loss_events FOR EACH ROW EXECUTE FUNCTION validate_source_evidence_loss_event_binding();
+
 CREATE OR REPLACE FUNCTION reject_source_evidence_loss_event_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'source evidence loss events are append-only'; END;
 $$;
@@ -196,7 +202,36 @@ CREATE TABLE IF NOT EXISTS source_evidence_loss_authorizations (
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp()
 );
 
-CREATE OR REPLACE FUNCTION reject_evidence_record_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION validate_source_evidence_loss_authorization_binding() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = NEW.evidence_id AND e.goal_id = NEW.goal_id AND e.project_id = NEW.project_id AND g.project_id = NEW.project_id) THEN
+    RAISE EXCEPTION 'source evidence loss authorization Goal/project binding is invalid';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS source_evidence_loss_authorizations_binding ON source_evidence_loss_authorizations;
+CREATE TRIGGER source_evidence_loss_authorizations_binding BEFORE INSERT ON source_evidence_loss_authorizations FOR EACH ROW EXECUTE FUNCTION validate_source_evidence_loss_authorization_binding();
+
+CREATE OR REPLACE FUNCTION reject_source_evidence_loss_authorization_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'source evidence loss authorizations are one-use';
+END;
+$$;
+DROP TRIGGER IF EXISTS source_evidence_loss_authorizations_immutable ON source_evidence_loss_authorizations;
+CREATE TRIGGER source_evidence_loss_authorizations_immutable BEFORE UPDATE OR TRUNCATE ON source_evidence_loss_authorizations FOR EACH STATEMENT EXECUTE FUNCTION reject_source_evidence_loss_authorization_mutation();
+
+
+
+-- Marker rows are not an application-role write surface. Promotion code runs as the migration owner; deployed app roles must use a narrowly scoped DB function or equivalent owner boundary.
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_promotion_authorizations FROM PUBLIC;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON source_evidence_loss_authorizations FROM PUBLIC;
+
+-- Marker rows are not an application-role write surface. Promotion code runs as the migration owner; deployed app roles must use a narrowly scoped DB function or equivalent owner boundary.
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_promotion_authorizations FROM PUBLIC;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON source_evidence_loss_authorizations FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION reject_evidence_record_mutation() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
   IF TG_OP = 'DELETE' AND EXISTS (
     SELECT 1 FROM source_evidence_loss_authorizations a
@@ -222,5 +257,8 @@ BEGIN
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_source_evidence_loss_event_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.propagate_organizational_knowledge_evidence_loss(uuid, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_evidence_record_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.validate_source_evidence_loss_event_binding() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.validate_source_evidence_loss_authorization_binding() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_source_evidence_loss_authorization_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
 END;
 $$;
