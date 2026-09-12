@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createWorkerProposedKnowledge, promoteKnowledgeToGlobal, promoteKnowledgeToProject } from "./organizational-knowledge.js";
+import { createWorkerProposedKnowledge, promoteKnowledgeToGlobal, promoteKnowledgeToProject, retireOrganizationalKnowledge } from "./organizational-knowledge.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
@@ -17,6 +17,8 @@ describe("organizational knowledge remediation gates", () => {
     expect(() => promoteKnowledgeToGlobal(project, { ...approved, generalizedStatement: "Project-specific raw detail" })).toThrow(/raw|safe/i);
     expect(promoteKnowledgeToGlobal(project, approved)).toMatchObject({ scope: "global", projectId: null, generalized: true, statement: approved.generalizedStatement });
     expect(() => promoteKnowledgeToGlobal(project, { ...approved, corroboratingEpisodeIds: ["episode-b", "episode-a"] })).toThrow(/episode|bound|corroborat/i);
+    expect(() => promoteKnowledgeToGlobal(retireOrganizationalKnowledge(project, { status: "unsupported", reason: "source withdrawn" }), approved)).toThrow(/active|status/);
+    expect(() => promoteKnowledgeToGlobal(retireOrganizationalKnowledge(project, { status: "retired", reason: "retired" }), approved)).toThrow(/active|status/);
   });
 
   it("requires distinct source-bound corroborating evidence, not arbitrary episode labels", () => {
