@@ -43,3 +43,5 @@ export * from "./routing-selector.js";
 export * from "./external-capability.js";
 export * from "./capacity.js";
 export * from "./portfolio-council.js";
+
+export * from "./organizational-knowledge.js";
