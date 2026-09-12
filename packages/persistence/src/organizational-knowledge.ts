@@ -82,6 +82,7 @@ export async function proposeOrganizationalKnowledge(pool: Pool, input: Organiza
     if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("proposal requires an active operator");
     await assertProjectMembership(client, author.operatorId, input.projectId);
     await assertProjectRole(client, author.operatorId, input.projectId, author.operatorRoleId);
+    await client.query("SELECT authorize_knowledge_proposal($1, $2, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8::bigint, $9, $10)", [randomUUID(), proposal.knowledgeId, input.projectId, input.sourceGoalId, author.operatorId, author.operatorRoleId, proof.ownerId, proof.fencingToken, author.actorId.trim(), author.sessionRef.trim()]);
     return insertRevision(client, proposal, author.actorId.trim(), author.sessionRef.trim());
   });
 }

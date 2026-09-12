@@ -93,6 +93,8 @@ BEGIN
        AND (SELECT count(DISTINCT (j.model_provider || ':' || j.model_id)) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
        AND (SELECT count(DISTINCT j.judgment_id) FROM encore_council_judgments j JOIN native_execution_bindings b ON b.execution_ref = j.execution_ref AND b.invocation_ref = j.invocation_ref AND b.goal_id = r.goal_id AND b.project_id = NEW.source_project_id AND b.admission_kind = 'encore_reviewer' AND b.actual_model_provider = j.model_provider AND b.actual_model_id = j.model_id WHERE j.round_id = r.round_id) = r.reviewer_count
   ) THEN RAISE EXCEPTION 'global organizational knowledge requires exact durable Council review'; END IF;
+  IF NEW.scope = 'worker_proposed' AND NOT EXISTS (SELECT 1 FROM knowledge_proposal_authorizations a WHERE a.knowledge_id = NEW.knowledge_id AND a.revision = NEW.revision AND a.project_id = NEW.source_project_id AND a.goal_id = NEW.source_goal_id AND a.actor_id = NEW.created_by AND a.session_ref = NEW.source_session_ref AND a.operator_id = current_setting('maestro.knowledge_proposal_operator', true)::uuid AND a.owner_id = current_setting('maestro.knowledge_proposal_owner', true) AND a.fencing_token = current_setting('maestro.knowledge_proposal_fence', true)::bigint AND a.token_hash = encode(public.digest(current_setting('maestro.knowledge_proposal_token', true), 'sha256'), 'hex')) THEN RAISE EXCEPTION 'organizational knowledge proposal authorization is missing or mismatched'; END IF;
+  IF NEW.scope = 'worker_proposed' THEN DELETE FROM knowledge_proposal_authorizations WHERE knowledge_id = NEW.knowledge_id AND revision = NEW.revision; END IF;
   IF NEW.status = 'active' AND NEW.scope IN ('project_department', 'global') AND NOT EXISTS (SELECT 1 FROM permanent_roles WHERE role_id = NEW.created_by AND role_kind = 'department_head' AND department_id = NEW.department_id AND status = 'standing') THEN
     RAISE EXCEPTION 'active organizational knowledge requires a standing Department Head';
   END IF;
@@ -281,6 +283,34 @@ $$;
 DROP TRIGGER IF EXISTS knowledge_promotion_authorizations_immutable ON knowledge_promotion_authorizations;
 CREATE TRIGGER knowledge_promotion_authorizations_immutable BEFORE UPDATE OR DELETE ON knowledge_promotion_authorizations FOR EACH ROW EXECUTE FUNCTION reject_knowledge_promotion_authorization_mutation();
 
+CREATE TABLE IF NOT EXISTS knowledge_proposal_authorizations (
+  token_hash char(64) PRIMARY KEY CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+  knowledge_id uuid NOT NULL, revision integer NOT NULL CHECK (revision = 1),
+  project_id uuid NOT NULL, goal_id uuid NOT NULL REFERENCES goals(goal_id),
+  operator_id uuid NOT NULL, role_id text NOT NULL, owner_id text NOT NULL,
+  fencing_token bigint NOT NULL CHECK (fencing_token > 0), actor_id text NOT NULL, session_ref text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT transaction_timestamp(), retention retention_class NOT NULL DEFAULT 'project_lifetime'
+);
+
+CREATE OR REPLACE FUNCTION authorize_knowledge_proposal(p_token text, p_knowledge_id uuid, p_project_id uuid, p_goal_id uuid, p_operator_id uuid, p_role_id text, p_owner_id text, p_fencing_token bigint, p_actor_id text, p_session_ref text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF btrim(p_token) = '' OR p_actor_id <> p_owner_id OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_operator_id AND r.project_id = p_project_id AND r.role_id = p_role_id AND r.active = true) OR NOT EXISTS (SELECT 1 FROM goals WHERE goal_id = p_goal_id AND project_id = p_project_id) OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) THEN RAISE EXCEPTION 'knowledge proposal authorization context is invalid'; END IF;
+  INSERT INTO knowledge_proposal_authorizations (token_hash, knowledge_id, project_id, goal_id, operator_id, role_id, owner_id, fencing_token, actor_id, session_ref) VALUES (encode(public.digest(p_token, 'sha256'), 'hex'), p_knowledge_id, p_project_id, p_goal_id, p_operator_id, p_role_id, p_owner_id, p_fencing_token, p_actor_id, p_session_ref);
+  PERFORM set_config('maestro.knowledge_proposal_token', p_token, true); PERFORM set_config('maestro.knowledge_proposal_operator', p_operator_id::text, true); PERFORM set_config('maestro.knowledge_proposal_owner', p_owner_id, true); PERFORM set_config('maestro.knowledge_proposal_fence', p_fencing_token::text, true);
+END;
+$$;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_proposal_authorizations FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION authorize_knowledge_proposal(text, uuid, uuid, uuid, uuid, text, text, bigint, text, text) FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION reject_knowledge_proposal_authorization_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' AND OLD.token_hash = encode(public.digest(current_setting('maestro.knowledge_proposal_token', true), 'sha256'), 'hex') THEN RETURN OLD; END IF;
+  RAISE EXCEPTION 'knowledge proposal authorizations are one-use';
+END;
+$$;
+DROP TRIGGER IF EXISTS knowledge_proposal_authorizations_immutable ON knowledge_proposal_authorizations;
+CREATE TRIGGER knowledge_proposal_authorizations_immutable BEFORE UPDATE OR DELETE ON knowledge_proposal_authorizations FOR EACH ROW EXECUTE FUNCTION reject_knowledge_proposal_authorization_mutation();
+
 CREATE OR REPLACE FUNCTION authorize_knowledge_promotion(p_token text, p_knowledge_id uuid, p_revision integer, p_scope text, p_role_id text, p_department_id text, p_operator_id uuid, p_project_id uuid, p_goal_id uuid, p_owner_id text, p_fencing_token bigint) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
   IF btrim(p_token) = '' OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_operator_id AND r.project_id = p_project_id AND r.role_id = p_role_id AND r.active = true) OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) OR NOT EXISTS (SELECT 1 FROM organizational_knowledge WHERE knowledge_id = p_knowledge_id AND revision = p_revision - 1 AND source_project_id = p_project_id AND source_goal_id = p_goal_id) THEN RAISE EXCEPTION 'knowledge promotion authorization context is invalid'; END IF;
@@ -348,6 +378,8 @@ DROP TRIGGER IF EXISTS source_evidence_loss_authorizations_no_truncate ON source
 CREATE TRIGGER source_evidence_loss_authorizations_no_truncate BEFORE TRUNCATE ON source_evidence_loss_authorizations FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
 DROP TRIGGER IF EXISTS knowledge_promotion_authorizations_no_truncate ON knowledge_promotion_authorizations;
 CREATE TRIGGER knowledge_promotion_authorizations_no_truncate BEFORE TRUNCATE ON knowledge_promotion_authorizations FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
+DROP TRIGGER IF EXISTS knowledge_proposal_authorizations_no_truncate ON knowledge_proposal_authorizations;
+CREATE TRIGGER knowledge_proposal_authorizations_no_truncate BEFORE TRUNCATE ON knowledge_proposal_authorizations FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
 
 DO $$
 DECLARE knowledge_schema text := current_schema();
@@ -365,5 +397,7 @@ BEGIN
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_unscoped_truncate() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_source_evidence_loss(text, uuid, uuid, uuid, text, bigint, text, uuid, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_proposal(text, uuid, uuid, uuid, uuid, text, text, bigint, text, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_knowledge_proposal_authorization_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
 END;
 $$;
