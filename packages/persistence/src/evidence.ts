@@ -89,6 +89,12 @@ export async function deleteEvidenceSource(pool: Pool, evidenceId: string, reaso
   await withGoalAuthority(pool, proof, 87, async (client) => {
     const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [recordedBy]);
     if (operator.rowCount !== 1) throw new Error("source evidence loss requires an authorized operator");
+    const tombstone = await client.query<{ goal_id: string; project_id: string; owner_id: string; fencing_token: string; reason: string; recorded_by: string }>("SELECT goal_id, project_id, owner_id, fencing_token, reason, recorded_by FROM evidence_source_tombstones WHERE evidence_id = $1", [evidenceId.toLowerCase()]);
+    if (tombstone.rowCount === 1) {
+      const tomb = tombstone.rows[0]!;
+      if (tomb.goal_id.toLowerCase() !== proof.goalId.toLowerCase() || tomb.owner_id !== proof.ownerId || tomb.fencing_token !== String(proof.fencingToken) || tomb.reason !== reason || tomb.recorded_by !== recordedBy) throw new Error("conflicting source evidence loss retry");
+      return;
+    }
     const source = await client.query<{ goal_id: string; project_id: string; goal_project_id: string }>("SELECT e.goal_id, e.project_id, g.project_id AS goal_project_id FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = $1", [evidenceId.toLowerCase()]);
     if (source.rowCount !== 1 || source.rows[0]!.goal_id !== proof.goalId || source.rows[0]!.project_id !== source.rows[0]!.goal_project_id) throw new Error("source evidence is outside the Goal lease/project");
     await assertProjectMembership(client, recordedBy, source.rows[0]!.project_id);

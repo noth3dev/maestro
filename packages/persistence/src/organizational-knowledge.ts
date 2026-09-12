@@ -115,6 +115,10 @@ export async function promoteOrganizationalKnowledgeToProject(pool: Pool, reques
     const current = await readCurrent(client, request.knowledgeId, true);
     if (current.sourceGoalId !== request.proof.goalId) throw new OrganizationalKnowledgeError("knowledge source Goal is outside the lease");
     await assertProjectRole(client, request.promoterOperatorId, current.sourceProjectId, request.promoterRoleId);
+    if (current.scope === "project_department" && current.status === "active") {
+      if (current.departmentId !== request.departmentId) throw new OrganizationalKnowledgeError("conflicting project promotion retry");
+      return current;
+    }
     const promoted = promoteKnowledgeToProject(current, { promoterRoleKind: "department_head", promoterDepartmentId: request.departmentId });
     await authorizePromotion(client, promoted, request.promoterRoleId, request.promoterOperatorId, request.proof);
     return insertRevision(client, promoted, request.promoterRoleId, `promotion:${request.promoterRoleId}`);
