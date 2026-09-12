@@ -40,7 +40,6 @@ CREATE INDEX IF NOT EXISTS organizational_knowledge_project_idx ON organizationa
 CREATE INDEX IF NOT EXISTS organizational_knowledge_global_idx ON organizational_knowledge (scope, department_id, created_at, knowledge_id, revision) WHERE scope = 'global';
 CREATE TABLE IF NOT EXISTS knowledge_promotion_authorizations (
   token_hash char(64) PRIMARY KEY CHECK (token_hash ~ '^[0-9a-f]{64}$'),
-  payload_hash char(64) NOT NULL CHECK (payload_hash ~ '^[0-9a-f]{64}$'),
   knowledge_id uuid NOT NULL,
   revision integer NOT NULL,
   scope text NOT NULL CHECK (scope IN ('project_department', 'global')),
@@ -293,6 +292,7 @@ CREATE TRIGGER knowledge_promotion_authorizations_immutable BEFORE UPDATE OR DEL
 
 CREATE TABLE IF NOT EXISTS knowledge_proposal_authorizations (
   token_hash char(64) PRIMARY KEY CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+  payload_hash char(64) NOT NULL CHECK (payload_hash ~ '^[0-9a-f]{64}$'),
   knowledge_id uuid NOT NULL, revision integer NOT NULL CHECK (revision = 1),
   project_id uuid NOT NULL, goal_id uuid NOT NULL REFERENCES goals(goal_id),
   operator_id uuid NOT NULL, role_id text NOT NULL, owner_id text NOT NULL,
@@ -311,6 +311,10 @@ $$;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_proposal_authorizations FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION authorize_knowledge_proposal(text, uuid, uuid, uuid, uuid, text, text, bigint, text, text, jsonb) FROM PUBLIC;
 
+ALTER TABLE knowledge_promotion_authorizations DROP COLUMN IF EXISTS payload_hash;
+ALTER TABLE knowledge_proposal_authorizations ADD COLUMN IF NOT EXISTS payload_hash char(64);
+ALTER TABLE knowledge_proposal_authorizations DROP CONSTRAINT IF EXISTS knowledge_proposal_authorizations_payload_hash_check;
+ALTER TABLE knowledge_proposal_authorizations ADD CONSTRAINT knowledge_proposal_authorizations_payload_hash_check CHECK (payload_hash ~ '^[0-9a-f]{64}$');
 CREATE OR REPLACE FUNCTION reject_knowledge_proposal_authorization_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'DELETE' AND OLD.token_hash = encode(public.digest(current_setting('maestro.knowledge_proposal_token', true), 'sha256'), 'hex') THEN RETURN OLD; END IF;
