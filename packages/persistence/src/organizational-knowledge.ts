@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   assertValidOrganizationalKnowledgeProposal, createWorkerProposedKnowledge, decayOrganizationalKnowledge as decayKnowledge, promoteKnowledgeToGlobal, promoteKnowledgeToProject,
   retireOrganizationalKnowledge as retireKnowledge, type GlobalKnowledgePromotion, type OrganizationalKnowledge,
@@ -58,11 +58,8 @@ function publicProjection(lesson: OrganizationalKnowledge): OrganizationalKnowle
 function authorValue(author: OrganizationalKnowledgeAuthor): void {
   if (!author || typeof author.actorId !== "string" || author.actorId.trim() === "" || author.actorId.length > 256 || typeof author.sessionRef !== "string" || author.sessionRef.trim() === "" || author.sessionRef.length > 256) throw new OrganizationalKnowledgeError("organizational knowledge author is invalid");
 }
-async function authorizePromotion(client: Pick<PoolClient, "query">, lesson: OrganizationalKnowledge, roleId: string): Promise<void> {
-  const token = randomUUID();
-  const tokenHash = createHash("sha256").update(token, "utf8").digest("hex");
-  await client.query("INSERT INTO knowledge_promotion_authorizations (token_hash, knowledge_id, revision, scope, role_id, department_id) VALUES ($1, $2, $3, $4, $5, $6)", [tokenHash, lesson.knowledgeId, lesson.revision, lesson.scope, roleId, lesson.departmentId]);
-  await client.query("SELECT set_config('maestro.knowledge_promotion_token', $1, true)", [token]);
+async function authorizePromotion(client: Pick<PoolClient, "query">, lesson: OrganizationalKnowledge, roleId: string, operatorId: string, proof: GoalLeaseProof): Promise<void> {
+  await client.query("SELECT authorize_knowledge_promotion($1, $2, $3, $4, $5, $6, $7::uuid, $8::uuid, $9::uuid, $10, $11::bigint)", [randomUUID(), lesson.knowledgeId, lesson.revision, lesson.scope, roleId, lesson.departmentId, operatorId, lesson.sourceProjectId, lesson.sourceGoalId, proof.ownerId, proof.fencingToken]);
 }
 
 async function insertRevision(client: Pick<PoolClient, "query">, lesson: OrganizationalKnowledge, createdBy: string, sourceSessionRef: string): Promise<OrganizationalKnowledge> {
@@ -116,7 +113,7 @@ export async function promoteOrganizationalKnowledgeToProject(pool: Pool, reques
     if (current.sourceGoalId !== request.proof.goalId) throw new OrganizationalKnowledgeError("knowledge source Goal is outside the lease");
     await assertProjectRole(client, request.promoterOperatorId, current.sourceProjectId, request.promoterRoleId);
     const promoted = promoteKnowledgeToProject(current, { promoterRoleKind: "department_head", promoterDepartmentId: request.departmentId });
-    await authorizePromotion(client, promoted, request.promoterRoleId);
+    await authorizePromotion(client, promoted, request.promoterRoleId, request.promoterOperatorId, request.proof);
     return insertRevision(client, promoted, request.promoterRoleId, `promotion:${request.promoterRoleId}`);
   });
 }
@@ -148,6 +145,7 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
         WHERE r.round_id = $1 AND r.goal_id = $2 AND s.final_verdict = 'proceed' AND s.same_model_only = false
           AND (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text(r.evidence_ids)) = (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text($3::jsonb))
           AND (SELECT count(*) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = r.reviewer_count
+          AND (SELECT count(DISTINCT j.reviewer_index) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = r.reviewer_count
           AND (SELECT min(j.reviewer_index) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = 0
           AND (SELECT max(j.reviewer_index) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = r.reviewer_count - 1
           AND NOT EXISTS (SELECT 1 FROM encore_council_judgments j WHERE j.round_id = r.round_id AND j.verdict <> 'proceed')
@@ -171,7 +169,7 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
     const approved = approval.rowCount === 1;
     const promotion: GlobalKnowledgePromotion = { encoreCouncilApproved: approved, corroboratingSourceIds: sourceIds, corroboratingEpisodeIds: request.corroboratingEpisodeIds, generalizedStatement: request.generalizedStatement, curatorRoleId: request.curatorRoleId, councilRoundId: request.encoreCouncilRoundId };
     const promoted = promoteKnowledgeToGlobal(current, promotion);
-    await authorizePromotion(client, promoted, request.promoterRoleId);
+    await authorizePromotion(client, promoted, request.promoterRoleId, request.promoterOperatorId, request.proof);
     const stored = await insertRevision(client, promoted, request.promoterRoleId, `promotion:${request.promoterRoleId}`);
     return publicProjection(stored);
   });
@@ -208,7 +206,7 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
     const maintenanceAuthor = current.createdBy;
     if (maintenanceAuthor === undefined) throw new OrganizationalKnowledgeError("knowledge maintenance requires durable source author");
     const maintained = { ...decayed, createdBy: maintenanceAuthor, sourceSessionRef: operationRef };
-    if (maintained.status === "active" && (maintained.scope === "project_department" || maintained.scope === "global")) await authorizePromotion(client, maintained, maintenanceAuthor);
+    if (maintained.status === "active" && (maintained.scope === "project_department" || maintained.scope === "global")) await authorizePromotion(client, maintained, maintenanceAuthor, request.operatorId, request.proof);
     const stored = await insertRevision(client, maintained, maintenanceAuthor, "system:knowledge-decay");
     return stored.scope === "global" ? publicProjection(stored) : stored;
   });

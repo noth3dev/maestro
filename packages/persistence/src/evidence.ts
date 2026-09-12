@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { verifyEvidenceRecord, type EvidenceContentReader, type EvidenceRecord } from "@maestro/evidence";
 import type { Pool } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
@@ -94,12 +94,8 @@ export async function deleteEvidenceSource(pool: Pool, evidenceId: string, reaso
     await assertProjectMembership(client, recordedBy, source.rows[0]!.project_id);
     await assertProjectRole(client, recordedBy, source.rows[0]!.project_id, operatorRoleId);
     const token = randomUUID();
-    const tokenHash = createHash("sha256").update(token, "utf8").digest("hex");
-    await client.query("INSERT INTO source_evidence_loss_authorizations (token_hash, evidence_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by) VALUES ($1, $2, $3, $4, $5, $6::bigint, $7, $8)", [tokenHash, evidenceId.toLowerCase(), source.rows[0]!.goal_id, source.rows[0]!.project_id, proof.ownerId, proof.fencingToken, reason, recordedBy]);
-    await client.query("SELECT set_config('maestro.source_evidence_loss_token', $1, true)", [token]);
+    await client.query("SELECT authorize_source_evidence_loss($1, $2::uuid, $3::uuid, $4::uuid, $5, $6::bigint, $7, $8::uuid, $9)", [token, evidenceId.toLowerCase(), source.rows[0]!.goal_id, source.rows[0]!.project_id, proof.ownerId, proof.fencingToken, reason, recordedBy, operatorRoleId]);
     await client.query("INSERT INTO source_evidence_loss_events (event_id, evidence_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by) VALUES ($1, $2, $3, $4, $5, $6::bigint, $7, $8)", [randomUUID(), evidenceId.toLowerCase(), source.rows[0]!.goal_id, source.rows[0]!.project_id, proof.ownerId, proof.fencingToken, reason, recordedBy]);
-    await client.query("SELECT set_config('maestro.source_loss_owner', $1, true)", [proof.ownerId]);
-    await client.query("SELECT set_config('maestro.source_loss_fence', $1, true)", [proof.fencingToken]);
     const deleted = await client.query("DELETE FROM evidence_records WHERE evidence_id = $1", [evidenceId.toLowerCase()]);
     if (deleted.rowCount !== 1) throw new Error("source evidence was not found");
   });

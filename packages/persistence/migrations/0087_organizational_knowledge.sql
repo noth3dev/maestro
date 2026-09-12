@@ -45,6 +45,10 @@ CREATE TABLE IF NOT EXISTS knowledge_promotion_authorizations (
   scope text NOT NULL CHECK (scope IN ('project_department', 'global')),
   role_id text NOT NULL,
   department_id text NOT NULL REFERENCES departments(department_id),
+  operator_id uuid NOT NULL,
+  goal_id uuid NOT NULL REFERENCES goals(goal_id),
+  owner_id text NOT NULL,
+  fencing_token bigint NOT NULL CHECK (fencing_token > 0),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   retention retention_class NOT NULL DEFAULT 'project_lifetime'
 );
@@ -81,6 +85,7 @@ BEGIN
      WHERE r.round_id = NEW.council_round_id AND r.goal_id = NEW.source_goal_id AND s.final_verdict = 'proceed' AND s.same_model_only = false
        AND (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text(r.evidence_ids)) = (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text(NEW.source_digest_ids))
        AND (SELECT count(*) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = r.reviewer_count
+       AND (SELECT count(DISTINCT j.reviewer_index) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = r.reviewer_count
        AND (SELECT min(j.reviewer_index) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = 0
        AND (SELECT max(j.reviewer_index) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = r.reviewer_count - 1
        AND NOT EXISTS (SELECT 1 FROM encore_council_judgments j WHERE j.round_id = r.round_id AND j.verdict <> 'proceed')
@@ -95,6 +100,9 @@ BEGIN
     SELECT 1 FROM knowledge_promotion_authorizations a
      WHERE a.knowledge_id = NEW.knowledge_id AND a.revision = NEW.revision AND a.scope = NEW.scope
        AND a.role_id = NEW.created_by AND a.department_id = NEW.department_id
+       AND a.operator_id = current_setting('maestro.knowledge_promotion_operator', true)::uuid
+       AND a.goal_id = NEW.source_goal_id AND a.owner_id = current_setting('maestro.knowledge_promotion_owner', true)
+       AND a.fencing_token = current_setting('maestro.knowledge_promotion_fence', true)::bigint
        AND a.token_hash = encode(public.digest(current_setting('maestro.knowledge_promotion_token', true), 'sha256'), 'hex')
   ) THEN RAISE EXCEPTION 'organizational knowledge promotion authorization is missing or mismatched'; END IF;
   IF NEW.status = 'active' AND NEW.scope IN ('project_department', 'global') THEN
@@ -234,6 +242,7 @@ CREATE TABLE IF NOT EXISTS source_evidence_loss_authorizations (
   fencing_token bigint NOT NULL CHECK (fencing_token > 0),
   reason text NOT NULL CHECK (btrim(reason) <> '' AND length(reason) <= 1024),
   recorded_by text NOT NULL CHECK (btrim(recorded_by) <> '' AND length(recorded_by) <= 256),
+  role_id text NOT NULL CHECK (btrim(role_id) <> '' AND length(role_id) <= 256),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   retention retention_class NOT NULL DEFAULT 'project_lifetime'
 );
@@ -243,6 +252,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = NEW.evidence_id AND e.goal_id = NEW.goal_id AND e.project_id = NEW.project_id AND g.project_id = NEW.project_id) THEN
     RAISE EXCEPTION 'source evidence loss authorization Goal/project binding is invalid';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = NEW.recorded_by::uuid AND active = true) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = NEW.recorded_by::uuid AND r.project_id = NEW.project_id AND r.role_id = NEW.role_id AND r.active = true) OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = NEW.goal_id AND owner_id = NEW.owner_id AND fencing_token = NEW.fencing_token AND expires_at > clock_timestamp()) THEN RAISE EXCEPTION 'source evidence loss authorization actor/lease is invalid'; END IF;
   RETURN NEW;
 END;
 $$;
@@ -269,9 +279,27 @@ $$;
 DROP TRIGGER IF EXISTS knowledge_promotion_authorizations_immutable ON knowledge_promotion_authorizations;
 CREATE TRIGGER knowledge_promotion_authorizations_immutable BEFORE UPDATE OR DELETE ON knowledge_promotion_authorizations FOR EACH ROW EXECUTE FUNCTION reject_knowledge_promotion_authorization_mutation();
 
+CREATE OR REPLACE FUNCTION authorize_knowledge_promotion(p_token text, p_knowledge_id uuid, p_revision integer, p_scope text, p_role_id text, p_department_id text, p_operator_id uuid, p_project_id uuid, p_goal_id uuid, p_owner_id text, p_fencing_token bigint) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF btrim(p_token) = '' OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_operator_id AND r.project_id = p_project_id AND r.role_id = p_role_id AND r.active = true) OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) OR NOT EXISTS (SELECT 1 FROM organizational_knowledge WHERE knowledge_id = p_knowledge_id AND revision = p_revision - 1 AND source_project_id = p_project_id AND source_goal_id = p_goal_id) THEN RAISE EXCEPTION 'knowledge promotion authorization context is invalid'; END IF;
+  INSERT INTO knowledge_promotion_authorizations (token_hash, knowledge_id, revision, scope, role_id, department_id, operator_id, goal_id, owner_id, fencing_token) VALUES (encode(public.digest(p_token, 'sha256'), 'hex'), p_knowledge_id, p_revision, p_scope, p_role_id, p_department_id, p_operator_id, p_goal_id, p_owner_id, p_fencing_token);
+  PERFORM set_config('maestro.knowledge_promotion_token', p_token, true); PERFORM set_config('maestro.knowledge_promotion_operator', p_operator_id::text, true); PERFORM set_config('maestro.knowledge_promotion_goal', p_goal_id::text, true); PERFORM set_config('maestro.knowledge_promotion_owner', p_owner_id, true); PERFORM set_config('maestro.knowledge_promotion_fence', p_fencing_token::text, true);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION authorize_source_evidence_loss(p_token text, p_evidence_id uuid, p_goal_id uuid, p_project_id uuid, p_owner_id text, p_fencing_token bigint, p_reason text, p_recorded_by uuid, p_role_id text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF btrim(p_token) = '' OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_recorded_by AND active = true) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_recorded_by AND r.project_id = p_project_id AND r.role_id = p_role_id AND r.active = true) OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) OR NOT EXISTS (SELECT 1 FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = p_evidence_id AND e.goal_id = p_goal_id AND e.project_id = p_project_id AND g.project_id = p_project_id) THEN RAISE EXCEPTION 'source evidence loss authorization context is invalid'; END IF;
+  INSERT INTO source_evidence_loss_authorizations (token_hash, evidence_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by, role_id) VALUES (encode(public.digest(p_token, 'sha256'), 'hex'), p_evidence_id, p_goal_id, p_project_id, p_owner_id, p_fencing_token, p_reason, p_recorded_by::text, p_role_id);
+  PERFORM set_config('maestro.source_evidence_loss_token', p_token, true); PERFORM set_config('maestro.source_loss_owner', p_owner_id, true); PERFORM set_config('maestro.source_loss_fence', p_fencing_token::text, true);
+END;
+$$;
+
 -- Marker rows are not an application-role write surface. Promotion code runs as the migration owner; deployed app roles must use a narrowly scoped DB function or equivalent owner boundary.
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_promotion_authorizations FROM PUBLIC;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON source_evidence_loss_authorizations FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION authorize_source_evidence_loss(text, uuid, uuid, uuid, text, bigint, text, uuid, text) FROM PUBLIC;
 
 CREATE OR REPLACE FUNCTION reject_evidence_record_mutation() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -330,5 +358,7 @@ BEGIN
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_knowledge_promotion_authorization_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.maestro_goal_truncate_reset() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_unscoped_truncate() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_source_evidence_loss(text, uuid, uuid, uuid, text, bigint, text, uuid, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
 END;
 $$;
