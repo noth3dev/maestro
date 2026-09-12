@@ -17,6 +17,21 @@ BEGIN
   END IF;
 END $$;
 
+DO $$
+DECLARE has_operator boolean; has_department boolean; bad boolean;
+BEGIN
+  IF to_regclass('organizational_knowledge') IS NOT NULL THEN
+    SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'organizational_knowledge' AND column_name = 'curator_operator_id') INTO has_operator;
+    SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'organizational_knowledge' AND column_name = 'curator_department_id') INTO has_department;
+    IF has_operator AND has_department THEN
+      EXECUTE 'SELECT EXISTS (SELECT 1 FROM organizational_knowledge WHERE scope = ''global'' AND (curator_operator_id IS NULL OR curator_department_id IS NULL))' INTO bad;
+    ELSE
+      EXECUTE 'SELECT EXISTS (SELECT 1 FROM organizational_knowledge WHERE scope = ''global'')' INTO bad;
+    END IF;
+    IF bad THEN RAISE EXCEPTION 'migration 0087 requires existing global knowledge rows to be reissued with durable curator identity'; END IF;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS organizational_knowledge (
   knowledge_id uuid NOT NULL,
   revision integer NOT NULL CHECK (revision >= 1),
@@ -63,7 +78,13 @@ ALTER TABLE organizational_knowledge ADD COLUMN IF NOT EXISTS author_role_id tex
 ALTER TABLE organizational_knowledge DROP CONSTRAINT IF EXISTS organizational_knowledge_generalized_statement_bound;
 ALTER TABLE organizational_knowledge ADD CONSTRAINT organizational_knowledge_generalized_statement_bound CHECK (generalized_statement IS NULL OR (btrim(generalized_statement) <> '' AND length(generalized_statement) <= 4096));
 ALTER TABLE organizational_knowledge DROP CONSTRAINT IF EXISTS organizational_knowledge_text_bounds;
-ALTER TABLE organizational_knowledge ADD CONSTRAINT organizational_knowledge_text_bounds CHECK (btrim(statement) <> '' AND length(statement) <= 4096 AND btrim(rationale) <> '' AND length(rationale) <= 4096 AND (reason IS NULL OR (btrim(reason) <> '' AND length(reason) <= 1024)) AND btrim(created_by) <> '' AND length(created_by) <= 256 AND btrim(source_session_ref) <> '' AND length(source_session_ref) <= 256 AND (curator_role_id IS NULL OR (btrim(curator_role_id) <> '' AND length(curator_role_id) <= 256)) AND (curator_department_id IS NULL OR (btrim(curator_department_id) <> '' AND length(curator_department_id) <= 256)) AND btrim(promotion_marker) <> '' AND length(promotion_marker) <= 64));
+ALTER TABLE organizational_knowledge ADD CONSTRAINT organizational_knowledge_text_bounds CHECK (btrim(statement) <> '' AND length(statement) <= 4096 AND btrim(rationale) <> '' AND length(rationale) <= 4096 AND (reason IS NULL OR (btrim(reason) <> '' AND length(reason) <= 1024)) AND btrim(created_by) <> '' AND length(created_by) <= 256 AND btrim(source_session_ref) <> '' AND length(source_session_ref) <= 256 AND (curator_role_id IS NULL OR (btrim(curator_role_id) <> '' AND length(curator_role_id) <= 256)) AND (curator_department_id IS NULL OR (btrim(curator_department_id) <> '' AND length(curator_department_id) <= 256)) AND (author_role_id IS NULL OR (btrim(author_role_id) <> '' AND length(author_role_id) <= 256)) AND btrim(promotion_marker) <> '' AND length(promotion_marker) <= 64));
+ALTER TABLE organizational_knowledge DROP CONSTRAINT IF EXISTS organizational_knowledge_global_shape;
+ALTER TABLE organizational_knowledge ADD CONSTRAINT organizational_knowledge_global_shape CHECK ((scope = 'global' AND project_id IS NULL AND generalized AND council_round_id IS NOT NULL AND generalized_statement IS NOT NULL AND curator_role_id IS NOT NULL AND curator_operator_id IS NOT NULL AND curator_department_id IS NOT NULL AND jsonb_array_length(episode_ids) >= 2) OR scope <> 'global');
+ALTER TABLE organizational_knowledge DROP CONSTRAINT IF EXISTS organizational_knowledge_lifecycle_shape;
+ALTER TABLE organizational_knowledge ADD CONSTRAINT organizational_knowledge_lifecycle_shape CHECK ((scope = 'worker_proposed' AND status IN ('proposed', 'unsupported')) OR (scope <> 'worker_proposed' AND status <> 'proposed'));
+ALTER TABLE organizational_knowledge DROP CONSTRAINT IF EXISTS organizational_knowledge_marker_shape;
+ALTER TABLE organizational_knowledge ADD CONSTRAINT organizational_knowledge_marker_shape CHECK ((scope = 'worker_proposed' AND promotion_marker = 'worker-proposal') OR (scope = 'project_department' AND status = 'active' AND promotion_marker = 'department-promotion') OR (scope = 'global' AND status = 'active' AND promotion_marker = 'global-promotion') OR (status IN ('unsupported', 'contradicted', 'retired') AND promotion_marker IN ('source-loss', 'knowledge-decay', 'adjudication')));
 CREATE INDEX IF NOT EXISTS organizational_knowledge_project_idx ON organizational_knowledge (project_id, department_id, created_at, knowledge_id, revision);
 CREATE INDEX IF NOT EXISTS organizational_knowledge_global_idx ON organizational_knowledge (scope, department_id, created_at, knowledge_id, revision) WHERE scope = 'global';
 CREATE TABLE IF NOT EXISTS knowledge_promotion_authorizations (
@@ -145,7 +166,7 @@ BEGIN
        AND (SELECT count(DISTINCT (j.model_provider || ':' || j.model_id)) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
        AND (SELECT count(DISTINCT j.judgment_id) FROM encore_council_judgments j JOIN native_execution_bindings b ON b.execution_ref = j.execution_ref AND b.invocation_ref = j.invocation_ref AND b.goal_id = r.goal_id AND b.project_id = NEW.source_project_id AND b.admission_kind = 'encore_reviewer' AND b.actual_model_provider = j.model_provider AND b.actual_model_id = j.model_id WHERE j.round_id = r.round_id) = r.reviewer_count
   ) THEN RAISE EXCEPTION 'global organizational knowledge requires exact durable Council review'; END IF;
-  IF NEW.scope = 'worker_proposed' AND NOT EXISTS (SELECT 1 FROM knowledge_proposal_authorizations a WHERE a.knowledge_id = NEW.knowledge_id AND a.revision = NEW.revision AND a.project_id = NEW.source_project_id AND a.goal_id = NEW.source_goal_id AND a.actor_id = NEW.created_by AND a.session_ref = NEW.source_session_ref AND a.operator_id = current_setting('maestro.knowledge_proposal_operator', true)::uuid AND a.owner_id = current_setting('maestro.knowledge_proposal_owner', true) AND a.fencing_token = current_setting('maestro.knowledge_proposal_fence', true)::bigint AND a.token_hash = encode(public.digest(current_setting('maestro.knowledge_proposal_token', true), 'sha256'), 'hex')
+  IF NEW.scope = 'worker_proposed' AND NOT EXISTS (SELECT 1 FROM knowledge_proposal_authorizations a WHERE a.knowledge_id = NEW.knowledge_id AND a.revision = NEW.revision AND a.project_id = NEW.source_project_id AND a.goal_id = NEW.source_goal_id AND a.actor_id = NEW.created_by AND a.session_ref = NEW.source_session_ref AND a.operator_id = current_setting('maestro.knowledge_proposal_operator', true)::uuid AND a.owner_id = current_setting('maestro.knowledge_proposal_owner', true) AND a.operator_id = NEW.author_operator_id AND a.role_id = NEW.author_role_id AND a.fencing_token = current_setting('maestro.knowledge_proposal_fence', true)::bigint AND a.token_hash = encode(public.digest(current_setting('maestro.knowledge_proposal_token', true), 'sha256'), 'hex')
        AND a.payload_hash = encode(public.digest(jsonb_build_object('projectId', NEW.source_project_id, 'goalId', NEW.source_goal_id, 'departmentId', NEW.department_id, 'statement', NEW.statement, 'rationale', NEW.rationale, 'sourceEvidenceIds', NEW.source_evidence_ids, 'sourceDigestIds', NEW.source_digest_ids, 'episodeIds', NEW.episode_ids, 'confidence', NEW.confidence, 'freshness', NEW.freshness, 'generalized', NEW.generalized)::text, 'sha256'), 'hex')) THEN RAISE EXCEPTION 'organizational knowledge proposal authorization is missing or mismatched'; END IF;
   IF NEW.scope = 'worker_proposed' THEN DELETE FROM knowledge_proposal_authorizations WHERE knowledge_id = NEW.knowledge_id AND revision = NEW.revision; END IF;
   IF NEW.status = 'active' AND NEW.scope IN ('project_department', 'global') AND NOT EXISTS (SELECT 1 FROM permanent_roles WHERE role_id = NEW.created_by AND role_kind = 'department_head' AND department_id = NEW.department_id AND status = 'standing') THEN

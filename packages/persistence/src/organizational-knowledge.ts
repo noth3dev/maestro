@@ -70,7 +70,7 @@ async function insertRevision(client: Pick<PoolClient, "query">, lesson: Organiz
   const prior = lesson.revision > 1 ? await client.query<{ retention: string }>("SELECT retention FROM organizational_knowledge WHERE knowledge_id = $1 AND revision = $2", [lesson.knowledgeId, lesson.revision - 1]) : { rows: [] as { retention: string }[] };
   const retention = prior.rows[0]?.retention ?? "project_lifetime";
   const result = await client.query<KnowledgeRow>(
-    `INSERT INTO organizational_knowledge (${INSERT_COLUMNS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26) RETURNING ${COLUMNS}`,
+    `INSERT INTO organizational_knowledge (${INSERT_COLUMNS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29) RETURNING ${COLUMNS}`,
     [lesson.knowledgeId, lesson.revision, lesson.schemaVersion, lesson.sourceProjectId, lesson.projectId, lesson.sourceGoalId, lesson.departmentId, lesson.scope, lesson.status, lesson.statement, lesson.rationale, JSON.stringify(lesson.sourceEvidenceIds), JSON.stringify(lesson.sourceDigestIds), JSON.stringify(lesson.episodeIds), lesson.confidence, lesson.freshness, lesson.generalized, lesson.councilRoundId, lesson.generalizedStatement ?? null, lesson.curatorRoleId ?? null, lesson.curatorOperatorId ?? null, lesson.curatorDepartmentId ?? null, authorOperatorId ?? lesson.authorOperatorId ?? null, authorRoleId ?? lesson.authorRoleId ?? null, marker(lesson), lesson.reason, createdBy, sourceSessionRef, retention],
   );
   return map(result.rows[0]!);
