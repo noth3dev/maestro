@@ -248,7 +248,7 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
     if (priorOperation.rowCount === 1 && (priorOperation.rows[0]!.payload_hash !== requestHash || priorOperation.rows[0]!.operator_id.toLowerCase() !== request.operatorId.toLowerCase())) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
     if (priorOperation.rowCount === 0) await client.query("INSERT INTO knowledge_refresh_operations (knowledge_id, operation_ref, payload_hash, operator_id, retention) VALUES ($1, $2, $3, $4::uuid, $5)", [current.knowledgeId, operationRef, requestHash, request.operatorId, current.retention]);
     if (current.sourceSessionRef === operationRef) {
-      if (current.promotionOperatorId?.toLowerCase() !== request.operatorId.toLowerCase() || current.promotionRoleId?.toLowerCase() !== current.departmentId.toLowerCase() || current.operationPayloadHash !== requestHash) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
+      if (current.promotionOperatorId?.toLowerCase() !== request.operatorId.toLowerCase() || current.promotionRoleId?.toLowerCase() !== request.operatorRoleId.toLowerCase() || current.operationPayloadHash !== requestHash) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
       return current.scope === "global" ? publicProjection(current) : current;
     }
     if (current.sourceSessionRef?.startsWith("system:knowledge-decay:") && current.status !== "retired") throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
@@ -260,7 +260,7 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
     const maintained = { ...decayed, createdBy: maintenanceAuthor, sourceSessionRef: operationRef };
     if (maintained.status === "active" && (maintained.scope === "project_department" || maintained.scope === "global")) await authorizePromotion(client, maintained, maintenanceAuthor, request.operatorId, request.proof, maintained.curatorOperatorId, maintained.curatorRoleId);
     if (maintained.status === "unsupported" || maintained.status === "contradicted" || maintained.status === "retired") await authorizeMaintenance(client, maintained, maintained.status, request.operatorId, request.operatorRoleId, request.proof, maintained.reason!, operationRef);
-    const stored = await insertRevision(client, maintained, maintenanceAuthor, operationRef, undefined, undefined, requestHash, request.operatorId, current.departmentId);
+    const stored = await insertRevision(client, maintained, maintenanceAuthor, operationRef, undefined, undefined, requestHash, request.operatorId, request.operatorRoleId);
     return stored.scope === "global" ? publicProjection(stored) : stored;
   });
 }
@@ -318,7 +318,7 @@ export async function retireOrganizationalKnowledge(pool: Pool, request: { reado
     await assertProjectRole(client, request.operatorId, current.sourceProjectId, request.retiredBy);
     // A retry acknowledges only the exact durable retirement command.
     if (current.status === "retired") {
-      if (current.sourceSessionRef !== operationRef || current.reason !== request.reason || current.createdBy !== request.retiredBy || current.promotionOperatorId?.toLowerCase() !== request.operatorId.toLowerCase() || current.promotionRoleId?.toLowerCase() !== request.retiredBy.toLowerCase()) throw new OrganizationalKnowledgeError("conflicting knowledge retirement retry");
+      if (current.sourceSessionRef !== operationRef || current.reason !== request.reason || current.promotionOperatorId?.toLowerCase() !== request.operatorId.toLowerCase() || current.promotionRoleId?.toLowerCase() !== request.retiredBy.toLowerCase()) throw new OrganizationalKnowledgeError("conflicting knowledge retirement retry");
       return current.scope === "global" ? publicProjection(current) : current;
     }
     const retired = retireKnowledge(current, { status: "retired", reason: request.reason });

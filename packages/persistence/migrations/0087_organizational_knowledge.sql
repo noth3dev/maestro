@@ -375,7 +375,7 @@ BEGIN
     INSERT INTO organizational_knowledge
       (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, curator_operator_id, curator_department_id, author_operator_id, author_role_id, operation_payload_hash, promotion_operator_id, promotion_role_id, promotion_marker, reason, created_by, source_session_ref, retention)
     VALUES
-      (k.knowledge_id, k.revision + 1, k.schema_version, k.source_project_id, k.project_id, k.source_goal_id, k.department_id, k.scope, 'unsupported', k.statement, k.rationale, k.source_evidence_ids, k.source_digest_ids, k.episode_ids, k.confidence, k.freshness, k.generalized, k.council_round_id, k.generalized_statement, k.curator_role_id, k.curator_operator_id, k.curator_department_id, k.author_operator_id, k.author_role_id, k.operation_payload_hash, k.promotion_operator_id, k.promotion_role_id, 'source-loss', p_reason, p_actor, 'evidence:' || p_evidence_id::text, k.retention);
+      (k.knowledge_id, k.revision + 1, k.schema_version, k.source_project_id, k.project_id, k.source_goal_id, k.department_id, k.scope, 'unsupported', k.statement, k.rationale, k.source_evidence_ids, k.source_digest_ids, k.episode_ids, k.confidence, k.freshness, k.generalized, k.council_round_id, k.generalized_statement, k.curator_role_id, k.curator_operator_id, k.curator_department_id, k.author_operator_id, k.author_role_id, k.operation_payload_hash, k.promotion_operator_id, k.promotion_role_id, 'source-loss', p_reason, k.created_by, 'evidence:' || p_evidence_id::text, k.retention);
   END LOOP;
 END;
 $$;
