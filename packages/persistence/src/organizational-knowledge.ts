@@ -77,6 +77,7 @@ async function insertRevision(client: Pick<PoolClient, "query">, lesson: Organiz
 export async function proposeOrganizationalKnowledge(pool: Pool, input: OrganizationalKnowledgeProposal, proof: GoalLeaseProof, author: OrganizationalKnowledgeAuthor): Promise<OrganizationalKnowledge> {
   assertValidOrganizationalKnowledgeProposal(input); authorValue(author);
   if (proof.goalId !== input.sourceGoalId) throw new OrganizationalKnowledgeError("knowledge source Goal does not match lease proof");
+  if (author.actorId.trim() !== proof.ownerId) throw new OrganizationalKnowledgeError("proposal author does not match Goal lease owner");
   const proposal = createWorkerProposedKnowledge(input);
   return withGoalAuthority(pool, proof, 63, async (client) => insertRevision(client, proposal, author.actorId.trim(), author.sessionRef.trim()));
 }
@@ -97,32 +98,37 @@ async function assertHead(client: Pick<PoolClient, "query">, roleId: string, dep
   if (role === undefined || role.role_kind !== "department_head" || role.department_id !== departmentId || role.status !== "standing") throw new OrganizationalKnowledgeError("Department Head identity or department is invalid");
 }
 
-export async function promoteOrganizationalKnowledgeToProject(pool: Pool, request: { readonly knowledgeId: string; readonly promoterRoleId: string; readonly departmentId: string }): Promise<OrganizationalKnowledge> {
+export async function promoteOrganizationalKnowledgeToProject(pool: Pool, request: { readonly knowledgeId: string; readonly promoterRoleId: string; readonly promoterOperatorId: string; readonly departmentId: string }): Promise<OrganizationalKnowledge> {
   return withKnowledgeTransaction(pool, async (client) => {
     await assertHead(client, request.promoterRoleId, request.departmentId);
     const current = await readCurrent(client, request.knowledgeId, true);
+    await assertProjectRole(client, request.promoterOperatorId, current.sourceProjectId, request.promoterRoleId);
     const promoted = promoteKnowledgeToProject(current, { promoterRoleKind: "department_head", promoterDepartmentId: request.departmentId });
     await authorizePromotion(client, promoted, request.promoterRoleId);
     return insertRevision(client, promoted, request.promoterRoleId, `promotion:${request.promoterRoleId}`);
   });
 }
 
-export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request: { readonly knowledgeId: string; readonly promoterRoleId: string; readonly departmentId: string; readonly encoreCouncilRoundId: string; readonly corroboratingSourceIds: readonly string[]; readonly corroboratingEpisodeIds: readonly string[]; readonly generalizedStatement: string; readonly curatorRoleId: string }): Promise<OrganizationalKnowledgePublic> {
+export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request: { readonly knowledgeId: string; readonly promoterRoleId: string; readonly promoterOperatorId: string; readonly departmentId: string; readonly encoreCouncilRoundId: string; readonly corroboratingSourceIds: readonly string[]; readonly corroboratingEpisodeIds: readonly string[]; readonly generalizedStatement: string; readonly curatorRoleId: string }): Promise<OrganizationalKnowledgePublic> {
   return withKnowledgeTransaction(pool, async (client) => {
     await assertHead(client, request.promoterRoleId, request.departmentId);
     const current = await readCurrent(client, request.knowledgeId, true);
+    await assertProjectRole(client, request.promoterOperatorId, current.sourceProjectId, request.promoterRoleId);
     await assertHead(client, request.curatorRoleId, request.departmentId);
+    await assertProjectRole(client, request.promoterOperatorId, current.sourceProjectId, request.curatorRoleId);
     if (request.curatorRoleId === request.promoterRoleId) throw new OrganizationalKnowledgeError("global generalization requires an independent Department Head curator");
+    const sourceIds = request.corroboratingSourceIds;
+    if (!Array.isArray(sourceIds) || !Array.isArray(request.corroboratingEpisodeIds) || sourceIds.length < 2 || sourceIds.some((id) => !current.sourceDigestIds.includes(id.toLowerCase()))) throw new OrganizationalKnowledgeError("global corroboration must use bound Improvement Digest sources");
     const approval = await client.query<{ final_verdict: string }>(
       `SELECT s.final_verdict FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id
         WHERE r.round_id = $1 AND r.goal_id = $2 AND s.final_verdict = 'proceed' AND s.same_model_only = false
-          AND r.evidence_ids @> $3::jsonb
+          AND (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text(r.evidence_ids)) = (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text($3::jsonb))
           AND (SELECT count(*) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
-          AND (SELECT count(DISTINCT (j.model_provider || ':' || j.model_id)) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2`,
-      [request.encoreCouncilRoundId, current.sourceGoalId, JSON.stringify([...current.sourceEvidenceIds, ...current.sourceDigestIds])],
+          AND NOT EXISTS (SELECT 1 FROM encore_council_judgments j WHERE j.round_id = r.round_id AND (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text(j.cited_evidence_ids)) IS DISTINCT FROM (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text($3::jsonb)))
+          AND (SELECT count(DISTINCT (j.model_provider || ':' || j.model_id)) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
+          AND (SELECT count(*) FROM encore_council_judgments j JOIN native_execution_bindings b ON b.execution_ref = j.execution_ref AND b.invocation_ref = j.invocation_ref AND b.goal_id = r.goal_id AND b.project_id = $4 AND b.admission_kind = 'encore_reviewer' AND b.actual_model_provider = j.model_provider AND b.actual_model_id = j.model_id WHERE j.round_id = r.round_id) >= 2`,
+      [request.encoreCouncilRoundId, current.sourceGoalId, JSON.stringify(sourceIds), current.sourceProjectId],
     );
-    const sourceIds = request.corroboratingSourceIds;
-    if (!Array.isArray(sourceIds) || !Array.isArray(request.corroboratingEpisodeIds) || sourceIds.length < 2 || sourceIds.some((id) => !current.sourceDigestIds.includes(id.toLowerCase()))) throw new OrganizationalKnowledgeError("global corroboration must use bound Improvement Digest sources");
     for (const sourceId of sourceIds) {
       if (current.sourceEvidenceIds.includes(sourceId.toLowerCase())) {
         const evidence = await client.query("SELECT 1 FROM evidence_records WHERE evidence_id = $1 AND project_id = $2 AND goal_id = $3", [sourceId, current.sourceProjectId, current.sourceGoalId]);
@@ -154,13 +160,17 @@ export async function listOrganizationalKnowledge(pool: Pool, authorization: Org
 }
 
 /** Appends a stale/contradicted score revision; the prior claim remains auditable. */
-export async function refreshOrganizationalKnowledge(pool: Pool, request: { readonly knowledgeId: string; readonly now: string; readonly lastSupportedAt: string; readonly staleAfterMs?: number; readonly contradicted?: boolean; readonly actorId: string }): Promise<OrganizationalKnowledge> {
-  if (request.actorId !== "knowledge-decay-system") throw new OrganizationalKnowledgeError("knowledge decay is restricted to the knowledge-decay system actor");
-  return withKnowledgeTransaction(pool, async (client) => {
+export async function refreshOrganizationalKnowledge(pool: Pool, request: { readonly knowledgeId: string; readonly now: string; readonly lastSupportedAt: string; readonly staleAfterMs?: number; readonly contradicted?: boolean; readonly proof: GoalLeaseProof; readonly operatorId: string }): Promise<OrganizationalKnowledge> {
+  return withGoalAuthority(pool, request.proof, 89, async (client) => {
+    const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [request.operatorId]);
+    if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("knowledge maintenance requires an active operator");
     const current = await readCurrent(client, request.knowledgeId, true);
+    if (current.sourceGoalId !== request.proof.goalId) throw new OrganizationalKnowledgeError("knowledge source Goal is outside the lease");
     const decayed = decayKnowledge(current, { now: request.now, lastSupportedAt: request.lastSupportedAt, ...(request.staleAfterMs === undefined ? {} : { staleAfterMs: request.staleAfterMs }), ...(request.contradicted === undefined ? {} : { contradicted: request.contradicted }) });
     if (decayed.revision === current.revision) return current;
-    return insertRevision(client, decayed, "knowledge-decay", "system:knowledge-decay");
+    const maintenanceAuthor = current.createdBy;
+    if (maintenanceAuthor === undefined) throw new OrganizationalKnowledgeError("knowledge maintenance requires durable source author");
+    return insertRevision(client, { ...decayed, createdBy: maintenanceAuthor, sourceSessionRef: "system:knowledge-decay" }, maintenanceAuthor, "system:knowledge-decay");
   });
 }
 
