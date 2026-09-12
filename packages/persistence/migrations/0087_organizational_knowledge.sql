@@ -368,6 +368,7 @@ DROP TRIGGER IF EXISTS source_evidence_loss_events_immutable ON source_evidence_
 CREATE TRIGGER source_evidence_loss_events_immutable BEFORE UPDATE OR DELETE ON source_evidence_loss_events FOR EACH STATEMENT EXECUTE FUNCTION reject_source_evidence_loss_event_mutation();
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON source_evidence_loss_events FROM PUBLIC;
 
+DROP FUNCTION IF EXISTS propagate_organizational_knowledge_evidence_loss(uuid, text, text);
 CREATE OR REPLACE FUNCTION propagate_organizational_knowledge_evidence_loss(p_evidence_id uuid, p_reason text, p_actor text, p_role_id text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE k record;
 BEGIN
