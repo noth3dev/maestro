@@ -66,7 +66,8 @@ function publicProjection(lesson: OrganizationalKnowledge): OrganizationalKnowle
 function authorValue(author: OrganizationalKnowledgeAuthor): void {
   if (!author || typeof author.actorId !== "string" || author.actorId.trim() === "" || author.actorId.length > 256 || typeof author.sessionRef !== "string" || author.sessionRef.trim() === "" || author.sessionRef.length > 256) throw new OrganizationalKnowledgeError("organizational knowledge author is invalid");
 }
-async function authorizePromotion(client: Pick<PoolClient, "query">, lesson: OrganizationalKnowledge, roleId: string, operatorId: string, proof: GoalLeaseProof, curatorOperatorId?: string, curatorRoleId?: string): Promise<void> {
+async function authorizePromotion(client: Pick<PoolClient, "query">, lesson: OrganizationalKnowledge, roleId: string, operatorId: string, proof: GoalLeaseProof, operationPayloadHash: string, curatorOperatorId?: string, curatorRoleId?: string): Promise<void> {
+  await client.query("SELECT set_config('maestro.knowledge_promotion_payload_hash', $1, true)", [operationPayloadHash]);
   await client.query("SELECT authorize_knowledge_promotion($1, $2, $3, $4, $5, $6, $7::uuid, $8::uuid, $9::uuid, $10, $11::bigint, $12::uuid, $13)", [randomUUID(), lesson.knowledgeId, lesson.revision, lesson.scope, roleId, lesson.departmentId, operatorId, lesson.sourceProjectId, lesson.sourceGoalId, proof.ownerId, proof.fencingToken, curatorOperatorId ?? null, curatorRoleId ?? null]);
 }
 
@@ -158,7 +159,7 @@ export async function promoteOrganizationalKnowledgeToProject(pool: Pool, reques
       return current;
     }
     const promoted = promoteKnowledgeToProject(current, { promoterRoleKind: "department_head", promoterDepartmentId: request.departmentId });
-    await authorizePromotion(client, promoted, request.promoterRoleId, request.promoterOperatorId, request.proof);
+    await authorizePromotion(client, promoted, request.promoterRoleId, request.promoterOperatorId, request.proof, payloadHash);
     return insertRevision(client, promoted, promoted.createdBy!, operationRef, undefined, undefined, payloadHash, request.promoterOperatorId, request.promoterRoleId);
   });
 }
@@ -226,7 +227,7 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
     const approved = approval.rowCount === 1;
     const promotion: GlobalKnowledgePromotion = { encoreCouncilApproved: approved, corroboratingSourceIds: sourceIds, corroboratingEpisodeIds: episodeIds, generalizedStatement: request.generalizedStatement, curatorRoleId: request.curatorRoleId, curatorOperatorId: request.curatorOperatorId, curatorDepartmentId, councilRoundId: request.encoreCouncilRoundId };
     const promoted = promoteKnowledgeToGlobal(current, promotion);
-    await authorizePromotion(client, promoted, request.promoterRoleId, request.promoterOperatorId, request.proof, request.curatorOperatorId, request.curatorRoleId);
+    await authorizePromotion(client, promoted, request.promoterRoleId, request.promoterOperatorId, request.proof, payloadHash, request.curatorOperatorId, request.curatorRoleId);
     const stored = await insertRevision(client, promoted, promoted.createdBy!, operationRef, undefined, undefined, payloadHash, request.promoterOperatorId, request.promoterRoleId);
     return publicProjection(stored);
   });
@@ -276,7 +277,7 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
     const maintained = { ...decayed, createdBy: maintenanceAuthor, sourceSessionRef: operationRef };
     if (maintained.status === "active" && (maintained.scope === "project_department" || maintained.scope === "global")) {
       if (maintained.promotionOperatorId === undefined || maintained.promotionRoleId === undefined) throw new OrganizationalKnowledgeError("knowledge maintenance requires durable promotion identity");
-      await authorizePromotion(client, maintained, maintained.promotionRoleId, maintained.promotionOperatorId, request.proof, maintained.curatorOperatorId, maintained.curatorRoleId);
+      await authorizePromotion(client, maintained, maintained.promotionRoleId, maintained.promotionOperatorId, request.proof, requestHash, maintained.curatorOperatorId, maintained.curatorRoleId);
     }
     if (maintained.status === "unsupported" || maintained.status === "contradicted" || maintained.status === "retired") await authorizeMaintenance(client, maintained, maintained.status, request.operatorId, request.operatorRoleId, request.proof, maintained.reason!, operationRef);
     const maintenanceOperator = maintained.status === "active" ? undefined : request.operatorId;
@@ -308,21 +309,22 @@ export async function markKnowledgeUnsupportedForEvidence(pool: Pool, evidenceId
 
 export async function markKnowledgeUnsupportedForDigest(pool: Pool, digestId: string, reason: string, proof: GoalLeaseProof, operatorId: string, operatorRoleId: string): Promise<readonly string[]> {
   if (!/^[-0-9a-f]{36}$/i.test(digestId) || reason.trim() === "") throw new OrganizationalKnowledgeError("digest source loss request is invalid");
+  const canonicalDigestId = digestId.toLowerCase();
   return withGoalAuthority(pool, proof, 88, async (client) => {
     const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [operatorId]);
     if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("source loss requires an active operator");
-    const digest = await client.query<{ goal_id: string; project_id: string; goal_project_id: string }>("SELECT d.goal_id, d.project_id, g.project_id AS goal_project_id FROM improvement_digests d JOIN goals g ON g.goal_id = d.goal_id WHERE d.digest_id = $1", [digestId.toLowerCase()]);
+    const digest = await client.query<{ goal_id: string; project_id: string; goal_project_id: string }>("SELECT d.goal_id, d.project_id, g.project_id AS goal_project_id FROM improvement_digests d JOIN goals g ON g.goal_id = d.goal_id WHERE d.digest_id = $1", [canonicalDigestId]);
     if (digest.rowCount !== 1 || digest.rows[0]!.goal_id !== proof.goalId || digest.rows[0]!.project_id !== digest.rows[0]!.goal_project_id) throw new OrganizationalKnowledgeError("digest source is outside the Goal lease/project");
     await assertProjectMembership(client, operatorId, digest.rows[0]!.project_id);
     await assertProjectRole(client, operatorId, digest.rows[0]!.project_id, operatorRoleId);
     const criticalRole = await client.query("SELECT 1 FROM permanent_roles WHERE status = 'standing' AND ((role_id = $1 AND role_kind = 'department_head') OR ($1 = 'ceo' AND role_id = 'concertmaster' AND role_kind = 'concertmaster'))", [operatorRoleId]);
     if (criticalRole.rowCount !== 1) throw new OrganizationalKnowledgeError("source loss requires a standing Department Head or CEO role");
-    await client.query("SELECT authorize_knowledge_digest_loss($1, $2::uuid, $3::uuid, $4::uuid, $5, $6::bigint, $7, $8::uuid, $9)", [randomUUID(), digestId.toLowerCase(), digest.rows[0]!.goal_id, digest.rows[0]!.project_id, proof.ownerId, proof.fencingToken, reason, operatorId, operatorRoleId]);
-    const replay = await client.query<{ knowledge_id: string; reason: string | null; created_by: string; promotion_operator_id: string | null; promotion_role_id: string | null }>("SELECT k.knowledge_id, k.reason, k.created_by, k.promotion_operator_id, k.promotion_role_id FROM organizational_knowledge k WHERE k.status = 'unsupported' AND k.source_session_ref = $1", [`digest:${digestId.toLowerCase()}`]);
+    await client.query("SELECT authorize_knowledge_digest_loss($1, $2::uuid, $3::uuid, $4::uuid, $5, $6::bigint, $7, $8::uuid, $9)", [randomUUID(), canonicalDigestId, digest.rows[0]!.goal_id, digest.rows[0]!.project_id, proof.ownerId, proof.fencingToken, reason, operatorId, operatorRoleId]);
+    const replay = await client.query<{ knowledge_id: string; reason: string | null; created_by: string; promotion_operator_id: string | null; promotion_role_id: string | null }>("SELECT k.knowledge_id, k.reason, k.created_by, k.promotion_operator_id, k.promotion_role_id FROM organizational_knowledge k WHERE k.status = 'unsupported' AND k.source_session_ref = $1", [`digest:${canonicalDigestId}`]);
     if (replay.rowCount) { if (replay.rows.some((row) => row.reason !== reason || row.promotion_operator_id?.toLowerCase() !== operatorId.toLowerCase() || row.promotion_role_id?.toLowerCase() !== operatorRoleId.toLowerCase())) throw new OrganizationalKnowledgeError("conflicting digest source-loss retry"); return replay.rows.map((row) => row.knowledge_id); }
-    const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_digest_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([digestId.toLowerCase()])]);
+    const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_digest_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([canonicalDigestId])]);
     const ids: string[] = [];
-    for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await authorizeMaintenance(client, unsupported, "unsupported", operatorId, operatorRoleId, proof, reason, `digest:${digestId}`); await insertRevision(client, unsupported, current.createdBy!, `digest:${digestId}`, undefined, undefined, undefined, operatorId, operatorRoleId); ids.push(current.knowledgeId); }
+    for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await authorizeMaintenance(client, unsupported, "unsupported", operatorId, operatorRoleId, proof, reason, `digest:${canonicalDigestId}`); await insertRevision(client, unsupported, current.createdBy!, `digest:${canonicalDigestId}`, undefined, undefined, undefined, operatorId, operatorRoleId); ids.push(current.knowledgeId); }
     return ids;
   });
 }
