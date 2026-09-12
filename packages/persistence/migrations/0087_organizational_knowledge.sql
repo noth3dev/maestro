@@ -149,12 +149,14 @@ ALTER TABLE knowledge_promotion_authorizations DROP CONSTRAINT IF EXISTS knowled
 ALTER TABLE knowledge_promotion_authorizations ADD CONSTRAINT knowledge_promotion_authorizations_text_safety CHECK (concat_ws('|', owner_id, role_id, department_id, curator_department_id, curator_role_id) !~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----|(^|[^a-z])(email|phone|ssn|social security|home address|personal information)([^a-z]|$))');
 
 CREATE TABLE IF NOT EXISTS knowledge_refresh_operations (
-  knowledge_id uuid NOT NULL, operation_ref text NOT NULL CHECK (btrim(operation_ref) <> '' AND length(operation_ref) <= 256), payload_hash char(64) NOT NULL CHECK (payload_hash ~ '^[0-9a-f]{64}$'), operator_id uuid NOT NULL, retention retention_class NOT NULL DEFAULT 'project_lifetime', created_at timestamptz NOT NULL DEFAULT transaction_timestamp(), PRIMARY KEY (knowledge_id, operation_ref)
+  knowledge_id uuid NOT NULL, operation_ref text NOT NULL CHECK (btrim(operation_ref) <> '' AND length(operation_ref) <= 256 AND operation_ref !~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----|(^|[^a-z])(email|phone|ssn|social security|home address|personal information)([^a-z]|$))'), payload_hash char(64) NOT NULL CHECK (payload_hash ~ '^[0-9a-f]{64}$'), operator_id uuid NOT NULL, retention retention_class NOT NULL DEFAULT 'project_lifetime', created_at timestamptz NOT NULL DEFAULT transaction_timestamp(), PRIMARY KEY (knowledge_id, operation_ref)
 );
 ALTER TABLE knowledge_refresh_operations ADD COLUMN IF NOT EXISTS retention retention_class;
 UPDATE knowledge_refresh_operations SET retention = 'project_lifetime' WHERE retention IS NULL;
 ALTER TABLE knowledge_refresh_operations ALTER COLUMN retention SET DEFAULT 'project_lifetime';
 ALTER TABLE knowledge_refresh_operations ALTER COLUMN retention SET NOT NULL;
+ALTER TABLE knowledge_refresh_operations DROP CONSTRAINT IF EXISTS knowledge_refresh_operations_operation_ref_safety;
+ALTER TABLE knowledge_refresh_operations ADD CONSTRAINT knowledge_refresh_operations_operation_ref_safety CHECK (operation_ref !~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----|(^|[^a-z])(email|phone|ssn|social security|home address|personal information)([^a-z]|$))');
 
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_refresh_operations FROM PUBLIC;
 
