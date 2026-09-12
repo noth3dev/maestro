@@ -6,8 +6,9 @@ import { grantProjectMembership } from "./project-membership.js";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";
 import { deleteEvidenceSource } from "./evidence.js";
+import { recordImprovementDigest } from "./improvement-digest.js";
 import {
-  listOrganizationalKnowledge, promoteOrganizationalKnowledgeToGlobal, refreshOrganizationalKnowledge,
+  listOrganizationalKnowledge, markKnowledgeUnsupportedForDigest, promoteOrganizationalKnowledgeToGlobal, refreshOrganizationalKnowledge,
   promoteOrganizationalKnowledgeToProject, proposeOrganizationalKnowledge, retireOrganizationalKnowledge,
   type OrganizationalKnowledgeProposalRecord,
 } from "./organizational-knowledge.js";
@@ -96,6 +97,16 @@ describeDatabase("organizational knowledge persistence", () => {
     const contradicted = await refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-21T00:00:00.000Z", lastSupportedAt: "2026-09-20T00:00:00.000Z", contradicted: true, actorId: "knowledge-decay-system" });
     expect(contradicted.status).toBe("contradicted");
     await expect(listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering" })).resolves.toMatchObject([{ knowledgeId: promoted.knowledgeId, status: "contradicted" }]);
+  });
+
+  it("marks digest-sourced knowledge unsupported through the source-loss path", async () => {
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
+    const digest = await recordImprovementDigest(pool, { schemaVersion: 1, projectId, goalId, episodeId: "digest-episode", trigger: "goal_completed", situation: "A bounded task completed.", selectedDecision: "Keep the gate.", rejectedAlternatives: [], observedResult: "The gate held.", metrics: [], confidence: 0.8, sourceRefs: [{ kind: "goal", sourceId: goalId }] }, proof, { actorId: "worker", sessionRef: "session:worker" });
+    const proposed = await proposeOrganizationalKnowledge(pool, proposal({ sourceEvidenceIds: [], sourceDigestIds: [digest.digestId] }), proof, { actorId: "worker", sessionRef: "session:worker" });
+    await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, promoterRoleId: "head-engineering", departmentId: "engineering" });
+    const affected = await markKnowledgeUnsupportedForDigest(pool, digest.digestId, "digest provenance was withdrawn", "evidence-source-loss");
+    expect(affected).toContain(proposed.knowledgeId);
+    await expect(listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering" })).resolves.toMatchObject([{ knowledgeId: proposed.knowledgeId, status: "unsupported" }]);
   });
 
   it("marks source-evidence loss unsupported and retires without deleting provenance", async () => {
