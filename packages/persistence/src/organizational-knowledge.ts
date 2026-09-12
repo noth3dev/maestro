@@ -24,7 +24,7 @@ interface KnowledgeRow {
   knowledge_id: string; revision: number; schema_version: number; source_project_id: string; project_id: string | null; source_goal_id: string;
   department_id: string; scope: OrganizationalKnowledge["scope"]; status: OrganizationalKnowledgeStatus; statement: string; rationale: string;
   source_evidence_ids: string[]; source_digest_ids: string[]; episode_ids: string[]; confidence: number; freshness: number; generalized: boolean;
-  council_round_id: string | null; generalized_statement: string | null; curator_role_id: string | null; curator_operator_id: string | null; curator_department_id: string | null; author_operator_id: string | null; author_role_id: string | null; operation_payload_hash: string | null; promotion_operator_id: string | null; promotion_role_id: string | null; promotion_marker: string; reason: string | null; created_by: string; source_session_ref: string; created_at: Date; retention?: string;
+  council_round_id: string | null; generalized_statement: string | null; curator_role_id: string | null; curator_operator_id: string | null; curator_department_id: string | null; author_operator_id: string | null; author_role_id: string | null; operation_payload_hash: string | null; promotion_operator_id: string | null; promotion_role_id: string | null; promotion_marker: string; reason: string | null; created_by: string; source_session_ref: string; created_at: Date; retention: string;
 }
 const COLUMNS = "knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, curator_operator_id, curator_department_id, author_operator_id, author_role_id, operation_payload_hash, promotion_operator_id, promotion_role_id, promotion_marker, reason, created_by, source_session_ref, created_at, retention";
 const INSERT_COLUMNS = COLUMNS.replace(", created_at", "");
@@ -54,7 +54,7 @@ function map(row: KnowledgeRow): OrganizationalKnowledge {
     ...(row.operation_payload_hash === null ? {} : { operationPayloadHash: row.operation_payload_hash }),
     ...(row.promotion_operator_id === null ? {} : { promotionOperatorId: row.promotion_operator_id }),
     ...(row.promotion_role_id === null ? {} : { promotionRoleId: row.promotion_role_id }),
-    createdAt: row.created_at.toISOString(), createdBy: row.created_by, sourceSessionRef: row.source_session_ref,
+    createdAt: row.created_at.toISOString(), createdBy: row.created_by, sourceSessionRef: row.source_session_ref, retention: row.retention,
   };
   return Object.freeze({ ...value, sourceEvidenceIds: Object.freeze([...value.sourceEvidenceIds]), sourceDigestIds: Object.freeze([...value.sourceDigestIds]), episodeIds: Object.freeze([...value.episodeIds]) });
 }
@@ -245,7 +245,7 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
     if (operationRef.length > 256) throw new OrganizationalKnowledgeError("knowledge maintenance idempotency key is invalid");
     const priorOperation = await client.query<{ payload_hash: string; operator_id: string }>("SELECT payload_hash, operator_id FROM knowledge_refresh_operations WHERE knowledge_id = $1 AND operation_ref = $2", [current.knowledgeId, operationRef]);
     if (priorOperation.rowCount === 1 && (priorOperation.rows[0]!.payload_hash !== requestHash || priorOperation.rows[0]!.operator_id.toLowerCase() !== request.operatorId.toLowerCase())) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
-    if (priorOperation.rowCount === 0) await client.query("INSERT INTO knowledge_refresh_operations (knowledge_id, operation_ref, payload_hash, operator_id) VALUES ($1, $2, $3, $4::uuid)", [current.knowledgeId, operationRef, requestHash, request.operatorId]);
+    if (priorOperation.rowCount === 0) await client.query("INSERT INTO knowledge_refresh_operations (knowledge_id, operation_ref, payload_hash, operator_id, retention) VALUES ($1, $2, $3, $4::uuid, $5)", [current.knowledgeId, operationRef, requestHash, request.operatorId, current.retention]);
     if (current.sourceSessionRef === operationRef) {
       if (current.promotionOperatorId?.toLowerCase() !== request.operatorId.toLowerCase() || current.promotionRoleId?.toLowerCase() !== current.departmentId.toLowerCase() || current.operationPayloadHash !== requestHash) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
       return current.scope === "global" ? publicProjection(current) : current;

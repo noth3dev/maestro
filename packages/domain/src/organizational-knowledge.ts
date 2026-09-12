@@ -43,6 +43,7 @@ export interface OrganizationalKnowledge extends Omit<OrganizationalKnowledgePro
   readonly createdAt: string;
   readonly createdBy?: string;
   readonly sourceSessionRef?: string;
+  readonly retention?: string;
 }
 
 export interface DepartmentHeadPromotion {
