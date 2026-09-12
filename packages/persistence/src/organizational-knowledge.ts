@@ -243,6 +243,9 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
     const operationRef = `system:knowledge-decay:${request.idempotencyKey.trim()}`;
     const requestHash = operationHash({ now: request.now, lastSupportedAt: request.lastSupportedAt, staleAfterMs: request.staleAfterMs ?? null, contradicted: request.contradicted ?? null });
     if (operationRef.length > 256) throw new OrganizationalKnowledgeError("knowledge maintenance idempotency key is invalid");
+    const priorOperation = await client.query<{ payload_hash: string; operator_id: string }>("SELECT payload_hash, operator_id FROM knowledge_refresh_operations WHERE knowledge_id = $1 AND operation_ref = $2", [current.knowledgeId, operationRef]);
+    if (priorOperation.rowCount === 1 && (priorOperation.rows[0]!.payload_hash !== requestHash || priorOperation.rows[0]!.operator_id.toLowerCase() !== request.operatorId.toLowerCase())) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
+    if (priorOperation.rowCount === 0) await client.query("INSERT INTO knowledge_refresh_operations (knowledge_id, operation_ref, payload_hash, operator_id) VALUES ($1, $2, $3, $4::uuid)", [current.knowledgeId, operationRef, requestHash, request.operatorId]);
     if (current.sourceSessionRef === operationRef) {
       if (current.promotionOperatorId?.toLowerCase() !== request.operatorId.toLowerCase() || current.promotionRoleId?.toLowerCase() !== current.departmentId.toLowerCase() || current.operationPayloadHash !== requestHash) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
       return current.scope === "global" ? publicProjection(current) : current;
