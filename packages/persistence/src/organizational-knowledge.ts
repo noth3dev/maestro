@@ -310,7 +310,7 @@ export async function retireOrganizationalKnowledge(pool: Pool, request: { reado
     await assertProjectRole(client, request.operatorId, current.sourceProjectId, request.retiredBy);
     // A retry acknowledges only the exact durable retirement command.
     if (current.status === "retired") {
-      if (current.sourceSessionRef !== operationRef || current.reason !== request.reason || current.createdBy !== request.retiredBy || current.authorOperatorId?.toLowerCase() !== request.operatorId.toLowerCase()) throw new OrganizationalKnowledgeError("conflicting knowledge retirement retry");
+      if (current.sourceSessionRef !== operationRef || current.reason !== request.reason || current.createdBy !== request.retiredBy || current.promotionOperatorId?.toLowerCase() !== request.operatorId.toLowerCase() || current.promotionRoleId?.toLowerCase() !== request.retiredBy.toLowerCase()) throw new OrganizationalKnowledgeError("conflicting knowledge retirement retry");
       return current.scope === "global" ? publicProjection(current) : current;
     }
     const retired = retireKnowledge(current, { status: "retired", reason: request.reason });
