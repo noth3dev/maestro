@@ -165,15 +165,21 @@ CREATE TABLE IF NOT EXISTS knowledge_maintenance_authorizations (
   status text NOT NULL CHECK (status IN ('unsupported', 'contradicted', 'retired')), operator_id uuid NOT NULL,
   role_id text NOT NULL CHECK (btrim(role_id) <> '' AND length(role_id) <= 256), owner_id text NOT NULL CHECK (btrim(owner_id) <> '' AND length(owner_id) <= 256),
   fencing_token bigint NOT NULL CHECK (fencing_token > 0), reason text NOT NULL CHECK (btrim(reason) <> '' AND length(reason) <= 1024),
-  source_session_ref text NOT NULL CHECK (btrim(source_session_ref) <> '' AND length(source_session_ref) <= 256), created_at timestamptz NOT NULL DEFAULT transaction_timestamp()
+  source_session_ref text NOT NULL CHECK (btrim(source_session_ref) <> '' AND length(source_session_ref) <= 256), retention retention_class NOT NULL DEFAULT 'project_lifetime', created_at timestamptz NOT NULL DEFAULT transaction_timestamp()
 );
 CREATE OR REPLACE FUNCTION authorize_knowledge_maintenance(p_token text, p_knowledge_id uuid, p_revision integer, p_status text, p_operator_id uuid, p_role_id text, p_owner_id text, p_fencing_token bigint, p_reason text, p_source_session_ref text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
   IF btrim(p_token) = '' OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM permanent_roles WHERE role_id = p_role_id AND role_kind IN ('department_head', 'ceo') AND status = 'standing') OR NOT EXISTS (SELECT 1 FROM organizational_knowledge k JOIN operator_project_roles r ON r.project_id = k.source_project_id AND r.role_id = p_role_id AND r.operator_id = p_operator_id AND r.active = true JOIN operator_project_memberships m ON m.project_id = r.project_id AND m.operator_id = r.operator_id AND m.active = true WHERE k.knowledge_id = p_knowledge_id AND k.revision = p_revision - 1) OR NOT EXISTS (SELECT 1 FROM goal_leases l JOIN organizational_knowledge k ON k.source_goal_id = l.goal_id WHERE k.knowledge_id = p_knowledge_id AND k.revision = p_revision - 1 AND l.owner_id = p_owner_id AND l.fencing_token = p_fencing_token AND l.expires_at > clock_timestamp()) THEN RAISE EXCEPTION 'knowledge maintenance authorization context is invalid'; END IF;
-  INSERT INTO knowledge_maintenance_authorizations (token_hash, knowledge_id, revision, status, operator_id, role_id, owner_id, fencing_token, reason, source_session_ref) VALUES (encode(public.digest(p_token, 'sha256'), 'hex'), p_knowledge_id, p_revision, p_status, p_operator_id, p_role_id, p_owner_id, p_fencing_token, p_reason, p_source_session_ref);
+  INSERT INTO knowledge_maintenance_authorizations (token_hash, knowledge_id, revision, status, operator_id, role_id, owner_id, fencing_token, reason, source_session_ref, retention) SELECT encode(public.digest(p_token, 'sha256'), 'hex'), p_knowledge_id, p_revision, p_status, p_operator_id, p_role_id, p_owner_id, p_fencing_token, p_reason, p_source_session_ref, k.retention FROM organizational_knowledge k WHERE k.knowledge_id = p_knowledge_id AND k.revision = p_revision - 1;
   PERFORM set_config('maestro.knowledge_maintenance_token', p_token, true); PERFORM set_config('maestro.knowledge_maintenance_operator', p_operator_id::text, true); PERFORM set_config('maestro.knowledge_maintenance_role', p_role_id, true); PERFORM set_config('maestro.knowledge_maintenance_owner', p_owner_id, true); PERFORM set_config('maestro.knowledge_maintenance_fence', p_fencing_token::text, true);
 END;
 $$;
+ALTER TABLE knowledge_maintenance_authorizations ADD COLUMN IF NOT EXISTS retention retention_class;
+UPDATE knowledge_maintenance_authorizations a SET retention = k.retention FROM organizational_knowledge k WHERE k.knowledge_id = a.knowledge_id AND k.revision = a.revision - 1 AND a.retention IS NULL;
+UPDATE knowledge_maintenance_authorizations SET retention = 'project_lifetime' WHERE retention IS NULL;
+ALTER TABLE knowledge_maintenance_authorizations ALTER COLUMN retention SET DEFAULT 'project_lifetime';
+ALTER TABLE knowledge_maintenance_authorizations ALTER COLUMN retention SET NOT NULL;
+
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_maintenance_authorizations FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION authorize_knowledge_maintenance(text, uuid, integer, text, uuid, text, text, bigint, text, text) FROM PUBLIC;
 
@@ -183,16 +189,16 @@ BEGIN
   IF NEW.scope = 'global' AND (NEW.statement ILIKE '%' || NEW.source_project_id::text || '%' OR NEW.rationale ILIKE '%' || NEW.source_project_id::text || '%' OR COALESCE(NEW.generalized_statement, '') ILIKE '%' || NEW.source_project_id::text || '%' OR COALESCE(NEW.generalized_statement, '') ILIKE '%' || NEW.source_goal_id::text || '%') THEN
     RAISE EXCEPTION 'global organizational knowledge cannot contain raw project identity';
   END IF;
-  IF NEW.statement ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----)' OR NEW.rationale ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----)' OR COALESCE(NEW.generalized_statement, '') ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----)' THEN
+  IF NEW.statement ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(?:sk|pk)-[A-Za-z0-9_-]{16,}|eyJ[A-Za-z0-9_-]{10,}\.)' OR NEW.rationale ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(?:sk|pk)-[A-Za-z0-9_-]{16,}|eyJ[A-Za-z0-9_-]{10,}\.)' OR COALESCE(NEW.generalized_statement, '') ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(?:sk|pk)-[A-Za-z0-9_-]{16,}|eyJ[A-Za-z0-9_-]{10,}\.)' THEN
     RAISE EXCEPTION 'organizational knowledge contains secret-like material';
   END IF;
   IF NEW.statement ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)' OR NEW.rationale ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)' OR COALESCE(NEW.generalized_statement, '') ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)' THEN
     RAISE EXCEPTION 'organizational knowledge contains personal information';
   END IF;
-  IF NEW.generalized_statement IS NOT NULL AND (NEW.generalized_statement ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----)' OR NEW.generalized_statement ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)' OR NEW.generalized_statement ~* '\m(raw|project-specific|source project|private project)\M') THEN
+  IF NEW.generalized_statement IS NOT NULL AND (NEW.generalized_statement ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(?:sk|pk)-[A-Za-z0-9_-]{16,}|eyJ[A-Za-z0-9_-]{10,}\.)' OR NEW.generalized_statement ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)' OR NEW.generalized_statement ~* '\m(raw|project-specific|source project|private project)\M') THEN
     RAISE EXCEPTION 'generalized organizational knowledge contains unsafe material';
   END IF;
-  IF concat_ws('|', NEW.reason, NEW.created_by, NEW.source_session_ref, NEW.curator_role_id, NEW.curator_department_id, NEW.author_role_id, NEW.promotion_role_id, NEW.department_id, NEW.promotion_marker) ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----)' THEN
+  IF concat_ws('|', NEW.reason, NEW.created_by, NEW.source_session_ref, NEW.curator_role_id, NEW.curator_department_id, NEW.author_role_id, NEW.promotion_role_id, NEW.department_id, NEW.promotion_marker) ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(?:sk|pk)-[A-Za-z0-9_-]{16,}|eyJ[A-Za-z0-9_-]{10,}\.)' THEN
     RAISE EXCEPTION 'organizational knowledge metadata contains secret-like material';
   END IF;
   IF concat_ws('|', NEW.reason, NEW.created_by, NEW.source_session_ref, NEW.curator_role_id, NEW.curator_department_id, NEW.author_role_id, NEW.promotion_role_id, NEW.department_id, NEW.promotion_marker) ~* '(^|[^a-z])(email|phone|telephone|ssn|social security|home address|personal information)([^a-z]|$)' THEN
@@ -362,7 +368,7 @@ DROP TRIGGER IF EXISTS source_evidence_loss_events_immutable ON source_evidence_
 CREATE TRIGGER source_evidence_loss_events_immutable BEFORE UPDATE OR DELETE ON source_evidence_loss_events FOR EACH STATEMENT EXECUTE FUNCTION reject_source_evidence_loss_event_mutation();
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON source_evidence_loss_events FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION propagate_organizational_knowledge_evidence_loss(p_evidence_id uuid, p_reason text, p_actor text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+CREATE OR REPLACE FUNCTION propagate_organizational_knowledge_evidence_loss(p_evidence_id uuid, p_reason text, p_actor text, p_role_id text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE k record;
 BEGIN
   FOR k IN
@@ -375,11 +381,11 @@ BEGIN
     INSERT INTO organizational_knowledge
       (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, curator_operator_id, curator_department_id, author_operator_id, author_role_id, operation_payload_hash, promotion_operator_id, promotion_role_id, promotion_marker, reason, created_by, source_session_ref, retention)
     VALUES
-      (k.knowledge_id, k.revision + 1, k.schema_version, k.source_project_id, k.project_id, k.source_goal_id, k.department_id, k.scope, 'unsupported', k.statement, k.rationale, k.source_evidence_ids, k.source_digest_ids, k.episode_ids, k.confidence, k.freshness, k.generalized, k.council_round_id, k.generalized_statement, k.curator_role_id, k.curator_operator_id, k.curator_department_id, k.author_operator_id, k.author_role_id, k.operation_payload_hash, k.promotion_operator_id, k.promotion_role_id, 'source-loss', p_reason, k.created_by, 'evidence:' || p_evidence_id::text, k.retention);
+      (k.knowledge_id, k.revision + 1, k.schema_version, k.source_project_id, k.project_id, k.source_goal_id, k.department_id, k.scope, 'unsupported', k.statement, k.rationale, k.source_evidence_ids, k.source_digest_ids, k.episode_ids, k.confidence, k.freshness, k.generalized, k.council_round_id, k.generalized_statement, k.curator_role_id, k.curator_operator_id, k.curator_department_id, k.author_operator_id, k.author_role_id, k.operation_payload_hash, p_actor::uuid, p_role_id, 'source-loss', p_reason, k.created_by, 'evidence:' || p_evidence_id::text, k.retention);
   END LOOP;
 END;
 $$;
-REVOKE EXECUTE ON FUNCTION propagate_organizational_knowledge_evidence_loss(uuid, text, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION propagate_organizational_knowledge_evidence_loss(uuid, text, text, text) FROM PUBLIC;
 
 
 -- Replace the original evidence immutability trigger function while retaining
@@ -529,7 +535,7 @@ BEGIN
        AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')
        AND EXISTS (SELECT 1 FROM source_evidence_loss_events e WHERE e.evidence_id = OLD.evidence_id AND e.goal_id = OLD.goal_id AND e.project_id = OLD.project_id AND e.owner_id = a.owner_id AND e.fencing_token = a.fencing_token AND e.reason = a.reason AND e.recorded_by = a.recorded_by)
   ) THEN
-    PERFORM propagate_organizational_knowledge_evidence_loss(OLD.evidence_id, (SELECT a.reason FROM source_evidence_loss_authorizations a WHERE a.evidence_id = OLD.evidence_id AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')), (SELECT a.recorded_by FROM source_evidence_loss_authorizations a WHERE a.evidence_id = OLD.evidence_id AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')));
+    PERFORM propagate_organizational_knowledge_evidence_loss(OLD.evidence_id, (SELECT a.reason FROM source_evidence_loss_authorizations a WHERE a.evidence_id = OLD.evidence_id AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')), (SELECT a.recorded_by FROM source_evidence_loss_authorizations a WHERE a.evidence_id = OLD.evidence_id AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')), (SELECT a.role_id FROM source_evidence_loss_authorizations a WHERE a.evidence_id = OLD.evidence_id AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')));
     DELETE FROM source_evidence_loss_authorizations WHERE evidence_id = OLD.evidence_id AND token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex');
     RETURN OLD;
   END IF;
@@ -575,7 +581,7 @@ BEGIN
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_maintenance(text, uuid, integer, text, uuid, text, text, bigint, text, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_organizational_knowledge_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_source_evidence_loss_event_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
-  EXECUTE pg_catalog.format('ALTER FUNCTION %I.propagate_organizational_knowledge_evidence_loss(uuid, text, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.propagate_organizational_knowledge_evidence_loss(uuid, text, text, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_evidence_record_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.validate_source_evidence_loss_event_binding() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.validate_source_evidence_loss_authorization_binding() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
