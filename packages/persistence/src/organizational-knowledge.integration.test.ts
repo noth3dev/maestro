@@ -145,7 +145,7 @@ describeDatabase("organizational knowledge persistence", () => {
     const digest = await recordImprovementDigest(pool, { schemaVersion: 1, projectId, goalId, episodeId: "digest-episode", trigger: "goal_completed", situation: "A bounded task completed.", selectedDecision: "Keep the gate.", rejectedAlternatives: [], observedResult: "The gate held.", metrics: [], confidence: 0.8, sourceRefs: [{ kind: "goal", sourceId: goalId }] }, proof, { actorId: "worker", sessionRef: "session:worker", operatorId });
     const proposed = await proposeOrganizationalKnowledge(pool, proposal({ sourceEvidenceIds: [], sourceDigestIds: [digest.digestId] }), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "engineering" });
     await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering" });
-    const affected = await markKnowledgeUnsupportedForDigest(pool, digest.digestId, "digest provenance was withdrawn", proof, operatorId, "engineering");
+    const affected = await markKnowledgeUnsupportedForDigest(pool, digest.digestId, "digest provenance was withdrawn", proof, operatorId, "head-engineering");
     expect(affected).toContain(proposed.knowledgeId);
     await expect(listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering", proof })).resolves.toMatchObject([{ knowledgeId: proposed.knowledgeId, status: "unsupported" }]);
   });
@@ -156,12 +156,12 @@ describeDatabase("organizational knowledge persistence", () => {
     const promoted = await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering" });
     await pool.query("SELECT set_config('maestro.source_evidence_loss', '1', true)");
     await expect(pool.query("DELETE FROM evidence_records WHERE evidence_id = $1", [evidenceId2])).rejects.toThrow(/immutable|authorization|invalid/);
-    await expect(deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", "worker", proof, "engineering")).rejects.toThrow(/operator|authorized/);
+    await expect(deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", "worker", proof, "head-engineering")).rejects.toThrow(/operator|authorized/);
     await pool.query("UPDATE local_operators SET active = false WHERE operator_id = $1", [operatorId]);
-    await expect(deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId, proof, "engineering")).rejects.toThrow(/operator|authorized|active/);
+    await expect(deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId, proof, "head-engineering")).rejects.toThrow(/operator|authorized|active/);
     await pool.query("UPDATE local_operators SET active = true WHERE operator_id = $1", [operatorId]);
-    await expect(deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId, { ...proof, fencingToken: "999999" }, "engineering")).rejects.toThrow(/stale|lease/);
-    await deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId, proof, "engineering");
+    await expect(deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId, { ...proof, fencingToken: "999999" }, "head-engineering")).rejects.toThrow(/stale|lease/);
+    await deleteEvidenceSource(pool, evidenceId, "source artifact was deleted", operatorId, proof, "head-engineering");
     await expect(pool.query("SELECT count(*)::int AS count FROM source_evidence_loss_events WHERE evidence_id = $1 AND goal_id = $2 AND project_id = $3 AND owner_id = $4 AND fencing_token = $5 AND reason = $6", [evidenceId, goalId, projectId, proof.ownerId, proof.fencingToken, "source artifact was deleted"])).resolves.toMatchObject({ rows: [{ count: 1 }] });
     await expect(pool.query("SELECT count(*)::int AS count FROM evidence_records WHERE evidence_id = $1", [evidenceId])).resolves.toMatchObject({ rows: [{ count: 0 }] });
     await expect(listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering", proof })).resolves.toMatchObject([{ knowledgeId: proposed.knowledgeId, status: "unsupported" }]);
