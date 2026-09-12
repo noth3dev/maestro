@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { applyAllMigrations } from "./test-migrations.js";
@@ -22,7 +24,7 @@ describeDatabase("organizational knowledge persistence", () => {
   const schema = `knowledge_${randomUUID().replaceAll("-", "")}`;
   const scopedUrl = (() => { const url = new URL(databaseUrl); url.searchParams.set("options", `-c search_path=${schema}`); return url.toString(); })();
   let pool: Pool; let projectId: string; let otherProjectId: string; let goalId: string; let evidenceId: string; let evidenceId2: string;
-  beforeAll(async () => { await basePool.query(`CREATE SCHEMA ${schema}`); pool = new Pool({ connectionString: scopedUrl }); await applyAllMigrations(pool); await applyAllMigrations(pool); await bootstrapPermanentOrganization(pool); });
+  beforeAll(async () => { await basePool.query(`CREATE SCHEMA ${schema}`); pool = new Pool({ connectionString: scopedUrl }); await applyAllMigrations(pool); await bootstrapPermanentOrganization(pool); const migration0087 = readFileSync(fileURLToPath(new URL("../migrations/0087_organizational_knowledge.sql", import.meta.url)), "utf8"); await pool.query(migration0087); await pool.query(migration0087); });
   beforeEach(async () => {
     projectId = randomUUID(); otherProjectId = randomUUID(); goalId = randomUUID(); evidenceId = randomUUID(); evidenceId2 = randomUUID();
     await pool.query("INSERT INTO local_operators (operator_id) VALUES ($1) ON CONFLICT DO NOTHING", [operatorId]);
