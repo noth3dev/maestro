@@ -56,6 +56,7 @@ describeDatabase("organizational knowledge persistence", () => {
   it("requires Council approval and multiple episodes, then exposes global knowledge across projects", async () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
     const proposed = await proposeOrganizationalKnowledge(pool, proposal({ generalized: true, statement: "Use bounded validation gates." , episodeIds: ["episode-a", "episode-b"] }), proof, { actorId: "worker", sessionRef: "session:worker" });
+    await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, promoterRoleId: "head-engineering", departmentId: "engineering" });
     await expect(promoteOrganizationalKnowledgeToGlobal(pool, { knowledgeId: proposed.knowledgeId, promoterRoleId: "head-engineering", departmentId: "engineering", encoreCouncilRoundId: randomUUID() })).rejects.toThrow(/Council|approval/);
     const roundId = randomUUID();
     await pool.query("INSERT INTO encore_council_rounds (round_id, goal_id, question, criteria, evidence_ids, trigger_reasons, reviewer_count) VALUES ($1, $2, 'approve knowledge', '[]', '[]', '[]', 2)", [roundId, goalId]);

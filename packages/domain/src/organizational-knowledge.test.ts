@@ -36,15 +36,15 @@ describe("organizational knowledge promotion gates", () => {
   });
 
   it("requires generalized safe content and Encore Council approval for global reuse", () => {
-    const proposal = createWorkerProposedKnowledge(base({ generalized: true, statement: "Use bounded validation gates for changes." }));
+    const proposal = promoteKnowledgeToProject(createWorkerProposedKnowledge(base({ generalized: true, statement: "Use bounded validation gates for changes." })), { promoterRoleKind: "department_head", promoterDepartmentId: "engineering" });
     expect(() => promoteKnowledgeToGlobal(proposal, { encoreCouncilApproved: false, corroboratingEpisodeIds: ["episode-a", "episode-b"] })).toThrow(/Council/);
     expect(() => promoteKnowledgeToGlobal(proposal, { encoreCouncilApproved: true, corroboratingEpisodeIds: ["episode-a", "episode-b"], generalized: false })).toThrow(/generalized/);
-    expect(() => promoteKnowledgeToGlobal(createWorkerProposedKnowledge(base({ generalized: false })), { encoreCouncilApproved: true, corroboratingEpisodeIds: ["episode-a", "episode-b"] })).toThrow(/generalized/);
+    expect(() => promoteKnowledgeToGlobal(promoteKnowledgeToProject(createWorkerProposedKnowledge(base({ generalized: false })), { promoterRoleKind: "department_head", promoterDepartmentId: "engineering" }), { encoreCouncilApproved: true, corroboratingEpisodeIds: ["episode-a", "episode-b"] })).toThrow(/generalized/);
     expect(promoteKnowledgeToGlobal(proposal, { encoreCouncilApproved: true, corroboratingEpisodeIds: ["episode-a", "episode-b"] })).toMatchObject({ scope: "global", status: "active", projectId: null });
   });
 
   it("rejects a single corroborating episode for global promotion", () => {
-    const proposal = createWorkerProposedKnowledge(base({ generalized: true, statement: "Use bounded validation gates." }));
+    const proposal = promoteKnowledgeToProject(createWorkerProposedKnowledge(base({ generalized: true, statement: "Use bounded validation gates." })), { promoterRoleKind: "department_head", promoterDepartmentId: "engineering" });
     expect(() => promoteKnowledgeToGlobal(proposal, { encoreCouncilApproved: true, corroboratingEpisodeIds: ["episode-a"] })).toThrow(/episode|corroborat/i);
   });
 

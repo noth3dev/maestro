@@ -125,7 +125,7 @@ function assertGeneralizedSafe(lesson: OrganizationalKnowledge, promotion: Globa
 }
 export function promoteKnowledgeToGlobal(lesson: OrganizationalKnowledge, promotion: GlobalKnowledgePromotion): OrganizationalKnowledge {
   if (lesson.scope === "global") return lesson;
-  if (lesson.scope !== "worker_proposed" && lesson.scope !== "project_department") throw new InvalidOrganizationalKnowledgeError("lesson is not promotable");
+  if (lesson.scope !== "project_department") throw new InvalidOrganizationalKnowledgeError("only Department Head project knowledge may be promoted globally");
   assertGeneralizedSafe(lesson, promotion);
   return copy({ ...lesson, revision: lesson.revision + 1, scope: "global", status: "active", projectId: null, councilRoundId: promotion.councilRoundId ?? null, episodeIds: Object.freeze([...new Set([...lesson.episodeIds, ...promotion.corroboratingEpisodeIds])]), createdAt: new Date().toISOString() });
 }
