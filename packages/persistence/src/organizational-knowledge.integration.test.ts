@@ -113,7 +113,7 @@ describeDatabase("organizational knowledge persistence", () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
     const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker" });
     const promoted = await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, promoterRoleId: "head-engineering", promoterOperatorId: operatorId, departmentId: "engineering" });
-    await expect(refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId })).rejects.toThrow(/restricted|system/);
+    await expect(refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId: randomUUID() })).rejects.toThrow(/active|operator/);
     const stale = await refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000, proof, operatorId });
     expect(stale.confidence).toBeLessThan(promoted.confidence);
     const contradicted = await refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-21T00:00:00.000Z", lastSupportedAt: "2026-09-20T00:00:00.000Z", contradicted: true, proof, operatorId });
