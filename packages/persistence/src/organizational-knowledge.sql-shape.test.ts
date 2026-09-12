@@ -22,5 +22,8 @@ describe("organizational knowledge persistence SQL shape", () => {
     expect(migration).toContain("b.operator_id IS DISTINCT FROM NEW.author_operator_id::text");
     expect(migration).toContain("a.role_id = NEW.promotion_role_id");
     expect(migration).toContain("INSERT INTO knowledge_proposal_authorizations (revision,");
+    const bounds = migration.split("\n").find((line) => line.includes("organizational_knowledge_text_bounds")) ?? "";
+    expect((bounds.match(/\(/g) ?? []).length).toBe((bounds.match(/\)/g) ?? []).length);
+
   });
 });
