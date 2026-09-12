@@ -74,8 +74,20 @@ BEGIN
     ref_id := (item #>> '{}')::uuid;
     IF NOT EXISTS (SELECT 1 FROM improvement_digests WHERE digest_id = ref_id AND project_id = NEW.source_project_id AND goal_id = NEW.source_goal_id) THEN RAISE EXCEPTION 'organizational knowledge digest reference is missing or outside source project'; END IF;
   END LOOP;
-  IF NEW.scope = 'global' AND NEW.status = 'active' AND NOT EXISTS (SELECT 1 FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id WHERE r.round_id = NEW.council_round_id AND r.goal_id = NEW.source_goal_id AND s.final_verdict = 'proceed' AND s.same_model_only = false AND r.evidence_ids @> NEW.source_evidence_ids) THEN
-    RAISE EXCEPTION 'global organizational knowledge requires an approved Encore Council round';
+  IF NEW.scope = 'global' AND NEW.status = 'active' AND (jsonb_array_length(NEW.source_evidence_ids) <> 0 OR jsonb_array_length(NEW.source_digest_ids) < 2) THEN
+    RAISE EXCEPTION 'global organizational knowledge requires two durable Improvement Digest sources';
+  END IF;
+  IF NEW.scope = 'global' AND NEW.status = 'active' AND (SELECT count(DISTINCT d.episode_id) FROM improvement_digests d WHERE d.digest_id::text IN (SELECT value #>> '{}' FROM jsonb_array_elements(NEW.source_digest_ids))) < 2 THEN
+    RAISE EXCEPTION 'global organizational knowledge requires distinct durable digest episodes';
+  END IF;
+  IF NEW.scope = 'global' AND NEW.status = 'active' AND NOT EXISTS (
+    SELECT 1 FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id
+     WHERE r.round_id = NEW.council_round_id AND r.goal_id = NEW.source_goal_id AND s.final_verdict = 'proceed'
+       AND s.same_model_only = false AND r.evidence_ids @> (NEW.source_evidence_ids || NEW.source_digest_ids)
+       AND (SELECT count(*) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
+       AND (SELECT count(DISTINCT (j.model_provider || ':' || j.model_id)) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
+  ) THEN
+    RAISE EXCEPTION 'global organizational knowledge requires an approved independent Encore Council round';
   END IF;
   RETURN NEW;
 END;
@@ -132,12 +144,38 @@ $$;
 -- Replace the original evidence immutability trigger function while retaining
 -- its ordinary fail-closed behavior. The scoped GUC is set only by the
 -- deleteEvidenceSource application boundary.
+
+CREATE TABLE IF NOT EXISTS source_evidence_loss_authorizations (
+  token_hash char(64) PRIMARY KEY CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+  evidence_id uuid NOT NULL,
+  reason text NOT NULL CHECK (btrim(reason) <> '' AND length(reason) <= 1024),
+  recorded_by text NOT NULL CHECK (btrim(recorded_by) <> '' AND length(recorded_by) <= 256),
+  created_at timestamptz NOT NULL DEFAULT transaction_timestamp()
+);
+
 CREATE OR REPLACE FUNCTION reject_evidence_record_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  IF TG_OP = 'DELETE' AND current_setting('maestro.source_evidence_loss', true) = '1' THEN
-    PERFORM propagate_organizational_knowledge_evidence_loss(OLD.evidence_id, COALESCE(current_setting('maestro.source_evidence_loss_reason', true), 'source evidence was lost'));
+  IF TG_OP = 'DELETE' AND EXISTS (
+    SELECT 1 FROM source_evidence_loss_authorizations a
+     WHERE a.evidence_id = OLD.evidence_id
+       AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')
+  ) THEN
+    PERFORM propagate_organizational_knowledge_evidence_loss(OLD.evidence_id, (SELECT a.reason FROM source_evidence_loss_authorizations a WHERE a.evidence_id = OLD.evidence_id AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')));
+    DELETE FROM source_evidence_loss_authorizations WHERE evidence_id = OLD.evidence_id AND token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex');
     RETURN OLD;
   END IF;
   RAISE EXCEPTION 'evidence records are immutable';
+END;
+$$;
+
+DO $$
+DECLARE knowledge_schema text := current_schema();
+BEGIN
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.validate_organizational_knowledge_insert() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_organizational_knowledge_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.current_organizational_knowledge(uuid) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_source_evidence_loss_event_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.propagate_organizational_knowledge_evidence_loss(uuid, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_evidence_record_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
 END;
 $$;

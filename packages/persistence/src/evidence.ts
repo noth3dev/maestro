@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { verifyEvidenceRecord, type EvidenceContentReader, type EvidenceRecord } from "@maestro/evidence";
 import type { Pool, PoolClient } from "pg";
 
@@ -86,8 +86,12 @@ export async function deleteEvidenceSource(pool: Pool, evidenceId: string, reaso
   const client: PoolClient = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query("SELECT set_config('maestro.source_evidence_loss', '1', true)");
-    await client.query("SELECT set_config('maestro.source_evidence_loss_reason', $1, true)", [reason]);
+    const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1", [recordedBy]);
+    if (operator.rowCount !== 1) throw new Error("source evidence loss requires an authorized operator");
+    const token = randomUUID();
+    const tokenHash = createHash("sha256").update(token, "utf8").digest("hex");
+    await client.query("INSERT INTO source_evidence_loss_authorizations (token_hash, evidence_id, reason, recorded_by) VALUES ($1, $2, $3, $4)", [tokenHash, evidenceId.toLowerCase(), reason, recordedBy]);
+    await client.query("SELECT set_config('maestro.source_evidence_loss_token', $1, true)", [token]);
     const event = await client.query("INSERT INTO source_evidence_loss_events (event_id, evidence_id, reason, recorded_by) VALUES ($1, $2, $3, $4) RETURNING event_id", [randomUUID(), evidenceId.toLowerCase(), reason, recordedBy]);
     if (event.rowCount !== 1) throw new Error("source evidence loss event was not recorded");
     const deleted = await client.query("DELETE FROM evidence_records WHERE evidence_id = $1", [evidenceId.toLowerCase()]);

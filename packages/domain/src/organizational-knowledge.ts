@@ -49,8 +49,6 @@ export interface GlobalKnowledgePromotion {
   readonly corroboratingEpisodeIds: readonly string[];
   readonly generalizedStatement: string;
   readonly curatorRoleId: string;
-  readonly noRawProjectContent: true;
-  readonly noPersonalInformation: true;
   readonly councilRoundId?: string;
 }
 export interface KnowledgeDecayOptions {
@@ -67,6 +65,7 @@ export class InvalidOrganizationalKnowledgeError extends Error {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SAFE_ID = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,255}$/;
 const SECRET = /(?:authorization\s*:\s*bearer|bearer\s+|password\s*[:=]|passwd\s*[:=]|secret\s*[:=]|api[_-]?key\s*[:=]|access[_-]?token\s*[:=]|refresh[_-]?token\s*[:=]|private[_-]?key|credential\s*[:=]|-----BEGIN.*PRIVATE KEY-----|(?:^|[^a-z0-9])(?:sk|pk)-[a-z0-9_-]{16,}(?:$|[^a-z0-9])|eyj[a-z0-9_-]+\.[a-z0-9_-]+\.[a-z0-9_-]+)/i;
+const RAW_PROJECT = /\b(raw|project-specific|source project|private project)\b/i;
 const PERSONAL = /(?:^|[^a-z])(email|e-mail|phone|telephone|mobile|ssn|social security|home address|street address|date of birth|birth date|personal information|personally identifiable)(?:[^a-z]|$)/i;
 const MAX_TEXT = 4096;
 const MAX_LIST = 32;
@@ -125,16 +124,16 @@ export function promoteKnowledgeToProject(lesson: OrganizationalKnowledge, promo
 function assertGeneralizedSafe(lesson: OrganizationalKnowledge, promotion: GlobalKnowledgePromotion): void {
   asText(promotion.generalizedStatement, "generalizedStatement");
   asId(promotion.curatorRoleId, "curatorRoleId");
-  if (promotion.noRawProjectContent !== true || promotion.noPersonalInformation !== true || PERSONAL.test(promotion.generalizedStatement) || SECRET.test(promotion.generalizedStatement) || promotion.generalizedStatement.toLowerCase().includes(lesson.sourceProjectId.toLowerCase()) || promotion.generalizedStatement.toLowerCase().includes(lesson.sourceGoalId.toLowerCase())) throw new InvalidOrganizationalKnowledgeError("global knowledge contains raw project content or personal information");
+  if (PERSONAL.test(promotion.generalizedStatement) || SECRET.test(promotion.generalizedStatement) || (RAW_PROJECT.test(promotion.generalizedStatement) || promotion.generalizedStatement.toLowerCase().includes(lesson.sourceProjectId.toLowerCase())) || promotion.generalizedStatement.toLowerCase().includes(lesson.sourceGoalId.toLowerCase())) throw new InvalidOrganizationalKnowledgeError("global knowledge contains raw project content or personal information");
   if (PERSONAL.test(lesson.statement) || PERSONAL.test(lesson.rationale) || SECRET.test(lesson.statement) || SECRET.test(lesson.rationale)) throw new InvalidOrganizationalKnowledgeError("global knowledge contains unsafe source content");
   if (!promotion.encoreCouncilApproved) throw new InvalidOrganizationalKnowledgeError("Encore Council approval is required for global knowledge");
-  if (!Array.isArray(promotion.corroboratingSourceIds) || !Array.isArray(promotion.corroboratingEpisodeIds) || promotion.corroboratingSourceIds.length < 2 || promotion.corroboratingSourceIds.length !== promotion.corroboratingEpisodeIds.length || new Set(promotion.corroboratingSourceIds.map((id) => id.toLowerCase())).size !== promotion.corroboratingSourceIds.length || new Set(promotion.corroboratingEpisodeIds.map((id) => id.toLowerCase())).size !== promotion.corroboratingEpisodeIds.length || promotion.corroboratingSourceIds.some((id, index) => !UUID.test(id) || !(lesson.sourceEvidenceIds.includes(id.toLowerCase()) || lesson.sourceDigestIds.includes(id.toLowerCase())) || !lesson.episodeIds.some((episodeId) => episodeId.toLowerCase() === promotion.corroboratingEpisodeIds[index]!.toLowerCase()))) throw new InvalidOrganizationalKnowledgeError("global knowledge requires distinct source-bound corroboration across episodes");
+  if (!Array.isArray(promotion.corroboratingSourceIds) || !Array.isArray(promotion.corroboratingEpisodeIds) || promotion.corroboratingSourceIds.length < 2 || promotion.corroboratingSourceIds.length !== promotion.corroboratingEpisodeIds.length || new Set(promotion.corroboratingSourceIds.map((id) => id.toLowerCase())).size !== promotion.corroboratingSourceIds.length || new Set(promotion.corroboratingEpisodeIds.map((id) => id.toLowerCase())).size !== promotion.corroboratingEpisodeIds.length || promotion.corroboratingSourceIds.some((id, index) => !UUID.test(id) || !lesson.sourceDigestIds.includes(id.toLowerCase()) || !lesson.episodeIds.some((episodeId) => episodeId.toLowerCase() === promotion.corroboratingEpisodeIds[index]!.toLowerCase()))) throw new InvalidOrganizationalKnowledgeError("global knowledge requires distinct source-bound corroboration across episodes");
 }
 export function promoteKnowledgeToGlobal(lesson: OrganizationalKnowledge, promotion: GlobalKnowledgePromotion): OrganizationalKnowledge {
   if (lesson.scope === "global") return lesson;
   if (lesson.scope !== "project_department") throw new InvalidOrganizationalKnowledgeError("only Department Head project knowledge may be promoted globally");
   assertGeneralizedSafe(lesson, promotion);
-  return copy({ ...lesson, revision: lesson.revision + 1, scope: "global", status: "active", projectId: null, generalized: true, statement: promotion.generalizedStatement, generalizedStatement: promotion.generalizedStatement, curatorRoleId: promotion.curatorRoleId, councilRoundId: promotion.councilRoundId ?? null, createdAt: new Date().toISOString() });
+  return copy({ ...lesson, revision: lesson.revision + 1, scope: "global", status: "active", projectId: null, generalized: true, statement: promotion.generalizedStatement, rationale: "Generalized organizational guidance.", generalizedStatement: promotion.generalizedStatement, curatorRoleId: promotion.curatorRoleId, councilRoundId: promotion.councilRoundId ?? null, createdAt: new Date().toISOString() });
 }
 
 export function decayOrganizationalKnowledge(lesson: OrganizationalKnowledge, options: KnowledgeDecayOptions): OrganizationalKnowledge {
