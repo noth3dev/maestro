@@ -37,6 +37,16 @@ CREATE TABLE IF NOT EXISTS organizational_knowledge (
 );
 CREATE INDEX IF NOT EXISTS organizational_knowledge_project_idx ON organizational_knowledge (project_id, department_id, created_at, knowledge_id, revision);
 CREATE INDEX IF NOT EXISTS organizational_knowledge_global_idx ON organizational_knowledge (scope, department_id, created_at, knowledge_id, revision) WHERE scope = 'global';
+CREATE TABLE IF NOT EXISTS knowledge_promotion_authorizations (
+  token_hash char(64) PRIMARY KEY CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+  knowledge_id uuid NOT NULL,
+  revision integer NOT NULL,
+  scope text NOT NULL CHECK (scope IN ('project_department', 'global')),
+  role_id text NOT NULL,
+  department_id text NOT NULL REFERENCES departments(department_id),
+  created_at timestamptz NOT NULL DEFAULT transaction_timestamp()
+);
+
 
 CREATE OR REPLACE FUNCTION validate_organizational_knowledge_insert() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE item jsonb; ref_id uuid; expected_revision integer;
@@ -60,6 +70,18 @@ BEGIN
   END IF;
   IF NEW.scope = 'global' AND NEW.status = 'active' AND NOT EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND prior.scope = 'project_department' AND prior.status = 'active') THEN
     RAISE EXCEPTION 'global organizational knowledge requires project promotion lineage';
+  END IF;
+  IF NEW.status = 'active' AND NEW.scope IN ('project_department', 'global') AND NOT EXISTS (SELECT 1 FROM permanent_roles WHERE role_id = NEW.created_by AND role_kind = 'department_head' AND department_id = NEW.department_id AND status = 'standing') THEN
+    RAISE EXCEPTION 'active organizational knowledge requires a standing Department Head';
+  END IF;
+  IF NEW.status = 'active' AND NEW.scope IN ('project_department', 'global') AND NOT EXISTS (
+    SELECT 1 FROM knowledge_promotion_authorizations a
+     WHERE a.knowledge_id = NEW.knowledge_id AND a.revision = NEW.revision AND a.scope = NEW.scope
+       AND a.role_id = NEW.created_by AND a.department_id = NEW.department_id
+       AND a.token_hash = encode(public.digest(current_setting('maestro.knowledge_promotion_token', true), 'sha256'), 'hex')
+  ) THEN RAISE EXCEPTION 'organizational knowledge promotion authorization is missing or mismatched'; END IF;
+  IF NEW.status = 'active' AND NEW.scope IN ('project_department', 'global') THEN
+    DELETE FROM knowledge_promotion_authorizations WHERE knowledge_id = NEW.knowledge_id AND revision = NEW.revision;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM goals WHERE goal_id = NEW.source_goal_id AND project_id = NEW.source_project_id) THEN RAISE EXCEPTION 'organizational knowledge source Goal is outside source project'; END IF;
   IF NEW.project_id IS DISTINCT FROM NEW.source_project_id AND NEW.scope <> 'global' THEN RAISE EXCEPTION 'project organizational knowledge must retain source project scope'; END IF;
@@ -136,10 +158,11 @@ CREATE OR REPLACE FUNCTION propagate_organizational_knowledge_evidence_loss(p_ev
 DECLARE k record;
 BEGIN
   FOR k IN
-    SELECT DISTINCT ON (knowledge_id) * FROM organizational_knowledge
-     WHERE status NOT IN ('unsupported', 'retired')
-       AND source_evidence_ids @> jsonb_build_array(p_evidence_id::text)
-     ORDER BY knowledge_id, revision DESC
+    SELECT current.* FROM organizational_knowledge current
+     WHERE current.status NOT IN ('unsupported', 'retired')
+       AND current.source_evidence_ids @> jsonb_build_array(p_evidence_id::text)
+       AND current.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = current.knowledge_id)
+     FOR UPDATE
   LOOP
     INSERT INTO organizational_knowledge
       (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, promotion_marker, reason, created_by, source_session_ref)
@@ -170,6 +193,8 @@ BEGIN
   IF TG_OP = 'DELETE' AND EXISTS (
     SELECT 1 FROM source_evidence_loss_authorizations a
      WHERE a.evidence_id = OLD.evidence_id AND a.goal_id = OLD.goal_id AND a.project_id = OLD.project_id
+       AND a.owner_id = current_setting('maestro.source_loss_owner', true)
+       AND a.fencing_token = current_setting('maestro.source_loss_fence', true)::bigint
        AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')
   ) THEN
     PERFORM propagate_organizational_knowledge_evidence_loss(OLD.evidence_id, (SELECT a.reason FROM source_evidence_loss_authorizations a WHERE a.evidence_id = OLD.evidence_id AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')));

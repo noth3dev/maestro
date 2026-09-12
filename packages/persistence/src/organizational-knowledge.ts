@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import {
   assertValidOrganizationalKnowledgeProposal, createWorkerProposedKnowledge, decayOrganizationalKnowledge as decayKnowledge, promoteKnowledgeToGlobal, promoteKnowledgeToProject,
   retireOrganizationalKnowledge as retireKnowledge, type GlobalKnowledgePromotion, type OrganizationalKnowledge,
@@ -57,6 +58,13 @@ function publicProjection(lesson: OrganizationalKnowledge): OrganizationalKnowle
 function authorValue(author: OrganizationalKnowledgeAuthor): void {
   if (!author || typeof author.actorId !== "string" || author.actorId.trim() === "" || author.actorId.length > 256 || typeof author.sessionRef !== "string" || author.sessionRef.trim() === "" || author.sessionRef.length > 256) throw new OrganizationalKnowledgeError("organizational knowledge author is invalid");
 }
+async function authorizePromotion(client: Pick<PoolClient, "query">, lesson: OrganizationalKnowledge, roleId: string): Promise<void> {
+  const token = randomUUID();
+  const tokenHash = createHash("sha256").update(token, "utf8").digest("hex");
+  await client.query("INSERT INTO knowledge_promotion_authorizations (token_hash, knowledge_id, revision, scope, role_id, department_id) VALUES ($1, $2, $3, $4, $5, $6)", [tokenHash, lesson.knowledgeId, lesson.revision, lesson.scope, roleId, lesson.departmentId]);
+  await client.query("SELECT set_config('maestro.knowledge_promotion_token', $1, true)", [token]);
+}
+
 async function insertRevision(client: Pick<PoolClient, "query">, lesson: OrganizationalKnowledge, createdBy: string, sourceSessionRef: string): Promise<OrganizationalKnowledge> {
   const result = await client.query<KnowledgeRow>(
     `INSERT INTO organizational_knowledge (${INSERT_COLUMNS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24) RETURNING ${COLUMNS}`,
@@ -94,6 +102,7 @@ export async function promoteOrganizationalKnowledgeToProject(pool: Pool, reques
     await assertHead(client, request.promoterRoleId, request.departmentId);
     const current = await readCurrent(client, request.knowledgeId, true);
     const promoted = promoteKnowledgeToProject(current, { promoterRoleKind: "department_head", promoterDepartmentId: request.departmentId });
+    await authorizePromotion(client, promoted, request.promoterRoleId);
     return insertRevision(client, promoted, request.promoterRoleId, `promotion:${request.promoterRoleId}`);
   });
 }
@@ -129,6 +138,7 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
     const approved = approval.rowCount === 1;
     const promotion: GlobalKnowledgePromotion = { encoreCouncilApproved: approved, corroboratingSourceIds: sourceIds, corroboratingEpisodeIds: request.corroboratingEpisodeIds, generalizedStatement: request.generalizedStatement, curatorRoleId: request.curatorRoleId, councilRoundId: request.encoreCouncilRoundId };
     const promoted = promoteKnowledgeToGlobal(current, promotion);
+    await authorizePromotion(client, promoted, request.promoterRoleId);
     const stored = await insertRevision(client, promoted, request.promoterRoleId, `promotion:${request.promoterRoleId}`);
     return publicProjection(stored);
   });
@@ -164,9 +174,11 @@ export async function markKnowledgeUnsupportedForEvidence(pool: Pool, evidenceId
   });
 }
 
-export async function markKnowledgeUnsupportedForDigest(pool: Pool, digestId: string, reason: string, actorId: string): Promise<readonly string[]> {
-  if (actorId !== "evidence-source-loss" || !/^[-0-9a-f]{36}$/i.test(digestId) || reason.trim() === "") throw new OrganizationalKnowledgeError("digest source loss request is invalid");
-  return withKnowledgeTransaction(pool, async (client) => {
+export async function markKnowledgeUnsupportedForDigest(pool: Pool, digestId: string, reason: string, proof: GoalLeaseProof): Promise<readonly string[]> {
+  if (!/^[-0-9a-f]{36}$/i.test(digestId) || reason.trim() === "") throw new OrganizationalKnowledgeError("digest source loss request is invalid");
+  return withGoalAuthority(pool, proof, 88, async (client) => {
+    const digest = await client.query<{ goal_id: string }>("SELECT goal_id FROM improvement_digests WHERE digest_id = $1", [digestId.toLowerCase()]);
+    if (digest.rowCount !== 1 || digest.rows[0]!.goal_id !== proof.goalId) throw new OrganizationalKnowledgeError("digest source is outside the Goal lease");
     const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_digest_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([digestId.toLowerCase()])]);
     const ids: string[] = [];
     for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await insertRevision(client, unsupported, "evidence-source-loss", `digest:${digestId}`); ids.push(current.knowledgeId); }
