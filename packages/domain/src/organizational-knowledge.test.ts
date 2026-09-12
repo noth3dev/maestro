@@ -24,6 +24,7 @@ describe("organizational knowledge promotion gates", () => {
     expect(proposal.scope).toBe("worker_proposed");
     expect(proposal.status).toBe("proposed");
     expect(() => promoteKnowledgeToProject(proposal, { promoterRoleKind: "worker", promoterDepartmentId: "engineering" })).toThrow(/Department Head/);
+    expect(() => promoteKnowledgeToGlobal(proposal, { encoreCouncilApproved: true, corroboratingEpisodeIds: ["episode-a", "episode-b"] })).toThrow(/Department Head project/);
     expect(() => promoteKnowledgeToProject(proposal, { promoterRoleKind: "department_head", promoterDepartmentId: "security" })).toThrow(/department/);
     expect(promoteKnowledgeToProject(proposal, { promoterRoleKind: "department_head", promoterDepartmentId: "engineering" })).toMatchObject({ scope: "project_department", status: "active", projectId });
   });

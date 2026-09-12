@@ -1,5 +1,5 @@
 import {
-  assertValidOrganizationalKnowledgeProposal, createWorkerProposedKnowledge, promoteKnowledgeToGlobal, promoteKnowledgeToProject,
+  assertValidOrganizationalKnowledgeProposal, createWorkerProposedKnowledge, decayOrganizationalKnowledge as decayKnowledge, promoteKnowledgeToGlobal, promoteKnowledgeToProject,
   retireOrganizationalKnowledge as retireKnowledge, type GlobalKnowledgePromotion, type OrganizationalKnowledge,
   type OrganizationalKnowledgeProposal, type OrganizationalKnowledgeStatus,
 } from "@maestro/domain";
@@ -99,6 +99,16 @@ export async function listOrganizationalKnowledge(pool: Pool, authorization: Org
   } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 
+/** Appends a stale/contradicted score revision; the prior claim remains auditable. */
+export async function refreshOrganizationalKnowledge(pool: Pool, request: { readonly knowledgeId: string; readonly now: string; readonly lastSupportedAt: string; readonly staleAfterMs?: number; readonly contradicted?: boolean }): Promise<OrganizationalKnowledge> {
+  return withKnowledgeTransaction(pool, async (client) => {
+    const current = await readCurrent(client, request.knowledgeId, true);
+    const decayed = decayKnowledge(current, { now: request.now, lastSupportedAt: request.lastSupportedAt, ...(request.staleAfterMs === undefined ? {} : { staleAfterMs: request.staleAfterMs }), ...(request.contradicted === undefined ? {} : { contradicted: request.contradicted }) });
+    if (decayed.revision === current.revision) return current;
+    return insertRevision(client, decayed, "knowledge-decay", "system:knowledge-decay");
+  });
+}
+
 export async function markKnowledgeUnsupportedForEvidence(pool: Pool, evidenceId: string, reason: string): Promise<readonly string[]> {
   if (!/^[-0-9a-f]{36}$/i.test(evidenceId) || reason.trim() === "") throw new OrganizationalKnowledgeError("evidence id and reason are required");
   return withKnowledgeTransaction(pool, async (client) => {
@@ -112,6 +122,9 @@ export async function markKnowledgeUnsupportedForEvidence(pool: Pool, evidenceId
 export async function retireOrganizationalKnowledge(pool: Pool, request: { readonly knowledgeId: string; readonly reason: string; readonly retiredBy: string }): Promise<OrganizationalKnowledge> {
   return withKnowledgeTransaction(pool, async (client) => {
     const current = await readCurrent(client, request.knowledgeId, true);
+    // A retry after the durable retirement is an acknowledgement, not a new
+    // mutation. The original retired row remains the provenance record.
+    if (current.status === "retired") return current;
     const retired = retireKnowledge(current, { status: "retired", reason: request.reason });
     return insertRevision(client, retired, request.retiredBy, `retirement:${request.retiredBy}`);
   });

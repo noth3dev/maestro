@@ -6,7 +6,7 @@ import { grantProjectMembership } from "./project-membership.js";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";
 import {
-  listOrganizationalKnowledge, markKnowledgeUnsupportedForEvidence, promoteOrganizationalKnowledgeToGlobal,
+  listOrganizationalKnowledge, markKnowledgeUnsupportedForEvidence, promoteOrganizationalKnowledgeToGlobal, refreshOrganizationalKnowledge,
   promoteOrganizationalKnowledgeToProject, proposeOrganizationalKnowledge, retireOrganizationalKnowledge,
   type OrganizationalKnowledgeProposalRecord,
 } from "./organizational-knowledge.js";
@@ -67,6 +67,17 @@ describeDatabase("organizational knowledge persistence", () => {
     await expect(listOrganizationalKnowledge(pool, { operatorId, projectId: otherProjectId })).resolves.toMatchObject([{ knowledgeId: proposed.knowledgeId, scope: "global" }]);
   });
 
+  it("persists stale and contradicted decay as auditable revisions", async () => {
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
+    const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker" });
+    const promoted = await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, promoterRoleId: "head-engineering", departmentId: "engineering" });
+    const stale = await refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-20T00:00:00.000Z", lastSupportedAt: "2026-08-01T00:00:00.000Z", staleAfterMs: 86_400_000 });
+    expect(stale.confidence).toBeLessThan(promoted.confidence);
+    const contradicted = await refreshOrganizationalKnowledge(pool, { knowledgeId: promoted.knowledgeId, now: "2026-09-21T00:00:00.000Z", lastSupportedAt: "2026-09-20T00:00:00.000Z", contradicted: true });
+    expect(contradicted.status).toBe("contradicted");
+    await expect(listOrganizationalKnowledge(pool, { operatorId, projectId })).resolves.toMatchObject([{ knowledgeId: promoted.knowledgeId, status: "contradicted" }]);
+  });
+
   it("marks source-evidence loss unsupported and retires without deleting provenance", async () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
     const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker" });
@@ -74,6 +85,8 @@ describeDatabase("organizational knowledge persistence", () => {
     const unsupported = await markKnowledgeUnsupportedForEvidence(pool, evidenceId, "source artifact was deleted");
     expect(unsupported).toContain(proposed.knowledgeId);
     await expect(retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "Superseded by reviewed guidance.", retiredBy: "head-engineering" })).resolves.toMatchObject({ status: "retired", knowledgeId: promoted.knowledgeId });
+    await expect(retireOrganizationalKnowledge(pool, { knowledgeId: proposed.knowledgeId, reason: "retry", retiredBy: "head-engineering" })).resolves.toMatchObject({ status: "retired", revision: 4 });
     await expect(pool.query("SELECT count(*)::int AS count FROM organizational_knowledge WHERE knowledge_id = $1", [proposed.knowledgeId])).resolves.toMatchObject({ rows: [{ count: 4 }] });
+    await expect(pool.query("UPDATE organizational_knowledge SET reason = 'tampered' WHERE knowledge_id = $1 AND revision = 4", [proposed.knowledgeId])).rejects.toThrow(/append-only/);
   });
 });
