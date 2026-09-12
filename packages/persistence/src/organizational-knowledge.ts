@@ -82,11 +82,6 @@ export async function proposeOrganizationalKnowledge(pool: Pool, input: Organiza
   return withGoalAuthority(pool, proof, 63, async (client) => insertRevision(client, proposal, author.actorId.trim(), author.sessionRef.trim()));
 }
 
-async function withKnowledgeTransaction<T>(pool: Pool, operation: (client: PoolClient) => Promise<T>): Promise<T> {
-  const client = await pool.connect();
-  try { await client.query("BEGIN"); const result = await operation(client); await client.query("COMMIT"); return result; }
-  catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
-}
 async function readCurrent(client: Pick<PoolClient, "query">, knowledgeId: string, lock = false): Promise<OrganizationalKnowledge> {
   const result = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge WHERE knowledge_id = $1 ORDER BY revision DESC LIMIT 1${lock ? " FOR UPDATE" : ""}`, [knowledgeId.trim()]);
   if (result.rowCount !== 1) throw new OrganizationalKnowledgeNotFoundError(`organizational knowledge not found: ${knowledgeId}`);
@@ -105,10 +100,13 @@ async function assertStandingHead(client: Pick<PoolClient, "query">, roleId: str
   return departmentId;
 }
 
-export async function promoteOrganizationalKnowledgeToProject(pool: Pool, request: { readonly knowledgeId: string; readonly promoterRoleId: string; readonly promoterOperatorId: string; readonly departmentId: string }): Promise<OrganizationalKnowledge> {
-  return withKnowledgeTransaction(pool, async (client) => {
+export async function promoteOrganizationalKnowledgeToProject(pool: Pool, request: { readonly knowledgeId: string; readonly promoterRoleId: string; readonly promoterOperatorId: string; readonly departmentId: string; readonly proof: GoalLeaseProof }): Promise<OrganizationalKnowledge> {
+  return withGoalAuthority(pool, request.proof, 91, async (client) => {
+    const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [request.promoterOperatorId]);
+    if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("promotion requires an active operator");
     await assertHead(client, request.promoterRoleId, request.departmentId);
     const current = await readCurrent(client, request.knowledgeId, true);
+    if (current.sourceGoalId !== request.proof.goalId) throw new OrganizationalKnowledgeError("knowledge source Goal is outside the lease");
     await assertProjectRole(client, request.promoterOperatorId, current.sourceProjectId, request.promoterRoleId);
     const promoted = promoteKnowledgeToProject(current, { promoterRoleKind: "department_head", promoterDepartmentId: request.departmentId });
     await authorizePromotion(client, promoted, request.promoterRoleId);
@@ -116,13 +114,24 @@ export async function promoteOrganizationalKnowledgeToProject(pool: Pool, reques
   });
 }
 
-export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request: { readonly knowledgeId: string; readonly promoterRoleId: string; readonly promoterOperatorId: string; readonly departmentId: string; readonly encoreCouncilRoundId: string; readonly corroboratingSourceIds: readonly string[]; readonly corroboratingEpisodeIds: readonly string[]; readonly generalizedStatement: string; readonly curatorRoleId: string }): Promise<OrganizationalKnowledgePublic> {
-  return withKnowledgeTransaction(pool, async (client) => {
+export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request: { readonly knowledgeId: string; readonly promoterRoleId: string; readonly promoterOperatorId: string; readonly departmentId: string; readonly proof: GoalLeaseProof; readonly encoreCouncilRoundId: string; readonly corroboratingSourceIds: readonly string[]; readonly corroboratingEpisodeIds: readonly string[]; readonly generalizedStatement: string; readonly curatorRoleId: string; readonly curatorOperatorId: string }): Promise<OrganizationalKnowledgePublic> {
+  return withGoalAuthority(pool, request.proof, 92, async (client) => {
+    const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [request.promoterOperatorId]);
+    if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("promotion requires an active operator");
     await assertHead(client, request.promoterRoleId, request.departmentId);
     const current = await readCurrent(client, request.knowledgeId, true);
+    if (current.sourceGoalId !== request.proof.goalId) throw new OrganizationalKnowledgeError("knowledge source Goal is outside the lease");
     await assertProjectRole(client, request.promoterOperatorId, current.sourceProjectId, request.promoterRoleId);
+    if (current.scope === "global") {
+      const same = current.generalizedStatement === request.generalizedStatement && current.councilRoundId === request.encoreCouncilRoundId && JSON.stringify(current.sourceDigestIds) === JSON.stringify(request.corroboratingSourceIds.map((id) => id.toLowerCase())) && JSON.stringify(current.episodeIds) === JSON.stringify(request.corroboratingEpisodeIds.map((id) => id.toLowerCase()));
+      if (!same) throw new OrganizationalKnowledgeError("conflicting global promotion retry");
+      return publicProjection(current);
+    }
     await assertStandingHead(client, request.curatorRoleId);
-    await assertProjectRole(client, request.promoterOperatorId, current.sourceProjectId, request.curatorRoleId);
+    const curatorOperator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [request.curatorOperatorId]);
+    if (curatorOperator.rowCount !== 1) throw new OrganizationalKnowledgeError("curator requires an active operator");
+    await assertProjectMembership(client, request.curatorOperatorId, current.sourceProjectId);
+    await assertProjectRole(client, request.curatorOperatorId, current.sourceProjectId, request.curatorRoleId);
     if (request.curatorRoleId === request.promoterRoleId) throw new OrganizationalKnowledgeError("global generalization requires an independent Department Head curator");
     const sourceIds = request.corroboratingSourceIds;
     if (!Array.isArray(sourceIds) || !Array.isArray(request.corroboratingEpisodeIds) || sourceIds.length < 2 || sourceIds.some((id) => !current.sourceDigestIds.includes(id.toLowerCase()))) throw new OrganizationalKnowledgeError("global corroboration must use bound Improvement Digest sources");
@@ -160,7 +169,10 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
 export async function listOrganizationalKnowledge(pool: Pool, authorization: OrganizationalKnowledgeReadAuthorization): Promise<readonly (OrganizationalKnowledge | OrganizationalKnowledgePublic)[]> {
   if (!authorization || typeof authorization.operatorId !== "string" || typeof authorization.projectId !== "string" || typeof authorization.departmentId !== "string") throw new OrganizationalKnowledgeError("knowledge read authorization is required");
   const client = await pool.connect();
-  try { await client.query("BEGIN"); await assertProjectMembership(client, authorization.operatorId, authorization.projectId); await assertProjectRole(client, authorization.operatorId, authorization.projectId, authorization.departmentId);
+  try { await client.query("BEGIN");
+    const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [authorization.operatorId]);
+    if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("knowledge read requires an active operator");
+    await assertProjectMembership(client, authorization.operatorId, authorization.projectId); await assertProjectRole(client, authorization.operatorId, authorization.projectId, authorization.departmentId);
     const result = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status <> 'retired' AND (k.scope = 'global' OR (k.project_id = $1 AND k.scope = 'project_department')) AND k.department_id = $2 AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) ORDER BY k.created_at, k.knowledge_id`, [authorization.projectId, authorization.departmentId]);
     await client.query("COMMIT"); return result.rows.map((row) => { const lesson = map(row); return lesson.scope === "global" ? publicProjection(lesson) : lesson; });
   } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
@@ -175,6 +187,7 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
     if (current.status === "retired") return current.scope === "global" ? publicProjection(current) : current;
     if (current.sourceGoalId !== request.proof.goalId) throw new OrganizationalKnowledgeError("knowledge source Goal is outside the lease");
     await assertProjectMembership(client, request.operatorId, current.sourceProjectId);
+    await assertProjectRole(client, request.operatorId, current.sourceProjectId, current.departmentId);
     const decayed = decayKnowledge(current, { now: request.now, lastSupportedAt: request.lastSupportedAt, ...(request.staleAfterMs === undefined ? {} : { staleAfterMs: request.staleAfterMs }), ...(request.contradicted === undefined ? {} : { contradicted: request.contradicted }) });
     if (decayed.revision === current.revision) return current.scope === "global" ? publicProjection(current) : current;
     const maintenanceAuthor = current.createdBy;
@@ -193,6 +206,7 @@ export async function markKnowledgeUnsupportedForEvidence(pool: Pool, evidenceId
     if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("source loss requires an active operator");
     const source = await client.query<{ goal_id: string; project_id: string; goal_project_id: string }>("SELECT e.goal_id, e.project_id, g.project_id AS goal_project_id FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = $1", [evidenceId.toLowerCase()]);
     if (source.rowCount !== 1 || source.rows[0]!.goal_id !== proof.goalId || source.rows[0]!.project_id !== source.rows[0]!.goal_project_id) throw new OrganizationalKnowledgeError("evidence source is outside the Goal lease/project");
+    await assertProjectMembership(client, operatorId, source.rows[0]!.project_id);
     const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_evidence_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([evidenceId.toLowerCase()])]);
     const ids: string[] = [];
     for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await insertRevision(client, unsupported, operatorId, `evidence:${evidenceId}`); ids.push(current.knowledgeId); }
@@ -207,6 +221,7 @@ export async function markKnowledgeUnsupportedForDigest(pool: Pool, digestId: st
     if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("source loss requires an active operator");
     const digest = await client.query<{ goal_id: string; project_id: string; goal_project_id: string }>("SELECT d.goal_id, d.project_id, g.project_id AS goal_project_id FROM improvement_digests d JOIN goals g ON g.goal_id = d.goal_id WHERE d.digest_id = $1", [digestId.toLowerCase()]);
     if (digest.rowCount !== 1 || digest.rows[0]!.goal_id !== proof.goalId || digest.rows[0]!.project_id !== digest.rows[0]!.goal_project_id) throw new OrganizationalKnowledgeError("digest source is outside the Goal lease/project");
+    await assertProjectMembership(client, operatorId, digest.rows[0]!.project_id);
     const rows = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status NOT IN ('retired','unsupported') AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND k.source_digest_ids @> $1::jsonb FOR UPDATE`, [JSON.stringify([digestId.toLowerCase()])]);
     const ids: string[] = [];
     for (const row of rows.rows) { const current = map(row); const unsupported = retireKnowledge(current, { status: "unsupported", reason }); await insertRevision(client, unsupported, operatorId, `digest:${digestId}`); ids.push(current.knowledgeId); }
@@ -214,7 +229,7 @@ export async function markKnowledgeUnsupportedForDigest(pool: Pool, digestId: st
   });
 }
 
-export async function retireOrganizationalKnowledge(pool: Pool, request: { readonly knowledgeId: string; readonly reason: string; readonly retiredBy: string; readonly proof: GoalLeaseProof; readonly operatorId: string }): Promise<OrganizationalKnowledge> {
+export async function retireOrganizationalKnowledge(pool: Pool, request: { readonly knowledgeId: string; readonly reason: string; readonly retiredBy: string; readonly proof: GoalLeaseProof; readonly operatorId: string }): Promise<OrganizationalKnowledge | OrganizationalKnowledgePublic> {
   return withGoalAuthority(pool, request.proof, 90, async (client) => {
     const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [request.operatorId]);
     if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("knowledge retirement requires an active operator");
@@ -223,7 +238,7 @@ export async function retireOrganizationalKnowledge(pool: Pool, request: { reado
     await assertHead(client, request.retiredBy, current.departmentId);
     await assertProjectRole(client, request.operatorId, current.sourceProjectId, request.retiredBy);
     // A retry after the durable retirement is an acknowledgement, not a new mutation.
-    if (current.status === "retired") return current;
+    if (current.status === "retired") return current.scope === "global" ? publicProjection(current) : current;
     const retired = retireKnowledge(current, { status: "retired", reason: request.reason });
     return insertRevision(client, retired, request.retiredBy, `retirement:${request.retiredBy}`);
   });

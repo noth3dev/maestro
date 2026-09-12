@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS knowledge_promotion_authorizations (
 CREATE OR REPLACE FUNCTION validate_organizational_knowledge_insert() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE item jsonb; ref_id uuid; expected_revision integer;
 BEGIN
-  IF NEW.scope = 'global' AND (NEW.statement ILIKE '%' || NEW.source_project_id::text || '%' OR NEW.rationale ILIKE '%' || NEW.source_project_id::text || '%') THEN
+  IF NEW.scope = 'global' AND (NEW.statement ILIKE '%' || NEW.source_project_id::text || '%' OR NEW.rationale ILIKE '%' || NEW.source_project_id::text || '%' OR COALESCE(NEW.generalized_statement, '') ILIKE '%' || NEW.source_project_id::text || '%' OR COALESCE(NEW.generalized_statement, '') ILIKE '%' || NEW.source_goal_id::text || '%') THEN
     RAISE EXCEPTION 'global organizational knowledge cannot contain raw project identity';
   END IF;
   IF NEW.statement ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----)' OR NEW.rationale ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----)' THEN
@@ -78,10 +78,13 @@ BEGIN
     SELECT 1 FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id
      WHERE r.round_id = NEW.council_round_id AND r.goal_id = NEW.source_goal_id AND s.final_verdict = 'proceed' AND s.same_model_only = false
        AND (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text(r.evidence_ids)) = (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text(NEW.source_digest_ids))
-       AND (SELECT count(*) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
+       AND (SELECT count(*) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = r.reviewer_count
+       AND (SELECT min(j.reviewer_index) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = 0
+       AND (SELECT max(j.reviewer_index) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = r.reviewer_count - 1
+       AND NOT EXISTS (SELECT 1 FROM encore_council_judgments j WHERE j.round_id = r.round_id AND j.verdict <> 'proceed')
        AND NOT EXISTS (SELECT 1 FROM encore_council_judgments j WHERE j.round_id = r.round_id AND (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text(j.cited_evidence_ids)) IS DISTINCT FROM (SELECT array_agg(value ORDER BY value) FROM jsonb_array_elements_text(NEW.source_digest_ids)))
        AND (SELECT count(DISTINCT (j.model_provider || ':' || j.model_id)) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
-       AND (SELECT count(*) FROM encore_council_judgments j JOIN native_execution_bindings b ON b.execution_ref = j.execution_ref AND b.invocation_ref = j.invocation_ref AND b.goal_id = r.goal_id AND b.project_id = NEW.source_project_id AND b.admission_kind = 'encore_reviewer' AND b.actual_model_provider = j.model_provider AND b.actual_model_id = j.model_id WHERE j.round_id = r.round_id) >= 2
+       AND (SELECT count(DISTINCT j.judgment_id) FROM encore_council_judgments j JOIN native_execution_bindings b ON b.execution_ref = j.execution_ref AND b.invocation_ref = j.invocation_ref AND b.goal_id = r.goal_id AND b.project_id = NEW.source_project_id AND b.admission_kind = 'encore_reviewer' AND b.actual_model_provider = j.model_provider AND b.actual_model_id = j.model_id WHERE j.round_id = r.round_id) = r.reviewer_count
   ) THEN RAISE EXCEPTION 'global organizational knowledge requires exact durable Council review'; END IF;
   IF NEW.status = 'active' AND NEW.scope IN ('project_department', 'global') AND NOT EXISTS (SELECT 1 FROM permanent_roles WHERE role_id = NEW.created_by AND role_kind = 'department_head' AND department_id = NEW.department_id AND status = 'standing') THEN
     RAISE EXCEPTION 'active organizational knowledge requires a standing Department Head';
@@ -134,7 +137,10 @@ BEGIN
     SELECT 1 FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id
      WHERE r.round_id = NEW.council_round_id AND r.goal_id = NEW.source_goal_id AND s.final_verdict = 'proceed'
        AND s.same_model_only = false AND r.evidence_ids @> (NEW.source_evidence_ids || NEW.source_digest_ids)
-       AND (SELECT count(*) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
+       AND (SELECT count(*) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = r.reviewer_count
+       AND (SELECT min(j.reviewer_index) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = 0
+       AND (SELECT max(j.reviewer_index) FROM encore_council_judgments j WHERE j.round_id = r.round_id) = r.reviewer_count - 1
+       AND NOT EXISTS (SELECT 1 FROM encore_council_judgments j WHERE j.round_id = r.round_id AND j.verdict <> 'proceed')
        AND (SELECT count(DISTINCT (j.model_provider || ':' || j.model_id)) FROM encore_council_judgments j WHERE j.round_id = r.round_id) >= 2
   ) THEN
     RAISE EXCEPTION 'global organizational knowledge requires an approved independent Encore Council round';
@@ -176,6 +182,8 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = NEW.evidence_id AND e.goal_id = NEW.goal_id AND e.project_id = NEW.project_id AND g.project_id = NEW.project_id) THEN
     RAISE EXCEPTION 'source evidence loss event Goal/project binding is invalid';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = NEW.recorded_by::uuid AND active = true) THEN RAISE EXCEPTION 'source evidence loss event operator is inactive'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = NEW.goal_id AND owner_id = NEW.owner_id AND fencing_token = NEW.fencing_token AND expires_at > clock_timestamp()) THEN RAISE EXCEPTION 'source evidence loss event lease is missing or stale'; END IF;
   IF NOT EXISTS (SELECT 1 FROM source_evidence_loss_authorizations a WHERE a.evidence_id = NEW.evidence_id AND a.goal_id = NEW.goal_id AND a.project_id = NEW.project_id AND a.owner_id = NEW.owner_id AND a.fencing_token = NEW.fencing_token AND a.recorded_by = NEW.recorded_by AND a.reason = NEW.reason AND a.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex')) THEN
     RAISE EXCEPTION 'source evidence loss event authorization is missing or mismatched';
   END IF;
@@ -239,11 +247,12 @@ CREATE TRIGGER source_evidence_loss_authorizations_binding BEFORE INSERT ON sour
 
 CREATE OR REPLACE FUNCTION reject_source_evidence_loss_authorization_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+  IF TG_OP = 'DELETE' AND OLD.token_hash = encode(public.digest(current_setting('maestro.source_evidence_loss_token', true), 'sha256'), 'hex') THEN RETURN OLD; END IF;
   RAISE EXCEPTION 'source evidence loss authorizations are one-use';
 END;
 $$;
 DROP TRIGGER IF EXISTS source_evidence_loss_authorizations_immutable ON source_evidence_loss_authorizations;
-CREATE TRIGGER source_evidence_loss_authorizations_immutable BEFORE UPDATE ON source_evidence_loss_authorizations FOR EACH STATEMENT EXECUTE FUNCTION reject_source_evidence_loss_authorization_mutation();
+CREATE TRIGGER source_evidence_loss_authorizations_immutable BEFORE UPDATE OR DELETE ON source_evidence_loss_authorizations FOR EACH ROW EXECUTE FUNCTION reject_source_evidence_loss_authorization_mutation();
 
 
 
@@ -277,6 +286,32 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION maestro_goal_truncate_reset() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  PERFORM set_config('maestro.schema_cleanup_reset', '1', true);
+  RETURN NULL;
+END;
+$$;
+DROP TRIGGER IF EXISTS maestro_goal_truncate_reset ON goals;
+CREATE TRIGGER maestro_goal_truncate_reset BEFORE TRUNCATE ON goals FOR EACH STATEMENT EXECUTE FUNCTION maestro_goal_truncate_reset();
+
+CREATE OR REPLACE FUNCTION reject_unscoped_truncate() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF current_setting('maestro.schema_cleanup_reset', true) IS DISTINCT FROM '1' THEN RAISE EXCEPTION 'direct table truncation is forbidden; truncate goals CASCADE for test reset'; END IF;
+  RETURN NULL;
+END;
+$$;
+DROP TRIGGER IF EXISTS organizational_knowledge_no_truncate ON organizational_knowledge;
+CREATE TRIGGER organizational_knowledge_no_truncate BEFORE TRUNCATE ON organizational_knowledge FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
+DROP TRIGGER IF EXISTS evidence_records_no_truncate ON evidence_records;
+CREATE TRIGGER evidence_records_no_truncate BEFORE TRUNCATE ON evidence_records FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
+DROP TRIGGER IF EXISTS source_evidence_loss_events_no_truncate ON source_evidence_loss_events;
+CREATE TRIGGER source_evidence_loss_events_no_truncate BEFORE TRUNCATE ON source_evidence_loss_events FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
+DROP TRIGGER IF EXISTS source_evidence_loss_authorizations_no_truncate ON source_evidence_loss_authorizations;
+CREATE TRIGGER source_evidence_loss_authorizations_no_truncate BEFORE TRUNCATE ON source_evidence_loss_authorizations FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
+DROP TRIGGER IF EXISTS knowledge_promotion_authorizations_no_truncate ON knowledge_promotion_authorizations;
+CREATE TRIGGER knowledge_promotion_authorizations_no_truncate BEFORE TRUNCATE ON knowledge_promotion_authorizations FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
+
 DO $$
 DECLARE knowledge_schema text := current_schema();
 BEGIN
@@ -289,5 +324,7 @@ BEGIN
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.validate_source_evidence_loss_authorization_binding() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_source_evidence_loss_authorization_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_knowledge_promotion_authorization_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.maestro_goal_truncate_reset() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_unscoped_truncate() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
 END;
 $$;
