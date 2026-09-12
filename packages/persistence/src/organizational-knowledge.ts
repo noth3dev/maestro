@@ -30,11 +30,11 @@ const COLUMNS = "knowledge_id, revision, schema_version, source_project_id, proj
 const INSERT_COLUMNS = COLUMNS.replace(", created_at", "");
 
 function operationHash(value: unknown): string { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
-function marker(lesson: OrganizationalKnowledge): string {
+function marker(lesson: OrganizationalKnowledge, sourceSessionRef = lesson.sourceSessionRef): string {
   if (lesson.scope === "worker_proposed") return "worker-proposal";
   if (lesson.status === "active" && lesson.scope === "project_department") return "department-promotion";
   if (lesson.status === "active" && lesson.scope === "global") return "global-promotion";
-  if (lesson.status === "unsupported") return lesson.sourceSessionRef?.startsWith("evidence:") || lesson.sourceSessionRef?.startsWith("digest:") ? "source-loss" : "knowledge-decay";
+  if (lesson.status === "unsupported") return sourceSessionRef?.startsWith("evidence:") || sourceSessionRef?.startsWith("digest:") ? "source-loss" : "knowledge-decay";
   if (lesson.status === "contradicted") return "knowledge-decay";
   return "adjudication";
 }
@@ -79,7 +79,7 @@ async function insertRevision(client: Pick<PoolClient, "query">, lesson: Organiz
   const retention = prior.rows[0]?.retention ?? "project_lifetime";
   const result = await client.query<KnowledgeRow>(
     `INSERT INTO organizational_knowledge (${INSERT_COLUMNS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32) RETURNING ${COLUMNS}`,
-    [lesson.knowledgeId, lesson.revision, lesson.schemaVersion, lesson.sourceProjectId, lesson.projectId, lesson.sourceGoalId, lesson.departmentId, lesson.scope, lesson.status, lesson.statement, lesson.rationale, JSON.stringify(lesson.sourceEvidenceIds), JSON.stringify(lesson.sourceDigestIds), JSON.stringify(lesson.episodeIds), lesson.confidence, lesson.freshness, lesson.generalized, lesson.councilRoundId, lesson.generalizedStatement ?? null, lesson.curatorRoleId ?? null, lesson.curatorOperatorId ?? null, lesson.curatorDepartmentId ?? null, authorOperatorId ?? lesson.authorOperatorId ?? null, authorRoleId ?? lesson.authorRoleId ?? null, operationPayloadHash ?? lesson.operationPayloadHash ?? null, promotionOperatorId ?? lesson.promotionOperatorId ?? null, promotionRoleId ?? lesson.promotionRoleId ?? null, marker(lesson), lesson.reason, createdBy, sourceSessionRef, retention],
+    [lesson.knowledgeId, lesson.revision, lesson.schemaVersion, lesson.sourceProjectId, lesson.projectId, lesson.sourceGoalId, lesson.departmentId, lesson.scope, lesson.status, lesson.statement, lesson.rationale, JSON.stringify(lesson.sourceEvidenceIds), JSON.stringify(lesson.sourceDigestIds), JSON.stringify(lesson.episodeIds), lesson.confidence, lesson.freshness, lesson.generalized, lesson.councilRoundId, lesson.generalizedStatement ?? null, lesson.curatorRoleId ?? null, lesson.curatorOperatorId ?? null, lesson.curatorDepartmentId ?? null, authorOperatorId ?? lesson.authorOperatorId ?? null, authorRoleId ?? lesson.authorRoleId ?? null, operationPayloadHash ?? lesson.operationPayloadHash ?? null, promotionOperatorId ?? lesson.promotionOperatorId ?? null, promotionRoleId ?? lesson.promotionRoleId ?? null, marker(lesson, sourceSessionRef), lesson.reason, createdBy, sourceSessionRef, retention],
   );
   return map(result.rows[0]!);
 }
@@ -225,7 +225,7 @@ export async function listOrganizationalKnowledge(pool: Pool, authorization: Org
     const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [authorization.operatorId]);
     if (operator.rowCount !== 1) throw new OrganizationalKnowledgeError("knowledge read requires an active operator");
     await assertProjectMembership(client, authorization.operatorId, authorization.projectId); await assertProjectRole(client, authorization.operatorId, authorization.projectId, authorization.departmentId);
-    const result = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status <> 'retired' AND (k.scope = 'global' OR (k.project_id = $1 AND k.scope = 'project_department')) AND k.department_id = $2 ORDER BY k.created_at, k.knowledge_id`, [authorization.projectId, authorization.departmentId]);
+    const result = await client.query<KnowledgeRow>(`SELECT ${COLUMNS} FROM organizational_knowledge k WHERE k.status <> 'retired' AND k.revision = (SELECT max(latest.revision) FROM organizational_knowledge latest WHERE latest.knowledge_id = k.knowledge_id) AND (k.scope = 'global' OR (k.project_id = $1 AND k.scope = 'project_department')) AND k.department_id = $2 ORDER BY k.created_at, k.knowledge_id`, [authorization.projectId, authorization.departmentId]);
     return result.rows.map((row) => { const lesson = map(row); return lesson.scope === "global" ? publicProjection(lesson) : lesson; });
   });
 }
@@ -251,7 +251,7 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
       if (current.promotionOperatorId?.toLowerCase() !== request.operatorId.toLowerCase() || current.promotionRoleId?.toLowerCase() !== request.operatorRoleId.toLowerCase() || current.operationPayloadHash !== requestHash) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
       return current.scope === "global" ? publicProjection(current) : current;
     }
-    if (current.sourceSessionRef?.startsWith("system:knowledge-decay:") && current.status !== "retired") throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
+    if (current.sourceSessionRef?.startsWith("system:knowledge-decay:") && current.status !== "retired" && !(request.contradicted === true && current.status === "active")) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
     if (current.status === "retired") throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
     const decayed = decayKnowledge(current, { now: request.now, lastSupportedAt: request.lastSupportedAt, ...(request.staleAfterMs === undefined ? {} : { staleAfterMs: request.staleAfterMs }), ...(request.contradicted === undefined ? {} : { contradicted: request.contradicted }) });
     if (decayed.revision === current.revision) return current.scope === "global" ? publicProjection(current) : current;

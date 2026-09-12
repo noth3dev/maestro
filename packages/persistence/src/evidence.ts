@@ -5,6 +5,8 @@ import type { GoalLeaseProof } from "./commands.js";
 import { withGoalAuthority } from "./goal-authority.js";
 import { assertProjectMembership, assertProjectRole } from "./project-membership.js";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export type EvidenceMetadataInput = Omit<EvidenceRecord, "createdAt">;
 
 export class EvidenceMetadataConflictError extends Error {
@@ -85,7 +87,8 @@ function validate(input: EvidenceMetadataInput): void {
  * unsupported knowledge revision before deleting the artifact metadata.
  */
 export async function deleteEvidenceSource(pool: Pool, evidenceId: string, reason: string, recordedBy: string, proof: GoalLeaseProof, operatorRoleId: string): Promise<void> {
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(evidenceId) || reason.trim() === "" || reason.length > 1024 || recordedBy.trim() === "" || recordedBy.length > 256) throw new Error("source evidence loss request is invalid");
+  if (!UUID.test(evidenceId) || reason.trim() === "" || reason.length > 1024 || recordedBy.trim() === "" || recordedBy.length > 256) throw new Error("source evidence loss request is invalid");
+  if (!UUID.test(recordedBy)) throw new Error("source evidence loss requires an authorized operator");
   await withGoalAuthority(pool, proof, 87, async (client) => {
     const operator = await client.query("SELECT 1 FROM local_operators WHERE operator_id = $1 AND active = true", [recordedBy]);
     if (operator.rowCount !== 1) throw new Error("source evidence loss requires an authorized operator");
