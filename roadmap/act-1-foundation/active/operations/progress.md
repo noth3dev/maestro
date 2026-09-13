@@ -4165,3 +4165,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-14 Plan 6 §S6 review round 2: reviewer found idempotent replay branches could return before rechecking the row Goal and operator role. Added RED coverage for cross-Goal start replay and revoked-operator observation/reconciliation replays; all replay paths now validate the row's leased Goal and active project role before returning.
 
 - 2026-09-14 Plan 6 §S6 review round 3: reviewer found expired owner leases could still be renewed by normal observation. Added RED coverage for post-expiry observation, bound normal observe/interrupt mutations to the durable owner identity, checked expiry before renewal, and added an SQL commit-time expiry fence; startup recovery remains the only expired-row path.
+
+- 2026-09-14 Plan 6 §S6 review round 4: reviewer found owner-expired idempotent observation and interruption replays could still return before expiry enforcement. Added durable owner lease duration, RED coverage for replay after expiry, and moved the live-expiry check into owner authorization shared by all owner replay paths.

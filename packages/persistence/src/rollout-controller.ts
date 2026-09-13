@@ -82,7 +82,7 @@ type RolloutRow = {
   window_start: Date; window_end: Date; protected_metrics: RolloutProtectedMetric[]; rollback_target: ImprovementCandidateRollbackTarget;
   source_evidence_ids: string[]; active_candidate_id: string; active_version: number; last_certified_candidate_id: string;
   last_certified_version: number; observed_goal_count: number; observed_goal_ids: string[];
-  owner_operator_id: string; owner_actor_id: string; owner_role_id: string; owner_session_ref: string; owner_lease_expires_at: Date;
+  owner_operator_id: string; owner_actor_id: string; owner_role_id: string; owner_session_ref: string; owner_lease_duration_ms: number; owner_lease_expires_at: Date;
   status: ImprovementRollout["status"];
   operation_ref: string; created_at: Date; updated_at: Date;
 };
@@ -91,7 +91,7 @@ type CandidateRow = { candidate_id: string; version: number; project_id: string;
 const COLUMNS = `rollout_id, candidate_id, candidate_version, project_id, goal_id, improvement_class, role_id, task_class,
   max_goal_count, window_start, window_end, protected_metrics, rollback_target, source_evidence_ids, active_candidate_id,
   active_version, last_certified_candidate_id, last_certified_version, observed_goal_count, observed_goal_ids,
-  owner_operator_id, owner_actor_id, owner_role_id, owner_session_ref, owner_lease_expires_at, status, operation_ref, created_at, updated_at`;
+  owner_operator_id, owner_actor_id, owner_role_id, owner_session_ref, owner_lease_duration_ms, owner_lease_expires_at, status, operation_ref, created_at, updated_at`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function text(value: unknown, field: string): string {
@@ -177,6 +177,7 @@ async function ownerMutationAuthorized(client: PoolClient, row: RolloutRow, proo
   if (row.owner_operator_id !== actor.operatorId || row.owner_actor_id !== actor.actorId || row.owner_role_id !== actor.operatorRoleId || row.owner_session_ref !== actor.sessionRef) {
     throw new RolloutPersistenceError("Rollout mutation actor is not the durable rollout owner");
   }
+  if (row.owner_lease_expires_at.getTime() <= Date.now()) throw new RolloutPersistenceError("Rollout owner lease has expired; startup reconciliation must run");
 }
 
 export async function enableImprovementClass(pool: Pool, projectId: string, improvementClass: ImprovementClass, proof: GoalLeaseProof, rawActor: RolloutActor, idempotencyKey: string): Promise<RolloutEnablement> {
@@ -208,7 +209,7 @@ export async function startBoundedRollout(pool: Pool, candidateId: string, rawSc
   return withGoalAuthority(pool, proof, 95, async (client) => {
     const existing = await client.query<RolloutRow>(`SELECT ${COLUMNS} FROM improvement_rollouts WHERE operation_ref = $1 FOR UPDATE`, [op]);
     if (existing.rowCount === 1) {
-      await mutationAuthorized(client, existing.rows[0]!, proof, actor);
+      await ownerMutationAuthorized(client, existing.rows[0]!, proof, actor);
       assertStartReplay(existing.rows[0]!, id, scope, actor);
       return result(client, existing.rows[0]!);
     }
@@ -228,8 +229,8 @@ export async function startBoundedRollout(pool: Pool, candidateId: string, rawSc
     const rollbackTarget = source.rollback_target;
     await authorizeWrite(client);
     const inserted = await client.query<RolloutRow>(`INSERT INTO improvement_rollouts
-      (rollout_id, candidate_id, candidate_version, project_id, goal_id, improvement_class, role_id, task_class, max_goal_count, window_start, window_end, protected_metrics, rollback_target, source_evidence_ids, active_candidate_id, active_version, last_certified_candidate_id, last_certified_version, owner_operator_id, owner_actor_id, owner_role_id, owner_session_ref, owner_lease_expires_at, status, operation_ref)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz, $11::timestamptz, $12::jsonb, $13::jsonb, $14::jsonb, $2, $3, $15, $16, $17, $18, $19, $20, transaction_timestamp() + ($21::bigint * interval '1 millisecond'), 'active', $22) RETURNING ${COLUMNS}`,
+      (rollout_id, candidate_id, candidate_version, project_id, goal_id, improvement_class, role_id, task_class, max_goal_count, window_start, window_end, protected_metrics, rollback_target, source_evidence_ids, active_candidate_id, active_version, last_certified_candidate_id, last_certified_version, owner_operator_id, owner_actor_id, owner_role_id, owner_session_ref, owner_lease_duration_ms, owner_lease_expires_at, status, operation_ref)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz, $11::timestamptz, $12::jsonb, $13::jsonb, $14::jsonb, $2, $3, $15, $16, $17, $18, $19, $20, $21::integer, transaction_timestamp() + ($21::bigint * interval '1 millisecond'), 'active', $22) RETURNING ${COLUMNS}`,
       [rolloutId, source.candidate_id, source.version, source.project_id, source.goal_id, source.kind, scope.roleId, scope.taskClass, scope.maxGoalCount, scope.windowStart, scope.windowEnd, JSON.stringify(protectedMetrics), JSON.stringify(rollbackTarget), JSON.stringify(source.source_evidence_ids), rollbackTarget.candidateId, rollbackTarget.version, actor.operatorId, actor.actorId, actor.operatorRoleId, actor.sessionRef, leaseDurationMs, op]);
     await authorizeWrite(client);
     await client.query("INSERT INTO improvement_rollout_events (event_id, rollout_id, kind, details, operation_ref) VALUES ($1, $2, 'started', $3::jsonb, $4)", [randomUUID(), rolloutId, JSON.stringify({ candidateId: source.candidate_id, candidateVersion: source.version, actorId: actor.actorId, sessionRef: actor.sessionRef }), `${op}:event`]);
@@ -273,7 +274,7 @@ export async function observeBoundedRollout(pool: Pool, rolloutId: string, input
     const lastCertifiedCandidateId = rollback ? row.last_certified_candidate_id : status === "certified" ? row.candidate_id : row.last_certified_candidate_id;
     const lastCertifiedVersion = rollback ? row.last_certified_version : status === "certified" ? row.candidate_version : row.last_certified_version;
     await authorizeWrite(client);
-    const updated = await client.query<RolloutRow>(`UPDATE improvement_rollouts SET active_candidate_id = $2, active_version = $3, last_certified_candidate_id = $4, last_certified_version = $5, observed_goal_count = $6, observed_goal_ids = $7::jsonb, status = $8, owner_lease_expires_at = transaction_timestamp() + interval '1 minute', updated_at = transaction_timestamp() WHERE rollout_id = $1 AND owner_operator_id = $9 AND owner_lease_expires_at > clock_timestamp() RETURNING ${COLUMNS}`, [id, activeCandidateId, activeVersion, lastCertifiedCandidateId, lastCertifiedVersion, goalCount, JSON.stringify(nextObservedGoalIds), status, actor.operatorId]);
+    const updated = await client.query<RolloutRow>(`UPDATE improvement_rollouts SET active_candidate_id = $2, active_version = $3, last_certified_candidate_id = $4, last_certified_version = $5, observed_goal_count = $6, observed_goal_ids = $7::jsonb, status = $8, owner_lease_expires_at = transaction_timestamp() + (owner_lease_duration_ms::bigint * interval '1 millisecond'), updated_at = transaction_timestamp() WHERE rollout_id = $1 AND owner_operator_id = $9 AND owner_lease_expires_at > clock_timestamp() RETURNING ${COLUMNS}`, [id, activeCandidateId, activeVersion, lastCertifiedCandidateId, lastCertifiedVersion, goalCount, JSON.stringify(nextObservedGoalIds), status, actor.operatorId]);
     if (updated.rowCount !== 1) throw new RolloutPersistenceError("Rollout owner lease expired before observation commit");
     await authorizeWrite(client);
     await client.query("INSERT INTO improvement_rollout_events (event_id, rollout_id, kind, details, operation_ref) VALUES ($1, $2, $3, $4::jsonb, $5)", [randomUUID(), id, rollback ? "automatic_rollback" : "observation", JSON.stringify({ goalId: observation.goalId, observedAt: observation.observedAt, goalCount, metrics: observation.metrics, violatedMetrics: metricDecision.violatedMetrics, actorId: actor.actorId, sessionRef: actor.sessionRef }), op]);

@@ -2092,3 +2092,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-14 S6 review round 2 replay-bypass finding was fixed. Existing operation/event replays now perform the same Goal/project/operator authorization checks as first execution before returning durable state.
 
 - 2026-09-14 S6 review round 3 expiry finding was fixed. Normal observation now requires the durable rollout owner and a live owner lease both before and during the update; expired active rows fail closed and are handled by startup reconciliation.
+
+- 2026-09-14 S6 review round 4 expiry-replay finding was fixed. Owner-bound replays now fail closed after lease expiry; only the startup expired-rollout reconciliation path may recover the row.

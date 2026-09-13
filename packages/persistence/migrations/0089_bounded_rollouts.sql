@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS improvement_rollouts (
   owner_actor_id text NOT NULL CHECK (btrim(owner_actor_id) <> '' AND length(owner_actor_id) <= 256 AND owner_actor_id !~ E'[\r\n]'),
   owner_role_id text NOT NULL CHECK (btrim(owner_role_id) <> '' AND length(owner_role_id) <= 256 AND owner_role_id !~ E'[\r\n]'),
   owner_session_ref text NOT NULL CHECK (btrim(owner_session_ref) <> '' AND length(owner_session_ref) <= 256 AND owner_session_ref !~ E'[\r\n]'),
+  owner_lease_duration_ms integer NOT NULL CHECK (owner_lease_duration_ms BETWEEN 1 AND 3600000),
   owner_lease_expires_at timestamptz NOT NULL,
   status text NOT NULL CHECK (status IN ('active', 'interrupted', 'certified', 'rolled_back')),
   operation_ref text NOT NULL UNIQUE CHECK (btrim(operation_ref) <> '' AND length(operation_ref) <= 256 AND operation_ref !~ E'[\r\n]'),
