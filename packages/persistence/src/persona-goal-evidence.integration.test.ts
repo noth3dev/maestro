@@ -17,7 +17,7 @@ describeDatabase("persona Goal evidence persistence", () => {
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'succeeded', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
     await pool.query("INSERT INTO task_contracts (contract_id, schema_version, version, content, content_hash, launch_state) VALUES ($1, 1, 3, '{}'::jsonb, $2, 'launched')", [contractId, "a".repeat(64)]);
     await pool.query("INSERT INTO head_councils (council_id, goal_id, contract_id, brief_deadline, state, snapshot_hash, snapshot_payload) VALUES ($1, $2, $3, transaction_timestamp() + interval '1 hour', 'collecting', $4, '{}'::jsonb)", [councilId, goalId, contractId, "b".repeat(64)]);
-    await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, head_role_id, contract_id, status, active_session_ref) VALUES ($1, 'security', 'head:security', $2, 'active', 'evidence-session')", [goalId, contractId]);
+    await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, head_role_id, contract_id, status, active_session_ref) VALUES ($1, 'security', 'head:security', $2, 'sleeping', NULL)", [goalId, contractId]);
   });
   afterAll(async () => { await pool.end(); await basePool.query(`DROP SCHEMA ${schema} CASCADE`); await basePool.end(); });
   const evidence = (): PersonaGoalEvidenceInput => ({
