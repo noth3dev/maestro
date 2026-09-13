@@ -2077,3 +2077,5 @@ All downstream routing documentation must use this contract and must not restore
 
 
 - 2026-09-13 S4 review round 5: completion must be atomically identity-bound to the existing Plan-1 journal terminal marker; candidate/process identity must be snapshotted; effect request properties must not be read before denial. The domain contract now requires an identity-bound atomic `resultSink.commit`, caches frozen identity/hash, and records a deny placeholder without touching hostile request properties. The request for a production process owner/SIGKILL harness is recorded as out-of-scope hardening for this domain-only slice after five review rounds; no second recovery mechanism is introduced.
+
+- 2026-09-13 S4 pre-merge verification passed: 232/232 files and 1604/1604 tests with authenticated real PostgreSQL; the initial passwordless URL failure was environment authentication configuration, not code.
