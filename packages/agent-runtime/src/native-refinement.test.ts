@@ -29,7 +29,17 @@ const passingEvaluation = {
   independentCouncilPassed: true,
   episodeCount: 3,
   comparableGoalCount: 2,
+  evidenceIds: ["33333333-3333-4333-8333-333333333333"],
+  episodeIds: ["episode-a", "episode-b", "episode-c"],
 };
+
+const createAdapter = (enabledClasses: readonly ("persona_axis" | "routing_capability_axis")[] = ["persona_axis"]) => createNativeRefinementAdapter({
+  enabledClasses,
+  restoreRollbackTarget: () => true,
+  verifyGlobalEvidence: () => true,
+  classifyMutation: () => "narrow_reversible",
+  verifyCeoApproval: () => true,
+} as never);
 
 const request = (overrides: Partial<NativeRefinementRequest> = {}): NativeRefinementRequest => ({
   candidate: candidate(),
@@ -42,13 +52,13 @@ const request = (overrides: Partial<NativeRefinementRequest> = {}): NativeRefine
 describe("native refinement boundary", () => {
   it("rejects out-of-scope components before evaluation", () => {
     const evaluate = vi.fn();
-    const adapter = createNativeRefinementAdapter({ enabledClasses: ["persona_axis"], evaluate });
+    const adapter = createNativeRefinementAdapter({ enabledClasses: ["persona_axis"], evaluate } as never);
     expect(() => adapter.refine(request({ component: "provider_config" as never }))).toThrow(/component|scope|provider/i);
     expect(evaluate).not.toHaveBeenCalled();
   });
 
   it("uses the shared ImprovementCandidate schema for every required proposal field", () => {
-    const adapter = createNativeRefinementAdapter({ enabledClasses: ["persona_axis"] });
+    const adapter = createAdapter();
     for (const field of ["evidencePattern", "predictedEffect", "sourceEvidenceIds", "rollbackTarget"] as const) {
       const incomplete = { ...candidate() } as Record<string, unknown>;
       delete incomplete[field];
@@ -57,7 +67,7 @@ describe("native refinement boundary", () => {
   });
 
   it("auto-applies enabled project refinements, observes them, and rolls them back", () => {
-    const adapter = createNativeRefinementAdapter({ enabledClasses: ["persona_axis"] });
+    const adapter = createAdapter();
     const applied = adapter.refine(request());
     expect(applied.status).toBe("applied");
     expect(adapter.observe(applied.refinementId, { regression: false }).status).toBe("observed");
@@ -65,22 +75,55 @@ describe("native refinement boundary", () => {
   });
 
   it("requires the multi-episode bar for global refinement even when its class is enabled", () => {
-    const adapter = createNativeRefinementAdapter({ enabledClasses: ["persona_axis"] });
+    const adapter = createAdapter();
     expect(() => adapter.refine(request({ scope: "global", evaluation: { ...passingEvaluation, episodeCount: 1, comparableGoalCount: 1 } }))).toThrow(/episode|global|evidence/i);
     const applied = adapter.refine(request({ scope: "global" }));
     expect(applied.status).toBe("applied");
     expect(() => adapter.refine(request({ scope: "global", mutation: "semantic_reversal" }))).toThrow(/CEO|approval|reversal|existing/i);
-    const revised = adapter.refine(request({ scope: "global", mutation: "narrow_reversible", ceoApproved: true, existingRefinementId: applied.refinementId }));
+    const destructiveAdapter = createNativeRefinementAdapter({ enabledClasses: ["persona_axis"], restoreRollbackTarget: () => true, verifyGlobalEvidence: () => true, classifyMutation: () => "semantic_reversal", verifyCeoApproval: () => true } as never);
+    const destructiveEntry = destructiveAdapter.refine(request({ scope: "global" }));
+    expect(() => destructiveAdapter.refine(request({ scope: "global", mutation: "semantic_reversal", existingRefinementId: destructiveEntry.refinementId, ceoApproval: { approvalId: "unverified" } as never }))).toThrow(/CEO|approval|verified|exact/i);
+    const revised = adapter.refine(request({ scope: "global", mutation: "narrow_reversible", existingRefinementId: applied.refinementId }));
     expect(revised.status).toBe("applied");
     expect(adapter.history(applied.refinementId)).toHaveLength(2);
   });
 
+  it("binds global evidence counts and requires distinct independently verified episodes", () => {
+    const adapter = createAdapter();
+    expect(() => adapter.refine(request({ scope: "global", candidate: candidate({ dataSufficiency: { episodeCount: 1, comparableGoalCount: 1 } }) }))).toThrow(/match|evidence|episode/i);
+    expect(() => adapter.refine(request({ scope: "global", evaluation: { ...passingEvaluation, episodeIds: ["episode-a", "episode-a"] } }))).toThrow(/distinct|episode|evidence/i);
+  });
+
+  it("binds an existing refinement to its original scope and project", () => {
+    const adapter = createAdapter();
+    const entry = adapter.refine(request());
+    expect(() => adapter.refine(request({ scope: "global", existingRefinementId: entry.refinementId, mutation: "scope_expansion" }))).toThrow(/scope|CEO|approval/i);
+    expect(() => adapter.refine(request({ candidate: candidate({ projectId: "99999999-9999-4999-8999-999999999999" }), existingRefinementId: entry.refinementId, mutation: "narrow_reversible" }))).toThrow(/project|scope/i);
+  });
+
+  it("rejects unsupported top-level controls instead of ignoring them", () => {
+    const adapter = createAdapter();
+    expect(() => adapter.refine(request({ authority: true } as never))).toThrow(/unknown|unsupported|authority/i);
+  });
+
+  it("retains evaluation and rollback metadata and fails closed without an exact restore", () => {
+    const adapter = createAdapter();
+    const entry = adapter.refine(request());
+    expect(entry.evaluation).toEqual(passingEvaluation);
+    expect(entry.rollbackTrigger.rollbackTarget).toEqual(candidate().rollbackTarget);
+    expect(entry.rolloutScope).toMatchObject({ scope: "project", projectId: candidate().projectId });
+    const noRestore = createNativeRefinementAdapter({ enabledClasses: ["persona_axis"] });
+    const noRestoreEntry = noRestore.refine(request());
+    expect(() => noRestore.rollback(noRestoreEntry.refinementId)).toThrow(/restore|rollback/i);
+  });
+
   it("deprecates and observes an unused global entry before CEO-approved removal", () => {
-    const adapter = createNativeRefinementAdapter({ enabledClasses: [] });
+    const adapter = createAdapter([]);
     const entry = adapter.refine(request({ scope: "global" }));
-    expect(() => adapter.removeGlobal(entry.refinementId, { ceoApproved: true })).toThrow(/deprecat|observ/i);
+    const removalApproval = { approvalId: "ceo-remove", candidateContentHash: entry.candidateContentHash, component: entry.component, scope: "global" as const, mutation: "delete" as const, existingRefinementId: entry.refinementId };
+    expect(() => adapter.removeGlobal(entry.refinementId, removalApproval)).toThrow(/deprecat|observ/i);
     expect(adapter.deprecateGlobal(entry.refinementId).status).toBe("deprecated");
     expect(adapter.observeGlobal(entry.refinementId, { used: false }).status).toBe("observed");
-    expect(adapter.removeGlobal(entry.refinementId, { ceoApproved: true }).status).toBe("removed");
+    expect(adapter.removeGlobal(entry.refinementId, removalApproval).status).toBe("removed");
   });
 });
