@@ -7,6 +7,7 @@ import {
   type ShadowOutput,
 } from "./shadow-evaluation.js";
 import type { ExecutionKernelPort } from "./execution-kernel.js";
+import { runShadowEvaluation as exportedRunShadowEvaluation } from "./index.js";
 
 const candidate = (): ImprovementCandidateInput => ({
   schemaVersion: 1,
@@ -34,11 +35,20 @@ const active: ShadowOutput = {
 };
 const input = { request: "review the change" };
 const sameInput = () => ({ input, activeInput: input, active });
+let runCounter = 0;
+const journalConfig = (events: string[] = []) => ({
+  journal: { append: async (event: { event: string }) => { events.push(event.event); } },
+  runId: `shadow-run-${++runCounter}`,
+  processRef: `shadow-process-${runCounter}`,
+  sessionId: `shadow-session-${runCounter}`,
+});
 
 describe("zero-authority shadow evaluation", () => {
   it("records proposed messages, plans, and challenges against the active persona on identical input", async () => {
+    const completedEvents: string[] = [];
     const result = await runShadowEvaluation({
       candidate: candidate(),
+      ...journalConfig(completedEvents),
       cases: [sameInput()],
       evaluate: async (receivedInput) => ({ ...active, messages: [`shadow:${(receivedInput as typeof input).request}`] }),
     });
@@ -47,11 +57,25 @@ describe("zero-authority shadow evaluation", () => {
     expect(result.records[0]).toMatchObject({ input, active, proposed: { plans: active.plans, challenges: active.challenges } });
     expect(result.records[0]!.compared).toBe(true);
     expect(result.records[0]!.matchesActive).toBe(false);
+    expect(completedEvents).toEqual(["started", "completed"]);
+    expect(exportedRunShadowEvaluation).toBe(runShadowEvaluation);
+  });
+
+  it("rejects an invalid candidate before starting its lifecycle journal", async () => {
+    const events: string[] = [];
+    await expect(runShadowEvaluation({
+      candidate: { ...candidate(), confidence: Number.NaN },
+      ...journalConfig(events),
+      cases: [sameInput()],
+      evaluate: async () => active,
+    })).rejects.toThrow(/finite|candidate/i);
+    expect(events).toEqual([]);
   });
 
   it("rejects a shadow case whose active output was not produced from the identical input", async () => {
     await expect(runShadowEvaluation({
       candidate: candidate(),
+      ...journalConfig(),
       cases: [{ input: { request: "one" }, activeInput: { request: "two" }, active }],
       evaluate: async () => active,
     })).rejects.toThrow(/inputs differ/i);
@@ -67,6 +91,7 @@ describe("zero-authority shadow evaluation", () => {
 
     const result = await runShadowEvaluation({
       candidate: candidate(),
+      ...journalConfig(),
       cases: [sameInput()],
       evaluate: async (_input, context) => {
         await expect(context.attemptEffect({ action: "project.file.write", target: "/repo/file" }, async () => { liveEffectRows += 1; })).rejects.toThrow(/shadow|authority/i);
@@ -82,6 +107,7 @@ describe("zero-authority shadow evaluation", () => {
     let evidenceReads = 0;
     const result = await runShadowEvaluation({
       candidate: candidate(),
+      ...journalConfig(),
       cases: [sameInput()],
       recordedEvidence: { "evidence-1": { kind: "test-result", content: "observed" } },
       evaluate: async (_input, context) => {
@@ -101,10 +127,12 @@ describe("zero-authority shadow evaluation", () => {
     let receivedInput: unknown;
     const result = await runShadowEvaluation({
       candidate: candidate(),
+      ...journalConfig(),
       cases: [sameInput()],
       recordedEvidence: { "evidence-1": evidence },
       evaluate: async (received, context) => {
         receivedInput = received;
+        expect(Object.isFrozen(context)).toBe(true);
         const observed = context.readRecordedEvidence("evidence-1") as { nested: { value: string } };
         expect(Object.isFrozen(received)).toBe(true);
         expect(Object.isFrozen(observed)).toBe(true);
@@ -115,6 +143,30 @@ describe("zero-authority shadow evaluation", () => {
     expect(Object.isFrozen(receivedInput)).toBe(true);
     expect(Object.isFrozen(result.records[0]!.proposed.plans[0])).toBe(true);
     expect(Object.isFrozen((result.records[0]!.proposed.plans[0] as { nested: object }).nested)).toBe(true);
+  });
+
+  it("marks evaluator failure as orphaned instead of leaving a started-only run", async () => {
+    const events: string[] = [];
+    await expect(runShadowEvaluation({
+      candidate: candidate(),
+      ...journalConfig(events),
+      cases: [sameInput()],
+      evaluate: async () => { throw new Error("provider disconnected"); },
+    })).rejects.toThrow("provider disconnected");
+    expect(events).toEqual(["started", "orphaned"]);
+  });
+
+  it("rejects sparse case arrays before starting the journal", async () => {
+    const events: string[] = [];
+    const cases = [] as ReturnType<typeof sameInput>[];
+    cases.length = 1;
+    await expect(runShadowEvaluation({
+      candidate: candidate(),
+      ...journalConfig(events),
+      cases,
+      evaluate: async () => active,
+    })).rejects.toThrow(/sparse/i);
+    expect(events).toEqual([]);
   });
 
   it("provides a read-only kernel facade with no provider write methods", async () => {
@@ -141,6 +193,7 @@ describe("zero-authority shadow evaluation", () => {
     let contextKernel: unknown;
     await runShadowEvaluation({
       candidate: candidate(),
+      ...journalConfig(),
       cases: [sameInput()],
       kernel: kernel as ExecutionKernelPort,
       evaluate: async (_input, context) => { contextKernel = context.kernel; return active; },
@@ -155,9 +208,8 @@ describe("zero-authority shadow evaluation", () => {
     const events: string[] = [];
     const result = await runShadowEvaluation({
       candidate: candidate(),
-      runId: "shadow-run-1",
+      ...journalConfig(events),
       signal: controller.signal,
-      journal: { append: async (event) => { events.push(event.event); } },
       cases: [sameInput(), { input: { request: "second" }, activeInput: { request: "second" }, active }],
       evaluate: async (receivedInput) => {
         if ((receivedInput as { request: string }).request === "review the change") controller.abort();
