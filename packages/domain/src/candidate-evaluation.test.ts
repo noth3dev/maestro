@@ -107,5 +107,6 @@ describe("candidate evaluation stages", () => {
     expect(result.weightedImprovement).toBeGreaterThan(0);
     expect(result.accepted).toBe(false);
     expect(result.failedFloors).toContain("correctness");
+    expect(applyCandidateHardFloors({ baseline: metrics(), candidate: metrics({ safety: Number.NaN }), floors: { safety: 0.95 } }).accepted).toBe(false);
   });
 });

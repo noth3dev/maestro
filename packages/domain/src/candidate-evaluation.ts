@@ -166,7 +166,10 @@ export interface CandidateHardFloorResult {
 
 export function applyCandidateHardFloors(request: CandidateHardFloorRequest): CandidateHardFloorResult {
   const failedFloors = Object.entries(request.floors)
-    .filter(([metric, floor]) => typeof request.candidate[metric] !== "number" || request.candidate[metric] < floor)
+    .filter(([metric, floor]) => {
+      const value = request.candidate[metric];
+      return !Number.isFinite(floor) || typeof value !== "number" || !Number.isFinite(value) || value < floor;
+    })
     .map(([metric]) => metric);
   const qualityDelta = (request.candidate.correctness - request.baseline.correctness)
     + (request.candidate.safety - request.baseline.safety)
