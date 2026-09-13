@@ -4,6 +4,7 @@ import { MODEL_MAP_SCHEMA_VERSION } from "./model-map.js";
 import { snapshotOperationalOverlayForGoal, type OperationalOverlay } from "./operational-overlay.js";
 import { TASK_DEMAND_SCHEMA_VERSION, type TaskDemand } from "./task-demand.js";
 import { materializeImprovementCandidate, improvementCandidateScenarioSuiteHash, type ImprovementCandidate, type ImprovementCandidateInput } from "./improvement-candidate.js";
+import type { EncoreJudgmentSubstance } from "./encore-council.js";
 import { createRoutingCapabilityCandidate, selectRoutedModelWithRoutingCandidate, type RoutingCapabilityCouncilJudgment } from "./routing-improvement-candidate.js";
 import { selectRoutedModel } from "./routing-selector.js";
 import type { RoutingSelectionRequest } from "./routing-selector.js";
@@ -109,15 +110,23 @@ function materialized(state: ImprovementCandidate["state"] = "candidate"): Impro
 }
 
 function judgmentFor(candidate: ImprovementCandidate): RoutingCapabilityCouncilJudgment {
+  const judgment = (modelProvider: string, modelId: string): EncoreJudgmentSubstance => ({
+    modelProvider,
+    modelId,
+    verdict: "proceed",
+    confidence: "high",
+    reasoning: "durable evidence supports the bounded proposal",
+    conditions: [],
+    dissentNote: null,
+    citedEvidenceIds: [DIGEST_ID],
+  });
   return {
     candidateId: candidate.candidateId,
     candidateVersion: candidate.version,
     candidateContentHash: candidate.contentHash,
     councilRoundId: "encore-round-routing-1",
-    finalVerdict: "proceed",
     evidenceIds: [DIGEST_ID],
-    reviewerCount: 2,
-    distinctModelCount: 2,
+    judgments: [judgment("test", "kimi"), judgment("openai", "gpt")],
   };
 }
 

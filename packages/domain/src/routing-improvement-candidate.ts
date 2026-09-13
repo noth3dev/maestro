@@ -5,6 +5,7 @@ import {
   type ImprovementCandidateInput,
 } from "./improvement-candidate.js";
 import { assertValidModelMap } from "./model-map.js";
+import { assertValidEncoreJudgmentSubstance, synthesizeEncoreJudgments, type EncoreJudgmentSubstance } from "./encore-council.js";
 import { assertValidTaskDemand } from "./task-demand.js";
 import { selectRoutedModel, type RoutingSelection, type RoutingSelectionRequest } from "./routing-selector.js";
 
@@ -22,10 +23,8 @@ export interface RoutingCapabilityCouncilJudgment {
   readonly candidateVersion: number;
   readonly candidateContentHash: string;
   readonly councilRoundId: string;
-  readonly finalVerdict: "proceed";
   readonly evidenceIds: readonly string[];
-  readonly reviewerCount: number;
-  readonly distinctModelCount: number;
+  readonly judgments: readonly EncoreJudgmentSubstance[];
 }
 
 function plainRecord(value: unknown, name: string): asserts value is Record<string, unknown> {
@@ -40,7 +39,7 @@ function line(value: unknown, field: string): asserts value is string {
 
 function assertCouncilJudgment(candidate: ImprovementCandidate, judgment: RoutingCapabilityCouncilJudgment): void {
   plainRecord(judgment, "Routing capability Council judgment");
-  const allowed = ["candidateId", "candidateVersion", "candidateContentHash", "councilRoundId", "finalVerdict", "evidenceIds", "reviewerCount", "distinctModelCount"];
+  const allowed = ["candidateId", "candidateVersion", "candidateContentHash", "councilRoundId", "evidenceIds", "judgments"];
   for (const key of Reflect.ownKeys(judgment)) {
     if (typeof key !== "string" || !allowed.includes(key)) throw new RoutingImprovementCandidateError("Routing capability Council judgment has an unknown field");
   }
@@ -49,15 +48,21 @@ function assertCouncilJudgment(candidate: ImprovementCandidate, judgment: Routin
   line(judgment.candidateContentHash, "Routing capability Council judgment candidateContentHash");
   if (!/^[a-f0-9]{64}$/.test(judgment.candidateContentHash)) throw new RoutingImprovementCandidateError("Routing capability Council judgment content hash is invalid");
   line(judgment.councilRoundId, "Routing capability Council judgment councilRoundId");
-  if (judgment.finalVerdict !== "proceed") throw new RoutingImprovementCandidateError("Routing capability Council judgment did not approve the proposal");
+  if (!Array.isArray(judgment.judgments) || judgment.judgments.length < 2) throw new RoutingImprovementCandidateError("Routing capability Council judgment requires independent reviewers");
+  for (const reviewer of judgment.judgments) {
+    try { assertValidEncoreJudgmentSubstance(reviewer); }
+    catch (error) { throw new RoutingImprovementCandidateError(error instanceof Error ? error.message : "Routing capability reviewer judgment is invalid"); }
+  }
+  const synthesis = synthesizeEncoreJudgments(judgment.judgments);
+  const modelRefs = new Set(judgment.judgments.map((reviewer) => `${reviewer.modelProvider}/${reviewer.modelId}`));
+  if (synthesis.finalVerdict !== "proceed" || synthesis.escalated || modelRefs.size < 2)
+    throw new RoutingImprovementCandidateError("Routing capability Council judgment requires a non-escalated diverse approval");
   if (!Number.isSafeInteger(judgment.candidateVersion) || judgment.candidateVersion < 1 || judgment.candidateId.toLowerCase() !== candidate.candidateId.toLowerCase() || judgment.candidateVersion !== candidate.version || judgment.candidateContentHash !== candidate.contentHash)
     throw new RoutingImprovementCandidateError("Routing capability Council judgment is not bound to the exact candidate version");
   if (!Array.isArray(judgment.evidenceIds) || judgment.evidenceIds.length === 0 || judgment.evidenceIds.some((id) => typeof id !== "string" || id.trim() === ""))
     throw new RoutingImprovementCandidateError("Routing capability Council judgment requires durable evidence references");
   if (!candidate.sourceEvidenceIds.every((id) => judgment.evidenceIds.includes(id)))
     throw new RoutingImprovementCandidateError("Routing capability Council judgment does not cover candidate source evidence");
-  if (!Number.isSafeInteger(judgment.reviewerCount) || judgment.reviewerCount < 2 || !Number.isSafeInteger(judgment.distinctModelCount) || judgment.distinctModelCount < 2 || judgment.distinctModelCount > judgment.reviewerCount)
-    throw new RoutingImprovementCandidateError("Routing capability Council judgment requires independent diverse reviewers");
 }
 
 /**
