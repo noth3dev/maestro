@@ -307,6 +307,7 @@ export async function transitionImprovementCandidate(pool: Pool, candidateId: st
     }
     const previous = await readRow(client, candidateId, true);
     if (previous.goal_id !== proof.goalId.toLowerCase()) throw new ImprovementCandidatePersistenceError("Improvement Candidate transition is outside the lease Goal");
+    if (previous.kind === "routing_capability_axis" && nextState === "applied") throw new ImprovementCandidatePersistenceError("Routing capability candidates remain proposal-only and cannot be auto-applied");
     if (!canTransitionImprovementCandidate(previous.state, nextState)) throw new ImprovementCandidatePersistenceError(`Improvement Candidate cannot transition from ${previous.state} to ${nextState}`);
       return appendFromPrevious(client, previous, normalizeInput(inputFromRow(previous)), proof, author, operation, nextState);
   });

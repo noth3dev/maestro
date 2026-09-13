@@ -229,6 +229,7 @@ BEGIN
       END LOOP;
       IF p_payload->>'projectId' <> lower(p_project_id::text) OR p_payload->>'goalId' <> lower(p_goal_id::text) THEN RAISE EXCEPTION 'candidate payload project or Goal is invalid'; END IF;
       IF p_payload->>'scenarioSuiteHash' <> encode(public.digest(%1$s.improvement_candidate_canonical_json(p_payload->'scenarioSuite'), 'sha256'), 'hex') THEN RAISE EXCEPTION 'candidate scenario suite hash is invalid'; END IF;
+      IF p_payload->>'kind' = 'routing_capability_axis' AND p_state = 'applied' THEN RAISE EXCEPTION 'routing capability candidates remain proposal-only'; END IF;
       IF NOT EXISTS (SELECT 1 FROM %1$s.goals g WHERE g.goal_id = p_goal_id AND g.project_id = p_project_id) THEN RAISE EXCEPTION 'candidate Goal/project binding is invalid'; END IF;
       IF NOT EXISTS (SELECT 1 FROM %1$s.local_operators o WHERE o.operator_id = p_author_operator_id AND o.active = true) THEN RAISE EXCEPTION 'candidate author operator is inactive'; END IF;
       IF NOT EXISTS (SELECT 1 FROM %1$s.operator_project_memberships m WHERE m.operator_id = p_author_operator_id AND m.project_id = p_project_id AND m.active = true) THEN RAISE EXCEPTION 'candidate author is not a project member'; END IF;

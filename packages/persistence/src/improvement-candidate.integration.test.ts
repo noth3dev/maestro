@@ -90,7 +90,9 @@ describeDatabase("Improvement Candidate persistence", () => {
     expect(persona.state).toBe("candidate");
     expect(routing.state).toBe("candidate");
     expect(await transitionImprovementCandidate(pool, persona.candidateId, "evaluated", proof, author, "persona-evaluated")).toMatchObject({ state: "evaluated", version: 2, parentCandidateId: persona.candidateId });
-    expect(await transitionImprovementCandidate(pool, routing.candidateId, "evaluated", proof, author, "routing-evaluated")).toMatchObject({ state: "evaluated", version: 2, parentCandidateId: routing.candidateId });
+    const routingEvaluated = await transitionImprovementCandidate(pool, routing.candidateId, "evaluated", proof, author, "routing-evaluated");
+    expect(routingEvaluated).toMatchObject({ state: "evaluated", version: 2, parentCandidateId: routing.candidateId });
+    await expect(transitionImprovementCandidate(pool, routingEvaluated.candidateId, "applied", proof, author, "routing-applied")).rejects.toThrow(/proposal|auto-applied|routing/i);
   });
 
   it("rejects a fabricated or cross-Goal Improvement Digest reference", async () => {
