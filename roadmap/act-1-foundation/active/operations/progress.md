@@ -4144,3 +4144,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-13 Plan 6 §S4 review reached five consecutive FAIL rounds. The fifth round exposed completion crash consistency, mutable identity, and proxy-read bypasses; these remain in scope and are being fixed. The remaining request for a real production process consumer/SIGKILL restart harness is outside this domain-only slice; it is covered by the existing Plan-1 journal adapter contract and is not being rebuilt here.
 
 - 2026-09-13 Plan 6 §S4 pre-merge verification passed on `79dbc59`: build, lint, diff-check, and authenticated serialized PostgreSQL suite passed **232/232 files and 1604/1604 tests** in 321.44s. Independent review is `REVIEW: PASS`; ready to merge.
+
+- 2026-09-13 Plan 6 §S4 merged as `f054d1a`; post-merge build, lint, diff-check, and authenticated serialized PostgreSQL verification passed **232/232 files and 1604/1604 tests** in 323.64s. S4 review was `REVIEW: PASS`; domain-only process-owner/SIGKILL integration remains documented out-of-scope hardening after five review rounds. Next: push and start §S5.
