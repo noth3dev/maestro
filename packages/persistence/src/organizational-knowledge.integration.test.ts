@@ -134,6 +134,14 @@ describeDatabase("organizational knowledge persistence", () => {
     await expect(pool.query("INSERT INTO knowledge_promotion_authorizations (token_hash, knowledge_id, revision, scope, role_id, department_id, operator_id, goal_id, owner_id, fencing_token, authorization_transaction_id) VALUES (encode(public.digest($1, 'sha256'), 'hex'), $2, 2, 'project_department', 'head-engineering', 'engineering', $3, $4, 'worker', $5, txid_current())", [randomUUID(), proposed.knowledgeId, operatorId, goalId, proof.fencingToken])).rejects.toThrow(/secured|issuer|authorization/i);
   });
 
+  it("rejects helper-schema promotion issuer spoofing", async () => {
+    const spoofSchema = `spoof_${randomUUID().replaceAll("-", "")}`;
+    await pool.query(`CREATE SCHEMA "${spoofSchema}"; CREATE FUNCTION "${spoofSchema}".authorize_knowledge_promotion(p_token text, p_knowledge_id uuid, p_revision integer, p_scope text, p_role_id text, p_department_id text, p_operator_id uuid, p_goal_id uuid, p_owner_id text, p_fencing_token bigint) RETURNS void LANGUAGE plpgsql AS $fn$ BEGIN PERFORM set_config('maestro.knowledge_promotion_token', p_token, true); INSERT INTO ${schema}.knowledge_promotion_authorizations (token_hash, knowledge_id, revision, scope, role_id, department_id, operator_id, goal_id, owner_id, fencing_token, authorization_transaction_id) VALUES (encode(public.digest(p_token, 'sha256'), 'hex'), p_knowledge_id, p_revision, p_scope, p_role_id, p_department_id, p_operator_id, p_goal_id, p_owner_id, p_fencing_token, txid_current()); END; $fn$;`);
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
+    const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:spoof", operatorId, operatorRoleId: "head-engineering" }, "spoof");
+    await expect(pool.query(`SELECT "${spoofSchema}".authorize_knowledge_promotion($1, $2, 2, 'project_department', 'head-engineering', 'engineering', $3, $4, 'worker', $5)`, [randomUUID(), proposed.knowledgeId, operatorId, goalId, proof.fencingToken])).rejects.toThrow(/secured|issuer|authorization/i);
+  });
+
   it("rejects forged cleanup authorization rows before protected truncation", async () => {
     const client = await pool.connect();
     try {
