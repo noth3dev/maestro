@@ -125,5 +125,8 @@ describe("Improvement Candidate contract", () => {
     expect(() => assertValidImprovementCandidateInput(candidate({
       scenarioSuiteHash: "f".repeat(64),
     }))).toThrow(/scenario|hash/i);
+    expect(() => assertValidImprovementCandidateInput(candidate({
+      protectedMetrics: [{ name: "correctness", unit: "score", minimum: 1e-7 }],
+    }))).toThrow(/stable JSON|number range/i);
   });
 });

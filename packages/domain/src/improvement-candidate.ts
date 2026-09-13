@@ -170,6 +170,8 @@ function positiveVersion(value: unknown, field: string): asserts value is number
 
 function finiteNumber(value: unknown, field: string): asserts value is number {
   if (typeof value !== "number" || !Number.isFinite(value)) throw new InvalidImprovementCandidateError(`${field} must be finite`);
+  const magnitude = Math.abs(value);
+  if (magnitude !== 0 && (magnitude < 1e-6 || magnitude >= 1e21)) throw new InvalidImprovementCandidateError(`${field} must use a stable JSON number range`);
 }
 
 function boundedList(value: unknown, field: string, max = MAX_LIST): asserts value is readonly unknown[] {

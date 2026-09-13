@@ -39,6 +39,21 @@ CREATE INDEX IF NOT EXISTS improvement_candidates_project_idx ON improvement_can
 CREATE INDEX IF NOT EXISTS improvement_candidates_lineage_idx ON improvement_candidates (lineage_id, version);
 REVOKE ALL ON improvement_candidates FROM PUBLIC;
 
+-- Profile/configuration baselines are registered by the owning profile store. A
+-- candidate may point at either one of these immutable baselines or an already
+-- persisted candidate version; both carry the project/Goal and content hash.
+CREATE TABLE IF NOT EXISTS improvement_candidate_rollback_targets (
+  target_candidate_id uuid NOT NULL,
+  target_version integer NOT NULL CHECK (target_version >= 1),
+  project_id uuid NOT NULL,
+  goal_id uuid NOT NULL REFERENCES goals(goal_id),
+  content_hash char(64) NOT NULL CHECK (content_hash ~ '^[0-9a-f]{64}$'),
+  created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  PRIMARY KEY (target_candidate_id, target_version)
+);
+CREATE INDEX IF NOT EXISTS improvement_candidate_rollback_targets_scope_idx ON improvement_candidate_rollback_targets (project_id, goal_id);
+REVOKE ALL ON improvement_candidate_rollback_targets FROM PUBLIC;
+
 CREATE TABLE IF NOT EXISTS improvement_candidate_insert_authorizations (
   token_hash char(64) PRIMARY KEY CHECK (token_hash ~ '^[0-9a-f]{64}$'),
   candidate_id uuid NOT NULL,
@@ -68,6 +83,93 @@ DO $$
 DECLARE
   schema_name text := quote_ident(current_schema());
 BEGIN
+  EXECUTE format($fn$
+    CREATE OR REPLACE FUNCTION %1$s.improvement_candidate_json_numbers_stable(value jsonb) RETURNS boolean
+    LANGUAGE plpgsql IMMUTABLE STRICT SET search_path = pg_catalog, %1$s
+    AS $body$
+    DECLARE
+      item jsonb;
+    BEGIN
+      CASE jsonb_typeof(value)
+        WHEN 'number' THEN
+          RETURN value::numeric = 0 OR (abs(value::numeric) >= 0.000001 AND abs(value::numeric) < 1000000000000000000000);
+        WHEN 'object' THEN
+          FOR item IN SELECT val FROM jsonb_each(value) AS entries(key, val) LOOP
+            IF NOT %1$s.improvement_candidate_json_numbers_stable(item) THEN RETURN false; END IF;
+          END LOOP;
+          RETURN true;
+        WHEN 'array' THEN
+          FOR item IN SELECT element FROM jsonb_array_elements(value) AS elements(element) LOOP
+            IF NOT %1$s.improvement_candidate_json_numbers_stable(item) THEN RETURN false; END IF;
+          END LOOP;
+          RETURN true;
+        ELSE
+          RETURN true;
+      END CASE;
+    END;
+    $body$;
+  $fn$, schema_name);
+
+  EXECUTE format($fn$
+    CREATE OR REPLACE FUNCTION %1$s.validate_improvement_candidate_payload(value jsonb) RETURNS void
+    LANGUAGE plpgsql SET search_path = pg_catalog, %1$s
+    AS $body$
+    DECLARE
+      item jsonb;
+      axis text;
+      previous_axis text[] := ARRAY[]::text[];
+      metric_name text;
+      previous_metric_name text[] := ARRAY[]::text[];
+      scenario_name text;
+      previous_scenario_name text[] := ARRAY[]::text[];
+      number_value double precision;
+    BEGIN
+      IF jsonb_typeof(value) <> 'object' OR value->>'schemaVersion' <> '1' OR value->>'kind' NOT IN ('persona_axis', 'routing_capability_axis') THEN RAISE EXCEPTION 'candidate payload shape is invalid'; END IF;
+      IF jsonb_typeof(value->'target') <> 'object' THEN RAISE EXCEPTION 'candidate target shape is invalid'; END IF;
+      IF value->>'kind' = 'persona_axis' THEN
+        IF value->'target' ? 'routingTarget' OR NOT (value->'target' ? 'roleId' OR value->'target' ? 'taskClass') OR (SELECT count(*) FROM jsonb_object_keys(value->'target')) NOT BETWEEN 1 AND 2 THEN RAISE EXCEPTION 'persona candidate target shape is invalid'; END IF;
+      ELSE
+        IF NOT (value->'target' ? 'routingTarget') OR (SELECT count(*) FROM jsonb_object_keys(value->'target')) <> 1 THEN RAISE EXCEPTION 'routing candidate target shape is invalid'; END IF;
+      END IF;
+      IF EXISTS (SELECT 1 FROM jsonb_each_text(value->'target') AS fields(key, val) WHERE btrim(val) = '' OR length(val) > 256) THEN RAISE EXCEPTION 'candidate target text is invalid'; END IF;
+      IF jsonb_typeof(value->'changes') <> 'array' OR jsonb_array_length(value->'changes') NOT BETWEEN 1 AND 2 THEN RAISE EXCEPTION 'candidate changes shape is invalid'; END IF;
+      FOR item IN SELECT change FROM jsonb_array_elements(value->'changes') AS changes(change) LOOP
+        IF jsonb_typeof(item) <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(item)) <> 3 OR NOT (item ? 'axis') OR NOT (item ? 'currentValue') OR NOT (item ? 'proposedValue') OR jsonb_typeof(item->'currentValue') <> 'number' OR jsonb_typeof(item->'proposedValue') <> 'number' THEN RAISE EXCEPTION 'candidate change shape is invalid'; END IF;
+        axis := item->>'axis';
+        IF axis = ANY(previous_axis) OR (value->>'kind' = 'persona_axis' AND axis NOT IN ('agreeableness','extraversion','imagination','realism','conscientiousness','caution','initiative','empathy','adaptability','sociability')) OR (value->>'kind' = 'routing_capability_axis' AND axis NOT IN ('reasoning','coding','verification','instruction-fidelity','tool-use','long-context','knowledge','refusal-calibration')) THEN RAISE EXCEPTION 'candidate change axis is invalid'; END IF;
+        previous_axis := array_append(previous_axis, axis);
+        number_value := (item->>'currentValue')::double precision;
+        IF value->>'kind' = 'persona_axis' AND (number_value < 0 OR number_value > 1) THEN RAISE EXCEPTION 'persona candidate value is out of range'; END IF;
+        IF value->>'kind' = 'routing_capability_axis' AND (number_value < 0 OR number_value > 200 OR item->>'currentValue' !~ '^[0-9]+$') THEN RAISE EXCEPTION 'routing candidate value is invalid'; END IF;
+        number_value := (item->>'proposedValue')::double precision;
+        IF value->>'kind' = 'persona_axis' AND (number_value < 0 OR number_value > 1) THEN RAISE EXCEPTION 'persona candidate value is out of range'; END IF;
+        IF value->>'kind' = 'routing_capability_axis' AND (number_value < 0 OR number_value > 200 OR item->>'proposedValue' !~ '^[0-9]+$') THEN RAISE EXCEPTION 'routing candidate value is invalid'; END IF;
+        IF item->>'currentValue' = item->>'proposedValue' THEN RAISE EXCEPTION 'candidate change must alter its axis'; END IF;
+      END LOOP;
+      IF jsonb_typeof(value->'sourceEvidenceIds') <> 'array' OR jsonb_array_length(value->'sourceEvidenceIds') NOT BETWEEN 1 AND 32 OR (SELECT count(*) FROM jsonb_array_elements_text(value->'sourceEvidenceIds')) <> (SELECT count(DISTINCT source_id) FROM jsonb_array_elements_text(value->'sourceEvidenceIds') AS sources(source_id)) THEN RAISE EXCEPTION 'candidate source evidence shape is invalid'; END IF;
+      IF jsonb_typeof(value->'expectedMetrics') <> 'array' OR jsonb_array_length(value->'expectedMetrics') NOT BETWEEN 1 AND 16 THEN RAISE EXCEPTION 'candidate expected metrics shape is invalid'; END IF;
+      FOR item IN SELECT metric FROM jsonb_array_elements(value->'expectedMetrics') AS metrics(metric) LOOP
+        IF jsonb_typeof(item) <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(item)) NOT BETWEEN 3 AND 4 OR NOT (item ? 'name') OR NOT (item ? 'unit') OR NOT (item ? 'direction') OR btrim(item->>'name') = '' OR length(item->>'name') > 128 OR btrim(item->>'unit') = '' OR length(item->>'unit') > 64 OR item->>'direction' NOT IN ('increase','decrease','maintain') OR (item ? 'target' AND jsonb_typeof(item->'target') <> 'number') THEN RAISE EXCEPTION 'candidate expected metric shape is invalid'; END IF;
+        metric_name := item->>'name';
+        IF metric_name = ANY(previous_metric_name) THEN RAISE EXCEPTION 'candidate expected metric names must be unique'; END IF;
+        previous_metric_name := array_append(previous_metric_name, metric_name);
+      END LOOP;
+      IF jsonb_typeof(value->'protectedMetrics') <> 'array' OR jsonb_array_length(value->'protectedMetrics') NOT BETWEEN 1 AND 16 THEN RAISE EXCEPTION 'candidate protected metrics shape is invalid'; END IF;
+      FOR item IN SELECT metric FROM jsonb_array_elements(value->'protectedMetrics') AS metrics(metric) LOOP
+        IF jsonb_typeof(item) <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(item)) NOT BETWEEN 3 AND 4 OR NOT (item ? 'name') OR NOT (item ? 'unit') OR btrim(item->>'name') = '' OR length(item->>'name') > 128 OR btrim(item->>'unit') = '' OR length(item->>'unit') > 64 OR NOT (item ? 'minimum' OR item ? 'maximum') OR (item ? 'minimum' AND jsonb_typeof(item->'minimum') <> 'number') OR (item ? 'maximum' AND jsonb_typeof(item->'maximum') <> 'number') OR (item ? 'minimum' AND item ? 'maximum' AND (item->>'minimum')::double precision > (item->>'maximum')::double precision) THEN RAISE EXCEPTION 'candidate protected metric shape is invalid'; END IF;
+        metric_name := item->>'name';
+        IF metric_name = ANY(previous_metric_name) THEN RAISE EXCEPTION 'candidate metric names must be unique'; END IF;
+        previous_metric_name := array_append(previous_metric_name, metric_name);
+      END LOOP;
+      IF jsonb_typeof(value->'scenarioSuite') <> 'array' OR jsonb_array_length(value->'scenarioSuite') NOT BETWEEN 1 AND 32 OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(value->'scenarioSuite') AS scenarios(scenario) WHERE btrim(scenario) = '' OR length(scenario) > 256) OR (SELECT count(*) FROM jsonb_array_elements_text(value->'scenarioSuite')) <> (SELECT count(DISTINCT scenario_id) FROM jsonb_array_elements_text(value->'scenarioSuite') AS scenarios(scenario_id)) THEN RAISE EXCEPTION 'candidate scenario suite shape is invalid'; END IF;
+      IF btrim(value->>'evidencePattern') = '' OR length(value->>'evidencePattern') > 4096 OR btrim(value->>'predictedEffect') = '' OR length(value->>'predictedEffect') > 4096 THEN RAISE EXCEPTION 'candidate evidence text is invalid'; END IF;
+      IF jsonb_typeof(value->'confidence') <> 'number' OR (value->>'confidence')::double precision < 0 OR (value->>'confidence')::double precision > 1 THEN RAISE EXCEPTION 'candidate confidence is invalid'; END IF;
+      IF jsonb_typeof(value->'dataSufficiency') <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(value->'dataSufficiency')) <> 2 OR NOT (value->'dataSufficiency' ? 'episodeCount') OR NOT (value->'dataSufficiency' ? 'comparableGoalCount') OR value->'dataSufficiency'->>'episodeCount' !~ '^[1-9][0-9]*$' OR value->'dataSufficiency'->>'comparableGoalCount' !~ '^[1-9][0-9]*$' OR (value->'dataSufficiency'->>'comparableGoalCount')::numeric > (value->'dataSufficiency'->>'episodeCount')::numeric THEN RAISE EXCEPTION 'candidate data sufficiency is invalid'; END IF;
+      IF jsonb_typeof(value->'rollbackTarget') <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(value->'rollbackTarget')) <> 3 OR NOT (value->'rollbackTarget' ? 'candidateId') OR NOT (value->'rollbackTarget' ? 'version') OR NOT (value->'rollbackTarget' ? 'contentHash') OR value->'rollbackTarget'->>'candidateId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' OR value->'rollbackTarget'->>'version' !~ '^[1-9][0-9]*$' OR value->'rollbackTarget'->>'contentHash' !~ '^[0-9a-f]{64}$' THEN RAISE EXCEPTION 'candidate rollback target shape is invalid'; END IF;
+    END;
+    $body$;
+  $fn$, schema_name);
+
   EXECUTE format($fn$
     CREATE OR REPLACE FUNCTION %1$s.improvement_candidate_canonical_json(value jsonb) RETURNS text
     LANGUAGE plpgsql IMMUTABLE STRICT SET search_path = pg_catalog, %1$s
@@ -189,7 +291,7 @@ BEGIN
       IF NEW.version = 1 THEN
         IF NEW.parent_candidate_id IS NOT NULL OR NEW.lineage_id IS DISTINCT FROM NEW.candidate_id THEN RAISE EXCEPTION 'initial candidate lineage is invalid'; END IF;
       ELSE
-        SELECT c.* INTO parent_row FROM %1$s.improvement_candidates c WHERE c.candidate_id = NEW.parent_candidate_id FOR KEY SHARE;
+        SELECT c.* INTO parent_row FROM %1$s.improvement_candidates c WHERE c.candidate_id = NEW.parent_candidate_id AND c.kind = NEW.kind FOR KEY SHARE;
         IF NOT FOUND OR parent_row.version + 1 <> NEW.version OR parent_row.lineage_id IS DISTINCT FROM NEW.lineage_id OR parent_row.project_id IS DISTINCT FROM NEW.project_id OR parent_row.goal_id IS DISTINCT FROM NEW.goal_id THEN
           RAISE EXCEPTION 'candidate parent lineage is invalid';
         END IF;
@@ -227,8 +329,10 @@ BEGIN
       FOREACH field_name IN ARRAY ARRAY['schemaVersion','projectId','goalId','kind','target','changes','sourceEvidenceIds','evidencePattern','predictedEffect','expectedMetrics','protectedMetrics','scenarioSuite','scenarioSuiteHash','confidence','dataSufficiency','rollbackTarget'] LOOP
         IF NOT (p_payload ? field_name) THEN RAISE EXCEPTION 'candidate payload is missing required field %%', field_name; END IF;
       END LOOP;
+      PERFORM %1$s.validate_improvement_candidate_payload(p_payload);
       IF p_payload->>'projectId' <> lower(p_project_id::text) OR p_payload->>'goalId' <> lower(p_goal_id::text) THEN RAISE EXCEPTION 'candidate payload project or Goal is invalid'; END IF;
       IF p_payload->>'scenarioSuiteHash' <> encode(public.digest(%1$s.improvement_candidate_canonical_json(p_payload->'scenarioSuite'), 'sha256'), 'hex') THEN RAISE EXCEPTION 'candidate scenario suite hash is invalid'; END IF;
+      IF NOT %1$s.improvement_candidate_json_numbers_stable(p_payload) THEN RAISE EXCEPTION 'candidate numeric values are outside the stable JSON range'; END IF;
       IF p_payload->>'kind' = 'routing_capability_axis' AND p_state = 'applied' THEN RAISE EXCEPTION 'routing capability candidates remain proposal-only'; END IF;
       IF NOT EXISTS (SELECT 1 FROM %1$s.goals g WHERE g.goal_id = p_goal_id AND g.project_id = p_project_id) THEN RAISE EXCEPTION 'candidate Goal/project binding is invalid'; END IF;
       IF NOT EXISTS (SELECT 1 FROM %1$s.local_operators o WHERE o.operator_id = p_author_operator_id AND o.active = true) THEN RAISE EXCEPTION 'candidate author operator is inactive'; END IF;
@@ -238,7 +342,7 @@ BEGIN
       IF p_version = 1 THEN
         IF p_parent_candidate_id IS NOT NULL OR p_lineage_id <> p_candidate_id OR p_state <> 'candidate' THEN RAISE EXCEPTION 'initial candidate lineage or state is invalid'; END IF;
       ELSE
-        IF NOT EXISTS (SELECT 1 FROM %1$s.improvement_candidates c WHERE c.candidate_id = p_parent_candidate_id AND c.version + 1 = p_version AND c.lineage_id = p_lineage_id AND c.project_id = p_project_id AND c.goal_id = p_goal_id) THEN RAISE EXCEPTION 'candidate parent lineage is invalid'; END IF;
+        IF NOT EXISTS (SELECT 1 FROM %1$s.improvement_candidates c WHERE c.candidate_id = p_parent_candidate_id AND c.version + 1 = p_version AND c.lineage_id = p_lineage_id AND c.project_id = p_project_id AND c.goal_id = p_goal_id AND c.kind = p_payload->>'kind') THEN RAISE EXCEPTION 'candidate parent lineage is invalid'; END IF;
         IF p_state <> 'candidate' AND NOT EXISTS (
           SELECT 1 FROM %1$s.improvement_candidates c
            WHERE c.candidate_id = p_parent_candidate_id AND (
@@ -251,6 +355,20 @@ BEGIN
            )
         ) THEN RAISE EXCEPTION 'candidate lifecycle transition is invalid'; END IF;
       END IF;
+      IF jsonb_typeof(p_payload->'rollbackTarget') <> 'object' OR NOT (p_payload->'rollbackTarget' ? 'candidateId') OR NOT (p_payload->'rollbackTarget' ? 'version') OR NOT (p_payload->'rollbackTarget' ? 'contentHash') THEN RAISE EXCEPTION 'candidate rollback target is invalid'; END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM %1$s.improvement_candidate_rollback_targets b
+         WHERE b.target_candidate_id = (p_payload->'rollbackTarget'->>'candidateId')::uuid
+           AND b.target_version = (p_payload->'rollbackTarget'->>'version')::integer
+           AND b.project_id = p_project_id AND b.goal_id = p_goal_id
+           AND b.content_hash = p_payload->'rollbackTarget'->>'contentHash'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM %1$s.improvement_candidates c
+         WHERE c.candidate_id = (p_payload->'rollbackTarget'->>'candidateId')::uuid
+           AND c.version = (p_payload->'rollbackTarget'->>'version')::integer
+           AND c.project_id = p_project_id AND c.goal_id = p_goal_id
+           AND c.content_hash = p_payload->'rollbackTarget'->>'contentHash'
+      ) THEN RAISE EXCEPTION 'candidate rollback target is not a registered project/Goal version'; END IF;
       IF jsonb_typeof(p_payload->'sourceEvidenceIds') <> 'array' OR jsonb_array_length(p_payload->'sourceEvidenceIds') NOT BETWEEN 1 AND 32 THEN RAISE EXCEPTION 'candidate digest sources are invalid'; END IF;
       IF EXISTS (SELECT 1 FROM jsonb_array_elements_text(p_payload->'sourceEvidenceIds') ref WHERE ref <> lower(ref) OR NOT EXISTS (SELECT 1 FROM %1$s.improvement_digests d WHERE d.digest_id::text = ref AND d.project_id = p_project_id AND d.goal_id = p_goal_id)) THEN RAISE EXCEPTION 'candidate digest source is missing or outside the Goal'; END IF;
       PERFORM pg_advisory_xact_lock(hashtextextended(p_operation_ref, 88));
@@ -265,7 +383,9 @@ BEGIN
 END $$;
 
 DROP TRIGGER IF EXISTS improvement_candidates_append_only ON improvement_candidates;
-CREATE TRIGGER improvement_candidates_append_only BEFORE UPDATE OR DELETE OR TRUNCATE ON improvement_candidates FOR EACH STATEMENT EXECUTE FUNCTION reject_improvement_candidate_mutation();
+CREATE TRIGGER improvement_candidates_append_only BEFORE UPDATE OR DELETE ON improvement_candidates FOR EACH STATEMENT EXECUTE FUNCTION reject_improvement_candidate_mutation();
+DROP TRIGGER IF EXISTS improvement_candidates_no_truncate ON improvement_candidates;
+CREATE TRIGGER improvement_candidates_no_truncate BEFORE TRUNCATE ON improvement_candidates FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
 DROP TRIGGER IF EXISTS improvement_candidate_authorization_issuer ON improvement_candidate_insert_authorizations;
 CREATE TRIGGER improvement_candidate_authorization_issuer BEFORE INSERT ON improvement_candidate_insert_authorizations FOR EACH ROW EXECUTE FUNCTION authorize_improvement_candidate_authorization_insert();
 DROP TRIGGER IF EXISTS improvement_candidate_authorization_immutable ON improvement_candidate_insert_authorizations;
@@ -275,6 +395,8 @@ CREATE TRIGGER improvement_candidate_insert_binding BEFORE INSERT ON improvement
 DROP TRIGGER IF EXISTS improvement_candidate_marker_guard ON improvement_candidate_issuer_markers;
 CREATE TRIGGER improvement_candidate_marker_guard BEFORE INSERT OR UPDATE OR DELETE ON improvement_candidate_issuer_markers FOR EACH ROW EXECUTE FUNCTION authorize_improvement_candidate_marker_mutation();
 REVOKE EXECUTE ON FUNCTION improvement_candidate_canonical_json(jsonb) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION validate_improvement_candidate_payload(jsonb) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION improvement_candidate_json_numbers_stable(jsonb) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION reject_improvement_candidate_mutation() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION authorize_improvement_candidate_authorization_insert() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION authorize_improvement_candidate_marker_mutation() FROM PUBLIC;

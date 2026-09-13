@@ -36,6 +36,7 @@ describeDatabase("Improvement Candidate persistence", () => {
   let projectId: string;
   let goalId: string;
   let digestId: string;
+  let rollbackTargetId: string;
   let proof: Awaited<ReturnType<typeof acquireGoalLease>>;
 
   beforeAll(async () => {
@@ -51,6 +52,8 @@ describeDatabase("Improvement Candidate persistence", () => {
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
     await grantProjectMembership(pool, operatorId, projectId);
     await grantProjectRole(pool, operatorId, projectId, "engineering");
+    rollbackTargetId = randomUUID();
+    await pool.query("INSERT INTO improvement_candidate_rollback_targets (target_candidate_id, target_version, project_id, goal_id, content_hash) VALUES ($1, 1, $2, $3, $4)", [rollbackTargetId, projectId, goalId, "0".repeat(64)]);
     proof = await acquireGoalLease(pool, { goalId, ownerId: "candidate-worker", leaseDurationMs: 60_000 });
     const digest = await recordImprovementDigest(pool, {
       schemaVersion: 1, projectId, goalId, episodeId: `candidate-episode-${randomUUID()}`, trigger: "goal_completed",
@@ -76,7 +79,7 @@ describeDatabase("Improvement Candidate persistence", () => {
     scenarioSuite: ["implementation-risk-review-v1"],
     scenarioSuiteHash: improvementCandidateScenarioSuiteHash(["implementation-risk-review-v1"]),
     confidence: 0.84, dataSufficiency: { episodeCount: 3, comparableGoalCount: 2 },
-    rollbackTarget: { candidateId: randomUUID(), version: 1, contentHash: "0".repeat(64) },
+    rollbackTarget: { candidateId: rollbackTargetId, version: 1, contentHash: "0".repeat(64) },
     ...overrides,
   });
 
@@ -93,9 +96,11 @@ describeDatabase("Improvement Candidate persistence", () => {
     const routingEvaluated = await transitionImprovementCandidate(pool, routing.candidateId, "evaluated", proof, author, "routing-evaluated");
     expect(routingEvaluated).toMatchObject({ state: "evaluated", version: 2, parentCandidateId: routing.candidateId });
     await expect(transitionImprovementCandidate(pool, routingEvaluated.candidateId, "applied", proof, author, "routing-applied")).rejects.toThrow(/proposal|auto-applied|routing/i);
+    await expect(appendImprovementCandidateVersion(pool, routing.candidateId, inputFor(), proof, author, "routing-kind-switch")).rejects.toThrow(/kind|revision|routing/i);
   });
 
-  it("rejects a fabricated or cross-Goal Improvement Digest reference", async () => {
+  it("rejects fabricated rollback targets and cross-Goal Improvement Digest references", async () => {
+    await expect(recordImprovementCandidate(pool, inputFor({ rollbackTarget: { candidateId: randomUUID(), version: 1, contentHash: "0".repeat(64) } }), proof, author, "dangling-rollback")).rejects.toThrow(/rollback|target/i);
     await expect(recordImprovementCandidate(pool, inputFor({ sourceEvidenceIds: [randomUUID()] }), proof, author, "dangling-source")).rejects.toThrow(/digest|source|evidence/i);
     const otherGoalId = randomUUID();
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [otherGoalId, projectId]);
@@ -106,11 +111,12 @@ describeDatabase("Improvement Candidate persistence", () => {
     const first = await recordImprovementCandidate(pool, inputFor(), proof, author, "revision-1");
     const second = await appendImprovementCandidateVersion(pool, first.candidateId, inputFor({ predictedEffect: "The revised role will surface checks before implementation." }), proof, author, "revision-2");
     expect(second).toMatchObject({ version: 2, parentCandidateId: first.candidateId, candidateId: expect.not.stringMatching(first.candidateId) });
-    await expect(readImprovementCandidate(pool, first.candidateId)).resolves.toEqual(first);
-    await expect(listImprovementCandidateVersions(pool, first.candidateId)).resolves.toEqual([first, second]);
+    await expect(readImprovementCandidate(pool, first.candidateId, { operatorId, proof })).resolves.toEqual(first);
+    await expect(listImprovementCandidateVersions(pool, first.candidateId, { operatorId, proof })).resolves.toEqual([first, second]);
+    await expect(readImprovementCandidate(pool, first.candidateId, { operatorId: randomUUID(), proof })).rejects.toThrow(/authorized|project|Goal/i);
     await expect(pool.query("UPDATE improvement_candidates SET predicted_effect = 'tampered' WHERE candidate_id = $1", [first.candidateId])).rejects.toThrow(/append-only|immutable|mutation/i);
     await expect(pool.query("DELETE FROM improvement_candidates WHERE candidate_id = $1", [first.candidateId])).rejects.toThrow(/append-only|immutable|mutation/i);
-    await expect(pool.query("TRUNCATE improvement_candidates")).rejects.toThrow(/append-only|immutable|mutation/i);
+    await expect(pool.query("TRUNCATE improvement_candidates")).rejects.toThrow(/truncat|forbidden|append-only/i);
     await expect(pool.query(`INSERT INTO improvement_candidates
       (candidate_id, lineage_id, version, parent_candidate_id, schema_version, project_id, goal_id, kind, target, changes,
        source_evidence_ids, evidence_pattern, predicted_effect, expected_metrics, protected_metrics, scenario_suite,
@@ -128,6 +134,17 @@ describeDatabase("Improvement Candidate persistence", () => {
     const first = await recordImprovementCandidate(pool, input, proof, author, "idempotent");
     await expect(recordImprovementCandidate(pool, input, proof, author, "idempotent")).resolves.toEqual(first);
     await expect(recordImprovementCandidate(pool, { ...input, predictedEffect: "different" }, proof, author, "idempotent")).rejects.toThrow(/idempotency|different|content/i);
+  });
+
+  it("does not replay a transition operation under another Goal lease", async () => {
+    const candidate = await recordImprovementCandidate(pool, inputFor(), proof, author, "cross-goal-replay-candidate");
+    const evaluated = await transitionImprovementCandidate(pool, candidate.candidateId, "evaluated", proof, author, "cross-goal-replay");
+    const otherGoalId = randomUUID();
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [otherGoalId, projectId]);
+    await grantProjectMembership(pool, operatorId, projectId);
+    await grantProjectRole(pool, operatorId, projectId, "engineering");
+    const otherProof = await acquireGoalLease(pool, { goalId: otherGoalId, ownerId: "candidate-worker-other", leaseDurationMs: 60_000 });
+    await expect(transitionImprovementCandidate(pool, evaluated.candidateId, "judged", otherProof, author, "cross-goal-replay")).rejects.toThrow(/Goal|lease|replay|authorized/i);
   });
 
   it("requires lifecycle transitions instead of allowing a direct state skip", async () => {

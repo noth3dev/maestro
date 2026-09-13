@@ -29,6 +29,11 @@ export interface ImprovementCandidateAuthor {
   readonly operatorRoleId: string;
 }
 
+export interface ImprovementCandidateReadAuthorization {
+  readonly operatorId: string;
+  readonly proof: GoalLeaseProof;
+}
+
 interface CandidateRow {
   candidate_id: string;
   lineage_id: string;
@@ -104,9 +109,10 @@ function normalizeInput(input: ImprovementCandidateInput): ImprovementCandidateI
   };
 }
 
-function operationRef(idempotencyKey: string): string {
-  line(idempotencyKey, "Improvement Candidate idempotencyKey", 247);
-  return `candidate:${idempotencyKey.trim()}`;
+function operationRef(kind: "record" | "append" | "transition", idempotencyKey: string): string {
+  const prefix = `candidate:${kind}:`;
+  line(idempotencyKey, "Improvement Candidate idempotencyKey", 256 - prefix.length);
+  return `${prefix}${idempotencyKey.trim()}`;
 }
 
 function inputFromRow(row: CandidateRow): ImprovementCandidateInput {
@@ -150,6 +156,23 @@ function mapRow(row: CandidateRow): ImprovementCandidate {
     if (error instanceof ImprovementCandidatePersistenceError) throw error;
     throw new ImprovementCandidatePersistenceError(error instanceof Error ? error.message : "Stored Improvement Candidate is invalid");
   }
+}
+
+async function assertReadAccess(pool: Pool, row: CandidateRow, authorization: ImprovementCandidateReadAuthorization): Promise<void> {
+  line(authorization?.operatorId, "Improvement Candidate read operatorId");
+  if (!UUID.test(authorization.operatorId)) throw new ImprovementCandidatePersistenceError("Improvement Candidate read operatorId must be a durable UUID");
+  if (authorization.proof?.goalId?.toLowerCase() !== row.goal_id || authorization.proof.ownerId === "" || !/^\d+$/.test(authorization.proof.fencingToken)) {
+    throw new ImprovementCandidatePersistenceError("Improvement Candidate read lease proof is invalid");
+  }
+  const result = await pool.query(
+    `SELECT 1
+       FROM local_operators o
+       JOIN operator_project_memberships m ON m.operator_id = o.operator_id AND m.project_id = $2 AND m.active = true
+       JOIN goal_leases l ON l.goal_id = $3 AND l.owner_id = $4 AND l.fencing_token = $5::bigint AND l.expires_at > clock_timestamp()
+      WHERE o.operator_id = $1 AND o.active = true`,
+    [authorization.operatorId, row.project_id, row.goal_id, authorization.proof.ownerId, authorization.proof.fencingToken],
+  );
+  if (result.rowCount !== 1) throw new ImprovementCandidatePersistenceError("Improvement Candidate read is not authorized for this project and Goal");
 }
 
 async function readRow(client: Pick<Pool | PoolClient, "query">, candidateId: string, forUpdate = false): Promise<CandidateRow> {
@@ -241,7 +264,7 @@ export async function recordImprovementCandidate(pool: Pool, rawInput: Improveme
   const input = normalizeInput(rawInput);
   authorValue(author);
   ensureProofMatches(input, proof);
-  const operation = operationRef(idempotencyKey);
+  const operation = operationRef("record", idempotencyKey);
   return withGoalAuthority(pool, proof, 94, async (client) => {
     const existing = await client.query<CandidateRow>(`SELECT ${COLUMNS} FROM improvement_candidates WHERE operation_ref = $1 FOR UPDATE`, [operation]);
     if (existing.rowCount === 1) {
@@ -256,12 +279,15 @@ export async function recordImprovementCandidate(pool: Pool, rawInput: Improveme
   });
 }
 
-export async function readImprovementCandidate(pool: Pool, candidateId: string): Promise<ImprovementCandidate> {
-  return mapRow(await readRow(pool, candidateId));
+export async function readImprovementCandidate(pool: Pool, candidateId: string, authorization: ImprovementCandidateReadAuthorization): Promise<ImprovementCandidate> {
+  const row = await readRow(pool, candidateId);
+  await assertReadAccess(pool, row, authorization);
+  return mapRow(row);
 }
 
-export async function listImprovementCandidateVersions(pool: Pool, candidateId: string): Promise<readonly ImprovementCandidate[]> {
+export async function listImprovementCandidateVersions(pool: Pool, candidateId: string, authorization: ImprovementCandidateReadAuthorization): Promise<readonly ImprovementCandidate[]> {
   const first = await readRow(pool, candidateId);
+  await assertReadAccess(pool, first, authorization);
   const result = await pool.query<CandidateRow>(`SELECT ${COLUMNS} FROM improvement_candidates WHERE lineage_id = $1 ORDER BY version`, [first.lineage_id]);
   return result.rows.map(mapRow);
 }
@@ -276,6 +302,7 @@ async function appendFromPrevious(
   state: ImprovementCandidateState,
 ): Promise<ImprovementCandidate> {
   if (input.projectId !== previous.project_id || input.goalId !== previous.goal_id) throw new ImprovementCandidatePersistenceError("Improvement Candidate revision cannot change project or Goal");
+  if (input.kind !== previous.kind) throw new ImprovementCandidatePersistenceError("Improvement Candidate revision cannot change candidate kind");
   const candidateId = randomUUID();
   return insertCandidate(client, input, proof, author, operation, { candidateId, lineageId: previous.lineage_id, version: previous.version + 1, parentCandidateId: previous.candidate_id, state });
 }
@@ -284,7 +311,7 @@ export async function appendImprovementCandidateVersion(pool: Pool, candidateId:
   const input = normalizeInput(rawInput);
   authorValue(author);
   ensureProofMatches(input, proof);
-  const operation = operationRef(idempotencyKey);
+  const operation = operationRef("append", idempotencyKey);
   return withGoalAuthority(pool, proof, 94, async (client) => {
     const existing = await client.query<CandidateRow>(`SELECT ${COLUMNS} FROM improvement_candidates WHERE operation_ref = $1 FOR UPDATE`, [operation]);
     if (existing.rowCount === 1) {
@@ -298,10 +325,11 @@ export async function appendImprovementCandidateVersion(pool: Pool, candidateId:
 
 export async function transitionImprovementCandidate(pool: Pool, candidateId: string, nextState: ImprovementCandidateState, proof: GoalLeaseProof, author: ImprovementCandidateAuthor, idempotencyKey: string): Promise<ImprovementCandidate> {
   authorValue(author);
-  const operation = operationRef(idempotencyKey);
+  const operation = operationRef("transition", idempotencyKey);
   return withGoalAuthority(pool, proof, 94, async (client) => {
     const existing = await client.query<CandidateRow>(`SELECT ${COLUMNS} FROM improvement_candidates WHERE operation_ref = $1 FOR UPDATE`, [operation]);
     if (existing.rowCount === 1) {
+      if (existing.rows[0]!.goal_id !== proof.goalId.toLowerCase()) throw new ImprovementCandidatePersistenceError("Improvement Candidate idempotency replay is outside the lease Goal");
       assertIdempotentReplay(existing.rows[0]!, inputFromRow(existing.rows[0]!), author, nextState, candidateId);
       return mapRow(existing.rows[0]!);
     }
@@ -309,6 +337,6 @@ export async function transitionImprovementCandidate(pool: Pool, candidateId: st
     if (previous.goal_id !== proof.goalId.toLowerCase()) throw new ImprovementCandidatePersistenceError("Improvement Candidate transition is outside the lease Goal");
     if (previous.kind === "routing_capability_axis" && nextState === "applied") throw new ImprovementCandidatePersistenceError("Routing capability candidates remain proposal-only and cannot be auto-applied");
     if (!canTransitionImprovementCandidate(previous.state, nextState)) throw new ImprovementCandidatePersistenceError(`Improvement Candidate cannot transition from ${previous.state} to ${nextState}`);
-      return appendFromPrevious(client, previous, normalizeInput(inputFromRow(previous)), proof, author, operation, nextState);
+    return appendFromPrevious(client, previous, normalizeInput(inputFromRow(previous)), proof, author, operation, nextState);
   });
 }
