@@ -156,6 +156,18 @@ CREATE TABLE IF NOT EXISTS organizational_knowledge_digest_loss_authorizations (
   retention retention_class NOT NULL DEFAULT 'project_lifetime'
 );
 REVOKE ALL ON organizational_knowledge_digest_loss_authorizations FROM PUBLIC;
+CREATE OR REPLACE FUNCTION validate_organizational_knowledge_digest_loss_authorization_provenance() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE call_stack text;
+BEGIN
+  GET DIAGNOSTICS call_stack = PG_CONTEXT;
+  IF call_stack NOT LIKE '%authorize_knowledge_digest_loss%' THEN
+    RAISE EXCEPTION 'digest-loss authorization rows must be created by authorize_knowledge_digest_loss';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS organizational_knowledge_digest_loss_authorizations_provenance ON organizational_knowledge_digest_loss_authorizations;
+CREATE TRIGGER organizational_knowledge_digest_loss_authorizations_provenance BEFORE INSERT ON organizational_knowledge_digest_loss_authorizations FOR EACH ROW EXECUTE FUNCTION validate_organizational_knowledge_digest_loss_authorization_provenance();
 CREATE INDEX IF NOT EXISTS organizational_knowledge_digest_losses_project_idx ON organizational_knowledge_digest_losses (project_id, goal_id, digest_id);
 CREATE OR REPLACE FUNCTION reject_organizational_knowledge_digest_loss_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -744,5 +756,6 @@ BEGIN
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.validate_organizational_knowledge_digest_loss_binding() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_organizational_knowledge_digest_loss_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_digest_loss(text, uuid, uuid, uuid, text, bigint, text, uuid, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.validate_organizational_knowledge_digest_loss_authorization_provenance() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
 END;
 $$;

@@ -101,8 +101,11 @@ describeDatabase("organizational knowledge persistence", () => {
     const digest = await recordImprovementDigest(pool, { schemaVersion: 1, projectId, goalId, episodeId: "digest-loss-episode", trigger: "goal_completed", situation: "A bounded task completed.", selectedDecision: "Keep the gate.", rejectedAlternatives: [], observedResult: "The gate held.", metrics: [], confidence: 0.8, sourceRefs: [{ kind: "goal", sourceId: goalId }] }, proof, { actorId: "worker", sessionRef: "session:digest-loss", operatorId });
     const client = await pool.connect();
     try {
-      await client.query("BEGIN");
       const forgedToken = "forged-digest-loss-token";
+      await client.query("BEGIN");
+      await expect(client.query(`INSERT INTO organizational_knowledge_digest_loss_authorizations (token_hash, digest_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by, role_id) VALUES (encode(public.digest($1, 'sha256'), 'hex'), $2, $3, $4, $5, $6, $7, $8, $9)`, [forgedToken, digest.digestId, goalId, projectId, proof.ownerId, proof.fencingToken, "forged", operatorId, "head-engineering"])).rejects.toThrow(/authorize|provenance|authorization/i);
+      await client.query("ROLLBACK");
+      await client.query("BEGIN");
       for (const [name, value] of [["maestro.knowledge_digest_loss_digest", digest.digestId], ["maestro.knowledge_digest_loss_goal", goalId], ["maestro.knowledge_digest_loss_project", projectId], ["maestro.knowledge_digest_loss_owner", proof.ownerId], ["maestro.knowledge_digest_loss_fence", String(proof.fencingToken)], ["maestro.knowledge_digest_loss_reason", "forged"], ["maestro.knowledge_digest_loss_recorded_by", operatorId], ["maestro.knowledge_digest_loss_role", "head-engineering"], ["maestro.knowledge_digest_loss_token", forgedToken]] as const) await client.query("SELECT set_config($1, $2, true)", [name, value]);
       await expect(client.query(`INSERT INTO organizational_knowledge_digest_losses (digest_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by, role_id, token_hash) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, encode(public.digest($9, 'sha256'), 'hex'))`, [digest.digestId, goalId, projectId, proof.ownerId, proof.fencingToken, "forged", operatorId, "head-engineering", forgedToken])).rejects.toThrow(/binding|authorization|loss/i);
       await client.query("ROLLBACK");
