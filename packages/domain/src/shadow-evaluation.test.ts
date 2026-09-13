@@ -108,6 +108,17 @@ describe("zero-authority shadow evaluation", () => {
     expect(facade).not.toHaveProperty("prompt");
     expect(facade).not.toHaveProperty("sendMessage");
     expect(facade).not.toHaveProperty("cancel");
+
+    let contextKernel: unknown;
+    await runShadowEvaluation({
+      candidate: candidate(),
+      cases: [sameInput()],
+      kernel: kernel as ExecutionKernelPort,
+      evaluate: async (_input, context) => { contextKernel = context.kernel; return active; },
+    });
+    expect(contextKernel).toEqual(expect.objectContaining({ observe: expect.any(Function) }));
+    expect(contextKernel).not.toHaveProperty("spawn");
+    expect(contextKernel).not.toHaveProperty("prompt");
   });
 
   it("journals an interrupted run as orphaned and commits no partial live effect", async () => {

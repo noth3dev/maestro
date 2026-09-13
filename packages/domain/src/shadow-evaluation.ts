@@ -103,8 +103,8 @@ export interface ShadowEvaluationRequest {
   /** A journal is required to make interruption/restart observable. */
   readonly journal?: ShadowLifecycleJournal;
   readonly runId?: string;
-  /** Read-only provider observations may be supplied by an ExecutionKernel adapter. */
-  readonly kernel?: ShadowKernelPort;
+  /** A full kernel is adapted to a read-only facade before evaluator code sees it. */
+  readonly kernel?: ExecutionKernelPort;
   readonly signal?: AbortSignal;
 }
 
@@ -158,7 +158,9 @@ function deepFreeze<T>(value: T, seen = new WeakSet<object>()): T {
 
 function snapshot<T>(value: T, name: string): T {
   try {
-    return deepFreeze(structuredClone(value));
+    const copy = structuredClone(value);
+    stableJson(copy);
+    return deepFreeze(copy);
   } catch (error) {
     throw new InvalidShadowOutputError(`${name} must be cloneable JSON data: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -218,7 +220,7 @@ export async function runShadowEvaluation(request: ShadowEvaluationRequest): Pro
         deniedEffects.push(Object.freeze({ ...effectRequest }));
         return await denyShadowEffect(effectRequest, effect);
       },
-      ...(request.kernel === undefined ? {} : { kernel: request.kernel }),
+      ...(request.kernel === undefined ? {} : { kernel: createShadowKernelPort(request.kernel) }),
     };
     const proposed = copyOutput(await request.evaluate(shadowCase.input, context));
     if (request.signal?.aborted) {
