@@ -128,6 +128,21 @@ describeDatabase("organizational knowledge persistence", () => {
     }
   });
 
+  it("rejects direct promotion authorization insertion", async () => {
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
+    const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:promotion-forge", operatorId, operatorRoleId: "head-engineering" }, "promotion-forge");
+    await expect(pool.query("INSERT INTO knowledge_promotion_authorizations (token_hash, knowledge_id, revision, scope, role_id, department_id, operator_id, goal_id, owner_id, fencing_token, authorization_transaction_id) VALUES (encode(public.digest($1, 'sha256'), 'hex'), $2, 2, 'project_department', 'head-engineering', 'engineering', $3, $4, 'worker', $5, txid_current())", [randomUUID(), proposed.knowledgeId, operatorId, goalId, proof.fencingToken])).rejects.toThrow(/secured|issuer|authorization/i);
+  });
+
+  it("rejects forged cleanup authorization rows before protected truncation", async () => {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await expect(client.query("INSERT INTO organizational_knowledge_schema_cleanup_authorizations (transaction_id, authorized_by) VALUES (txid_current(), session_user); TRUNCATE organizational_knowledge")).rejects.toThrow(/cleanup|secured|goal reset|internal|forbidden/i);
+      await client.query("ROLLBACK");
+    } finally { client.release(); }
+  });
+
   it("persists worker proposals separately and only exposes promoted knowledge", async () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
     await expect(pool.query(`INSERT INTO organizational_knowledge (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, promotion_marker, reason, created_by, source_session_ref) VALUES ($1, 1, 1, $2, $2, $3, 'engineering', 'worker_proposed', 'proposed', 'direct SQL', 'direct SQL', $4::jsonb, '[]', '["episode-a"]', 0.5, 1, false, NULL, NULL, NULL, 'worker-proposal', NULL, 'worker', 'sql:direct')`, [randomUUID(), projectId, goalId, JSON.stringify([evidenceId])])).rejects.toThrow(/authorization|marker/);
