@@ -49,6 +49,14 @@ describe("zero-authority shadow evaluation", () => {
     expect(result.records[0]!.matchesActive).toBe(false);
   });
 
+  it("rejects a shadow case whose active output was not produced from the identical input", async () => {
+    await expect(runShadowEvaluation({
+      candidate: candidate(),
+      cases: [{ input: { request: "one" }, activeInput: { request: "two" }, active }],
+      evaluate: async () => active,
+    })).rejects.toThrow(/inputs differ/i);
+  });
+
   it("denies an effect attempt before any AuthorizedEffectExecutor or live effect is reached", async () => {
     let executorCalls = 0;
     let liveEffectRows = 0;
@@ -86,6 +94,27 @@ describe("zero-authority shadow evaluation", () => {
     expect(result.status).toBe("completed");
     expect(evidenceReads).toBe(1);
     expect(result.records[0]!.readEvidenceIds).toEqual(["evidence-1"]);
+  });
+
+  it("deep-freezes evaluator inputs, evidence, and returned nested records", async () => {
+    const evidence = { nested: { value: "observed" } };
+    let receivedInput: unknown;
+    const result = await runShadowEvaluation({
+      candidate: candidate(),
+      cases: [sameInput()],
+      recordedEvidence: { "evidence-1": evidence },
+      evaluate: async (received, context) => {
+        receivedInput = received;
+        const observed = context.readRecordedEvidence("evidence-1") as { nested: { value: string } };
+        expect(Object.isFrozen(received)).toBe(true);
+        expect(Object.isFrozen(observed)).toBe(true);
+        expect(Object.isFrozen(observed.nested)).toBe(true);
+        return { ...active, plans: [{ nested: { value: "shadow" } }] };
+      },
+    });
+    expect(Object.isFrozen(receivedInput)).toBe(true);
+    expect(Object.isFrozen(result.records[0]!.proposed.plans[0])).toBe(true);
+    expect(Object.isFrozen((result.records[0]!.proposed.plans[0] as { nested: object }).nested)).toBe(true);
   });
 
   it("provides a read-only kernel facade with no provider write methods", async () => {

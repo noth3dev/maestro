@@ -141,7 +141,12 @@ function stableJson(value: unknown, seen = new WeakSet<object>()): string {
   seen.add(value);
   try {
     if (value instanceof Date) return JSON.stringify(value.toISOString());
-    if (Array.isArray(value)) return `[${value.map((entry) => stableJson(entry, seen)).join(",")}]`;
+    if (Array.isArray(value)) {
+      for (let index = 0; index < value.length; index += 1) if (!Object.hasOwn(value, index)) throw new InvalidShadowOutputError("shadow arrays must not be sparse");
+      return `[${value.map((entry) => stableJson(entry, seen)).join(",")}]`;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) throw new InvalidShadowOutputError("shadow values must be plain JSON objects");
     const object = value as Record<string, unknown>;
     return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${stableJson(object[key], seen)}`).join(",")}}`;
   } finally {
@@ -170,6 +175,7 @@ function copyOutput(value: ShadowOutput): ShadowOutput {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new InvalidShadowOutputError("shadow output must be an object");
   if (!Array.isArray(value.messages) || value.messages.some((message) => typeof message !== "string")) throw new InvalidShadowOutputError("shadow output messages must be strings");
   if (!Array.isArray(value.plans) || !Array.isArray(value.challenges)) throw new InvalidShadowOutputError("shadow output plans and challenges must be arrays");
+  for (const entries of [value.messages, value.plans, value.challenges]) for (let index = 0; index < entries.length; index += 1) if (!Object.hasOwn(entries, index)) throw new InvalidShadowOutputError("shadow output arrays must not be sparse");
   return snapshot({ messages: [...value.messages], plans: [...value.plans], challenges: [...value.challenges] }, "shadow output");
 }
 
@@ -189,7 +195,8 @@ async function journalOrphan(request: ShadowEvaluationRequest, reason: string): 
  */
 export async function runShadowEvaluation(request: ShadowEvaluationRequest): Promise<ShadowEvaluationResult> {
   assertValidImprovementCandidateInput(request.candidate);
-  if (!Array.isArray(request.cases)) throw new InvalidShadowOutputError("shadow cases must be an array");
+  if (!Array.isArray(request.cases) || request.cases.length === 0) throw new InvalidShadowOutputError("shadow cases must be a non-empty array");
+  if (request.recordedEvidence !== undefined && (typeof request.recordedEvidence !== "object" || request.recordedEvidence === null || Array.isArray(request.recordedEvidence))) throw new InvalidShadowOutputError("recorded evidence must be an object");
   if (request.journal !== undefined && (!request.runId || request.runId.trim() === "")) throw new InvalidShadowOutputError("shadow runId is required when a journal is supplied");
 
   const evidence = snapshot(request.recordedEvidence ?? {}, "recorded evidence");
