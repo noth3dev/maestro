@@ -434,6 +434,7 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
         workerId, councilId: request.councilId, departmentId: request.departmentId, planVersion: request.planVersion,
         itemId: request.itemId, profileRef: bundle.substance.profileRef, roleId: `head-${request.departmentId}`, taskClass: bundle.substance.role,
         allowDefaultMissionOverlay: true,
+        defaultMissionOverlayExpiresAt: new Date(Date.now() + missionTimeLimitMs(bundle.substance.timeCeiling)).toISOString(),
       });
       const preparedCwd = request.prepareWorktree === undefined ? request.cwd : await request.prepareWorktree(workerId);
       const providerAdmission: ExecutionAdmission = {

@@ -20,6 +20,8 @@ export interface DeriveWorkerProfileForMissionRequest {
   readonly taskClass: string;
   /** Spawn admission may use a zero-delta overlay until a Head-selected overlay is issued. */
   readonly allowDefaultMissionOverlay?: boolean;
+  /** Explicit Mission Bundle time bound used for a zero-delta default overlay. */
+  readonly defaultMissionOverlayExpiresAt?: string;
 }
 interface BoundRow { axis: PersonaAxis; floor_value: string; ceiling_value: string; }
 interface WorkerBindingRow { status: string; bundle_content_hash: string; owner_lease_expires_at: Date | string | null; }
@@ -53,9 +55,8 @@ export async function deriveWorkerProfileForMission(pool: Pool, request: DeriveW
     overlay = await readMissionPersonaOverlay(pool, request.councilId, request.departmentId, request.planVersion, request.itemId, new Date(), request.workerId);
   } catch (error) {
     if (!(request.allowDefaultMissionOverlay && error instanceof MissionPersonaOverlayNotFoundError)) throw error;
-    const expiresAt = worker.rows[0]!.owner_lease_expires_at;
-    if (expiresAt === null) throw new WorkerProfileExpiredError(`Worker has no bounded owner lease: ${request.workerId}`);
-    overlay = { persona: active.persona, expiresAt: new Date(expiresAt).toISOString() };
+    if (request.defaultMissionOverlayExpiresAt === undefined) throw new WorkerProfileExpiredError(`Worker has no explicit Mission Bundle profile lifetime: ${request.workerId}`);
+    overlay = { persona: active.persona, expiresAt: new Date(request.defaultMissionOverlayExpiresAt).toISOString() };
   }
   const missionDelta: Partial<Record<PersonaAxis, number>> = {};
   for (const axis of PERSONA_AXES) missionDelta[axis] = overlay.persona[axis] - active.persona[axis];
