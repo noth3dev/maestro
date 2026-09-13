@@ -4173,3 +4173,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-14 Plan 6 §S6 independent review: after five consecutive FAIL rounds and the required progress checkpoint, exact-HEAD no-edit review passed at `b163a55`. All planned gates are closed: explicit per-class enablement/isolation, fixed scope, automatic predecessor rollback with intact evidence, durable owner-expiry recovery, monotonic Goal observations, conflicting replay rejection, and fresh/replay authority checks. Further additions are non-spec hardening and stop here under the five-round rule.
 
 - 2026-09-14 Plan 6 §S6 merged as the bounded rollout and auto-rollback slice. Post-merge build, lint, diff-check, and authenticated serialized PostgreSQL verification passed 235/235 files and 1617/1617 tests in 333.84s. Next: remove the S6 worktree, push normally, then start §S7 native refinement adapter.
+
+- 2026-09-14 Plan 6 §S7 `native-refinement-adapter`: opened `.worktrees/native-refinement-adapter` from `main` after S6 post-merge verification and push. No migration is required by this slice; RED tests for the controlled native `refine` boundary come first.
