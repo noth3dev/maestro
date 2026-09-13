@@ -178,6 +178,7 @@ BEGIN
      OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) THEN
     RAISE EXCEPTION 'knowledge digest loss authorization context is invalid';
   END IF;
+  PERFORM set_config('maestro.knowledge_digest_loss_token', p_token, true);
   INSERT INTO knowledge_issuer_transaction_markers (transaction_id, issuer_kind, token_hash) VALUES (txid_current(), 'digest_loss', encode(public.digest(p_token, 'sha256'), 'hex')) ON CONFLICT DO NOTHING;
   INSERT INTO organizational_knowledge_digest_loss_authorizations (token_hash, digest_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by, role_id, retention)
     SELECT encode(public.digest(p_token, 'sha256'), 'hex'), p_digest_id, p_goal_id, p_project_id, p_owner_id, p_fencing_token, p_reason, p_recorded_by, p_role_id, d.retention
@@ -202,6 +203,14 @@ END;
 $$;
 DROP TRIGGER IF EXISTS organizational_knowledge_digest_loss_authorizations_issuer ON organizational_knowledge_digest_loss_authorizations;
 CREATE TRIGGER organizational_knowledge_digest_loss_authorizations_issuer BEFORE INSERT ON organizational_knowledge_digest_loss_authorizations FOR EACH ROW EXECUTE FUNCTION authorize_organizational_knowledge_digest_loss_insert();
+CREATE OR REPLACE FUNCTION reject_organizational_knowledge_digest_loss_authorization_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' AND OLD.token_hash = encode(public.digest(NULLIF(current_setting('maestro.knowledge_digest_loss_token', true), ''), 'sha256'), 'hex') THEN RETURN OLD; END IF;
+  RAISE EXCEPTION 'organizational knowledge digest-loss authorizations are one-use';
+END;
+$$;
+DROP TRIGGER IF EXISTS organizational_knowledge_digest_loss_authorizations_immutable ON organizational_knowledge_digest_loss_authorizations;
+CREATE TRIGGER organizational_knowledge_digest_loss_authorizations_immutable BEFORE UPDATE OR DELETE ON organizational_knowledge_digest_loss_authorizations FOR EACH ROW EXECUTE FUNCTION reject_organizational_knowledge_digest_loss_authorization_mutation();
 CREATE OR REPLACE FUNCTION validate_organizational_knowledge_digest_loss_binding() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
   IF NOT EXISTS (
@@ -332,6 +341,14 @@ END;
 $$;
 DROP TRIGGER IF EXISTS knowledge_maintenance_authorizations_issuer ON knowledge_maintenance_authorizations;
 CREATE TRIGGER knowledge_maintenance_authorizations_issuer BEFORE INSERT ON knowledge_maintenance_authorizations FOR EACH ROW EXECUTE FUNCTION authorize_knowledge_maintenance_authorization_insert();
+CREATE OR REPLACE FUNCTION reject_knowledge_maintenance_authorization_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' AND OLD.token_hash = encode(public.digest(NULLIF(current_setting('maestro.knowledge_maintenance_token', true), ''), 'sha256'), 'hex') THEN RETURN OLD; END IF;
+  RAISE EXCEPTION 'knowledge maintenance authorizations are one-use';
+END;
+$$;
+DROP TRIGGER IF EXISTS knowledge_maintenance_authorizations_immutable ON knowledge_maintenance_authorizations;
+CREATE TRIGGER knowledge_maintenance_authorizations_immutable BEFORE UPDATE OR DELETE ON knowledge_maintenance_authorizations FOR EACH ROW EXECUTE FUNCTION reject_knowledge_maintenance_authorization_mutation();
 
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON knowledge_maintenance_authorizations FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION authorize_knowledge_maintenance(text, uuid, integer, text, uuid, text, text, bigint, text, text) FROM PUBLIC;
@@ -880,6 +897,8 @@ BEGIN
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.validate_organizational_knowledge_digest_loss_binding() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_organizational_knowledge_digest_loss_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_digest_loss(text, uuid, uuid, uuid, text, bigint, text, uuid, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_organizational_knowledge_digest_loss_authorization_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_knowledge_maintenance_authorization_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_organizational_knowledge_digest_loss_insert() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
 END;
 $$;
