@@ -89,6 +89,7 @@ import {
   MetronomeScanInputSchema,
   MetronomeFindingListSchema,
   RaiseMetronomeChallengeInputSchema,
+  WorkerOverlayChallengeInputSchema,
   MetronomeCorrectionInputSchema,
   MetronomeSafePauseInputSchema,
   MetronomeResolutionInputSchema,
@@ -803,6 +804,14 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const input = parse(RaiseMetronomeChallengeInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
     const result = await metronome.raise(goalId, input, commandId);
+    return reply.status(201).send(MetronomeChallengeSchema.parse(result));
+  });
+
+  app.post("/v1/goals/:goalId/metronome/worker-overlays/challenges", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const input = parse(WorkerOverlayChallengeInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const result = await metronome.challengeWorkerOverlay(goalId, input, commandId);
     return reply.status(201).send(MetronomeChallengeSchema.parse(result));
   });
 

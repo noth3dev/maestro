@@ -49,7 +49,7 @@ export async function deriveWorkerProfileForMission(pool: Pool, request: DeriveW
   for (const axis of PERSONA_AXES) missionDelta[axis] = overlay.persona[axis] - active.persona[axis];
   return deriveWorkerProfile({
     workerId: request.workerId, roleId: request.roleId, taskClass: request.taskClass,
-    departmentBaseline: role.persona, taskClassTemplate: active.persona, headProfile: active.persona,
+    departmentBaseline: role.persona, taskClassTemplate: role.persona, headProfile: active.persona,
     missionOverlay: missionDelta, missionOverlayExpiresAt: overlay.expiresAt,
     assignmentRef: `mission-bundle:${request.councilId}/${request.departmentId}/${request.planVersion}/${request.itemId}`,
     roleFloors: floors, roleCeilings: ceilings,

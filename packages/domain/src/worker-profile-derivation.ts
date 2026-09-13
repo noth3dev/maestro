@@ -77,7 +77,9 @@ function parseOverlay(value: PersonaLayerDelta): PersonaLayerDelta {
 /** Derive a temporary worker profile from a reviewed task template, never from scratch. */
 export function deriveWorkerProfile(input: WorkerProfileDerivationInput): WorkerProfileDerivation {
   text(input.roleId, "worker profile roleId"); text(input.taskClass, "worker profile taskClass"); text(input.assignmentRef, "worker profile assignmentRef"); text(input.missionOverlayExpiresAt, "worker profile missionOverlayExpiresAt");
-  if (Number.isNaN(Date.parse(input.missionOverlayExpiresAt))) throw new InvalidWorkerProfileDerivationError("worker profile missionOverlayExpiresAt must be a valid timestamp");
+  const expiryAt = Date.parse(input.missionOverlayExpiresAt);
+  if (Number.isNaN(expiryAt)) throw new InvalidWorkerProfileDerivationError("worker profile missionOverlayExpiresAt must be a valid timestamp");
+  if (expiryAt <= Date.now()) throw new InvalidWorkerProfileDerivationError("worker profile missionOverlay has already expired");
   if (input.workerId !== undefined) text(input.workerId, "worker profile workerId");
   if (input.missionType !== undefined) text(input.missionType, "worker profile missionType");
   for (const [name, value] of Object.entries({ risk: input.risk, collaborationDemand: input.collaborationDemand, taskAmbiguity: input.taskAmbiguity, reversibility: input.reversibility, timePressure: input.timePressure, evidenceBurden: input.evidenceBurden })) if (value !== undefined) scalar(value, `worker profile ${name}`);

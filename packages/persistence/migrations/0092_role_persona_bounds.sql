@@ -15,6 +15,16 @@ CREATE TABLE IF NOT EXISTS role_persona_bounds (
 );
 CREATE INDEX IF NOT EXISTS role_persona_bounds_role_idx ON role_persona_bounds (role_id, axis);
 
+-- Backfill an upgraded installation whose permanent taxonomy was bootstrapped
+-- before this additive bounds table existed.
+INSERT INTO role_persona_bounds (role_id, axis, floor_value, ceiling_value, rationale)
+SELECT role_id, axis,
+       GREATEST(0, ROUND(value - 0.15, 2)),
+       LEAST(1, ROUND(value + 0.15, 2)),
+       'role-persona-v1: reviewed duty bound from immutable baseline'
+  FROM role_persona_axes
+ON CONFLICT (role_id, axis) DO NOTHING;
+
 CREATE OR REPLACE FUNCTION reject_role_persona_bounds_mutation()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
