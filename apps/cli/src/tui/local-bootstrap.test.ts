@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
-import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, resolveLocalConnection, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
+import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, resolveLocalConnection, type LocalBootstrapStepEvent, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
 
 function secretStore(initial?: string): LocalSecretStore {
   let value = initial;
@@ -168,7 +168,15 @@ describe("resolveLocalConnection", () => {
     const startModelGateway = vi.fn(async () => undefined);
     const startControlPlane = vi.fn(async () => undefined);
 
-    const result = await resolveLocalConnection({ env: {}, fetch, secretStore: store, runCommand, startModelGateway, startControlPlane, retryDelayMs: 0 });
+    const setupEvents: LocalBootstrapStepEvent[] = [];
+    const result = await resolveLocalConnection({ env: {}, fetch, secretStore: store, runCommand, startModelGateway, startControlPlane, retryDelayMs: 0, onStep: (event) => setupEvents.push(event) });
+    expect(setupEvents.filter((event) => event.status === "started").map((event) => event.step)).toEqual([
+      "docker-check",
+      "postgres-ready",
+      "model-gateway-up",
+      "migrations",
+      "control-plane-up",
+    ]);
     expect(result.kind).toBe("configured");
     if (result.kind === "configured") {
       expect(result.apiUrl).toBe("http://127.0.0.1:4310");
@@ -378,6 +386,16 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     const runCommand = vi.fn(async () => ({ code: 0, stdout: "accepting connections", stderr: "" }));
     await expect(resolveLocalConnection({ env: { MAESTRO_MODEL_GATEWAY_URL: "http://192.0.2.10:4321" }, fetch, secretStore: secretStore(), runCommand, retryDelayMs: 0 })).resolves.toEqual({ kind: "setup-required", reason: "Local model gateway auto-start requires a loopback host" });
     expect(runCommand).not.toHaveBeenCalled();
+  });
+
+  it("reports the bootstrap step that failed", async () => {
+    const setupEvents: LocalBootstrapStepEvent[] = [];
+    const fetch = vi.fn().mockRejectedValue(new Error("connection refused"));
+    const runCommand = vi.fn(async () => ({ code: 127, stdout: "", stderr: "docker: command not found" }));
+
+    await resolveLocalConnection({ env: {}, fetch, secretStore: secretStore(), runCommand, retryDelayMs: 0, onStep: (event) => setupEvents.push(event) });
+
+    expect(setupEvents.at(-1)).toMatchObject({ step: "docker-check", status: "failed", message: expect.stringContaining("Docker") });
   });
 
   it("returns actionable guidance when Docker is unavailable", async () => {
