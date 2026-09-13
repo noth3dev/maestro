@@ -52,58 +52,70 @@ CREATE TABLE IF NOT EXISTS routing_candidate_approval_mutation_markers (
 );
 REVOKE ALL ON routing_candidate_approval_mutation_markers FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION authorize_routing_candidate_approval_marker_mutation()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
+DO $$
+DECLARE schema_name text := quote_ident(current_schema());
 BEGIN
-  IF TG_OP = 'INSERT' AND NEW.transaction_id = txid_current()
-     AND NEW.token_hash = encode(public.digest(NULLIF(current_setting('maestro.routing_candidate_approval_token', true), ''), 'sha256'), 'hex') THEN RETURN NEW; END IF;
-  IF TG_OP = 'DELETE' AND OLD.transaction_id = txid_current()
-     AND OLD.token_hash = encode(public.digest(NULLIF(current_setting('maestro.routing_candidate_approval_token', true), ''), 'sha256'), 'hex') THEN RETURN OLD; END IF;
-  RAISE EXCEPTION 'routing candidate approval markers are secured and one-use';
-END;
-$$;
+  EXECUTE format($fn$
+    CREATE OR REPLACE FUNCTION %1$s.authorize_routing_candidate_approval_marker_mutation()
+    RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, %1$s AS $body$
+    BEGIN
+      IF TG_OP = 'INSERT' AND NEW.transaction_id = txid_current()
+         AND NEW.token_hash = encode(public.digest(NULLIF(current_setting('maestro.routing_candidate_approval_token', true), ''), 'sha256'), 'hex') THEN RETURN NEW; END IF;
+      IF TG_OP = 'DELETE' AND OLD.transaction_id = txid_current()
+         AND OLD.token_hash = encode(public.digest(NULLIF(current_setting('maestro.routing_candidate_approval_token', true), ''), 'sha256'), 'hex') THEN RETURN OLD; END IF;
+      RAISE EXCEPTION 'routing candidate approval markers are secured and one-use';
+    END;
+    $body$;
+  $fn$, schema_name);
 
-CREATE OR REPLACE FUNCTION authorize_routing_candidate_approval_write()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE token_hash_value char(64);
-BEGIN
-  token_hash_value := encode(public.digest(NULLIF(current_setting('maestro.routing_candidate_approval_token', true), ''), 'sha256'), 'hex');
-  IF NOT EXISTS (SELECT 1 FROM routing_candidate_approval_mutation_markers WHERE transaction_id = txid_current() AND token_hash = token_hash_value) THEN
-    RAISE EXCEPTION 'routing candidate approval write is not bound to secured authorization';
-  END IF;
-  DELETE FROM routing_candidate_approval_mutation_markers WHERE transaction_id = txid_current() AND token_hash = token_hash_value;
-  RETURN NEW;
-END;
-$$;
+  EXECUTE format($fn$
+    CREATE OR REPLACE FUNCTION %1$s.authorize_routing_candidate_approval_write()
+    RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, %1$s AS $body$
+    DECLARE token_hash_value char(64);
+    BEGIN
+      token_hash_value := encode(public.digest(NULLIF(current_setting('maestro.routing_candidate_approval_token', true), ''), 'sha256'), 'hex');
+      IF NOT EXISTS (SELECT 1 FROM %1$s.routing_candidate_approval_mutation_markers WHERE transaction_id = txid_current() AND token_hash = token_hash_value) THEN
+        RAISE EXCEPTION 'routing candidate approval write is not bound to secured authorization';
+      END IF;
+      DELETE FROM %1$s.routing_candidate_approval_mutation_markers WHERE transaction_id = txid_current() AND token_hash = token_hash_value;
+      RETURN NEW;
+    END;
+    $body$;
+  $fn$, schema_name);
 
-CREATE OR REPLACE FUNCTION reject_routing_candidate_approval_mutation()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
-BEGIN
-  RAISE EXCEPTION 'routing candidate approvals are append-only evidence';
-END;
-$$;
+  EXECUTE format($fn$
+    CREATE OR REPLACE FUNCTION %1$s.reject_routing_candidate_approval_mutation()
+    RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, %1$s AS $body$
+    BEGIN
+      RAISE EXCEPTION 'routing candidate approvals are append-only evidence';
+    END;
+    $body$;
+  $fn$, schema_name);
 
-CREATE OR REPLACE FUNCTION validate_routing_candidate_rollback_binding()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-  IF NEW.kind = 'routing_capability_axis' THEN
-    IF NOT EXISTS (
-      SELECT 1 FROM improvement_candidate_rollback_targets b
-      WHERE b.target_candidate_id = (NEW.rollback_target->>'candidateId')::uuid
-        AND b.target_version = (NEW.rollback_target->>'version')::integer
-        AND b.project_id = NEW.project_id
-        AND b.goal_id = NEW.goal_id
-        AND b.content_hash = NEW.rollback_target->>'contentHash'
-        AND b.kind = 'routing_capability_axis'
-        AND b.role_id = NEW.target->>'roleId'
-        AND b.task_class = NEW.target->>'taskClass'
-    ) THEN
-      RAISE EXCEPTION 'routing candidate rollback target must bind kind, role, and task scope';
-    END IF;
-  END IF;
-  RETURN NEW;
-END;
-$$;
+  EXECUTE format($fn$
+    CREATE OR REPLACE FUNCTION %1$s.validate_routing_candidate_rollback_binding()
+    RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, %1$s AS $body$
+    BEGIN
+      IF NEW.kind = 'routing_capability_axis' THEN
+        IF NOT EXISTS (
+          SELECT 1 FROM %1$s.improvement_candidate_rollback_targets b
+          WHERE b.target_candidate_id = (NEW.rollback_target->>'candidateId')::uuid
+            AND b.target_version = (NEW.rollback_target->>'version')::integer
+            AND b.project_id = NEW.project_id
+            AND b.goal_id = NEW.goal_id
+            AND b.content_hash = NEW.rollback_target->>'contentHash'
+            AND b.kind = 'routing_capability_axis'
+            AND b.role_id = NEW.target->>'roleId'
+            AND b.task_class = NEW.target->>'taskClass'
+        ) THEN
+          RAISE EXCEPTION 'routing candidate rollback target must bind kind, role, and task scope';
+        END IF;
+      END IF;
+      RETURN NEW;
+    END;
+    $body$;
+  $fn$, schema_name);
+END $$;
 
 DROP TRIGGER IF EXISTS routing_candidate_approval_marker_guard ON routing_candidate_approval_mutation_markers;
 CREATE TRIGGER routing_candidate_approval_marker_guard BEFORE INSERT OR UPDATE OR DELETE ON routing_candidate_approval_mutation_markers FOR EACH ROW EXECUTE FUNCTION authorize_routing_candidate_approval_marker_mutation();
