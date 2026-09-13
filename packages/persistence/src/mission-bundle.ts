@@ -17,6 +17,8 @@ import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
 import { readDepartmentPlan } from "./department-plan.js";
+import { readActivePersonaProfile } from "./persona-profile.js";
+import { getPermanentRole } from "./organization.js";
 
 export class MissionBundleError extends Error {}
 export class MissionBundleNotFoundError extends MissionBundleError {}
@@ -218,10 +220,23 @@ export async function issueMissionPersonaOverlay(pool: Pool, request: IssueMissi
   try {
     await client.query("BEGIN"); open = true;
     const bundle = await client.query(
-      "SELECT 1 FROM mission_bundles WHERE council_id = $1 AND department_id = $2 AND plan_version = $3 AND item_id = $4 FOR UPDATE",
+      "SELECT substance FROM mission_bundles WHERE council_id = $1 AND department_id = $2 AND plan_version = $3 AND item_id = $4 FOR UPDATE",
       [request.councilId, request.departmentId, request.planVersion, request.itemId],
     );
     if (bundle.rowCount !== 1) throw new MissionBundleNotFoundError(`Mission Bundle not found: ${request.councilId}/${request.departmentId}/${request.planVersion}/${request.itemId}`);
+    const role = await getPermanentRole(pool, `head-${request.departmentId}`);
+    if (role === undefined) throw new MissionBundleError(`Department Head role not found: head-${request.departmentId}`);
+    const taskClass = (bundle.rows[0]!.substance as { role?: unknown }).role;
+    if (typeof taskClass !== "string" || taskClass.trim() === "") throw new MissionBundleError("Mission Bundle role is invalid");
+    const taskTemplate = (await readActivePersonaProfile(pool, role.roleId, taskClass)).persona;
+    const bounds = await client.query<{ axis: string; floor_value: string; ceiling_value: string }>("SELECT axis, floor_value::text, ceiling_value::text FROM role_persona_bounds WHERE role_id = $1", [role.roleId]);
+    if (bounds.rowCount !== PERSONA_AXES.length) throw new MissionBundleError("Reviewed role bounds are incomplete");
+    for (const bound of bounds.rows) {
+      const axis = bound.axis as typeof PERSONA_AXES[number];
+      const delta = persona[axis] - taskTemplate[axis];
+      if (Math.abs(delta) > 0.15) throw new MissionBundleError(`Mission persona overlay exceeds the ±0.15 worker derivation bound for ${axis}`);
+      if (persona[axis] < Number(bound.floor_value) || persona[axis] > Number(bound.ceiling_value)) throw new MissionBundleError(`Mission persona overlay violates reviewed role bounds for ${axis}`);
+    }
     if (proof.ownerId.trim() === "" || !isValidFencingToken(proof.fencingToken)) throw new StaleGoalLeaseError(proof.goalId);
     const council = await readHeadCouncil(pool, request.councilId);
     if (council.goalId !== proof.goalId) throw new StaleGoalLeaseError(proof.goalId);

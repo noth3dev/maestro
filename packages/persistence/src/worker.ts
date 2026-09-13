@@ -437,6 +437,12 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
         defaultMissionOverlayExpiresAt: new Date(Date.now() + missionTimeLimitMs(bundle.substance.timeCeiling)).toISOString(),
       });
       const preparedCwd = request.prepareWorktree === undefined ? request.cwd : await request.prepareWorktree(workerId);
+      const persistedProfile = await pool.query(
+        `UPDATE workers SET worker_profile_derivation = $2::jsonb
+          WHERE worker_id = $1 AND status = 'spawned' AND owner_id = $3 AND owner_fencing_token = $4::bigint`,
+        [workerId, JSON.stringify(workerProfile), proof.ownerId, proof.fencingToken],
+      );
+      if (persistedProfile.rowCount !== 1) throw new StaleGoalLeaseError(proof.goalId);
       const providerAdmission: ExecutionAdmission = {
         context: {
           operatorId: context.actorId,

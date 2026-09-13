@@ -4202,3 +4202,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-14 Plan 6 §S9 remediation: reserved migration **0093** before persisting Metronome worker challenge target identities for per-worker idempotency and auditability.
 
 - 2026-09-14 Plan 6 §S9 remediation: reserved migration **0094** before hardening Metronome challenge `target_ref` immutability.
+
+- 2026-09-14 Plan 6 §S9 remediation: reserved migration **0095** before durably storing the worker derivation assignment used at provider admission.
