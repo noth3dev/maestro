@@ -108,6 +108,24 @@ describeDatabase("Improvement Candidate persistence", () => {
     await expect(listImprovementCandidateVersions(pool, first.candidateId)).resolves.toEqual([first, second]);
     await expect(pool.query("UPDATE improvement_candidates SET predicted_effect = 'tampered' WHERE candidate_id = $1", [first.candidateId])).rejects.toThrow(/append-only|immutable|mutation/i);
     await expect(pool.query("DELETE FROM improvement_candidates WHERE candidate_id = $1", [first.candidateId])).rejects.toThrow(/append-only|immutable|mutation/i);
+    await expect(pool.query("TRUNCATE improvement_candidates")).rejects.toThrow(/append-only|immutable|mutation/i);
+    await expect(pool.query(`INSERT INTO improvement_candidates
+      (candidate_id, lineage_id, version, parent_candidate_id, schema_version, project_id, goal_id, kind, target, changes,
+       source_evidence_ids, evidence_pattern, predicted_effect, expected_metrics, protected_metrics, scenario_suite,
+       scenario_suite_hash, confidence, data_sufficiency, rollback_target, state, content_hash, author_id,
+       author_operator_id, author_role_id, session_ref, operation_ref)
+      SELECT $1, lineage_id, version + 1, candidate_id, schema_version, project_id, goal_id, kind, target, changes,
+       source_evidence_ids, evidence_pattern, predicted_effect, expected_metrics, protected_metrics, scenario_suite,
+       scenario_suite_hash, confidence, data_sufficiency, rollback_target, 'candidate', content_hash, author_id,
+       author_operator_id, author_role_id, session_ref, operation_ref || '-forged'
+      FROM improvement_candidates WHERE candidate_id = $2`, [randomUUID(), first.candidateId])).rejects.toThrow(/authorization|bound|candidate insert/i);
+  });
+
+  it("replays an idempotent operation only when its content and author binding match", async () => {
+    const input = inputFor();
+    const first = await recordImprovementCandidate(pool, input, proof, author, "idempotent");
+    await expect(recordImprovementCandidate(pool, input, proof, author, "idempotent")).resolves.toEqual(first);
+    await expect(recordImprovementCandidate(pool, { ...input, predictedEffect: "different" }, proof, author, "idempotent")).rejects.toThrow(/idempotency|different|content/i);
   });
 
   it("requires lifecycle transitions instead of allowing a direct state skip", async () => {
