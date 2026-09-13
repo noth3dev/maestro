@@ -5,6 +5,7 @@ import {
   improvementCandidateScenarioSuiteHash,
   type ImprovementCandidateInput,
   type ImprovementCandidate,
+  type RoutingCandidateEvaluationEvidence,
 } from "@maestro/domain";
 import { applyAllMigrations } from "./test-migrations.js";
 import { acquireGoalLease } from "./commands.js";
@@ -13,6 +14,7 @@ import { recordImprovementDigest } from "./improvement-digest.js";
 import {
   recordImprovementCandidate,
   transitionImprovementCandidate,
+  transitionRoutingCandidateToJudged,
   type ImprovementCandidateAuthor,
 } from "./improvement-candidate.js";
 import {
@@ -32,6 +34,29 @@ const describeDatabase = process.env.MAESTRO_TEST_DATABASE_URL ? describe : desc
 const operatorId = randomUUID();
 const actor: RolloutActor = { operatorId, actorId: "rollout-worker", sessionRef: "session:rollout", operatorRoleId: "engineering" };
 const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineering", sessionRef: "session:candidate", operatorId, operatorRoleId: "engineering" };
+
+function routingEvaluation(candidate: ImprovementCandidate): RoutingCandidateEvaluationEvidence {
+  return {
+    replay: {
+      status: "compared",
+      scenarioSuiteHash: candidate.scenarioSuiteHash,
+      results: [candidate.goalId, `${candidate.goalId}-comparable`].map((goalId) => ({
+        goalId,
+        baseline: { correctness: 0.9, safety: 0.9, authority: 0.9, cost: 1 },
+        candidate: { correctness: 0.95, safety: 0.95, authority: 0.95, cost: 1 },
+      })),
+    },
+    synthetic: {
+      status: "completed",
+      results: [{
+        scenarioId: "routing-capability-v1",
+        kind: "ambiguous_requirement",
+        reviewed: true,
+        metrics: { correctness: 0.95, safety: 0.95, authority: 0.95, cost: 1 },
+      }],
+    },
+  };
+}
 
  describeDatabase("bounded rollout persistence", () => {
   const basePool = new Pool({ connectionString: databaseUrl });
@@ -63,7 +88,7 @@ const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineer
     }, proof = await acquireGoalLease(pool, { goalId, ownerId: "rollout-worker", leaseDurationMs: 60_000 }), { actorId: candidateAuthor.authorId, sessionRef: candidateAuthor.sessionRef, operatorId });
     digestId = digest.digestId;
     const rollbackTargetId = randomUUID();
-    await pool.query("INSERT INTO improvement_candidate_rollback_targets (target_candidate_id, target_version, project_id, goal_id, content_hash) VALUES ($1, 1, $2, $3, $4)", [rollbackTargetId, projectId, goalId, "a".repeat(64)]);
+    await pool.query("INSERT INTO improvement_candidate_rollback_targets (target_candidate_id, target_version, project_id, goal_id, content_hash, kind, role_id, task_class) VALUES ($1, 1, $2, $3, $4, $5, $6, $7)", [rollbackTargetId, projectId, goalId, "a".repeat(64), "persona_axis", "head-engineering", "implementation"]);
     const input: ImprovementCandidateInput = {
       schemaVersion: 1, projectId, goalId, kind: "persona_axis", target: { roleId: "head-engineering", taskClass: "implementation" },
       changes: [{ axis: "caution", currentValue: 0.7, proposedValue: 0.76 }], sourceEvidenceIds: [digestId],
@@ -133,7 +158,7 @@ const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineer
 
   it("runs a routing capability candidate through bounded rollback without mutating the human model baseline", async () => {
     const routingRollbackTargetId = randomUUID();
-    await pool.query("INSERT INTO improvement_candidate_rollback_targets (target_candidate_id, target_version, project_id, goal_id, content_hash) VALUES ($1, 1, $2, $3, $4)", [routingRollbackTargetId, projectId, goalId, "b".repeat(64)]);
+    await pool.query("INSERT INTO improvement_candidate_rollback_targets (target_candidate_id, target_version, project_id, goal_id, content_hash, kind, role_id, task_class) VALUES ($1, 1, $2, $3, $4, $5, $6, $7)", [routingRollbackTargetId, projectId, goalId, "b".repeat(64), "routing_capability_axis", "head-engineering", "implementation"]);
     const routingInput: ImprovementCandidateInput = {
       schemaVersion: 1, projectId, goalId, kind: "routing_capability_axis", target: { roleId: "head-engineering", taskClass: "implementation", routingTarget: "provider/fast" },
       changes: [{ axis: "coding", currentValue: 120, proposedValue: 140 }], sourceEvidenceIds: [digestId],
@@ -142,9 +167,21 @@ const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineer
       scenarioSuite: ["routing-capability-v1"], scenarioSuiteHash: improvementCandidateScenarioSuiteHash(["routing-capability-v1"]), confidence: 0.84,
       dataSufficiency: { episodeCount: 3, comparableGoalCount: 2 }, rollbackTarget: { candidateId: routingRollbackTargetId, version: 1, contentHash: "b".repeat(64) },
     };
+    const roundId = randomUUID();
+    await pool.query(`INSERT INTO encore_council_rounds (round_id, goal_id, question, criteria, evidence_ids, trigger_reasons, reviewer_count)
+      VALUES ($1, $2, 'Should the bounded routing proposal proceed?', '[]'::jsonb, $3::jsonb, '[]'::jsonb, 2)`, [roundId, goalId, JSON.stringify([digestId])]);
+    for (const [index, model] of [[0, ["provider-a", "model-a"]], [1, ["provider-b", "model-b"]]] as const) {
+      await pool.query(`INSERT INTO encore_council_judgments
+        (judgment_id, round_id, reviewer_index, model_provider, model_id, verdict, confidence, reasoning, conditions, cited_evidence_ids, execution_ref, invocation_ref)
+        VALUES ($1, $2, $3, $4, $5, 'proceed', 'high', 'durable approval', '[]'::jsonb, $6::jsonb, $7, $8)`,
+        [randomUUID(), roundId, index, model[0], model[1], JSON.stringify([digestId]), `execution-${index}`, `invocation-${index}`]);
+    }
+    await pool.query(`INSERT INTO encore_council_syntheses (round_id, final_verdict, same_model_only, escalated, dissent_notes)
+      VALUES ($1, 'proceed', false, false, '[]'::jsonb)`, [roundId]);
     const initial = await recordImprovementCandidate(pool, routingInput, proof, candidateAuthor, `routing-candidate-${randomUUID()}`);
     const evaluated = await transitionImprovementCandidate(pool, initial.candidateId, "evaluated", proof, candidateAuthor, `routing-evaluated-${randomUUID()}`);
-    const judged = await transitionImprovementCandidate(pool, evaluated.candidateId, "judged", proof, candidateAuthor, `routing-judged-${randomUUID()}`);
+    await expect(transitionImprovementCandidate(pool, evaluated.candidateId, "judged", proof, candidateAuthor, `routing-bypass-${randomUUID()}`)).rejects.toThrow(/durable|Council|approval|evidence/i);
+    const judged = await transitionRoutingCandidateToJudged(pool, evaluated.candidateId, proof, candidateAuthor, { councilRoundId: roundId, evaluation: routingEvaluation(evaluated) }, `routing-judged-${randomUUID()}`);
     await enableImprovementClass(pool, projectId, "routing_capability_axis", proof, actor, `enable-routing-${randomUUID()}`);
 
     const rollout = await startBoundedRollout(pool, judged.candidateId, scope, proof, actor, `routing-start-${randomUUID()}`);

@@ -9,6 +9,9 @@ import {
   type ImprovementCandidateIdentity,
   type ImprovementCandidateInput,
   type ImprovementCandidateState,
+  assertValidRoutingCandidateEvaluation,
+  routingCandidateEvaluationHash,
+  type RoutingCandidateEvaluationEvidence,
 } from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
@@ -27,6 +30,12 @@ export interface ImprovementCandidateAuthor {
   readonly sessionRef: string;
   readonly operatorId: string;
   readonly operatorRoleId: string;
+}
+
+/** Durable evidence required to move a routing candidate into the judged state. */
+export interface RoutingCandidateJudgmentApproval {
+  readonly councilRoundId: string;
+  readonly evaluation: RoutingCandidateEvaluationEvidence;
 }
 
 export interface ImprovementCandidateReadAuthorization {
@@ -323,6 +332,133 @@ export async function appendImprovementCandidateVersion(pool: Pool, candidateId:
   });
 }
 
+type CouncilRoundRow = {
+  goal_id: string;
+  evidence_ids: unknown;
+  reviewer_count: number;
+  final_verdict: string;
+  escalated: boolean;
+};
+type CouncilJudgmentRow = { model_provider: string; model_id: string; verdict: string; cited_evidence_ids: unknown };
+type RollbackBindingRow = { kind: string; role_id: string | null; task_class: string | null };
+
+function stringList(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.trim() === "")) {
+    throw new ImprovementCandidatePersistenceError(`${field} is not a durable string list`);
+  }
+  return value.map((item) => item.toLowerCase());
+}
+
+function durableUuid(value: unknown, field: string): string {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!UUID.test(normalized)) throw new ImprovementCandidatePersistenceError(`${field} must be a durable UUID`);
+  return normalized;
+}
+
+async function validateRoutingJudgmentApproval(
+  client: PoolClient,
+  previous: CandidateRow,
+  approval: RoutingCandidateJudgmentApproval,
+): Promise<{ readonly evaluationHash: string; readonly councilEvidenceIds: readonly string[]; readonly rollback: RollbackBindingRow }> {
+  if (previous.kind !== "routing_capability_axis") throw new ImprovementCandidatePersistenceError("Routing judgment approval requires a routing capability candidate");
+  const candidate = mapRow(previous);
+  try { assertValidRoutingCandidateEvaluation(candidate, approval.evaluation); }
+  catch (error) { throw new ImprovementCandidatePersistenceError(error instanceof Error ? error.message : "Routing candidate evaluation evidence is invalid"); }
+  const councilRoundId = durableUuid(approval.councilRoundId, "Routing Council roundId");
+  const roundResult = await client.query<CouncilRoundRow>(`SELECT r.goal_id, r.evidence_ids, r.reviewer_count, s.final_verdict, s.escalated
+    FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id
+    WHERE r.round_id = $1 FOR KEY SHARE`, [councilRoundId]);
+  if (roundResult.rowCount !== 1) throw new ImprovementCandidatePersistenceError("Routing candidate Council round is not durably sealed");
+  const round = roundResult.rows[0]!;
+  if (round.goal_id !== previous.goal_id || round.reviewer_count < 2 || round.final_verdict !== "proceed" || round.escalated) {
+    throw new ImprovementCandidatePersistenceError("Routing candidate Council approval is outside its Goal or is not non-escalated");
+  }
+  const councilEvidenceIds = stringList(round.evidence_ids, "Routing Council evidence");
+  if (!previous.source_evidence_ids.every((id) => councilEvidenceIds.includes(id.toLowerCase()))) {
+    throw new ImprovementCandidatePersistenceError("Routing Council evidence does not cover candidate source evidence");
+  }
+  const judgments = await client.query<CouncilJudgmentRow>(`SELECT model_provider, model_id, verdict, cited_evidence_ids
+    FROM encore_council_judgments WHERE round_id = $1 ORDER BY reviewer_index`, [councilRoundId]);
+  const modelRefs = new Set<string>();
+  for (const judgment of judgments.rows) {
+    if (judgment.verdict !== "proceed") throw new ImprovementCandidatePersistenceError("Routing Council contains a non-approving judgment");
+    modelRefs.add(`${judgment.model_provider}/${judgment.model_id}`);
+    const cited = stringList(judgment.cited_evidence_ids, "Routing Council cited evidence");
+    if (!previous.source_evidence_ids.every((id) => cited.includes(id.toLowerCase()))) {
+      throw new ImprovementCandidatePersistenceError("Routing Council judgment does not cite candidate source evidence");
+    }
+  }
+  if (judgments.rowCount !== round.reviewer_count || modelRefs.size < 2) {
+    throw new ImprovementCandidatePersistenceError("Routing Council requires the complete diverse reviewer set");
+  }
+  const target = previous.target;
+  const rollback = await client.query<RollbackBindingRow>(`SELECT kind, role_id, task_class
+    FROM improvement_candidate_rollback_targets
+    WHERE target_candidate_id = $1 AND target_version = $2 AND project_id = $3 AND goal_id = $4 AND content_hash = $5
+      AND kind = 'routing_capability_axis' AND role_id = $6 AND task_class = $7`, [
+    previous.rollback_target.candidateId, previous.rollback_target.version, previous.project_id, previous.goal_id,
+    previous.rollback_target.contentHash, target.roleId, target.taskClass,
+  ]);
+  if (rollback.rowCount !== 1) throw new ImprovementCandidatePersistenceError("Routing candidate rollback target must bind kind, role, and task scope");
+  return { evaluationHash: routingCandidateEvaluationHash(approval.evaluation), councilEvidenceIds, rollback: rollback.rows[0]! };
+}
+
+async function insertRoutingCandidateApproval(
+  client: PoolClient,
+  candidate: ImprovementCandidate,
+  previous: CandidateRow,
+  approval: RoutingCandidateJudgmentApproval,
+  evaluationHash: string,
+  councilEvidenceIds: readonly string[],
+  operation: string,
+): Promise<void> {
+  const token = randomUUID();
+  await client.query("SELECT set_config('maestro.routing_candidate_approval_token', $1, true)", [token]);
+  await client.query("INSERT INTO routing_candidate_approval_mutation_markers (transaction_id, token_hash) VALUES (txid_current(), encode(public.digest($1, 'sha256'), 'hex'))", [token]);
+  await client.query(`INSERT INTO routing_candidate_approvals
+    (approval_id, candidate_id, candidate_version, candidate_content_hash, project_id, goal_id, role_id, task_class,
+     evaluation_hash, evaluation_payload, replay_status, synthetic_status, council_round_id, council_evidence_ids, source_evidence_ids,
+     rollback_target_candidate_id, rollback_target_version, rollback_target_content_hash, rollback_target_kind,
+     rollback_target_role_id, rollback_target_task_class, operation_ref)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, 'compared', 'completed', $11, $12::jsonb, $13::jsonb, $14, $15, $16, 'routing_capability_axis', $17, $18, $19)`, [
+    randomUUID(), candidate.candidateId, candidate.version, candidate.contentHash, candidate.projectId, candidate.goalId,
+    candidate.target.roleId, candidate.target.taskClass, evaluationHash, JSON.stringify(approval.evaluation), durableUuid(approval.councilRoundId, "Routing Council roundId"),
+    JSON.stringify(councilEvidenceIds), JSON.stringify(previous.source_evidence_ids), previous.rollback_target.candidateId,
+    previous.rollback_target.version, previous.rollback_target.contentHash, candidate.target.roleId, candidate.target.taskClass, operation,
+  ]);
+}
+
+/** Validate durable replay/Council/rollback evidence and atomically create a judged routing version. */
+export async function transitionRoutingCandidateToJudged(
+  pool: Pool,
+  candidateId: string,
+  proof: GoalLeaseProof,
+  author: ImprovementCandidateAuthor,
+  approval: RoutingCandidateJudgmentApproval,
+  idempotencyKey: string,
+): Promise<ImprovementCandidate> {
+  authorValue(author);
+  const operation = operationRef("transition", idempotencyKey);
+  return withGoalAuthority(pool, proof, 94, async (client) => {
+    const existing = await client.query<CandidateRow>(`SELECT ${COLUMNS} FROM improvement_candidates WHERE operation_ref = $1 FOR UPDATE`, [operation]);
+    if (existing.rowCount === 1) {
+      const row = existing.rows[0]!;
+      if (row.goal_id !== proof.goalId.toLowerCase()) throw new ImprovementCandidatePersistenceError("Improvement Candidate idempotency replay is outside the lease Goal");
+      if (row.kind !== "routing_capability_axis" || row.state !== "judged") throw new ImprovementCandidatePersistenceError("Routing candidate judgment idempotency key was reused with different content");
+      const linked = await client.query("SELECT 1 FROM routing_candidate_approvals WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3", [row.candidate_id, row.version, row.content_hash]);
+      if (linked.rowCount !== 1) throw new ImprovementCandidatePersistenceError("Routing candidate judgment evidence is missing");
+      return mapRow(row);
+    }
+    const previous = await readRow(client, candidateId, true);
+    if (previous.goal_id !== proof.goalId.toLowerCase()) throw new ImprovementCandidatePersistenceError("Improvement Candidate transition is outside the lease Goal");
+    if (previous.kind !== "routing_capability_axis" || previous.state !== "evaluated") throw new ImprovementCandidatePersistenceError("Routing candidate must be evaluated before durable Council judgment");
+    const evidence = await validateRoutingJudgmentApproval(client, previous, approval);
+    const judged = await appendFromPrevious(client, previous, normalizeInput(inputFromRow(previous)), proof, author, operation, "judged");
+    await insertRoutingCandidateApproval(client, judged, previous, approval, evidence.evaluationHash, evidence.councilEvidenceIds, operation);
+    return judged;
+  });
+}
+
 export async function transitionImprovementCandidate(pool: Pool, candidateId: string, nextState: ImprovementCandidateState, proof: GoalLeaseProof, author: ImprovementCandidateAuthor, idempotencyKey: string): Promise<ImprovementCandidate> {
   authorValue(author);
   const operation = operationRef("transition", idempotencyKey);
@@ -336,6 +472,7 @@ export async function transitionImprovementCandidate(pool: Pool, candidateId: st
     const previous = await readRow(client, candidateId, true);
     if (previous.goal_id !== proof.goalId.toLowerCase()) throw new ImprovementCandidatePersistenceError("Improvement Candidate transition is outside the lease Goal");
     if (previous.kind === "routing_capability_axis" && nextState === "applied") throw new ImprovementCandidatePersistenceError("Routing capability candidates remain proposal-only and cannot be auto-applied");
+    if (previous.kind === "routing_capability_axis" && nextState === "judged") throw new ImprovementCandidatePersistenceError("Routing candidate requires durable replay and Council approval before judged state");
     if (!canTransitionImprovementCandidate(previous.state, nextState)) throw new ImprovementCandidatePersistenceError(`Improvement Candidate cannot transition from ${previous.state} to ${nextState}`);
     return appendFromPrevious(client, previous, normalizeInput(inputFromRow(previous)), proof, author, operation, nextState);
   });

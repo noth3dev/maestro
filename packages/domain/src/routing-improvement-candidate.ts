@@ -1,9 +1,16 @@
+import { createHash } from "node:crypto";
 import {
   assertValidImprovementCandidate,
   assertValidImprovementCandidateInput,
   type ImprovementCandidate,
   type ImprovementCandidateInput,
 } from "./improvement-candidate.js";
+import {
+  runDeterministicCandidateGuards,
+  type ReplayResult,
+  type SyntheticRunResult,
+} from "./candidate-evaluation.js";
+import { canonicalJson } from "./task-contract.js";
 import { assertValidModelMap } from "./model-map.js";
 import { assertValidEncoreJudgmentSubstance, synthesizeEncoreJudgments, type EncoreJudgmentSubstance } from "./encore-council.js";
 import { assertValidTaskDemand } from "./task-demand.js";
@@ -25,6 +32,70 @@ export interface RoutingCapabilityCouncilJudgment {
   readonly councilRoundId: string;
   readonly evidenceIds: readonly string[];
   readonly judgments: readonly EncoreJudgmentSubstance[];
+}
+
+/** Evaluation output that must be durably linked before a routing candidate is judged. */
+export interface RoutingCandidateEvaluationEvidence {
+  readonly replay: ReplayResult;
+  readonly synthetic: SyntheticRunResult;
+}
+
+function assertEvaluationResultShape(evaluation: RoutingCandidateEvaluationEvidence): void {
+  plainRecord(evaluation, "Routing candidate evaluation evidence");
+  if (!Object.hasOwn(evaluation, "replay") || !Object.hasOwn(evaluation, "synthetic")) {
+    throw new RoutingImprovementCandidateError("Routing candidate evaluation requires replay and synthetic evidence");
+  }
+  plainRecord(evaluation.replay, "Routing candidate replay evidence");
+  plainRecord(evaluation.synthetic, "Routing candidate synthetic evidence");
+  if (evaluation.replay.status !== "compared" || evaluation.synthetic.status !== "completed") {
+    throw new RoutingImprovementCandidateError("Routing candidate evaluation requires completed replay and synthetic evidence");
+  }
+  if (!Array.isArray(evaluation.replay.results) || evaluation.replay.results.length === 0) {
+    throw new RoutingImprovementCandidateError("Routing candidate replay evidence requires comparable results");
+  }
+  if (!Array.isArray(evaluation.synthetic.results) || evaluation.synthetic.results.length === 0) {
+    throw new RoutingImprovementCandidateError("Routing candidate synthetic evidence requires completed scenarios");
+  }
+}
+
+export function assertValidRoutingCandidateEvaluation(
+  candidate: ImprovementCandidate,
+  evaluation: RoutingCandidateEvaluationEvidence,
+): void {
+  assertEvaluationResultShape(evaluation);
+  if (evaluation.replay.status !== "compared") throw new RoutingImprovementCandidateError("Routing candidate replay evidence is incomplete");
+  if (evaluation.replay.scenarioSuiteHash !== candidate.scenarioSuiteHash) {
+    throw new RoutingImprovementCandidateError("Routing candidate replay evidence is bound to a different scenario suite");
+  }
+  if (evaluation.replay.results.length < candidate.dataSufficiency.comparableGoalCount) {
+    throw new RoutingImprovementCandidateError("Routing candidate replay evidence does not meet comparable Goal sufficiency");
+  }
+  const guards = runDeterministicCandidateGuards({
+    schemaVersion: candidate.schemaVersion,
+    projectId: candidate.projectId,
+    goalId: candidate.goalId,
+    kind: candidate.kind,
+    target: candidate.target,
+    changes: candidate.changes,
+    sourceEvidenceIds: candidate.sourceEvidenceIds,
+    evidencePattern: candidate.evidencePattern,
+    predictedEffect: candidate.predictedEffect,
+    expectedMetrics: candidate.expectedMetrics,
+    protectedMetrics: candidate.protectedMetrics,
+    scenarioSuite: candidate.scenarioSuite,
+    scenarioSuiteHash: candidate.scenarioSuiteHash,
+    confidence: candidate.confidence,
+    dataSufficiency: candidate.dataSufficiency,
+    rollbackTarget: candidate.rollbackTarget,
+  });
+  if (!guards.passed) {
+    throw new RoutingImprovementCandidateError(`Routing candidate deterministic evaluation failed: ${guards.reasons.join("; ")}`);
+  }
+}
+
+export function routingCandidateEvaluationHash(evaluation: RoutingCandidateEvaluationEvidence): string {
+  assertEvaluationResultShape(evaluation);
+  return createHash("sha256").update(canonicalJson(evaluation), "utf8").digest("hex");
 }
 
 function plainRecord(value: unknown, name: string): asserts value is Record<string, unknown> {

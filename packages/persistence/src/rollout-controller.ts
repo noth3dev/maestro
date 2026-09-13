@@ -87,7 +87,7 @@ type RolloutRow = {
   operation_ref: string; created_at: Date; updated_at: Date;
 };
 type EventRow = { event_id: string; rollout_id: string; kind: RolloutHistoryEvent["kind"]; details: Record<string, unknown>; created_at: Date };
-type CandidateRow = { candidate_id: string; version: number; project_id: string; goal_id: string; kind: ImprovementClass; state: string; target: Record<string, string>; rollback_target: ImprovementCandidateRollbackTarget; source_evidence_ids: string[] };
+type CandidateRow = { candidate_id: string; version: number; project_id: string; goal_id: string; kind: ImprovementClass; state: string; target: Record<string, string>; rollback_target: ImprovementCandidateRollbackTarget; source_evidence_ids: string[]; content_hash: string };
 const COLUMNS = `rollout_id, candidate_id, candidate_version, project_id, goal_id, improvement_class, role_id, task_class,
   max_goal_count, window_start, window_end, protected_metrics, rollback_target, source_evidence_ids, active_candidate_id,
   active_version, last_certified_candidate_id, last_certified_version, observed_goal_count, observed_goal_ids,
@@ -214,13 +214,36 @@ export async function startBoundedRollout(pool: Pool, candidateId: string, rawSc
       assertStartReplay(existing.rows[0]!, id, scope, actor, leaseDurationMs);
       return result(client, existing.rows[0]!);
     }
-    const candidate = await client.query<CandidateRow>("SELECT candidate_id, version, project_id, goal_id, kind, state, target, rollback_target, source_evidence_ids FROM improvement_candidates WHERE candidate_id = $1 FOR KEY SHARE", [id]);
+    const candidate = await client.query<CandidateRow>("SELECT candidate_id, version, project_id, goal_id, kind, state, target, rollback_target, source_evidence_ids, content_hash FROM improvement_candidates WHERE candidate_id = $1 FOR KEY SHARE", [id]);
     if (candidate.rowCount !== 1) throw new RolloutPersistenceError("Rollout candidate does not exist");
     const source = candidate.rows[0]!;
     if (source.goal_id !== proof.goalId.toLowerCase()) throw new RolloutPersistenceError("Rollout candidate is outside the leased Goal");
     await operatorAuthorized(client, actor, source.project_id);
     if (source.state !== "judged") throw new RolloutPersistenceError("Only a judged candidate can start a rollout");
     if (source.target.roleId !== scope.roleId || source.target.taskClass !== scope.taskClass) throw new RolloutPersistenceError("Rollout scope cannot widen beyond the candidate target");
+    if (source.kind === "routing_capability_axis") {
+      const approval = await client.query<{ candidate_version: number; candidate_content_hash: string; project_id: string; goal_id: string; role_id: string; task_class: string; source_evidence_ids: string[]; rollback_target_candidate_id: string; rollback_target_version: number; rollback_target_content_hash: string; rollback_target_kind: string; rollback_target_role_id: string; rollback_target_task_class: string }>(
+        `SELECT candidate_version, candidate_content_hash, project_id, goal_id, role_id, task_class, source_evidence_ids,
+                rollback_target_candidate_id, rollback_target_version, rollback_target_content_hash, rollback_target_kind,
+                rollback_target_role_id, rollback_target_task_class
+           FROM routing_candidate_approvals
+          WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3 AND project_id = $4 AND goal_id = $5
+            AND role_id = $6 AND task_class = $7`,
+        [source.candidate_id, source.version, source.content_hash, source.project_id, source.goal_id, scope.roleId, scope.taskClass],
+      );
+      if (approval.rowCount !== 1) throw new RolloutPersistenceError("Routing rollout requires durable replay and Council approval evidence");
+      const linked = approval.rows[0]!;
+      const rollback = source.rollback_target;
+      const sameEvidence = linked.source_evidence_ids.length === source.source_evidence_ids.length
+        && linked.source_evidence_ids.every((id) => source.source_evidence_ids.includes(id));
+      if (linked.candidate_version !== source.version || linked.candidate_content_hash !== source.content_hash
+          || linked.role_id !== scope.roleId || linked.task_class !== scope.taskClass || !sameEvidence
+          || linked.rollback_target_candidate_id !== rollback.candidateId || linked.rollback_target_version !== rollback.version
+          || linked.rollback_target_content_hash !== rollback.contentHash || linked.rollback_target_kind !== "routing_capability_axis"
+          || linked.rollback_target_role_id !== scope.roleId || linked.rollback_target_task_class !== scope.taskClass) {
+        throw new RolloutPersistenceError("Routing rollout approval or rollback target is outside the candidate scope");
+      }
+    }
     const candidateDetails = await client.query<{ protected_metrics: RolloutProtectedMetric[] }>("SELECT protected_metrics FROM improvement_candidates WHERE candidate_id = $1", [id]);
     const protectedMetrics = candidateDetails.rows[0]?.protected_metrics;
     validateProtectedMetrics(protectedMetrics ?? []);
