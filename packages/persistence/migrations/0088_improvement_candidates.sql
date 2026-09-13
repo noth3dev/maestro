@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS improvement_candidates (
   session_ref text NOT NULL CHECK (btrim(session_ref) <> '' AND length(session_ref) <= 256 AND session_ref !~ E'[\r\n]' AND session_ref !~* '(authorization[[:space:]]*:[[:space:]]*bearer|bearer[[:space:]]+|password[[:space:]]*[:=]|passwd[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|access[_-]?token[[:space:]]*[:=]|private[_-]?key|credential[[:space:]]*[:=]|-----BEGIN|(^|[^a-z0-9])(sk|pk)-[a-z0-9_-]{16,}|eyj[a-z0-9_-]+\.[a-z0-9_-]+\.[a-z0-9_-]+|AKIA[0-9A-Z]{16}|gh[pousr]_[a-z0-9]{20,}|AIza[0-9a-z_-]{20,}|xox[baprs]-[0-9a-z-]{20,}|hf_[a-z0-9]{20,})'),
   operation_ref text NOT NULL UNIQUE CHECK (btrim(operation_ref) <> '' AND length(operation_ref) <= 256 AND operation_ref !~ E'[\r\n]' AND operation_ref !~* '(authorization[[:space:]]*:[[:space:]]*bearer|bearer[[:space:]]+|password[[:space:]]*[:=]|passwd[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|access[_-]?token[[:space:]]*[:=]|private[_-]?key|credential[[:space:]]*[:=]|-----BEGIN|(^|[^a-z0-9])(sk|pk)-[a-z0-9_-]{16,}|eyj[a-z0-9_-]+\.[a-z0-9_-]+\.[a-z0-9_-]+|AKIA[0-9A-Z]{16}|gh[pousr]_[a-z0-9]{20,}|AIza[0-9a-z_-]{20,}|xox[baprs]-[0-9a-z-]{20,}|hf_[a-z0-9]{20,})'),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
-  retention retention_class NOT NULL DEFAULT 'project_lifetime',
+  retention retention_class NOT NULL DEFAULT 'project_lifetime' CHECK (retention = 'project_lifetime'),
   UNIQUE (lineage_id, version),
   CHECK ((version = 1 AND parent_candidate_id IS NULL AND lineage_id = candidate_id) OR version > 1),
   CHECK (confidence = 0 OR confidence >= 0.000001)
