@@ -273,4 +273,11 @@ DROP TRIGGER IF EXISTS improvement_candidate_insert_binding ON improvement_candi
 CREATE TRIGGER improvement_candidate_insert_binding BEFORE INSERT ON improvement_candidates FOR EACH ROW EXECUTE FUNCTION validate_improvement_candidate_insert();
 DROP TRIGGER IF EXISTS improvement_candidate_marker_guard ON improvement_candidate_issuer_markers;
 CREATE TRIGGER improvement_candidate_marker_guard BEFORE INSERT OR UPDATE OR DELETE ON improvement_candidate_issuer_markers FOR EACH ROW EXECUTE FUNCTION authorize_improvement_candidate_marker_mutation();
+REVOKE EXECUTE ON FUNCTION improvement_candidate_canonical_json(jsonb) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION reject_improvement_candidate_mutation() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION authorize_improvement_candidate_authorization_insert() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION authorize_improvement_candidate_marker_mutation() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION reject_improvement_candidate_authorization_mutation() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION validate_improvement_candidate_insert() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION authorize_improvement_candidate_insert(text, uuid, uuid, integer, uuid, uuid, uuid, uuid, text, text, bigint, text, text, text, jsonb) FROM PUBLIC;
 
