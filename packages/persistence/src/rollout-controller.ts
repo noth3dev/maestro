@@ -228,7 +228,21 @@ export async function startBoundedRollout(pool: Pool, candidateId: string, rawSc
                 rollback_target_role_id, rollback_target_task_class
            FROM routing_candidate_approvals
           WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3 AND project_id = $4 AND goal_id = $5
-            AND role_id = $6 AND task_class = $7`,
+            AND role_id = $6 AND task_class = $7 AND evaluation_id IS NOT NULL AND council_judgment_payload IS NOT NULL
+            AND EXISTS (SELECT 1
+              FROM improvement_candidates judged
+              JOIN improvement_candidates evaluated ON evaluated.candidate_id = judged.parent_candidate_id
+              JOIN routing_candidate_evaluations e
+                ON e.evaluation_id = routing_candidate_approvals.evaluation_id
+               AND e.candidate_id = evaluated.candidate_id
+               AND e.candidate_version = evaluated.version
+               AND e.candidate_content_hash = evaluated.content_hash
+               AND e.project_id = evaluated.project_id
+               AND e.goal_id = evaluated.goal_id
+               AND e.evaluation_hash = routing_candidate_approvals.evaluation_hash
+              WHERE judged.candidate_id = routing_candidate_approvals.candidate_id
+                AND judged.version = routing_candidate_approvals.candidate_version
+                AND judged.content_hash = routing_candidate_approvals.candidate_content_hash)`,
         [source.candidate_id, source.version, source.content_hash, source.project_id, source.goal_id, scope.roleId, scope.taskClass],
       );
       if (approval.rowCount !== 1) throw new RolloutPersistenceError("Routing rollout requires durable replay and Council approval evidence");
