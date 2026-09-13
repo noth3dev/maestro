@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parseInput } from "./commands/parser.js";
-import { createAutomaticProviderSignInGate, shouldOfferAutomaticProviderSignIn } from "./entry.js";
+import { createAutomaticProviderSignInGate, runAutomaticProviderSignInOffer, shouldOfferAutomaticProviderSignIn } from "./entry.js";
 
 const model = (provider: string, id: string) => ({
   identity: { provider, id },
@@ -24,10 +24,86 @@ describe("automatic provider sign-in", () => {
     expect(shouldOfferAutomaticProviderSignIn([model("openai", "gpt-5")], "openai/gpt-5")).toBe(false);
   });
 
-  it("claims the automatic offer only once, including after dismissal", () => {
+  it("enters the account sign-in flow from a connected empty catalog without a keypress", async () => {
+    const onOffer = vi.fn();
+    await runAutomaticProviderSignInOffer({
+      client: { listModels: async () => [] },
+      getConfiguredModel: () => undefined,
+      gate: createAutomaticProviderSignInGate(),
+      isCurrent: () => true,
+      isManualLoginActive: () => false,
+      onOffer,
+    });
+    expect(onOffer).toHaveBeenCalledOnce();
+  });
+
+  it("claims the automatic offer only once, including after dismissal", async () => {
     const gate = createAutomaticProviderSignInGate();
-    expect(gate.claim()).toBe(true);
-    expect(gate.claim()).toBe(false);
+    const onOffer = vi.fn();
+    const options = {
+      client: { listModels: async () => [] },
+      getConfiguredModel: () => undefined,
+      gate,
+      isCurrent: () => true,
+      isManualLoginActive: () => false,
+      onOffer,
+    };
+    await runAutomaticProviderSignInOffer(options);
+    await runAutomaticProviderSignInOffer(options);
+    expect(onOffer).toHaveBeenCalledOnce();
+  });
+
+  it("does not overwrite manual provider-key entry or a stale connection", async () => {
+    let resolveModels: ((models: readonly []) => void) | undefined;
+    let manualLoginActive = false;
+    const manualOffer = vi.fn();
+    const manualRequest = runAutomaticProviderSignInOffer({
+      client: { listModels: () => new Promise<readonly []>((resolve) => { resolveModels = resolve; }) },
+      getConfiguredModel: () => undefined,
+      gate: createAutomaticProviderSignInGate(),
+      isCurrent: () => true,
+      isManualLoginActive: () => manualLoginActive,
+      onOffer: manualOffer,
+    });
+    manualLoginActive = true;
+    resolveModels!([]);
+    await manualRequest;
+    expect(manualOffer).not.toHaveBeenCalled();
+
+    let current = true;
+    resolveModels = undefined;
+    const staleOffer = vi.fn();
+    const staleRequest = runAutomaticProviderSignInOffer({
+      client: { listModels: () => new Promise<readonly []>((resolve) => { resolveModels = resolve; }) },
+      getConfiguredModel: () => undefined,
+      gate: createAutomaticProviderSignInGate(),
+      isCurrent: () => current,
+      isManualLoginActive: () => false,
+      onOffer: staleOffer,
+    });
+    current = false;
+    resolveModels!([]);
+    await staleRequest;
+    expect(staleOffer).not.toHaveBeenCalled();
+  });
+
+  it("does not consume the offer gate when model discovery fails", async () => {
+    let unavailable = true;
+    const onOffer = vi.fn();
+    const client = { listModels: vi.fn(async () => { if (unavailable) throw new Error("gateway unavailable"); return []; }) };
+    const gate = createAutomaticProviderSignInGate();
+    const options = {
+      client,
+      getConfiguredModel: () => undefined,
+      gate,
+      isCurrent: () => true,
+      isManualLoginActive: () => false,
+      onOffer,
+    };
+    await runAutomaticProviderSignInOffer(options);
+    unavailable = false;
+    await runAutomaticProviderSignInOffer(options);
+    expect(onOffer).toHaveBeenCalledOnce();
   });
 
   it("leaves the explicit /login command available", () => {
