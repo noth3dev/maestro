@@ -112,6 +112,13 @@ describe("candidate evaluation stages", () => {
     });
     expect(rejected.status).toBe("rejected");
     expect(evaluatorCalls).toBe(0);
+    const floorRejected = runSyntheticAdversarialScenarios(candidate(), {
+      guards: { roleFloors: { caution: 0.8 } },
+      scenarios: SYNTHETIC_SCENARIO_SPECS,
+      evaluate: () => { evaluatorCalls += 1; return metrics(); },
+    });
+    expect(floorRejected.status).toBe("rejected");
+    expect(evaluatorCalls).toBe(0);
   });
 
   it("rejects a cheap candidate when any correctness, safety, or authority floor fails", () => {

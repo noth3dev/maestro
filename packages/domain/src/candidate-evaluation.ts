@@ -149,6 +149,7 @@ export interface SyntheticScenarioResult extends SyntheticScenarioSpec {
 }
 
 export interface SyntheticRunRequest {
+  readonly guards?: DeterministicCandidateGuardContext;
   readonly scenarios: readonly SyntheticScenarioSpec[];
   readonly evaluate: (scenario: SyntheticScenarioSpec, candidate: ImprovementCandidateInput) => CandidateEvaluationMetrics;
 }
@@ -158,7 +159,7 @@ export type SyntheticRunResult =
   | { readonly status: "rejected"; readonly results: readonly []; readonly reason: string };
 
 export function runSyntheticAdversarialScenarios(candidate: ImprovementCandidateInput, request: SyntheticRunRequest): SyntheticRunResult {
-  const guards = runDeterministicCandidateGuards(candidate);
+  const guards = runDeterministicCandidateGuards(candidate, request.guards);
   if (!guards.passed) return { status: "rejected", results: [], reason: `deterministic candidate guard failed: ${guards.reasons.join("; ")}` };
   const expected = new Map(SYNTHETIC_SCENARIO_SPECS.map((scenario) => [scenario.kind, scenario.scenarioId]));
   const seen = new Set<string>();
