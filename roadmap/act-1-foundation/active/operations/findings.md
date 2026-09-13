@@ -2081,3 +2081,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-13 S4 pre-merge verification passed: 232/232 files and 1604/1604 tests with authenticated real PostgreSQL; the initial passwordless URL failure was environment authentication configuration, not code.
 
 - 2026-09-13 S4 post-merge verification passed: 232/232 files and 1604/1604 tests, including real PostgreSQL, build, lint, and diff-check.
+
+- 2026-09-13 S5 review remediation closed the initial concern about arbitrary candidate objects: the service now loads the persisted candidate under the caller's Goal lease, checks the durable author operator identity, and includes the complete candidate/evaluation disclosure. Candidate↔Council linkage remains the immutable candidate identity in the Council question/result; application enforcement belongs to S6 rollout scope because S5 has no application path.

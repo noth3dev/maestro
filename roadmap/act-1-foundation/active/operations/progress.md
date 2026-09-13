@@ -4148,3 +4148,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-13 Plan 6 §S4 merged as `f054d1a`; post-merge build, lint, diff-check, and authenticated serialized PostgreSQL verification passed **232/232 files and 1604/1604 tests** in 323.64s. S4 review was `REVIEW: PASS`; domain-only process-owner/SIGKILL integration remains documented out-of-scope hardening after five review rounds. Next: push and start §S5.
 
 - 2026-09-13 Plan 6 §S5 `council-review-and-disclosure`: opened `.worktrees/council-review-and-disclosure` from `main` after S4 post-merge verification. RED tests are next; implementation must remain a thin composition over the existing Encore Council durable-binding path.
+
+- 2026-09-13 Plan 6 §S5 pre-merge verification passed on `77c5f1e`: build, lint, diff-check, and authenticated serialized PostgreSQL suite passed **233/233 files and 1608/1608 tests** in 356.43s. Independent no-edit review passed (`REVIEW: PASS`), confirming durable candidate loading, author-operator exclusion, complete disclosure, honest same-model labeling, and dissent blocking. Ready to merge.
