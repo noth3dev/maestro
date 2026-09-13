@@ -2096,3 +2096,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-14 S6 review round 4 expiry-replay finding was fixed. Owner-bound replays now fail closed after lease expiry; only the startup expired-rollout reconciliation path may recover the row.
 
 - 2026-09-14 S6 review round 5 lease-duration replay finding was fixed. Reusing a start idempotency key with a different owner-lease duration now fails closed.
+
+- 2026-09-14 S6 final review is `REVIEW: PASS` at `b163a55`. The five-round review cap was reached; no spec-level findings remain. Additional race or operational hardening is explicitly out of scope for this slice.
