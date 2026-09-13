@@ -13,7 +13,7 @@ describe("Metronome worker overlay challenge", () => {
     const bounds = PERSONA_AXES.map((axis) => ({ axis, floor_value: axis === "caution" ? "0.75" : "0", ceiling_value: "1" }));
     const pool = { query: vi.fn()
       .mockResolvedValueOnce({ rowCount: 1, rows: [{ project_id: "project-1" }] })
-      .mockResolvedValueOnce({ rowCount: 1, rows: [{ status: "running", persona: durableProfile, expires_at: "2099-01-01T00:00:00.000Z" }] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ status: "running", department_id: "security", bundle_content_hash: "a".repeat(64), content_hash: "a".repeat(64), persona: durableProfile, expires_at: "2099-01-01T00:00:00.000Z" }] })
       .mockResolvedValueOnce({ rowCount: PERSONA_AXES.length, rows: bounds }) } as never;
     const service = createMetronomeService({ pool, withGoalLease: async (_goal, operation) => operation({ goalId: "goal-1", ownerId: "owner", fencingToken: "1" }) });
     const input: WorkerOverlayChallengeInput = { projectId: "project-1", workerId: "worker-1", roleId: "head-security", profile: { caution: 0.5 }, roleFloors: { caution: 0.75 }, evidenceReferences: ["evidence-1"] };

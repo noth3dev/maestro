@@ -14,7 +14,7 @@ export interface WorkerOverlayChallengeInput {
   readonly evidenceReferences: readonly string[];
 }
 export class WorkerOverlayChallengeError extends Error { constructor(message: string) { super(message); this.name = "WorkerOverlayChallengeError"; } }
-interface DurableWorkerOverlayRow { status: string; persona: unknown; expires_at: Date | string; }
+interface DurableWorkerOverlayRow { status: string; department_id: string; bundle_content_hash: string; content_hash: string; persona: unknown; expires_at: Date | string; }
 interface DurablePersonaBoundRow { axis: PersonaAxis; floor_value: string | number; ceiling_value: string | number; }
 export function findUnsafeWorkerOverlay(input: WorkerOverlayChallengeInput): readonly string[] {
   const violations: string[] = [];
@@ -88,8 +88,9 @@ export function createMetronomeService(deps: MetronomeServiceDependencies): Metr
       await assertProject(goalId, input.projectId);
       if (input.evidenceReferences.length === 0) throw new WorkerOverlayChallengeError("worker overlay challenge requires durable evidence references");
       const worker = await deps.pool.query<DurableWorkerOverlayRow>(
-        `SELECT w.status, o.persona, o.expires_at
+        `SELECT w.status, w.department_id, w.bundle_content_hash, b.content_hash, o.persona, o.expires_at
            FROM workers w
+           JOIN mission_bundles b ON b.council_id = w.council_id AND b.department_id = w.department_id AND b.plan_version = w.plan_version AND b.item_id = w.item_id
            JOIN mission_persona_overlays o ON o.council_id = w.council_id AND o.department_id = w.department_id AND o.plan_version = w.plan_version AND o.item_id = w.item_id
            JOIN head_councils c ON c.council_id = w.council_id
           WHERE w.worker_id = $1 AND c.goal_id = $2`, [input.workerId, goalId],
@@ -99,7 +100,12 @@ export function createMetronomeService(deps: MetronomeServiceDependencies): Metr
       if (isTerminalWorkerStatus(durableWorker.status as WorkerStatus) || isMissionPersonaOverlayExpired({ expiresAt: new Date(durableWorker.expires_at).toISOString() }, new Date())) throw new WorkerOverlayChallengeError("worker overlay is no longer active");
       let profile;
       try { profile = parsePersonaProfile(durableWorker.persona); } catch { throw new WorkerOverlayChallengeError("stored worker overlay profile is invalid"); }
-      const bounds = await deps.pool.query<DurablePersonaBoundRow>("SELECT axis, floor_value::text, ceiling_value::text FROM role_persona_bounds WHERE role_id = $1 ORDER BY axis", [input.roleId]);
+      const bounds = await deps.pool.query<DurablePersonaBoundRow>(
+        `SELECT b.axis, b.floor_value::text, b.ceiling_value::text
+           FROM role_persona_bounds b JOIN permanent_roles r ON r.role_id = b.role_id
+          WHERE b.role_id = $1 AND r.role_kind = 'department_head' AND r.department_id = $2 ORDER BY b.axis`,
+        [input.roleId, durableWorker.department_id],
+      );
       if (bounds.rowCount !== PERSONA_AXES.length) throw new WorkerOverlayChallengeError("reviewed role bounds are incomplete");
       const roleFloors: Partial<Record<PersonaAxis, number>> = {}; const roleCeilings: Partial<Record<PersonaAxis, number>> = {};
       for (const bound of bounds.rows) { roleFloors[bound.axis] = Number(bound.floor_value); roleCeilings[bound.axis] = Number(bound.ceiling_value); }

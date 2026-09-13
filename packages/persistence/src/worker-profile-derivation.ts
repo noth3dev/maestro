@@ -20,7 +20,7 @@ export interface DeriveWorkerProfileForMissionRequest {
   readonly taskClass: string;
 }
 interface BoundRow { axis: PersonaAxis; floor_value: string; ceiling_value: string; }
-interface WorkerBindingRow { status: string; }
+interface WorkerBindingRow { status: string; bundle_content_hash: string; }
 
 async function readReviewedBounds(pool: Pool, roleId: string): Promise<{ floors: Partial<Record<PersonaAxis, number>>; ceilings: Partial<Record<PersonaAxis, number>> }> {
   const rows = await pool.query<BoundRow>("SELECT axis, floor_value::text, ceiling_value::text FROM role_persona_bounds WHERE role_id = $1 ORDER BY axis", [roleId]);
@@ -35,7 +35,7 @@ export async function deriveWorkerProfileForMission(pool: Pool, request: DeriveW
   const bundle = await readMissionBundle(pool, request.councilId, request.departmentId, request.planVersion, request.itemId);
   if (bundle.substance.profileRef !== request.profileRef) throw new WorkerProfileDerivationPersistenceError("Worker profile reference does not match the Mission Bundle");
   const worker = await pool.query<WorkerBindingRow>(
-    `SELECT status FROM workers WHERE worker_id = $1 AND council_id = $2 AND department_id = $3 AND plan_version = $4 AND item_id = $5`,
+    `SELECT status, bundle_content_hash FROM workers WHERE worker_id = $1 AND council_id = $2 AND department_id = $3 AND plan_version = $4 AND item_id = $5`,
     [request.workerId, request.councilId, request.departmentId, request.planVersion, request.itemId],
   );
   if (worker.rowCount !== 1) throw new WorkerProfileNotFoundError(`Worker is not bound to the Mission Bundle: ${request.workerId}`);
@@ -43,6 +43,7 @@ export async function deriveWorkerProfileForMission(pool: Pool, request: DeriveW
   const overlay = await readMissionPersonaOverlay(pool, request.councilId, request.departmentId, request.planVersion, request.itemId);
   const role = await getPermanentRole(pool, request.roleId);
   if (role === undefined) throw new WorkerProfileDerivationPersistenceError(`Permanent role not found: ${request.roleId}`);
+  if (role.roleKind !== "department_head" || role.departmentId !== request.departmentId) throw new WorkerProfileDerivationPersistenceError("Worker derivation role is not the Department Head for this Mission Bundle");
   const active = await readActivePersonaProfile(pool, request.roleId, request.taskClass);
   const { floors, ceilings } = await readReviewedBounds(pool, request.roleId);
   const missionDelta: Partial<Record<PersonaAxis, number>> = {};
