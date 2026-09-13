@@ -156,18 +156,8 @@ CREATE TABLE IF NOT EXISTS organizational_knowledge_digest_loss_authorizations (
   retention retention_class NOT NULL DEFAULT 'project_lifetime'
 );
 REVOKE ALL ON organizational_knowledge_digest_loss_authorizations FROM PUBLIC;
-CREATE OR REPLACE FUNCTION validate_organizational_knowledge_digest_loss_authorization_provenance() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE call_stack text;
-BEGIN
-  GET DIAGNOSTICS call_stack = PG_CONTEXT;
-  IF call_stack NOT LIKE '%authorize_knowledge_digest_loss%' THEN
-    RAISE EXCEPTION 'digest-loss authorization rows must be created by authorize_knowledge_digest_loss';
-  END IF;
-  RETURN NEW;
-END;
-$$;
 DROP TRIGGER IF EXISTS organizational_knowledge_digest_loss_authorizations_provenance ON organizational_knowledge_digest_loss_authorizations;
-CREATE TRIGGER organizational_knowledge_digest_loss_authorizations_provenance BEFORE INSERT ON organizational_knowledge_digest_loss_authorizations FOR EACH ROW EXECUTE FUNCTION validate_organizational_knowledge_digest_loss_authorization_provenance();
+DROP FUNCTION IF EXISTS validate_organizational_knowledge_digest_loss_authorization_provenance();
 CREATE INDEX IF NOT EXISTS organizational_knowledge_digest_losses_project_idx ON organizational_knowledge_digest_losses (project_id, goal_id, digest_id);
 CREATE OR REPLACE FUNCTION reject_organizational_knowledge_digest_loss_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -186,6 +176,7 @@ BEGIN
      OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) THEN
     RAISE EXCEPTION 'knowledge digest loss authorization context is invalid';
   END IF;
+  INSERT INTO knowledge_issuer_transaction_markers (transaction_id, issuer_kind, token_hash) VALUES (txid_current(), 'digest_loss', encode(public.digest(p_token, 'sha256'), 'hex')) ON CONFLICT DO NOTHING;
   INSERT INTO organizational_knowledge_digest_loss_authorizations (token_hash, digest_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by, role_id, retention)
     SELECT encode(public.digest(p_token, 'sha256'), 'hex'), p_digest_id, p_goal_id, p_project_id, p_owner_id, p_fencing_token, p_reason, p_recorded_by, p_role_id, d.retention
     FROM improvement_digests d WHERE d.digest_id = p_digest_id;
@@ -200,6 +191,15 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION authorize_organizational_knowledge_digest_loss_insert() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM knowledge_issuer_transaction_markers m WHERE m.transaction_id = txid_current() AND m.issuer_kind = 'digest_loss' AND m.token_hash = NEW.token_hash) THEN RAISE EXCEPTION 'digest-loss authorization must be issued by secured function'; END IF;
+  DELETE FROM knowledge_issuer_transaction_markers WHERE transaction_id = txid_current() AND issuer_kind = 'digest_loss' AND token_hash = NEW.token_hash;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS organizational_knowledge_digest_loss_authorizations_issuer ON organizational_knowledge_digest_loss_authorizations;
+CREATE TRIGGER organizational_knowledge_digest_loss_authorizations_issuer BEFORE INSERT ON organizational_knowledge_digest_loss_authorizations FOR EACH ROW EXECUTE FUNCTION authorize_organizational_knowledge_digest_loss_insert();
 CREATE OR REPLACE FUNCTION validate_organizational_knowledge_digest_loss_binding() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
   IF NOT EXISTS (
@@ -227,11 +227,19 @@ CREATE INDEX IF NOT EXISTS organizational_knowledge_project_idx ON organizationa
 CREATE INDEX IF NOT EXISTS organizational_knowledge_global_idx ON organizational_knowledge (scope, department_id, created_at, knowledge_id, revision) WHERE scope = 'global';
 CREATE TABLE IF NOT EXISTS knowledge_issuer_transaction_markers (
   transaction_id bigint NOT NULL,
-  issuer_kind text NOT NULL CHECK (issuer_kind IN ('promotion', 'source_loss', 'maintenance', 'cleanup')),
+  token_hash char(64),
+  nonce uuid,
+  issuer_kind text NOT NULL CHECK (issuer_kind IN ('promotion', 'source_loss', 'maintenance', 'cleanup', 'digest_loss')),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   PRIMARY KEY (transaction_id, issuer_kind)
 );
 REVOKE ALL ON knowledge_issuer_transaction_markers FROM PUBLIC;
+ALTER TABLE knowledge_issuer_transaction_markers ADD COLUMN IF NOT EXISTS token_hash char(64);
+ALTER TABLE knowledge_issuer_transaction_markers ADD COLUMN IF NOT EXISTS nonce uuid;
+ALTER TABLE knowledge_issuer_transaction_markers DROP CONSTRAINT IF EXISTS knowledge_issuer_transaction_markers_issuer_kind_check;
+ALTER TABLE knowledge_issuer_transaction_markers ADD CONSTRAINT knowledge_issuer_transaction_markers_issuer_kind_check CHECK (issuer_kind IN ('promotion', 'source_loss', 'maintenance', 'cleanup', 'digest_loss'));
+ALTER TABLE knowledge_issuer_transaction_markers DROP CONSTRAINT IF EXISTS knowledge_issuer_transaction_markers_binding_check;
+ALTER TABLE knowledge_issuer_transaction_markers ADD CONSTRAINT knowledge_issuer_transaction_markers_binding_check CHECK ((issuer_kind = 'cleanup' AND nonce IS NOT NULL AND token_hash IS NULL) OR (issuer_kind <> 'cleanup' AND token_hash IS NOT NULL AND nonce IS NULL));
 
 CREATE TABLE IF NOT EXISTS knowledge_promotion_authorizations (
   token_hash char(64) PRIMARY KEY CHECK (token_hash ~ '^[0-9a-f]{64}$'),
@@ -293,8 +301,8 @@ CREATE TABLE IF NOT EXISTS knowledge_maintenance_authorizations (
 );
 CREATE OR REPLACE FUNCTION authorize_knowledge_maintenance(p_token text, p_knowledge_id uuid, p_revision integer, p_status text, p_operator_id uuid, p_role_id text, p_owner_id text, p_fencing_token bigint, p_reason text, p_source_session_ref text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-  INSERT INTO knowledge_issuer_transaction_markers (transaction_id, issuer_kind) VALUES (txid_current(), 'maintenance') ON CONFLICT DO NOTHING;
   IF btrim(p_token) = '' OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM permanent_roles WHERE status = 'standing' AND ((role_id = p_role_id AND role_kind = 'department_head') OR (p_role_id = 'ceo' AND role_id = 'concertmaster' AND role_kind = 'concertmaster'))) OR NOT EXISTS (SELECT 1 FROM organizational_knowledge k JOIN operator_project_roles r ON r.project_id = k.source_project_id AND r.role_id = p_role_id AND r.operator_id = p_operator_id AND r.active = true JOIN operator_project_memberships m ON m.project_id = r.project_id AND m.operator_id = r.operator_id AND m.active = true WHERE k.knowledge_id = p_knowledge_id AND k.revision = p_revision - 1) OR NOT EXISTS (SELECT 1 FROM goal_leases l JOIN organizational_knowledge k ON k.source_goal_id = l.goal_id WHERE k.knowledge_id = p_knowledge_id AND k.revision = p_revision - 1 AND l.owner_id = p_owner_id AND l.fencing_token = p_fencing_token AND l.expires_at > clock_timestamp()) THEN RAISE EXCEPTION 'knowledge maintenance authorization context is invalid'; END IF;
+  INSERT INTO knowledge_issuer_transaction_markers (transaction_id, issuer_kind, token_hash) VALUES (txid_current(), 'maintenance', encode(public.digest(p_token, 'sha256'), 'hex')) ON CONFLICT DO NOTHING;
   PERFORM set_config('maestro.knowledge_maintenance_token', p_token, true); PERFORM set_config('maestro.knowledge_maintenance_operator', p_operator_id::text, true); PERFORM set_config('maestro.knowledge_maintenance_role', p_role_id, true); PERFORM set_config('maestro.knowledge_maintenance_owner', p_owner_id, true); PERFORM set_config('maestro.knowledge_maintenance_fence', p_fencing_token::text, true);
   INSERT INTO knowledge_maintenance_authorizations (token_hash, knowledge_id, revision, status, operator_id, role_id, owner_id, fencing_token, reason, source_session_ref, retention) SELECT encode(public.digest(p_token, 'sha256'), 'hex'), p_knowledge_id, p_revision, p_status, p_operator_id, p_role_id, p_owner_id, p_fencing_token, p_reason, p_source_session_ref, k.retention FROM organizational_knowledge k WHERE k.knowledge_id = p_knowledge_id AND k.revision = p_revision - 1;
 END;
@@ -306,11 +314,9 @@ ALTER TABLE knowledge_maintenance_authorizations ALTER COLUMN retention SET DEFA
 ALTER TABLE knowledge_maintenance_authorizations ALTER COLUMN retention SET NOT NULL;
 
 CREATE OR REPLACE FUNCTION authorize_knowledge_maintenance_authorization_insert() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE call_context text;
 BEGIN
-  GET DIAGNOSTICS call_context = PG_CONTEXT;
-  IF call_context !~ 'function authorize_knowledge_maintenance\(text,[[:space:]]*uuid,[[:space:]]*integer,[[:space:]]*text' THEN RAISE EXCEPTION 'knowledge maintenance authorization must be issued by secured function'; END IF;
-  IF NEW.token_hash IS DISTINCT FROM encode(public.digest(NULLIF(current_setting('maestro.knowledge_maintenance_token', true), ''), 'sha256'), 'hex') OR NEW.operator_id::text IS DISTINCT FROM NULLIF(current_setting('maestro.knowledge_maintenance_operator', true), '') OR NEW.role_id IS DISTINCT FROM NULLIF(current_setting('maestro.knowledge_maintenance_role', true), '') OR NEW.owner_id IS DISTINCT FROM NULLIF(current_setting('maestro.knowledge_maintenance_owner', true), '') OR NEW.fencing_token IS DISTINCT FROM NULLIF(current_setting('maestro.knowledge_maintenance_fence', true), '')::bigint OR NOT EXISTS (SELECT 1 FROM knowledge_issuer_transaction_markers m WHERE m.transaction_id = txid_current() AND m.issuer_kind = 'maintenance') THEN RAISE EXCEPTION 'knowledge maintenance authorization must be issued by secured function'; END IF;
+    IF NEW.token_hash IS DISTINCT FROM encode(public.digest(NULLIF(current_setting('maestro.knowledge_maintenance_token', true), ''), 'sha256'), 'hex') OR NEW.operator_id::text IS DISTINCT FROM NULLIF(current_setting('maestro.knowledge_maintenance_operator', true), '') OR NEW.role_id IS DISTINCT FROM NULLIF(current_setting('maestro.knowledge_maintenance_role', true), '') OR NEW.owner_id IS DISTINCT FROM NULLIF(current_setting('maestro.knowledge_maintenance_owner', true), '') OR NEW.fencing_token IS DISTINCT FROM NULLIF(current_setting('maestro.knowledge_maintenance_fence', true), '')::bigint OR NOT EXISTS (SELECT 1 FROM knowledge_issuer_transaction_markers m WHERE m.transaction_id = txid_current() AND m.issuer_kind = 'maintenance' AND m.token_hash = NEW.token_hash) THEN RAISE EXCEPTION 'knowledge maintenance authorization must be issued by secured function'; END IF;
+  DELETE FROM knowledge_issuer_transaction_markers WHERE transaction_id = txid_current() AND issuer_kind = 'maintenance' AND token_hash = NEW.token_hash;
   RETURN NEW;
 END;
 $$;
@@ -356,10 +362,10 @@ BEGIN
   IF NEW.revision = 1 AND NEW.scope <> 'worker_proposed' THEN
     RAISE EXCEPTION 'organizational knowledge must be proposed before promotion';
   END IF;
-  IF NEW.scope = 'project_department' AND NEW.status = 'active' AND NEW.promotion_marker = 'department-promotion' AND NEW.revision = 2 AND NOT EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND prior.scope = 'worker_proposed' AND prior.status = 'proposed') THEN
+  IF NEW.scope = 'project_department' AND NEW.status = 'active' AND NEW.promotion_marker = 'department-promotion' AND NOT EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND ((prior.scope = 'worker_proposed' AND prior.status = 'proposed') OR (prior.scope = 'project_department' AND prior.status = 'active'))) THEN
     RAISE EXCEPTION 'project organizational knowledge requires proposal-first lineage';
   END IF;
-  IF NEW.scope = 'global' AND NEW.status = 'active' AND NEW.promotion_marker = 'global-promotion' AND NEW.revision = 2 AND NOT EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND prior.scope = 'project_department' AND prior.status = 'active') THEN
+  IF NEW.scope = 'global' AND NEW.status = 'active' AND NEW.promotion_marker = 'global-promotion' AND NOT EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND ((prior.scope = 'project_department' AND prior.status = 'active') OR (prior.scope = 'global' AND prior.status = 'active'))) THEN
     RAISE EXCEPTION 'global organizational knowledge requires project promotion lineage';
   END IF;
   IF NEW.scope = 'global' AND NEW.status = 'active' AND jsonb_array_length(NEW.source_evidence_ids) <> 0 THEN RAISE EXCEPTION 'global organizational knowledge cannot retain raw evidence references'; END IF;
@@ -595,12 +601,9 @@ DROP TRIGGER IF EXISTS evidence_source_tombstones_immutable ON evidence_source_t
 CREATE TRIGGER evidence_source_tombstones_immutable BEFORE UPDATE OR DELETE ON evidence_source_tombstones FOR EACH ROW EXECUTE FUNCTION reject_evidence_source_tombstone_mutation();
 
 CREATE OR REPLACE FUNCTION authorize_source_evidence_loss_authorization_insert() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE call_context text;
 BEGIN
-  INSERT INTO knowledge_issuer_transaction_markers (transaction_id, issuer_kind) VALUES (txid_current(), 'source_loss') ON CONFLICT DO NOTHING;
-  GET DIAGNOSTICS call_context = PG_CONTEXT;
-  IF call_context !~ 'function authorize_source_evidence_loss\(text,[[:space:]]*uuid,[[:space:]]*uuid,[[:space:]]*uuid' THEN RAISE EXCEPTION 'source evidence loss authorization must be issued by secured function'; END IF;
-  IF NEW.token_hash IS DISTINCT FROM encode(public.digest(NULLIF(current_setting('maestro.source_evidence_loss_token', true), ''), 'sha256'), 'hex') OR NEW.owner_id IS DISTINCT FROM NULLIF(current_setting('maestro.source_loss_owner', true), '') OR NEW.fencing_token IS DISTINCT FROM NULLIF(current_setting('maestro.source_loss_fence', true), '')::bigint OR NOT EXISTS (SELECT 1 FROM knowledge_issuer_transaction_markers m WHERE m.transaction_id = txid_current() AND m.issuer_kind = 'source_loss') OR NOT EXISTS (SELECT 1 FROM permanent_roles WHERE status = 'standing' AND ((role_id = NEW.role_id AND role_kind = 'department_head') OR (NEW.role_id = 'ceo' AND role_id = 'concertmaster' AND role_kind = 'concertmaster'))) THEN RAISE EXCEPTION 'source evidence loss authorization must be issued by secured function'; END IF;
+    IF NEW.token_hash IS DISTINCT FROM encode(public.digest(NULLIF(current_setting('maestro.source_evidence_loss_token', true), ''), 'sha256'), 'hex') OR NEW.owner_id IS DISTINCT FROM NULLIF(current_setting('maestro.source_loss_owner', true), '') OR NEW.fencing_token IS DISTINCT FROM NULLIF(current_setting('maestro.source_loss_fence', true), '')::bigint OR NOT EXISTS (SELECT 1 FROM knowledge_issuer_transaction_markers m WHERE m.transaction_id = txid_current() AND m.issuer_kind = 'source_loss' AND m.token_hash = NEW.token_hash) OR NOT EXISTS (SELECT 1 FROM permanent_roles WHERE status = 'standing' AND ((role_id = NEW.role_id AND role_kind = 'department_head') OR (NEW.role_id = 'ceo' AND role_id = 'concertmaster' AND role_kind = 'concertmaster'))) THEN RAISE EXCEPTION 'source evidence loss authorization must be issued by secured function'; END IF;
+  DELETE FROM knowledge_issuer_transaction_markers WHERE transaction_id = txid_current() AND issuer_kind = 'source_loss' AND token_hash = NEW.token_hash;
   RETURN NEW;
 END;
 $$;
@@ -619,11 +622,9 @@ CREATE TRIGGER source_evidence_loss_authorizations_immutable BEFORE UPDATE OR DE
 
 
 CREATE OR REPLACE FUNCTION authorize_knowledge_promotion_authorization_insert() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE call_context text;
 BEGIN
-  INSERT INTO knowledge_issuer_transaction_markers (transaction_id, issuer_kind) VALUES (txid_current(), 'promotion') ON CONFLICT DO NOTHING;
-  GET DIAGNOSTICS call_context = PG_CONTEXT;
-  IF call_context !~ 'function authorize_knowledge_promotion\(text,[[:space:]]*uuid' OR NEW.token_hash IS DISTINCT FROM encode(public.digest(NULLIF(current_setting('maestro.knowledge_promotion_token', true), ''), 'sha256'), 'hex') OR NEW.authorization_transaction_id <> txid_current() OR NOT EXISTS (SELECT 1 FROM knowledge_issuer_transaction_markers m WHERE m.transaction_id = txid_current() AND m.issuer_kind = 'promotion') THEN RAISE EXCEPTION 'knowledge promotion authorization must be issued by secured function'; END IF;
+  IF NEW.token_hash IS DISTINCT FROM encode(public.digest(NULLIF(current_setting('maestro.knowledge_promotion_token', true), ''), 'sha256'), 'hex') OR NEW.authorization_transaction_id <> txid_current() OR NOT EXISTS (SELECT 1 FROM knowledge_issuer_transaction_markers m WHERE m.transaction_id = txid_current() AND m.issuer_kind = 'promotion' AND m.token_hash = NEW.token_hash) THEN RAISE EXCEPTION 'knowledge promotion authorization must be issued by secured function'; END IF;
+  DELETE FROM knowledge_issuer_transaction_markers WHERE transaction_id = txid_current() AND issuer_kind = 'promotion' AND token_hash = NEW.token_hash;
   RETURN NEW;
 END;
 $$;
@@ -685,6 +686,7 @@ BEGIN
   IF btrim(p_token) = '' OR p_scope NOT IN ('project_department', 'global') OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_operator_id AND r.project_id = p_project_id AND r.role_id = p_role_id AND r.active = true) OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) OR NOT EXISTS (SELECT 1 FROM organizational_knowledge WHERE knowledge_id = p_knowledge_id AND revision = p_revision - 1 AND source_project_id = p_project_id AND source_goal_id = p_goal_id) THEN RAISE EXCEPTION 'knowledge promotion authorization context is invalid'; END IF;
   IF p_scope = 'global' AND (p_curator_operator_id IS NULL OR p_curator_role_id IS NULL OR p_curator_operator_id = p_operator_id OR p_curator_role_id = p_role_id OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_curator_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM permanent_roles WHERE role_id = p_curator_role_id AND role_kind = 'department_head' AND status = 'standing' AND department_id <> p_department_id) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_curator_operator_id AND r.project_id = p_project_id AND r.role_id = p_curator_role_id AND r.active = true)) THEN RAISE EXCEPTION 'global knowledge curator authorization context is invalid'; END IF;
   IF p_scope = 'global' THEN SELECT department_id INTO curator_department FROM permanent_roles WHERE role_id = p_curator_role_id AND role_kind = 'department_head' AND status = 'standing'; END IF;
+  INSERT INTO knowledge_issuer_transaction_markers (transaction_id, issuer_kind, token_hash) VALUES (txid_current(), 'promotion', encode(public.digest(p_token, 'sha256'), 'hex')) ON CONFLICT DO NOTHING;
   PERFORM set_config('maestro.knowledge_promotion_token', p_token, true);
   INSERT INTO knowledge_promotion_authorizations (token_hash, knowledge_id, revision, scope, role_id, department_id, operator_id, goal_id, owner_id, fencing_token, curator_operator_id, curator_department_id, curator_role_id, payload_hash, payload_json, authorization_transaction_id) VALUES (encode(public.digest(p_token, 'sha256'), 'hex'), p_knowledge_id, p_revision, p_scope, p_role_id, p_department_id, p_operator_id, p_goal_id, p_owner_id, p_fencing_token, p_curator_operator_id, curator_department, p_curator_role_id, CASE WHEN normalized_payload IS NULL THEN NULL ELSE encode(public.digest(normalized_payload::text, 'sha256'), 'hex') END, normalized_payload, txid_current());
   RETURN CASE WHEN normalized_payload IS NULL THEN NULL ELSE encode(public.digest(normalized_payload::text, 'sha256'), 'hex') END;
@@ -704,6 +706,7 @@ REVOKE EXECUTE ON FUNCTION authorize_knowledge_promotion(text, uuid, integer, te
 CREATE OR REPLACE FUNCTION authorize_source_evidence_loss(p_token text, p_evidence_id uuid, p_goal_id uuid, p_project_id uuid, p_owner_id text, p_fencing_token bigint, p_reason text, p_recorded_by uuid, p_role_id text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
   IF btrim(p_token) = '' OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_recorded_by AND active = true) OR NOT EXISTS (SELECT 1 FROM permanent_roles WHERE status = 'standing' AND ((role_id = p_role_id AND role_kind = 'department_head') OR (p_role_id = 'ceo' AND role_id = 'concertmaster' AND role_kind = 'concertmaster'))) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_recorded_by AND r.project_id = p_project_id AND r.role_id = p_role_id AND r.active = true) OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) OR NOT EXISTS (SELECT 1 FROM evidence_records e JOIN goals g ON g.goal_id = e.goal_id WHERE e.evidence_id = p_evidence_id AND e.goal_id = p_goal_id AND e.project_id = p_project_id AND g.project_id = p_project_id) THEN RAISE EXCEPTION 'source evidence loss authorization context is invalid'; END IF;
+  INSERT INTO knowledge_issuer_transaction_markers (transaction_id, issuer_kind, token_hash) VALUES (txid_current(), 'source_loss', encode(public.digest(p_token, 'sha256'), 'hex')) ON CONFLICT DO NOTHING;
   PERFORM set_config('maestro.source_evidence_loss_token', p_token, true); PERFORM set_config('maestro.source_loss_owner', p_owner_id, true); PERFORM set_config('maestro.source_loss_fence', p_fencing_token::text, true);
   INSERT INTO source_evidence_loss_authorizations (token_hash, evidence_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by, role_id) VALUES (encode(public.digest(p_token, 'sha256'), 'hex'), p_evidence_id, p_goal_id, p_project_id, p_owner_id, p_fencing_token, p_reason, p_recorded_by::text, p_role_id);
 END;
@@ -748,11 +751,10 @@ ALTER TABLE organizational_knowledge_schema_cleanup_authorizations ALTER COLUMN 
 REVOKE ALL ON organizational_knowledge_schema_cleanup_authorizations FROM PUBLIC;
 
 CREATE OR REPLACE FUNCTION reject_organizational_knowledge_schema_cleanup_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE call_context text;
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    GET DIAGNOSTICS call_context = PG_CONTEXT;
-    IF call_context !~ 'function maestro_goal_truncate_reset\(' OR NEW.transaction_id <> txid_current() OR NEW.nonce IS DISTINCT FROM NULLIF(current_setting('maestro.schema_cleanup_nonce', true), '')::uuid OR NEW.authorized_by IS DISTINCT FROM session_user OR current_query() !~* '^truncate[[:space:]]+goals([[:space:]]|;|$)' THEN RAISE EXCEPTION 'schema cleanup authorization must be issued by secured goal reset'; END IF;
+    IF NEW.transaction_id <> txid_current() OR NEW.nonce IS DISTINCT FROM NULLIF(current_setting('maestro.schema_cleanup_nonce', true), '')::uuid OR NEW.authorized_by IS DISTINCT FROM session_user OR NOT EXISTS (SELECT 1 FROM knowledge_issuer_transaction_markers m WHERE m.transaction_id = txid_current() AND m.issuer_kind = 'cleanup' AND m.nonce IS NOT DISTINCT FROM NEW.nonce) THEN RAISE EXCEPTION 'schema cleanup authorization must be issued by secured goal reset'; END IF;
+    DELETE FROM knowledge_issuer_transaction_markers WHERE transaction_id = txid_current() AND issuer_kind = 'cleanup' AND nonce IS NOT DISTINCT FROM NEW.nonce;
     RETURN NEW;
   END IF;
   RAISE EXCEPTION 'schema cleanup authorizations are internal and append-only';
@@ -764,8 +766,8 @@ CREATE TRIGGER organizational_knowledge_schema_cleanup_immutable BEFORE UPDATE O
 CREATE OR REPLACE FUNCTION maestro_goal_truncate_reset() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
   IF session_user <> (SELECT tableowner FROM pg_catalog.pg_tables WHERE schemaname = TG_TABLE_SCHEMA AND tablename = TG_TABLE_NAME) THEN RAISE EXCEPTION 'schema cleanup reset requires the goals table owner'; END IF;
-  INSERT INTO knowledge_issuer_transaction_markers (transaction_id, issuer_kind) VALUES (txid_current(), 'cleanup') ON CONFLICT DO NOTHING;
   PERFORM set_config('maestro.schema_cleanup_nonce', gen_random_uuid()::text, true);
+  INSERT INTO knowledge_issuer_transaction_markers (transaction_id, issuer_kind, nonce) VALUES (txid_current(), 'cleanup', NULLIF(current_setting('maestro.schema_cleanup_nonce', true), '')::uuid) ON CONFLICT DO NOTHING;
   INSERT INTO organizational_knowledge_schema_cleanup_authorizations (transaction_id, nonce, authorized_by) VALUES (txid_current(), current_setting('maestro.schema_cleanup_nonce', true)::uuid, session_user) ON CONFLICT (transaction_id) DO NOTHING;
   PERFORM set_config('maestro.schema_cleanup_reset', '1', true);
   RETURN NULL;
@@ -830,6 +832,6 @@ BEGIN
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.validate_organizational_knowledge_digest_loss_binding() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_organizational_knowledge_digest_loss_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_digest_loss(text, uuid, uuid, uuid, text, bigint, text, uuid, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
-  EXECUTE pg_catalog.format('ALTER FUNCTION %I.validate_organizational_knowledge_digest_loss_authorization_provenance() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_organizational_knowledge_digest_loss_insert() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
 END;
 $$;
