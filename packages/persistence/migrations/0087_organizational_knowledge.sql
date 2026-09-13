@@ -279,6 +279,7 @@ CREATE TABLE IF NOT EXISTS knowledge_promotion_authorizations (
   retention retention_class NOT NULL DEFAULT 'project_lifetime'
 );
 ALTER TABLE knowledge_promotion_authorizations ADD COLUMN IF NOT EXISTS authorization_kind text;
+DROP TRIGGER IF EXISTS knowledge_promotion_authorizations_immutable ON knowledge_promotion_authorizations;
 UPDATE knowledge_promotion_authorizations SET authorization_kind = 'promotion' WHERE authorization_kind IS NULL;
 ALTER TABLE knowledge_promotion_authorizations ALTER COLUMN authorization_kind SET DEFAULT 'promotion';
 ALTER TABLE knowledge_promotion_authorizations ALTER COLUMN authorization_kind SET NOT NULL;
