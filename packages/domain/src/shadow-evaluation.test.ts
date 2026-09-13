@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { improvementCandidateScenarioSuiteHash, type ImprovementCandidateInput } from "./improvement-candidate.js";
-import { runShadowEvaluation, type ShadowOutput } from "./shadow-evaluation.js";
+import {
+  createShadowAuthorityBoundary,
+  createShadowKernelPort,
+  runShadowEvaluation,
+  type ShadowOutput,
+} from "./shadow-evaluation.js";
+import type { ExecutionKernelPort } from "./execution-kernel.js";
 
 const candidate = (): ImprovementCandidateInput => ({
   schemaVersion: 1,
@@ -26,34 +32,39 @@ const active: ShadowOutput = {
   plans: [{ step: "inspect" }],
   challenges: [{ kind: "risk-review" }],
 };
+const input = { request: "review the change" };
+const sameInput = () => ({ input, activeInput: input, active });
 
 describe("zero-authority shadow evaluation", () => {
   it("records proposed messages, plans, and challenges against the active persona on identical input", async () => {
-    const input = { request: "review the change" };
     const result = await runShadowEvaluation({
       candidate: candidate(),
-      cases: [{ input, active }],
+      cases: [sameInput()],
       evaluate: async (receivedInput) => ({ ...active, messages: [`shadow:${(receivedInput as typeof input).request}`] }),
     });
     expect(result.status).toBe("completed");
     expect(result.records).toHaveLength(1);
     expect(result.records[0]).toMatchObject({ input, active, proposed: { plans: active.plans, challenges: active.challenges } });
     expect(result.records[0]!.compared).toBe(true);
+    expect(result.records[0]!.matchesActive).toBe(false);
   });
 
   it("denies an effect attempt before any AuthorizedEffectExecutor or live effect is reached", async () => {
     let executorCalls = 0;
     let liveEffectRows = 0;
+    const authority = createShadowAuthorityBoundary({ execute: async () => { executorCalls += 1; return { effect: "allow" }; } });
+    await expect(authority.attemptEffect({ action: "project.file.write", target: "/repo/file" }, async () => { liveEffectRows += 1; })).rejects.toThrow(/shadow|authority/i);
+    expect(executorCalls).toBe(0);
+    expect(liveEffectRows).toBe(0);
+
     const result = await runShadowEvaluation({
       candidate: candidate(),
-      cases: [{ input: { request: "write" }, active }],
-      authorityExecutor: { execute: async () => { executorCalls += 1; return { effect: "allow" }; } },
+      cases: [sameInput()],
       evaluate: async (_input, context) => {
         await expect(context.attemptEffect({ action: "project.file.write", target: "/repo/file" }, async () => { liveEffectRows += 1; })).rejects.toThrow(/shadow|authority/i);
         return active;
       },
     });
-    expect(result.status).toBe("completed");
     expect(result.deniedEffects).toHaveLength(1);
     expect(executorCalls).toBe(0);
     expect(liveEffectRows).toBe(0);
@@ -63,7 +74,7 @@ describe("zero-authority shadow evaluation", () => {
     let evidenceReads = 0;
     const result = await runShadowEvaluation({
       candidate: candidate(),
-      cases: [{ input: { request: "inspect" }, active }],
+      cases: [sameInput()],
       recordedEvidence: { "evidence-1": { kind: "test-result", content: "observed" } },
       evaluate: async (_input, context) => {
         expect(Object.keys(context).sort()).toEqual(["attemptEffect", "readRecordedEvidence"]);
@@ -77,22 +88,45 @@ describe("zero-authority shadow evaluation", () => {
     expect(result.records[0]!.readEvidenceIds).toEqual(["evidence-1"]);
   });
 
-  it("interrupts without committing partial live effects when a shadow run is cancelled", async () => {
+  it("provides a read-only kernel facade with no provider write methods", async () => {
+    const kernel = {
+      spawn: async () => ({ execution: "execution" as never, invocation: "invocation" as never }),
+      prompt: async () => undefined,
+      observe: async () => [],
+      sendMessage: async () => undefined,
+      cancel: async () => ({ cancelled: true }),
+      getModelIdentity: async () => ({ provider: "test", id: "test" }),
+      getToolEvents: async () => ({ state: "empty", events: [] as const }),
+      getUsage: async () => ({ state: "unknown" as const }),
+      getInvocationStatus: async () => "unknown" as const,
+      resume: async () => { throw new Error("unused"); },
+      reconnect: async () => { throw new Error("unused"); },
+    } satisfies Partial<ExecutionKernelPort>;
+    const facade = createShadowKernelPort(kernel as ExecutionKernelPort);
+    expect(facade).toEqual(expect.objectContaining({ observe: expect.any(Function), getToolEvents: expect.any(Function), getUsage: expect.any(Function), getInvocationStatus: expect.any(Function) }));
+    expect(facade).not.toHaveProperty("spawn");
+    expect(facade).not.toHaveProperty("prompt");
+    expect(facade).not.toHaveProperty("sendMessage");
+    expect(facade).not.toHaveProperty("cancel");
+  });
+
+  it("journals an interrupted run as orphaned and commits no partial live effect", async () => {
     const controller = new AbortController();
+    const events: string[] = [];
     const result = await runShadowEvaluation({
       candidate: candidate(),
+      runId: "shadow-run-1",
       signal: controller.signal,
-      cases: [
-        { input: { request: "first" }, active },
-        { input: { request: "second" }, active },
-      ],
-      evaluate: async (input) => {
-        if ((input as { request: string }).request === "first") controller.abort();
+      journal: { append: async (event) => { events.push(event.event); } },
+      cases: [sameInput(), { input: { request: "second" }, activeInput: { request: "second" }, active }],
+      evaluate: async (receivedInput) => {
+        if ((receivedInput as { request: string }).request === "review the change") controller.abort();
         return active;
       },
     });
     expect(result.status).toBe("interrupted");
     expect(result.records).toHaveLength(0);
     expect(result.liveEffects).toEqual([]);
+    expect(events).toEqual(["started", "orphaned"]);
   });
 });
