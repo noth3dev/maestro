@@ -62,6 +62,17 @@ export async function bootstrapPermanentOrganization(pool: Pool): Promise<void> 
           [role.roleId, axis, role.persona[axis]],
         );
       }
+      const rationale = Object.fromEntries(PERSONA_AXES.map((axis) => [axis, {
+        reason: `${role.provenance.reviewVersion}: reviewed baseline for ${role.roleId} duty`,
+        low: `Lower ${axis} while preserving ${role.charter}`,
+        current: `Balance ${axis} for ${role.charter}`,
+        high: `Higher ${axis} while preserving ${role.charter}`,
+      }]));
+      await client.query(
+        `INSERT INTO persona_profile_versions (role_id, version, profile, rationale, source)
+         VALUES ($1, 1, $2::jsonb, $3::jsonb, $4) ON CONFLICT (role_id, version) DO NOTHING`,
+        [role.roleId, JSON.stringify(role.persona), JSON.stringify(rationale), role.provenance.source],
+      );
     }
     await client.query("COMMIT");
   } catch (error) {

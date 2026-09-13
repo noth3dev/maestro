@@ -58,7 +58,8 @@ describe("learned persona profile layers", () => {
       delta: { caution: 0.05, initiative: -0.03 }, reason: "incident evidence",
     });
     const missionOverlay = { caution: 0.02, empathy: 0.01 };
-    const composed = composePersonaProfile(learned, adjustment, missionOverlay);
+    const core = extractPersonaCoreIdentity({ roleId: "concertmaster", charter: "coordinate", capabilityBoundary: { allowed: ["coordinate"], forbidden: ["execute"] } });
+    const composed = composePersonaProfile(learned, adjustment, core, missionOverlay);
     expect(composed.persona.caution).toBeCloseTo(0.97);
     expect(composed.persona.initiative).toBeCloseTo(0.89);
     expect(composed.layers.learnedProfile).toEqual(learned);

@@ -1,4 +1,5 @@
 import {
+  canonicalJson,
   composePersonaProfile,
   extractPersonaCoreIdentity,
   parseLearnedPersonaProfileVersion,
@@ -69,7 +70,7 @@ export async function storeLearnedPersonaProfileVersion(pool: Pool, input: Learn
     );
     if (existing.rowCount === 1) {
       const prior = profileRecord(existing.rows[0]!);
-      if (JSON.stringify(prior) !== JSON.stringify(parsed)) throw new PersonaProfileVersionConflictError(`learned persona profile version already exists: ${parsed.roleId}/${parsed.version}`);
+      if (canonicalJson(prior) !== canonicalJson(parsed)) throw new PersonaProfileVersionConflictError(`learned persona profile version already exists: ${parsed.roleId}/${parsed.version}`);
       await client.query("COMMIT");
       return prior;
     }
@@ -121,7 +122,7 @@ export async function storeTaskClassPersonaAdjustment(pool: Pool, input: TaskCla
     );
     if (existing.rowCount === 1) {
       const prior = adjustmentRecord(existing.rows[0]!);
-      if (JSON.stringify(prior) !== JSON.stringify(parsed)) throw new PersonaProfileVersionConflictError(`task-class adjustment version already exists: ${parsed.roleId}/${parsed.taskClass}/${parsed.version}`);
+      if (canonicalJson(prior) !== canonicalJson(parsed)) throw new PersonaProfileVersionConflictError(`task-class adjustment version already exists: ${parsed.roleId}/${parsed.taskClass}/${parsed.version}`);
       await client.query("COMMIT");
       return prior;
     }
@@ -147,18 +148,28 @@ export async function storeTaskClassPersonaAdjustment(pool: Pool, input: TaskCla
 }
 
 export async function readActivePersonaProfile(pool: Pool, roleId: string, taskClass: string, missionOverlay: Readonly<Partial<Record<PersonaAxis, number>>> = {}): Promise<ResolvedPersonaProfile> {
-  const role = await getPermanentRole(pool, roleId);
-  if (!role) throw new PersonaProfileNotFoundError(`Permanent role not found: ${roleId}`);
-  const profileResult = await pool.query<LearnedProfileRow>(
-    `SELECT role_id, version, profile, rationale, source FROM persona_profile_versions WHERE role_id = $1 ORDER BY version DESC LIMIT 1`, [roleId],
-  );
-  if (profileResult.rowCount !== 1) throw new PersonaProfileNotFoundError(`No learned persona profile for role: ${roleId}`);
-  const learned = profileRecord(profileResult.rows[0]!);
-  const adjustmentResult = await pool.query<AdjustmentRow>(
-    `SELECT role_id, task_class, version, delta, reason FROM persona_task_class_adjustments WHERE role_id = $1 AND task_class = $2 ORDER BY version DESC LIMIT 1`, [roleId, taskClass],
-  );
-  const adjustment = adjustmentResult.rowCount === 1
-    ? adjustmentRecord(adjustmentResult.rows[0]!)
-    : parseTaskClassPersonaAdjustment({ roleId, taskClass, version: 1, delta: {}, reason: "no task-class adjustment" });
-  return composePersonaProfile(learned, adjustment, missionOverlay, extractPersonaCoreIdentity(role));
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const role = await lockRole(client, roleId);
+    const profileResult = await client.query<LearnedProfileRow>(
+      `SELECT role_id, version, profile, rationale, source FROM persona_profile_versions WHERE role_id = $1 ORDER BY version DESC LIMIT 1`, [roleId],
+    );
+    if (profileResult.rowCount !== 1) throw new PersonaProfileNotFoundError(`No learned persona profile for role: ${roleId}`);
+    const learned = profileRecord(profileResult.rows[0]!);
+    const adjustmentResult = await client.query<AdjustmentRow>(
+      `SELECT role_id, task_class, version, delta, reason FROM persona_task_class_adjustments WHERE role_id = $1 AND task_class = $2 ORDER BY version DESC LIMIT 1`, [roleId, taskClass],
+    );
+    const adjustment = adjustmentResult.rowCount === 1
+      ? adjustmentRecord(adjustmentResult.rows[0]!)
+      : parseTaskClassPersonaAdjustment({ roleId, taskClass, version: 1, delta: {}, reason: "no task-class adjustment" });
+    const resolved = composePersonaProfile(learned, adjustment, extractPersonaCoreIdentity(role), missionOverlay);
+    await client.query("COMMIT");
+    return resolved;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }

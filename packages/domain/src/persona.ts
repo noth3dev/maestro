@@ -88,9 +88,9 @@ export type PersonaLayerDelta = Readonly<Partial<Record<PersonaAxis, number>>>;
 
 export interface ResolvedPersonaProfile {
   readonly persona: PersonaProfile;
-  readonly coreIdentity: PersonaCoreIdentity | null;
+  readonly coreIdentity: PersonaCoreIdentity;
   readonly layers: {
-    readonly coreIdentity: PersonaCoreIdentity | null;
+    readonly coreIdentity: PersonaCoreIdentity;
     readonly learnedProfile: LearnedPersonaProfileVersion;
     readonly taskClassAdjustment: TaskClassPersonaAdjustment;
     readonly missionOverlay: PersonaLayerDelta;
@@ -197,12 +197,13 @@ export function extractPersonaCoreIdentity(source: PersonaCoreIdentitySource): P
 export function composePersonaProfile(
   learnedProfile: LearnedPersonaProfileVersion,
   taskClassAdjustment: TaskClassPersonaAdjustment,
+  coreIdentity: PersonaCoreIdentity,
   missionOverlay: PersonaLayerDelta = {},
-  coreIdentity: PersonaCoreIdentity | null = null,
 ): ResolvedPersonaProfile {
   const learned = parseLearnedPersonaProfileVersion(learnedProfile);
   const adjustment = parseTaskClassPersonaAdjustment(taskClassAdjustment);
   const overlay = parseDelta(missionOverlay, "Mission persona overlay");
+  if (!coreIdentity) throw new InvalidPersonaProfileError("Persona composition requires core identity");
   if (learned.roleId !== adjustment.roleId) throw new InvalidPersonaProfileError("Persona layers must target the same role");
   const values = { ...learned.profile } as Record<PersonaAxis, number>;
   for (const axis of PERSONA_AXES) {
@@ -210,7 +211,7 @@ export function composePersonaProfile(
     if (value < 0 || value > 1) throw new InvalidPersonaProfileError(`Composed persona ${axis} leaves [0,1]`);
     values[axis] = value;
   }
-  const frozenCore = coreIdentity === null ? null : Object.freeze({
+  const frozenCore = Object.freeze({
     mission: coreIdentity.mission, authority: Object.freeze([...coreIdentity.authority]), truthfulness: coreIdentity.truthfulness,
     safety: coreIdentity.safety, prohibitedBehavior: Object.freeze([...coreIdentity.prohibitedBehavior]),
   });
