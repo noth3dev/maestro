@@ -741,7 +741,7 @@ DECLARE call_context text;
 BEGIN
   IF TG_OP = 'INSERT' THEN
     GET DIAGNOSTICS call_context = PG_CONTEXT;
-    IF call_context !~ 'function maestro_goal_truncate_reset\(' OR NEW.transaction_id <> txid_current() OR NEW.nonce IS DISTINCT FROM NULLIF(current_setting('maestro.schema_cleanup_nonce', true), '')::uuid OR NEW.authorized_by IS DISTINCT FROM session_user THEN RAISE EXCEPTION 'schema cleanup authorization must be issued by secured goal reset'; END IF;
+    IF call_context !~ 'function maestro_goal_truncate_reset\(' OR NEW.transaction_id <> txid_current() OR NEW.nonce IS DISTINCT FROM NULLIF(current_setting('maestro.schema_cleanup_nonce', true), '')::uuid OR NEW.authorized_by IS DISTINCT FROM session_user OR current_query() !~* '^truncate[[:space:]]+goals([[:space:]]|;|$)' THEN RAISE EXCEPTION 'schema cleanup authorization must be issued by secured goal reset'; END IF;
     RETURN NEW;
   END IF;
   RAISE EXCEPTION 'schema cleanup authorizations are internal and append-only';
