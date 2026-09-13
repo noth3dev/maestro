@@ -87,7 +87,7 @@ type RolloutRow = {
   operation_ref: string; created_at: Date; updated_at: Date;
 };
 type EventRow = { event_id: string; rollout_id: string; kind: RolloutHistoryEvent["kind"]; details: Record<string, unknown>; created_at: Date };
-type CandidateRow = { candidate_id: string; version: number; project_id: string; goal_id: string; kind: ImprovementClass; state: string; target: Record<string, string>; rollback_target: ImprovementCandidateRollbackTarget; source_evidence_ids: string[]; content_hash: string };
+type CandidateRow = { candidate_id: string; version: number; parent_candidate_id: string | null; project_id: string; goal_id: string; kind: ImprovementClass; state: string; target: Record<string, string>; rollback_target: ImprovementCandidateRollbackTarget; source_evidence_ids: string[]; content_hash: string };
 const COLUMNS = `rollout_id, candidate_id, candidate_version, project_id, goal_id, improvement_class, role_id, task_class,
   max_goal_count, window_start, window_end, protected_metrics, rollback_target, source_evidence_ids, active_candidate_id,
   active_version, last_certified_candidate_id, last_certified_version, observed_goal_count, observed_goal_ids,
@@ -214,7 +214,7 @@ export async function startBoundedRollout(pool: Pool, candidateId: string, rawSc
       assertStartReplay(existing.rows[0]!, id, scope, actor, leaseDurationMs);
       return result(client, existing.rows[0]!);
     }
-    const candidate = await client.query<CandidateRow>("SELECT candidate_id, version, project_id, goal_id, kind, state, target, rollback_target, source_evidence_ids, content_hash FROM improvement_candidates WHERE candidate_id = $1 FOR KEY SHARE", [id]);
+    const candidate = await client.query<CandidateRow>("SELECT candidate_id, version, parent_candidate_id, project_id, goal_id, kind, state, target, rollback_target, source_evidence_ids, content_hash FROM improvement_candidates WHERE candidate_id = $1 FOR KEY SHARE", [id]);
     if (candidate.rowCount !== 1) throw new RolloutPersistenceError("Rollout candidate does not exist");
     const source = candidate.rows[0]!;
     if (source.goal_id !== proof.goalId.toLowerCase()) throw new RolloutPersistenceError("Rollout candidate is outside the leased Goal");
@@ -257,6 +257,18 @@ export async function startBoundedRollout(pool: Pool, candidateId: string, rawSc
           || linked.rollback_target_role_id !== scope.roleId || linked.rollback_target_task_class !== scope.taskClass) {
         throw new RolloutPersistenceError("Routing rollout approval or rollback target is outside the candidate scope");
       }
+    } else if (source.kind === "persona_axis") {
+      const approval = await client.query(`SELECT 1
+          FROM improvement_candidate_council_approvals a
+          JOIN improvement_candidate_evaluations e
+            ON e.evaluation_id = a.evaluation_id
+           AND e.candidate_id = a.candidate_id
+           AND e.candidate_version = a.candidate_version
+           AND e.candidate_content_hash = a.candidate_content_hash
+           AND e.evaluation_hash = a.evaluation_hash
+         WHERE a.candidate_id = $1 AND a.candidate_version = $2 AND a.candidate_content_hash = $3
+           AND a.project_id = $4 AND a.goal_id = $5`, [source.parent_candidate_id ?? source.candidate_id, source.version - 1, source.content_hash, source.project_id, source.goal_id]);
+      if (approval.rowCount !== 1) throw new RolloutPersistenceError("Persona rollout requires durable evaluation and Council approval evidence");
     }
     const candidateDetails = await client.query<{ protected_metrics: RolloutProtectedMetric[] }>("SELECT protected_metrics FROM improvement_candidates WHERE candidate_id = $1", [id]);
     const protectedMetrics = candidateDetails.rows[0]?.protected_metrics;

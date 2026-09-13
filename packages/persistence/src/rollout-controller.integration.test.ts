@@ -15,6 +15,9 @@ import { grantProjectMembership, grantProjectRole, revokeProjectRole } from "./p
 import { recordImprovementDigest } from "./improvement-digest.js";
 import {
   recordImprovementCandidate,
+  recordImprovementCandidateEvaluation,
+  recordImprovementCandidateCouncilApproval,
+  transitionImprovementCandidateAfterCouncil,
   transitionImprovementCandidate,
   transitionRoutingCandidateToJudged,
   recordRoutingCandidateEvaluation,
@@ -99,6 +102,7 @@ function routingCouncilJudgment(candidate: ImprovementCandidate, roundId: string
       sourceRefs: [{ kind: "goal", sourceId: goalId }],
     }, proof = await acquireGoalLease(pool, { goalId, ownerId: "rollout-worker", leaseDurationMs: 60_000 }), { actorId: candidateAuthor.authorId, sessionRef: candidateAuthor.sessionRef, operatorId });
     digestId = digest.digestId;
+    await pool.query(`INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 'improvement-digest', 'application/json', 'project_lifetime')`, [digestId, randomUUID(), randomUUID(), projectId, goalId, operatorId, digest.contentHash]);
     const rollbackTargetId = randomUUID();
     await pool.query("INSERT INTO improvement_candidate_rollback_targets (target_candidate_id, target_version, project_id, goal_id, content_hash, kind, role_id, task_class) VALUES ($1, 1, $2, $3, $4, $5, $6, $7)", [rollbackTargetId, projectId, goalId, "a".repeat(64), "persona_axis", "head-engineering", "implementation"]);
     const input: ImprovementCandidateInput = {
@@ -111,7 +115,13 @@ function routingCouncilJudgment(candidate: ImprovementCandidate, roundId: string
     };
     const initial = await recordImprovementCandidate(pool, input, proof, candidateAuthor, `candidate-${randomUUID()}`);
     const evaluated = await transitionImprovementCandidate(pool, initial.candidateId, "evaluated", proof, candidateAuthor, `evaluated-${randomUUID()}`);
-    candidate = await transitionImprovementCandidate(pool, evaluated.candidateId, "judged", proof, candidateAuthor, `judged-${randomUUID()}`);
+    const evaluation = await recordImprovementCandidateEvaluation(pool, evaluated.candidateId, proof, { evidenceIds: [digestId], payload: { replay: { status: "compared" }, synthetic: { status: "completed" } } }, `evaluation-${randomUUID()}`);
+    const councilRoundId = randomUUID(); const councilEvidenceIds = [digestId, evaluation.evaluationId];
+    await pool.query(`INSERT INTO encore_council_rounds (round_id, goal_id, question, criteria, evidence_ids, trigger_reasons, reviewer_count) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, '[]'::jsonb, 2)`, [councilRoundId, goalId, `Review candidate ${evaluated.candidateId}`, "[]", JSON.stringify(councilEvidenceIds)]);
+    for (const [reviewerIndex, model] of [[0, "provider-a/model-a"], [1, "provider-b/model-b"]] as const) { const [modelProvider, modelId] = model.split("/"); await pool.query(`INSERT INTO encore_council_judgments (judgment_id, round_id, reviewer_index, model_provider, model_id, verdict, confidence, reasoning, conditions, dissent_note, cited_evidence_ids, execution_ref, invocation_ref) VALUES ($1, $2, $3, $4, $5, 'proceed', 'high', 'durable approval', '[]'::jsonb, NULL, $6::jsonb, $7, $8)`, [randomUUID(), councilRoundId, reviewerIndex, modelProvider, modelId, JSON.stringify(councilEvidenceIds), `execution-${reviewerIndex}`, `invocation-${reviewerIndex}`]); }
+    await pool.query(`INSERT INTO encore_council_syntheses (round_id, final_verdict, same_model_only, escalated, dissent_notes) VALUES ($1, 'proceed', false, false, '[]'::jsonb)`, [councilRoundId]);
+    await recordImprovementCandidateCouncilApproval(pool, { candidateId: evaluated.candidateId, evaluationId: evaluation.evaluationId, evaluationHash: evaluation.evaluationHash, councilRoundId, councilEvidenceIds }, proof);
+    candidate = await transitionImprovementCandidateAfterCouncil(pool, evaluated.candidateId, proof, candidateAuthor, `judged-${randomUUID()}`);
   });
   afterAll(async () => { await pool.end(); await basePool.query(`DROP SCHEMA ${schema} CASCADE`); await basePool.end(); });
 
