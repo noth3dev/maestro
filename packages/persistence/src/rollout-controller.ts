@@ -168,6 +168,10 @@ async function operatorAuthorized(client: PoolClient, actor: RolloutActor, proje
   const result = await client.query(`SELECT 1 FROM local_operators o JOIN operator_project_memberships m ON m.operator_id = o.operator_id AND m.project_id = $2 AND m.active = true JOIN operator_project_roles r ON r.operator_id = o.operator_id AND r.project_id = $2 AND r.role_id = $3 AND r.active = true WHERE o.operator_id = $1 AND o.active = true`, [actor.operatorId, projectId, actor.operatorRoleId]);
   if (result.rowCount !== 1) throw new RolloutPersistenceError("Rollout actor is not an active project operator with the declared role");
 }
+async function mutationAuthorized(client: PoolClient, row: RolloutRow, proof: GoalLeaseProof, actor: RolloutActor): Promise<void> {
+  if (proof.goalId.toLowerCase() !== row.goal_id) throw new RolloutPersistenceError("Rollout mutation is outside the leased Goal");
+  await operatorAuthorized(client, actor, row.project_id);
+}
 
 export async function enableImprovementClass(pool: Pool, projectId: string, improvementClass: ImprovementClass, proof: GoalLeaseProof, rawActor: RolloutActor, idempotencyKey: string): Promise<RolloutEnablement> {
   const project = uuid(projectId, "Rollout projectId");
@@ -198,6 +202,7 @@ export async function startBoundedRollout(pool: Pool, candidateId: string, rawSc
   return withGoalAuthority(pool, proof, 95, async (client) => {
     const existing = await client.query<RolloutRow>(`SELECT ${COLUMNS} FROM improvement_rollouts WHERE operation_ref = $1 FOR UPDATE`, [op]);
     if (existing.rowCount === 1) {
+      await mutationAuthorized(client, existing.rows[0]!, proof, actor);
       assertStartReplay(existing.rows[0]!, id, scope, actor);
       return result(client, existing.rows[0]!);
     }
@@ -234,10 +239,12 @@ export async function observeBoundedRollout(pool: Pool, rolloutId: string, input
     if (existingEvent.rowCount === 1) {
       const prior = existingEvent.rows[0]!;
       const priorGoalCount = prior.details.goalCount;
+      const replayRow = await readRow(client, id);
+      await mutationAuthorized(client, replayRow, proof, actor);
       if (prior.rollout_id !== id || prior.details.goalId !== observation.goalId || prior.details.observedAt !== observation.observedAt
           || canonical(prior.details.metrics) !== canonical(observation.metrics)
           || (observation.goalCount !== undefined && priorGoalCount !== observation.goalCount)) throw new RolloutPersistenceError("Rollout observation idempotency key was reused with different content");
-      return result(client, await readRow(client, id));
+      return result(client, replayRow);
     }
     const row = await readRow(client, id, true);
     if (row.goal_id !== proof.goalId.toLowerCase() || observation.goalId !== row.goal_id) throw new RolloutPersistenceError("Rollout observation is outside its Goal");
@@ -274,12 +281,13 @@ async function transitionRollout(pool: Pool, rolloutId: string, status: "interru
   return withGoalAuthority(pool, proof, 95, async (client) => {
     const priorEvent = await client.query<{ rollout_id: string; kind: RolloutHistoryEvent["kind"] }>("SELECT rollout_id, kind FROM improvement_rollout_events WHERE operation_ref = $1", [op]);
     if (priorEvent.rowCount === 1) {
+      const replayRow = await readRow(client, id);
+      await mutationAuthorized(client, replayRow, proof, actor);
       if (priorEvent.rows[0]!.rollout_id !== id || priorEvent.rows[0]!.kind !== eventKind) throw new RolloutPersistenceError("Rollout lifecycle idempotency key was reused with different content");
-      return result(client, await readRow(client, id));
+      return result(client, replayRow);
     }
     const row = await readRow(client, id, true);
-    if (row.goal_id !== proof.goalId.toLowerCase()) throw new RolloutPersistenceError("Rollout is outside its Goal");
-    await operatorAuthorized(client, actor, row.project_id);
+    await mutationAuthorized(client, row, proof, actor);
     if (status === "interrupted" && row.status !== "active") throw new RolloutPersistenceError("Only an active rollout can be interrupted");
     if (status === "rolled_back" && row.status !== "interrupted") throw new RolloutPersistenceError("Only an interrupted rollout can be reconciled");
     const target = status === "rolled_back" ? reconcileInterruptedRolloutState({ status: "interrupted", activeCandidateId: row.active_candidate_id, activeVersion: row.active_version, lastCertifiedCandidateId: row.last_certified_candidate_id, lastCertifiedVersion: row.last_certified_version, rollbackTarget: row.rollback_target }) : undefined;

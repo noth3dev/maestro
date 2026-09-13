@@ -8,7 +8,7 @@ import {
 } from "@maestro/domain";
 import { applyAllMigrations } from "./test-migrations.js";
 import { acquireGoalLease } from "./commands.js";
-import { grantProjectMembership, grantProjectRole } from "./project-membership.js";
+import { grantProjectMembership, grantProjectRole, revokeProjectRole } from "./project-membership.js";
 import { recordImprovementDigest } from "./improvement-digest.js";
 import {
   recordImprovementCandidate,
@@ -90,6 +90,10 @@ const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineer
     await expect(startBoundedRollout(pool, candidate.candidateId, { ...scope, maxGoalCount: 3 }, proof, actor, "same-start-key")).rejects.toThrow(/idempotency|different|scope/i);
     const unauthorized = { ...actor, operatorId: randomUUID() };
     await expect(observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T01:00:00.000Z", metrics: [{ name: "correctness", value: 0.95 }] }, proof, unauthorized, `unauthorized-${randomUUID()}`)).rejects.toThrow(/operator|authorized|member/i);
+    const otherGoalId = randomUUID();
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [otherGoalId, projectId]);
+    const otherProof = await acquireGoalLease(pool, { goalId: otherGoalId, ownerId: "other-rollout-worker", leaseDurationMs: 60_000 });
+    await expect(startBoundedRollout(pool, candidate.candidateId, scope, otherProof, actor, "same-start-key")).rejects.toThrow(/Goal|outside|lease|authorized/i);
   });
 
   it("keeps each enabled improvement class isolated and bounds the rollout scope", async () => {
@@ -108,6 +112,8 @@ const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineer
     const observationKey = "same-observe-key";
     const rolledBack = await observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T02:00:00.000Z", metrics: [{ name: "correctness", value: 0.84 }] }, proof, actor, observationKey);
     await expect(observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T02:00:00.000Z", metrics: [{ name: "correctness", value: 0.95 }] }, proof, actor, observationKey)).rejects.toThrow(/idempotency|different|content/i);
+    await revokeProjectRole(pool, operatorId, projectId, "engineering");
+    await expect(observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T02:00:00.000Z", metrics: [{ name: "correctness", value: 0.84 }] }, proof, actor, observationKey)).rejects.toThrow(/operator|authorized|member/i);
     expect(rolledBack).toMatchObject({ status: "rolled_back", activeCandidateId: candidate.rollbackTarget.candidateId, activeVersion: candidate.rollbackTarget.version, rollbackTarget: candidate.rollbackTarget });
     expect(rolledBack.sourceEvidenceIds).toContain(digestId);
     expect(rolledBack.history.some((event) => event.kind === "automatic_rollback")).toBe(true);
@@ -126,6 +132,9 @@ const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineer
     const rollout = await startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, `start-${randomUUID()}`);
     const interrupted = await interruptBoundedRollout(pool, rollout.rolloutId, proof, actor, `interrupt-${randomUUID()}`);
     expect(interrupted).toMatchObject({ status: "interrupted", activeCandidateId: candidate.candidateId, rollbackTarget: candidate.rollbackTarget });
-    await expect(reconcileInterruptedRollout(pool, rollout.rolloutId, proof, actor, `reconcile-${randomUUID()}`)).resolves.toMatchObject({ status: "rolled_back", activeCandidateId: candidate.rollbackTarget.candidateId, activeVersion: candidate.rollbackTarget.version, rollbackTarget: candidate.rollbackTarget });
+    const reconcileKey = "same-reconcile-key";
+    await expect(reconcileInterruptedRollout(pool, rollout.rolloutId, proof, actor, reconcileKey)).resolves.toMatchObject({ status: "rolled_back", activeCandidateId: candidate.rollbackTarget.candidateId, activeVersion: candidate.rollbackTarget.version, rollbackTarget: candidate.rollbackTarget });
+    await revokeProjectRole(pool, operatorId, projectId, "engineering");
+    await expect(reconcileInterruptedRollout(pool, rollout.rolloutId, proof, actor, reconcileKey)).rejects.toThrow(/operator|authorized|member/i);
   });
 });
