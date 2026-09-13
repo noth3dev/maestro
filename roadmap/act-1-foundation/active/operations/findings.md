@@ -2071,3 +2071,6 @@ All downstream routing documentation must use this contract and must not restore
 - Initial independent review at `b0569d0` failed because replay bypassed Stage 1, hard floors could omit correctness/safety/authority, and the first guard-order assertion did not invoke replay. RED/GREEN fixes landed in `d21ced1` and `0457aab`.
 - A follow-up RED exposed that synthetic evaluation could still bypass role floor/ceiling context. `SyntheticRunRequest.guards` now forwards the deterministic context before any synthetic evaluator call (`0592c81`).
 - Final independent no-edit review passed at exact HEAD `0592c81`. No PostgreSQL run is required for this domain-only slice.
+
+
+- 2026-09-13 Plan 6 §S3 post-merge verification passed on main merge `922c7d4`: build, lint, diff-check, and full serialized PostgreSQL passed 231/231 files and 1592/1592 tests.
