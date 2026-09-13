@@ -2090,3 +2090,5 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-14 Plan 6 §S6 review round 1 findings were accepted in scope and fixed: every rollout mutation now verifies the active project operator role; start/observation/lifecycle retries reject conflicting content; Goal observations are unique and monotonic; owner-expiry recovery can roll back active rows during startup; and class enablements cannot be updated or deleted.
 
 - 2026-09-14 S6 review round 2 replay-bypass finding was fixed. Existing operation/event replays now perform the same Goal/project/operator authorization checks as first execution before returning durable state.
+
+- 2026-09-14 S6 review round 3 expiry finding was fixed. Normal observation now requires the durable rollout owner and a live owner lease both before and during the update; expired active rows fail closed and are handled by startup reconciliation.

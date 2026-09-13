@@ -172,6 +172,12 @@ async function mutationAuthorized(client: PoolClient, row: RolloutRow, proof: Go
   if (proof.goalId.toLowerCase() !== row.goal_id) throw new RolloutPersistenceError("Rollout mutation is outside the leased Goal");
   await operatorAuthorized(client, actor, row.project_id);
 }
+async function ownerMutationAuthorized(client: PoolClient, row: RolloutRow, proof: GoalLeaseProof, actor: RolloutActor): Promise<void> {
+  await mutationAuthorized(client, row, proof, actor);
+  if (row.owner_operator_id !== actor.operatorId || row.owner_actor_id !== actor.actorId || row.owner_role_id !== actor.operatorRoleId || row.owner_session_ref !== actor.sessionRef) {
+    throw new RolloutPersistenceError("Rollout mutation actor is not the durable rollout owner");
+  }
+}
 
 export async function enableImprovementClass(pool: Pool, projectId: string, improvementClass: ImprovementClass, proof: GoalLeaseProof, rawActor: RolloutActor, idempotencyKey: string): Promise<RolloutEnablement> {
   const project = uuid(projectId, "Rollout projectId");
@@ -240,7 +246,7 @@ export async function observeBoundedRollout(pool: Pool, rolloutId: string, input
       const prior = existingEvent.rows[0]!;
       const priorGoalCount = prior.details.goalCount;
       const replayRow = await readRow(client, id);
-      await mutationAuthorized(client, replayRow, proof, actor);
+      await ownerMutationAuthorized(client, replayRow, proof, actor);
       if (prior.rollout_id !== id || prior.details.goalId !== observation.goalId || prior.details.observedAt !== observation.observedAt
           || canonical(prior.details.metrics) !== canonical(observation.metrics)
           || (observation.goalCount !== undefined && priorGoalCount !== observation.goalCount)) throw new RolloutPersistenceError("Rollout observation idempotency key was reused with different content");
@@ -248,8 +254,9 @@ export async function observeBoundedRollout(pool: Pool, rolloutId: string, input
     }
     const row = await readRow(client, id, true);
     if (row.goal_id !== proof.goalId.toLowerCase() || observation.goalId !== row.goal_id) throw new RolloutPersistenceError("Rollout observation is outside its Goal");
-    await operatorAuthorized(client, actor, row.project_id);
+    await ownerMutationAuthorized(client, row, proof, actor);
     if (row.status !== "active") throw new RolloutPersistenceError("Rollout is not active");
+    if (row.owner_lease_expires_at.getTime() <= Date.now()) throw new RolloutPersistenceError("Rollout owner lease has expired; startup reconciliation must run");
     const observedAt = Date.parse(observation.observedAt);
     if (!Number.isFinite(observedAt) || observedAt < row.window_start.getTime() || observedAt > row.window_end.getTime()) throw new RolloutPersistenceError("Rollout observation is outside its fixed time window");
     const observedGoalIds = row.observed_goal_ids.map((goalId) => goalId.toLowerCase());
@@ -266,7 +273,8 @@ export async function observeBoundedRollout(pool: Pool, rolloutId: string, input
     const lastCertifiedCandidateId = rollback ? row.last_certified_candidate_id : status === "certified" ? row.candidate_id : row.last_certified_candidate_id;
     const lastCertifiedVersion = rollback ? row.last_certified_version : status === "certified" ? row.candidate_version : row.last_certified_version;
     await authorizeWrite(client);
-    const updated = await client.query<RolloutRow>(`UPDATE improvement_rollouts SET active_candidate_id = $2, active_version = $3, last_certified_candidate_id = $4, last_certified_version = $5, observed_goal_count = $6, observed_goal_ids = $7::jsonb, status = $8, owner_lease_expires_at = transaction_timestamp() + interval '1 minute', updated_at = transaction_timestamp() WHERE rollout_id = $1 RETURNING ${COLUMNS}`, [id, activeCandidateId, activeVersion, lastCertifiedCandidateId, lastCertifiedVersion, goalCount, JSON.stringify(nextObservedGoalIds), status]);
+    const updated = await client.query<RolloutRow>(`UPDATE improvement_rollouts SET active_candidate_id = $2, active_version = $3, last_certified_candidate_id = $4, last_certified_version = $5, observed_goal_count = $6, observed_goal_ids = $7::jsonb, status = $8, owner_lease_expires_at = transaction_timestamp() + interval '1 minute', updated_at = transaction_timestamp() WHERE rollout_id = $1 AND owner_operator_id = $9 AND owner_lease_expires_at > clock_timestamp() RETURNING ${COLUMNS}`, [id, activeCandidateId, activeVersion, lastCertifiedCandidateId, lastCertifiedVersion, goalCount, JSON.stringify(nextObservedGoalIds), status, actor.operatorId]);
+    if (updated.rowCount !== 1) throw new RolloutPersistenceError("Rollout owner lease expired before observation commit");
     await authorizeWrite(client);
     await client.query("INSERT INTO improvement_rollout_events (event_id, rollout_id, kind, details, operation_ref) VALUES ($1, $2, $3, $4::jsonb, $5)", [randomUUID(), id, rollback ? "automatic_rollback" : "observation", JSON.stringify({ goalId: observation.goalId, observedAt: observation.observedAt, goalCount, metrics: observation.metrics, violatedMetrics: metricDecision.violatedMetrics, actorId: actor.actorId, sessionRef: actor.sessionRef }), op]);
     return result(client, updated.rows[0]!);
@@ -282,12 +290,14 @@ async function transitionRollout(pool: Pool, rolloutId: string, status: "interru
     const priorEvent = await client.query<{ rollout_id: string; kind: RolloutHistoryEvent["kind"] }>("SELECT rollout_id, kind FROM improvement_rollout_events WHERE operation_ref = $1", [op]);
     if (priorEvent.rowCount === 1) {
       const replayRow = await readRow(client, id);
-      await mutationAuthorized(client, replayRow, proof, actor);
+      if (eventKind === "interrupted") await ownerMutationAuthorized(client, replayRow, proof, actor);
+      else await mutationAuthorized(client, replayRow, proof, actor);
       if (priorEvent.rows[0]!.rollout_id !== id || priorEvent.rows[0]!.kind !== eventKind) throw new RolloutPersistenceError("Rollout lifecycle idempotency key was reused with different content");
       return result(client, replayRow);
     }
     const row = await readRow(client, id, true);
-    await mutationAuthorized(client, row, proof, actor);
+    if (status === "interrupted") await ownerMutationAuthorized(client, row, proof, actor);
+    else await mutationAuthorized(client, row, proof, actor);
     if (status === "interrupted" && row.status !== "active") throw new RolloutPersistenceError("Only an active rollout can be interrupted");
     if (status === "rolled_back" && row.status !== "interrupted") throw new RolloutPersistenceError("Only an interrupted rollout can be reconciled");
     const target = status === "rolled_back" ? reconcileInterruptedRolloutState({ status: "interrupted", activeCandidateId: row.active_candidate_id, activeVersion: row.active_version, lastCertifiedCandidateId: row.last_certified_candidate_id, lastCertifiedVersion: row.last_certified_version, rollbackTarget: row.rollback_target }) : undefined;

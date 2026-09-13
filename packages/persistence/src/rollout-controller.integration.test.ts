@@ -124,6 +124,7 @@ const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineer
     await enableImprovementClass(pool, projectId, "persona_axis", proof, actor, `enable-${randomUUID()}`);
     const rollout = await startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, `start-${randomUUID()}`, { rolloutLeaseDurationMs: 1 });
     await new Promise((resolve) => setTimeout(resolve, 10));
+    await expect(observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T01:00:00.000Z", metrics: [{ name: "correctness", value: 0.95 }] }, proof, actor, `expired-observe-${randomUUID()}`)).rejects.toThrow(/expired|lease|owner/i);
     await expect(reconcileExpiredBoundedRollouts(pool, proof, actor)).resolves.toEqual([expect.objectContaining({ rolloutId: rollout.rolloutId, status: "rolled_back", activeCandidateId: candidate.rollbackTarget.candidateId, activeVersion: candidate.rollbackTarget.version })]);
   });
 
