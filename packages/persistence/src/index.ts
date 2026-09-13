@@ -66,3 +66,5 @@ export * from "./improvement-candidate.js";
 export * from "./rollout-controller.js";
 
 export * from "./persona-profile.js";
+
+export * from "./persona-goal-evidence.js";

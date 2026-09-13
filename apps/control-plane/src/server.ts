@@ -382,6 +382,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
     requestCorrection: async () => { throw new DurableStoreUnavailableError(); },
     requestSafePause: async () => { throw new DurableStoreUnavailableError(); },
     resolve: async () => { throw new DurableStoreUnavailableError(); },
+    challengeWorkerOverlay: async () => { throw new DurableStoreUnavailableError(); },
   } satisfies MetronomeService;
   const encore = encoreService ?? { review: async () => { throw new DurableStoreUnavailableError(); } } satisfies EncoreService;
   const discordSignal = discordSignalService ?? { record: async () => { throw new DurableStoreUnavailableError(); } } satisfies DiscordSignalService;
