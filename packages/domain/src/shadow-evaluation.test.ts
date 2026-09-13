@@ -219,6 +219,14 @@ describe("zero-authority shadow evaluation", () => {
       cases: [{ input, activeInput: input, active }],
       evaluate: async () => active,
     })).rejects.toThrow(/array|JSON/i);
+    const accessor = [] as unknown[];
+    Object.defineProperty(accessor, "0", { enumerable: true, get: () => "must not run" });
+    await expect(runShadowEvaluation({
+      candidate: candidate(),
+      ...journalConfig(),
+      cases: [{ input: accessor, activeInput: accessor, active }],
+      evaluate: async () => active,
+    })).rejects.toThrow(/data properties|JSON/i);
   });
 
   it("provides a read-only kernel facade with no provider write methods", async () => {

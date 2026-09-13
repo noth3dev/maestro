@@ -190,6 +190,8 @@ function stableJson(value: unknown, seen = new WeakSet<object>()): string {
       for (const key of Reflect.ownKeys(value)) {
         if (key === "length") continue;
         if (typeof key !== "string" || !/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= value.length) throw new InvalidShadowOutputError("shadow arrays must contain indexed JSON data only");
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) throw new InvalidShadowOutputError("shadow arrays must contain enumerable data properties only");
       }
       for (let index = 0; index < value.length; index += 1) if (!Object.hasOwn(value, index)) throw new InvalidShadowOutputError("shadow arrays must not be sparse");
       return `[${value.map((entry) => stableJson(entry, seen)).join(",")}]`;
