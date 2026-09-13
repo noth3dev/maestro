@@ -10,7 +10,7 @@ import {
   matchesKey,
 } from "@earendil-works/pi-tui";
 import { createApiClient, type GoalEvent } from "@maestro/api-client";
-import type { ConversationEvent } from "@maestro/contracts";
+import type { ConversationEvent, ModelCatalogEntry } from "@maestro/contracts";
 
 import { resolveWorkspace } from "./workspace.js";
 
@@ -54,6 +54,29 @@ import { ConversationViewport, FramedComposer } from "./components/conversation-
 
 export { type InteractiveTuiOptions } from "./startup.js";
 import { initializeTui, shouldAutoBootstrapLocal, type InteractiveTuiOptions } from "./startup.js";
+
+/** A selected model is only resolvable when the gateway exposes that exact model. */
+export function shouldOfferAutomaticProviderSignIn(
+  models: readonly Pick<ModelCatalogEntry, "identity">[],
+  configuredModel: string | undefined,
+): boolean {
+  const selectedModel = configuredModel?.trim();
+  if (models.length === 0) return selectedModel === undefined || selectedModel === "";
+  if (selectedModel === undefined || selectedModel === "") return false;
+  return !models.some((model) => `${model.identity.provider}/${model.identity.id}` === selectedModel);
+}
+
+/** Prevent a dismissed or already-presented automatic offer from nagging again. */
+export function createAutomaticProviderSignInGate(): { claim: () => boolean } {
+  let claimed = false;
+  return {
+    claim: () => {
+      if (claimed) return false;
+      claimed = true;
+      return true;
+    },
+  };
+}
 import type { LocalBootstrapStepEvent } from "./local-bootstrap.js";
 import { createTuiRuntime } from "./runtime.js";
 
@@ -146,6 +169,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let accountLoginController: AbortController | undefined;
     let accountLoginId: string | undefined;
     let accountLoginUrl: string | undefined;
+    const automaticProviderSignInGate = createAutomaticProviderSignInGate();
     const syncModelState = (): void => {
       const model = options.env.MAESTRO_MODEL?.trim() || session?.model;
       if (model === undefined) delete state.model;
@@ -424,6 +448,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         if (projectDiscoveryNotice !== undefined) appendWarning(projectDiscoveryNotice);
         void refreshDashboard();
         restartActivity();
+        void offerAutomaticProviderSignIn();
       } catch {
         client = undefined;
         state.connection = { kind: "error", message: "Control Plane client could not be created" };
@@ -474,6 +499,21 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         else appendWarning(`Account login ${status.state}: ${status.message ?? "no additional details"}`);
       } catch (error) { if (!controller.signal.aborted) appendError(`Account login failed: ${error instanceof Error ? error.message : "request failed"}`); }
       finally { if (accountLoginController === controller) { accountLoginController = undefined; accountLoginId = undefined; accountLoginUrl = undefined; accountLoginSelection = undefined; accountLoginState = undefined; editor.hidden = false; render(); } }
+    };
+    const offerAutomaticProviderSignIn = async (): Promise<void> => {
+      if (client === undefined || accountLoginSelection !== undefined || !automaticProviderSignInGate.claim()) return;
+      try {
+        const models = await client.listModels();
+        if (accountLoginSelection !== undefined || !shouldOfferAutomaticProviderSignIn(models, options.env.MAESTRO_MODEL?.trim() || session?.model)) return;
+        accountLoginSelection = 0;
+        accountLoginState = "selecting";
+        editor.hidden = true;
+        editor.setText("");
+        render();
+      } catch {
+        // A connected Control Plane with a temporarily unavailable gateway is
+        // not evidence that credentials are absent. Leave the normal shell usable.
+      }
     };
 
     const submit = async (text: string) => {
@@ -938,6 +978,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     runtime.start();
     if (projectDiscoveryNotice !== undefined) appendWarning(projectDiscoveryNotice);
     void refreshDashboard();
+    void offerAutomaticProviderSignIn();
     if (project.kind === "attached") {
       const activityGeneration = ++activityHydrationGeneration;
       void hydrateActivity(project.projectId, activityGeneration).then(() => {
