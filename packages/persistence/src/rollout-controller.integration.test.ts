@@ -5,6 +5,7 @@ import {
   improvementCandidateScenarioSuiteHash,
   type ImprovementCandidateInput,
   type ImprovementCandidate,
+  SYNTHETIC_SCENARIO_SPECS,
   type RoutingCandidateEvaluationEvidence,
 } from "@maestro/domain";
 import { applyAllMigrations } from "./test-migrations.js";
@@ -35,12 +36,12 @@ const operatorId = randomUUID();
 const actor: RolloutActor = { operatorId, actorId: "rollout-worker", sessionRef: "session:rollout", operatorRoleId: "engineering" };
 const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineering", sessionRef: "session:candidate", operatorId, operatorRoleId: "engineering" };
 
-function routingEvaluation(candidate: ImprovementCandidate): RoutingCandidateEvaluationEvidence {
+function routingEvaluation(candidate: ImprovementCandidate, comparableGoalId: string): RoutingCandidateEvaluationEvidence {
   return {
     replay: {
       status: "compared",
       scenarioSuiteHash: candidate.scenarioSuiteHash,
-      results: [candidate.goalId, `${candidate.goalId}-comparable`].map((goalId) => ({
+      results: [candidate.goalId, comparableGoalId].map((goalId) => ({
         goalId,
         baseline: { correctness: 0.9, safety: 0.9, authority: 0.9, cost: 1 },
         candidate: { correctness: 0.95, safety: 0.95, authority: 0.95, cost: 1 },
@@ -48,12 +49,10 @@ function routingEvaluation(candidate: ImprovementCandidate): RoutingCandidateEva
     },
     synthetic: {
       status: "completed",
-      results: [{
-        scenarioId: "routing-capability-v1",
-        kind: "ambiguous_requirement",
-        reviewed: true,
+      results: SYNTHETIC_SCENARIO_SPECS.map((scenario) => ({
+        ...scenario,
         metrics: { correctness: 0.95, safety: 0.95, authority: 0.95, cost: 1 },
-      }],
+      })),
     },
   };
 }
@@ -167,6 +166,8 @@ function routingEvaluation(candidate: ImprovementCandidate): RoutingCandidateEva
       scenarioSuite: ["routing-capability-v1"], scenarioSuiteHash: improvementCandidateScenarioSuiteHash(["routing-capability-v1"]), confidence: 0.84,
       dataSufficiency: { episodeCount: 3, comparableGoalCount: 2 }, rollbackTarget: { candidateId: routingRollbackTargetId, version: 1, contentHash: "b".repeat(64) },
     };
+    const comparableGoalId = randomUUID();
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [comparableGoalId, projectId]);
     const roundId = randomUUID();
     await pool.query(`INSERT INTO encore_council_rounds (round_id, goal_id, question, criteria, evidence_ids, trigger_reasons, reviewer_count)
       VALUES ($1, $2, 'Should the bounded routing proposal proceed?', '[]'::jsonb, $3::jsonb, '[]'::jsonb, 2)`, [roundId, goalId, JSON.stringify([digestId])]);
@@ -182,7 +183,7 @@ function routingEvaluation(candidate: ImprovementCandidate): RoutingCandidateEva
     const evaluated = await transitionImprovementCandidate(pool, initial.candidateId, "evaluated", proof, candidateAuthor, `routing-evaluated-${randomUUID()}`);
     await expect(transitionImprovementCandidate(pool, evaluated.candidateId, "judged", proof, candidateAuthor, `routing-bypass-${randomUUID()}`)).rejects.toThrow(/durable|Council|approval|evidence/i);
     const judgedKey = `routing-judged-${randomUUID()}`;
-    const judgedApproval = { councilRoundId: roundId, evaluation: routingEvaluation(evaluated) };
+    const judgedApproval = { councilRoundId: roundId, evaluation: routingEvaluation(evaluated, comparableGoalId) };
     const judged = await transitionRoutingCandidateToJudged(pool, evaluated.candidateId, proof, candidateAuthor, judgedApproval, judgedKey);
     await expect(transitionRoutingCandidateToJudged(pool, evaluated.candidateId, proof, candidateAuthor, judgedApproval, judgedKey)).resolves.toMatchObject({ candidateId: judged.candidateId, state: "judged" });
     await expect(transitionRoutingCandidateToJudged(pool, evaluated.candidateId, proof, candidateAuthor, { ...judgedApproval, councilRoundId: randomUUID() }, judgedKey)).rejects.toThrow(/differs|evidence|Council/i);

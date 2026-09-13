@@ -7,6 +7,7 @@ import {
 } from "./improvement-candidate.js";
 import {
   runDeterministicCandidateGuards,
+  SYNTHETIC_SCENARIO_SPECS,
   type ReplayResult,
   type SyntheticRunResult,
 } from "./candidate-evaluation.js";
@@ -23,6 +24,7 @@ export class RoutingImprovementCandidateError extends Error {
     this.name = "RoutingImprovementCandidateError";
   }
 }
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** Durable projection of an independent Encore Council judgment. */
 export interface RoutingCapabilityCouncilJudgment {
@@ -53,8 +55,16 @@ function assertEvaluationResultShape(evaluation: RoutingCandidateEvaluationEvide
   if (!Array.isArray(evaluation.replay.results) || evaluation.replay.results.length === 0) {
     throw new RoutingImprovementCandidateError("Routing candidate replay evidence requires comparable results");
   }
-  if (!Array.isArray(evaluation.synthetic.results) || evaluation.synthetic.results.length === 0) {
-    throw new RoutingImprovementCandidateError("Routing candidate synthetic evidence requires completed scenarios");
+  const replayGoalIds = evaluation.replay.results.map((result) => result && typeof result.goalId === "string" ? result.goalId.toLowerCase() : "");
+  if (replayGoalIds.some((goalId) => !UUID.test(goalId)) || new Set(replayGoalIds).size !== replayGoalIds.length) {
+    throw new RoutingImprovementCandidateError("Routing candidate replay evidence requires distinct durable Goal identities");
+  }
+  if (!Array.isArray(evaluation.synthetic.results) || evaluation.synthetic.results.length !== SYNTHETIC_SCENARIO_SPECS.length) {
+    throw new RoutingImprovementCandidateError("Routing candidate synthetic evidence requires the complete reviewed scenario suite");
+  }
+  const syntheticIds = new Set(evaluation.synthetic.results.map((result) => result && typeof result.scenarioId === "string" ? result.scenarioId : ""));
+  if (syntheticIds.size !== SYNTHETIC_SCENARIO_SPECS.length || SYNTHETIC_SCENARIO_SPECS.some((scenario) => !syntheticIds.has(scenario.scenarioId))) {
+    throw new RoutingImprovementCandidateError("Routing candidate synthetic evidence is missing a reviewed scenario");
   }
 }
 

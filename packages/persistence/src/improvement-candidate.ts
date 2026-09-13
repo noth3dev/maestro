@@ -364,6 +364,10 @@ async function validateRoutingJudgmentApproval(
   const candidate = mapRow(previous);
   try { assertValidRoutingCandidateEvaluation(candidate, approval.evaluation); }
   catch (error) { throw new ImprovementCandidatePersistenceError(error instanceof Error ? error.message : "Routing candidate evaluation evidence is invalid"); }
+  if (approval.evaluation.replay.status !== "compared") throw new ImprovementCandidatePersistenceError("Routing candidate replay evidence is incomplete");
+  const replayGoalIds = approval.evaluation.replay.results.map((result) => result.goalId.toLowerCase());
+  const replayGoals = await client.query<{ goal_id: string }>("SELECT goal_id FROM goals WHERE project_id = $1 AND goal_id = ANY($2::uuid[])", [previous.project_id, replayGoalIds]);
+  if (replayGoals.rowCount !== new Set(replayGoalIds).size) throw new ImprovementCandidatePersistenceError("Routing candidate replay Goals are outside the candidate project");
   const councilRoundId = durableUuid(approval.councilRoundId, "Routing Council roundId");
   const roundResult = await client.query<CouncilRoundRow>(`SELECT r.goal_id, r.evidence_ids, r.reviewer_count, s.final_verdict, s.escalated
     FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id
