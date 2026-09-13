@@ -347,10 +347,10 @@ BEGIN
   IF NEW.revision = 1 AND NEW.scope <> 'worker_proposed' THEN
     RAISE EXCEPTION 'organizational knowledge must be proposed before promotion';
   END IF;
-  IF NEW.scope = 'project_department' AND NEW.status = 'active' AND NEW.promotion_marker = 'department-promotion' AND NEW.source_session_ref LIKE 'promotion:%' AND NOT EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND prior.scope = 'worker_proposed' AND prior.status = 'proposed') THEN
+  IF NEW.scope = 'project_department' AND NEW.status = 'active' AND NEW.promotion_marker = 'department-promotion' AND NEW.revision = 2 AND NOT EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND prior.scope = 'worker_proposed' AND prior.status = 'proposed') THEN
     RAISE EXCEPTION 'project organizational knowledge requires proposal-first lineage';
   END IF;
-  IF NEW.scope = 'global' AND NEW.status = 'active' AND NEW.promotion_marker = 'global-promotion' AND NEW.source_session_ref LIKE 'promotion:%' AND NOT EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND prior.scope = 'project_department' AND prior.status = 'active') THEN
+  IF NEW.scope = 'global' AND NEW.status = 'active' AND NEW.promotion_marker = 'global-promotion' AND NEW.revision = 2 AND NOT EXISTS (SELECT 1 FROM organizational_knowledge prior WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1 AND prior.scope = 'project_department' AND prior.status = 'active') THEN
     RAISE EXCEPTION 'global organizational knowledge requires project promotion lineage';
   END IF;
   IF NEW.scope = 'global' AND NEW.status = 'active' AND jsonb_array_length(NEW.source_evidence_ids) <> 0 THEN RAISE EXCEPTION 'global organizational knowledge cannot retain raw evidence references'; END IF;
