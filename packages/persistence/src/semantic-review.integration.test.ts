@@ -43,7 +43,7 @@ describeDatabase("Semantic review with PostgreSQL", () => {
     await pool.query("DROP TABLE IF EXISTS semantic_reviews, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals CASCADE");
     await applyAllMigrations(pool);
   });
-  beforeEach(async () => { await pool.query("TRUNCATE semantic_reviews, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals RESTART IDENTITY CASCADE"); });
+  beforeEach(async () => { await pool.query("TRUNCATE goals, semantic_reviews, evidence_records, goal_leases, outbox, goal_events, command_receipts RESTART IDENTITY CASCADE"); });
   afterAll(async () => { await pool.end(); });
 
   const criteria = [{ criterionId: "evidence-cited", description: "must cite verifiable evidence" }];

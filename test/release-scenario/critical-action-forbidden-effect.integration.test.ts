@@ -51,7 +51,7 @@ describeDatabase("release-scenario Steps 12/13: durable forbidden-effect evidenc
   });
   beforeEach(async () => {
     await pool.query(
-      "TRUNCATE reconciler_leader_lease, authority_effect_claims, authority_decisions, authority_records, capability_decision_journal, capability_sessions, capability_approvals, evidence_records, goal_controls, goal_leases, outbox, goal_events, command_receipts, goals, operator_project_memberships, local_operator_credentials, local_operators CASCADE",
+      "TRUNCATE goals, reconciler_leader_lease, authority_effect_claims, authority_decisions, authority_records, capability_decision_journal, capability_sessions, capability_approvals, evidence_records, goal_controls, goal_leases, outbox, goal_events, command_receipts, operator_project_memberships, local_operator_credentials, local_operators CASCADE",
     );
   });
   afterAll(async () => { await pool.end(); await basePool.query(`DROP SCHEMA ${schema} CASCADE`); await basePool.end(); });

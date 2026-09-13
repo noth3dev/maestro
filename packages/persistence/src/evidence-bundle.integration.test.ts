@@ -71,7 +71,7 @@ describeDatabase("Phase 2 work-sequence step 12: one real local Goal through the
     await applyAllMigrations(pool);
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE capability_effect_resolutions, capability_decision_journal, capability_repetition_claims, capability_repetition_budgets, capability_sessions, capability_approvals, evidence_bundles, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls RESTART IDENTITY CASCADE");
+    await pool.query("TRUNCATE goals, capability_effect_resolutions, capability_decision_journal, capability_repetition_claims, capability_repetition_budgets, capability_sessions, capability_approvals, evidence_bundles, budget_forecasts, budget_reservations, integration_commits, worker_worktrees, department_branches, goal_integration_branches, team_lead_grants, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goal_controls RESTART IDENTITY CASCADE");
     await bootstrapPermanentOrganization(pool);
   });
   afterAll(async () => { await pool.end(); });

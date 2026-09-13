@@ -163,7 +163,7 @@ describeDatabase("real Control Plane + PostgreSQL + Model Gateway Worker accepta
   beforeEach(async () => {
     seenToolSets.length = 0;
     await pool.query(
-      "TRUNCATE native_execution_bindings, workers, team_lead_grants, mission_bundles, department_plans, department_plan_revisions, department_branches, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls, local_operator_credentials, local_operators, operator_project_memberships CASCADE",
+      "TRUNCATE goals, native_execution_bindings, workers, team_lead_grants, mission_bundles, department_plans, department_plan_revisions, department_branches, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goal_controls, local_operator_credentials, local_operators, operator_project_memberships CASCADE",
     );
   });
   afterAll(async () => {

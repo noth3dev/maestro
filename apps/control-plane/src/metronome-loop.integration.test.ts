@@ -25,7 +25,7 @@ describeDatabase("real Metronome continuous-observation loop with a real GoalSer
     await applyAllMigrations(pool);
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE metronome_findings, goal_leases, outbox, goal_events, command_receipts, goals CASCADE");
+    await pool.query("TRUNCATE goals, metronome_findings, goal_leases, outbox, goal_events, command_receipts CASCADE");
     await bootstrapPermanentOrganization(pool);
   });
   afterAll(async () => {
@@ -90,7 +90,7 @@ describeDatabase("real Metronome continuous-observation loop expiring awaiting-r
     await applyAllMigrations(pool);
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE metronome_findings, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls, capability_approvals, capability_repetition_budgets, capability_repetition_claims RESTART IDENTITY CASCADE");
+    await pool.query("TRUNCATE goals, metronome_findings, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goal_controls, capability_approvals, capability_repetition_budgets, capability_repetition_claims RESTART IDENTITY CASCADE");
     await bootstrapPermanentOrganization(pool);
   });
   afterAll(async () => {

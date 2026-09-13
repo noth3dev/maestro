@@ -21,7 +21,7 @@ async function captureAndAppend(pool: Pool): Promise<{ record: Awaited<ReturnTyp
 describeDatabase("durable evidence metadata", () => {
   const pool = new Pool({ connectionString: databaseUrl });
   beforeAll(async () => { await applyAllMigrations(pool); });
-  beforeEach(async () => { await pool.query("TRUNCATE evidence_records"); });
+  beforeEach(async () => { await pool.query("TRUNCATE goals CASCADE"); });
   afterAll(async () => { await pool.end(); });
 
   it("reads valid captured evidence through the verified retrieval API", async () => {

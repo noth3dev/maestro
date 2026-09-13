@@ -346,4 +346,9 @@ describeDatabase("organizational knowledge persistence", () => {
     await expect(pool.query("UPDATE organizational_knowledge SET reason = 'tampered' WHERE knowledge_id = $1", [proposed.knowledgeId])).rejects.toThrow();
     await expect(pool.query("TRUNCATE goals CASCADE")).resolves.toBeDefined();
   });
+
+  it("requires goals to be the first target in a guarded reset", async () => {
+    await expect(pool.query("TRUNCATE evidence_records, goals CASCADE")).rejects.toThrow(/truncat|forbidden/i);
+    await expect(pool.query("TRUNCATE goals, evidence_records CASCADE")).resolves.toBeDefined();
+  });
 });

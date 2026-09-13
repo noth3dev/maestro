@@ -48,7 +48,7 @@ const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`
    await pool.query("DROP TABLE IF EXISTS council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals CASCADE");
    await applyAllMigrations(pool);
  });
- beforeEach(async () => { await pool.query("TRUNCATE council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
+ beforeEach(async () => { await pool.query("TRUNCATE goals, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
  afterAll(async () => { await pool.end(); });
 
  it("stores and reloads the complete immutable snapshot, and seals/idempotently accepts briefs", async () => {

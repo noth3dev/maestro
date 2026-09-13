@@ -1410,3 +1410,8 @@ Before production router code, create and review: the eight A-axis scoring rubri
 
 - Final independent no-edit review at exact HEAD `49827ef` returned `REVIEW: FAIL` for the evidence source-loss CEO alias precheck only. The defect was within the sixth RED requirement (retire/source-loss preserves provenance), not a new general hardening category.
 - Added RED/GREEN coverage and corrected `deleteEvidenceSource` initial/retry role checks to accept the supported `ceo` alias against canonical `concertmaster` role identity. Focused real-PostgreSQL verification passed 5/5 files and 29/29 tests; build, lint, and diff-check passed. S1 is ready for merge under the final-review stop rule.
+
+## 2026-09-13 — Plan 6 S1 post-merge fixture compatibility
+
+- The merged-state full PostgreSQL run exposed a shared fixture reset incompatibility with migration `0087`: protected tables must follow the guarded `goals` reset target. Remediated the 24 failing fixture files only, added a focused ordering regression, and verified the affected set at 24/24 files and 211/211 tests.
+- Build, lint, and `git diff --check` pass. Final serialized real-PostgreSQL revalidation passes 228/228 files and 1577/1577 tests. Next gate: commit this fixture remediation, fast-forward merge it into `main`, run fresh post-merge build/lint/full PostgreSQL verification, then delete the worktree and prepare the normal push.

@@ -24,7 +24,7 @@ describeDatabase("Metronome approval observation with PostgreSQL", () => {
     await applyAllMigrations(pool);
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE capability_effect_resolutions, capability_decision_journal, capability_repetition_claims, capability_repetition_budgets, capability_approvals, metronome_challenge_findings, metronome_challenges, metronome_findings, ensemble_router_routing_evidence, evidence_records, goal_leases, goals, goal_controls CASCADE");
+    await pool.query("TRUNCATE goals, capability_effect_resolutions, capability_decision_journal, capability_repetition_claims, capability_repetition_budgets, capability_approvals, metronome_challenge_findings, metronome_challenges, metronome_findings, ensemble_router_routing_evidence, evidence_records, goal_leases, goal_controls CASCADE");
     await bootstrapPermanentOrganization(pool);
   });
   afterAll(async () => {

@@ -84,7 +84,7 @@ describeDatabase("real Encore Council acceptance: multiple real reviewer admissi
   });
   beforeEach(async () => {
     await pool.query(
-      "TRUNCATE native_execution_bindings, encore_council_syntheses, encore_council_judgments, encore_council_rounds, evidence_records, goal_leases, outbox, goal_events, command_receipts, goals, local_operator_credentials, local_operators CASCADE",
+      "TRUNCATE goals, native_execution_bindings, encore_council_syntheses, encore_council_judgments, encore_council_rounds, evidence_records, goal_leases, outbox, goal_events, command_receipts, local_operator_credentials, local_operators CASCADE",
     );
   });
   afterAll(async () => {
