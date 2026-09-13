@@ -1414,4 +1414,4 @@ Before production router code, create and review: the eight A-axis scoring rubri
 ## 2026-09-13 — Plan 6 S1 post-merge fixture compatibility
 
 - The merged-state full PostgreSQL run exposed a shared fixture reset incompatibility with migration `0087`: protected tables must follow the guarded `goals` reset target. Remediated the 24 failing fixture files only, added a focused ordering regression, and verified the affected set at 24/24 files and 211/211 tests.
-- Build, lint, and `git diff --check` pass. Final serialized real-PostgreSQL revalidation passes 228/228 files and 1577/1577 tests. Next gate: commit this fixture remediation, fast-forward merge it into `main`, run fresh post-merge build/lint/full PostgreSQL verification, then delete the worktree and prepare the normal push.
+- Build, lint, and `git diff --check` pass. Final serialized real-PostgreSQL revalidation passes 228/228 files and 1577/1577 tests. Fixture remediation is committed as `02d67c0` and fast-forward merged into `main`; fresh post-merge verification also passes. Next: delete the worktree, then prepare the normal push for the user.
