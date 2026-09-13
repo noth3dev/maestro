@@ -30,6 +30,9 @@ const COLUMNS = "knowledge_id, revision, schema_version, source_project_id, proj
 const INSERT_COLUMNS = COLUMNS.replace(", created_at", "");
 
 function operationHash(value: unknown): string { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
+function canonicalMaintenancePayload(lesson: OrganizationalKnowledge): Record<string, unknown> {
+  return { knowledgeId: lesson.knowledgeId.toLowerCase(), revision: lesson.revision, schemaVersion: lesson.schemaVersion, sourceProjectId: lesson.sourceProjectId.toLowerCase(), projectId: lesson.projectId?.toLowerCase() ?? null, sourceGoalId: lesson.sourceGoalId.toLowerCase(), departmentId: lesson.departmentId, scope: lesson.scope, status: lesson.status, statement: lesson.statement, rationale: lesson.rationale, sourceEvidenceIds: lesson.sourceEvidenceIds, sourceDigestIds: lesson.sourceDigestIds, episodeIds: lesson.episodeIds, confidence: lesson.confidence, freshness: lesson.freshness, generalized: lesson.generalized, councilRoundId: lesson.councilRoundId?.toLowerCase() ?? null, generalizedStatement: lesson.generalizedStatement ?? null, curatorRoleId: lesson.curatorRoleId ?? null, curatorOperatorId: lesson.curatorOperatorId?.toLowerCase() ?? null, curatorDepartmentId: lesson.curatorDepartmentId ?? null, authorOperatorId: lesson.authorOperatorId?.toLowerCase() ?? null, authorRoleId: lesson.authorRoleId ?? null, promotionOperatorId: lesson.promotionOperatorId?.toLowerCase() ?? null, promotionRoleId: lesson.promotionRoleId ?? null, promotionMarker: marker(lesson), reason: lesson.reason ?? null, createdBy: lesson.createdBy ?? null, sourceSessionRef: lesson.sourceSessionRef ?? null, retention: lesson.retention ?? "project_lifetime" };
+}
 function marker(lesson: OrganizationalKnowledge, sourceSessionRef = lesson.sourceSessionRef): string {
   if (lesson.scope === "worker_proposed") return "worker-proposal";
   if (lesson.status === "active" && lesson.scope === "project_department") return "department-promotion";
@@ -66,9 +69,9 @@ function publicProjection(lesson: OrganizationalKnowledge): OrganizationalKnowle
 function authorValue(author: OrganizationalKnowledgeAuthor): void {
   if (!author || typeof author.actorId !== "string" || author.actorId.trim() === "" || author.actorId.length > 256 || typeof author.sessionRef !== "string" || author.sessionRef.trim() === "" || author.sessionRef.length > 256) throw new OrganizationalKnowledgeError("organizational knowledge author is invalid");
 }
-async function authorizePromotion(client: Pick<PoolClient, "query">, lesson: OrganizationalKnowledge, roleId: string, operatorId: string, proof: GoalLeaseProof, operationPayloadHash: string, curatorOperatorId?: string, curatorRoleId?: string): Promise<void> {
-  await client.query("SELECT set_config('maestro.knowledge_promotion_payload_hash', $1, true)", [operationPayloadHash]);
-  await client.query("SELECT authorize_knowledge_promotion($1, $2, $3, $4, $5, $6, $7::uuid, $8::uuid, $9::uuid, $10, $11::bigint, $12::uuid, $13)", [randomUUID(), lesson.knowledgeId, lesson.revision, lesson.scope, roleId, lesson.departmentId, operatorId, lesson.sourceProjectId, lesson.sourceGoalId, proof.ownerId, proof.fencingToken, curatorOperatorId ?? null, curatorRoleId ?? null]);
+async function authorizePromotion(client: Pick<PoolClient, "query">, lesson: OrganizationalKnowledge, roleId: string, operatorId: string, proof: GoalLeaseProof, operationPayloadHash: string, operationPayload: string, curatorOperatorId?: string, curatorRoleId?: string): Promise<void> {
+  if (operationHash(JSON.parse(operationPayload)) !== operationPayloadHash) throw new OrganizationalKnowledgeError("organizational knowledge promotion payload is invalid");
+  await client.query("SELECT authorize_knowledge_promotion($1, $2, $3, $4, $5, $6, $7::uuid, $8::uuid, $9::uuid, $10, $11::bigint, $12::uuid, $13, $14::text)", [randomUUID(), lesson.knowledgeId, lesson.revision, lesson.scope, roleId, lesson.departmentId, operatorId, lesson.sourceProjectId, lesson.sourceGoalId, proof.ownerId, proof.fencingToken, curatorOperatorId ?? null, curatorRoleId ?? null, operationPayload]);
 }
 
 async function authorizeMaintenance(client: Pick<PoolClient, "query">, lesson: OrganizationalKnowledge, status: "unsupported" | "contradicted" | "retired", operatorId: string, roleId: string, proof: GoalLeaseProof, reason: string, sourceSessionRef: string): Promise<void> {
@@ -153,13 +156,15 @@ export async function promoteOrganizationalKnowledgeToProject(pool: Pool, reques
     if (request.idempotencyKey === undefined || request.idempotencyKey.trim() === "") throw new OrganizationalKnowledgeError("promotion idempotency key is required");
     const operationRef = `promotion:${request.idempotencyKey.trim()}`;
     if (operationRef.length > 256) throw new OrganizationalKnowledgeError("promotion idempotency key is invalid");
-    const payloadHash = operationHash({ knowledgeId: request.knowledgeId.toLowerCase(), promoterRoleId: request.promoterRoleId.toLowerCase(), promoterOperatorId: request.promoterOperatorId.toLowerCase(), departmentId: request.departmentId.toLowerCase() });
+    const promotionPayload = { knowledgeId: request.knowledgeId.toLowerCase(), promoterRoleId: request.promoterRoleId.toLowerCase(), promoterOperatorId: request.promoterOperatorId.toLowerCase(), departmentId: request.departmentId.toLowerCase() };
+    const payloadHash = operationHash(promotionPayload);
+    const payloadJson = JSON.stringify(promotionPayload);
     if (current.scope === "project_department" && current.status === "active") {
       if ((request.idempotencyKey !== undefined && current.sourceSessionRef !== operationRef) || current.promotionRoleId?.toLowerCase() !== request.promoterRoleId.toLowerCase() || current.promotionOperatorId?.toLowerCase() !== request.promoterOperatorId.toLowerCase() || current.operationPayloadHash !== payloadHash || current.sourceProjectId.toLowerCase() !== current.projectId?.toLowerCase() || current.departmentId !== request.departmentId) throw new OrganizationalKnowledgeError("conflicting project promotion retry");
       return current;
     }
     const promoted = promoteKnowledgeToProject(current, { promoterRoleKind: "department_head", promoterDepartmentId: request.departmentId });
-    await authorizePromotion(client, promoted, request.promoterRoleId, request.promoterOperatorId, request.proof, payloadHash);
+    await authorizePromotion(client, promoted, request.promoterRoleId, request.promoterOperatorId, request.proof, payloadHash, payloadJson);
     return insertRevision(client, promoted, promoted.createdBy!, operationRef, undefined, undefined, payloadHash, request.promoterOperatorId, request.promoterRoleId);
   });
 }
@@ -185,7 +190,9 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
     if (operationRef.length > 256) throw new OrganizationalKnowledgeError("promotion idempotency key is invalid");
     const sourceIds = request.corroboratingSourceIds.map((id) => id.toLowerCase());
     const episodeIds = request.corroboratingEpisodeIds.map((id) => id.toLowerCase());
-    const payloadHash = operationHash({ knowledgeId: request.knowledgeId.toLowerCase(), promoterRoleId: request.promoterRoleId.toLowerCase(), promoterOperatorId: request.promoterOperatorId.toLowerCase(), departmentId: request.departmentId.toLowerCase(), encoreCouncilRoundId: request.encoreCouncilRoundId.toLowerCase(), corroboratingSourceIds: sourceIds, corroboratingEpisodeIds: episodeIds, generalizedStatement: request.generalizedStatement, curatorRoleId: request.curatorRoleId.toLowerCase(), curatorOperatorId: request.curatorOperatorId.toLowerCase(), curatorDepartmentId: curatorDepartmentId.toLowerCase() });
+    const promotionPayload = { knowledgeId: request.knowledgeId.toLowerCase(), promoterRoleId: request.promoterRoleId.toLowerCase(), promoterOperatorId: request.promoterOperatorId.toLowerCase(), departmentId: request.departmentId.toLowerCase(), encoreCouncilRoundId: request.encoreCouncilRoundId.toLowerCase(), corroboratingSourceIds: sourceIds, corroboratingEpisodeIds: episodeIds, generalizedStatement: request.generalizedStatement, curatorRoleId: request.curatorRoleId.toLowerCase(), curatorOperatorId: request.curatorOperatorId.toLowerCase(), curatorDepartmentId: curatorDepartmentId.toLowerCase() };
+    const payloadHash = operationHash(promotionPayload);
+    const payloadJson = JSON.stringify(promotionPayload);
     if (current.scope === "global") {
       const same = current.sourceSessionRef === operationRef && current.promotionOperatorId?.toLowerCase() === request.promoterOperatorId.toLowerCase() && current.promotionRoleId?.toLowerCase() === request.promoterRoleId.toLowerCase() && current.operationPayloadHash === payloadHash && current.generalizedStatement === request.generalizedStatement && current.councilRoundId?.toLowerCase() === request.encoreCouncilRoundId.toLowerCase() && current.curatorRoleId?.toLowerCase() === request.curatorRoleId.toLowerCase() && current.curatorOperatorId?.toLowerCase() === request.curatorOperatorId.toLowerCase() && current.curatorDepartmentId?.toLowerCase() === curatorDepartmentId.toLowerCase() && JSON.stringify(current.sourceDigestIds) === JSON.stringify(sourceIds) && JSON.stringify(current.episodeIds) === JSON.stringify(episodeIds);
       if (!same) throw new OrganizationalKnowledgeError("conflicting global promotion retry");
@@ -227,7 +234,7 @@ export async function promoteOrganizationalKnowledgeToGlobal(pool: Pool, request
     const approved = approval.rowCount === 1;
     const promotion: GlobalKnowledgePromotion = { encoreCouncilApproved: approved, corroboratingSourceIds: sourceIds, corroboratingEpisodeIds: episodeIds, generalizedStatement: request.generalizedStatement, curatorRoleId: request.curatorRoleId, curatorOperatorId: request.curatorOperatorId, curatorDepartmentId, councilRoundId: request.encoreCouncilRoundId };
     const promoted = promoteKnowledgeToGlobal(current, promotion);
-    await authorizePromotion(client, promoted, request.promoterRoleId, request.promoterOperatorId, request.proof, payloadHash, request.curatorOperatorId, request.curatorRoleId);
+    await authorizePromotion(client, promoted, request.promoterRoleId, request.promoterOperatorId, request.proof, payloadHash, payloadJson, request.curatorOperatorId, request.curatorRoleId);
     const stored = await insertRevision(client, promoted, promoted.createdBy!, operationRef, undefined, undefined, payloadHash, request.promoterOperatorId, request.promoterRoleId);
     return publicProjection(stored);
   });
@@ -265,7 +272,7 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
     if (priorOperation.rowCount === 0) await client.query("INSERT INTO knowledge_refresh_operations (knowledge_id, operation_ref, payload_hash, operator_id, retention) VALUES ($1, $2, $3, $4::uuid, $5)", [current.knowledgeId, operationRef, requestHash, request.operatorId, current.retention]);
     if (current.sourceSessionRef === operationRef) {
       const maintenanceIdentityMatches = current.status === "active" || (current.promotionOperatorId?.toLowerCase() === request.operatorId.toLowerCase() && current.promotionRoleId?.toLowerCase() === request.operatorRoleId.toLowerCase());
-      if (!maintenanceIdentityMatches || current.operationPayloadHash !== requestHash) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
+      if (!maintenanceIdentityMatches || priorOperation.rowCount !== 1 || priorOperation.rows[0]!.payload_hash !== requestHash) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
       return current.scope === "global" ? publicProjection(current) : current;
     }
     if (current.sourceSessionRef?.startsWith("system:knowledge-decay:") && current.status !== "retired" && !(request.contradicted === true && current.status === "active")) throw new OrganizationalKnowledgeError("conflicting knowledge maintenance retry");
@@ -275,14 +282,17 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
     const maintenanceAuthor = current.createdBy;
     if (maintenanceAuthor === undefined) throw new OrganizationalKnowledgeError("knowledge maintenance requires durable source author");
     const maintained = { ...decayed, createdBy: maintenanceAuthor, sourceSessionRef: operationRef };
+    const maintenancePayload = canonicalMaintenancePayload(maintained);
+    const maintenancePayloadHash = operationHash(maintenancePayload);
+    const maintenancePayloadJson = JSON.stringify(maintenancePayload);
     if (maintained.status === "active" && (maintained.scope === "project_department" || maintained.scope === "global")) {
       if (maintained.promotionOperatorId === undefined || maintained.promotionRoleId === undefined) throw new OrganizationalKnowledgeError("knowledge maintenance requires durable promotion identity");
-      await authorizePromotion(client, maintained, maintained.promotionRoleId, maintained.promotionOperatorId, request.proof, requestHash, maintained.curatorOperatorId, maintained.curatorRoleId);
+      await authorizePromotion(client, maintained, maintained.promotionRoleId, maintained.promotionOperatorId, request.proof, maintenancePayloadHash, maintenancePayloadJson, maintained.curatorOperatorId, maintained.curatorRoleId);
     }
     if (maintained.status === "unsupported" || maintained.status === "contradicted" || maintained.status === "retired") await authorizeMaintenance(client, maintained, maintained.status, request.operatorId, request.operatorRoleId, request.proof, maintained.reason!, operationRef);
     const maintenanceOperator = maintained.status === "active" ? undefined : request.operatorId;
     const maintenanceRole = maintained.status === "active" ? undefined : request.operatorRoleId;
-    const stored = await insertRevision(client, maintained, maintenanceAuthor, operationRef, undefined, undefined, requestHash, maintenanceOperator, maintenanceRole);
+    const stored = await insertRevision(client, maintained, maintenanceAuthor, operationRef, undefined, undefined, maintained.status === "active" ? maintenancePayloadHash : requestHash, maintenanceOperator, maintenanceRole);
     return stored.scope === "global" ? publicProjection(stored) : stored;
   });
 }

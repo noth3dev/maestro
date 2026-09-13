@@ -59,6 +59,7 @@ describeDatabase("organizational knowledge persistence", () => {
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
+        if (operationPayloadHash !== null) await client.query("SELECT set_config('maestro.knowledge_promotion_payload_hash', $1, true)", [operationPayloadHash]);
         await client.query("SELECT authorize_knowledge_promotion($1, $2::uuid, $3, $4, $5, $6, $7::uuid, $8::uuid, $9::uuid, $10, $11::bigint, $12::uuid, $13)", [randomUUID(), proposed.knowledgeId, 2, "project_department", "head-engineering", "engineering", curatorOperatorId, projectId, goalId, proof.ownerId, proof.fencingToken, null, null]);
         let error: unknown;
         try {
@@ -84,8 +85,28 @@ describeDatabase("organizational knowledge persistence", () => {
   it("binds digest-loss records and blocks direct truncation", async () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "digest-loss-worker", leaseDurationMs: 60_000 });
     const digest = await recordImprovementDigest(pool, { schemaVersion: 1, projectId, goalId, episodeId: "digest-loss-episode", trigger: "goal_completed", situation: "A bounded task completed.", selectedDecision: "Keep the gate.", rejectedAlternatives: [], observedResult: "The gate held.", metrics: [], confidence: 0.8, sourceRefs: [{ kind: "goal", sourceId: goalId }] }, proof, { actorId: "worker", sessionRef: "session:digest-loss", operatorId });
-    await expect(pool.query(`INSERT INTO organizational_knowledge_digest_losses (digest_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by, role_id, token_hash) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, [digest.digestId, goalId, projectId, proof.ownerId, proof.fencingToken, "forged", operatorId, "head-engineering", "a".repeat(64)])).rejects.toThrow(/binding|authorization|loss/i);
-    await expect(pool.query("TRUNCATE organizational_knowledge_digest_losses")).rejects.toThrow(/truncat|forbidden/i);
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const forgedToken = "forged-digest-loss-token";
+      for (const [name, value] of [["maestro.knowledge_digest_loss_digest", digest.digestId], ["maestro.knowledge_digest_loss_goal", goalId], ["maestro.knowledge_digest_loss_project", projectId], ["maestro.knowledge_digest_loss_owner", proof.ownerId], ["maestro.knowledge_digest_loss_fence", String(proof.fencingToken)], ["maestro.knowledge_digest_loss_reason", "forged"], ["maestro.knowledge_digest_loss_recorded_by", operatorId], ["maestro.knowledge_digest_loss_role", "head-engineering"], ["maestro.knowledge_digest_loss_token", forgedToken]] as const) await client.query("SELECT set_config($1, $2, true)", [name, value]);
+      await expect(client.query(`INSERT INTO organizational_knowledge_digest_losses (digest_id, goal_id, project_id, owner_id, fencing_token, reason, recorded_by, role_id, token_hash) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, encode(public.digest($9, 'sha256'), 'hex'))`, [digest.digestId, goalId, projectId, proof.ownerId, proof.fencingToken, "forged", operatorId, "head-engineering", forgedToken])).rejects.toThrow(/binding|authorization|loss/i);
+      await client.query("ROLLBACK");
+    } finally {
+      client.release();
+    }
+  });
+
+  it("does not let a caller-controlled cleanup GUC authorize truncation", async () => {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('maestro.schema_cleanup_reset', '1', true)");
+      await expect(client.query("TRUNCATE organizational_knowledge_digest_losses")).rejects.toThrow(/truncat|forbidden/i);
+      await client.query("ROLLBACK");
+    } finally {
+      client.release();
+    }
   });
 
   it("persists worker proposals separately and only exposes promoted knowledge", async () => {
@@ -104,6 +125,8 @@ describeDatabase("organizational knowledge persistence", () => {
       (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, council_round_id, generalized_statement, curator_role_id, curator_operator_id, curator_department_id, author_operator_id, author_role_id, promotion_marker, reason, created_by, source_session_ref)
       VALUES ($1, 2, 1, $2, $2, $3, 'engineering', 'project_department', 'unsupported', 'forged', 'forged', $4::jsonb, '[]', '["episode-a"]', 0.5, 1, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'adjudication', 'forged', 'head-engineering', 'forged-maintenance')`, [proposed.knowledgeId, projectId, goalId, JSON.stringify([evidenceId])])).rejects.toThrow(/authorization|maintenance/);
     await expect(pool.query(`INSERT INTO organizational_knowledge (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, promotion_marker, reason, created_by, source_session_ref) VALUES ($1, 1, 1, $2, $2, $3, 'worker_proposed', 'project_department', 'unsupported', 'missing', 'missing', $4::jsonb, '[]', '["episode-a"]', 0.5, 1, false, 'source-loss', 'missing', 'worker', 'evidence:' || $5)`, [randomUUID(), projectId, goalId, JSON.stringify([randomUUID()]), evidenceId])).rejects.toThrow(/evidence|authorization|marker|source-loss/);
+    const uppercaseDigestId = randomUUID().toUpperCase();
+    await expect(pool.query(`INSERT INTO organizational_knowledge (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, promotion_marker, reason, created_by, source_session_ref) VALUES ($1, 1, 1, $2, $2, $3, 'engineering', 'project_department', 'proposed', 'uppercase ref', 'uppercase ref', '[]', $4::jsonb, '["episode-a"]', 0.5, 1, false, 'worker-proposal', NULL, 'worker', 'sql:uppercase-ref')`, [randomUUID(), projectId, goalId, JSON.stringify([uppercaseDigestId])])).rejects.toThrow(/lowercase|canonical/);
     await expect(pool.query("TRUNCATE organizational_knowledge")).rejects.toThrow(/truncat|forbidden/);
     expect(await listOrganizationalKnowledge(pool, { operatorId, projectId, departmentId: "engineering", proof })).toEqual([]);
     const promoted = await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: curatorOperatorId, departmentId: "engineering", idempotencyKey: "project-default" });
