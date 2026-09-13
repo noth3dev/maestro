@@ -690,7 +690,7 @@ export type CriticalActionResult = z.infer<typeof CriticalActionResultSchema>;
 export const MetronomeChallengeSchema = z.object({
   challengeId: UuidSchema, goalId: UuidSchema, reason: z.string().min(1), evidenceReferences: z.array(z.string()),
   status: z.enum(["open", "correction_requested", "safe_paused", "resolved"]), correctionRequest: z.string().nullable(),
-  raisedBy: z.string().min(1), resolvedBy: z.string().nullable(), resolutionReason: z.string().nullable(),
+  raisedBy: z.string().min(1), resolvedBy: z.string().nullable(), resolutionReason: z.string().nullable(), targetRef: z.string().nullable(),
 }).strict();
 export type MetronomeChallenge = z.infer<typeof MetronomeChallengeSchema>;
 export const MetronomeChallengeListSchema = z.object({ challenges: z.array(MetronomeChallengeSchema) }).strict();

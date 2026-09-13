@@ -31,11 +31,12 @@ export interface MetronomeChallenge {
   readonly raisedBy: string;
   readonly resolvedBy: string | null;
   readonly resolutionReason: string | null;
+  readonly targetRef: string | null;
 }
 
 interface ChallengeRow {
   challenge_id: string; goal_id: string; reason: string; evidence_references: string[]; status: MetronomeChallengeStatus;
-  correction_request: string | null; raised_by: string; resolved_by: string | null; resolution_reason: string | null;
+  correction_request: string | null; raised_by: string; resolved_by: string | null; resolution_reason: string | null; target_ref: string | null;
   idempotency_key?: string | null; request_hash?: string | null;
 }
 
@@ -52,11 +53,11 @@ function mapChallenge(row: ChallengeRow): MetronomeChallenge {
     reason: row.reason, evidenceReferences: row.evidence_references.map(normalizeMetronomeIdentity),
     status: row.status, correctionRequest: row.correction_request, raisedBy: normalizeMetronomeIdentity(row.raised_by),
     resolvedBy: row.resolved_by === null ? null : normalizeMetronomeIdentity(row.resolved_by),
-    resolutionReason: row.resolution_reason,
+    resolutionReason: row.resolution_reason, targetRef: row.target_ref === null ? null : normalizeMetronomeIdentity(row.target_ref),
   };
 }
 
-const CHALLENGE_COLUMNS = "challenge_id, goal_id, reason, evidence_references, status, correction_request, raised_by, resolved_by, resolution_reason";
+const CHALLENGE_COLUMNS = "challenge_id, goal_id, reason, evidence_references, status, correction_request, raised_by, resolved_by, resolution_reason, target_ref";
 
 function challengeSelectSql(): string {
   return `SELECT ${CHALLENGE_COLUMNS} FROM metronome_challenges`;
@@ -253,11 +254,11 @@ export async function raiseMetronomeChallenge(
     const requestHash = hash({ identity, findingIds: [...normalizedFindingIds].sort(), reason: substance.reason.trim(), targetRef: substance.targetRef });
     const inserted = await client.query<ChallengeRow>(
       `INSERT INTO metronome_challenges
-         (challenge_id, goal_id, reason, evidence_references, status, raised_by, idempotency_key, request_hash)
-       VALUES ($1, $2, $3, $4::jsonb, 'open', $5, $6, $7)
+         (challenge_id, goal_id, reason, evidence_references, status, raised_by, idempotency_key, request_hash, target_ref)
+       VALUES ($1, $2, $3, $4::jsonb, 'open', $5, $6, $7, $8)
        ON CONFLICT (goal_id, idempotency_key) DO NOTHING
        RETURNING ${CHALLENGE_COLUMNS}, idempotency_key, request_hash`,
-      [randomUUID(), normalizedGoalId, substance.reason.trim(), JSON.stringify(normalizedEvidenceReferences), METRONOME_ACTOR_ID, idempotencyKey, requestHash],
+      [randomUUID(), normalizedGoalId, substance.reason.trim(), JSON.stringify(normalizedEvidenceReferences), METRONOME_ACTOR_ID, idempotencyKey, requestHash, substance.targetRef === undefined ? null : normalizeMetronomeIdentity(substance.targetRef)],
     );
     if (inserted.rowCount === 1) {
       for (const findingId of normalizedFindingIds) {
