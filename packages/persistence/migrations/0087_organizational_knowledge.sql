@@ -608,6 +608,17 @@ CREATE TRIGGER source_evidence_loss_authorizations_immutable BEFORE UPDATE OR DE
 
 
 
+CREATE OR REPLACE FUNCTION authorize_knowledge_promotion_authorization_insert() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE call_context text;
+BEGIN
+  GET DIAGNOSTICS call_context = PG_CONTEXT;
+  IF call_context !~ 'function authorize_knowledge_promotion\(text,[[:space:]]*uuid' OR NEW.token_hash IS DISTINCT FROM encode(public.digest(NULLIF(current_setting('maestro.knowledge_promotion_token', true), ''), 'sha256'), 'hex') OR NEW.authorization_transaction_id <> txid_current() THEN RAISE EXCEPTION 'knowledge promotion authorization must be issued by secured function'; END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS knowledge_promotion_authorizations_issuer ON knowledge_promotion_authorizations;
+CREATE TRIGGER knowledge_promotion_authorizations_issuer BEFORE INSERT ON knowledge_promotion_authorizations FOR EACH ROW EXECUTE FUNCTION authorize_knowledge_promotion_authorization_insert();
+
 CREATE OR REPLACE FUNCTION reject_knowledge_promotion_authorization_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'DELETE' AND OLD.authorization_transaction_id = txid_current() THEN RETURN OLD; END IF;
@@ -663,6 +674,7 @@ BEGIN
   IF btrim(p_token) = '' OR p_scope NOT IN ('project_department', 'global') OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_operator_id AND r.project_id = p_project_id AND r.role_id = p_role_id AND r.active = true) OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) OR NOT EXISTS (SELECT 1 FROM organizational_knowledge WHERE knowledge_id = p_knowledge_id AND revision = p_revision - 1 AND source_project_id = p_project_id AND source_goal_id = p_goal_id) THEN RAISE EXCEPTION 'knowledge promotion authorization context is invalid'; END IF;
   IF p_scope = 'global' AND (p_curator_operator_id IS NULL OR p_curator_role_id IS NULL OR p_curator_operator_id = p_operator_id OR p_curator_role_id = p_role_id OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_curator_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM permanent_roles WHERE role_id = p_curator_role_id AND role_kind = 'department_head' AND status = 'standing' AND department_id <> p_department_id) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_curator_operator_id AND r.project_id = p_project_id AND r.role_id = p_curator_role_id AND r.active = true)) THEN RAISE EXCEPTION 'global knowledge curator authorization context is invalid'; END IF;
   IF p_scope = 'global' THEN SELECT department_id INTO curator_department FROM permanent_roles WHERE role_id = p_curator_role_id AND role_kind = 'department_head' AND status = 'standing'; END IF;
+  PERFORM set_config('maestro.knowledge_promotion_token', p_token, true);
   INSERT INTO knowledge_promotion_authorizations (token_hash, knowledge_id, revision, scope, role_id, department_id, operator_id, goal_id, owner_id, fencing_token, curator_operator_id, curator_department_id, curator_role_id, payload_hash, payload_json, authorization_transaction_id) VALUES (encode(public.digest(p_token, 'sha256'), 'hex'), p_knowledge_id, p_revision, p_scope, p_role_id, p_department_id, p_operator_id, p_goal_id, p_owner_id, p_fencing_token, p_curator_operator_id, curator_department, p_curator_role_id, CASE WHEN normalized_payload IS NULL THEN NULL ELSE encode(public.digest(normalized_payload::text, 'sha256'), 'hex') END, normalized_payload, txid_current());
   RETURN CASE WHEN normalized_payload IS NULL THEN NULL ELSE encode(public.digest(normalized_payload::text, 'sha256'), 'hex') END;
 END;
@@ -714,13 +726,26 @@ $$;
 
 CREATE TABLE IF NOT EXISTS organizational_knowledge_schema_cleanup_authorizations (
   transaction_id bigint PRIMARY KEY,
+  nonce uuid NOT NULL,
   authorized_by text NOT NULL CHECK (btrim(authorized_by) <> ''),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp()
 );
+ALTER TABLE organizational_knowledge_schema_cleanup_authorizations ADD COLUMN IF NOT EXISTS nonce uuid;
+UPDATE organizational_knowledge_schema_cleanup_authorizations SET nonce = gen_random_uuid() WHERE nonce IS NULL;
+ALTER TABLE organizational_knowledge_schema_cleanup_authorizations ALTER COLUMN nonce SET DEFAULT gen_random_uuid();
+ALTER TABLE organizational_knowledge_schema_cleanup_authorizations ALTER COLUMN nonce SET NOT NULL;
 REVOKE ALL ON organizational_knowledge_schema_cleanup_authorizations FROM PUBLIC;
 
 CREATE OR REPLACE FUNCTION reject_organizational_knowledge_schema_cleanup_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN RAISE EXCEPTION 'schema cleanup authorizations are internal and append-only'; END;
+DECLARE call_context text;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    GET DIAGNOSTICS call_context = PG_CONTEXT;
+    IF call_context !~ 'function maestro_goal_truncate_reset\(' OR NEW.transaction_id <> txid_current() OR NEW.nonce IS DISTINCT FROM NULLIF(current_setting('maestro.schema_cleanup_nonce', true), '')::uuid OR NEW.authorized_by IS DISTINCT FROM session_user THEN RAISE EXCEPTION 'schema cleanup authorization must be issued by secured goal reset'; END IF;
+    RETURN NEW;
+  END IF;
+  RAISE EXCEPTION 'schema cleanup authorizations are internal and append-only';
+END;
 $$;
 DROP TRIGGER IF EXISTS organizational_knowledge_schema_cleanup_immutable ON organizational_knowledge_schema_cleanup_authorizations;
 CREATE TRIGGER organizational_knowledge_schema_cleanup_immutable BEFORE UPDATE OR DELETE ON organizational_knowledge_schema_cleanup_authorizations FOR EACH ROW EXECUTE FUNCTION reject_organizational_knowledge_schema_cleanup_mutation();
@@ -728,7 +753,8 @@ CREATE TRIGGER organizational_knowledge_schema_cleanup_immutable BEFORE UPDATE O
 CREATE OR REPLACE FUNCTION maestro_goal_truncate_reset() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
   IF session_user <> (SELECT tableowner FROM pg_catalog.pg_tables WHERE schemaname = TG_TABLE_SCHEMA AND tablename = TG_TABLE_NAME) THEN RAISE EXCEPTION 'schema cleanup reset requires the goals table owner'; END IF;
-  INSERT INTO organizational_knowledge_schema_cleanup_authorizations (transaction_id, authorized_by) VALUES (txid_current(), session_user) ON CONFLICT (transaction_id) DO NOTHING;
+  PERFORM set_config('maestro.schema_cleanup_nonce', gen_random_uuid()::text, true);
+  INSERT INTO organizational_knowledge_schema_cleanup_authorizations (transaction_id, nonce, authorized_by) VALUES (txid_current(), current_setting('maestro.schema_cleanup_nonce', true)::uuid, session_user) ON CONFLICT (transaction_id) DO NOTHING;
   PERFORM set_config('maestro.schema_cleanup_reset', '1', true);
   RETURN NULL;
 END;
@@ -738,7 +764,7 @@ CREATE TRIGGER maestro_goal_truncate_reset BEFORE TRUNCATE ON goals FOR EACH STA
 
 CREATE OR REPLACE FUNCTION reject_unscoped_truncate() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM organizational_knowledge_schema_cleanup_authorizations WHERE transaction_id = txid_current()) THEN RAISE EXCEPTION 'direct table truncation is forbidden; truncate goals CASCADE for test reset'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM organizational_knowledge_schema_cleanup_authorizations WHERE transaction_id = txid_current() AND nonce::text IS NOT DISTINCT FROM NULLIF(current_setting('maestro.schema_cleanup_nonce', true), '')) THEN RAISE EXCEPTION 'direct table truncation is forbidden; truncate goals CASCADE for test reset'; END IF;
   RETURN NULL;
 END;
 $$;
@@ -782,6 +808,7 @@ BEGIN
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_evidence_source_reuse() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_organizational_knowledge_schema_cleanup_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint, uuid, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_promotion_authorization_insert() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint, uuid, text, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_source_evidence_loss(text, uuid, uuid, uuid, text, bigint, text, uuid, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_source_evidence_loss_authorization_insert() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
