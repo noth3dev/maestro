@@ -56,7 +56,7 @@ export interface LearnedPersonaProfileVersionInput {
   readonly source: string;
 }
 
-export interface LearnedPersonaProfileVersion extends LearnedPersonaProfileVersionInput {}
+export type LearnedPersonaProfileVersion = LearnedPersonaProfileVersionInput;
 
 export interface TaskClassPersonaAdjustmentInput {
   readonly roleId: string;
@@ -67,7 +67,7 @@ export interface TaskClassPersonaAdjustmentInput {
   readonly reason: string;
 }
 
-export interface TaskClassPersonaAdjustment extends TaskClassPersonaAdjustmentInput {}
+export type TaskClassPersonaAdjustment = TaskClassPersonaAdjustmentInput;
 
 /** Fixed role identity. Adaptive profile writes do not contain this shape. */
 export interface PersonaCoreIdentity {

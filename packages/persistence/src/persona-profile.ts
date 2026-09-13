@@ -15,8 +15,6 @@ import {
 import type { Pool, PoolClient } from "pg";
 import { getPermanentRole } from "./organization.js";
 
-type Queryable = Pick<Pool, "query">;
-
 export class PersonaProfileError extends Error {}
 export class PersonaProfileNotFoundError extends PersonaProfileError {}
 export class PersonaProfileVersionConflictError extends PersonaProfileError {}
@@ -107,7 +105,7 @@ export async function storeTaskClassPersonaAdjustment(pool: Pool, input: TaskCla
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const role = await lockRole(client, parsed.roleId);
+    await lockRole(client, parsed.roleId);
     const profileResult = await client.query<LearnedProfileRow>(
       `SELECT role_id, version, profile, rationale, source FROM persona_profile_versions WHERE role_id = $1 ORDER BY version DESC LIMIT 1`, [parsed.roleId],
     );
