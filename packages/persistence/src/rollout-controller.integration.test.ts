@@ -29,7 +29,7 @@ import {
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL ?? "postgresql://127.0.0.1/maestro_test";
 const describeDatabase = process.env.MAESTRO_TEST_DATABASE_URL ? describe : describe.skip;
 const operatorId = randomUUID();
-const actor: RolloutActor = { operatorId, actorId: "concertmaster", sessionRef: "session:rollout", operatorRoleId: "concertmaster" };
+const actor: RolloutActor = { operatorId, actorId: "rollout-worker", sessionRef: "session:rollout", operatorRoleId: "engineering" };
 const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineering", sessionRef: "session:candidate", operatorId, operatorRoleId: "engineering" };
 
  describeDatabase("bounded rollout persistence", () => {
@@ -80,6 +80,7 @@ const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineer
   const scope: RolloutScope = { roleId: "head-engineering", taskClass: "implementation", maxGoalCount: 2, windowStart: "2026-09-14T00:00:00.000Z", windowEnd: "2026-09-15T00:00:00.000Z" };
 
   it("denies applying a judged candidate until its exact improvement class is enabled", async () => {
+    await expect(pool.query("INSERT INTO improvement_class_enablements (project_id, improvement_class, operator_id, operator_role_id, session_ref, operation_ref) VALUES ($1, 'persona_axis', $2, 'engineering', 'session:direct', $3)", [projectId, operatorId, `direct-${randomUUID()}`])).rejects.toThrow(/secured|authorization|marker/i);
     await expect(startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, `start-${randomUUID()}`)).rejects.toThrow(/enabled|class/i);
     await enableImprovementClass(pool, projectId, "persona_axis", proof, actor, `enable-${randomUUID()}`);
     await expect(startBoundedRollout(pool, candidate.candidateId, { ...scope, taskClass: "unrelated" }, proof, actor, `start-${randomUUID()}`)).rejects.toThrow(/scope|target|task/i);
@@ -101,9 +102,9 @@ const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineer
     const rollout = await startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, `start-${randomUUID()}`);
     const rolledBack = await observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T02:00:00.000Z", metrics: [{ name: "correctness", value: 0.84 }] }, proof, actor, `observe-${randomUUID()}`);
     expect(rolledBack).toMatchObject({ status: "rolled_back", activeCandidateId: candidate.rollbackTarget.candidateId, activeVersion: candidate.rollbackTarget.version, rollbackTarget: candidate.rollbackTarget });
-    expect(rolledBack.evidenceIds).toContain(digestId);
+    expect(rolledBack.sourceEvidenceIds).toContain(digestId);
     expect(rolledBack.history.some((event) => event.kind === "automatic_rollback")).toBe(true);
-    await expect(readBoundedRollout(pool, rollout.rolloutId, { operatorId, proof })).resolves.toMatchObject({ status: "rolled_back", evidenceIds: [digestId] });
+    await expect(readBoundedRollout(pool, rollout.rolloutId, { operatorId, proof })).resolves.toMatchObject({ status: "rolled_back", sourceEvidenceIds: [digestId] });
   });
 
   it("reconciles an interrupted rollout to the last certified state using its durable rollback target", async () => {
