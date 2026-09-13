@@ -579,6 +579,23 @@ export const CreateMissionBundleInputSchema = z.object({ projectId: UuidSchema, 
 type CreateMissionBundleInputSchemaOutput = z.infer<typeof CreateMissionBundleInputSchema>;
 export type CreateMissionBundleInput = Omit<CreateMissionBundleInputSchemaOutput, "substance"> & { readonly substance: MissionBundleSubstance };
 
+const PersonaProfileInputSchema = z.object({
+  agreeableness: z.number().finite().min(0).max(1), extraversion: z.number().finite().min(0).max(1), imagination: z.number().finite().min(0).max(1),
+  realism: z.number().finite().min(0).max(1), conscientiousness: z.number().finite().min(0).max(1), caution: z.number().finite().min(0).max(1),
+  initiative: z.number().finite().min(0).max(1), empathy: z.number().finite().min(0).max(1), adaptability: z.number().finite().min(0).max(1), sociability: z.number().finite().min(0).max(1),
+}).strict();
+const MissionPersonaOverlayInputsSchema = z.object({
+  departmentStyle: PersonaProfileInputSchema, headChoice: PersonaProfileInputSchema,
+  taskAmbiguity: z.number().finite().min(0).max(1), risk: z.number().finite().min(0).max(1), collaborationDemand: z.number().finite().min(0).max(1), evidenceBurden: z.number().finite().min(0).max(1),
+}).strict();
+export const IssueMissionPersonaOverlayInputSchema = z.object({ projectId: UuidSchema, planVersion: z.number().int().positive(), inputs: MissionPersonaOverlayInputsSchema, missionLifetimeMs: z.number().int().positive() }).strict();
+export type IssueMissionPersonaOverlayInput = z.infer<typeof IssueMissionPersonaOverlayInputSchema>;
+export const MissionPersonaOverlaySchema = z.object({
+  councilId: z.string().min(1), departmentId: z.string().min(1), planVersion: z.number().int().positive(), itemId: z.string().min(1),
+  persona: PersonaProfileInputSchema, issuedAt: z.string().datetime(), expiresAt: z.string().datetime(),
+}).strict();
+export type MissionPersonaOverlay = z.infer<typeof MissionPersonaOverlaySchema>;
+
 export const WorkerSchema = z.object({
   workerId: UuidSchema, councilId: UuidSchema, departmentId: z.string().min(1), planVersion: z.number().int().positive(), itemId: z.string().min(1),
   bundleContentHash: z.string().regex(/^[a-f0-9]{64}$/), attempt: z.number().int().positive(), executionRef: z.string().min(1), invocationRef: z.string().min(1),
@@ -690,7 +707,7 @@ export type CriticalActionResult = z.infer<typeof CriticalActionResultSchema>;
 export const MetronomeChallengeSchema = z.object({
   challengeId: UuidSchema, goalId: UuidSchema, reason: z.string().min(1), evidenceReferences: z.array(z.string()),
   status: z.enum(["open", "correction_requested", "safe_paused", "resolved"]), correctionRequest: z.string().nullable(),
-  raisedBy: z.string().min(1), resolvedBy: z.string().nullable(), resolutionReason: z.string().nullable(),
+  raisedBy: z.string().min(1), resolvedBy: z.string().nullable(), resolutionReason: z.string().nullable(), targetRef: z.string().nullable(),
 }).strict();
 export type MetronomeChallenge = z.infer<typeof MetronomeChallengeSchema>;
 export const MetronomeChallengeListSchema = z.object({ challenges: z.array(MetronomeChallengeSchema) }).strict();
@@ -702,6 +719,8 @@ export const MetronomeScanInputSchema = z.object({ projectId: UuidSchema }).stri
 export type MetronomeScanInput = z.infer<typeof MetronomeScanInputSchema>;
 export const RaiseMetronomeChallengeInputSchema = z.object({ projectId: UuidSchema, findingIds: z.array(UuidSchema), reason: z.string().min(1), evidenceReferences: z.array(z.string().min(1)) }).strict();
 export type RaiseMetronomeChallengeInput = z.infer<typeof RaiseMetronomeChallengeInputSchema>;
+export const WorkerOverlayChallengeInputSchema = z.object({ projectId: UuidSchema, workerId: UuidSchema, roleId: z.string().min(1), evidenceReferences: z.array(z.string().min(1)).min(1) }).strict();
+export type WorkerOverlayChallengeInput = z.infer<typeof WorkerOverlayChallengeInputSchema>;
 export const MetronomeCorrectionInputSchema = z.object({ projectId: UuidSchema, correctionRequest: z.string().min(1) }).strict();
 export type MetronomeCorrectionInput = z.infer<typeof MetronomeCorrectionInputSchema>;
 export const MetronomeSafePauseInputSchema = z.object({ projectId: UuidSchema }).strict();

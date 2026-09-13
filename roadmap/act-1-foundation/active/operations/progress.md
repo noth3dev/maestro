@@ -4195,3 +4195,14 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-14 Plan 6 §S8 pre-merge build, lint, diff-check, and authenticated serialized PostgreSQL verification passed **237/237 files and 1638/1638 tests** in 356.31s. An earlier run exposed two unrelated git-adapter failures because this worktree resolved stale package dist links; restoring all local workspace package links made the targeted git suite pass 13/13, and the clean full run passed. Next: merge S8, re-verify on main, remove the worktree, and push normally.
 
 - 2026-09-14 Plan 6 §S8 merged as the learned persona profile and task-class layer. Post-merge build, lint, diff-check, and authenticated serialized PostgreSQL verification passed **237/237 files and 1638/1638 tests** in 338.48s. The worktree and branch can now be removed; next is §S9 worker profile derivation.
+
+- 2026-09-14 Plan 6 §S9 `worker-profile-derivation`: opened `.worktrees/worker-profile-derivation` from pushed `main` after S8 post-merge verification. Reserved migration **0091** before writing it; RED tests for bounded worker derivation, role floors/ceilings, three-largest-delta explanations, mission overlay expiry, full post-Goal evidence, and Metronome challenge come first.
+
+- 2026-09-14 Plan 6 §S9 remediation: reserved migration **0092** before adding the durable reviewed role persona floor/ceiling rubric required to bind worker derivation and Metronome checks to role duty.
+- 2026-09-14 Plan 6 §S9 remediation: reserved migration **0093** before persisting Metronome worker challenge target identities for per-worker idempotency and auditability.
+
+- 2026-09-14 Plan 6 §S9 remediation: reserved migration **0094** before hardening Metronome challenge `target_ref` immutability.
+
+- 2026-09-14 Plan 6 §S9 remediation: reserved migration **0095** before durably storing the worker derivation assignment used at provider admission.
+
+- 2026-09-14 Plan 6 §S9 remediation and review: worker derivation is durably bound to Mission Bundle/Worker hashes, reviewed role bounds, task-class profiles, lifecycle expiry, and persisted assignment explanations; Metronome target refs are immutable; Head overlay selection is authenticated and bounded; complete post-Goal evidence is terminal-Goal and participating-Head bound through an authenticated control-plane route; native runtime delivers the host-owned assignment to provider turns. Exact-HEAD independent no-edit review passed at `447faab` (68 focused tests). Pre-merge build, lint, diff-check, and authenticated serialized PostgreSQL verification passed **240/240 files and 1646/1646 tests** in 389.35s (`/tmp/plan6-s9-full9.log`).

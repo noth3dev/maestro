@@ -110,7 +110,7 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
     assertBindingMatches(binding, admission.model, accountRef);
     return {
       binding,
-      runtime: createMaestroAgentRuntime({ gateway: options.gateway, binding, tools: options.tools, closeGateway: false }),
+      runtime: createMaestroAgentRuntime({ gateway: options.gateway, binding, tools: options.tools, ...(request.workerProfile === undefined ? {} : { workerProfile: request.workerProfile }), closeGateway: false }),
     };
   }
 

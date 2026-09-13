@@ -13,6 +13,7 @@ import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
 import { createCapabilityApprovalService } from "./capability-approval-service.js";
 import { createEvidenceCaptureService, EvidenceCaptureGoalBindingError } from "./evidence-capture-service.js";
+import { createPersonaGoalEvidenceService } from "./persona-goal-evidence-service.js";
 import { createDurableGoalService } from "./goal-service.js";
 import { createReadStateService } from "./read-state-service.js";
 import { createDurableTaskContractService } from "./task-contract-service.js";
@@ -696,6 +697,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       if (goal.rowCount !== 1 || goal.rows[0]!.project_id !== projectId) throw new EvidenceCaptureGoalBindingError();
     },
   });
+  const personaGoalEvidenceService = createPersonaGoalEvidenceService({ pool });
   const headParticipationService = createHeadParticipationService({
     pool,
     kernel: executionKernel,
@@ -786,6 +788,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     criticalActionService,
     capabilityApprovalService,
     evidenceCaptureService,
+    personaGoalEvidenceService,
     readStateService: createReadStateService(pool),
     taskContractService: createDurableTaskContractService(pool),
     ...(config.discordSignalCredential === undefined ? {} : {

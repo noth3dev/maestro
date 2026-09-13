@@ -91,6 +91,12 @@ export interface CapabilityGrant {
   };
 }
 
+export interface WorkerProfileAssignment {
+  readonly profile: Readonly<Record<string, number>>;
+  readonly explanations: readonly unknown[];
+  readonly assignmentRef: string;
+}
+
 export interface SpawnRequest {
   name: string;
   cwd?: string;
@@ -98,6 +104,8 @@ export interface SpawnRequest {
   prompt?: string;
   /** Only meaningful for a root spawn (no parent); a child spawn inherits its root's session. */
   capabilities?: SpawnCapabilities;
+  /** Bounded, host-derived worker assignment context; providers must not re-derive it. */
+  workerProfile?: WorkerProfileAssignment;
   /** Required by the native runtime; optional while legacy test-only kernels remain supported. */
   context?: InvocationContext;
   grant?: CapabilityGrant;

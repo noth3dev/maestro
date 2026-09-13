@@ -31,11 +31,12 @@ export interface MetronomeChallenge {
   readonly raisedBy: string;
   readonly resolvedBy: string | null;
   readonly resolutionReason: string | null;
+  readonly targetRef: string | null;
 }
 
 interface ChallengeRow {
   challenge_id: string; goal_id: string; reason: string; evidence_references: string[]; status: MetronomeChallengeStatus;
-  correction_request: string | null; raised_by: string; resolved_by: string | null; resolution_reason: string | null;
+  correction_request: string | null; raised_by: string; resolved_by: string | null; resolution_reason: string | null; target_ref: string | null;
   idempotency_key?: string | null; request_hash?: string | null;
 }
 
@@ -52,11 +53,11 @@ function mapChallenge(row: ChallengeRow): MetronomeChallenge {
     reason: row.reason, evidenceReferences: row.evidence_references.map(normalizeMetronomeIdentity),
     status: row.status, correctionRequest: row.correction_request, raisedBy: normalizeMetronomeIdentity(row.raised_by),
     resolvedBy: row.resolved_by === null ? null : normalizeMetronomeIdentity(row.resolved_by),
-    resolutionReason: row.resolution_reason,
+    resolutionReason: row.resolution_reason, targetRef: row.target_ref === null ? null : normalizeMetronomeIdentity(row.target_ref),
   };
 }
 
-const CHALLENGE_COLUMNS = "challenge_id, goal_id, reason, evidence_references, status, correction_request, raised_by, resolved_by, resolution_reason";
+const CHALLENGE_COLUMNS = "challenge_id, goal_id, reason, evidence_references, status, correction_request, raised_by, resolved_by, resolution_reason, target_ref";
 
 function challengeSelectSql(): string {
   return `SELECT ${CHALLENGE_COLUMNS} FROM metronome_challenges`;
@@ -70,7 +71,7 @@ function hash(value: unknown): string {
   return createHash("sha256").update(canonicalJson(value)).digest("hex");
 }
 
-function findingIdentity(goalId: string, rows: readonly FindingIdentityRow[], evidenceReferences: readonly string[]): Readonly<Record<string, unknown>> {
+function findingIdentity(goalId: string, rows: readonly FindingIdentityRow[], evidenceReferences: readonly string[], targetRef?: string): Readonly<Record<string, unknown>> {
   const findings = rows.map((row) => ({
     ruleId: normalizeMetronomeIdentity(row.rule_id), evidenceIdentity: normalizeMetronomeIdentity(row.evidence_identity),
     planVersion: row.plan_version,
@@ -79,6 +80,7 @@ function findingIdentity(goalId: string, rows: readonly FindingIdentityRow[], ev
     goalId: normalizeMetronomeIdentity(goalId),
     findings,
     evidenceReferences: [...new Set(evidenceReferences.map(normalizeMetronomeIdentity))].sort(),
+    ...(targetRef === undefined ? {} : { targetRef: normalizeMetronomeIdentity(targetRef) }),
   };
 }
 
@@ -225,9 +227,14 @@ export async function raiseMetronomeChallenge(
       "SELECT evidence_id FROM ensemble_router_routing_evidence WHERE goal_ref = $1 AND project_ref = $2",
       [normalizedGoalId, projectId],
     );
+    const personaEvidence = await client.query<{ evidence_id: string }>(
+      "SELECT evidence_id FROM persona_goal_evidence WHERE goal_id = $1 AND project_id = $2",
+      [normalizedGoalId, projectId],
+    );
     const durableIds = new Set([
       ...durable.rows.flatMap((row) => [normalizeMetronomeIdentity(row.evidence_id), normalizeMetronomeIdentity(row.sha256)]),
       ...routing.rows.map((row) => normalizeMetronomeIdentity(row.evidence_id)),
+      ...personaEvidence.rows.map((row) => normalizeMetronomeIdentity(row.evidence_id)),
     ]);
     for (const reference of normalizedEvidenceReferences) if (!durableIds.has(reference)) throw new MetronomeChallengeError(`Metronome challenge evidence reference is not a durable goal-scoped record: ${reference}`);
 
@@ -242,16 +249,16 @@ export async function raiseMetronomeChallenge(
         [normalizedGoalId, normalizedFindingIds],
       );
     if (found.rowCount !== normalizedFindingIds.length) throw new MetronomeChallengeError("Metronome challenge cites a finding that does not exist for this Goal");
-    const identity = findingIdentity(normalizedGoalId, found.rows, normalizedEvidenceReferences);
+    const identity = findingIdentity(normalizedGoalId, found.rows, normalizedEvidenceReferences, substance.targetRef);
     const idempotencyKey = hash(identity);
-    const requestHash = hash({ identity, findingIds: [...normalizedFindingIds].sort(), reason: substance.reason.trim() });
+    const requestHash = hash({ identity, findingIds: [...normalizedFindingIds].sort(), reason: substance.reason.trim(), targetRef: substance.targetRef });
     const inserted = await client.query<ChallengeRow>(
       `INSERT INTO metronome_challenges
-         (challenge_id, goal_id, reason, evidence_references, status, raised_by, idempotency_key, request_hash)
-       VALUES ($1, $2, $3, $4::jsonb, 'open', $5, $6, $7)
+         (challenge_id, goal_id, reason, evidence_references, status, raised_by, idempotency_key, request_hash, target_ref)
+       VALUES ($1, $2, $3, $4::jsonb, 'open', $5, $6, $7, $8)
        ON CONFLICT (goal_id, idempotency_key) DO NOTHING
        RETURNING ${CHALLENGE_COLUMNS}, idempotency_key, request_hash`,
-      [randomUUID(), normalizedGoalId, substance.reason.trim(), JSON.stringify(normalizedEvidenceReferences), METRONOME_ACTOR_ID, idempotencyKey, requestHash],
+      [randomUUID(), normalizedGoalId, substance.reason.trim(), JSON.stringify(normalizedEvidenceReferences), METRONOME_ACTOR_ID, idempotencyKey, requestHash, substance.targetRef === undefined ? null : normalizeMetronomeIdentity(substance.targetRef)],
     );
     if (inserted.rowCount === 1) {
       for (const findingId of normalizedFindingIds) {

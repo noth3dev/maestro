@@ -4,17 +4,22 @@ import {
   assertValidMissionPersonaOverlay,
   deriveMissionPersonaOverlay,
   isMissionPersonaOverlayExpired,
+  isTerminalWorkerStatus,
   missionBundleSubstanceContentHash,
   PERSONA_AXES,
   type MissionBundle,
   type MissionBundleSubstance,
   type MissionPersonaOverlay,
   type MissionPersonaOverlayInputs,
+  type WorkerStatus,
+  WORKER_PROFILE_MAX_AXIS_DELTA,
 } from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
 import { readDepartmentPlan } from "./department-plan.js";
+import { readActivePersonaProfile } from "./persona-profile.js";
+import { getPermanentRole } from "./organization.js";
 
 export class MissionBundleError extends Error {}
 export class MissionBundleNotFoundError extends MissionBundleError {}
@@ -207,7 +212,7 @@ function personaOverlaySelectSql(): string {
  * this file's existing Mission Bundle pattern; a differing retry for the
  * same bundle is a conflict.
  */
-export async function issueMissionPersonaOverlay(pool: Pool, request: IssueMissionPersonaOverlayRequest): Promise<MissionPersonaOverlay> {
+export async function issueMissionPersonaOverlay(pool: Pool, request: IssueMissionPersonaOverlayRequest, proof: GoalLeaseProof, context: CouncilActorContext): Promise<MissionPersonaOverlay> {
   if (!Number.isSafeInteger(request.missionLifetimeMs) || request.missionLifetimeMs <= 0) {
     throw new MissionBundleError("Mission persona overlay requires a positive whole-millisecond missionLifetimeMs");
   }
@@ -216,10 +221,31 @@ export async function issueMissionPersonaOverlay(pool: Pool, request: IssueMissi
   try {
     await client.query("BEGIN"); open = true;
     const bundle = await client.query(
-      "SELECT 1 FROM mission_bundles WHERE council_id = $1 AND department_id = $2 AND plan_version = $3 AND item_id = $4 FOR UPDATE",
+      "SELECT substance FROM mission_bundles WHERE council_id = $1 AND department_id = $2 AND plan_version = $3 AND item_id = $4 FOR UPDATE",
       [request.councilId, request.departmentId, request.planVersion, request.itemId],
     );
     if (bundle.rowCount !== 1) throw new MissionBundleNotFoundError(`Mission Bundle not found: ${request.councilId}/${request.departmentId}/${request.planVersion}/${request.itemId}`);
+    const role = await getPermanentRole(pool, `head-${request.departmentId}`);
+    if (role === undefined) throw new MissionBundleError(`Department Head role not found: head-${request.departmentId}`);
+    const taskClass = (bundle.rows[0]!.substance as { role?: unknown }).role;
+    if (typeof taskClass !== "string" || taskClass.trim() === "") throw new MissionBundleError("Mission Bundle role is invalid");
+    const taskTemplate = (await readActivePersonaProfile(pool, role.roleId, taskClass)).persona;
+    const bounds = await client.query<{ axis: string; floor_value: string; ceiling_value: string }>("SELECT axis, floor_value::text, ceiling_value::text FROM role_persona_bounds WHERE role_id = $1", [role.roleId]);
+    if (bounds.rowCount !== PERSONA_AXES.length) throw new MissionBundleError("Reviewed role bounds are incomplete");
+    for (const bound of bounds.rows) {
+      const axis = bound.axis as typeof PERSONA_AXES[number];
+      const delta = persona[axis] - taskTemplate[axis];
+      if (Math.abs(delta) > WORKER_PROFILE_MAX_AXIS_DELTA + 1e-9) throw new MissionBundleError(`Mission persona overlay exceeds the ±0.15 worker derivation bound for ${axis}`);
+      if (persona[axis] < Number(bound.floor_value) || persona[axis] > Number(bound.ceiling_value)) throw new MissionBundleError(`Mission persona overlay violates reviewed role bounds for ${axis}`);
+    }
+    if (proof.ownerId.trim() === "" || !isValidFencingToken(proof.fencingToken)) throw new StaleGoalLeaseError(proof.goalId);
+    const council = await readHeadCouncil(pool, request.councilId);
+    if (council.goalId !== proof.goalId) throw new StaleGoalLeaseError(proof.goalId);
+    await lockGoalLease(client, proof);
+    const captured = council.snapshot.participants.find((participant) => (participant.departmentId ?? participant.participantId) === request.departmentId);
+    if (captured === undefined || !isAuthorizedHeadCouncilActor(context, captured)) throw new MissionBundleError("Mission persona overlay issuer is not bound to the captured Head identity and session");
+    const active = await client.query("SELECT 1 FROM goal_head_participations WHERE goal_id = $1 AND department_id = $2 AND status = 'active' AND active_session_ref = $3 FOR UPDATE", [council.goalId, request.departmentId, captured.sessionRef]);
+    if (active.rowCount !== 1) throw new MissionBundleError("Captured Head session is no longer authorized to issue Mission persona overlays");
     const existing = await client.query<MissionPersonaOverlayRow>(
       personaOverlaySelectSql() + " WHERE council_id = $1 AND department_id = $2 AND plan_version = $3 AND item_id = $4 FOR UPDATE",
       [request.councilId, request.departmentId, request.planVersion, request.itemId],
@@ -246,7 +272,16 @@ export async function issueMissionPersonaOverlay(pool: Pool, request: IssueMissi
   } catch (error) { if (open) await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 
-async function readStoredMissionPersonaOverlay(pool: Pool, councilId: string, departmentId: string, planVersion: number, itemId: string): Promise<MissionPersonaOverlay> {
+async function assertOverlayWorkerActive(pool: Pool, councilId: string, departmentId: string, planVersion: number, itemId: string, workerId?: string): Promise<void> {
+  const result = await pool.query<{ status: string }>(
+    `SELECT status FROM workers WHERE council_id = $1 AND department_id = $2 AND plan_version = $3 AND item_id = $4${workerId === undefined ? "" : " AND worker_id = $5"}`,
+    workerId === undefined ? [councilId, departmentId, planVersion, itemId] : [councilId, departmentId, planVersion, itemId, workerId],
+  );
+  if (result.rows.some((row) => isTerminalWorkerStatus(row.status as WorkerStatus))) throw new MissionPersonaOverlayExpiredError(`Mission Persona Overlay is unavailable after Worker termination: ${councilId}/${departmentId}/${planVersion}/${itemId}`);
+}
+
+async function readStoredMissionPersonaOverlay(pool: Pool, councilId: string, departmentId: string, planVersion: number, itemId: string, workerId?: string): Promise<MissionPersonaOverlay> {
+  await assertOverlayWorkerActive(pool, councilId, departmentId, planVersion, itemId, workerId);
   const result = await pool.query<MissionPersonaOverlayRow>(
     personaOverlaySelectSql() + " WHERE council_id = $1 AND department_id = $2 AND plan_version = $3 AND item_id = $4",
     [councilId, departmentId, planVersion, itemId],
@@ -277,9 +312,10 @@ export async function readMissionPersonaOverlay(
   planVersion: number,
   itemId: string,
   now: Date = new Date(),
+  workerId?: string,
 ): Promise<MissionPersonaOverlay> {
   return assertMissionPersonaOverlayAvailable(
-    await readStoredMissionPersonaOverlay(pool, councilId, departmentId, planVersion, itemId),
+    await readStoredMissionPersonaOverlay(pool, councilId, departmentId, planVersion, itemId, workerId),
     councilId, departmentId, planVersion, itemId, now,
   );
 }
@@ -292,6 +328,7 @@ export async function readActiveMissionPersonaOverlay(
   planVersion: number,
   itemId: string,
   now: Date = new Date(),
+  workerId?: string,
 ): Promise<MissionPersonaOverlay> {
-  return readMissionPersonaOverlay(pool, councilId, departmentId, planVersion, itemId, now);
+  return readMissionPersonaOverlay(pool, councilId, departmentId, planVersion, itemId, now, workerId);
 }

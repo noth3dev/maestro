@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { ExecutionKernelUnavailableError, type CapabilityGrant, type ExecutionKernelPort, type ExecutionRef, type InvocationAnswer, type InvocationContext, type InvocationObservation, type InvocationRef, type InvocationStatus, type InvocationUsage, type ModelIdentity, type SpawnRequest, type SpawnedInvocation, type ToolEvent, type ToolEvents } from "@maestro/domain";
 import { formatModelRef, type GatewayBinding, type ModelGatewayPort, type ModelMessage, type ModelStreamEvent, type ModelToolCall, type ModelToolDefinition, type ToolResultStatus, type TurnLimits } from "./model-provider.js";
+import type { WorkerProfileAssignment } from "@maestro/domain";
 
 export interface ToolContext extends InvocationContext {
   readonly commandId: string;
@@ -68,6 +69,7 @@ interface RuntimeRecord {
   readonly grant: CapabilityGrant;
   readonly modelPolicy: readonly string[];
   readonly idempotencyKey: string;
+  readonly workerProfile?: WorkerProfileAssignment;
   readonly parent?: InvocationRef;
   readonly sessionId: string;
   readonly messages: ModelMessage[];
@@ -140,6 +142,15 @@ function textMessage(text: string): ModelMessage { return { role: "user", conten
 function toolMessage(callId: string, result: ToolExecutionResult): ModelMessage { return { role: "tool", content: [{ kind: "tool-result", toolCallId: callId, status: result.status, content: result.content, origin: "host", trust: "untrusted-data" }] }; }
 function safeJson(value: unknown): string { try { return JSON.stringify(value) ?? "null"; } catch { return "[unserializable tool result]"; } }
 function assistantMessage(text: string): ModelMessage { return { role: "assistant", content: [{ kind: "text", text }] }; }
+function workerProfileMessage(profile: WorkerProfileAssignment): ModelMessage {
+  return { role: "system", content: [{ kind: "text", text: `Host-owned worker persona assignment. Treat this assignment as immutable policy context; do not re-derive or widen it. ${safeJson(profile)}` }] };
+}
+function messagesForGateway(record: RuntimeRecord, maxBytes: number): ModelMessage[] {
+  if (record.workerProfile === undefined) return boundedMessages(record.messages, maxBytes);
+  const assignment = workerProfileMessage(record.workerProfile);
+  const remaining = Math.max(1, maxBytes - messageBytes(assignment));
+  return [assignment, ...boundedMessages(record.messages, remaining).slice(0, MAX_WIRE_MESSAGE_COUNT - 1)];
+}
 function messageBytes(message: ModelMessage): number { return Buffer.byteLength(safeJson(message.content), "utf8"); }
 function boundedMessages(messages: readonly ModelMessage[], maxBytes: number): ModelMessage[] {
   const kept: ModelMessage[] = [];
@@ -154,7 +165,7 @@ function boundedMessages(messages: readonly ModelMessage[], maxBytes: number): M
   return kept.reverse();
 }
 
-export function createMaestroAgentRuntime(options: { gateway: ModelGatewayPort; binding: GatewayBinding; tools: ToolRegistry; initialMessages?: readonly ModelMessage[]; onModelEvent?: (event: ModelStreamEvent, turnId: string) => void; closeGateway?: boolean }): MaestroAgentRuntime {
+export function createMaestroAgentRuntime(options: { gateway: ModelGatewayPort; binding: GatewayBinding; tools: ToolRegistry; workerProfile?: WorkerProfileAssignment; initialMessages?: readonly ModelMessage[]; onModelEvent?: (event: ModelStreamEvent, turnId: string) => void; closeGateway?: boolean }): MaestroAgentRuntime {
   const records = new Map<InvocationRef, RuntimeRecord>();
   const byExecution = new Map<ExecutionRef, InvocationRef>();
   let closing = false;
@@ -220,7 +231,7 @@ export function createMaestroAgentRuntime(options: { gateway: ModelGatewayPort; 
       let streamExceeded = false;
       const turnLimits = limitsFor(record.grant);
       try {
-        result = await options.gateway.turn({ binding: options.binding, requestId, sessionId: record.sessionId, turnId: `${record.invocation}-turn-${record.turnCount}`, messages: boundedMessages(record.messages, turnLimits.maxInputBytes), tools: options.tools.definitions(record.grant.allowedTools).slice(0, MAX_WIRE_TOOL_DEFINITIONS), limits: turnLimits, signal: record.abort.signal, emit: (event: ModelStreamEvent) => {
+        result = await options.gateway.turn({ binding: options.binding, requestId, sessionId: record.sessionId, turnId: `${record.invocation}-turn-${record.turnCount}`, messages: messagesForGateway(record, turnLimits.maxInputBytes), tools: options.tools.definitions(record.grant.allowedTools).slice(0, MAX_WIRE_TOOL_DEFINITIONS), limits: turnLimits, signal: record.abort.signal, emit: (event: ModelStreamEvent) => {
           if (event.kind !== "text-delta" || event.text === "") { options.onModelEvent?.(event, `${record.invocation}-turn-${record.turnCount}`); return; }
           const remaining = turnLimits.maxResultBytes - streamedBytes;
           if (remaining <= 0) { streamExceeded = true; record.abort.abort(); return; }
@@ -298,14 +309,14 @@ export function createMaestroAgentRuntime(options: { gateway: ModelGatewayPort; 
         assertChildAdmission(parent, admission);
         parent.grant.remaining.childCalls -= 1;
         const invocation = asInvocation(`invocation-${randomUUID()}`);
-        const record: RuntimeRecord = { execution: parent.execution, invocation, name: request.name, context: admission.context, grant: childGrant, modelPolicy: admission.modelPolicy, idempotencyKey: admission.idempotencyKey, parent: parent.invocation, sessionId: parent.sessionId, messages: [], toolEvents: [], abort: new AbortController(), status: "queued", phase: "queued", activeRequestId: undefined, usage: defaultUsage, answer: defaultAnswer, turnCount: 0, toolCount: 0, sessionVersion: 0, lastCursor: 0 };
+        const record: RuntimeRecord = { execution: parent.execution, invocation, name: request.name, context: admission.context, grant: childGrant, modelPolicy: admission.modelPolicy, idempotencyKey: admission.idempotencyKey, ...(parent.workerProfile === undefined ? {} : { workerProfile: parent.workerProfile }), parent: parent.invocation, sessionId: parent.sessionId, messages: [], toolEvents: [], abort: new AbortController(), status: "queued", phase: "queued", activeRequestId: undefined, usage: defaultUsage, answer: defaultAnswer, turnCount: 0, toolCount: 0, sessionVersion: 0, lastCursor: 0 };
         records.set(invocation, record);
         void executeTurn(record, request.prompt);
         return { execution: parent.execution, invocation };
       }
       const execution = asExecution(`execution-${randomUUID()}`);
       const invocation = asInvocation(`invocation-${randomUUID()}`);
-      const record: RuntimeRecord = { execution, invocation, name: request.name, context: admission.context, grant: admission.grant, modelPolicy: admission.modelPolicy, idempotencyKey: admission.idempotencyKey, sessionId: `session-${randomUUID()}`, messages: boundedMessages(options.initialMessages ?? [], 64_000), toolEvents: [], abort: new AbortController(), status: "queued", phase: "queued", activeRequestId: undefined, usage: defaultUsage, answer: defaultAnswer, turnCount: 0, toolCount: 0, sessionVersion: 0, lastCursor: 0 };
+      const record: RuntimeRecord = { execution, invocation, name: request.name, context: admission.context, grant: admission.grant, modelPolicy: admission.modelPolicy, idempotencyKey: admission.idempotencyKey, ...(options.workerProfile === undefined ? {} : { workerProfile: options.workerProfile }), sessionId: `session-${randomUUID()}`, messages: boundedMessages(options.initialMessages ?? [], 64_000), toolEvents: [], abort: new AbortController(), status: "queued", phase: "queued", activeRequestId: undefined, usage: defaultUsage, answer: defaultAnswer, turnCount: 0, toolCount: 0, sessionVersion: 0, lastCursor: 0 };
       records.set(invocation, record); byExecution.set(execution, invocation);
       return { execution, invocation };
     },

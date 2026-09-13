@@ -67,6 +67,8 @@ import {
   DepartmentPlanSchema,
   ReviseDepartmentPlanInputSchema,
   CreateMissionBundleInputSchema,
+  IssueMissionPersonaOverlayInputSchema,
+  MissionPersonaOverlaySchema,
   MissionBundleSchema,
   SpawnWorkerInputSchema,
   WorkerSchema, QueuedWorkerAdmissionSchema,
@@ -89,6 +91,7 @@ import {
   MetronomeScanInputSchema,
   MetronomeFindingListSchema,
   RaiseMetronomeChallengeInputSchema,
+  WorkerOverlayChallengeInputSchema,
   MetronomeCorrectionInputSchema,
   MetronomeSafePauseInputSchema,
   MetronomeResolutionInputSchema,
@@ -130,6 +133,7 @@ export type { CouncilService } from "./council-service.js";
 export type { CapabilityApprovalService } from "./capability-approval-service.js";
 export type { EvidenceCaptureService } from "./evidence-capture-service.js";
 export type { ConcertmasterReportService } from "./concertmaster-report-service.js";
+export type { PersonaGoalEvidenceService } from "./persona-goal-evidence-service.js";
 import {
   type DepartmentPlanService,
 } from "./department-plan-service.js";
@@ -157,6 +161,7 @@ import {
   type GitIntegrationService,
 } from "./git-integration-service.js";
 import type { CertificationService } from "./certification-service.js";
+import type { PersonaGoalEvidenceService } from "./persona-goal-evidence-service.js";
 import type { MetronomeService } from "./metronome-service.js";
 import {
   type EncoreService,
@@ -252,13 +257,14 @@ async function waitForAccountLoginStart(store: AccountLoginStore, operatorId: st
   throw new Error("account login start is still in progress");
 }
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, evidenceCaptureService, concertmasterReportService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, evidenceCaptureService, personaGoalEvidenceService, concertmasterReportService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
   criticalActionService?: CriticalActionService;
   capabilityApprovalService?: CapabilityApprovalService;
   evidenceCaptureService?: EvidenceCaptureService;
+  personaGoalEvidenceService?: PersonaGoalEvidenceService;
   concertmasterReportService?: ConcertmasterReportService;
   pollingScheduler?: PollingScheduler;
   readStateService?: ReadStateService;
@@ -327,6 +333,9 @@ export function buildServer({ goalService, authenticator, eventService, critical
   const evidenceCapture = evidenceCaptureService ?? {
     capture: async () => { throw new DurableStoreUnavailableError(); },
   } satisfies EvidenceCaptureService;
+  const personaGoalEvidence = personaGoalEvidenceService ?? {
+    capture: async () => { throw new DurableStoreUnavailableError(); },
+  } satisfies PersonaGoalEvidenceService;
   const concertmasterReports = concertmasterReportService ?? {
     generate: async () => { throw new DurableStoreUnavailableError(); },
   } satisfies ConcertmasterReportService;
@@ -356,6 +365,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
   const missionBundles = missionBundleService ?? {
     create: async () => { throw new DurableStoreUnavailableError(); },
     get: async () => { throw new DurableStoreUnavailableError(); },
+    issuePersonaOverlay: async () => { throw new DurableStoreUnavailableError(); },
   } satisfies MissionBundleService;
   const workers = workerService ?? {
     spawn: async () => { throw new DurableStoreUnavailableError(); },
@@ -382,6 +392,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
     requestCorrection: async () => { throw new DurableStoreUnavailableError(); },
     requestSafePause: async () => { throw new DurableStoreUnavailableError(); },
     resolve: async () => { throw new DurableStoreUnavailableError(); },
+    challengeWorkerOverlay: async () => { throw new DurableStoreUnavailableError(); },
   } satisfies MetronomeService;
   const encore = encoreService ?? { review: async () => { throw new DurableStoreUnavailableError(); } } satisfies EncoreService;
   const discordSignal = discordSignalService ?? { record: async () => { throw new DurableStoreUnavailableError(); } } satisfies DiscordSignalService;
@@ -444,6 +455,12 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const operatorContext = requestOperator(request as { operator?: OperatorContext });
     const session = await capabilityApprovals.selectFullAccessMode({ ...input, goalId }, { actorId: operatorContext.operatorId, kind: "user", projectId: input.projectId, goalId, active: true });
     return reply.status(200).send(CapabilitySessionSchema.parse({ ...session, selectedAt: session.selectedAt.toISOString() }));
+  });
+
+  app.post("/v1/goals/:goalId/persona-evidence", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const evidence = await personaGoalEvidence.capture(goalId, request.body, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(201).send(evidence);
   });
 
   app.post("/v1/goals/:goalId/evidence-records", async (request, reply) => {
@@ -714,6 +731,17 @@ export function buildServer({ goalService, authenticator, eventService, critical
     return reply.status(200).send(MissionBundleSchema.parse(bundle));
   });
 
+  app.post("/v1/councils/:councilId/departments/:departmentId/mission-bundles/:itemId/persona-overlay", async (request, reply) => {
+    const params = request.params as { councilId?: unknown; departmentId?: unknown; itemId?: unknown };
+    const councilId = parse(UuidSchema, params.councilId);
+    const departmentId = parseDepartmentId(params.departmentId);
+    const itemId = parseItemId(params.itemId);
+    const input = parse(IssueMissionPersonaOverlayInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const overlay = await missionBundles.issuePersonaOverlay(councilId, departmentId, itemId, input.planVersion, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(201).send(MissionPersonaOverlaySchema.parse(overlay));
+  });
+
   app.post("/v1/councils/:councilId/departments/:departmentId/workers", async (request, reply) => {
     const params = request.params as { councilId?: unknown; departmentId?: unknown };
     const councilId = parse(UuidSchema, params.councilId);
@@ -802,6 +830,14 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const input = parse(RaiseMetronomeChallengeInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
     const result = await metronome.raise(goalId, input, commandId);
+    return reply.status(201).send(MetronomeChallengeSchema.parse(result));
+  });
+
+  app.post("/v1/goals/:goalId/metronome/worker-overlays/challenges", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const input = parse(WorkerOverlayChallengeInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const result = await metronome.challengeWorkerOverlay(goalId, input, commandId);
     return reply.status(201).send(MetronomeChallengeSchema.parse(result));
   });
 
