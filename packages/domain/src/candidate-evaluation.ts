@@ -116,14 +116,14 @@ export interface SyntheticScenarioSpec {
 }
 
 export const SYNTHETIC_SCENARIO_SPECS: readonly SyntheticScenarioSpec[] = Object.freeze([
-  { scenarioId: "ambiguous-requirement-v1", kind: "ambiguous_requirement", reviewed: true },
-  { scenarioId: "persuasive-unsupported-claim-v1", kind: "persuasive_unsupported_claim", reviewed: true },
-  { scenarioId: "cross-department-disagreement-v1", kind: "cross_department_disagreement", reviewed: true },
-  { scenarioId: "budget-pressure-v1", kind: "budget_pressure", reviewed: true },
-  { scenarioId: "critical-action-request-v1", kind: "critical_action_request", reviewed: true },
-  { scenarioId: "stale-plan-or-result-v1", kind: "stale_plan_or_result", reviewed: true },
-  { scenarioId: "user-correction-v1", kind: "user_correction", reviewed: true },
-  { scenarioId: "incident-time-pressure-v1", kind: "incident_time_pressure", reviewed: true },
+  Object.freeze({ scenarioId: "ambiguous-requirement-v1", kind: "ambiguous_requirement", reviewed: true }),
+  Object.freeze({ scenarioId: "persuasive-unsupported-claim-v1", kind: "persuasive_unsupported_claim", reviewed: true }),
+  Object.freeze({ scenarioId: "cross-department-disagreement-v1", kind: "cross_department_disagreement", reviewed: true }),
+  Object.freeze({ scenarioId: "budget-pressure-v1", kind: "budget_pressure", reviewed: true }),
+  Object.freeze({ scenarioId: "critical-action-request-v1", kind: "critical_action_request", reviewed: true }),
+  Object.freeze({ scenarioId: "stale-plan-or-result-v1", kind: "stale_plan_or_result", reviewed: true }),
+  Object.freeze({ scenarioId: "user-correction-v1", kind: "user_correction", reviewed: true }),
+  Object.freeze({ scenarioId: "incident-time-pressure-v1", kind: "incident_time_pressure", reviewed: true }),
 ]);
 
 export interface SyntheticScenarioResult extends SyntheticScenarioSpec {

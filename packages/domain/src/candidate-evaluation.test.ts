@@ -87,6 +87,7 @@ describe("candidate evaluation stages", () => {
 
   it("runs all eight reviewed synthetic adversarial scenario kinds with stable identities", () => {
     expect(SYNTHETIC_SCENARIO_SPECS).toHaveLength(8);
+    expect(SYNTHETIC_SCENARIO_SPECS.every((scenario) => Object.isFrozen(scenario))).toBe(true);
     expect(new Set(SYNTHETIC_SCENARIO_SPECS.map((scenario) => scenario.kind)).size).toBe(8);
     const result = runSyntheticAdversarialScenarios(candidate(), {
       scenarios: SYNTHETIC_SCENARIO_SPECS,
