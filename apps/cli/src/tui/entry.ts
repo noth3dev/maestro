@@ -45,7 +45,7 @@ import { mergeEvents, runActivityStream, subscribeToEvents } from "./activity-st
 import { addConversationMessage, applyConversationEvent, createConversationTranscript, isTerminalConversationEvent, renderUnifiedStreamEntries, type ConversationTranscriptState } from "./conversation-transcript.js";
 import { pendingDecisionsFromActivity, toActivityTimelineEvent } from "./components/activity-timeline.js";
 import { createDecisionRegion, createDynamicRegion, createStatusRegion } from "./components/regions.js";
-import { createSplashController, renderPendingDecisionDetails, renderTuiFooter } from "./components/shell.js";
+import { createSplashController, renderPendingDecisionDetails, renderTuiFooter, type TuiShellState } from "./components/shell.js";
 import { getModeAccentProgress, setModeAccentProgress, tuiTheme, type TranscriptLine } from "./theme.js";
 
 import { copyToClipboard, openExternalUrl } from "../external-url.js";
@@ -54,15 +54,53 @@ import { ConversationViewport, FramedComposer } from "./components/conversation-
 
 export { type InteractiveTuiOptions } from "./startup.js";
 import { initializeTui, shouldAutoBootstrapLocal, type InteractiveTuiOptions } from "./startup.js";
+import type { LocalBootstrapStepEvent } from "./local-bootstrap.js";
 import { createTuiRuntime } from "./runtime.js";
 
 export async function startInteractiveTui(options: InteractiveTuiOptions): Promise<number> {
-  const initialized = await initializeTui(options);
+  const terminal = new ProcessTerminal();
+  const tui = new TuiAltScreen(terminal, true);
+  const liveState: TuiShellState = {
+    workspace: { cwd: options.cwd, gitRoot: options.cwd },
+    connection: { kind: "connecting" },
+    goal: { kind: "empty" },
+    workers: { kind: "empty" },
+    approvals: { kind: "empty" },
+    budget: { kind: "empty" },
+  };
+  const splash = createSplashController();
+  const updateSetupStep = (event: LocalBootstrapStepEvent): void => {
+    const steps = [...(liveState.setupSteps ?? [])];
+    const existing = steps.findIndex((step) => step.step === event.step);
+    if (existing === -1) steps.push(event);
+    else steps[existing] = event;
+    liveState.setupSteps = steps;
+    liveState.connection = event.status === "failed"
+      ? { kind: "setup-required", message: event.message ?? `${event.step} failed` }
+      : { kind: "setup-required", message: `Local setup · ${event.step}` };
+    tui.requestRender(true);
+    options.onSetupStep?.(event);
+  };
+  const statusRegion = createStatusRegion({ state: liveState, height: () => terminal.rows, splash });
+  tui.setLayoutRoot(new VStack([{ component: statusRegion, basis: "auto", shrink: 0, minSize: 1 }]));
+  let tuiStarted = false;
+  const startTui = (): void => {
+    if (tuiStarted) return;
+    tuiStarted = true;
+    tui.start();
+  };
+  startTui();
+  let initialized: Awaited<ReturnType<typeof initializeTui>>;
+  try {
+    initialized = await initializeTui({ ...options, onSetupStep: updateSetupStep });
+  } catch (error) {
+    tui.stop();
+    throw error;
+  }
+  Object.assign(liveState, initialized.state);
   let { workspace, startupError, connection, session, project, projectDiscoveryNotice, client } = initialized;
-  const { state } = initialized;
+  const state = liveState;
   return await new Promise<number>((resolve) => {
-    const terminal = new ProcessTerminal();
-    const tui = new TuiAltScreen(terminal, true);
     const editor = new SecretEditor(tui, editorTheme, { paddingX: 2, autocompleteMaxVisible: 6 });
     const inputPanel = new Box(1, 0, tuiTheme.inputSurface);
     inputPanel.addChild(
@@ -81,7 +119,6 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     );
     let conversation: ConversationTranscriptState = createConversationTranscript();
     let activity: GoalEvent[] = [];
-    const splash = createSplashController();
     let recovery: RecoverySummary = reconcileTuiSession(workspace.cwd, session);
     let pendingConfirmation: { summary: ApprovalDialogSummary; resolve: (decision: ConfirmationResult) => void } | undefined;
     const syncPendingDecisionState = (): void => {
@@ -114,7 +151,6 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       if (model === undefined) delete state.model;
       else state.model = model;
     };
-    const statusRegion = createStatusRegion({ state, height: () => terminal.rows, splash });
     const decisionRegion = createDecisionRegion({ state, height: () => terminal.rows });
     const noticeRegion = createDynamicRegion(() => {
       if (terminal.rows < 16) return [];
@@ -340,6 +376,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           connection = await resolveLocalConnection({
             env: options.env,
             ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }),
+            onStep: updateSetupStep,
           });
           if (connection.kind !== "configured") {
             state.connection = { kind: "setup-required", message: connection.reason };
@@ -897,7 +934,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       }
       return undefined;
     });
-    const runtime = createTuiRuntime({ start: () => tui.start(), stop });
+    const runtime = createTuiRuntime({ start: startTui, stop });
     runtime.start();
     if (projectDiscoveryNotice !== undefined) appendWarning(projectDiscoveryNotice);
     void refreshDashboard();

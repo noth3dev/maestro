@@ -2,13 +2,18 @@ import { createApiClient, type ApiClient } from "@maestro/api-client";
 import { resolveWorkspace, type Workspace } from "./workspace.js";
 import { resolveConnection } from "./connection.js";
 import { ensureLocalControlPlane } from "./local-control-plane.js";
-import { resolveLocalConnection } from "./local-bootstrap.js";
+import { resolveLocalConnection, type LocalBootstrapStepEvent } from "./local-bootstrap.js";
 import { discoverWorkspaceProject, discoverWorkspaceProjectFromControlPlane } from "./commands/read-commands.js";
 import { loadWorkspaceSession, attachWorkspaceSession, saveWorkspaceSession } from "./session.js";
 import type { TuiShellState } from "./components/shell.js";
 import type { CliIo } from "../main.js";
 
-export interface InteractiveTuiOptions { cwd: string; env: Record<string, string | undefined>; io: CliIo; }
+export interface InteractiveTuiOptions {
+  cwd: string;
+  env: Record<string, string | undefined>;
+  io: CliIo;
+  onSetupStep?: (event: LocalBootstrapStepEvent) => void;
+}
 
 export function shouldAutoBootstrapLocal(env: Record<string, string | undefined>): boolean {
   return (env.MAESTRO_API_URL?.trim() ?? "") === "" && (env.MAESTRO_API_TOKEN?.trim() ?? "") === "" && env.MAESTRO_DISABLE_LOCAL_AUTOSTART !== "true";
@@ -33,11 +38,19 @@ export async function initializeTui(options: InteractiveTuiOptions): Promise<{
     workspace = { cwd: options.cwd };
     startupError = error instanceof Error ? error.message : "Workspace could not be resolved";
   }
+  const setupSteps: LocalBootstrapStepEvent[] = [];
+  const onSetupStep = (event: LocalBootstrapStepEvent): void => {
+    const existing = setupSteps.findIndex((step) => step.step === event.step);
+    if (existing === -1) setupSteps.push(event);
+    else setupSteps[existing] = event;
+    options.onSetupStep?.(event);
+  };
   let connection = await resolveConnection(options.env);
   if (connection.kind !== "configured" && shouldAutoBootstrapLocal(options.env)) {
     connection = await resolveLocalConnection({
       env: options.env,
       ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }),
+      onStep: onSetupStep,
     });
   }
   const controlPlane =
@@ -76,6 +89,7 @@ export async function initializeTui(options: InteractiveTuiOptions): Promise<{
   const initialModel = options.env.MAESTRO_MODEL?.trim() || session?.model;
   const state: TuiShellState = {
     workspace,
+    ...(setupSteps.length === 0 ? {} : { setupSteps }),
     ...(initialModel === undefined ? {} : { model: initialModel }),
     mode: "maestro",
     connection:

@@ -1,4 +1,5 @@
 import type { Workspace } from "../workspace.js";
+import { LOCAL_BOOTSTRAP_STEP_ORDER, type LocalBootstrapStepEvent, type LocalBootstrapStepName } from "../local-bootstrap.js";
 import { fitPlain, tuiTheme } from "../theme.js";
 
 export type AsyncState<T> = { kind: "loading" } | { kind: "empty" } | { kind: "error"; message: string } | { kind: "value"; value: T };
@@ -11,9 +12,12 @@ export interface PendingDecision {
   readonly actor: string;
 }
 
+export type SetupStep = LocalBootstrapStepEvent;
+
 export interface TuiShellState {
   workspace: Workspace;
   model?: string;
+  setupSteps?: readonly SetupStep[];
   mode?: "maestro" | "flashmob";
   working?: boolean;
   connection:
@@ -133,6 +137,32 @@ function renderSplash(width: number): string[] {
   ];
 }
 
+const setupStepLabels: Record<LocalBootstrapStepName, string> = {
+  "docker-check": "Docker check",
+  "postgres-ready": "PostgreSQL ready",
+  migrations: "Migrations",
+  "control-plane-up": "Control Plane",
+  "model-gateway-up": "Model gateway",
+};
+
+function setupStepGlyph(status: SetupStep["status"]): string {
+  if (status === "completed") return "✓";
+  if (status === "started") return "›";
+  if (status === "failed") return "×";
+  return "·";
+}
+
+export function renderSetupSteps(state: TuiShellState, width: number): string[] {
+  if (state.connection.kind === "connected") return [];
+  const latest = new Map<LocalBootstrapStepName, SetupStep>();
+  for (const step of state.setupSteps ?? []) latest.set(step.step, step);
+  return LOCAL_BOOTSTRAP_STEP_ORDER.map((stepName) => {
+    const step = latest.get(stepName) ?? { step: stepName, status: "pending" as const };
+    const message = step.status === "failed" && step.message !== undefined ? ` · ${step.message}` : "";
+    return tuiTheme.text(fitPlain(`${setupStepGlyph(step.status)} ${setupStepLabels[step.step]}${message}`, width));
+  });
+}
+
 export interface SplashController {
   visible(): boolean;
   dismiss(): void;
@@ -173,7 +203,7 @@ export function renderTuiLayout(state: TuiShellState, width: number, height: num
 /** Fixed status chrome rendered above the independently scrollable conversation viewport. */
 export function renderStatusRegion(state: TuiShellState, width: number, height = 30, options: TuiLayoutOptions = {}): string[] {
   const frame = renderTuiLayout(state, width, height, options);
-  return [...frame.splash, ...frame.status];
+  return [...frame.splash, ...renderSetupSteps(state, width), ...frame.status];
 }
 
 /** Compatibility wrapper for callers that still need the complete fixed chrome. */
