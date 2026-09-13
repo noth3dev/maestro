@@ -2060,3 +2060,7 @@ All downstream routing documentation must use this contract and must not restore
 - Fresh exact-HEAD independent review passed at `8fae11e` after the candidate SQL/domain parity fixes. The reviewer noted that a direct secured-database caller could supply an arbitrary `created_at`; the public persistence API uses the database default and the planned S2 RED specification does not expose a caller-controlled timestamp. This is classified as **out-of-scope hardening; stop here and merge**, not an S2 blocker.
 - The first full serialized PostgreSQL run exposed one unrelated test-fixture query that counted `devices` and `device_policies` across all isolated schemas. The test now joins `pg_namespace` and filters `current_schema()` only. No application code or `testbed/` file was changed.
 - Final rerun passed 230/230 files and 1588/1588 tests.
+
+
+- 2026-09-13 Plan 6 §S2 post-merge verification: main initially had a stale local `node_modules/@maestro/domain` symlink targeting the deleted S1 worktree, so the first build failed with missing `@maestro/domain` types. Repointing the ignored local symlink to `../../packages/domain` restored the intended workspace dependency; build/lint/diff-check then passed. This was environment cleanup, not a tracked code change.
+- 2026-09-13 Plan 6 §S2 post-merge full verification passed 230/230 files and 1588/1588 tests.
