@@ -579,6 +579,23 @@ export const CreateMissionBundleInputSchema = z.object({ projectId: UuidSchema, 
 type CreateMissionBundleInputSchemaOutput = z.infer<typeof CreateMissionBundleInputSchema>;
 export type CreateMissionBundleInput = Omit<CreateMissionBundleInputSchemaOutput, "substance"> & { readonly substance: MissionBundleSubstance };
 
+const PersonaProfileInputSchema = z.object({
+  agreeableness: z.number().finite().min(0).max(1), extraversion: z.number().finite().min(0).max(1), imagination: z.number().finite().min(0).max(1),
+  realism: z.number().finite().min(0).max(1), conscientiousness: z.number().finite().min(0).max(1), caution: z.number().finite().min(0).max(1),
+  initiative: z.number().finite().min(0).max(1), empathy: z.number().finite().min(0).max(1), adaptability: z.number().finite().min(0).max(1), sociability: z.number().finite().min(0).max(1),
+}).strict();
+const MissionPersonaOverlayInputsSchema = z.object({
+  departmentStyle: PersonaProfileInputSchema, headChoice: PersonaProfileInputSchema,
+  taskAmbiguity: z.number().finite().min(0).max(1), risk: z.number().finite().min(0).max(1), collaborationDemand: z.number().finite().min(0).max(1), evidenceBurden: z.number().finite().min(0).max(1),
+}).strict();
+export const IssueMissionPersonaOverlayInputSchema = z.object({ projectId: UuidSchema, inputs: MissionPersonaOverlayInputsSchema, missionLifetimeMs: z.number().int().positive() }).strict();
+export type IssueMissionPersonaOverlayInput = z.infer<typeof IssueMissionPersonaOverlayInputSchema>;
+export const MissionPersonaOverlaySchema = z.object({
+  councilId: z.string().min(1), departmentId: z.string().min(1), planVersion: z.number().int().positive(), itemId: z.string().min(1),
+  persona: PersonaProfileInputSchema, issuedAt: z.string().datetime(), expiresAt: z.string().datetime(),
+}).strict();
+export type MissionPersonaOverlay = z.infer<typeof MissionPersonaOverlaySchema>;
+
 export const WorkerSchema = z.object({
   workerId: UuidSchema, councilId: UuidSchema, departmentId: z.string().min(1), planVersion: z.number().int().positive(), itemId: z.string().min(1),
   bundleContentHash: z.string().regex(/^[a-f0-9]{64}$/), attempt: z.number().int().positive(), executionRef: z.string().min(1), invocationRef: z.string().min(1),

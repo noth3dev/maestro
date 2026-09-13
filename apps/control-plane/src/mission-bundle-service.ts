@@ -1,10 +1,12 @@
-import type { CreateMissionBundleInput, MissionBundle } from "@maestro/contracts";
-import { assertProjectRole, createMissionBundle, readMissionBundle, readDepartmentPlan, readHeadCouncil, type OperatorContext } from "@maestro/persistence";
+import type { CreateMissionBundleInput, IssueMissionPersonaOverlayInput, MissionBundle } from "@maestro/contracts";
+import { assertProjectRole, createMissionBundle, issueMissionPersonaOverlay, readMissionBundle, readDepartmentPlan, readHeadCouncil, type OperatorContext } from "@maestro/persistence";
+import type { MissionPersonaOverlay } from "@maestro/domain";
 import type { Pool } from "pg";
 
 export interface MissionBundleService {
   create(councilId: string, departmentId: string, itemId: string, input: CreateMissionBundleInput, commandId: string, operator: OperatorContext): Promise<MissionBundle>;
   get(councilId: string, departmentId: string, planVersion: number, itemId: string, projectId: string): Promise<MissionBundle>;
+  issuePersonaOverlay(councilId: string, departmentId: string, itemId: string, planVersion: number, input: IssueMissionPersonaOverlayInput, commandId: string, operator: OperatorContext): Promise<MissionPersonaOverlay>;
 }
 export interface MissionBundleServiceDependencies {
   pool: Pool;
@@ -36,6 +38,14 @@ export function createMissionBundleService(deps: MissionBundleServiceDependencie
       const council = await readHeadCouncil(deps.pool, councilId);
       if (council.snapshot.projectId !== projectId) throw new MissionBundleProjectMismatchError();
       return bundle;
+    },
+    async issuePersonaOverlay(councilId, departmentId, itemId, planVersion, input, commandId, operator) {
+      await assertProjectRole(deps.pool, operator.operatorId, input.projectId, `head-${departmentId}`);
+      const plan = await readDepartmentPlan(deps.pool, councilId, departmentId);
+      if (plan.version !== planVersion || plan.projectId !== input.projectId) throw new MissionBundleProjectMismatchError();
+      const { council, context } = await headContext(councilId, departmentId, commandId);
+      if (council.snapshot.projectId !== input.projectId) throw new MissionBundleProjectMismatchError();
+      return deps.withGoalLease(plan.goalId, (proof) => issueMissionPersonaOverlay(deps.pool, { councilId, departmentId, planVersion, itemId, inputs: input.inputs, missionLifetimeMs: input.missionLifetimeMs }, proof, context));
     },
   };
 }

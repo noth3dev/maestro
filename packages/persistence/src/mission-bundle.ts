@@ -207,7 +207,7 @@ function personaOverlaySelectSql(): string {
  * this file's existing Mission Bundle pattern; a differing retry for the
  * same bundle is a conflict.
  */
-export async function issueMissionPersonaOverlay(pool: Pool, request: IssueMissionPersonaOverlayRequest): Promise<MissionPersonaOverlay> {
+export async function issueMissionPersonaOverlay(pool: Pool, request: IssueMissionPersonaOverlayRequest, proof?: GoalLeaseProof, context?: CouncilActorContext): Promise<MissionPersonaOverlay> {
   if (!Number.isSafeInteger(request.missionLifetimeMs) || request.missionLifetimeMs <= 0) {
     throw new MissionBundleError("Mission persona overlay requires a positive whole-millisecond missionLifetimeMs");
   }
@@ -215,6 +215,16 @@ export async function issueMissionPersonaOverlay(pool: Pool, request: IssueMissi
   const client = await pool.connect(); let open = false;
   try {
     await client.query("BEGIN"); open = true;
+    if (proof !== undefined || context !== undefined) {
+      if (proof === undefined || context === undefined || proof.ownerId.trim() === "" || !isValidFencingToken(proof.fencingToken)) throw new StaleGoalLeaseError(proof?.goalId ?? "");
+      const council = await readHeadCouncil(pool, request.councilId);
+      if (council.goalId !== proof.goalId) throw new StaleGoalLeaseError(proof.goalId);
+      await lockGoalLease(client, proof);
+      const captured = council.snapshot.participants.find((participant) => (participant.departmentId ?? participant.participantId) === request.departmentId);
+      if (captured === undefined || !isAuthorizedHeadCouncilActor(context, captured)) throw new MissionBundleError("Mission persona overlay issuer is not bound to the captured Head identity and session");
+      const active = await client.query("SELECT 1 FROM goal_head_participations WHERE goal_id = $1 AND department_id = $2 AND status = 'active' AND active_session_ref = $3 FOR UPDATE", [council.goalId, request.departmentId, captured.sessionRef]);
+      if (active.rowCount !== 1) throw new MissionBundleError("Captured Head session is no longer authorized to issue Mission persona overlays");
+    }
     const bundle = await client.query(
       "SELECT 1 FROM mission_bundles WHERE council_id = $1 AND department_id = $2 AND plan_version = $3 AND item_id = $4 FOR UPDATE",
       [request.councilId, request.departmentId, request.planVersion, request.itemId],

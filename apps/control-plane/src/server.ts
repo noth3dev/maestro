@@ -357,6 +357,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
   const missionBundles = missionBundleService ?? {
     create: async () => { throw new DurableStoreUnavailableError(); },
     get: async () => { throw new DurableStoreUnavailableError(); },
+    issuePersonaOverlay: async () => { throw new DurableStoreUnavailableError(); },
   } satisfies MissionBundleService;
   const workers = workerService ?? {
     spawn: async () => { throw new DurableStoreUnavailableError(); },
