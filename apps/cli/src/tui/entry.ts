@@ -9,7 +9,7 @@ import {
   VStack,
   matchesKey,
 } from "@earendil-works/pi-tui";
-import { createApiClient, type GoalEvent } from "@maestro/api-client";
+import { createApiClient, type ApiClient, type GoalEvent } from "@maestro/api-client";
 import type { ConversationEvent, ModelCatalogEntry } from "@maestro/contracts";
 
 import { resolveWorkspace } from "./workspace.js";
@@ -76,6 +76,26 @@ export function createAutomaticProviderSignInGate(): { claim: () => boolean } {
       return true;
     },
   };
+}
+
+export async function runAutomaticProviderSignInOffer(options: {
+  client: Pick<ApiClient, "listModels">;
+  getConfiguredModel: () => string | undefined;
+  gate: { claim: () => boolean };
+  isCurrent: () => boolean;
+  isManualLoginActive: () => boolean;
+  onOffer: () => void;
+}): Promise<void> {
+  if (!options.isCurrent() || options.isManualLoginActive()) return;
+  let models: readonly Pick<ModelCatalogEntry, "identity">[];
+  try {
+    models = await options.client.listModels();
+  } catch {
+    return;
+  }
+  if (!options.isCurrent() || options.isManualLoginActive() || !shouldOfferAutomaticProviderSignIn(models, options.getConfiguredModel())) return;
+  if (!options.gate.claim() || !options.isCurrent() || options.isManualLoginActive()) return;
+  options.onOffer();
 }
 import type { LocalBootstrapStepEvent } from "./local-bootstrap.js";
 import { createTuiRuntime } from "./runtime.js";
@@ -169,6 +189,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let accountLoginController: AbortController | undefined;
     let accountLoginId: string | undefined;
     let accountLoginUrl: string | undefined;
+    let connectionGeneration = client === undefined ? 0 : 1;
     const automaticProviderSignInGate = createAutomaticProviderSignInGate();
     const syncModelState = (): void => {
       const model = options.env.MAESTRO_MODEL?.trim() || session?.model;
@@ -382,6 +403,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       });
     };
     const retryConnection = async () => {
+      connectionGeneration += 1;
       appendWarning("Retrying Maestro startup checks…");
       if (startupError !== undefined) {
         try {
@@ -500,20 +522,24 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       } catch (error) { if (!controller.signal.aborted) appendError(`Account login failed: ${error instanceof Error ? error.message : "request failed"}`); }
       finally { if (accountLoginController === controller) { accountLoginController = undefined; accountLoginId = undefined; accountLoginUrl = undefined; accountLoginSelection = undefined; accountLoginState = undefined; editor.hidden = false; render(); } }
     };
-    const offerAutomaticProviderSignIn = async (): Promise<void> => {
-      if (client === undefined || accountLoginSelection !== undefined || !automaticProviderSignInGate.claim()) return;
-      try {
-        const models = await client.listModels();
-        if (accountLoginSelection !== undefined || !shouldOfferAutomaticProviderSignIn(models, options.env.MAESTRO_MODEL?.trim() || session?.model)) return;
-        accountLoginSelection = 0;
-        accountLoginState = "selecting";
-        editor.hidden = true;
-        editor.setText("");
-        render();
-      } catch {
-        // A connected Control Plane with a temporarily unavailable gateway is
-        // not evidence that credentials are absent. Leave the normal shell usable.
-      }
+    const offerAutomaticProviderSignIn = (): void => {
+      if (client === undefined) return;
+      const candidateClient = client;
+      const candidateGeneration = connectionGeneration;
+      void runAutomaticProviderSignInOffer({
+        client: candidateClient,
+        getConfiguredModel: () => options.env.MAESTRO_MODEL?.trim() || session?.model,
+        gate: automaticProviderSignInGate,
+        isCurrent: () => !stopped && client === candidateClient && connectionGeneration === candidateGeneration && state.connection.kind === "connected",
+        isManualLoginActive: () => pendingProviderLogin !== undefined || accountLoginSelection !== undefined,
+        onOffer: () => {
+          accountLoginSelection = 0;
+          accountLoginState = "selecting";
+          editor.hidden = true;
+          editor.setText("");
+          render();
+        },
+      });
     };
 
     const submit = async (text: string) => {
