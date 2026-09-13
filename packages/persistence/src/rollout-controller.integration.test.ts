@@ -131,6 +131,30 @@ const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineer
     await expect(reconcileExpiredBoundedRollouts(pool, proof, actor)).resolves.toEqual([expect.objectContaining({ rolloutId: rollout.rolloutId, status: "rolled_back", activeCandidateId: candidate.rollbackTarget.candidateId, activeVersion: candidate.rollbackTarget.version })]);
   });
 
+  it("runs a routing capability candidate through bounded rollback without mutating the human model baseline", async () => {
+    const routingRollbackTargetId = randomUUID();
+    await pool.query("INSERT INTO improvement_candidate_rollback_targets (target_candidate_id, target_version, project_id, goal_id, content_hash) VALUES ($1, 1, $2, $3, $4)", [routingRollbackTargetId, projectId, goalId, "b".repeat(64)]);
+    const routingInput: ImprovementCandidateInput = {
+      schemaVersion: 1, projectId, goalId, kind: "routing_capability_axis", target: { routingTarget: "provider/fast" },
+      changes: [{ axis: "coding", currentValue: 120, proposedValue: 140 }], sourceEvidenceIds: [digestId],
+      evidencePattern: "Comparable Goals show a repeatable coding verification gap.", predictedEffect: "The local proposal can be evaluated without changing model_map.",
+      expectedMetrics: [{ name: "verification_failures", unit: "count", direction: "decrease", target: 0 }], protectedMetrics: [{ name: "correctness", unit: "score", minimum: 0.9 }],
+      scenarioSuite: ["routing-capability-v1"], scenarioSuiteHash: improvementCandidateScenarioSuiteHash(["routing-capability-v1"]), confidence: 0.84,
+      dataSufficiency: { episodeCount: 3, comparableGoalCount: 2 }, rollbackTarget: { candidateId: routingRollbackTargetId, version: 1, contentHash: "b".repeat(64) },
+    };
+    const initial = await recordImprovementCandidate(pool, routingInput, proof, candidateAuthor, `routing-candidate-${randomUUID()}`);
+    const evaluated = await transitionImprovementCandidate(pool, initial.candidateId, "evaluated", proof, candidateAuthor, `routing-evaluated-${randomUUID()}`);
+    const judged = await transitionImprovementCandidate(pool, evaluated.candidateId, "judged", proof, candidateAuthor, `routing-judged-${randomUUID()}`);
+    await enableImprovementClass(pool, projectId, "routing_capability_axis", proof, actor, `enable-routing-${randomUUID()}`);
+
+    const rollout = await startBoundedRollout(pool, judged.candidateId, scope, proof, actor, `routing-start-${randomUUID()}`);
+    const rolledBack = await observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T02:00:00.000Z", metrics: [{ name: "correctness", value: 0.84 }] }, proof, actor, `routing-observe-${randomUUID()}`);
+
+    expect(rolledBack).toMatchObject({ status: "rolled_back", activeCandidateId: routingRollbackTargetId, activeVersion: 1, sourceEvidenceIds: [digestId] });
+    expect(rolledBack.history.some((event) => event.kind === "automatic_rollback")).toBe(true);
+    await expect(readBoundedRollout(pool, rollout.rolloutId, { operatorId, proof })).resolves.toMatchObject({ status: "rolled_back", sourceEvidenceIds: [digestId] });
+  });
+
   it("reconciles an interrupted rollout to the last certified state using its durable rollback target", async () => {
     await enableImprovementClass(pool, projectId, "persona_axis", proof, actor, `enable-${randomUUID()}`);
     const rollout = await startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, `start-${randomUUID()}`);

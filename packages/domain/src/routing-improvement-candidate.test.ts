@@ -4,7 +4,7 @@ import { MODEL_MAP_SCHEMA_VERSION } from "./model-map.js";
 import { snapshotOperationalOverlayForGoal, type OperationalOverlay } from "./operational-overlay.js";
 import { TASK_DEMAND_SCHEMA_VERSION, type TaskDemand } from "./task-demand.js";
 import { materializeImprovementCandidate, improvementCandidateScenarioSuiteHash, type ImprovementCandidate, type ImprovementCandidateInput } from "./improvement-candidate.js";
-import { createRoutingCapabilityCandidate, selectRoutedModelWithRoutingCandidate } from "./routing-improvement-candidate.js";
+import { createRoutingCapabilityCandidate, selectRoutedModelWithRoutingCandidate, type RoutingCapabilityCouncilJudgment } from "./routing-improvement-candidate.js";
 import { selectRoutedModel } from "./routing-selector.js";
 import type { RoutingSelectionRequest } from "./routing-selector.js";
 
@@ -108,6 +108,19 @@ function materialized(state: ImprovementCandidate["state"] = "candidate"): Impro
   });
 }
 
+function judgmentFor(candidate: ImprovementCandidate): RoutingCapabilityCouncilJudgment {
+  return {
+    candidateId: candidate.candidateId,
+    candidateVersion: candidate.version,
+    candidateContentHash: candidate.contentHash,
+    councilRoundId: "encore-round-routing-1",
+    finalVerdict: "proceed",
+    evidenceIds: [DIGEST_ID],
+    reviewerCount: 2,
+    distinctModelCount: 2,
+  };
+}
+
 describe("routing learning integration", () => {
   it("excludes an unavailable model from current routing without changing its A capability judgment", () => {
     const before = request();
@@ -122,7 +135,7 @@ describe("routing learning integration", () => {
   it("adapts a capability proposal to the shared candidate schema and blocks it before Council judgment", () => {
     const candidate = createRoutingCapabilityCandidate(candidateInput());
     expect(candidate).toMatchObject({ kind: "routing_capability_axis", target: { routingTarget: "provider/fast" }, changes: [{ axis: "coding" }] });
-    expect(() => selectRoutedModelWithRoutingCandidate(request({ taskDemand: { ...demand, requirements: { ...demand.requirements, coding: { level: 140, rationale: "needs the proposed increase" } } } }), materialized())).toThrow(/Council|judg|proposal/i);
+    expect(() => selectRoutedModelWithRoutingCandidate(request({ taskDemand: { ...demand, requirements: { ...demand.requirements, coding: { level: 140, rationale: "needs the proposed increase" } } } }), materialized(), judgmentFor(materialized()))).toThrow(/Council|judg|proposal/i);
   });
 
   it("keeps a project overlay independent when the human model_map baseline changes", () => {
@@ -145,7 +158,7 @@ describe("routing learning integration", () => {
       taskDemand: { ...demand, requirements: { ...demand.requirements, coding: { level: 140, rationale: "requires the human baseline" } } },
     });
 
-    expect(() => selectRoutedModelWithRoutingCandidate(route, judged)).toThrow(/capability|No candidate|baseline|requirement/i);
+    expect(() => selectRoutedModelWithRoutingCandidate(route, judged, judgmentFor(judged))).toThrow(/capability|No candidate|baseline|requirement/i);
     expect(route.modelMap.entries[0]!.capability.axes.coding.score).toBe(120);
     expect(judged.changes[0]!.proposedValue).toBe(140);
   });
@@ -157,6 +170,6 @@ describe("routing learning integration", () => {
     expect(singleExecution.state).toBe("candidate");
     expect(withSingleEpisode.sourceEvidenceIds).toEqual([DIGEST_ID]);
     expect(withSingleEpisode.rollbackTarget).toEqual(candidateInput().rollbackTarget);
-    expect(() => selectRoutedModelWithRoutingCandidate(request(), singleExecution)).toThrow(/Council|judg|proposal/i);
+    expect(() => selectRoutedModelWithRoutingCandidate(request(), singleExecution, judgmentFor(singleExecution))).toThrow(/Council|judg|proposal/i);
   });
 });
