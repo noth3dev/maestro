@@ -173,10 +173,9 @@ describe("resolveLocalConnection", () => {
     expect(setupEvents.filter((event) => event.status === "started").map((event) => event.step)).toEqual([
       "docker-check",
       "postgres-ready",
-      "model-gateway-up",
-      "control-plane-up",
       "migrations",
-      "local-operator",
+      "control-plane-up",
+      "model-gateway-up",
     ]);
     expect(result.kind).toBe("configured");
     if (result.kind === "configured") {
@@ -190,14 +189,14 @@ describe("resolveLocalConnection", () => {
 
 
 
-  it("starts a model gateway before auto-starting Control Plane and shares its service token", async () => {
+  it("starts Control Plane before the model gateway and shares its service token", async () => {
     const projectId = "11111111-1111-4111-8111-111111111111";
     const fetch = vi.fn()
       .mockRejectedValueOnce(new Error("connection refused"))
+      .mockResolvedValueOnce(response({ status: "ok" }))
       .mockRejectedValueOnce(new Error("connection refused"))
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockResolvedValueOnce(response([]))
-      .mockResolvedValueOnce(response({ status: "ok" }))
       .mockResolvedValueOnce(response({ projects: [projectId] }))
       .mockResolvedValueOnce(response([]))
       .mockResolvedValueOnce(response({ goals: [] }))
@@ -214,9 +213,10 @@ describe("resolveLocalConnection", () => {
       }
       throw new Error(`unexpected command: ${file} ${args.join(" ")}`);
     });
-    const startModelGateway = vi.fn(async () => undefined);
+    const startupOrder: string[] = [];
+    const startModelGateway = vi.fn(async () => { startupOrder.push("model-gateway"); });
     let controlPlaneOptions: Record<string, unknown> | undefined;
-    const startControlPlane = vi.fn(async (options: Record<string, unknown>) => { controlPlaneOptions = options; });
+    const startControlPlane = vi.fn(async (options: Record<string, unknown>) => { startupOrder.push("control-plane"); controlPlaneOptions = options; });
 
     const options = {
       env: {
@@ -232,6 +232,7 @@ describe("resolveLocalConnection", () => {
       retryDelayMs: 0,
     };
     await expect(resolveLocalConnection(options)).resolves.toMatchObject({ kind: "configured" });
+    expect(startupOrder).toEqual(["control-plane", "model-gateway"]);
     expect(startModelGateway).toHaveBeenCalledOnce();
     expect(startModelGateway.mock.calls[0]?.[0]).toMatchObject({
       apiUrl: "http://127.0.0.1:4321",
@@ -248,13 +249,8 @@ describe("resolveLocalConnection", () => {
     expect(controlPlaneOptions?.modelGatewayToken).toBe((startModelGateway.mock.calls[0]?.[0] as { token: string }).token);
   });
 
-  it("stops a gateway when operator bootstrap fails after child startup", async () => {
-    const fetch = vi.fn()
-      .mockRejectedValueOnce(new Error("Control Plane is down"))
-      .mockRejectedValueOnce(new Error("gateway is down"))
-      .mockResolvedValueOnce(response({ status: "ok" }))
-      .mockResolvedValueOnce(response([]))
-      .mockResolvedValueOnce(response({ status: "ok" }));
+  it("reports migration helper failure before child startup", async () => {
+    const fetch = vi.fn().mockRejectedValue(new Error("Control Plane is down"));
     const gatewayStop = vi.fn(async () => undefined);
     const startModelGateway = vi.fn(async (): Promise<LocalProcessHandle> => ({ stop: gatewayStop }));
     const startControlPlane = vi.fn(async () => undefined);
@@ -271,16 +267,13 @@ describe("resolveLocalConnection", () => {
       onStep: (event) => setupEvents.push(event),
     });
     expect(result).toMatchObject({ kind: "setup-required", reason: "Local operator bootstrap failed; check PostgreSQL and Control Plane logs" });
-    expect(setupEvents.at(-1)).toMatchObject({ step: "local-operator", status: "failed", message: expect.stringContaining("Local operator bootstrap failed") });
-    expect(gatewayStop).toHaveBeenCalledOnce();
+    expect(setupEvents.at(-1)).toMatchObject({ step: "migrations", status: "failed", message: expect.stringContaining("Local operator bootstrap failed") });
+    expect(gatewayStop).not.toHaveBeenCalled();
   });
 
   it("stops newly started children when Control Plane startup fails", async () => {
     const fetch = vi.fn()
       .mockRejectedValueOnce(new Error("Control Plane is down"))
-      .mockRejectedValueOnce(new Error("gateway is down"))
-      .mockResolvedValueOnce(response({ status: "ok" }))
-      .mockResolvedValueOnce(response([]))
       .mockRejectedValue(new Error("Control Plane is still down"));
     const gatewayStop = vi.fn(async () => undefined);
     const controlPlaneStop = vi.fn(async () => undefined);
@@ -293,7 +286,7 @@ describe("resolveLocalConnection", () => {
       env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
       fetch,
       secretStore: secretStore(),
-      runCommand: vi.fn(),
+      runCommand: vi.fn(async () => ({ code: 0, stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }), stderr: "" })),
       startModelGateway,
       startControlPlane,
       retryDelayMs: 0,
@@ -302,7 +295,7 @@ describe("resolveLocalConnection", () => {
     expect(result.kind).toBe("setup-required");
     expect(setupEvents).toContainEqual(expect.objectContaining({ step: "control-plane-up", status: "failed", message: expect.stringContaining("Control Plane startup failed") }));
     expect(setupEvents).not.toContainEqual(expect.objectContaining({ step: "migrations", status: "failed" }));
-    expect(gatewayStop).toHaveBeenCalledOnce();
+    expect(gatewayStop).not.toHaveBeenCalled();
     expect(controlPlaneStop).toHaveBeenCalledOnce();
   });
 
@@ -310,31 +303,37 @@ describe("resolveLocalConnection", () => {
     let childStarted = false;
     let controlPlaneStarted = false;
     const gatewayUrl = "http://127.0.0.1:46201";
+    const projectId = "11111111-1111-4111-8111-111111111111";
     const startModelGateway = vi.fn(async () => {
       setImmediate(() => { childStarted = true; });
       return { stop: vi.fn(async () => undefined) };
     });
     const fetch = vi.fn(async (input: RequestInfo | URL) => {
-      if (String(input).startsWith(gatewayUrl)) {
+      const url = String(input);
+      if (url.startsWith(gatewayUrl)) {
         if (!childStarted) throw new Error("gateway is not listening");
-        if (String(input).endsWith("/healthz")) return response({ status: "ok" });
+        if (url.endsWith("/healthz")) return response({ status: "ok" });
         return response([]);
       }
       if (!controlPlaneStarted) throw new Error("Control Plane is down");
-      return response({ status: "ok" });
+      if (url.endsWith("/healthz")) return response({ status: "ok" });
+      if (url.includes("/v1/projects")) return response({ projects: [projectId, "22222222-2222-4222-8222-222222222222"] });
+      if (url.includes("/v1/models")) return response([]);
+      if (url.includes("/v1/goals")) return response({ goals: [{ goalId: "22222222-2222-4222-8222-222222222222" }] });
+      return response({});
     });
     const result = await resolveLocalConnection({
       env: { MAESTRO_API_URL: "http://127.0.0.1:46202", MAESTRO_MODEL_GATEWAY_URL: gatewayUrl, MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro" },
       fetch,
       secretStore: secretStore(),
-      runCommand: vi.fn(async () => ({ code: 1, stdout: "", stderr: "bootstrap failed" })),
+      runCommand: vi.fn(async () => ({ code: 0, stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }), stderr: "" })),
       startModelGateway,
       startControlPlane: vi.fn(async () => {
         controlPlaneStarted = true;
       }),
       retryDelayMs: 0,
     });
-    expect(result).toEqual({ kind: "setup-required", reason: "Local operator bootstrap failed; check PostgreSQL and Control Plane logs" });
+    expect(result.kind).toBe("configured");
     expect(childStarted).toBe(true);
   });
 
@@ -356,17 +355,21 @@ server.listen(Number(process.env.MAESTRO_MODEL_GATEWAY_PORT), process.env.MAESTR
 process.on("SIGTERM", () => server.close(() => process.exit(0)));
 `);
     const realFetch = globalThis.fetch;
+    let controlPlaneStarted = false;
     const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input).startsWith(gatewayUrl)) return realFetch(input, init);
-      throw new Error("Control Plane is down");
+      const url = String(input);
+      if (url.startsWith(gatewayUrl)) return realFetch(input, init);
+      if (!controlPlaneStarted) throw new Error("Control Plane is down");
+      if (url.endsWith("/healthz")) return response({ status: "ok" });
+      return response({ error: { code: "authentication_required", message: "invalid credential" } }, 401);
     });
     try {
       const result = await resolveLocalConnection({
         env: { MAESTRO_API_URL: "http://127.0.0.1:46199", MAESTRO_MODEL_GATEWAY_URL: gatewayUrl, MAESTRO_MODEL_GATEWAY_ENTRY: entry, MAESTRO_CONTROL_PLANE_ENTRY: `${directory}/control.js`, MAESTRO_CODEX_APP_SERVER_COMMAND: "/tmp/codex", MAESTRO_CODEX_MODELS: "gpt-5.3-codex", MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro" },
         fetch,
         secretStore: secretStore(),
-        runCommand: vi.fn(),
-        startControlPlane: vi.fn(async () => undefined),
+        runCommand: vi.fn(async () => ({ code: 0, stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }), stderr: "" })),
+        startControlPlane: vi.fn(async () => { controlPlaneStarted = true; }),
         retryDelayMs: 0,
       });
       expect(result.kind).toBe("setup-required");
@@ -396,7 +399,7 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     expect(runCommand).not.toHaveBeenCalled();
   });
 
-  it("reports keychain persistence failure as a failed local-operator step", async () => {
+  it("reports keychain persistence failure as a failed Control Plane step", async () => {
     const setupEvents: LocalBootstrapStepEvent[] = [];
     const fetch = vi.fn()
       .mockResolvedValueOnce(response({ status: "ok" }))
@@ -425,10 +428,10 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     });
 
     expect(result).toMatchObject({ kind: "setup-required", reason: expect.stringContaining("OS keychain") });
-    expect(setupEvents.at(-1)).toMatchObject({ step: "local-operator", status: "failed", message: expect.stringContaining("OS keychain") });
+    expect(setupEvents.at(-1)).toMatchObject({ step: "control-plane-up", status: "failed", message: expect.stringContaining("OS keychain") });
   });
 
-  it("reports final Control Plane authentication failure as a failed local-operator step", async () => {
+  it("reports final Control Plane authentication failure as a failed Control Plane step", async () => {
     const setupEvents: LocalBootstrapStepEvent[] = [];
     const fetch = vi.fn()
       .mockResolvedValueOnce(response({ status: "ok" }))
@@ -453,7 +456,7 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     });
 
     expect(result).toMatchObject({ kind: "setup-required", reason: "Local operator bootstrap completed but Control Plane authentication failed" });
-    expect(setupEvents.at(-1)).toMatchObject({ step: "local-operator", status: "failed", message: "Local operator bootstrap completed but Control Plane authentication failed" });
+    expect(setupEvents.at(-1)).toMatchObject({ step: "control-plane-up", status: "failed", message: "Local operator bootstrap completed but Control Plane authentication failed" });
   });
 
   it("reports the bootstrap step that failed", async () => {

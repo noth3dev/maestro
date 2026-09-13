@@ -18,11 +18,13 @@ export function createStatusRegion(options: {
 }): Component {
   return createDynamicRegion((width) => {
     const canShowSplash = width >= 100 && options.height() >= 28;
-    const setupVisible = (options.state.setupSteps?.length ?? 0) > 0 && options.state.connection.kind !== "connected";
+    const setupVisible = options.state.connection.kind !== "connected";
+    const setupInProgress = options.state.connection.kind === "connecting";
     const showSplash = canShowSplash && !setupVisible && options.state.connection.kind === "connected" && options.splash.visible();
     const lines = renderStatusRegion(options.state, width, options.height(), { showSplash });
-    // Consume the first-frame splash even when the terminal is too small to show it.
-    if (options.splash.visible() && !setupVisible) options.splash.dismiss();
+    // Do not consume the first-frame splash while initialization is still
+    // connecting; setup callbacks can arrive after this first render.
+    if (options.splash.visible() && !setupInProgress && !setupVisible) options.splash.dismiss();
     return lines;
   });
 }

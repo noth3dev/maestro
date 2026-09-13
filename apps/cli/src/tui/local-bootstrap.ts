@@ -68,10 +68,9 @@ export interface LocalBootstrapOptions {
 export const LOCAL_BOOTSTRAP_STEP_ORDER = [
   "docker-check",
   "postgres-ready",
-  "model-gateway-up",
-  "control-plane-up",
   "migrations",
-  "local-operator",
+  "control-plane-up",
+  "model-gateway-up",
 ] as const;
 
 export type LocalBootstrapStepName = typeof LOCAL_BOOTSTRAP_STEP_ORDER[number];
@@ -216,7 +215,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
         const validation = await validateLocalToken(apiUrl, storedToken, fetch);
         if (validation.kind === "valid") return { kind: "configured", apiUrl, token: storedToken };
         if (validation.kind === "unavailable") {
-          reportSetupStep(options.onStep, "local-operator", "failed", validation.reason);
+          reportSetupStep(options.onStep, "control-plane-up", "failed", validation.reason);
           await stopOwnedProcesses();
           return { kind: "setup-required", reason: validation.reason };
         }
@@ -235,6 +234,30 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
   if (database.kind === "unavailable") return { kind: "setup-required", reason: database.reason };
 
   const initialHealth = await ensureLocalControlPlane({ apiUrl, fetch });
+  let bootstrap: Awaited<ReturnType<typeof runBootstrapHelper>> | undefined;
+
+  // The bootstrap helper is the parent-visible migration operation. Run it
+  // before starting either service so the callback reflects the real setup
+  // order instead of inferring migrations from a later health poll.
+  if (storedToken === undefined) {
+    const entry = resolveControlPlaneEntry(options.env);
+    if (initialHealth.kind !== "ready" && entry === undefined) {
+      const reason = "Local Control Plane is not running and its executable was not found; set MAESTRO_CONTROL_PLANE_ENTRY or configure MAESTRO_API_URL and MAESTRO_API_TOKEN";
+      reportSetupStep(options.onStep, "control-plane-up", "failed", reason);
+      return { kind: "setup-required", reason };
+    }
+    bootstrapSecret = bootstrapSecret ?? randomBytes(32).toString("base64url");
+    const projectId = randomUUID();
+    reportSetupStep(options.onStep, "migrations", "started");
+    bootstrap = await runBootstrapHelper({ env: options.env, databaseUrl, secret: bootstrapSecret, projectId, operatorId: localOperatorId, runCommand });
+    if (bootstrap.kind === "unavailable") {
+      reportSetupStep(options.onStep, "migrations", "failed", bootstrap.reason);
+      await stopOwnedProcesses();
+      return { kind: "setup-required", reason: bootstrap.reason };
+    }
+    reportSetupStep(options.onStep, "migrations", "completed");
+  }
+
   if (initialHealth.kind !== "ready") {
     const entry = resolveControlPlaneEntry(options.env);
     if (entry === undefined) {
@@ -242,20 +265,8 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
       reportSetupStep(options.onStep, "control-plane-up", "failed", reason);
       return { kind: "setup-required", reason };
     }
-    bootstrapSecret = extractLocalSecret(storedToken) ?? randomBytes(32).toString("base64url");
+    bootstrapSecret = bootstrapSecret ?? extractLocalSecret(storedToken) ?? randomBytes(32).toString("base64url");
     const modelGatewayToken = options.env.MAESTRO_MODEL_GATEWAY_TOKEN?.trim() || deriveModelGatewayToken(bootstrapSecret);
-    const gateway = await ensureLocalModelGatewayWithReporting({
-      env: options.env,
-      operatorId: localOperatorId,
-      apiUrl: modelGatewayUrl,
-      token: modelGatewayToken,
-      fetch,
-      retryDelayMs,
-      ...(options.onStep === undefined ? {} : { onStep: options.onStep }),
-      ...(options.startModelGateway === undefined ? {} : { startModelGateway: options.startModelGateway }),
-    });
-    if (gateway.kind !== "ready") return { kind: "setup-required", reason: gateway.reason };
-    ownedGateway = gateway.process;
     const modelGatewayOperatorId = options.env.MAESTRO_MODEL_GATEWAY_OPERATOR_ID?.trim() || localOperatorId;
     const dataDir = options.env.MAESTRO_LOCAL_DATA_DIR?.trim() || join(homedir(), ".local", "share", "maestro");
     try {
@@ -281,8 +292,8 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
     reportSetupStep(options.onStep, "control-plane-up", "completed");
   }
 
-  if (initialHealth.kind === "ready" && !gatewayReady) {
-    bootstrapSecret = extractLocalSecret(storedToken) ?? randomBytes(32).toString("base64url");
+  if (!gatewayReady) {
+    bootstrapSecret = bootstrapSecret ?? extractLocalSecret(storedToken) ?? randomBytes(32).toString("base64url");
     const modelGatewayToken = options.env.MAESTRO_MODEL_GATEWAY_TOKEN?.trim() || deriveModelGatewayToken(bootstrapSecret);
     const gateway = await ensureLocalModelGatewayWithReporting({
       env: options.env,
@@ -306,7 +317,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
     const validation = await validateLocalToken(apiUrl, storedToken, fetch);
     if (validation.kind === "valid") return { kind: "configured", apiUrl, token: storedToken };
     if (validation.kind === "unavailable") {
-      reportSetupStep(options.onStep, "local-operator", "failed", validation.reason);
+      reportSetupStep(options.onStep, "control-plane-up", "failed", validation.reason);
       await stopOwnedProcesses();
       return { kind: "setup-required", reason: validation.reason };
     }
@@ -315,24 +326,32 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
     storedToken = undefined;
   }
 
-  const secret = bootstrapSecret ?? randomBytes(32).toString("base64url");
-  const projectId = randomUUID();
-  reportSetupStep(options.onStep, "migrations", "started");
-  reportSetupStep(options.onStep, "local-operator", "started");
-  const bootstrap = await runBootstrapHelper({ env: options.env, databaseUrl, secret, projectId, operatorId: localOperatorId, runCommand });
-  if (bootstrap.kind === "unavailable") {
-    reportSetupStep(options.onStep, "local-operator", "failed", bootstrap.reason);
-    await stopOwnedProcesses();
-    return { kind: "setup-required", reason: bootstrap.reason };
+  if (bootstrap === undefined) {
+    const secret = bootstrapSecret ?? randomBytes(32).toString("base64url");
+    const projectId = randomUUID();
+    reportSetupStep(options.onStep, "migrations", "started");
+    bootstrap = await runBootstrapHelper({ env: options.env, databaseUrl, secret, projectId, operatorId: localOperatorId, runCommand });
+    if (bootstrap.kind === "unavailable") {
+      reportSetupStep(options.onStep, "migrations", "failed", bootstrap.reason);
+      await stopOwnedProcesses();
+      return { kind: "setup-required", reason: bootstrap.reason };
+    }
+    reportSetupStep(options.onStep, "migrations", "completed");
+    bootstrapSecret = secret;
   }
-  reportSetupStep(options.onStep, "migrations", "completed");
-  reportSetupStep(options.onStep, "local-operator", "completed");
+  const secret = bootstrapSecret!;
+  if (bootstrap === undefined || bootstrap.kind !== "ready") {
+    const reason = "Local operator bootstrap returned no credential";
+    reportSetupStep(options.onStep, "migrations", "failed", reason);
+    await stopOwnedProcesses();
+    return { kind: "setup-required", reason };
+  }
   const token = `${bootstrap.credentialId}.${secret}`;
   try {
     secretStore.write(token);
   } catch {
     const reason = "Local operator was created, but the OS keychain is unavailable; set MAESTRO_API_TOKEN explicitly or enable a system keychain";
-    reportSetupStep(options.onStep, "local-operator", "failed", reason);
+    reportSetupStep(options.onStep, "control-plane-up", "failed", reason);
     await stopOwnedProcesses();
     return { kind: "setup-required", reason };
   }
@@ -340,7 +359,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
   const validation = await validateLocalToken(apiUrl, token, fetch);
   if (validation.kind !== "valid") {
     const reason = validation.kind === "unavailable" ? validation.reason : "Local operator bootstrap completed but Control Plane authentication failed";
-    reportSetupStep(options.onStep, "local-operator", "failed", reason);
+    reportSetupStep(options.onStep, "control-plane-up", "failed", reason);
     await stopOwnedProcesses();
     secretStore.clear();
     return { kind: "setup-required", reason };

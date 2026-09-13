@@ -66,6 +66,17 @@ describe("Maestro TUI shell", () => {
     expect(output.split("\n").every((line) => line.length <= 60)).toBe(true);
   });
 
+  it("renders the complete pending setup sequence before the first callback", () => {
+    const output = renderSetupSteps({ ...state, connection: { kind: "connecting" } }, 80);
+    expect(output).toEqual([
+      "· Docker check",
+      "· PostgreSQL ready",
+      "· Migrations",
+      "· Control Plane",
+      "· Model gateway",
+    ]);
+  });
+
   it("renders setup progress at the narrow supported width", () => {
     const setupSteps: SetupStep[] = [
       { step: "docker-check", status: "completed" },
