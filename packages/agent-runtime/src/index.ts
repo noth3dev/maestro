@@ -8,3 +8,4 @@ export * from "./ipython-git-gateway.js";
 export * from "./ipython-local-effects.js";
 
 export * from "./ipython-process-adapter.js";
+export * from "./native-refinement.js";

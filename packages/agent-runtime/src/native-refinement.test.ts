@@ -69,8 +69,10 @@ describe("native refinement boundary", () => {
     expect(() => adapter.refine(request({ scope: "global", evaluation: { ...passingEvaluation, episodeCount: 1, comparableGoalCount: 1 } }))).toThrow(/episode|global|evidence/i);
     const applied = adapter.refine(request({ scope: "global" }));
     expect(applied.status).toBe("applied");
-    expect(() => adapter.refine(request({ scope: "global", mutation: "semantic_reversal" }))).toThrow(/CEO|approval|reversal/i);
-    expect(adapter.refine(request({ scope: "global", mutation: "narrow_reversible", ceoApproved: true })).status).toBe("applied");
+    expect(() => adapter.refine(request({ scope: "global", mutation: "semantic_reversal" }))).toThrow(/CEO|approval|reversal|existing/i);
+    const revised = adapter.refine(request({ scope: "global", mutation: "narrow_reversible", ceoApproved: true, existingRefinementId: applied.refinementId }));
+    expect(revised.status).toBe("applied");
+    expect(adapter.history(applied.refinementId)).toHaveLength(2);
   });
 
   it("deprecates and observes an unused global entry before CEO-approved removal", () => {
