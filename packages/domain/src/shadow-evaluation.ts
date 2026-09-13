@@ -88,23 +88,36 @@ export interface ShadowEvaluationResult {
 
 export interface ShadowRunIdentity {
   readonly runId: string;
-  /** Process/session generation fields let the existing orphan journal own restart recovery. */
+  /** These fields match the existing Plan-1 IPython journal identity. */
   readonly processRef: string;
   readonly sessionId: string;
+  readonly processPid: number;
+  readonly parentPid?: number;
   readonly projectId: string;
   readonly goalId: string;
 }
 
-export type ShadowJournalEvent =
-  | { readonly event: "started"; readonly identity: ShadowRunIdentity }
-  | { readonly event: "orphaned"; readonly identity: ShadowRunIdentity; readonly reason: string }
-  | { readonly event: "completed"; readonly identity: ShadowRunIdentity; readonly recordCount: number };
+/** Input shape accepted directly by the existing append-only IPython journal adapter. */
+export type ShadowJournalEvent = {
+  readonly sessionId: string;
+  readonly processRef: string;
+  readonly projectId: string;
+  readonly goalId: string;
+  readonly event: "started" | "orphaned";
+  readonly reason?: string;
+  readonly processPid: number;
+  readonly parentPid?: number;
+  readonly details: Readonly<Record<string, unknown>>;
+};
 
-/** Adapter seam for the existing append-only process/session journal and its restart reconciler. */
+/** Adapter for Plan-1's append-only process/session journal; recovery stays there. */
 export interface ShadowLifecycleJournal {
   append(event: ShadowJournalEvent): Promise<void>;
-  /** Reuse the existing orphan reconciliation result; no second recovery algorithm is implemented here. */
-  reconcile?(identity: ShadowRunIdentity): Promise<"reaped" | "unknown">;
+}
+
+/** Durable sink for the completed shadow comparison, separate from process recovery. */
+export interface ShadowResultSink {
+  record(result: ShadowEvaluationResult): Promise<void>;
 }
 
 export interface ShadowEvaluationRequest {
@@ -112,11 +125,15 @@ export interface ShadowEvaluationRequest {
   readonly cases: readonly ShadowCase[];
   readonly evaluate: (input: unknown, context: ShadowExecutionContext) => Promise<ShadowOutput>;
   readonly recordedEvidence?: Readonly<Record<string, unknown>>;
-  /** A journal is required to make interruption/restart observable. */
+  /** Plan-1's journal is required to make interruption/restart observable. */
   readonly journal: ShadowLifecycleJournal;
+  /** Completed comparison evidence is persisted by this separate sink. */
+  readonly resultSink: ShadowResultSink;
   readonly runId: string;
   readonly processRef: string;
   readonly sessionId: string;
+  readonly processPid: number;
+  readonly parentPid?: number;
   /** A full kernel is adapted to a read-only facade before evaluator code sees it. */
   readonly kernel?: ExecutionKernelPort;
   readonly signal?: AbortSignal;
@@ -162,6 +179,12 @@ function stableJson(value: unknown, seen = new WeakSet<object>()): string {
     const prototype = Object.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) throw new InvalidShadowOutputError("shadow values must be plain JSON objects");
     const object = value as Record<string, unknown>;
+    const keys = Reflect.ownKeys(object);
+    if (keys.some((key) => typeof key !== "string")) throw new InvalidShadowOutputError("shadow objects must not contain symbol keys");
+    for (const key of keys) {
+      const descriptor = Object.getOwnPropertyDescriptor(object, key);
+      if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) throw new InvalidShadowOutputError("shadow objects must contain enumerable data properties only");
+    }
     return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${stableJson(object[key], seen)}`).join(",")}}`;
   } finally {
     seen.delete(value);
@@ -177,6 +200,7 @@ function deepFreeze<T>(value: T, seen = new WeakSet<object>()): T {
 
 function snapshot<T>(value: T, name: string): T {
   try {
+    stableJson(value);
     const copy = structuredClone(value);
     stableJson(copy);
     return deepFreeze(copy);
@@ -199,16 +223,33 @@ function result(status: ShadowEvaluationResult["status"], records: readonly Shad
 
 function journalIdentity(request: ShadowEvaluationRequest): ShadowRunIdentity {
   return {
-    runId: request.runId!,
-    processRef: request.processRef!,
-    sessionId: request.sessionId!,
+    runId: request.runId,
+    processRef: request.processRef,
+    sessionId: request.sessionId,
+    processPid: request.processPid,
+    ...(request.parentPid === undefined ? {} : { parentPid: request.parentPid }),
     projectId: request.candidate.projectId,
     goalId: request.candidate.goalId,
   };
 }
 
+function journalEvent(request: ShadowEvaluationRequest, event: ShadowJournalEvent["event"], reason?: string): ShadowJournalEvent {
+  const identity = journalIdentity(request);
+  return {
+    sessionId: identity.sessionId,
+    processRef: identity.processRef,
+    projectId: identity.projectId,
+    goalId: identity.goalId,
+    event,
+    processPid: identity.processPid,
+    ...(identity.parentPid === undefined ? {} : { parentPid: identity.parentPid }),
+    ...(reason === undefined ? {} : { reason }),
+    details: { shadow_run_id: identity.runId },
+  };
+}
+
 async function journalOrphan(request: ShadowEvaluationRequest, reason: string): Promise<void> {
-  await request.journal.append({ event: "orphaned", identity: journalIdentity(request), reason });
+  await request.journal.append(journalEvent(request, "orphaned", reason));
 }
 
 async function journalOrphanBestEffort(request: ShadowEvaluationRequest, reason: string): Promise<void> {
@@ -228,6 +269,8 @@ export async function runShadowEvaluation(request: ShadowEvaluationRequest): Pro
   if (!request.runId || request.runId.trim() === "") throw new InvalidShadowOutputError("shadow runId is required");
   if (!request.processRef || request.processRef.trim() === "") throw new InvalidShadowOutputError("shadow processRef is required");
   if (!request.sessionId || request.sessionId.trim() === "") throw new InvalidShadowOutputError("shadow sessionId is required");
+  if (!Number.isSafeInteger(request.processPid) || request.processPid <= 1) throw new InvalidShadowOutputError("shadow processPid is invalid");
+  if (request.parentPid !== undefined && (!Number.isSafeInteger(request.parentPid) || request.parentPid <= 0)) throw new InvalidShadowOutputError("shadow parentPid is invalid");
 
   const evidence = snapshot(request.recordedEvidence ?? {}, "recorded evidence");
   const cases = request.cases.map((shadowCase, index) => {
@@ -238,7 +281,7 @@ export async function runShadowEvaluation(request: ShadowEvaluationRequest): Pro
     return Object.freeze({ input, activeInput, active: copyOutput(shadowCase.active) });
   });
 
-  await request.journal.append({ event: "started", identity: journalIdentity(request) });
+  await request.journal.append(journalEvent(request, "started"));
   const records: ShadowEvaluationRecord[] = [];
   const deniedEffects: ShadowEffectRequest[] = [];
   for (const shadowCase of cases) {
@@ -283,13 +326,11 @@ export async function runShadowEvaluation(request: ShadowEvaluationRequest): Pro
   }
 
   const complete = result("completed", records, deniedEffects);
-  {
-    try {
-      await request.journal.append({ event: "completed", identity: journalIdentity(request), recordCount: complete.records.length });
-    } catch (error) {
-      await journalOrphanBestEffort(request, "shadow_run_terminal_evidence_not_durably_recorded");
-      throw error;
-    }
+  try {
+    await request.resultSink.record(complete);
+  } catch (error) {
+    await journalOrphanBestEffort(request, "shadow_run_result_not_durably_recorded");
+    throw error;
   }
   return complete;
 }

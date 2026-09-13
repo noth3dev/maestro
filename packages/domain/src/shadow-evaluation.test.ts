@@ -36,19 +36,22 @@ const active: ShadowOutput = {
 const input = { request: "review the change" };
 const sameInput = () => ({ input, activeInput: input, active });
 let runCounter = 0;
-const journalConfig = (events: string[] = []) => ({
+const journalConfig = (events: string[] = [], outcomes: string[] = []) => ({
   journal: { append: async (event: { event: string }) => { events.push(event.event); } },
+  resultSink: { record: async (result: { status: string }) => { outcomes.push(result.status); } },
   runId: `shadow-run-${++runCounter}`,
   processRef: `shadow-process-${runCounter}`,
   sessionId: `shadow-session-${runCounter}`,
+  processPid: 4321,
 });
 
 describe("zero-authority shadow evaluation", () => {
   it("records proposed messages, plans, and challenges against the active persona on identical input", async () => {
     const completedEvents: string[] = [];
+    const outcomes: string[] = [];
     const result = await runShadowEvaluation({
       candidate: candidate(),
-      ...journalConfig(completedEvents),
+      ...journalConfig(completedEvents, outcomes),
       cases: [sameInput()],
       evaluate: async (receivedInput) => ({ ...active, messages: [`shadow:${(receivedInput as typeof input).request}`] }),
     });
@@ -57,7 +60,8 @@ describe("zero-authority shadow evaluation", () => {
     expect(result.records[0]).toMatchObject({ input, active, proposed: { plans: active.plans, challenges: active.challenges } });
     expect(result.records[0]!.compared).toBe(true);
     expect(result.records[0]!.matchesActive).toBe(false);
-    expect(completedEvents).toEqual(["started", "completed"]);
+    expect(completedEvents).toEqual(["started"]);
+    expect(outcomes).toEqual(["completed"]);
     expect(exportedRunShadowEvaluation).toBe(runShadowEvaluation);
   });
 
@@ -70,6 +74,16 @@ describe("zero-authority shadow evaluation", () => {
       evaluate: async () => active,
     })).rejects.toThrow(/finite|candidate/i);
     expect(events).toEqual([]);
+  });
+
+  it("rejects class instances and other non-JSON input before cloning", async () => {
+    class MutableInput { constructor(readonly request: string) {} }
+    await expect(runShadowEvaluation({
+      candidate: candidate(),
+      ...journalConfig(),
+      cases: [{ input: new MutableInput("one"), activeInput: new MutableInput("one"), active }],
+      evaluate: async () => active,
+    })).rejects.toThrow(/plain JSON|JSON data/i);
   });
 
   it("rejects a shadow case whose active output was not produced from the identical input", async () => {
