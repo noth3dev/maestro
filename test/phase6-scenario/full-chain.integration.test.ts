@@ -25,6 +25,7 @@ import {
   createRoutingCapabilityCandidate,
   improvementCandidateScenarioSuiteHash,
   replayCandidateAgainstFrozenBaseline,
+  improvementCandidateContentHash,
   runDeterministicCandidateGuards,
   runShadowEvaluation,
   runSyntheticAdversarialScenarios,
@@ -42,6 +43,7 @@ import { acquireGoalLease, type GoalLeaseProof } from "../../packages/persistenc
 import { bootstrapPermanentOrganization } from "../../packages/persistence/src/organization.js";
 import { grantProjectMembership, grantProjectRole } from "../../packages/persistence/src/project-membership.js";
 import { recordImprovementDigest } from "../../packages/persistence/src/improvement-digest.js";
+import { proposeOrganizationalKnowledge, promoteOrganizationalKnowledgeToProject, promoteOrganizationalKnowledgeToGlobal } from "../../packages/persistence/src/organizational-knowledge.js";
 import { raiseMetronomeChallenge, readMetronomeChallenge } from "../../packages/persistence/src/metronome-challenge.js";
 import { runEncoreCouncilReview } from "../../packages/persistence/src/encore-council.js";
 import { createImprovementCouncilService } from "../../apps/control-plane/src/improvement-council-service.js";
@@ -50,6 +52,7 @@ import { createDepartmentPlan } from "../../packages/persistence/src/department-
 import { createMissionBundle, issueMissionPersonaOverlay, readActiveMissionPersonaOverlay, type IssueMissionPersonaOverlayRequest } from "../../packages/persistence/src/mission-bundle.js";
 import {
   recordImprovementCandidate,
+  readImprovementCandidate,
   transitionImprovementCandidate,
   transitionRoutingCandidateToJudged,
   recordRoutingCandidateEvaluation,
@@ -109,6 +112,8 @@ async function seedGoal(pool: Pool, label: string): Promise<ScenarioGoal> {
   await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
   await grantProjectMembership(pool, actorId, projectId); await grantProjectRole(pool, actorId, projectId, "engineering");
   await grantProjectMembership(pool, evaluatorOperatorId, projectId); await grantProjectRole(pool, evaluatorOperatorId, projectId, "engineering");
+  await grantProjectRole(pool, actorId, projectId, "head-engineering"); await grantProjectRole(pool, actorId, projectId, "head-product");
+  await grantProjectRole(pool, evaluatorOperatorId, projectId, "head-engineering"); await grantProjectRole(pool, evaluatorOperatorId, projectId, "head-product");
   for (const [index, evidenceId] of evidenceIds.entries()) {
     await pool.query(`INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'test-result', 'text/plain', 'project_lifetime')`, [evidenceId, randomUUID(), randomUUID(), projectId, goalId, actorId, createHash("sha256").update(`${label}-${index}`).digest("hex"), label.length,]);
@@ -174,21 +179,31 @@ function kernelWithAnswers(evidenceIds: readonly string[], sameModel = false): E
   };
 }
 
-async function shadow(pool: Pool, candidate: ImprovementCandidateInput, goal: ScenarioGoal, label: string): Promise<{ result: Awaited<ReturnType<typeof runShadowEvaluation>>; digestId: string; shadowEvidenceId: string }> {
+async function shadow(pool: Pool, candidate: ImprovementCandidateInput, goal: ScenarioGoal, label: string, candidateId?: string): Promise<{ result: Awaited<ReturnType<typeof runShadowEvaluation>>; digestId: string; shadowEvidenceId: string; taskFit: number }> {
   const input = { request: `phase6 ${label}` }; const active: ShadowOutput = { messages: ["I will verify before acting."], plans: [{ step: "verify" }], challenges: [{ kind: "risk-review" }] };
-  const processRef = `phase6-process-${label}-${randomUUID()}`; const sessionId = `phase6-session-${label}`; const shadowEvidenceId = randomUUID();
-  const result = await runShadowEvaluation({ candidate, cases: [{ input, activeInput: input, active }], recordedEvidence: { [goal.evidenceId]: { observed: label }, ...Object.fromEntries(goal.digestIds.map((id) => [id, { observed: label }])) },
-    evaluate: async () => ({ messages: [`shadow-${label}`], plans: [{ step: "verify" }], challenges: [{ kind: "risk-review" }] }),
-    journal: { append: async (event) => { await pool.query(`INSERT INTO ipython_session_journal (journal_id, session_id, process_ref, project_id, goal_id, event, reason, process_pid, details, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, 'project_lifetime')`, [randomUUID(), event.sessionId, event.processRef, event.projectId, event.goalId, event.event, event.event === "started" ? null : event.reason ?? `shadow ${event.event}`, event.processPid ?? 4321, JSON.stringify({ phase: "full-chain-proof", label })]); } },
-    resultSink: { commit: async (evidence) => { const payload = JSON.stringify(evidence); await pool.query(`INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'shadow-evaluation', 'application/json', 'project_lifetime')`, [shadowEvidenceId, randomUUID(), randomUUID(), candidate.projectId, candidate.goalId, actorId, createHash("sha256").update(payload).digest("hex"), payload.length]); } }, runId: `phase6-shadow-${label}-${randomUUID()}`, processRef, sessionId, processPid: 4321 });
+  const processRef = `phase6-process-${label}-${randomUUID()}`; const sessionId = `phase6-session-${label}`; const runId = `phase6-shadow-${label}-${randomUUID()}`; const shadowEvidenceId = randomUUID();
+  const client = await pool.connect();
+  let result: Awaited<ReturnType<typeof runShadowEvaluation>>;
+  try {
+    await client.query("BEGIN");
+    result = await runShadowEvaluation({ runId, processRef, sessionId, processPid: 4321, candidate, cases: [{ input, activeInput: input, active }], recordedEvidence: { [goal.evidenceId]: { observed: label }, ...Object.fromEntries(goal.digestIds.map((id) => [id, { observed: label }])) },
+      evaluate: async (_input, context) => { context.readRecordedEvidence(goal.evidenceId); return { messages: [`shadow-${label}-${JSON.stringify(candidate.changes)}`], plans: [{ step: "verify" }], challenges: [{ kind: "risk-review" }] }; },
+      journal: { append: async (event) => { await client.query(`INSERT INTO ipython_session_journal (journal_id, session_id, process_ref, project_id, goal_id, event, reason, process_pid, details, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, 'project_lifetime')`, [randomUUID(), event.sessionId, event.processRef, event.projectId, event.goalId, event.event, event.event === "started" ? null : event.reason ?? `shadow ${event.event}`, event.processPid ?? 4321, JSON.stringify({ phase: "full-chain-proof", label, candidateId: candidateId ?? candidate.parentCandidateId ?? null, candidateContentHash: JSON.stringify(candidate), ...event.details })]); } },
+      resultSink: { commit: async (evidence, lifecycle) => { const payload = JSON.stringify(evidence); await client.query(`INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'shadow-evaluation', 'application/json', 'project_lifetime')`, [shadowEvidenceId, randomUUID(), randomUUID(), candidate.projectId, candidate.goalId, actorId, createHash("sha256").update(payload).digest("hex"), payload.length]); await lifecycle.append({ sessionId: evidence.identity.sessionId, processRef: evidence.identity.processRef, projectId: evidence.identity.projectId, goalId: evidence.identity.goalId, event: "orphaned", reason: "shadow evidence committed before terminal close", processPid: evidence.identity.processPid, details: { phase: "full-chain-proof", label, shadowEvidenceId, candidateContentHash: evidence.candidateContentHash, shadowRunId: evidence.identity.runId } }); await lifecycle.append({ sessionId: evidence.identity.sessionId, processRef: evidence.identity.processRef, projectId: evidence.identity.projectId, goalId: evidence.identity.goalId, event: "completed", reason: "shadow evidence durably closed", processPid: evidence.identity.processPid, details: { phase: "full-chain-proof", label, shadowEvidenceId, candidateContentHash: evidence.candidateContentHash, shadowRunId: evidence.identity.runId } }); } }, kernel: undefined });
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally { client.release(); }
   const shadowEvidence = await pool.query("SELECT evidence_id FROM evidence_records WHERE evidence_id = $1 AND project_id = $2 AND goal_id = $3 AND kind = 'shadow-evaluation'", [shadowEvidenceId, candidate.projectId, candidate.goalId]);
-  const journalEvidence = await pool.query("SELECT count(*)::int AS count FROM ipython_session_journal WHERE process_ref = $1 AND project_id = $2 AND goal_id = $3", [processRef, candidate.projectId, candidate.goalId]);
-  expect(result.status).toBe("completed"); expect(shadowEvidence.rowCount).toBe(1); expect(Number(journalEvidence.rows[0]!.count)).toBeGreaterThan(0);
-  const digest = await recordImprovementDigest(pool, { schemaVersion: 1, projectId: goal.projectId, goalId: goal.goalId, episodeId: `phase6-shadow-${label}`,
+  const journalEvidence = await pool.query<{ count: number; candidate_content_hash: string | null }>("SELECT count(*)::int AS count, max(details->>'candidate_content_hash') AS candidate_content_hash FROM ipython_session_journal WHERE process_ref = $1 AND project_id = $2 AND goal_id = $3 AND event IN ('started', 'orphaned', 'completed')", [processRef, candidate.projectId, candidate.goalId]);
+  expect(result.status).toBe("completed"); expect(shadowEvidence.rowCount).toBe(1); expect(Number(journalEvidence.rows[0]!.count)).toBe(3); expect(journalEvidence.rows[0]!.candidate_content_hash).toBe(improvementCandidateContentHash(candidate));
+  const digest = await recordImprovementDigest(pool, { schemaVersion: 1, projectId: goal.projectId, goalId: goal.goalId, episodeId: `phase6-shadow-${label}-${randomUUID()}`,
     trigger: "quality_signal", situation: "Shadow evaluation completed on identical input.", selectedDecision: "Retain shadow comparison as evidence.", rejectedAlternatives: ["Use live authority during shadow."],
-    observedResult: JSON.stringify(result.records), metrics: [{ name: "correctness", value: 0.96, unit: "score" }], confidence: 0.95,
+    observedResult: JSON.stringify(result.records), metrics: [{ name: "correctness", value: 0.96, unit: "score" }, { name: "task_fit", value: result.records[0]!.proposed.messages.length, unit: "message_count" }], confidence: 0.95,
     sourceRefs: [{ kind: "evidence_record", sourceId: goal.evidenceId }, { kind: "evidence_record", sourceId: shadowEvidenceId }], }, goal.proof, { actorId: author.authorId, sessionRef: author.sessionRef });
-  return { result, digestId: digest.digestId, shadowEvidenceId };
+  await pool.query(`INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'improvement-digest', 'application/json', 'project_lifetime')`, [digest.digestId, randomUUID(), randomUUID(), goal.projectId, goal.goalId, actorId, digest.contentHash, JSON.stringify(digest).length]);
+  return { result, digestId: digest.digestId, shadowEvidenceId, taskFit: result.records[0]!.proposed.messages.length };
 }
 
 async function exercisePersistentWorkerOverlay(pool: Pool, goal: ScenarioGoal, activePersona: Record<string, number>): Promise<{ readonly overlayPersona: Record<string, number>; readonly expired: boolean }> {
@@ -233,7 +248,8 @@ describeDatabase("Plan 6 full-chain proof", () => {
     const routeBaseline = await recordImprovementCandidate(pool, createRoutingCapabilityCandidate(routeBaselineInput), routeGoal.proof, author, `phase6-route-baseline-${randomUUID()}`);
     await pool.query("INSERT INTO improvement_candidate_rollback_targets (target_candidate_id, target_version, project_id, goal_id, content_hash, kind, role_id, task_class) VALUES ($1, $2, $3, $4, $5, 'routing_capability_axis', 'head-engineering', 'implementation')", [routeBaseline.candidateId, routeBaseline.version, routeGoal.projectId, routeGoal.goalId, routeBaseline.contentHash]);
     const routeRaw = candidateInput(routeGoal, "routing_capability_axis", routeBaseline.candidateId, [{ axis: "coding", currentValue: 70, proposedValue: 76 }], routeBaseline.contentHash);
-    const routeInput = createRoutingCapabilityCandidate(routeRaw); const routeCandidate = await recordImprovementCandidate(pool, routeInput, routeGoal.proof, author, `phase6-route-${randomUUID()}`);
+    const routeDraftShadow = await shadow(pool, routeRaw, routeGoal, "routing-draft");
+    const routeInput = createRoutingCapabilityCandidate({ ...routeRaw, sourceEvidenceIds: [...routeRaw.sourceEvidenceIds, routeDraftShadow.digestId] }); const routeCandidate = await recordImprovementCandidate(pool, routeInput, routeGoal.proof, author, `phase6-route-${randomUUID()}`);
     const routeEvaluated = await transitionImprovementCandidate(pool, routeCandidate.candidateId, "evaluated", routeGoal.proof, author, `phase6-route-eval-${randomUUID()}`);
     const replay = replayCandidateAgainstFrozenBaseline(routeInput, { scenarioSuite: routeInput.scenarioSuite, goals: [
       { goalId: routeGoal.goalId, input: { request: "review" }, baseline: metrics({ cost: 100 }) },
@@ -241,24 +257,29 @@ describeDatabase("Plan 6 full-chain proof", () => {
     ], evaluate: () => metrics() });
     const synthetic = runSyntheticAdversarialScenarios(routeInput, { scenarios: SYNTHETIC_SCENARIO_SPECS, evaluate: () => metrics() });
     expect(replay.status).toBe("compared"); expect(synthetic.status).toBe("completed");
-    const routeShadow = await shadow(pool, routeInput, routeGoal, "routing");
-    const routeCouncilCommandId = randomUUID();
-    const routeCouncilService = createImprovementCouncilService({ pool, kernel: kernelWithAnswers(routeGoal.digestIds), withGoalLease: async (_goalId, operation) => operation(routeGoal.proof),
-      createAdmission: (input) => encoreAdmission(routeGoal, input.commandId, input.reviewerIndex) });
-    const routeCouncil = await routeCouncilService.review({ candidateId: routeEvaluated.candidateId, goalId: routeGoal.goalId, projectId: routeGoal.projectId, operatorId: evaluatorOperatorId, reviewerCount: 2,
-      evaluation: { evidenceIds: routeGoal.digestIds, quantitative: [{ metric: "correctness", baseline: 0.96, candidate: 0.96 }, { metric: "cost", baseline: 100, candidate: 80 }], qualitative: ["Durable shadow comparison changed only the proposed behavior.", "All reviewed adversarial scenarios passed."] } }, routeCouncilCommandId);
-    const sameModelCommandId = randomUUID();
-    const sameModelCouncil = await runEncoreCouncilReview(pool, kernelWithAnswers(routeGoal.digestIds, true), { goalId: routeGoal.goalId, proof: routeGoal.proof, commandId: sameModelCommandId,
-      question: "Disclose same-model review diversity accurately.", criteria: [{ criterionId: "disclosure", description: "label same-model evidence" }], evidenceIds: routeGoal.digestIds, reviewerCount: 2,
-      admission: (index) => encoreAdmission(routeGoal, sameModelCommandId, index, true) });
+    const routeShadow = await shadow(pool, routeInput, routeGoal, "routing", routeCandidate.candidateId);
     const routeEvaluation = { replay, synthetic };
     const routeEvaluationRecord = await recordRoutingCandidateEvaluation(pool, routeEvaluated.candidateId, routeGoal.proof, routeEvaluation, `phase6-eval-${randomUUID()}`);
-    const routeJudgment = councilProof(routeEvaluated, routeCouncil.roundId, routeGoal.digestIds);
+    const routeEvaluationEvidence = await pool.query(`INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 'routing-evaluation', 'application/json', 'project_lifetime')`, [routeEvaluationRecord.evaluationId, randomUUID(), randomUUID(), routeGoal.projectId, routeGoal.goalId, actorId, routeEvaluationRecord.evaluationHash]);
+    const routeEvidenceIds = [...routeGoal.digestIds, routeDraftShadow.digestId, routeShadow.digestId, routeEvaluationRecord.evaluationId];
+    expect(routeEvaluationEvidence.rowCount).toBe(1);
+    const routeCouncilCommandId = randomUUID();
+    const routeCouncilService = createImprovementCouncilService({ pool, kernel: kernelWithAnswers(routeEvidenceIds), withGoalLease: async (_goalId, operation) => operation(routeGoal.proof),
+      createAdmission: (input) => encoreAdmission(routeGoal, input.commandId, input.reviewerIndex) });
+    const routeCouncil = await routeCouncilService.review({ candidateId: routeEvaluated.candidateId, goalId: routeGoal.goalId, projectId: routeGoal.projectId, operatorId: evaluatorOperatorId, reviewerCount: 2,
+      evaluation: { evidenceIds: routeEvidenceIds, quantitative: [{ metric: "correctness", baseline: 0.96, candidate: 0.96 }, { metric: "cost", baseline: 100, candidate: 80 }], qualitative: ["Durable shadow comparison changed only the proposed behavior.", "All reviewed adversarial scenarios passed."] } }, routeCouncilCommandId);
+    const routeCouncilBinding = await pool.query<{ question: string; evidence_ids: unknown }>("SELECT question, evidence_ids FROM encore_council_rounds WHERE round_id = $1 AND question LIKE $2", [routeCouncil.roundId, `%${routeEvaluated.candidateId}%`]);
+    expect(routeCouncilBinding.rowCount).toBe(1); expect(JSON.stringify(routeCouncilBinding.rows[0]!.evidence_ids)).toContain(routeEvaluationRecord.evaluationId); expect(JSON.stringify(routeCouncilBinding.rows[0]!.evidence_ids)).toContain(routeShadow.digestId);
+    const sameModelCommandId = randomUUID();
+    const sameModelCouncil = await runEncoreCouncilReview(pool, kernelWithAnswers(routeEvidenceIds, true), { goalId: routeGoal.goalId, proof: routeGoal.proof, commandId: sameModelCommandId,
+      question: "Disclose same-model review diversity accurately.", criteria: [{ criterionId: "disclosure", description: "label same-model evidence" }], evidenceIds: routeEvidenceIds, reviewerCount: 2,
+      admission: (index) => encoreAdmission(routeGoal, sameModelCommandId, index, true) });
+    const routeJudgment = councilProof(routeEvaluated, routeCouncil.roundId, routeEvidenceIds);
     const routeJudged = await transitionRoutingCandidateToJudged(pool, routeEvaluated.candidateId, routeGoal.proof, author, {
       evaluationId: routeEvaluationRecord.evaluationId, evaluationHash: routeEvaluationRecord.evaluationHash, councilRoundId: routeCouncil.roundId, councilJudgment: routeJudgment,
     }, `phase6-route-judge-${randomUUID()}`);
     const routingBaseline = routingRequest(routeGoal.goalId); const modelMapBefore = JSON.stringify(routingBaseline.modelMap);
-    const routeSelectionJudgment = councilProof(routeJudged, routeCouncil.roundId, routeGoal.digestIds);
+    const routeSelectionJudgment = councilProof(routeJudged, routeCouncil.roundId, routeEvidenceIds);
     const routeSelection = selectRoutedModelWithRoutingCandidate(routingBaseline, routeJudged, routeSelectionJudgment);
     const modelMapAfter = JSON.stringify(routingBaseline.modelMap);
     await enableImprovementClass(pool, routeGoal.projectId, "routing_capability_axis", routeGoal.proof, actor, `phase6-enable-route-${randomUUID()}`);
@@ -278,16 +299,17 @@ describeDatabase("Plan 6 full-chain proof", () => {
     const floors = Object.fromEntries(boundsRows.rows.map((row) => [row.axis, row.floor_value])); const ceilings = Object.fromEntries(boundsRows.rows.map((row) => [row.axis, row.ceiling_value]));
     const guardDraft = runDeterministicCandidateGuards(personaRaw, { roleFloors: floors, roleCeilings: ceilings, mandatoryScenarioIds: SYNTHETIC_SCENARIO_SPECS.map((scenario) => scenario.scenarioId), baselineProfile: activePersona.persona, existingProfiles: [activePersona.persona, { ...activePersona.persona, caution: Math.max(0, activePersona.persona.caution - 0.1) }], diversityPreserved: true });
     expect(guardDraft.passed).toBe(true);
+    const personaDraftShadow = await shadow(pool, personaRaw, personaGoal, "persona-draft");
     const replayDraft = replayCandidateAgainstFrozenBaseline(personaRaw, { scenarioSuite: personaRaw.scenarioSuite, guards: { roleFloors: floors, roleCeilings: ceilings, diversityPreserved: true }, goals: [{ goalId: personaGoal.goalId, input: { request: "review" }, baseline: metrics({ cost: 100 }) }], evaluate: () => metrics({ correctness: 0.98 }) });
     expect(replayDraft.status).toBe("compared"); const syntheticDraft = runSyntheticAdversarialScenarios(personaRaw, { scenarios: SYNTHETIC_SCENARIO_SPECS, guards: { roleFloors: floors, roleCeilings: ceilings, diversityPreserved: true }, evaluate: () => metrics({ correctness: 0.97 }) });
     expect(syntheticDraft.status).toBe("completed");
     const personaEvaluationDigest = await recordImprovementDigest(pool, { schemaVersion: 1, projectId: personaGoal.projectId, goalId: personaGoal.goalId, episodeId: `phase6-persona-evaluation-${randomUUID()}`,
       trigger: "quality_signal", situation: "Replay and synthetic evaluation completed against the frozen persona baseline.", selectedDecision: "Retain the bounded evaluation evidence.", rejectedAlternatives: ["Skip adversarial scenarios."],
       observedResult: JSON.stringify({ replay: replayDraft, synthetic: syntheticDraft }), metrics: [{ name: "correctness", value: 0.97, unit: "score" }], confidence: 0.95,
-      sourceRefs: [{ kind: "evidence_record", sourceId: personaGoal.evidenceId }], }, personaGoal.proof, { actorId: author.authorId, sessionRef: author.sessionRef });
+      sourceRefs: [{ kind: "evidence_record", sourceId: personaGoal.evidenceId }, { kind: "evidence_record", sourceId: personaDraftShadow.digestId }], }, personaGoal.proof, { actorId: author.authorId, sessionRef: author.sessionRef });
     const personaEvaluationEvidence = await pool.query(`INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 'improvement-evaluation', 'application/json', 'project_lifetime')`, [personaEvaluationDigest.digestId, randomUUID(), randomUUID(), personaGoal.projectId, personaGoal.goalId, actorId, personaEvaluationDigest.contentHash]);
     expect(personaEvaluationDigest.digestId).toMatch(/[0-9a-f-]{36}/); expect(personaEvaluationEvidence.rowCount).toBe(1);
-    const personaEvidenceIds = [...personaGoal.digestIds, personaEvaluationDigest.digestId];
+    const personaEvidenceIds = [...personaGoal.digestIds, personaEvaluationDigest.digestId, personaDraftShadow.digestId];
     const personaInput = { ...personaRaw, sourceEvidenceIds: personaEvidenceIds };
     const personaCandidate = await recordImprovementCandidate(pool, personaInput, personaGoal.proof, author, `phase6-persona-${randomUUID()}`);
     const personaEvaluated = await transitionImprovementCandidate(pool, personaCandidate.candidateId, "evaluated", personaGoal.proof, author, `phase6-persona-eval-${randomUUID()}`);
@@ -296,12 +318,20 @@ describeDatabase("Plan 6 full-chain proof", () => {
     const personaReplay = replayCandidateAgainstFrozenBaseline(personaInput, { scenarioSuite: personaInput.scenarioSuite, guards: { roleFloors: floors, roleCeilings: ceilings, diversityPreserved: true }, goals: [{ goalId: personaGoal.goalId, input: { request: "review" }, baseline: metrics({ cost: 100 }) }], evaluate: () => metrics({ correctness: 0.98 }) });
     expect(personaReplay.status).toBe("compared"); const personaSynthetic = runSyntheticAdversarialScenarios(personaInput, { scenarios: SYNTHETIC_SCENARIO_SPECS, guards: { roleFloors: floors, roleCeilings: ceilings, diversityPreserved: true }, evaluate: () => metrics({ correctness: 0.97 }) });
     expect(personaSynthetic.status).toBe("completed");
-    const personaShadow = await shadow(pool, personaInput, personaGoal, "persona");
+    const personaShadow = await shadow(pool, personaInput, personaGoal, "persona", personaCandidate.candidateId);
+    const personaCouncilEvidenceIds = [...personaEvidenceIds, personaShadow.digestId];
     const personaCouncilCommandId = randomUUID();
-    const personaCouncilService = createImprovementCouncilService({ pool, kernel: kernelWithAnswers(personaEvidenceIds), withGoalLease: async (_goalId, operation) => operation(personaGoal.proof),
+    const personaCouncilService = createImprovementCouncilService({ pool, kernel: kernelWithAnswers(personaCouncilEvidenceIds), withGoalLease: async (_goalId, operation) => operation(personaGoal.proof),
       createAdmission: (input) => encoreAdmission(personaGoal, input.commandId, input.reviewerIndex) });
     const personaCouncil = await personaCouncilService.review({ candidateId: personaEvaluated.candidateId, goalId: personaGoal.goalId, projectId: personaGoal.projectId, operatorId: evaluatorOperatorId, reviewerCount: 2,
-      evaluation: { evidenceIds: personaEvidenceIds, quantitative: [{ metric: "correctness", baseline: 0.96, candidate: 0.98 }, { metric: "cost", baseline: 100, candidate: 80 }], qualitative: ["The candidate remains within reviewed persona floors.", "The persistent overlay and shadow comparison are bounded."] } }, personaCouncilCommandId);
+      evaluation: { evidenceIds: personaCouncilEvidenceIds, quantitative: [{ metric: "correctness", baseline: 0.96, candidate: 0.98 }, { metric: "cost", baseline: 100, candidate: 80 }], qualitative: ["The candidate remains within reviewed persona floors.", "The persistent overlay and shadow comparison are bounded."] } }, personaCouncilCommandId);
+    const personaCouncilBinding = await pool.query<{ question: string; evidence_ids: unknown }>("SELECT question, evidence_ids FROM encore_council_rounds WHERE round_id = $1 AND question LIKE $2", [personaCouncil.roundId, `%${personaEvaluated.candidateId}%`]);
+    expect(personaCouncilBinding.rowCount).toBe(1); expect(JSON.stringify(personaCouncilBinding.rows[0]!.evidence_ids)).toContain(personaShadow.digestId);
+    const knowledge = await proposeOrganizationalKnowledge(pool, { schemaVersion: 1, projectId: personaGoal.projectId, sourceGoalId: personaGoal.goalId, departmentId: "engineering", statement: "Bounded verification improves implementation task fit without expanding authority.", rationale: "A generalized lesson retains no raw project content.", sourceEvidenceIds: personaGoal.evidenceIds, sourceDigestIds: personaGoal.digestIds, episodeIds: personaGoal.digestIds.map((_id, index) => `phase6-persona-${index}`), confidence: 0.9, freshness: 1, generalized: true, noRawProjectContent: true, noPersonalInformation: true }, personaGoal.proof, { actorId: personaGoal.proof.ownerId, sessionRef: "phase6-knowledge-author", operatorId: actorId, operatorRoleId: "engineering" }, `phase6-knowledge-${randomUUID()}`);
+    const projectKnowledge = await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: knowledge.knowledgeId, promoterRoleId: "head-engineering", promoterOperatorId: evaluatorOperatorId, departmentId: "engineering", proof: personaGoal.proof, idempotencyKey: `phase6-project-knowledge-${randomUUID()}` });
+    const knowledgeCouncilCommandId = randomUUID();
+    const knowledgeCouncil = await runEncoreCouncilReview(pool, kernelWithAnswers(personaGoal.digestIds), { goalId: personaGoal.goalId, proof: personaGoal.proof, commandId: knowledgeCouncilCommandId, question: "Should this generalized lesson cross the project boundary?", criteria: [{ criterionId: "privacy", description: "retain only generalized, non-private evidence" }], evidenceIds: personaGoal.digestIds, reviewerCount: 2, admission: (index) => encoreAdmission(personaGoal, knowledgeCouncilCommandId, index) });
+    const globalKnowledge = await promoteOrganizationalKnowledgeToGlobal(pool, { knowledgeId: projectKnowledge.knowledgeId, promoterRoleId: "head-engineering", promoterOperatorId: evaluatorOperatorId, departmentId: "engineering", proof: personaGoal.proof, encoreCouncilRoundId: knowledgeCouncil.roundId, corroboratingSourceIds: personaGoal.digestIds, corroboratingEpisodeIds: personaGoal.digestIds.map((_id, index) => `phase6-persona-${index}`), generalizedStatement: "Bounded verification improves implementation task fit without expanding authority.", curatorRoleId: "head-product", curatorOperatorId: actorId, idempotencyKey: `phase6-global-knowledge-${randomUUID()}` });
     const personaJudged = await transitionImprovementCandidate(pool, personaEvaluated.candidateId, "judged", personaGoal.proof, author, `phase6-persona-judge-${randomUUID()}`);
     await enableImprovementClass(pool, personaGoal.projectId, "persona_axis", personaGoal.proof, actor, `phase6-enable-persona-${randomUUID()}`);
     const personaRollout = await startBoundedRollout(pool, personaJudged.candidateId, { roleId: "head-engineering", taskClass: "implementation", maxGoalCount: 1, windowStart: "2026-09-14T00:00:00.000Z", windowEnd: "2026-09-15T00:00:00.000Z" }, personaGoal.proof, actor, `phase6-start-persona-${randomUUID()}`);
@@ -332,7 +362,10 @@ describeDatabase("Plan 6 full-chain proof", () => {
     const globalRows = await pool.query<{ role_id: string; profile: unknown; source: string }>("SELECT role_id, profile, source FROM persona_profile_versions");
     const concertmasterSeed = await pool.query<{ profile: unknown }>("SELECT profile FROM persona_profile_versions WHERE role_id = 'concertmaster' AND version = 1");
     const headBaselineAfter = await pool.query("SELECT version, profile, source FROM persona_profile_versions WHERE role_id = 'head-engineering' ORDER BY version DESC LIMIT 1");
-    const uiExplanation = { changedAxes: personaInput.changes.map((change) => change.axis), expectedBehavior: personaInput.predictedEffect, evidence: personaInput.sourceEvidenceIds, rollback: personaInput.rollbackTarget };
+    const persistedPersona = await readImprovementCandidate(pool, personaCouncil.candidateId, { operatorId: evaluatorOperatorId, proof: personaGoal.proof });
+    const personaHistory = await pool.query<{ question: string; evidence_ids: unknown }>("SELECT question, evidence_ids FROM encore_council_rounds WHERE round_id = $1 AND question LIKE $2", [personaCouncil.roundId, `%${persistedPersona.candidateId}%`]);
+    const uiExplanation = { changedAxes: persistedPersona.changes.map((change) => change.axis), expectedBehavior: persistedPersona.predictedEffect, evidence: [...persistedPersona.sourceEvidenceIds, personaShadow.digestId], rollback: persistedPersona.rollbackTarget, councilRoundId: personaCouncil.roundId, durableHistory: personaHistory.rowCount === 1 };
+    const knowledgeRows = await pool.query<{ scope: string; project_id: string | null; source_project_id: string; generalized: boolean; source_evidence_ids: unknown }>("SELECT scope, project_id, source_project_id, generalized, source_evidence_ids FROM organizational_knowledge WHERE knowledge_id = $1 ORDER BY revision", [knowledge.knowledgeId]);
     const routeCouncilRows = await pool.query<{ model_provider: string; model_id: string }>("SELECT model_provider, model_id FROM encore_council_judgments WHERE round_id = $1", [routeCouncil.roundId]);
     const invalidAxisRejections = PERSONA_AXES.every((axis) => { try { parsePersonaProfile({ ...activePersona.persona, [axis]: 1.1 }); return false; } catch { return true; } });
     const incompleteCandidates = [
@@ -350,11 +383,11 @@ describeDatabase("Plan 6 full-chain proof", () => {
       ["low-cost regression fails hard floor", hardFloor.accepted === false],
       ["diversity collapse fails", diversity.passed === false],
       ["route regression restores exact version", routeOutcome.status === "rolled_back" && routeOutcome.activeCandidateId === routeBaseline.candidateId && routeOutcome.activeVersion === routeBaseline.version && routeOutcome.rollbackTarget.contentHash === routeBaseline.contentHash],
-            ["explanation carries changed axes/effect/evidence/rollback", uiExplanation.changedAxes.length === 2 && uiExplanation.expectedBehavior.length > 0 && uiExplanation.evidence.length > 0 && uiExplanation.rollback !== undefined],
-      ["project evidence is not global profile data", globalRows.rows.every((row) => !JSON.stringify(row.profile).includes(personaGoal.evidenceId) && !personaGoal.digestIds.some((digestId) => JSON.stringify(row.profile).includes(digestId)))],
+            ["explanation carries changed axes/effect/evidence/rollback", uiExplanation.durableHistory && uiExplanation.councilRoundId === personaCouncil.roundId && uiExplanation.changedAxes.length === 2 && uiExplanation.expectedBehavior.length > 0 && uiExplanation.evidence.includes(personaShadow.digestId) && uiExplanation.rollback !== undefined],
+      ["project evidence is not global profile data", globalKnowledge.scope === "global" && globalKnowledge.generalized === true && globalKnowledge.statement.includes("without expanding authority") && knowledgeRows.rows.some((row) => row.scope === "global" && row.project_id === null && row.source_project_id === personaGoal.projectId && row.generalized === true && !JSON.stringify(row.source_evidence_ids).includes(personaGoal.evidenceId)) && globalRows.rows.every((row) => !JSON.stringify(row.profile).includes(personaGoal.evidenceId) && !personaGoal.digestIds.some((digestId) => JSON.stringify(row.profile).includes(digestId)))],
       ["bounded overlay is readable and challengeable", resulting.layers.missionOverlay.caution === overlayCaution && Object.values(derivedWorkerOverlay).every((value) => value >= 0 && value <= 1) && Object.values(persistentWorkerOverlay.overlayPersona).every((value) => value >= 0 && value <= 1) && persistentWorkerOverlay.expired && !isMissionPersonaOverlayExpired({ expiresAt: "2026-09-14T02:00:00.000Z" }, new Date("2026-09-14T01:00:00.000Z")) && isMissionPersonaOverlayExpired({ expiresAt: "2026-09-14T00:00:00.000Z" }, new Date("2026-09-14T01:00:00.000Z")) && readChallenge.status === "open" && metronomeChallenge.evidenceReferences.includes(personaGoal.evidenceId)],
       ["same replay is deterministic and measurable", personaReplay.status === "compared" && personaReplay.results[0]!.candidate.correctness > personaReplay.results[0]!.baseline.correctness && JSON.stringify(personaReplay) === JSON.stringify(replayCandidateAgainstFrozenBaseline(personaInput, { scenarioSuite: personaInput.scenarioSuite, guards: { roleFloors: floors, roleCeilings: ceilings, diversityPreserved: true }, goals: [{ goalId: personaGoal.goalId, input: { request: "review" }, baseline: metrics({ cost: 100 }) }], evaluate: () => metrics({ correctness: 0.98 }) }))],
-      ["shadow output changes behavior without permissions", personaShadow.result.records.length > 0 && personaShadow.result.records[0]!.matchesActive === false && personaShadow.result.liveEffects.length === 0 && JSON.stringify(personaShadow.result.records[0]!.input) === JSON.stringify(personaShadow.result.records[0]!.activeInput) && JSON.stringify(personaShadow.result.records[0]!.active.plans) === JSON.stringify(personaShadow.result.records[0]!.proposed.plans) && JSON.stringify(personaShadow.result.records[0]!.active.challenges) === JSON.stringify(personaShadow.result.records[0]!.proposed.challenges)],
+      ["shadow output changes behavior without permissions", personaShadow.taskFit > 0 && personaShadow.result.records.length > 0 && personaShadow.result.records[0]!.matchesActive === false && personaShadow.result.records[0]!.readEvidenceIds.includes(personaGoal.evidenceId) && personaShadow.result.liveEffects.length === 0 && JSON.stringify(personaShadow.result.records[0]!.input) === JSON.stringify(personaShadow.result.records[0]!.activeInput) && JSON.stringify(personaShadow.result.records[0]!.active.plans) === JSON.stringify(personaShadow.result.records[0]!.proposed.plans) && JSON.stringify(personaShadow.result.records[0]!.active.challenges) === JSON.stringify(personaShadow.result.records[0]!.proposed.challenges)],
     ];
     for (const [name, passed] of acceptance) expect(passed, name).toBe(true);
     const nativeReviewerOperators = await pool.query<{ operator_id: string }>("SELECT DISTINCT operator_id FROM native_execution_bindings WHERE goal_id = $1 AND admission_kind = 'encore_reviewer'", [routeGoal.goalId]);
