@@ -107,7 +107,7 @@ export async function listPermanentRoles(pool: Pool): Promise<readonly Permanent
   return Promise.all(result.rows.map(async (row) => toPermanentRole(row, await getPersona(pool, row.role_id))));
 }
 
-export async function getPermanentRole(pool: Pool, roleId: string): Promise<PermanentRole | undefined> {
+export async function getPermanentRole(pool: Queryable, roleId: string): Promise<PermanentRole | undefined> {
   const role = await pool.query<PermanentRoleRow>(
     `SELECT role_id, display_name, status, role_kind, department_id, role_charter, capability_boundary, provenance
        FROM permanent_roles WHERE role_id = $1`, [roleId],
