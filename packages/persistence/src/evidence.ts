@@ -6,6 +6,7 @@ import { withGoalAuthority } from "./goal-authority.js";
 import { assertProjectMembership, assertProjectRole } from "./project-membership.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CRITICAL_ROLE_QUERY = "SELECT 1 FROM permanent_roles WHERE status = 'standing' AND ((role_id = $1 AND role_kind = 'department_head') OR ($1 = 'ceo' AND role_id = 'concertmaster' AND role_kind = 'concertmaster'))";
 
 export type EvidenceMetadataInput = Omit<EvidenceRecord, "createdAt">;
 
@@ -99,7 +100,7 @@ export async function deleteEvidenceSource(pool: Pool, evidenceId: string, reaso
       if (goal.rowCount !== 1 || tomb.project_id.toLowerCase() !== goal.rows[0]!.project_id.toLowerCase() || tomb.goal_id.toLowerCase() !== proof.goalId.toLowerCase() || tomb.owner_id !== proof.ownerId || tomb.fencing_token !== String(proof.fencingToken) || tomb.reason !== reason || tomb.recorded_by !== recordedBy) throw new Error("conflicting source evidence loss retry");
       await assertProjectMembership(client, recordedBy, tomb.project_id);
       await assertProjectRole(client, recordedBy, tomb.project_id, operatorRoleId);
-      const criticalRetry = await client.query("SELECT 1 FROM permanent_roles WHERE role_id = $1 AND role_kind IN ('department_head', 'ceo') AND status = 'standing'", [operatorRoleId]);
+      const criticalRetry = await client.query(CRITICAL_ROLE_QUERY, [operatorRoleId]);
       if (criticalRetry.rowCount !== 1) throw new Error("source evidence loss requires a standing Department Head or CEO role");
       return;
     }
@@ -107,7 +108,7 @@ export async function deleteEvidenceSource(pool: Pool, evidenceId: string, reaso
     if (source.rowCount !== 1 || source.rows[0]!.goal_id !== proof.goalId || source.rows[0]!.project_id !== source.rows[0]!.goal_project_id) throw new Error("source evidence is outside the Goal lease/project");
     await assertProjectMembership(client, recordedBy, source.rows[0]!.project_id);
     await assertProjectRole(client, recordedBy, source.rows[0]!.project_id, operatorRoleId);
-    const criticalRole = await client.query("SELECT 1 FROM permanent_roles WHERE role_id = $1 AND role_kind IN ('department_head', 'ceo') AND status = 'standing'", [operatorRoleId]);
+    const criticalRole = await client.query(CRITICAL_ROLE_QUERY, [operatorRoleId]);
     if (criticalRole.rowCount !== 1) throw new Error("source evidence loss requires a standing Department Head or CEO role");
     const token = randomUUID();
     await client.query("SELECT authorize_source_evidence_loss($1, $2::uuid, $3::uuid, $4::uuid, $5, $6::bigint, $7, $8::uuid, $9)", [token, evidenceId.toLowerCase(), source.rows[0]!.goal_id, source.rows[0]!.project_id, proof.ownerId, proof.fencingToken, reason, recordedBy, operatorRoleId]);

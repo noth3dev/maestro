@@ -297,6 +297,20 @@ describeDatabase("organizational knowledge persistence", () => {
     await expect(proposeOrganizationalKnowledge(pool, proposal({ sourceEvidenceIds: [], sourceDigestIds: [digest.digestId], episodeIds: ["digest-episode"] }), proof, { actorId: "worker", sessionRef: "session:post-loss", operatorId, operatorRoleId: "head-engineering" }, "post-loss-proposal")).rejects.toThrow(/withdrawn|loss|digest/);
   });
 
+  it("allows the CEO alias to delete evidence and preserve unsupported provenance", async () => {
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
+    const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "head-engineering" }, "ceo-source-loss");
+    await promoteOrganizationalKnowledgeToProject(pool, { knowledgeId: proposed.knowledgeId, proof, promoterRoleId: "head-engineering", promoterOperatorId: curatorOperatorId, departmentId: "engineering", idempotencyKey: "ceo-project-promotion" });
+
+    await expect(deleteEvidenceSource(pool, evidenceId, "CEO-authorized source loss", curatorOperatorId, proof, "ceo")).resolves.toBeUndefined();
+    await expect(deleteEvidenceSource(pool, evidenceId, "CEO-authorized source loss", curatorOperatorId, proof, "ceo")).resolves.toBeUndefined();
+
+    await expect(pool.query("SELECT count(*)::int AS count FROM evidence_records WHERE evidence_id = $1", [evidenceId])).resolves.toMatchObject({ rows: [{ count: 0 }] });
+    const latest = await pool.query<{ status: string; source_evidence_ids: string[]; promotion_operator_id: string; promotion_role_id: string }>("SELECT status, source_evidence_ids, promotion_operator_id, promotion_role_id FROM organizational_knowledge WHERE knowledge_id = $1 ORDER BY revision DESC LIMIT 1", [proposed.knowledgeId]);
+    expect(latest.rows[0]).toMatchObject({ status: "unsupported", promotion_operator_id: curatorOperatorId, promotion_role_id: "ceo" });
+    expect(latest.rows[0]?.source_evidence_ids).toContain(evidenceId);
+  });
+
   it("marks source-evidence loss unsupported and retires without deleting provenance", async () => {
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "worker", leaseDurationMs: 60_000 });
     const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: "worker", sessionRef: "session:worker", operatorId, operatorRoleId: "head-engineering" }, "proposal-default");
