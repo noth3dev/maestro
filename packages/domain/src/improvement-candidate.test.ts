@@ -103,6 +103,10 @@ describe("Improvement Candidate contract", () => {
     expect(revision.candidateId).not.toBe(original.candidateId);
     expect(original.version).toBe(1);
     expect(original.changes[0]!.proposedValue).toBe(0.76);
+    expect(Object.isFrozen(original)).toBe(true);
+    expect(Object.isFrozen(original.target)).toBe(true);
+    expect(Object.isFrozen(original.expectedMetrics)).toBe(true);
+    expect(Object.isFrozen(original.expectedMetrics[0])).toBe(true);
   });
 
   it("accepts the shared routing shape while enforcing its target and score semantics", () => {

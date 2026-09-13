@@ -362,10 +362,14 @@ export function materializeImprovementCandidate(input: ImprovementCandidateInput
   const state = identity.state ?? "candidate";
   return Object.freeze({
     ...input,
+    target: Object.freeze({ ...input.target }),
     sourceEvidenceIds: Object.freeze([...input.sourceEvidenceIds.map((id) => id.toLowerCase())]),
     changes: Object.freeze(input.changes.map((change) => Object.freeze({ ...change }))),
+    expectedMetrics: Object.freeze(input.expectedMetrics.map((metric) => Object.freeze({ ...metric }))),
     protectedMetrics: Object.freeze(input.protectedMetrics.map((metric) => Object.freeze({ ...metric }))),
     scenarioSuite: Object.freeze([...input.scenarioSuite]),
+    dataSufficiency: Object.freeze({ ...input.dataSufficiency }),
+    rollbackTarget: Object.freeze({ ...input.rollbackTarget }),
     candidateId: identity.candidateId.toLowerCase(),
     version: identity.version,
     contentHash: improvementCandidateContentHash(input),
