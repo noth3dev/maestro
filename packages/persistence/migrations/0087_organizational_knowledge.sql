@@ -695,6 +695,12 @@ CREATE TABLE IF NOT EXISTS organizational_knowledge_schema_cleanup_authorization
 );
 REVOKE ALL ON organizational_knowledge_schema_cleanup_authorizations FROM PUBLIC;
 
+CREATE OR REPLACE FUNCTION reject_organizational_knowledge_schema_cleanup_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN RAISE EXCEPTION 'schema cleanup authorizations are internal and append-only'; END;
+$$;
+DROP TRIGGER IF EXISTS organizational_knowledge_schema_cleanup_immutable ON organizational_knowledge_schema_cleanup_authorizations;
+CREATE TRIGGER organizational_knowledge_schema_cleanup_immutable BEFORE UPDATE OR DELETE ON organizational_knowledge_schema_cleanup_authorizations FOR EACH ROW EXECUTE FUNCTION reject_organizational_knowledge_schema_cleanup_mutation();
+
 CREATE OR REPLACE FUNCTION maestro_goal_truncate_reset() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
   IF session_user <> (SELECT tableowner FROM pg_catalog.pg_tables WHERE schemaname = TG_TABLE_SCHEMA AND tablename = TG_TABLE_NAME) THEN RAISE EXCEPTION 'schema cleanup reset requires the goals table owner'; END IF;
@@ -730,6 +736,8 @@ DROP TRIGGER IF EXISTS knowledge_promotion_authorizations_no_truncate ON knowled
 CREATE TRIGGER knowledge_promotion_authorizations_no_truncate BEFORE TRUNCATE ON knowledge_promotion_authorizations FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
 DROP TRIGGER IF EXISTS knowledge_proposal_authorizations_no_truncate ON knowledge_proposal_authorizations;
 CREATE TRIGGER knowledge_proposal_authorizations_no_truncate BEFORE TRUNCATE ON knowledge_proposal_authorizations FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
+DROP TRIGGER IF EXISTS organizational_knowledge_schema_cleanup_no_truncate ON organizational_knowledge_schema_cleanup_authorizations;
+CREATE TRIGGER organizational_knowledge_schema_cleanup_no_truncate BEFORE TRUNCATE ON organizational_knowledge_schema_cleanup_authorizations FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
 
 DO $$
 DECLARE knowledge_schema text := current_schema();
@@ -748,6 +756,7 @@ BEGIN
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.maestro_goal_truncate_reset() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_unscoped_truncate() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_evidence_source_reuse() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_organizational_knowledge_schema_cleanup_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint, uuid, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint, uuid, text, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_source_evidence_loss(text, uuid, uuid, uuid, text, bigint, text, uuid, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
