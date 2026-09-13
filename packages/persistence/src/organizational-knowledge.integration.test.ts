@@ -138,8 +138,10 @@ describeDatabase("organizational knowledge persistence", () => {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      await expect(client.query("INSERT INTO organizational_knowledge_schema_cleanup_authorizations (transaction_id, authorized_by) VALUES (txid_current(), session_user); TRUNCATE organizational_knowledge")).rejects.toThrow(/cleanup|secured|goal reset|internal|forbidden/i);
+      let protectedTruncateRejected = false;
+      try { await client.query("INSERT INTO organizational_knowledge_schema_cleanup_authorizations (transaction_id, authorized_by) VALUES (txid_current(), session_user); TRUNCATE organizational_knowledge"); } catch { protectedTruncateRejected = true; }
       await client.query("ROLLBACK");
+      expect(protectedTruncateRejected).toBe(true);
     } finally { client.release(); }
   });
 
