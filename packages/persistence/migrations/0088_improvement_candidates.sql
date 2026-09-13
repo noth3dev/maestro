@@ -23,11 +23,11 @@ CREATE TABLE IF NOT EXISTS improvement_candidates (
   rollback_target jsonb NOT NULL CHECK (jsonb_typeof(rollback_target) = 'object'),
   state text NOT NULL CHECK (state IN ('candidate', 'evaluated', 'judged', 'applied', 'rejected', 'retained', 'rolled_back')),
   content_hash char(64) NOT NULL CHECK (content_hash ~ '^[0-9a-f]{64}$'),
-  author_id text NOT NULL CHECK (btrim(author_id) <> '' AND length(author_id) <= 256),
+  author_id text NOT NULL CHECK (btrim(author_id) <> '' AND length(author_id) <= 256 AND author_id !~ E'[\r\n]' AND author_id !~* '(authorization[[:space:]]*:[[:space:]]*bearer|bearer[[:space:]]+|password[[:space:]]*[:=]|passwd[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|access[_-]?token[[:space:]]*[:=]|private[_-]?key|credential[[:space:]]*[:=]|-----BEGIN|(^|[^a-z0-9])(sk|pk)-[a-z0-9_-]{16,}|eyj[a-z0-9_-]+\.[a-z0-9_-]+\.[a-z0-9_-]+|AKIA[0-9A-Z]{16}|gh[pousr]_[a-z0-9]{20,}|AIza[0-9a-z_-]{20,}|xox[baprs]-[0-9a-z-]{20,}|hf_[a-z0-9]{20,})'),
   author_operator_id uuid NOT NULL,
-  author_role_id text NOT NULL CHECK (btrim(author_role_id) <> '' AND length(author_role_id) <= 256),
-  session_ref text NOT NULL CHECK (btrim(session_ref) <> '' AND length(session_ref) <= 256),
-  operation_ref text NOT NULL UNIQUE CHECK (btrim(operation_ref) <> '' AND length(operation_ref) <= 256),
+  author_role_id text NOT NULL CHECK (btrim(author_role_id) <> '' AND length(author_role_id) <= 256 AND author_role_id !~ E'[\r\n]' AND author_role_id !~* '(authorization[[:space:]]*:[[:space:]]*bearer|bearer[[:space:]]+|password[[:space:]]*[:=]|passwd[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|access[_-]?token[[:space:]]*[:=]|private[_-]?key|credential[[:space:]]*[:=]|-----BEGIN|(^|[^a-z0-9])(sk|pk)-[a-z0-9_-]{16,}|eyj[a-z0-9_-]+\.[a-z0-9_-]+\.[a-z0-9_-]+|AKIA[0-9A-Z]{16}|gh[pousr]_[a-z0-9]{20,}|AIza[0-9a-z_-]{20,}|xox[baprs]-[0-9a-z-]{20,}|hf_[a-z0-9]{20,})'),
+  session_ref text NOT NULL CHECK (btrim(session_ref) <> '' AND length(session_ref) <= 256 AND session_ref !~ E'[\r\n]' AND session_ref !~* '(authorization[[:space:]]*:[[:space:]]*bearer|bearer[[:space:]]+|password[[:space:]]*[:=]|passwd[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|access[_-]?token[[:space:]]*[:=]|private[_-]?key|credential[[:space:]]*[:=]|-----BEGIN|(^|[^a-z0-9])(sk|pk)-[a-z0-9_-]{16,}|eyj[a-z0-9_-]+\.[a-z0-9_-]+\.[a-z0-9_-]+|AKIA[0-9A-Z]{16}|gh[pousr]_[a-z0-9]{20,}|AIza[0-9a-z_-]{20,}|xox[baprs]-[0-9a-z-]{20,}|hf_[a-z0-9]{20,})'),
+  operation_ref text NOT NULL UNIQUE CHECK (btrim(operation_ref) <> '' AND length(operation_ref) <= 256 AND operation_ref !~ E'[\r\n]' AND operation_ref !~* '(authorization[[:space:]]*:[[:space:]]*bearer|bearer[[:space:]]+|password[[:space:]]*[:=]|passwd[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|access[_-]?token[[:space:]]*[:=]|private[_-]?key|credential[[:space:]]*[:=]|-----BEGIN|(^|[^a-z0-9])(sk|pk)-[a-z0-9_-]{16,}|eyj[a-z0-9_-]+\.[a-z0-9_-]+\.[a-z0-9_-]+|AKIA[0-9A-Z]{16}|gh[pousr]_[a-z0-9]{20,}|AIza[0-9a-z_-]{20,}|xox[baprs]-[0-9a-z-]{20,}|hf_[a-z0-9]{20,})'),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   retention retention_class NOT NULL DEFAULT 'project_lifetime',
   UNIQUE (lineage_id, version),
@@ -63,8 +63,8 @@ CREATE TABLE IF NOT EXISTS improvement_candidate_insert_authorizations (
   project_id uuid NOT NULL,
   goal_id uuid NOT NULL REFERENCES goals(goal_id),
   author_operator_id uuid NOT NULL,
-  author_role_id text NOT NULL CHECK (btrim(author_role_id) <> '' AND length(author_role_id) <= 256),
-  operation_ref text NOT NULL CHECK (btrim(operation_ref) <> '' AND length(operation_ref) <= 256),
+  author_role_id text NOT NULL CHECK (btrim(author_role_id) <> '' AND length(author_role_id) <= 256 AND author_role_id !~ E'[\r\n]' AND author_role_id !~* '(authorization[[:space:]]*:[[:space:]]*bearer|bearer[[:space:]]+|password[[:space:]]*[:=]|passwd[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|access[_-]?token[[:space:]]*[:=]|private[_-]?key|credential[[:space:]]*[:=]|-----BEGIN|(^|[^a-z0-9])(sk|pk)-[a-z0-9_-]{16,}|eyj[a-z0-9_-]+\.[a-z0-9_-]+\.[a-z0-9_-]+|AKIA[0-9A-Z]{16}|gh[pousr]_[a-z0-9]{20,}|AIza[0-9a-z_-]{20,}|xox[baprs]-[0-9a-z-]{20,}|hf_[a-z0-9]{20,})'),
+  operation_ref text NOT NULL CHECK (btrim(operation_ref) <> '' AND length(operation_ref) <= 256 AND operation_ref !~ E'[\r\n]' AND operation_ref !~* '(authorization[[:space:]]*:[[:space:]]*bearer|bearer[[:space:]]+|password[[:space:]]*[:=]|passwd[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|access[_-]?token[[:space:]]*[:=]|private[_-]?key|credential[[:space:]]*[:=]|-----BEGIN|(^|[^a-z0-9])(sk|pk)-[a-z0-9_-]{16,}|eyj[a-z0-9_-]+\.[a-z0-9_-]+\.[a-z0-9_-]+|AKIA[0-9A-Z]{16}|gh[pousr]_[a-z0-9]{20,}|AIza[0-9a-z_-]{20,}|xox[baprs]-[0-9a-z-]{20,}|hf_[a-z0-9]{20,})'),
   state text NOT NULL CHECK (state IN ('candidate', 'evaluated', 'judged', 'applied', 'rejected', 'retained', 'rolled_back')),
   content_hash char(64) NOT NULL CHECK (content_hash ~ '^[0-9a-f]{64}$'),
   payload jsonb NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
@@ -342,8 +342,8 @@ BEGIN
       field_name text;
     BEGIN
       IF btrim(coalesce(p_token, '')) = '' OR p_candidate_id IS NULL OR p_lineage_id IS NULL OR p_project_id IS NULL OR p_goal_id IS NULL
-         OR p_version IS NULL OR p_version < 1 OR btrim(coalesce(p_owner_id, '')) = '' OR p_fencing_token IS NULL OR p_fencing_token <= 0
-         OR btrim(coalesce(p_operation_ref, '')) = '' OR length(p_operation_ref) > 256 OR p_state IS NULL OR p_state NOT IN ('candidate', 'evaluated', 'judged', 'applied', 'rejected', 'retained', 'rolled_back') OR p_payload IS NULL OR jsonb_typeof(p_payload) <> 'object' THEN
+         OR p_version IS NULL OR p_version < 1 OR btrim(coalesce(p_owner_id, '')) = '' OR p_owner_id ~ E'[\r\n]' OR p_owner_id ~* '(password|secret|api[_-]?key|private[_-]?key|bearer)' OR p_fencing_token IS NULL OR p_fencing_token <= 0
+         OR btrim(coalesce(p_operation_ref, '')) = '' OR length(p_operation_ref) > 256 OR p_operation_ref ~ E'[\r\n]' OR p_operation_ref ~* '(password|secret|api[_-]?key|private[_-]?key|bearer)' OR p_state IS NULL OR p_state NOT IN ('candidate', 'evaluated', 'judged', 'applied', 'rejected', 'retained', 'rolled_back') OR p_payload IS NULL OR jsonb_typeof(p_payload) <> 'object' THEN
         RAISE EXCEPTION 'candidate authorization context is invalid';
       END IF;
       canonical_hash := encode(public.digest(%1$s.improvement_candidate_canonical_json(p_payload), 'sha256'), 'hex');
