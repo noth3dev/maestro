@@ -60,3 +60,5 @@ export * from "./capacity-reservation.js";
 export * from "./portfolio-council.js";
 
 export * from "./organizational-knowledge.js";
+
+export * from "./improvement-candidate.js";

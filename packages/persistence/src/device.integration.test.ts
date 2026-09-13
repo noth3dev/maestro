@@ -61,7 +61,7 @@ const context = (role: "ceo" | "device_agent", deviceId?: string, identityFinger
 
   it("reapplies the device migration without changing the durable schema", async () => {
     await expect(pool.query(await readFile(fileURLToPath(new URL("../migrations/0040_devices.sql", import.meta.url)), "utf8"))).resolves.toBeDefined();
-    const tables = await pool.query<{ relname: string }>("SELECT relname FROM pg_class WHERE relname IN ('devices', 'device_policies') AND relkind = 'r' ORDER BY relname");
+    const tables = await pool.query<{ relname: string }>("SELECT c.relname FROM pg_class AS c JOIN pg_namespace AS n ON n.oid = c.relnamespace WHERE n.nspname = current_schema() AND c.relname IN ('devices', 'device_policies') AND c.relkind = 'r' ORDER BY c.relname");
     expect(tables.rows.map((row) => row.relname)).toEqual(["device_policies", "devices"]);
   });
 
