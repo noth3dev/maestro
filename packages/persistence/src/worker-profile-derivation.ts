@@ -1,7 +1,7 @@
 import { deriveWorkerProfile, isTerminalWorkerStatus, PERSONA_AXES, type PersonaAxis, type WorkerProfileDerivation, type WorkerStatus } from "@maestro/domain";
 import type { Pool } from "pg";
 import { readActivePersonaProfile } from "./persona-profile.js";
-import { MissionPersonaOverlayNotFoundError, readMissionBundle, readMissionPersonaOverlay } from "./mission-bundle.js";
+import { MissionPersonaOverlayExpiredError, MissionPersonaOverlayNotFoundError, readMissionBundle, readMissionPersonaOverlay } from "./mission-bundle.js";
 import { getPermanentRole } from "./organization.js";
 
 export class WorkerProfileDerivationPersistenceError extends Error {}
@@ -52,9 +52,14 @@ export async function deriveWorkerProfileForMission(pool: Pool, request: DeriveW
   const { floors, ceilings } = await readReviewedBounds(pool, request.roleId);
   let overlay;
   try {
-    overlay = await readMissionPersonaOverlay(pool, request.councilId, request.departmentId, request.planVersion, request.itemId, new Date(), request.workerId);
+    overlay = await readMissionPersonaOverlay(pool, request.councilId, request.departmentId, request.planVersion, request.itemId);
   } catch (error) {
-    if (!(request.allowDefaultMissionOverlay && error instanceof MissionPersonaOverlayNotFoundError)) throw error;
+    let canUseDefault = error instanceof MissionPersonaOverlayNotFoundError;
+    if (request.allowDefaultMissionOverlay && error instanceof MissionPersonaOverlayExpiredError) {
+      const stored = await pool.query("SELECT 1 FROM mission_persona_overlays WHERE council_id = $1 AND department_id = $2 AND plan_version = $3 AND item_id = $4", [request.councilId, request.departmentId, request.planVersion, request.itemId]);
+      canUseDefault = stored.rowCount === 0;
+    }
+    if (!(request.allowDefaultMissionOverlay && canUseDefault)) throw error;
     if (request.defaultMissionOverlayExpiresAt === undefined) throw new WorkerProfileExpiredError(`Worker has no explicit Mission Bundle profile lifetime: ${request.workerId}`);
     overlay = { persona: active.persona, expiresAt: new Date(request.defaultMissionOverlayExpiresAt).toISOString() };
   }

@@ -1,5 +1,5 @@
 import type { MetronomeCorrectionInput, MetronomeFindingList, MetronomeResolutionInput, MetronomeSafePauseInput, RaiseMetronomeChallengeInput } from "@maestro/contracts";
-import { isMissionPersonaOverlayExpired, isTerminalWorkerStatus, METRONOME_ACTOR_ID, parsePersonaProfile, PERSONA_AXES, type PersonaAxis, type WorkerStatus } from "@maestro/domain";
+import { isMissionPersonaOverlayExpired, isTerminalWorkerStatus, METRONOME_ACTOR_ID, WORKER_PROFILE_MAX_AXIS_DELTA, parsePersonaProfile, PERSONA_AXES, type PersonaAxis, type WorkerStatus } from "@maestro/domain";
 import { observeGoalForMetronome, raiseMetronomeChallenge, requestMetronomeCorrection, requestMetronomeSafePause, resolveMetronomeChallenge, type MetronomeActorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
 
@@ -29,7 +29,7 @@ export function findUnsafeWorkerOverlay(input: WorkerOverlayChallengeInput): rea
     if (floor !== undefined && (typeof floor !== "number" || !Number.isFinite(floor) || value < floor)) violations.push(`${axis} is below role floor`);
     if (ceiling !== undefined && (typeof ceiling !== "number" || !Number.isFinite(ceiling) || value > ceiling)) violations.push(`${axis} is above role ceiling`);
     const template = input.taskClassTemplate?.[axis];
-    if (template !== undefined && (typeof template !== "number" || !Number.isFinite(template) || Math.abs(value - template) > 0.15)) violations.push(`${axis} exceeds the ±0.15 worker derivation bound`);
+    if (template !== undefined && (typeof template !== "number" || !Number.isFinite(template) || Math.abs(value - template) > WORKER_PROFILE_MAX_AXIS_DELTA + 1e-9)) violations.push(`${axis} exceeds the ±0.15 worker derivation bound`);
   }
   for (const axis of Object.keys(input.profile ?? {})) if (!PERSONA_AXES.includes(axis as PersonaAxis)) violations.push(`unknown persona axis: ${axis}`);
   return Object.freeze(violations);

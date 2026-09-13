@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { canonicalJson, parsePersonaGoalEvidence, type PersonaGoalEvidence, type PersonaGoalEvidenceInput } from "@maestro/domain";
+import { canonicalJson, isGoalState, isTerminalGoalState, parsePersonaGoalEvidence, type PersonaGoalEvidence, type PersonaGoalEvidenceInput } from "@maestro/domain";
 import type { Pool } from "pg";
 
 export class PersonaGoalEvidenceError extends Error {}
@@ -27,14 +27,23 @@ export async function capturePersonaGoalEvidence(pool: Pool, input: PersonaGoalE
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const goal = await client.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1 FOR KEY SHARE", [payload.goalId]);
+    const goal = await client.query<{ project_id: string; state: string }>("SELECT project_id, state FROM goals WHERE goal_id = $1 FOR KEY SHARE", [payload.goalId]);
     if (goal.rowCount !== 1) throw new PersonaGoalEvidenceError(`Goal not found: ${payload.goalId}`);
     if (goal.rows[0]!.project_id !== payload.projectId) throw new PersonaGoalEvidenceError("persona Goal evidence project does not match Goal project");
+    if (!isGoalState(goal.rows[0]!.state) || !isTerminalGoalState(goal.rows[0]!.state)) throw new PersonaGoalEvidenceError("persona Goal evidence can only be captured after a terminal Goal state");
     const contract = await client.query(
       `SELECT 1 FROM head_councils h JOIN task_contracts t ON t.contract_id = h.contract_id
         WHERE h.goal_id = $1 AND t.version = $2 FOR KEY SHARE`, [payload.goalId, payload.taskContractVersion],
     );
     if (contract.rowCount !== 1) throw new PersonaGoalEvidenceError("persona Goal evidence Task Contract version is not bound to the Goal");
+    const participation = await client.query(
+      `SELECT 1 FROM goal_head_participations p
+         JOIN head_councils h ON h.goal_id = p.goal_id
+         JOIN permanent_roles r ON r.department_id = p.department_id AND r.role_id = $2 AND r.role_kind = 'department_head'
+        WHERE p.goal_id = $1 AND h.contract_id IS NOT NULL FOR KEY SHARE`,
+      [payload.goalId, payload.roleId],
+    );
+    if (participation.rowCount !== 1) throw new PersonaGoalEvidenceError("persona Goal evidence role did not participate in the Goal");
     const profile = await client.query("SELECT 1 FROM persona_profile_versions WHERE role_id = $1 AND version = $2 FOR KEY SHARE", [payload.roleId, payload.activeProfileVersion]);
     if (profile.rowCount !== 1) throw new PersonaGoalEvidenceError("persona Goal evidence active profile version is not durable for the role");
     const role = await client.query("SELECT 1 FROM permanent_roles WHERE role_id = $1 FOR KEY SHARE", [payload.roleId]);

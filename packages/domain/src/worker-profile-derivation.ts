@@ -68,7 +68,7 @@ function parseOverlay(value: PersonaLayerDelta): PersonaLayerDelta {
   for (const key of Object.keys(value)) {
     if (!PERSONA_AXES.includes(key as PersonaAxis)) throw new InvalidWorkerProfileDerivationError(`missionOverlay contains unknown axis ${key}`);
     const delta = value[key as PersonaAxis];
-    if (typeof delta !== "number" || !Number.isFinite(delta) || Math.abs(delta) > WORKER_PROFILE_MAX_AXIS_DELTA) throw new InvalidWorkerProfileDerivationError(`missionOverlay.${key} must be within ±${WORKER_PROFILE_MAX_AXIS_DELTA}`);
+    if (typeof delta !== "number" || !Number.isFinite(delta) || Math.abs(delta) > WORKER_PROFILE_MAX_AXIS_DELTA + 1e-9) throw new InvalidWorkerProfileDerivationError(`missionOverlay.${key} must be within ±${WORKER_PROFILE_MAX_AXIS_DELTA}`);
     result[key as PersonaAxis] = delta;
   }
   return Object.freeze(result);
@@ -93,7 +93,7 @@ export function deriveWorkerProfile(input: WorkerProfileDerivationInput): Worker
     const floor = floors[axis] ?? 0; const ceiling = ceilings[axis] ?? 1;
     if (floor > ceiling) throw new InvalidWorkerProfileDerivationError(`${axis} floor exceeds ceiling`);
     const delta = head[axis] - template[axis] + (overlay[axis] ?? 0);
-    if (Math.abs(delta) > WORKER_PROFILE_MAX_AXIS_DELTA) throw new InvalidWorkerProfileDerivationError(`${axis} exceeds the ±${WORKER_PROFILE_MAX_AXIS_DELTA} worker derivation bound`);
+    if (Math.abs(delta) > WORKER_PROFILE_MAX_AXIS_DELTA + 1e-9) throw new InvalidWorkerProfileDerivationError(`${axis} exceeds the ±${WORKER_PROFILE_MAX_AXIS_DELTA} worker derivation bound`);
     const value = template[axis] + delta;
     if (value < floor) throw new InvalidWorkerProfileDerivationError(`${axis} violates role floor`);
     if (value > ceiling) throw new InvalidWorkerProfileDerivationError(`${axis} violates role ceiling`);

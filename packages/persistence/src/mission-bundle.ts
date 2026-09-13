@@ -12,6 +12,7 @@ import {
   type MissionPersonaOverlay,
   type MissionPersonaOverlayInputs,
   type WorkerStatus,
+  WORKER_PROFILE_MAX_AXIS_DELTA,
 } from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
@@ -234,7 +235,7 @@ export async function issueMissionPersonaOverlay(pool: Pool, request: IssueMissi
     for (const bound of bounds.rows) {
       const axis = bound.axis as typeof PERSONA_AXES[number];
       const delta = persona[axis] - taskTemplate[axis];
-      if (Math.abs(delta) > 0.15) throw new MissionBundleError(`Mission persona overlay exceeds the ±0.15 worker derivation bound for ${axis}`);
+      if (Math.abs(delta) > WORKER_PROFILE_MAX_AXIS_DELTA + 1e-9) throw new MissionBundleError(`Mission persona overlay exceeds the ±0.15 worker derivation bound for ${axis}`);
       if (persona[axis] < Number(bound.floor_value) || persona[axis] > Number(bound.ceiling_value)) throw new MissionBundleError(`Mission persona overlay violates reviewed role bounds for ${axis}`);
     }
     if (proof.ownerId.trim() === "" || !isValidFencingToken(proof.fencingToken)) throw new StaleGoalLeaseError(proof.goalId);
