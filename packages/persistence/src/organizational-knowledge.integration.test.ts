@@ -80,6 +80,20 @@ describeDatabase("organizational knowledge persistence", () => {
 
     await insertDirectPromotion(null, "null-hash");
     await insertDirectPromotion("f".repeat(64), "mismatched-hash");
+    const formatted = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: proof.ownerId, sessionRef: "session:formatted", operatorId, operatorRoleId: "head-engineering" }, "proposal-formatted");
+    const noncanonicalPayload = `{ "departmentId": "engineering", "knowledgeId": "${formatted.knowledgeId}",\n "promoterOperatorId": "${curatorOperatorId}", "promoterRoleId": "head-engineering" }`;
+    const formattedClient = await pool.connect();
+    try {
+      await formattedClient.query("BEGIN");
+      const rawHash = (await formattedClient.query<{ payload_hash: string }>("SELECT encode(public.digest($1, 'sha256'), 'hex') AS payload_hash", [noncanonicalPayload])).rows[0]!.payload_hash;
+      await formattedClient.query("SELECT authorize_knowledge_promotion($1, $2::uuid, $3, $4, $5, $6, $7::uuid, $8::uuid, $9::uuid, $10, $11::bigint, $12::uuid, $13, $14::text)", [randomUUID(), formatted.knowledgeId, 2, "project_department", "head-engineering", "engineering", curatorOperatorId, projectId, goalId, proof.ownerId, proof.fencingToken, null, null, noncanonicalPayload]);
+      await expect(formattedClient.query(`INSERT INTO organizational_knowledge
+        (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, author_operator_id, author_role_id, operation_payload_hash, promotion_operator_id, promotion_role_id, promotion_marker, reason, created_by, source_session_ref)
+        VALUES ($1, 2, 1, $2, $2, $3, 'engineering', 'project_department', 'active', 'Use a bounded validation gate.', 'It prevented recurrence.', $4::jsonb, '[]', '["episode-a"]', 0.9, 1, false, $5::uuid, 'head-engineering', $6, $7::uuid, 'head-engineering', 'department-promotion', NULL, 'worker', 'promotion:formatted-json')`, [formatted.knowledgeId, projectId, goalId, JSON.stringify([evidenceId, evidenceId2]), operatorId, rawHash, curatorOperatorId])).rejects.toThrow(/authorization|canonical|payload|hash/);
+      await formattedClient.query("ROLLBACK");
+    } finally {
+      formattedClient.release();
+    }
   });
 
   it("binds digest-loss records and blocks direct truncation", async () => {
