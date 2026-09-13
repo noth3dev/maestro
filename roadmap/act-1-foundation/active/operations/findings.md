@@ -2083,3 +2083,6 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-13 S4 post-merge verification passed: 232/232 files and 1604/1604 tests, including real PostgreSQL, build, lint, and diff-check.
 
 - 2026-09-13 S5 review remediation closed the initial concern about arbitrary candidate objects: the service now loads the persisted candidate under the caller's Goal lease, checks the durable author operator identity, and includes the complete candidate/evaluation disclosure. Candidate↔Council linkage remains the immutable candidate identity in the Council question/result; application enforcement belongs to S6 rollout scope because S5 has no application path.
+
+- 2026-09-14 S5 review remediation passed: the final reviewer prompt discloses every durable candidate field, including the full ordered scenario suite, confidence/data sufficiency, parent and creator identity, and the PostgreSQL author operator/role. The integration harness now cleanly skips without a configured database.
+- 2026-09-14 S5 full-suite transient failures were isolated from the slice: a public-schema certification race and an IPython process-group timing test each passed on targeted rerun; final serialized verification passed 233/233 files and 1608/1608 tests.
