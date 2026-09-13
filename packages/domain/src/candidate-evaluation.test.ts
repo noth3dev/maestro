@@ -105,6 +105,13 @@ describe("candidate evaluation stages", () => {
     expect(result.status).toBe("completed");
     expect(result.results).toHaveLength(8);
     expect(result.results.every((entry) => entry.scenarioId.length > 0 && entry.reviewed)).toBe(true);
+    let evaluatorCalls = 0;
+    const rejected = runSyntheticAdversarialScenarios(candidate({ sourceEvidenceIds: [] }), {
+      scenarios: SYNTHETIC_SCENARIO_SPECS,
+      evaluate: () => { evaluatorCalls += 1; return metrics(); },
+    });
+    expect(rejected.status).toBe("rejected");
+    expect(evaluatorCalls).toBe(0);
   });
 
   it("rejects a cheap candidate when any correctness, safety, or authority floor fails", () => {
