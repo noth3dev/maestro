@@ -15,6 +15,12 @@ import {
   TASK_DEMAND_SCHEMA_VERSION,
   type RoutingSelectionRequest,
   type ModelMap,
+  taskContractContentHash,
+  type TaskContractSubstance,
+  type DepartmentPlanSubstance,
+  type MissionBundleSubstance,
+  type DecisionPacket,
+  type IndependentBrief,
   applyCandidateHardFloors,
   createRoutingCapabilityCandidate,
   improvementCandidateScenarioSuiteHash,
@@ -39,6 +45,9 @@ import { grantProjectMembership, grantProjectRole } from "../../packages/persist
 import { recordImprovementDigest } from "../../packages/persistence/src/improvement-digest.js";
 import { raiseMetronomeChallenge, readMetronomeChallenge } from "../../packages/persistence/src/metronome-challenge.js";
 import { runEncoreCouncilReview } from "../../packages/persistence/src/encore-council.js";
+import { createHeadCouncil, submitIndependentBrief, revealCouncilBriefs, recordCouncilDecisionPacket } from "../../packages/persistence/src/council.js";
+import { createDepartmentPlan } from "../../packages/persistence/src/department-plan.js";
+import { createMissionBundle, issueMissionPersonaOverlay, readActiveMissionPersonaOverlay, type IssueMissionPersonaOverlayRequest } from "../../packages/persistence/src/mission-bundle.js";
 import {
   recordImprovementCandidate,
   transitionImprovementCandidate,
@@ -182,6 +191,29 @@ async function shadow(pool: Pool, candidate: ImprovementCandidateInput, goal: Sc
   return { result, digestId: digest.digestId };
 }
 
+async function exercisePersistentWorkerOverlay(pool: Pool, goal: ScenarioGoal, activePersona: Record<string, number>): Promise<{ readonly overlayPersona: Record<string, number>; readonly expired: boolean }> {
+  const contractId = randomUUID(); const councilId = randomUUID(); const activeSessionRef = `phase6-head-session-${goal.goalId}`;
+  const contract: TaskContractSubstance = { desiredOutcome: "deliver safely", userVisibleBehavior: [], successCriteria: [], liveEvidence: [], scope: [], nonGoals: [], priorities: [], acceptableTradeoffs: [], constraints: [], knownEdgeCases: [], project: { projectId: goal.projectId, repository: "repo", immutableBaseRevision: "base", dataBoundary: "local" }, evidenceReferences: [], approvedPreviewReferences: [], expectedGroups: [], expectedDepartments: [], criticalActionExpectations: [], forbiddenEffects: [], environmentAssumptions: [], externalServiceAssumptions: [], budget: { ceiling: "1", reportingExpectations: [], stoppingConditions: [] } };
+  await pool.query("INSERT INTO task_contracts (contract_id, schema_version, version, content, content_hash, launch_state) VALUES ($1, 1, 1, $2::jsonb, $3, 'launched')", [contractId, JSON.stringify(contract), taskContractContentHash(contract)]);
+  await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, head_role_id, contract_id, status, active_session_ref) VALUES ($1, 'engineering', 'head:engineering', $2, 'active', $3)", [goal.goalId, contractId, activeSessionRef]);
+  const context = (actorId: string, sessionRef: string) => ({ actorId, sessionRef, commandId: randomUUID() });
+  const council = await createHeadCouncil(pool, { councilId, goalId: goal.goalId, contractId, briefDeadline: new Date(Date.now() + 60_000), evidence: { references: [goal.evidenceId] } }, goal.proof, context("concertmaster", "phase6-secretary"));
+  const brief: IndependentBrief = { interpretation: "bounded execution", contribution: "review worker overlay", nonGoals: [], assumptions: [], evidenceGaps: [], risks: [], dependencies: [], proposedValidation: [], expectedWorkers: ["one"], expectedCost: "1", expectedTime: "1 hour", objectionsToLikelyAlternatives: [] };
+  await submitIndependentBrief(pool, council.councilId, "engineering", brief, goal.proof, context("head:engineering", activeSessionRef)); await revealCouncilBriefs(pool, council.councilId, goal.proof, context("concertmaster", "phase6-reveal"));
+  const packet: DecisionPacket = { outcome: "decided", executionDisposition: "executable", selectedDirection: "proceed", rejectedAlternatives: [], departmentOwnership: [{ departmentId: "engineering", responsibility: "own execution" }], workerPlan: [], completionCriteria: ["done"], failureCriteria: ["unsafe"], dissent: [], uncertainty: [], criticalActions: [], unresolvedConflicts: [], evidenceReferences: [] };
+  const resolved = await recordCouncilDecisionPacket(pool, council.councilId, packet, goal.proof, context("concertmaster", "phase6-decision"));
+  const planSubstance: DepartmentPlanSubstance = { contribution: "bounded execution", nonGoals: [], items: [{ itemId: "exec-1", kind: "execution", objective: "verify safely", dependsOn: [], scoutQuestion: "", workerAssignment: "verify", evidenceReferences: [] }], requiredHandoffs: [], budgetCeiling: "1", expectedTime: "1 hour", maxRetries: 1, maxWorkers: 1, gitRepository: "repo", gitBranch: "phase6", integrationPath: "packages", risks: [], safePausePoints: ["before write"], escalationTriggers: ["unsafe choice"], evidenceReferences: [], validationCriteria: ["tests pass"] };
+  const plan = await createDepartmentPlan(pool, { councilId: resolved.councilId, departmentId: "engineering", substance: planSubstance }, goal.proof, context("head:engineering", activeSessionRef));
+  const taskDemand = { schemaVersion: 1 as const, taskKinds: ["coding"] as const, requirements: Object.fromEntries(MODEL_CAPABILITY_AXES.map((axis) => [axis, { level: 80, rationale: "Head requirement" }])) as never, provenance: { taskContractRef: contractId, headDecisionRef: council.councilId } };
+  const bundleSubstance: MissionBundleSubstance = { role: "execution", profileRef: "phase6-profile", goalBrief: "verify safely", taskDemand, approvedModels: ["provider/model-a"], allowedSkills: ["review"], allowedTools: ["read"], allowedPaths: ["packages"], environment: ["node24"], authorityBoundary: ["read-only"], externalServiceBoundary: ["none"], dataBoundary: ["repository files only"], costCeiling: "1", timeCeiling: "1 hour", retryCeiling: 1, workerCeiling: 0, deliverable: "verification", evidenceRequirements: ["evidence"], validationCriteria: ["tests pass"], terminationConditions: ["done"] };
+  await createMissionBundle(pool, { councilId: resolved.councilId, departmentId: "engineering", itemId: "exec-1", substance: bundleSubstance }, goal.proof, context("head:engineering", activeSessionRef));
+  const overlayRequest: IssueMissionPersonaOverlayRequest = { councilId: resolved.councilId, departmentId: "engineering", planVersion: plan.version, itemId: "exec-1", inputs: { departmentStyle: activePersona, headChoice: activePersona, taskAmbiguity: 0.5, risk: 0.5, collaborationDemand: 0.5, evidenceBurden: 0.5 }, missionLifetimeMs: 60_000 };
+  const overlay = await issueMissionPersonaOverlay(pool, overlayRequest, goal.proof, context("head:engineering", activeSessionRef));
+  await expect(readActiveMissionPersonaOverlay(pool, resolved.councilId, "engineering", plan.version, "exec-1", new Date())).resolves.toMatchObject({ councilId: resolved.councilId, itemId: "exec-1" });
+  let expired = false; try { await readActiveMissionPersonaOverlay(pool, resolved.councilId, "engineering", plan.version, "exec-1", new Date(Date.parse(overlay.expiresAt) + 1)); } catch { expired = true; }
+  return { overlayPersona: overlay.persona, expired };
+}
+
 describeDatabase("Plan 6 full-chain proof", () => {
   const basePool = new Pool({ connectionString: databaseUrl });
   const schema = `phase6_${randomUUID().replaceAll("-", "")}`;
@@ -232,28 +264,37 @@ describeDatabase("Plan 6 full-chain proof", () => {
     const activePersona = await import("../../packages/persistence/src/persona-profile.js").then(({ readActivePersonaProfile }) => readActivePersonaProfile(pool, "head-engineering", "implementation"));
     const headBaselineBefore = await pool.query("SELECT version, profile, source FROM persona_profile_versions WHERE role_id = 'head-engineering' ORDER BY version DESC LIMIT 1");
     const derivedWorkerOverlay = deriveMissionPersonaOverlay({ departmentStyle: activePersona.persona, headChoice: activePersona.persona, taskAmbiguity: 0.4, risk: 0.8, collaborationDemand: 0.6, evidenceBurden: 0.9 });
+    const persistentWorkerOverlay = await exercisePersistentWorkerOverlay(pool, personaGoal, activePersona.persona);
     const personaBaselineInput = candidateInput(personaGoal, "persona_axis", personaRollbackPlaceholder, [{ axis: "caution", currentValue: activePersona.persona.caution, proposedValue: Math.min(1, activePersona.persona.caution + 0.01) }, { axis: "realism", currentValue: activePersona.persona.realism, proposedValue: Math.min(1, activePersona.persona.realism + 0.01) }]);
     const personaBaseline = await recordImprovementCandidate(pool, personaBaselineInput, personaGoal.proof, author, `phase6-persona-baseline-${randomUUID()}`);
     await pool.query("INSERT INTO improvement_candidate_rollback_targets (target_candidate_id, target_version, project_id, goal_id, content_hash, kind, role_id, task_class) VALUES ($1, $2, $3, $4, $5, 'persona_axis', 'head-engineering', 'implementation')", [personaBaseline.candidateId, personaBaseline.version, personaGoal.projectId, personaGoal.goalId, personaBaseline.contentHash]);
     const personaRaw = candidateInput(personaGoal, "persona_axis", personaBaseline.candidateId, [{ axis: "caution", currentValue: activePersona.persona.caution, proposedValue: Math.min(1, activePersona.persona.caution + 0.04) }, { axis: "realism", currentValue: activePersona.persona.realism, proposedValue: Math.min(1, activePersona.persona.realism + 0.03) }], personaBaseline.contentHash);
-    const personaInput = personaRaw; const personaCandidate = await recordImprovementCandidate(pool, personaInput, personaGoal.proof, author, `phase6-persona-${randomUUID()}`);
-    const personaEvaluated = await transitionImprovementCandidate(pool, personaCandidate.candidateId, "evaluated", personaGoal.proof, author, `phase6-persona-eval-${randomUUID()}`);
     const boundsRows = await pool.query<{ axis: string; floor_value: number; ceiling_value: number }>("SELECT axis, floor_value, ceiling_value FROM role_persona_bounds WHERE role_id = 'head-engineering'");
     const floors = Object.fromEntries(boundsRows.rows.map((row) => [row.axis, row.floor_value])); const ceilings = Object.fromEntries(boundsRows.rows.map((row) => [row.axis, row.ceiling_value]));
+    const guardDraft = runDeterministicCandidateGuards(personaRaw, { roleFloors: floors, roleCeilings: ceilings, mandatoryScenarioIds: SYNTHETIC_SCENARIO_SPECS.map((scenario) => scenario.scenarioId), baselineProfile: activePersona.persona, existingProfiles: [activePersona.persona, { ...activePersona.persona, caution: Math.max(0, activePersona.persona.caution - 0.1) }], diversityPreserved: true });
+    expect(guardDraft.passed).toBe(true);
+    const replayDraft = replayCandidateAgainstFrozenBaseline(personaRaw, { scenarioSuite: personaRaw.scenarioSuite, guards: { roleFloors: floors, roleCeilings: ceilings, diversityPreserved: true }, goals: [{ goalId: personaGoal.goalId, input: { request: "review" }, baseline: metrics({ cost: 100 }) }], evaluate: () => metrics({ correctness: 0.98 }) });
+    expect(replayDraft.status).toBe("compared"); const syntheticDraft = runSyntheticAdversarialScenarios(personaRaw, { scenarios: SYNTHETIC_SCENARIO_SPECS, guards: { roleFloors: floors, roleCeilings: ceilings, diversityPreserved: true }, evaluate: () => metrics({ correctness: 0.97 }) });
+    expect(syntheticDraft.status).toBe("completed");
+    const personaEvaluationDigest = await recordImprovementDigest(pool, { schemaVersion: 1, projectId: personaGoal.projectId, goalId: personaGoal.goalId, episodeId: `phase6-persona-evaluation-${randomUUID()}`,
+      trigger: "quality_signal", situation: "Replay and synthetic evaluation completed against the frozen persona baseline.", selectedDecision: "Retain the bounded evaluation evidence.", rejectedAlternatives: ["Skip adversarial scenarios."],
+      observedResult: JSON.stringify({ replay: replayDraft, synthetic: syntheticDraft }), metrics: [{ name: "correctness", value: 0.97, unit: "score" }], confidence: 0.95,
+      sourceRefs: [{ kind: "evidence_record", sourceId: personaGoal.evidenceId }], }, personaGoal.proof, { actorId: author.authorId, sessionRef: author.sessionRef });
+    const personaEvaluationEvidence = await pool.query(`INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 'improvement-evaluation', 'application/json', 'project_lifetime')`, [personaEvaluationDigest.digestId, randomUUID(), randomUUID(), personaGoal.projectId, personaGoal.goalId, actorId, personaEvaluationDigest.contentHash]);
+    expect(personaEvaluationDigest.digestId).toMatch(/[0-9a-f-]{36}/); expect(personaEvaluationEvidence.rowCount).toBe(1);
+    const personaEvidenceIds = [...personaGoal.digestIds, personaEvaluationDigest.digestId];
+    const personaInput = { ...personaRaw, sourceEvidenceIds: personaEvidenceIds };
+    const personaCandidate = await recordImprovementCandidate(pool, personaInput, personaGoal.proof, author, `phase6-persona-${randomUUID()}`);
+    const personaEvaluated = await transitionImprovementCandidate(pool, personaCandidate.candidateId, "evaluated", personaGoal.proof, author, `phase6-persona-eval-${randomUUID()}`);
     const guard = runDeterministicCandidateGuards(personaInput, { roleFloors: floors, roleCeilings: ceilings, mandatoryScenarioIds: SYNTHETIC_SCENARIO_SPECS.map((scenario) => scenario.scenarioId), baselineProfile: activePersona.persona, existingProfiles: [activePersona.persona, { ...activePersona.persona, caution: Math.max(0, activePersona.persona.caution - 0.1) }], diversityPreserved: true });
     expect(guard.passed).toBe(true);
     const personaReplay = replayCandidateAgainstFrozenBaseline(personaInput, { scenarioSuite: personaInput.scenarioSuite, guards: { roleFloors: floors, roleCeilings: ceilings, diversityPreserved: true }, goals: [{ goalId: personaGoal.goalId, input: { request: "review" }, baseline: metrics({ cost: 100 }) }], evaluate: () => metrics({ correctness: 0.98 }) });
     expect(personaReplay.status).toBe("compared"); const personaSynthetic = runSyntheticAdversarialScenarios(personaInput, { scenarios: SYNTHETIC_SCENARIO_SPECS, guards: { roleFloors: floors, roleCeilings: ceilings, diversityPreserved: true }, evaluate: () => metrics({ correctness: 0.97 }) });
     expect(personaSynthetic.status).toBe("completed");
-    const personaEvaluationDigest = await recordImprovementDigest(pool, { schemaVersion: 1, projectId: personaGoal.projectId, goalId: personaGoal.goalId, episodeId: `phase6-persona-evaluation-${randomUUID()}`,
-      trigger: "quality_signal", situation: "Replay and synthetic evaluation completed against the frozen persona baseline.", selectedDecision: "Retain the bounded evaluation evidence.", rejectedAlternatives: ["Skip adversarial scenarios."],
-      observedResult: JSON.stringify({ replay: personaReplay, synthetic: personaSynthetic }), metrics: [{ name: "correctness", value: 0.97, unit: "score" }], confidence: 0.95,
-      sourceRefs: [{ kind: "evidence_record", sourceId: personaGoal.evidenceId }], }, personaGoal.proof, { actorId: author.authorId, sessionRef: author.sessionRef });
-    expect(personaEvaluationDigest.digestId).toMatch(/[0-9a-f-]{36}/);
     const personaShadow = await shadow(pool, personaInput, personaGoal, "persona");
     const personaCouncilCommandId = randomUUID();
-    const personaCouncil = await runEncoreCouncilReview(pool, kernelWithAnswers(personaGoal.digestIds), { goalId: personaGoal.goalId, proof: personaGoal.proof, commandId: personaCouncilCommandId,
-      question: "Should this bounded persona proposal proceed?", criteria: [{ criterionId: "diversity", description: "preserve profile diversity and floors" }], evidenceIds: personaGoal.digestIds, reviewerCount: 2,
+    const personaCouncil = await runEncoreCouncilReview(pool, kernelWithAnswers(personaEvidenceIds), { goalId: personaGoal.goalId, proof: personaGoal.proof, commandId: personaCouncilCommandId,
+      question: "Should this bounded persona proposal proceed?", criteria: [{ criterionId: "diversity", description: "preserve profile diversity and floors" }], evidenceIds: personaEvidenceIds, reviewerCount: 2,
       admission: (index) => encoreAdmission(personaGoal, personaCouncilCommandId, index) });
     const personaJudged = await transitionImprovementCandidate(pool, personaEvaluated.candidateId, "judged", personaGoal.proof, author, `phase6-persona-judge-${randomUUID()}`);
     await enableImprovementClass(pool, personaGoal.projectId, "persona_axis", personaGoal.proof, actor, `phase6-enable-persona-${randomUUID()}`);
@@ -305,7 +346,7 @@ describeDatabase("Plan 6 full-chain proof", () => {
       ["route regression restores exact version", routeOutcome.status === "rolled_back" && routeOutcome.activeCandidateId === routeBaseline.candidateId && routeOutcome.activeVersion === routeBaseline.version && routeOutcome.rollbackTarget.contentHash === routeBaseline.contentHash],
             ["explanation carries changed axes/effect/evidence/rollback", uiExplanation.changedAxes.length === 2 && uiExplanation.expectedBehavior.length > 0 && uiExplanation.evidence.length > 0 && uiExplanation.rollback !== undefined],
       ["project evidence is not global profile data", globalRows.rows.every((row) => !JSON.stringify(row.profile).includes(personaGoal.evidenceId) && !personaGoal.digestIds.some((digestId) => JSON.stringify(row.profile).includes(digestId)))],
-      ["bounded overlay is readable and challengeable", resulting.layers.missionOverlay.caution === overlayCaution && Object.values(derivedWorkerOverlay).every((value) => value >= 0 && value <= 1) && !isMissionPersonaOverlayExpired({ expiresAt: "2026-09-14T02:00:00.000Z" }, new Date("2026-09-14T01:00:00.000Z")) && isMissionPersonaOverlayExpired({ expiresAt: "2026-09-14T00:00:00.000Z" }, new Date("2026-09-14T01:00:00.000Z")) && readChallenge.status === "open" && metronomeChallenge.evidenceReferences.includes(personaGoal.evidenceId)],
+      ["bounded overlay is readable and challengeable", resulting.layers.missionOverlay.caution === overlayCaution && Object.values(derivedWorkerOverlay).every((value) => value >= 0 && value <= 1) && Object.values(persistentWorkerOverlay.overlayPersona).every((value) => value >= 0 && value <= 1) && persistentWorkerOverlay.expired && !isMissionPersonaOverlayExpired({ expiresAt: "2026-09-14T02:00:00.000Z" }, new Date("2026-09-14T01:00:00.000Z")) && isMissionPersonaOverlayExpired({ expiresAt: "2026-09-14T00:00:00.000Z" }, new Date("2026-09-14T01:00:00.000Z")) && readChallenge.status === "open" && metronomeChallenge.evidenceReferences.includes(personaGoal.evidenceId)],
       ["same replay is deterministic and measurable", personaReplay.status === "compared" && personaReplay.results[0]!.candidate.correctness > personaReplay.results[0]!.baseline.correctness && JSON.stringify(personaReplay) === JSON.stringify(replayCandidateAgainstFrozenBaseline(personaInput, { scenarioSuite: personaInput.scenarioSuite, guards: { roleFloors: floors, roleCeilings: ceilings, diversityPreserved: true }, goals: [{ goalId: personaGoal.goalId, input: { request: "review" }, baseline: metrics({ cost: 100 }) }], evaluate: () => metrics({ correctness: 0.98 }) }))],
       ["shadow output changes behavior without permissions", personaShadow.result.records.length > 0 && personaShadow.result.records[0]!.matchesActive === false && personaShadow.result.liveEffects.length === 0 && JSON.stringify(personaShadow.result.records[0]!.input) === JSON.stringify(personaShadow.result.records[0]!.activeInput) && JSON.stringify(personaShadow.result.records[0]!.active.plans) === JSON.stringify(personaShadow.result.records[0]!.proposed.plans) && JSON.stringify(personaShadow.result.records[0]!.active.challenges) === JSON.stringify(personaShadow.result.records[0]!.proposed.challenges)],
     ];
