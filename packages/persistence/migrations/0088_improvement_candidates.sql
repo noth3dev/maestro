@@ -131,10 +131,10 @@ BEGIN
       ELSE
         IF NOT (value->'target' ? 'routingTarget') OR (SELECT count(*) FROM jsonb_object_keys(value->'target')) <> 1 THEN RAISE EXCEPTION 'routing candidate target shape is invalid'; END IF;
       END IF;
-      IF EXISTS (SELECT 1 FROM jsonb_each_text(value->'target') AS fields(key, val) WHERE btrim(val) = '' OR length(val) > 256) THEN RAISE EXCEPTION 'candidate target text is invalid'; END IF;
+      IF EXISTS (SELECT 1 FROM jsonb_each(value->'target') AS fields(key, val) WHERE jsonb_typeof(val) <> 'string' OR btrim(val #>> '{}') = '' OR length(val #>> '{}') > 256) THEN RAISE EXCEPTION 'candidate target text is invalid'; END IF;
       IF jsonb_typeof(value->'changes') <> 'array' OR jsonb_array_length(value->'changes') NOT BETWEEN 1 AND 2 THEN RAISE EXCEPTION 'candidate changes shape is invalid'; END IF;
       FOR item IN SELECT change FROM jsonb_array_elements(value->'changes') AS changes(change) LOOP
-        IF jsonb_typeof(item) <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(item)) <> 3 OR NOT (item ? 'axis') OR NOT (item ? 'currentValue') OR NOT (item ? 'proposedValue') OR jsonb_typeof(item->'currentValue') <> 'number' OR jsonb_typeof(item->'proposedValue') <> 'number' THEN RAISE EXCEPTION 'candidate change shape is invalid'; END IF;
+        IF jsonb_typeof(item) <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(item)) <> 3 OR NOT (item ? 'axis') OR jsonb_typeof(item->'axis') <> 'string' OR NOT (item ? 'currentValue') OR NOT (item ? 'proposedValue') OR jsonb_typeof(item->'currentValue') <> 'number' OR jsonb_typeof(item->'proposedValue') <> 'number' THEN RAISE EXCEPTION 'candidate change shape is invalid'; END IF;
         axis := item->>'axis';
         IF axis = ANY(previous_axis) OR (value->>'kind' = 'persona_axis' AND axis NOT IN ('agreeableness','extraversion','imagination','realism','conscientiousness','caution','initiative','empathy','adaptability','sociability')) OR (value->>'kind' = 'routing_capability_axis' AND axis NOT IN ('reasoning','coding','verification','instruction-fidelity','tool-use','long-context','knowledge','refusal-calibration')) THEN RAISE EXCEPTION 'candidate change axis is invalid'; END IF;
         previous_axis := array_append(previous_axis, axis);
@@ -149,23 +149,24 @@ BEGIN
       IF jsonb_typeof(value->'sourceEvidenceIds') <> 'array' OR jsonb_array_length(value->'sourceEvidenceIds') NOT BETWEEN 1 AND 32 OR (SELECT count(*) FROM jsonb_array_elements_text(value->'sourceEvidenceIds')) <> (SELECT count(DISTINCT source_id) FROM jsonb_array_elements_text(value->'sourceEvidenceIds') AS sources(source_id)) THEN RAISE EXCEPTION 'candidate source evidence shape is invalid'; END IF;
       IF jsonb_typeof(value->'expectedMetrics') <> 'array' OR jsonb_array_length(value->'expectedMetrics') NOT BETWEEN 1 AND 16 THEN RAISE EXCEPTION 'candidate expected metrics shape is invalid'; END IF;
       FOR item IN SELECT metric FROM jsonb_array_elements(value->'expectedMetrics') AS metrics(metric) LOOP
-        IF jsonb_typeof(item) <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(item)) NOT BETWEEN 3 AND 4 OR NOT (item ? 'name') OR NOT (item ? 'unit') OR NOT (item ? 'direction') OR btrim(item->>'name') = '' OR length(item->>'name') > 128 OR btrim(item->>'unit') = '' OR length(item->>'unit') > 64 OR item->>'direction' NOT IN ('increase','decrease','maintain') OR (item ? 'target' AND jsonb_typeof(item->'target') <> 'number') THEN RAISE EXCEPTION 'candidate expected metric shape is invalid'; END IF;
+        IF jsonb_typeof(item) <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(item)) NOT BETWEEN 3 AND 4 OR NOT (item ? 'name') OR jsonb_typeof(item->'name') <> 'string' OR NOT (item ? 'unit') OR jsonb_typeof(item->'unit') <> 'string' OR NOT (item ? 'direction') OR jsonb_typeof(item->'direction') <> 'string' OR btrim(item->>'name') = '' OR length(item->>'name') > 128 OR btrim(item->>'unit') = '' OR length(item->>'unit') > 64 OR item->>'direction' NOT IN ('increase','decrease','maintain') OR (item ? 'target' AND jsonb_typeof(item->'target') <> 'number') THEN RAISE EXCEPTION 'candidate expected metric shape is invalid'; END IF;
         metric_name := item->>'name';
         IF metric_name = ANY(previous_metric_name) THEN RAISE EXCEPTION 'candidate expected metric names must be unique'; END IF;
         previous_metric_name := array_append(previous_metric_name, metric_name);
       END LOOP;
+      previous_metric_name := ARRAY[]::text[];
       IF jsonb_typeof(value->'protectedMetrics') <> 'array' OR jsonb_array_length(value->'protectedMetrics') NOT BETWEEN 1 AND 16 THEN RAISE EXCEPTION 'candidate protected metrics shape is invalid'; END IF;
       FOR item IN SELECT metric FROM jsonb_array_elements(value->'protectedMetrics') AS metrics(metric) LOOP
-        IF jsonb_typeof(item) <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(item)) NOT BETWEEN 3 AND 4 OR NOT (item ? 'name') OR NOT (item ? 'unit') OR btrim(item->>'name') = '' OR length(item->>'name') > 128 OR btrim(item->>'unit') = '' OR length(item->>'unit') > 64 OR NOT (item ? 'minimum' OR item ? 'maximum') OR (item ? 'minimum' AND jsonb_typeof(item->'minimum') <> 'number') OR (item ? 'maximum' AND jsonb_typeof(item->'maximum') <> 'number') OR (item ? 'minimum' AND item ? 'maximum' AND (item->>'minimum')::double precision > (item->>'maximum')::double precision) THEN RAISE EXCEPTION 'candidate protected metric shape is invalid'; END IF;
+        IF jsonb_typeof(item) <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(item)) NOT BETWEEN 3 AND 4 OR NOT (item ? 'name') OR jsonb_typeof(item->'name') <> 'string' OR NOT (item ? 'unit') OR jsonb_typeof(item->'unit') <> 'string' OR btrim(item->>'name') = '' OR length(item->>'name') > 128 OR btrim(item->>'unit') = '' OR length(item->>'unit') > 64 OR NOT (item ? 'minimum' OR item ? 'maximum') OR (item ? 'minimum' AND jsonb_typeof(item->'minimum') <> 'number') OR (item ? 'maximum' AND jsonb_typeof(item->'maximum') <> 'number') OR (item ? 'minimum' AND item ? 'maximum' AND (item->>'minimum')::double precision > (item->>'maximum')::double precision) THEN RAISE EXCEPTION 'candidate protected metric shape is invalid'; END IF;
         metric_name := item->>'name';
         IF metric_name = ANY(previous_metric_name) THEN RAISE EXCEPTION 'candidate metric names must be unique'; END IF;
         previous_metric_name := array_append(previous_metric_name, metric_name);
       END LOOP;
-      IF jsonb_typeof(value->'scenarioSuite') <> 'array' OR jsonb_array_length(value->'scenarioSuite') NOT BETWEEN 1 AND 32 OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(value->'scenarioSuite') AS scenarios(scenario) WHERE btrim(scenario) = '' OR length(scenario) > 256) OR (SELECT count(*) FROM jsonb_array_elements_text(value->'scenarioSuite')) <> (SELECT count(DISTINCT scenario_id) FROM jsonb_array_elements_text(value->'scenarioSuite') AS scenarios(scenario_id)) THEN RAISE EXCEPTION 'candidate scenario suite shape is invalid'; END IF;
-      IF btrim(value->>'evidencePattern') = '' OR length(value->>'evidencePattern') > 4096 OR btrim(value->>'predictedEffect') = '' OR length(value->>'predictedEffect') > 4096 THEN RAISE EXCEPTION 'candidate evidence text is invalid'; END IF;
+      IF jsonb_typeof(value->'scenarioSuite') <> 'array' OR jsonb_array_length(value->'scenarioSuite') NOT BETWEEN 1 AND 32 OR EXISTS (SELECT 1 FROM jsonb_array_elements(value->'scenarioSuite') AS scenarios(element) WHERE jsonb_typeof(element) <> 'string' OR btrim(element #>> '{}') = '' OR length(element #>> '{}') > 256) OR (SELECT count(*) FROM jsonb_array_elements_text(value->'scenarioSuite')) <> (SELECT count(DISTINCT scenario_id) FROM jsonb_array_elements_text(value->'scenarioSuite') AS scenarios(scenario_id)) THEN RAISE EXCEPTION 'candidate scenario suite shape is invalid'; END IF;
+      IF jsonb_typeof(value->'evidencePattern') <> 'string' OR btrim(value->>'evidencePattern') = '' OR length(value->>'evidencePattern') > 4096 OR jsonb_typeof(value->'predictedEffect') <> 'string' OR btrim(value->>'predictedEffect') = '' OR length(value->>'predictedEffect') > 4096 THEN RAISE EXCEPTION 'candidate evidence text is invalid'; END IF;
       IF jsonb_typeof(value->'confidence') <> 'number' OR (value->>'confidence')::double precision < 0 OR (value->>'confidence')::double precision > 1 THEN RAISE EXCEPTION 'candidate confidence is invalid'; END IF;
-      IF jsonb_typeof(value->'dataSufficiency') <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(value->'dataSufficiency')) <> 2 OR NOT (value->'dataSufficiency' ? 'episodeCount') OR NOT (value->'dataSufficiency' ? 'comparableGoalCount') OR value->'dataSufficiency'->>'episodeCount' !~ '^[1-9][0-9]*$' OR value->'dataSufficiency'->>'comparableGoalCount' !~ '^[1-9][0-9]*$' OR (value->'dataSufficiency'->>'comparableGoalCount')::numeric > (value->'dataSufficiency'->>'episodeCount')::numeric THEN RAISE EXCEPTION 'candidate data sufficiency is invalid'; END IF;
-      IF jsonb_typeof(value->'rollbackTarget') <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(value->'rollbackTarget')) <> 3 OR NOT (value->'rollbackTarget' ? 'candidateId') OR NOT (value->'rollbackTarget' ? 'version') OR NOT (value->'rollbackTarget' ? 'contentHash') OR value->'rollbackTarget'->>'candidateId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' OR value->'rollbackTarget'->>'version' !~ '^[1-9][0-9]*$' OR value->'rollbackTarget'->>'contentHash' !~ '^[0-9a-f]{64}$' THEN RAISE EXCEPTION 'candidate rollback target shape is invalid'; END IF;
+      IF jsonb_typeof(value->'dataSufficiency') <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(value->'dataSufficiency')) <> 2 OR NOT (value->'dataSufficiency' ? 'episodeCount') OR jsonb_typeof(value->'dataSufficiency'->'episodeCount') <> 'number' OR NOT (value->'dataSufficiency' ? 'comparableGoalCount') OR jsonb_typeof(value->'dataSufficiency'->'comparableGoalCount') <> 'number' OR value->'dataSufficiency'->>'episodeCount' !~ '^[1-9][0-9]*$' OR value->'dataSufficiency'->>'comparableGoalCount' !~ '^[1-9][0-9]*$' OR (value->'dataSufficiency'->>'comparableGoalCount')::numeric > (value->'dataSufficiency'->>'episodeCount')::numeric THEN RAISE EXCEPTION 'candidate data sufficiency is invalid'; END IF;
+      IF jsonb_typeof(value->'rollbackTarget') <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(value->'rollbackTarget')) <> 3 OR NOT (value->'rollbackTarget' ? 'candidateId') OR jsonb_typeof(value->'rollbackTarget'->'candidateId') <> 'string' OR NOT (value->'rollbackTarget' ? 'version') OR jsonb_typeof(value->'rollbackTarget'->'version') <> 'number' OR NOT (value->'rollbackTarget' ? 'contentHash') OR jsonb_typeof(value->'rollbackTarget'->'contentHash') <> 'string' OR value->'rollbackTarget'->>'candidateId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' OR value->'rollbackTarget'->>'version' !~ '^[1-9][0-9]*$' OR value->'rollbackTarget'->>'contentHash' !~ '^[0-9a-f]{64}$' THEN RAISE EXCEPTION 'candidate rollback target shape is invalid'; END IF;
     END;
     $body$;
   $fn$, schema_name);
@@ -190,6 +191,16 @@ BEGIN
         ELSE
           RETURN value::text;
       END CASE;
+    END;
+    $body$;
+  $fn$, schema_name);
+
+  EXECUTE format($fn$
+    CREATE OR REPLACE FUNCTION %1$s.reject_improvement_candidate_rollback_target_mutation() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, %1$s
+    AS $body$
+    BEGIN
+      RAISE EXCEPTION 'improvement candidate rollback targets are append-only';
     END;
     $body$;
   $fn$, schema_name);
@@ -386,6 +397,10 @@ DROP TRIGGER IF EXISTS improvement_candidates_append_only ON improvement_candida
 CREATE TRIGGER improvement_candidates_append_only BEFORE UPDATE OR DELETE ON improvement_candidates FOR EACH STATEMENT EXECUTE FUNCTION reject_improvement_candidate_mutation();
 DROP TRIGGER IF EXISTS improvement_candidates_no_truncate ON improvement_candidates;
 CREATE TRIGGER improvement_candidates_no_truncate BEFORE TRUNCATE ON improvement_candidates FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
+DROP TRIGGER IF EXISTS improvement_candidate_rollback_targets_append_only ON improvement_candidate_rollback_targets;
+CREATE TRIGGER improvement_candidate_rollback_targets_append_only BEFORE UPDATE OR DELETE ON improvement_candidate_rollback_targets FOR EACH STATEMENT EXECUTE FUNCTION reject_improvement_candidate_rollback_target_mutation();
+DROP TRIGGER IF EXISTS improvement_candidate_rollback_targets_no_truncate ON improvement_candidate_rollback_targets;
+CREATE TRIGGER improvement_candidate_rollback_targets_no_truncate BEFORE TRUNCATE ON improvement_candidate_rollback_targets FOR EACH STATEMENT EXECUTE FUNCTION reject_unscoped_truncate();
 DROP TRIGGER IF EXISTS improvement_candidate_authorization_issuer ON improvement_candidate_insert_authorizations;
 CREATE TRIGGER improvement_candidate_authorization_issuer BEFORE INSERT ON improvement_candidate_insert_authorizations FOR EACH ROW EXECUTE FUNCTION authorize_improvement_candidate_authorization_insert();
 DROP TRIGGER IF EXISTS improvement_candidate_authorization_immutable ON improvement_candidate_insert_authorizations;
@@ -398,6 +413,7 @@ REVOKE EXECUTE ON FUNCTION improvement_candidate_canonical_json(jsonb) FROM PUBL
 REVOKE EXECUTE ON FUNCTION validate_improvement_candidate_payload(jsonb) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION improvement_candidate_json_numbers_stable(jsonb) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION reject_improvement_candidate_mutation() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION reject_improvement_candidate_rollback_target_mutation() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION authorize_improvement_candidate_authorization_insert() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION authorize_improvement_candidate_marker_mutation() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION reject_improvement_candidate_authorization_mutation() FROM PUBLIC;

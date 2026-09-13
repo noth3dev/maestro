@@ -128,5 +128,8 @@ describe("Improvement Candidate contract", () => {
     expect(() => assertValidImprovementCandidateInput(candidate({
       protectedMetrics: [{ name: "correctness", unit: "score", minimum: 1e-7 }],
     }))).toThrow(/stable JSON|number range/i);
+    expect(() => assertValidImprovementCandidateInput(candidate({
+      expectedMetrics: [{ name: "correctness", unit: "score", direction: "increase", target: 1 }],
+    }))).not.toThrow();
   });
 });
