@@ -337,6 +337,7 @@ type CouncilRoundRow = {
   evidence_ids: unknown;
   reviewer_count: number;
   final_verdict: string;
+  same_model_only: boolean;
   escalated: boolean;
 };
 type CouncilJudgmentRow = { model_provider: string; model_id: string; verdict: string; cited_evidence_ids: unknown };
@@ -369,12 +370,12 @@ async function validateRoutingJudgmentApproval(
   const replayGoals = await client.query<{ goal_id: string }>("SELECT goal_id FROM goals WHERE project_id = $1 AND goal_id = ANY($2::uuid[])", [previous.project_id, replayGoalIds]);
   if (replayGoals.rowCount !== new Set(replayGoalIds).size) throw new ImprovementCandidatePersistenceError("Routing candidate replay Goals are outside the candidate project");
   const councilRoundId = durableUuid(approval.councilRoundId, "Routing Council roundId");
-  const roundResult = await client.query<CouncilRoundRow>(`SELECT r.goal_id, r.evidence_ids, r.reviewer_count, s.final_verdict, s.escalated
+  const roundResult = await client.query<CouncilRoundRow>(`SELECT r.goal_id, r.evidence_ids, r.reviewer_count, s.final_verdict, s.same_model_only, s.escalated
     FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id
     WHERE r.round_id = $1 FOR KEY SHARE`, [councilRoundId]);
   if (roundResult.rowCount !== 1) throw new ImprovementCandidatePersistenceError("Routing candidate Council round is not durably sealed");
   const round = roundResult.rows[0]!;
-  if (round.goal_id !== previous.goal_id || round.reviewer_count < 2 || round.final_verdict !== "proceed" || round.escalated) {
+  if (round.goal_id !== previous.goal_id || round.reviewer_count < 2 || round.final_verdict !== "proceed" || round.same_model_only || round.escalated) {
     throw new ImprovementCandidatePersistenceError("Routing candidate Council approval is outside its Goal or is not non-escalated");
   }
   const councilEvidenceIds = stringList(round.evidence_ids, "Routing Council evidence");
