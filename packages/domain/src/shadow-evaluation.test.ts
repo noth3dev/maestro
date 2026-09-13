@@ -38,7 +38,7 @@ const sameInput = () => ({ input, activeInput: input, active });
 let runCounter = 0;
 const journalConfig = (events: string[] = [], outcomes: string[] = []) => ({
   journal: { append: async (event: { event: string }) => { events.push(event.event); } },
-  resultSink: { record: async (result: { status: string }) => { outcomes.push(result.status); } },
+  resultSink: { record: async (evidence: { result: { status: string } }) => { outcomes.push(evidence.result.status); } },
   runId: `shadow-run-${++runCounter}`,
   processRef: `shadow-process-${runCounter}`,
   sessionId: `shadow-session-${runCounter}`,
@@ -60,7 +60,7 @@ describe("zero-authority shadow evaluation", () => {
     expect(result.records[0]).toMatchObject({ input, active, proposed: { plans: active.plans, challenges: active.challenges } });
     expect(result.records[0]!.compared).toBe(true);
     expect(result.records[0]!.matchesActive).toBe(false);
-    expect(completedEvents).toEqual(["started"]);
+    expect(completedEvents).toEqual(["started", "orphaned", "completed"]);
     expect(outcomes).toEqual(["completed"]);
     expect(exportedRunShadowEvaluation).toBe(runShadowEvaluation);
   });
@@ -181,6 +181,17 @@ describe("zero-authority shadow evaluation", () => {
       evaluate: async () => active,
     })).rejects.toThrow(/sparse/i);
     expect(events).toEqual([]);
+  });
+
+  it("rejects arrays with extra keys or non-Array prototypes before cloning", async () => {
+    const input = [] as unknown[];
+    (input as unknown as { extra: string }).extra = "dropped";
+    await expect(runShadowEvaluation({
+      candidate: candidate(),
+      ...journalConfig(),
+      cases: [{ input, activeInput: input, active }],
+      evaluate: async () => active,
+    })).rejects.toThrow(/array|JSON/i);
   });
 
   it("provides a read-only kernel facade with no provider write methods", async () => {

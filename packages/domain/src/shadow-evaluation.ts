@@ -2,6 +2,7 @@ import type { AuthorizedEffectExecutor } from "@maestro/authority";
 import type { ExecutionKernelPort } from "./execution-kernel.js";
 import {
   assertValidImprovementCandidateInput,
+  improvementCandidateContentHash,
   type ImprovementCandidateInput,
 } from "./improvement-candidate.js";
 
@@ -103,7 +104,7 @@ export type ShadowJournalEvent = {
   readonly processRef: string;
   readonly projectId: string;
   readonly goalId: string;
-  readonly event: "started" | "orphaned";
+  readonly event: "started" | "orphaned" | "completed";
   readonly reason?: string;
   readonly processPid: number;
   readonly parentPid?: number;
@@ -116,8 +117,14 @@ export interface ShadowLifecycleJournal {
 }
 
 /** Durable sink for the completed shadow comparison, separate from process recovery. */
+export interface ShadowEvaluationEvidence {
+  readonly identity: ShadowRunIdentity;
+  readonly candidateContentHash: string;
+  readonly result: ShadowEvaluationResult;
+}
+
 export interface ShadowResultSink {
-  record(result: ShadowEvaluationResult): Promise<void>;
+  record(evidence: ShadowEvaluationEvidence): Promise<void>;
 }
 
 export interface ShadowEvaluationRequest {
@@ -173,6 +180,11 @@ function stableJson(value: unknown, seen = new WeakSet<object>()): string {
   try {
     if (value instanceof Date) throw new InvalidShadowOutputError("shadow values must use plain JSON data");
     if (Array.isArray(value)) {
+      if (Object.getPrototypeOf(value) !== Array.prototype) throw new InvalidShadowOutputError("shadow arrays must use Array.prototype");
+      for (const key of Reflect.ownKeys(value)) {
+        if (key === "length") continue;
+        if (typeof key !== "string" || !/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= value.length) throw new InvalidShadowOutputError("shadow arrays must contain indexed JSON data only");
+      }
       for (let index = 0; index < value.length; index += 1) if (!Object.hasOwn(value, index)) throw new InvalidShadowOutputError("shadow arrays must not be sparse");
       return `[${value.map((entry) => stableJson(entry, seen)).join(",")}]`;
     }
@@ -244,12 +256,19 @@ function journalEvent(request: ShadowEvaluationRequest, event: ShadowJournalEven
     processPid: identity.processPid,
     ...(identity.parentPid === undefined ? {} : { parentPid: identity.parentPid }),
     ...(reason === undefined ? {} : { reason }),
-    details: { shadow_run_id: identity.runId },
+    details: {
+      shadow_run_id: identity.runId,
+      candidate_content_hash: improvementCandidateContentHash(request.candidate),
+    },
   };
 }
 
 async function journalOrphan(request: ShadowEvaluationRequest, reason: string): Promise<void> {
   await request.journal.append(journalEvent(request, "orphaned", reason));
+}
+
+async function journalCompleted(request: ShadowEvaluationRequest, recordCount: number): Promise<void> {
+  await request.journal.append(journalEvent(request, "completed", `shadow_run_completed:${recordCount}`));
 }
 
 async function journalOrphanBestEffort(request: ShadowEvaluationRequest, reason: string): Promise<void> {
@@ -326,8 +345,14 @@ export async function runShadowEvaluation(request: ShadowEvaluationRequest): Pro
   }
 
   const complete = result("completed", records, deniedEffects);
+  // Plan-1's hardened process journal requires orphan evidence before a
+  // terminal event. A clean shadow completion uses that same protocol, then
+  // records the terminal completed marker; restart reconciliation therefore
+  // never mistakes a successful run for an unresolved started process.
+  await journalOrphan(request, "shadow_run_completed");
   try {
-    await request.resultSink.record(complete);
+    await request.resultSink.record({ identity: journalIdentity(request), candidateContentHash: improvementCandidateContentHash(request.candidate), result: complete });
+    await journalCompleted(request, complete.records.length);
   } catch (error) {
     await journalOrphanBestEffort(request, "shadow_run_result_not_durably_recorded");
     throw error;
