@@ -82,8 +82,11 @@ describe("native refinement boundary", () => {
     expect(() => adapter.refine(request({ scope: "global", mutation: "semantic_reversal" }))).toThrow(/CEO|approval|reversal|existing/i);
     const destructiveAdapter = createNativeRefinementAdapter({ enabledClasses: ["persona_axis"], restoreRollbackTarget: () => true, verifyGlobalEvidence: () => true, classifyMutation: () => "semantic_reversal", verifyCeoApproval: () => true } as never);
     const destructiveEntry = destructiveAdapter.refine(request({ scope: "global" }));
-    expect(() => destructiveAdapter.refine(request({ scope: "global", mutation: "semantic_reversal", existingRefinementId: destructiveEntry.refinementId, ceoApproval: { approvalId: "unverified" } as never }))).toThrow(/CEO|approval|verified|exact/i);
-    const revised = adapter.refine(request({ scope: "global", mutation: "narrow_reversible", existingRefinementId: applied.refinementId }));
+    const destructiveTarget = { candidateId: destructiveEntry.refinementId, version: destructiveEntry.version, contentHash: destructiveEntry.candidateContentHash };
+    expect(() => destructiveAdapter.refine(request({ scope: "global", mutation: "semantic_reversal", candidate: candidate({ rollbackTarget: destructiveTarget }), existingRefinementId: destructiveEntry.refinementId, ceoApproval: { approvalId: "unverified" } as never }))).toThrow(/CEO|approval|verified|exact/i);
+    const predecessorTarget = { candidateId: applied.refinementId, version: applied.version, contentHash: applied.candidateContentHash };
+    expect(() => adapter.refine(request({ scope: "global", mutation: "narrow_reversible", existingRefinementId: applied.refinementId }))).toThrow(/rollback|predecessor|target/i);
+    const revised = adapter.refine(request({ scope: "global", mutation: "narrow_reversible", candidate: candidate({ rollbackTarget: predecessorTarget }), existingRefinementId: applied.refinementId }));
     expect(revised.status).toBe("applied");
     expect(adapter.history(applied.refinementId)).toHaveLength(2);
   });
@@ -97,13 +100,39 @@ describe("native refinement boundary", () => {
   it("binds an existing refinement to its original scope and project", () => {
     const adapter = createAdapter();
     const entry = adapter.refine(request());
-    expect(() => adapter.refine(request({ scope: "global", existingRefinementId: entry.refinementId, mutation: "scope_expansion" }))).toThrow(/scope|CEO|approval/i);
+    const predecessorTarget = { candidateId: entry.refinementId, version: entry.version, contentHash: entry.candidateContentHash };
+    expect(() => adapter.refine(request({ scope: "global", candidate: candidate({ rollbackTarget: predecessorTarget }), existingRefinementId: entry.refinementId, mutation: "scope_expansion" }))).toThrow(/scope|CEO|approval/i);
     expect(() => adapter.refine(request({ candidate: candidate({ projectId: "99999999-9999-4999-8999-999999999999" }), existingRefinementId: entry.refinementId, mutation: "narrow_reversible" }))).toThrow(/project|scope/i);
   });
 
   it("rejects unsupported top-level controls instead of ignoring them", () => {
     const adapter = createAdapter();
     expect(() => adapter.refine(request({ authority: true } as never))).toThrow(/unknown|unsupported|authority/i);
+  });
+
+  it("binds a revision rollback target to the immutable predecessor", () => {
+    const adapter = createAdapter();
+    const entry = adapter.refine(request());
+    expect(() => adapter.refine(request({ existingRefinementId: entry.refinementId, mutation: "narrow_reversible" }))).toThrow(/rollback|predecessor|target/i);
+    const predecessorTarget = { candidateId: entry.refinementId, version: entry.version, contentHash: entry.candidateContentHash };
+    const revision = adapter.refine(request({ existingRefinementId: entry.refinementId, mutation: "narrow_reversible", candidate: candidate({ rollbackTarget: predecessorTarget }) }));
+    expect(revision.previousCandidate).toEqual(entry.candidate);
+  });
+
+  it("passes frozen candidate snapshots to hooks and rechecks their exact hash", () => {
+    const mutate = vi.fn(({ candidate: value }: NativeRefinementRequest) => {
+      expect(() => { (value as { projectId: string }).projectId = "99999999-9999-4999-8999-999999999999"; }).toThrow();
+    });
+    const adapter = createNativeRefinementAdapter({ enabledClasses: ["persona_axis"], evaluate: mutate } as never);
+    expect(() => adapter.refine(request())).not.toThrow();
+    expect(mutate).toHaveBeenCalled();
+  });
+
+  it("snapshots enabled classes at construction", () => {
+    const enabled = ["persona_axis"] as ("persona_axis" | "routing_capability_axis")[];
+    const adapter = createNativeRefinementAdapter({ enabledClasses: enabled, restoreRollbackTarget: () => true } as never);
+    enabled.length = 0;
+    expect(adapter.refine(request()).status).toBe("applied");
   });
 
   it("retains evaluation and rollback metadata and fails closed without an exact restore", () => {

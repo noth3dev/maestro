@@ -198,6 +198,7 @@ export interface NativeRefinementAdapter {
 
 export function createNativeRefinementAdapter(options: NativeRefinementAdapterOptions): NativeRefinementAdapter {
   if (!options || !Array.isArray(options.enabledClasses)) fail("Native refinement enabled classes are required");
+  const enabledClasses = Object.freeze([...options.enabledClasses]);
   const entries = new Map<string, NativeRefinementRecord>();
   const histories = new Map<string, NativeRefinementRecord[]>();
 
@@ -217,16 +218,19 @@ export function createNativeRefinementAdapter(options: NativeRefinementAdapterOp
 
   function refine(request: NativeRefinementRequest): NativeRefinementRecord {
     validateRequestShape(request);
-    const candidate = cloneCandidate(request.candidate);
-    if (request.scope === "global") verifyGlobalEvidence(candidate, request.evaluation, options.verifyGlobalEvidence);
+    const candidate = deepFreeze(cloneCandidate(request.candidate));
+    const evaluation = deepFreeze(structuredClone(request.evaluation));
+    if (request.scope === "global") verifyGlobalEvidence(candidate, evaluation, options.verifyGlobalEvidence);
     else {
-      try { assertImprovementClassEnabled(candidate.kind, options.enabledClasses); }
+      try { assertImprovementClassEnabled(candidate.kind, enabledClasses); }
       catch (error) { fail(error instanceof Error ? error.message : "Improvement class is not enabled"); }
     }
     const existing = request.existingRefinementId === undefined ? undefined : read(request.existingRefinementId);
     if (existing !== undefined) {
       if (existing.candidate.projectId !== candidate.projectId) fail("Refinement project identity cannot change");
       if (existing.status !== "applied" && existing.status !== "observed") fail("Only an active refinement can be modified");
+      const target = candidate.rollbackTarget;
+      if (target.candidateId !== existing.refinementId || target.version !== existing.version || target.contentHash !== existing.candidateContentHash) fail("Revision rollback target must bind to the immutable predecessor");
     }
     const contentHash = improvementCandidateContentHash(candidate);
     let mutation: NativeRefinementMutation;
@@ -242,7 +246,10 @@ export function createNativeRefinementAdapter(options: NativeRefinementAdapterOp
       validateApproval(request.ceoApproval, candidate, request.component, request.scope, mutation, existing.refinementId, options.verifyCeoApproval, existing);
       if (mutation === "delete") fail("Global entries must be deprecated and observed before removal");
     }
-    options.evaluate?.({ ...request, candidate, mutation });
+    const safeRequest = Object.freeze({ ...request, candidate, evaluation, mutation });
+    options.evaluate?.(safeRequest);
+    const checkedCandidate = cloneCandidate(candidate);
+    if (improvementCandidateContentHash(checkedCandidate) !== contentHash) fail("Refinement candidate changed during evaluation");
     const entry: NativeRefinementRecord = {
       refinementId: existing?.refinementId ?? randomUUID(),
       version: (existing?.version ?? 0) + 1,
@@ -252,7 +259,7 @@ export function createNativeRefinementAdapter(options: NativeRefinementAdapterOp
       scope: request.scope,
       improvementClass: candidate.kind,
       mutation,
-      evaluation: request.evaluation,
+      evaluation,
       rolloutScope: { scope: request.scope, projectId: candidate.projectId, improvementClass: candidate.kind, component: request.component },
       rollbackTrigger: { protectedMetrics: candidate.protectedMetrics, rollbackTarget: candidate.rollbackTarget },
       ...(existing === undefined ? {} : { previousCandidate: existing.candidate }),
