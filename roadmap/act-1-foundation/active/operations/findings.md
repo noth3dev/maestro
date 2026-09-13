@@ -2053,3 +2053,10 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-13 S1 fixture-compatibility remediation was independently reviewed as `REVIEW: PASS`, merged as `02d67c0`, and verified on `main` with build/lint/diff-check plus **228/228 files and 1577/1577** serialized real-PostgreSQL tests. No remaining in-scope verification issue is open.
 
 - 2026-09-13 Plan 6 §S1 post-merge verification finding: migration `0087` correctly rejects unscoped protected-table truncation, but existing full-suite fixtures used multi-table `TRUNCATE` statements with `goals` after protected tables. The merged-state run failed 210 tests in 24 files at fixture setup with `direct table truncation is forbidden; truncate goals CASCADE for test reset`; no S1 application-path assertion failed. The fix is limited to ordering `goals` first (and using `TRUNCATE goals CASCADE` for evidence metadata reset), with a regression proving wrong-order rejection and goals-first success. The 24 affected files pass 211/211, and the final serialized full-suite revalidation passes 228/228 files and 1577/1577 tests.
+
+
+## 2026-09-13 — Plan 6 §S2 candidate lifecycle review and full verification
+
+- Fresh exact-HEAD independent review passed at `8fae11e` after the candidate SQL/domain parity fixes. The reviewer noted that a direct secured-database caller could supply an arbitrary `created_at`; the public persistence API uses the database default and the planned S2 RED specification does not expose a caller-controlled timestamp. This is classified as **out-of-scope hardening; stop here and merge**, not an S2 blocker.
+- The first full serialized PostgreSQL run exposed one unrelated test-fixture query that counted `devices` and `device_policies` across all isolated schemas. The test now joins `pg_namespace` and filters `current_schema()` only. No application code or `testbed/` file was changed.
+- Final rerun passed 230/230 files and 1588/1588 tests.
