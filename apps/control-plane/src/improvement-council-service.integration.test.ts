@@ -7,19 +7,20 @@ import { grantProjectMembership, grantProjectRole } from "../../../packages/pers
 import { createImprovementCouncilService, ImprovementCouncilError } from "./improvement-council-service.js";
 import type { ExecutionAdmission, ExecutionKernelPort } from "@maestro/domain";
 
-const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
-const describeDatabase = databaseUrl ? describe : describe.skip;
+const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL ?? "postgresql://127.0.0.1/maestro_test";
+const hasDatabase = Boolean(process.env.MAESTRO_TEST_DATABASE_URL);
+const describeDatabase = hasDatabase ? describe : describe.skip;
 const scenarios = ["ambiguous-requirement-v1", "persuasive-unsupported-claim-v1", "cross-department-disagreement-v1", "budget-pressure-v1", "critical-action-request-v1", "stale-plan-or-result-v1", "user-correction-v1", "incident-time-pressure-v1"] as const;
 
 function reviewerAdmission(goalId: string, projectId: string, proof: GoalLeaseProof, commandId: string, index: number, operatorId: string): ExecutionAdmission {
   return { context: { operatorId, projectId, goalId, missionBundleId: "improvement-council-bundle", policyVersion: "improvement-council-policy", fencingToken: proof.fencingToken, accountRef: "account-1" }, grant: { grantId: `grant-${commandId}-${index}`, allowedTools: [], allowedSkills: ["review"], modelPolicy: ["test/kimi"], pathScope: [], outboundDataClasses: ["repository files only"], remaining: { modelTurns: 2, toolCalls: 0, childCalls: 0, outputTokens: 2048, wallTimeMs: 20_000, retryCount: 0 } }, modelPolicy: ["test/kimi"], idempotencyKey: `improvement-${commandId}-${index}` };
 }
 
-function kernel(answer: string, model = { provider: "test", id: "kimi" }): ExecutionKernelPort {
+function kernel(answer: string, model = { provider: "test", id: "kimi" }, onPrompt?: (prompt: string) => void): ExecutionKernelPort {
   let count = 0; const executions = new Map<string, string>();
   return {
     async spawn() { const execution = `improvement-exec-${count}`; const invocation = `improvement-inv-${count}`; count += 1; executions.set(execution, invocation); return { execution: execution as never, invocation: invocation as never }; },
-    async prompt() {}, async observe(execution) { return [{ invocation: executions.get(execution as unknown as string) as never, name: "reviewer", status: "succeeded", toolEvents: { state: "empty", events: [] }, usage: { state: "available", totalTokens: 1 }, answer: { state: "available", text: answer } }]; },
+    async prompt(_execution, prompt) { onPrompt?.(prompt); }, async observe(execution) { return [{ invocation: executions.get(execution as unknown as string) as never, name: "reviewer", status: "succeeded", toolEvents: { state: "empty", events: [] }, usage: { state: "available", totalTokens: 1 }, answer: { state: "available", text: answer } }]; },
     async sendMessage() {}, async cancel() { return { cancelled: true }; }, async getModelIdentity() { return model; }, async getExecutionBinding() { return { model, accountRef: "account-1" }; },
     async getToolEvents() { return { state: "empty", events: [] }; }, async getUsage() { return { state: "available", totalTokens: 1 }; }, async getInvocationStatus() { return "succeeded"; }, async resume() { throw new Error("not supported"); }, async reconnect() { throw new Error("not supported"); },
   };
@@ -31,9 +32,9 @@ describeDatabase("Improvement Council review and disclosure with PostgreSQL", ()
   const scopedUrl = (() => { const url = new URL(databaseUrl!); url.searchParams.set("options", `-c search_path=${schema}`); return url.toString(); })();
   let pool: Pool;
 
-  beforeAll(async () => { await basePool.query(`CREATE SCHEMA ${schema}`); pool = new Pool({ connectionString: scopedUrl }); await applyAllMigrations(pool); await bootstrapPermanentOrganization(pool); });
-  beforeEach(async () => { await pool.query("TRUNCATE goals CASCADE"); });
-  afterAll(async () => { await pool.end(); await basePool.query(`DROP SCHEMA ${schema} CASCADE`); await basePool.end(); });
+  beforeAll(async () => { if (!hasDatabase) return; await basePool.query(`CREATE SCHEMA ${schema}`); pool = new Pool({ connectionString: scopedUrl }); await applyAllMigrations(pool); await bootstrapPermanentOrganization(pool); });
+  beforeEach(async () => { if (!hasDatabase) return; await pool.query("TRUNCATE goals CASCADE"); });
+  afterAll(async () => { if (!hasDatabase) return; await pool.end(); await basePool.query(`DROP SCHEMA ${schema} CASCADE`); await basePool.end(); });
 
   async function setup() {
     const goalId = randomUUID(), projectId = randomUUID();
@@ -58,9 +59,12 @@ describeDatabase("Improvement Council review and disclosure with PostgreSQL", ()
 
   it("records actual reviewer model identity through the existing durable native-binding path", async () => {
     const s = await setup(); const commandId = randomUUID(); const answer = JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "safe", conditions: [], dissentNote: null, citedEvidenceIds: [s.evidenceId] });
-    const service = createImprovementCouncilService({ pool, kernel: kernel(answer), withGoalLease: async (_goalId, op) => op(s.proof), createAdmission: (input) => reviewerAdmission(input.goalId, input.projectId, s.proof, commandId, input.reviewerIndex, s.reviewerOperator) });
+    const prompts: string[] = []; const service = createImprovementCouncilService({ pool, kernel: kernel(answer, { provider: "test", id: "kimi" }, (prompt) => prompts.push(prompt)), withGoalLease: async (_goalId, op) => op(s.proof), createAdmission: (input) => reviewerAdmission(input.goalId, input.projectId, s.proof, commandId, input.reviewerIndex, s.reviewerOperator) });
     const result = await service.review(requestFor(s), commandId);
     expect(result.judgments[0]).toMatchObject({ modelProvider: "test", modelId: "kimi" });
+    expect(prompts[0]).toContain(`Scenario suite: ${JSON.stringify(s.candidate.scenarioSuite)}`);
+    expect(prompts[0]).toContain(`Confidence: ${s.candidate.confidence}`);
+    expect(prompts[0]).toContain(`authorOperator ${s.authorOperator}`);
     expect((await pool.query("SELECT actual_model_provider, actual_model_id FROM native_execution_bindings WHERE admission_kind = 'encore_reviewer'")).rows).toEqual([{ actual_model_provider: "test", actual_model_id: "kimi" }]);
   });
 

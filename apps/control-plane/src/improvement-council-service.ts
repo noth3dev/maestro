@@ -77,17 +77,20 @@ function assertEvaluation(disclosure: ImprovementCouncilEvaluationDisclosure): v
   if (new Set(disclosure.evidenceIds.map((id) => id.trim())).size !== disclosure.evidenceIds.length) throw new ImprovementCouncilError("Improvement Council evaluation evidence must be unique");
 }
 
-function reviewQuestion(candidate: ImprovementCandidate, evaluation: ImprovementCouncilEvaluationDisclosure): string {
+function reviewQuestion(candidate: ImprovementCandidate, evaluation: ImprovementCouncilEvaluationDisclosure, authorOperatorId: string, authorRoleId: string): string {
   return [
     "Review this evaluated improvement candidate independently. Do not treat quantitative improvement as permission to weaken safety, authority, core identity, or diversity boundaries.",
-    `Candidate: ${candidate.candidateId} version ${candidate.version} contentHash ${candidate.contentHash} (${candidate.kind})`,
+    `Candidate: ${candidate.candidateId} version ${candidate.version} schemaVersion ${candidate.schemaVersion} contentHash ${candidate.contentHash} (${candidate.kind})`,
+    `Binding: project ${candidate.projectId} Goal ${candidate.goalId} parent ${candidate.parentCandidateId ?? "none"} author ${candidate.authorId} authorOperator ${authorOperatorId} authorRole ${authorRoleId} session ${candidate.sessionRef} createdAt ${candidate.createdAt}`,
     `Target: ${JSON.stringify(candidate.target)}`,
     `Changes: ${JSON.stringify(candidate.changes)}`,
     `Source digest evidence ids: ${JSON.stringify(candidate.sourceEvidenceIds)}`,
     `Expected metrics: ${JSON.stringify(candidate.expectedMetrics)}`,
     `Protected metrics: ${JSON.stringify(candidate.protectedMetrics)}`,
+    `Scenario suite: ${JSON.stringify(candidate.scenarioSuite)}`,
     `Scenario suite hash: ${candidate.scenarioSuiteHash}`,
     `Rollback target: ${JSON.stringify(candidate.rollbackTarget)}`,
+    `Confidence: ${candidate.confidence} data sufficiency: ${JSON.stringify(candidate.dataSufficiency)}`,
     `Evidence pattern: ${candidate.evidencePattern}`,
     `Predicted effect: ${candidate.predictedEffect}`,
     `Quantitative evaluation: ${JSON.stringify(evaluation.quantitative)}`,
@@ -110,14 +113,14 @@ export function createImprovementCouncilService(deps: ImprovementCouncilServiceD
         const candidate = await readImprovementCandidate(deps.pool, request.candidateId, { operatorId: request.operatorId, proof });
         if (candidate.goalId !== request.goalId.toLowerCase() || candidate.projectId !== request.projectId.toLowerCase()) throw new ImprovementCouncilError("Improvement Council candidate is outside the requested Goal/project");
         if (candidate.state !== "evaluated") throw new ImprovementCouncilError("Improvement Council requires an evaluated candidate");
-        const author = await deps.pool.query<{ author_operator_id: string }>("SELECT author_operator_id FROM improvement_candidates WHERE candidate_id = $1", [candidate.candidateId]);
-        if (author.rowCount !== 1 || author.rows[0]!.author_operator_id.trim() === "") throw new ImprovementCouncilError("Improvement Council candidate author identity is missing");
+        const author = await deps.pool.query<{ author_operator_id: string; author_role_id: string }>("SELECT author_operator_id, author_role_id FROM improvement_candidates WHERE candidate_id = $1", [candidate.candidateId]);
+        if (author.rowCount !== 1 || author.rows[0]!.author_operator_id.trim() === "" || author.rows[0]!.author_role_id.trim() === "") throw new ImprovementCouncilError("Improvement Council candidate author identity is missing");
         const excludedAuthorOperatorId = author.rows[0]!.author_operator_id.toLowerCase();
         const result = await runEncoreCouncilReview(deps.pool, deps.kernel, {
           goalId: candidate.goalId,
           proof,
           commandId,
-          question: reviewQuestion(candidate, request.evaluation),
+          question: reviewQuestion(candidate, request.evaluation, author.rows[0]!.author_operator_id, author.rows[0]!.author_role_id),
           criteria: [
             { criterionId: "candidate-safety", description: "does the candidate preserve correctness, safety, authority, core identity, and diversity hard floors" },
             { criterionId: "candidate-fit", description: "do the fixed evaluation results support the predicted improvement for the declared target" },
