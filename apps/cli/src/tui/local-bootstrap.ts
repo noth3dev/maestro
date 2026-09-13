@@ -62,6 +62,37 @@ export interface LocalBootstrapOptions {
   startControlPlane?: (options: LocalControlPlaneLaunchOptions) => Promise<LocalProcessHandle | void>;
   startModelGateway?: (options: LocalModelGatewayLaunchOptions) => Promise<LocalProcessHandle | void>;
   retryDelayMs?: number;
+  onStep?: (event: LocalBootstrapStepEvent) => void;
+}
+
+export const LOCAL_BOOTSTRAP_STEP_ORDER = [
+  "docker-check",
+  "postgres-ready",
+  "migrations",
+  "control-plane-up",
+  "model-gateway-up",
+] as const;
+
+export type LocalBootstrapStepName = typeof LOCAL_BOOTSTRAP_STEP_ORDER[number];
+export type LocalBootstrapStepStatus = "pending" | "started" | "completed" | "failed";
+
+export interface LocalBootstrapStepEvent {
+  readonly step: LocalBootstrapStepName;
+  readonly status: LocalBootstrapStepStatus;
+  readonly message?: string;
+}
+
+function reportSetupStep(
+  onStep: ((event: LocalBootstrapStepEvent) => void) | undefined,
+  step: LocalBootstrapStepName,
+  status: LocalBootstrapStepStatus,
+  message?: string,
+): void {
+  try {
+    onStep?.({ step, status, ...(message === undefined ? {} : { message }) });
+  } catch {
+    // Setup telemetry is presentation-only and must never change bootstrap behavior.
+  }
 }
 
 const defaultSecretStore = (): LocalSecretStore => {
@@ -168,13 +199,14 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
         secretStore.clear();
         storedToken = undefined;
       } else {
-        const gateway = await ensureLocalModelGatewayForBootstrap({
+        const gateway = await ensureLocalModelGatewayWithReporting({
           env: options.env,
           operatorId: localOperatorId,
           apiUrl: modelGatewayUrl,
           token: options.env.MAESTRO_MODEL_GATEWAY_TOKEN?.trim() || deriveModelGatewayToken(localSecret),
           fetch,
           retryDelayMs,
+          ...(options.onStep === undefined ? {} : { onStep: options.onStep }),
           ...(options.startModelGateway === undefined ? {} : { startModelGateway: options.startModelGateway }),
         });
         if (gateway.kind !== "ready") return { kind: "setup-required", reason: gateway.reason };
@@ -197,27 +229,27 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
   }
 
   const databaseUrl = options.env.MAESTRO_LOCAL_DATABASE_URL?.trim() || DEFAULT_LOCAL_DATABASE_URL;
-  const database = await ensureLocalDatabase({ databaseUrl, runCommand, retryDelayMs });
+  const database = await ensureLocalDatabase({ databaseUrl, runCommand, retryDelayMs, ...(options.onStep === undefined ? {} : { onStep: options.onStep }) });
   if (database.kind === "unavailable") return { kind: "setup-required", reason: database.reason };
 
   const initialHealth = await ensureLocalControlPlane({ apiUrl, fetch });
   if (initialHealth.kind !== "ready") {
     const entry = resolveControlPlaneEntry(options.env);
     if (entry === undefined) {
-      return {
-        kind: "setup-required",
-        reason: "Local Control Plane is not running and its executable was not found; set MAESTRO_CONTROL_PLANE_ENTRY or configure MAESTRO_API_URL and MAESTRO_API_TOKEN",
-      };
+      const reason = "Local Control Plane is not running and its executable was not found; set MAESTRO_CONTROL_PLANE_ENTRY or configure MAESTRO_API_URL and MAESTRO_API_TOKEN";
+      reportSetupStep(options.onStep, "control-plane-up", "failed", reason);
+      return { kind: "setup-required", reason };
     }
     bootstrapSecret = extractLocalSecret(storedToken) ?? randomBytes(32).toString("base64url");
     const modelGatewayToken = options.env.MAESTRO_MODEL_GATEWAY_TOKEN?.trim() || deriveModelGatewayToken(bootstrapSecret);
-    const gateway = await ensureLocalModelGatewayForBootstrap({
+    const gateway = await ensureLocalModelGatewayWithReporting({
       env: options.env,
       operatorId: localOperatorId,
       apiUrl: modelGatewayUrl,
       token: modelGatewayToken,
       fetch,
       retryDelayMs,
+      ...(options.onStep === undefined ? {} : { onStep: options.onStep }),
       ...(options.startModelGateway === undefined ? {} : { startModelGateway: options.startModelGateway }),
     });
     if (gateway.kind !== "ready") return { kind: "setup-required", reason: gateway.reason };
@@ -226,31 +258,42 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
     const dataDir = options.env.MAESTRO_LOCAL_DATA_DIR?.trim() || join(homedir(), ".local", "share", "maestro");
     try {
       await makeLocalDataDirectories(dataDir);
+      reportSetupStep(options.onStep, "migrations", "started");
+      reportSetupStep(options.onStep, "control-plane-up", "started");
       ownedControlPlane = await (options.startControlPlane ?? defaultStartControlPlane)({ entry, databaseUrl, dataDir, apiUrl, modelGatewayUrl, modelGatewayToken, modelGatewayOperatorId }) ?? undefined;
     } catch {
+      const reason = "Local Control Plane could not be started; check its executable and local data directory permissions";
+      reportSetupStep(options.onStep, "migrations", "failed", reason);
+      reportSetupStep(options.onStep, "control-plane-up", "failed", reason);
       await stopOwnedProcesses();
-      return { kind: "setup-required", reason: "Local Control Plane could not be started; check its executable and local data directory permissions" };
+      return { kind: "setup-required", reason };
     }
     // Fresh PostgreSQL migrations and a cold Node process can take several
     // seconds. Retry failed connections, not just hanging requests, while
     // keeping the whole startup window bounded.
     const started = await waitForLocalControlPlane({ apiUrl, fetch, retryDelayMs });
     if (started.kind !== "ready") {
+      const reason = `Local Control Plane startup failed: ${started.reason}`;
+      reportSetupStep(options.onStep, "migrations", "failed", reason);
+      reportSetupStep(options.onStep, "control-plane-up", "failed", reason);
       await stopOwnedProcesses();
-      return { kind: "setup-required", reason: `Local Control Plane startup failed: ${started.reason}` };
+      return { kind: "setup-required", reason };
     }
+    reportSetupStep(options.onStep, "migrations", "completed");
+    reportSetupStep(options.onStep, "control-plane-up", "completed");
   }
 
   if (initialHealth.kind === "ready" && !gatewayReady) {
     bootstrapSecret = extractLocalSecret(storedToken) ?? randomBytes(32).toString("base64url");
     const modelGatewayToken = options.env.MAESTRO_MODEL_GATEWAY_TOKEN?.trim() || deriveModelGatewayToken(bootstrapSecret);
-    const gateway = await ensureLocalModelGatewayForBootstrap({
+    const gateway = await ensureLocalModelGatewayWithReporting({
       env: options.env,
       operatorId: localOperatorId,
       apiUrl: modelGatewayUrl,
       token: modelGatewayToken,
       fetch,
       retryDelayMs,
+      ...(options.onStep === undefined ? {} : { onStep: options.onStep }),
       ...(options.startModelGateway === undefined ? {} : { startModelGateway: options.startModelGateway }),
     });
     if (gateway.kind !== "ready") return { kind: "setup-required", reason: gateway.reason };
@@ -374,6 +417,17 @@ async function probeLocalModelGateway(options: {
   return { kind: "ready" };
 }
 
+async function ensureLocalModelGatewayWithReporting(
+  options: Parameters<typeof ensureLocalModelGatewayForBootstrap>[0] & { onStep?: LocalBootstrapOptions["onStep"] },
+): Promise<Awaited<ReturnType<typeof ensureLocalModelGatewayForBootstrap>>> {
+  reportSetupStep(options.onStep, "model-gateway-up", "started");
+  const { onStep: _onStep, ...gatewayOptions } = options;
+  const result = await ensureLocalModelGatewayForBootstrap(gatewayOptions);
+  if (result.kind === "ready") reportSetupStep(options.onStep, "model-gateway-up", "completed");
+  else reportSetupStep(options.onStep, "model-gateway-up", "failed", result.reason);
+  return result;
+}
+
 async function ensureLocalModelGatewayForBootstrap(options: {
   env: ConnectionEnvironment;
   operatorId: string;
@@ -469,8 +523,10 @@ async function ensureLocalDatabase(options: {
   databaseUrl: string;
   runCommand: LocalCommandRunner;
   retryDelayMs: number;
+  onStep?: (event: LocalBootstrapStepEvent) => void;
 }): Promise<{ kind: "ready"; databaseUrl: string } | { kind: "unavailable"; reason: string }> {
   if (options.databaseUrl !== DEFAULT_LOCAL_DATABASE_URL) return { kind: "ready", databaseUrl: options.databaseUrl };
+  reportSetupStep(options.onStep, "docker-check", "started");
   const inspect = await options.runCommand("docker", ["inspect", "--format", "{{.State.Running}}", LOCAL_POSTGRES_CONTAINER]);
   if (inspect.code !== 0) {
     const started = await options.runCommand("docker", [
@@ -478,17 +534,32 @@ async function ensureLocalDatabase(options: {
       "-e", "POSTGRES_USER=maestro", "-e", "POSTGRES_DB=maestro_local", "-e", "POSTGRES_HOST_AUTH_METHOD=trust",
       "-p", "127.0.0.1:55432:5432", "-v", "maestro-local-postgres-data:/var/lib/postgresql/data", "postgres:17-alpine",
     ]);
-    if (started.code !== 0) return { kind: "unavailable", reason: dockerUnavailableReason(started.stderr || inspect.stderr) };
+    if (started.code !== 0) {
+      const reason = dockerUnavailableReason(started.stderr || inspect.stderr);
+      reportSetupStep(options.onStep, "docker-check", "failed", reason);
+      return { kind: "unavailable", reason };
+    }
   } else if (inspect.stdout.trim() !== "true") {
     const started = await options.runCommand("docker", ["start", LOCAL_POSTGRES_CONTAINER]);
-    if (started.code !== 0) return { kind: "unavailable", reason: "Docker PostgreSQL exists but could not be started; run `docker logs maestro-local-postgres`" };
+    if (started.code !== 0) {
+      const reason = "Docker PostgreSQL exists but could not be started; run `docker logs maestro-local-postgres`";
+      reportSetupStep(options.onStep, "docker-check", "failed", reason);
+      return { kind: "unavailable", reason };
+    }
   }
+  reportSetupStep(options.onStep, "docker-check", "completed");
+  reportSetupStep(options.onStep, "postgres-ready", "started");
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const ready = await options.runCommand("docker", ["exec", LOCAL_POSTGRES_CONTAINER, "pg_isready", "-U", "maestro", "-d", "maestro_local"]);
-    if (ready.code === 0) return { kind: "ready", databaseUrl: options.databaseUrl };
+    if (ready.code === 0) {
+      reportSetupStep(options.onStep, "postgres-ready", "completed");
+      return { kind: "ready", databaseUrl: options.databaseUrl };
+    }
     if (options.retryDelayMs > 0) await delay(options.retryDelayMs);
   }
-  return { kind: "unavailable", reason: "Docker PostgreSQL started but did not become ready; run `docker logs maestro-local-postgres`" };
+  const reason = "Docker PostgreSQL started but did not become ready; run `docker logs maestro-local-postgres`";
+  reportSetupStep(options.onStep, "postgres-ready", "failed", reason);
+  return { kind: "unavailable", reason };
 }
 
 function dockerUnavailableReason(detail: string): string {

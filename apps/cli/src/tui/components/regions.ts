@@ -18,10 +18,11 @@ export function createStatusRegion(options: {
 }): Component {
   return createDynamicRegion((width) => {
     const canShowSplash = width >= 100 && options.height() >= 28;
-    const showSplash = canShowSplash && options.splash.visible();
+    const setupVisible = (options.state.setupSteps?.length ?? 0) > 0 && options.state.connection.kind !== "connected";
+    const showSplash = canShowSplash && !setupVisible && options.state.connection.kind === "connected" && options.splash.visible();
     const lines = renderStatusRegion(options.state, width, options.height(), { showSplash });
     // Consume the first-frame splash even when the terminal is too small to show it.
-    if (options.splash.visible()) options.splash.dismiss();
+    if (options.splash.visible() && !setupVisible) options.splash.dismiss();
     return lines;
   });
 }
