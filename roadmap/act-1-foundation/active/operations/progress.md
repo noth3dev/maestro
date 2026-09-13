@@ -4209,5 +4209,6 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - 2026-09-14 Plan 6 §S10 remediation: reserved migration **0096** before changing the durable candidate payload validator so routing candidates carry the same explicit role/task rollout scope required by bounded rollout and rollback.
 - 2026-09-14 Plan 6 §S10 remediation: reserved migration **0097** before adding durable routing approval links and rollback kind/scope bindings. The rollout gate will require persisted evaluation/Council evidence, exact candidate identity, and a scope-matched rollback target.
+- 2026-09-14 Plan 6 §S10 remediation: reserved migration **0098** before separating durable routing replay/synthetic evaluation records from the judged-transition request and binding the persisted Council substance to the exact candidate identity.
 
 - 2026-09-14 Plan 6 §S9 merged as worker profile derivation, bounded Mission Bundle overlays, persisted assignment provenance, authenticated post-Goal evidence, and provider propagation. Post-merge build, lint, diff-check, and authenticated serialized PostgreSQL verification passed **240/240 files and 1646/1646 tests** in 391.09s (`/tmp/plan6-s9-postmerge.log`). Next: remove the S9 worktree, push normally, then start §S10 routing integration.

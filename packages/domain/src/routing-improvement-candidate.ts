@@ -142,7 +142,7 @@ function line(value: unknown, field: string): asserts value is string {
     throw new RoutingImprovementCandidateError(`${field} is invalid`);
 }
 
-function assertCouncilJudgment(candidate: ImprovementCandidate, judgment: RoutingCapabilityCouncilJudgment): void {
+export function assertValidRoutingCapabilityCouncilJudgment(candidate: ImprovementCandidate, judgment: RoutingCapabilityCouncilJudgment): void {
   plainRecord(judgment, "Routing capability Council judgment");
   const allowed = ["candidateId", "candidateVersion", "candidateContentHash", "councilRoundId", "evidenceIds", "judgments"];
   for (const key of Reflect.ownKeys(judgment)) {
@@ -231,7 +231,7 @@ export function selectRoutedModelWithRoutingCandidate(
   if (candidate.dataSufficiency.episodeCount < 2 || candidate.dataSufficiency.comparableGoalCount < 2) {
     throw new RoutingImprovementCandidateError("Routing capability judgment requires repeated comparable evidence, not a single execution");
   }
-  assertCouncilJudgment(candidate, judgment);
+  assertValidRoutingCapabilityCouncilJudgment(candidate, judgment);
 
   // Validate the routing inputs before checking the target, but never use the
   // candidate to replace any field in the request or to alter the baseline.

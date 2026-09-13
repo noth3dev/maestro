@@ -7,6 +7,7 @@ import {
   type ImprovementCandidate,
   SYNTHETIC_SCENARIO_SPECS,
   type RoutingCandidateEvaluationEvidence,
+  type RoutingCapabilityCouncilJudgment,
 } from "@maestro/domain";
 import { applyAllMigrations } from "./test-migrations.js";
 import { acquireGoalLease } from "./commands.js";
@@ -16,6 +17,7 @@ import {
   recordImprovementCandidate,
   transitionImprovementCandidate,
   transitionRoutingCandidateToJudged,
+  recordRoutingCandidateEvaluation,
   type ImprovementCandidateAuthor,
 } from "./improvement-candidate.js";
 import {
@@ -54,6 +56,17 @@ function routingEvaluation(candidate: ImprovementCandidate, comparableGoalId: st
         metrics: { correctness: 0.95, safety: 0.95, authority: 0.95, cost: 1 },
       })),
     },
+  };
+}
+
+function routingCouncilJudgment(candidate: ImprovementCandidate, roundId: string, digestId: string): RoutingCapabilityCouncilJudgment {
+  const judgment = (modelProvider: string, modelId: string) => ({
+    modelProvider, modelId, verdict: "proceed" as const, confidence: "high" as const,
+    reasoning: "durable approval", conditions: [], dissentNote: null, citedEvidenceIds: [digestId],
+  });
+  return {
+    candidateId: candidate.candidateId, candidateVersion: candidate.version, candidateContentHash: candidate.contentHash,
+    councilRoundId: roundId, evidenceIds: [digestId], judgments: [judgment("provider-a", "model-a"), judgment("provider-b", "model-b")],
   };
 }
 
@@ -182,11 +195,13 @@ function routingEvaluation(candidate: ImprovementCandidate, comparableGoalId: st
     const initial = await recordImprovementCandidate(pool, routingInput, proof, candidateAuthor, `routing-candidate-${randomUUID()}`);
     const evaluated = await transitionImprovementCandidate(pool, initial.candidateId, "evaluated", proof, candidateAuthor, `routing-evaluated-${randomUUID()}`);
     await expect(transitionImprovementCandidate(pool, evaluated.candidateId, "judged", proof, candidateAuthor, `routing-bypass-${randomUUID()}`)).rejects.toThrow(/durable|Council|approval|evidence/i);
+    const evaluation = routingEvaluation(evaluated, comparableGoalId);
+    const evaluationRecord = await recordRoutingCandidateEvaluation(pool, evaluated.candidateId, proof, evaluation, `routing-evaluation-${randomUUID()}`);
     const judgedKey = `routing-judged-${randomUUID()}`;
-    const judgedApproval = { councilRoundId: roundId, evaluation: routingEvaluation(evaluated, comparableGoalId) };
+    const judgedApproval = { evaluationId: evaluationRecord.evaluationId, evaluationHash: evaluationRecord.evaluationHash, councilRoundId: roundId, councilJudgment: routingCouncilJudgment(evaluated, roundId, digestId) };
     const judged = await transitionRoutingCandidateToJudged(pool, evaluated.candidateId, proof, candidateAuthor, judgedApproval, judgedKey);
     await expect(transitionRoutingCandidateToJudged(pool, evaluated.candidateId, proof, candidateAuthor, judgedApproval, judgedKey)).resolves.toMatchObject({ candidateId: judged.candidateId, state: "judged" });
-    await expect(transitionRoutingCandidateToJudged(pool, evaluated.candidateId, proof, candidateAuthor, { ...judgedApproval, councilRoundId: randomUUID() }, judgedKey)).rejects.toThrow(/differs|evidence|Council/i);
+    await expect(transitionRoutingCandidateToJudged(pool, evaluated.candidateId, proof, candidateAuthor, { ...judgedApproval, evaluationHash: "f".repeat(64) }, judgedKey)).rejects.toThrow(/differs|evidence|hash|bound/i);
     await enableImprovementClass(pool, projectId, "routing_capability_axis", proof, actor, `enable-routing-${randomUUID()}`);
 
     const rollout = await startBoundedRollout(pool, judged.candidateId, scope, proof, actor, `routing-start-${randomUUID()}`);
