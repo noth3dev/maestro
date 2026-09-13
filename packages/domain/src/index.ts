@@ -52,3 +52,4 @@ export * from "./shadow-evaluation.js";
 export * from "./rollout-controller.js";
 
 export * from "./worker-profile-derivation.js";
+export * from "./routing-improvement-candidate.js";

@@ -85,9 +85,12 @@ describeDatabase("Improvement Candidate persistence", () => {
 
   it("stores one shared candidate shape for persona and routing targets", async () => {
     const persona = await recordImprovementCandidate(pool, inputFor({ expectedMetrics: [{ name: "correctness", unit: "score", direction: "increase", target: 1 }] }), proof, author, "persona-1");
+    const routingRollbackTargetId = randomUUID();
+    await pool.query("INSERT INTO improvement_candidate_rollback_targets (target_candidate_id, target_version, project_id, goal_id, content_hash, kind, role_id, task_class) VALUES ($1, 1, $2, $3, $4, 'routing_capability_axis', 'head-engineering', 'implementation')", [routingRollbackTargetId, projectId, goalId, "1".repeat(64)]);
     const routing = await recordImprovementCandidate(pool, inputFor({
-      kind: "routing_capability_axis", target: { routingTarget: "openai/gpt-5" },
+      kind: "routing_capability_axis", target: { roleId: "head-engineering", taskClass: "implementation", routingTarget: "openai/gpt-5" },
       changes: [{ axis: "verification", currentValue: 120, proposedValue: 135 }],
+      rollbackTarget: { candidateId: routingRollbackTargetId, version: 1, contentHash: "1".repeat(64) },
     }), proof, author, "routing-1");
 
     expect(persona.state).toBe("candidate");

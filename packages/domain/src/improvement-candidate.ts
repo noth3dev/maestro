@@ -192,7 +192,7 @@ function validateTarget(value: unknown, kind: ImprovementCandidateKind): Improve
     if (hasRouting) throw new InvalidImprovementCandidateError("persona candidate cannot contain a routing target");
   } else {
     if (!hasRouting) throw new InvalidImprovementCandidateError("routing candidate requires a routingTarget");
-    if (hasRole || hasTaskClass) throw new InvalidImprovementCandidateError("routing candidate cannot contain a persona target");
+    if (!hasRole || !hasTaskClass) throw new InvalidImprovementCandidateError("routing candidate requires a bounded roleId and taskClass scope");
   }
   return target as ImprovementCandidateTarget;
 }
