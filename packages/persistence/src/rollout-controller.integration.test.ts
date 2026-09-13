@@ -181,7 +181,11 @@ function routingEvaluation(candidate: ImprovementCandidate): RoutingCandidateEva
     const initial = await recordImprovementCandidate(pool, routingInput, proof, candidateAuthor, `routing-candidate-${randomUUID()}`);
     const evaluated = await transitionImprovementCandidate(pool, initial.candidateId, "evaluated", proof, candidateAuthor, `routing-evaluated-${randomUUID()}`);
     await expect(transitionImprovementCandidate(pool, evaluated.candidateId, "judged", proof, candidateAuthor, `routing-bypass-${randomUUID()}`)).rejects.toThrow(/durable|Council|approval|evidence/i);
-    const judged = await transitionRoutingCandidateToJudged(pool, evaluated.candidateId, proof, candidateAuthor, { councilRoundId: roundId, evaluation: routingEvaluation(evaluated) }, `routing-judged-${randomUUID()}`);
+    const judgedKey = `routing-judged-${randomUUID()}`;
+    const judgedApproval = { councilRoundId: roundId, evaluation: routingEvaluation(evaluated) };
+    const judged = await transitionRoutingCandidateToJudged(pool, evaluated.candidateId, proof, candidateAuthor, judgedApproval, judgedKey);
+    await expect(transitionRoutingCandidateToJudged(pool, evaluated.candidateId, proof, candidateAuthor, judgedApproval, judgedKey)).resolves.toMatchObject({ candidateId: judged.candidateId, state: "judged" });
+    await expect(transitionRoutingCandidateToJudged(pool, evaluated.candidateId, proof, candidateAuthor, { ...judgedApproval, councilRoundId: randomUUID() }, judgedKey)).rejects.toThrow(/differs|evidence|Council/i);
     await enableImprovementClass(pool, projectId, "routing_capability_axis", proof, actor, `enable-routing-${randomUUID()}`);
 
     const rollout = await startBoundedRollout(pool, judged.candidateId, scope, proof, actor, `routing-start-${randomUUID()}`);

@@ -445,9 +445,19 @@ export async function transitionRoutingCandidateToJudged(
       const row = existing.rows[0]!;
       if (row.goal_id !== proof.goalId.toLowerCase()) throw new ImprovementCandidatePersistenceError("Improvement Candidate idempotency replay is outside the lease Goal");
       if (row.kind !== "routing_capability_axis" || row.state !== "judged") throw new ImprovementCandidatePersistenceError("Routing candidate judgment idempotency key was reused with different content");
-      const linked = await client.query("SELECT 1 FROM routing_candidate_approvals WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3", [row.candidate_id, row.version, row.content_hash]);
-      if (linked.rowCount !== 1) throw new ImprovementCandidatePersistenceError("Routing candidate judgment evidence is missing");
-      return mapRow(row);
+      const parentId = durableUuid(candidateId, "Routing candidate parentCandidateId");
+      assertIdempotentReplay(row, inputFromRow(row), author, "judged", parentId);
+      const replayCandidate = mapRow(row);
+      let replayEvaluationHash: string;
+      try {
+        assertValidRoutingCandidateEvaluation(replayCandidate, approval.evaluation);
+        replayEvaluationHash = routingCandidateEvaluationHash(approval.evaluation);
+      } catch (error) {
+        throw new ImprovementCandidatePersistenceError(error instanceof Error ? error.message : "Routing candidate evaluation evidence is invalid");
+      }
+      const linked = await client.query<{ council_round_id: string; evaluation_hash: string }>("SELECT council_round_id, evaluation_hash FROM routing_candidate_approvals WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3", [row.candidate_id, row.version, row.content_hash]);
+      if (linked.rowCount !== 1 || linked.rows[0]!.council_round_id !== durableUuid(approval.councilRoundId, "Routing Council roundId") || linked.rows[0]!.evaluation_hash !== replayEvaluationHash) throw new ImprovementCandidatePersistenceError("Routing candidate judgment evidence is missing or differs from the original approval");
+      return replayCandidate;
     }
     const previous = await readRow(client, candidateId, true);
     if (previous.goal_id !== proof.goalId.toLowerCase()) throw new ImprovementCandidatePersistenceError("Improvement Candidate transition is outside the lease Goal");
