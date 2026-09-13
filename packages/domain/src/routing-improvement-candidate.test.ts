@@ -166,10 +166,15 @@ describe("routing learning integration", () => {
   it("keeps single-execution evidence as a proposal and preserves the rollback/evidence chain", () => {
     const singleExecution = materialized();
     const withSingleEpisode = createRoutingCapabilityCandidate(candidateInput({ dataSufficiency: { episodeCount: 1, comparableGoalCount: 1 } }));
+    const judgedSingleExecution = materializeImprovementCandidate(
+      candidateInput({ dataSufficiency: { episodeCount: 1, comparableGoalCount: 1 } }),
+      { candidateId: UPDATED_CANDIDATE_ID, version: 1, parentCandidateId: null, state: "judged", authorId: "encore-lab", sessionRef: "session:routing:single", createdAt: "2026-09-13T12:00:00.000Z" },
+    );
 
     expect(singleExecution.state).toBe("candidate");
     expect(withSingleEpisode.sourceEvidenceIds).toEqual([DIGEST_ID]);
     expect(withSingleEpisode.rollbackTarget).toEqual(candidateInput().rollbackTarget);
     expect(() => selectRoutedModelWithRoutingCandidate(request(), singleExecution, judgmentFor(singleExecution))).toThrow(/Council|judg|proposal/i);
+    expect(() => selectRoutedModelWithRoutingCandidate(request(), judgedSingleExecution, judgmentFor(judgedSingleExecution))).toThrow(/single|comparable|sufficient|episode/i);
   });
 });
