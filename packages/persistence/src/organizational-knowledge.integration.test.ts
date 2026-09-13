@@ -91,7 +91,7 @@ describeDatabase("organizational knowledge persistence", () => {
       await formattedClient.query("SELECT authorize_knowledge_promotion($1, $2::uuid, $3, $4, $5, $6, $7::uuid, $8::uuid, $9::uuid, $10, $11::bigint, $12::uuid, $13, $14::text)", [randomUUID(), formatted.knowledgeId, 2, "project_department", "head-engineering", "engineering", curatorOperatorId, projectId, goalId, proof.ownerId, proof.fencingToken, null, null, noncanonicalPayload]);
       await expect(formattedClient.query(`INSERT INTO organizational_knowledge
         (knowledge_id, revision, schema_version, source_project_id, project_id, source_goal_id, department_id, scope, status, statement, rationale, source_evidence_ids, source_digest_ids, episode_ids, confidence, freshness, generalized, author_operator_id, author_role_id, operation_payload_hash, promotion_operator_id, promotion_role_id, promotion_marker, reason, created_by, source_session_ref)
-        VALUES ($1, 2, 1, $2, $2, $3, 'engineering', 'project_department', 'active', 'Use a bounded validation gate.', 'It prevented recurrence.', $4::jsonb, '[]', '["episode-a"]', 0.9, 1, false, $5::uuid, 'head-engineering', $6, $7::uuid, 'head-engineering', 'department-promotion', NULL, 'worker', 'promotion:formatted-json')`, [formatted.knowledgeId, projectId, goalId, JSON.stringify([evidenceId, evidenceId2]), operatorId, rawHash, curatorOperatorId])).rejects.toThrow(/authorization|canonical|payload|hash/);
+        VALUES ($1, 2, 1, $2, $2, $3, 'engineering', 'project_department', 'active', 'Use a bounded validation gate.', 'It prevented recurrence.', $4::jsonb, '[]', '["episode-a"]', 0.9, 1, false, $5::uuid, 'head-engineering', $6, $7::uuid, 'head-engineering', 'department-promotion', NULL, 'worker', 'promotion:formatted-json')`, [formatted.knowledgeId, projectId, goalId, JSON.stringify([evidenceId, evidenceId2]), operatorId, rawHash, curatorOperatorId])).rejects.toThrow(/authorization|canonical|payload|hash|promotion/);
       await formattedClient.query("ROLLBACK");
     } finally {
       formattedClient.release();
@@ -142,14 +142,23 @@ describeDatabase("organizational knowledge persistence", () => {
     await expect(pool.query(`SELECT "${spoofSchema}".authorize_knowledge_promotion($1, $2, 2, 'project_department', 'head-engineering', 'engineering', $3, $4, 'worker', $5)`, [randomUUID(), proposed.knowledgeId, operatorId, goalId, proof.fencingToken])).rejects.toThrow(/secured|issuer|authorization/i);
   });
 
+  it("rejects helper-schema proposal issuer spoofing", async () => {
+    const spoofSchema = `proposal_spoof_${randomUUID().replaceAll("-", "")}`;
+    await pool.query(`CREATE SCHEMA "${spoofSchema}"; CREATE FUNCTION "${spoofSchema}".authorize_knowledge_proposal(p_token text, p_knowledge_id uuid, p_project_id uuid, p_goal_id uuid, p_operator_id uuid, p_role_id text, p_owner_id text, p_fencing_token bigint, p_actor_id text, p_session_ref text, p_payload jsonb) RETURNS void LANGUAGE plpgsql AS $fn$ BEGIN PERFORM set_config('maestro.knowledge_proposal_token', p_token, true); PERFORM set_config('maestro.knowledge_proposal_operator', p_operator_id::text, true); PERFORM set_config('maestro.knowledge_proposal_owner', p_owner_id, true); PERFORM set_config('maestro.knowledge_proposal_fence', p_fencing_token::text, true); INSERT INTO ${schema}.knowledge_proposal_authorizations (revision, token_hash, payload_hash, knowledge_id, project_id, goal_id, operator_id, role_id, owner_id, fencing_token, actor_id, session_ref) VALUES (1, encode(public.digest(p_token, 'sha256'), 'hex'), encode(public.digest(p_payload::text, 'sha256'), 'hex'), p_knowledge_id, p_project_id, p_goal_id, p_operator_id, p_role_id, p_owner_id, p_fencing_token, p_actor_id, p_session_ref); END; $fn$;`);
+    const proof = await acquireGoalLease(pool, { goalId, ownerId: "proposal-spoof-worker", leaseDurationMs: 60_000 });
+    const proposed = await proposeOrganizationalKnowledge(pool, proposal(), proof, { actorId: proof.ownerId, sessionRef: "session:proposal-spoof", operatorId, operatorRoleId: "head-engineering" }, "proposal-spoof");
+    await expect(pool.query(`SELECT "${spoofSchema}".authorize_knowledge_proposal($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)`, [randomUUID(), proposed.knowledgeId, projectId, goalId, operatorId, "head-engineering", proof.ownerId, proof.fencingToken, proof.ownerId, "session:proposal-spoof", JSON.stringify(proposal())])).rejects.toThrow(/secured|issuer|authorization/i);
+  });
+
   it("rejects forged cleanup authorization rows before protected truncation", async () => {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      let protectedTruncateRejected = false;
-      try { await client.query("INSERT INTO organizational_knowledge_schema_cleanup_authorizations (transaction_id, authorized_by) VALUES (txid_current(), session_user); TRUNCATE organizational_knowledge"); } catch { protectedTruncateRejected = true; }
+      await expect(client.query("INSERT INTO organizational_knowledge_schema_cleanup_authorizations (transaction_id, authorized_by) VALUES (txid_current(), session_user)")).rejects.toThrow(/secured|cleanup|authorization/i);
       await client.query("ROLLBACK");
-      expect(protectedTruncateRejected).toBe(true);
+      await client.query("BEGIN");
+      await expect(client.query("TRUNCATE organizational_knowledge")).rejects.toThrow(/truncat|forbidden/i);
+      await client.query("ROLLBACK");
     } finally { client.release(); }
   });
 
