@@ -10,9 +10,12 @@ import {
   type RoutingCapabilityCouncilJudgment,
 } from "@maestro/domain";
 import { applyAllMigrations } from "./test-migrations.js";
+import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";
 import { grantProjectMembership, grantProjectRole, revokeProjectRole } from "./project-membership.js";
 import { recordImprovementDigest } from "./improvement-digest.js";
+import { deleteEvidenceSource } from "./evidence.js";
+import { readActivePersonaProfile } from "./persona-profile.js";
 import {
   recordImprovementCandidate,
   recordImprovementCandidateEvaluation,
@@ -83,18 +86,23 @@ function routingCouncilJudgment(candidate: ImprovementCandidate, roundId: string
   let digestId: string;
   let proof: Awaited<ReturnType<typeof acquireGoalLease>>;
   let candidate: ImprovementCandidate;
+  let taskClass: string;
+  let scope: RolloutScope;
 
   beforeAll(async () => {
     await basePool.query(`CREATE SCHEMA ${schema}`);
     pool = new Pool({ connectionString: scopedUrl });
     await applyAllMigrations(pool);
+    await bootstrapPermanentOrganization(pool);
   });
   beforeEach(async () => {
-    projectId = randomUUID(); goalId = randomUUID();
+    projectId = randomUUID(); goalId = randomUUID(); taskClass = `implementation-${randomUUID()}`;
+    scope = { roleId: "head-engineering", taskClass, maxGoalCount: 2, windowStart: "2026-09-14T00:00:00.000Z", windowEnd: "2026-09-15T00:00:00.000Z" };
     await pool.query("INSERT INTO local_operators (operator_id) VALUES ($1) ON CONFLICT DO NOTHING", [operatorId]);
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
     await grantProjectMembership(pool, operatorId, projectId);
     await grantProjectRole(pool, operatorId, projectId, "engineering");
+    await grantProjectRole(pool, operatorId, projectId, "head-engineering");
     const digest = await recordImprovementDigest(pool, {
       schemaVersion: 1, projectId, goalId, episodeId: `rollout-${randomUUID()}`, trigger: "goal_completed",
       situation: "The bounded rollout has comparable evidence.", selectedDecision: "Use the measured predecessor.", rejectedAlternatives: ["Skip evidence."],
@@ -103,11 +111,12 @@ function routingCouncilJudgment(candidate: ImprovementCandidate, roundId: string
     }, proof = await acquireGoalLease(pool, { goalId, ownerId: "rollout-worker", leaseDurationMs: 60_000 }), { actorId: candidateAuthor.authorId, sessionRef: candidateAuthor.sessionRef, operatorId });
     digestId = digest.digestId;
     await pool.query(`INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 'improvement-digest', 'application/json', 'project_lifetime')`, [digestId, randomUUID(), randomUUID(), projectId, goalId, operatorId, digest.contentHash]);
+    const currentPersona = await readActivePersonaProfile(pool, "head-engineering", taskClass);
     const rollbackTargetId = randomUUID();
-    await pool.query("INSERT INTO improvement_candidate_rollback_targets (target_candidate_id, target_version, project_id, goal_id, content_hash, kind, role_id, task_class) VALUES ($1, 1, $2, $3, $4, $5, $6, $7)", [rollbackTargetId, projectId, goalId, "a".repeat(64), "persona_axis", "head-engineering", "implementation"]);
+    await pool.query("INSERT INTO improvement_candidate_rollback_targets (target_candidate_id, target_version, project_id, goal_id, content_hash, kind, role_id, task_class) VALUES ($1, 1, $2, $3, $4, $5, $6, $7)", [rollbackTargetId, projectId, goalId, "a".repeat(64), "persona_axis", "head-engineering", taskClass]);
     const input: ImprovementCandidateInput = {
-      schemaVersion: 1, projectId, goalId, kind: "persona_axis", target: { roleId: "head-engineering", taskClass: "implementation" },
-      changes: [{ axis: "caution", currentValue: 0.7, proposedValue: 0.76 }], sourceEvidenceIds: [digestId],
+      schemaVersion: 1, projectId, goalId, kind: "persona_axis", target: { roleId: "head-engineering", taskClass },
+      changes: [{ axis: "caution", currentValue: currentPersona.persona.caution, proposedValue: Math.min(1, currentPersona.persona.caution + 0.06) }], sourceEvidenceIds: [digestId],
       evidencePattern: "Comparable Goals recorded avoidable risk-review omissions.", predictedEffect: "The role will surface reversible-risk checks earlier.",
       expectedMetrics: [{ name: "correctness", unit: "score", direction: "increase", target: 1 }], protectedMetrics: [{ name: "correctness", unit: "score", minimum: 0.9 }],
       scenarioSuite: ["implementation-risk-review-v1"], scenarioSuiteHash: improvementCandidateScenarioSuiteHash(["implementation-risk-review-v1"]), confidence: 0.84,
@@ -115,9 +124,9 @@ function routingCouncilJudgment(candidate: ImprovementCandidate, roundId: string
     };
     const initial = await recordImprovementCandidate(pool, input, proof, candidateAuthor, `candidate-${randomUUID()}`);
     const evaluated = await transitionImprovementCandidate(pool, initial.candidateId, "evaluated", proof, candidateAuthor, `evaluated-${randomUUID()}`);
-    const evaluation = await recordImprovementCandidateEvaluation(pool, evaluated.candidateId, proof, { evidenceIds: [digestId], payload: { replay: { status: "compared" }, synthetic: { status: "completed" } } }, `evaluation-${randomUUID()}`);
+    const evaluation = await recordImprovementCandidateEvaluation(pool, evaluated.candidateId, proof, { evidenceIds: [digestId], payload: { replay: { status: "compared", scenarioSuiteHash: evaluated.scenarioSuiteHash, results: [{ goalId, baseline: { correctness: 0.9 }, candidate: { correctness: 0.95 } }] }, synthetic: { status: "completed", results: [{ scenarioId: "implementation-risk-review-v1", metrics: { correctness: 0.95 } }] }, shadow: { status: "completed", records: [{ matchesActive: false }], liveEffects: [] } } }, `evaluation-${randomUUID()}`);
     const councilRoundId = randomUUID(); const councilEvidenceIds = [digestId, evaluation.evaluationId];
-    await pool.query(`INSERT INTO encore_council_rounds (round_id, goal_id, question, criteria, evidence_ids, trigger_reasons, reviewer_count) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, '[]'::jsonb, 2)`, [councilRoundId, goalId, `Review candidate ${evaluated.candidateId}`, "[]", JSON.stringify(councilEvidenceIds)]);
+    await pool.query(`INSERT INTO encore_council_rounds (round_id, goal_id, question, criteria, evidence_ids, trigger_reasons, reviewer_count) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, '[]'::jsonb, 2)`, [councilRoundId, goalId, `Review candidate ${evaluated.candidateId} version ${evaluated.version} contentHash ${evaluated.contentHash}`, JSON.stringify([{ criterionId: "candidate-safety" }, { criterionId: "candidate-fit" }, { criterionId: "candidate-disclosure" }]), JSON.stringify(councilEvidenceIds)]);
     for (const [reviewerIndex, model] of [[0, "provider-a/model-a"], [1, "provider-b/model-b"]] as const) { const [modelProvider, modelId] = model.split("/"); await pool.query(`INSERT INTO encore_council_judgments (judgment_id, round_id, reviewer_index, model_provider, model_id, verdict, confidence, reasoning, conditions, dissent_note, cited_evidence_ids, execution_ref, invocation_ref) VALUES ($1, $2, $3, $4, $5, 'proceed', 'high', 'durable approval', '[]'::jsonb, NULL, $6::jsonb, $7, $8)`, [randomUUID(), councilRoundId, reviewerIndex, modelProvider, modelId, JSON.stringify(councilEvidenceIds), `execution-${reviewerIndex}`, `invocation-${reviewerIndex}`]); }
     await pool.query(`INSERT INTO encore_council_syntheses (round_id, final_verdict, same_model_only, escalated, dissent_notes) VALUES ($1, 'proceed', false, false, '[]'::jsonb)`, [councilRoundId]);
     await recordImprovementCandidateCouncilApproval(pool, { candidateId: evaluated.candidateId, evaluationId: evaluation.evaluationId, evaluationHash: evaluation.evaluationHash, councilRoundId, councilEvidenceIds }, proof);
@@ -125,7 +134,6 @@ function routingCouncilJudgment(candidate: ImprovementCandidate, roundId: string
   });
   afterAll(async () => { await pool.end(); await basePool.query(`DROP SCHEMA ${schema} CASCADE`); await basePool.end(); });
 
-  const scope: RolloutScope = { roleId: "head-engineering", taskClass: "implementation", maxGoalCount: 2, windowStart: "2026-09-14T00:00:00.000Z", windowEnd: "2026-09-15T00:00:00.000Z" };
 
   it("denies applying a judged candidate until its exact improvement class is enabled", async () => {
     await expect(pool.query("INSERT INTO improvement_class_enablements (project_id, improvement_class, operator_id, operator_role_id, session_ref, operation_ref) VALUES ($1, 'persona_axis', $2, 'engineering', 'session:direct', $3)", [projectId, operatorId, `direct-${randomUUID()}`])).rejects.toThrow(/secured|authorization|marker/i);
@@ -133,17 +141,31 @@ function routingCouncilJudgment(candidate: ImprovementCandidate, roundId: string
     await enableImprovementClass(pool, projectId, "persona_axis", proof, actor, `enable-${randomUUID()}`);
     await expect(pool.query("DELETE FROM improvement_class_enablements WHERE project_id = $1", [projectId])).rejects.toThrow(/append-only|history|mutation/i);
     await expect(startBoundedRollout(pool, candidate.candidateId, { ...scope, taskClass: "unrelated" }, proof, actor, `start-${randomUUID()}`)).rejects.toThrow(/scope|target|task/i);
-    const rollout = await startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, "same-start-key");
+    const beforeApply = await readActivePersonaProfile(pool, "head-engineering", taskClass);
+    const rollout = await startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, "same-start-key", { rolloutLeaseDurationMs: 1000 });
+    const afterApply = await readActivePersonaProfile(pool, "head-engineering", taskClass);
+    expect(afterApply.persona.caution).toBeGreaterThan(beforeApply.persona.caution);
     await expect(startBoundedRollout(pool, candidate.candidateId, { ...scope, maxGoalCount: 3 }, proof, actor, "same-start-key")).rejects.toThrow(/idempotency|different|scope/i);
-    const durationRollout = await startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, "duration-start-key", { rolloutLeaseDurationMs: 1000 });
-    expect(durationRollout.status).toBe("active");
-    await expect(startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, "duration-start-key", { rolloutLeaseDurationMs: 2000 })).rejects.toThrow(/idempotency|duration|different/i);
+    await expect(startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, "same-start-key", { rolloutLeaseDurationMs: 2000 })).rejects.toThrow(/idempotency|duration|different/i);
     const unauthorized = { ...actor, operatorId: randomUUID() };
     await expect(observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T01:00:00.000Z", metrics: [{ name: "correctness", value: 0.95 }] }, proof, unauthorized, `unauthorized-${randomUUID()}`)).rejects.toThrow(/operator|authorized|member/i);
     const otherGoalId = randomUUID();
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [otherGoalId, projectId]);
     const otherProof = await acquireGoalLease(pool, { goalId: otherGoalId, ownerId: "other-rollout-worker", leaseDurationMs: 60_000 });
     await expect(startBoundedRollout(pool, candidate.candidateId, scope, otherProof, actor, "same-start-key")).rejects.toThrow(/Goal|outside|lease|authorized/i);
+  });
+
+  it("rejects a rollout after its supporting source evidence is retired", async () => {
+    await deleteEvidenceSource(pool, digestId, "retire source before rollout", operatorId, proof, "head-engineering");
+    await enableImprovementClass(pool, projectId, "persona_axis", proof, actor, `enable-${randomUUID()}`);
+    await expect(startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, `retired-source-${randomUUID()}`)).rejects.toThrow(/evidence|missing|source/i);
+  });
+
+  it("rolls back an active rollout when supporting source evidence is retired", async () => {
+    await enableImprovementClass(pool, projectId, "persona_axis", proof, actor, `enable-${randomUUID()}`);
+    const rollout = await startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, `source-loss-start-${randomUUID()}`);
+    await deleteEvidenceSource(pool, digestId, "retire source during rollout", operatorId, proof, "head-engineering");
+    await expect(observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T01:00:00.000Z", metrics: [{ name: "correctness", value: 0.95 }] }, proof, actor, `source-loss-observe-${randomUUID()}`)).resolves.toMatchObject({ status: "rolled_back", activeCandidateId: candidate.rollbackTarget.candidateId, activeVersion: candidate.rollbackTarget.version });
   });
 
   it("keeps each enabled improvement class isolated and bounds the rollout scope", async () => {
@@ -180,9 +202,9 @@ function routingCouncilJudgment(candidate: ImprovementCandidate, roundId: string
 
   it("runs a routing capability candidate through bounded rollback without mutating the human model baseline", async () => {
     const routingRollbackTargetId = randomUUID();
-    await pool.query("INSERT INTO improvement_candidate_rollback_targets (target_candidate_id, target_version, project_id, goal_id, content_hash, kind, role_id, task_class) VALUES ($1, 1, $2, $3, $4, $5, $6, $7)", [routingRollbackTargetId, projectId, goalId, "b".repeat(64), "routing_capability_axis", "head-engineering", "implementation"]);
+    await pool.query("INSERT INTO improvement_candidate_rollback_targets (target_candidate_id, target_version, project_id, goal_id, content_hash, kind, role_id, task_class) VALUES ($1, 1, $2, $3, $4, $5, $6, $7)", [routingRollbackTargetId, projectId, goalId, "b".repeat(64), "routing_capability_axis", "head-engineering", taskClass]);
     const routingInput: ImprovementCandidateInput = {
-      schemaVersion: 1, projectId, goalId, kind: "routing_capability_axis", target: { roleId: "head-engineering", taskClass: "implementation", routingTarget: "provider/fast" },
+      schemaVersion: 1, projectId, goalId, kind: "routing_capability_axis", target: { roleId: "head-engineering", taskClass, routingTarget: "provider/fast" },
       changes: [{ axis: "coding", currentValue: 120, proposedValue: 140 }], sourceEvidenceIds: [digestId],
       evidencePattern: "Comparable Goals show a repeatable coding verification gap.", predictedEffect: "The local proposal can be evaluated without changing model_map.",
       expectedMetrics: [{ name: "verification_failures", unit: "count", direction: "decrease", target: 0 }], protectedMetrics: [{ name: "correctness", unit: "score", minimum: 0.9 }],

@@ -147,6 +147,79 @@ export async function storeTaskClassPersonaAdjustment(pool: Pool, input: TaskCla
   }
 }
 
+export interface PersonaTaskClassApplication {
+  readonly roleId: string;
+  readonly taskClass: string;
+  readonly previousVersion: number;
+  readonly previousDelta: Readonly<Partial<Record<PersonaAxis, number>>>;
+  readonly appliedVersion: number;
+  readonly appliedDelta: Readonly<Partial<Record<PersonaAxis, number>>>;
+}
+
+export interface PersonaTaskClassApplicationInput {
+  readonly roleId: string;
+  readonly taskClass: string;
+  readonly changes: readonly { readonly axis: PersonaAxis; readonly currentValue: number; readonly proposedValue: number }[];
+  readonly reason: string;
+}
+
+/** Applies a judged persona candidate inside the caller's rollout transaction. */
+export async function applyPersonaTaskClassApplication(client: PoolClient, input: PersonaTaskClassApplicationInput): Promise<PersonaTaskClassApplication> {
+  const role = await lockRole(client, input.roleId);
+  const profileResult = await client.query<LearnedProfileRow>(
+    `SELECT role_id, version, profile, rationale, source FROM persona_profile_versions WHERE role_id = $1 ORDER BY version DESC LIMIT 1`, [input.roleId],
+  );
+  if (profileResult.rowCount !== 1) throw new PersonaProfileNotFoundError(`No learned persona profile for role: ${input.roleId}`);
+  const learned = profileRecord(profileResult.rows[0]!);
+  const adjustmentResult = await client.query<AdjustmentRow>(
+    `SELECT role_id, task_class, version, delta, reason FROM persona_task_class_adjustments WHERE role_id = $1 AND task_class = $2 ORDER BY version DESC LIMIT 1 FOR UPDATE`, [input.roleId, input.taskClass],
+  );
+  const previous = adjustmentResult.rowCount === 1 ? adjustmentRecord(adjustmentResult.rows[0]!) : undefined;
+  const previousDelta: Partial<Record<PersonaAxis, number>> = previous === undefined ? {} : { ...previous.delta };
+  const nextDelta: Partial<Record<PersonaAxis, number>> = { ...previousDelta };
+  const bounds = await client.query<{ axis: PersonaAxis; floor_value: number; ceiling_value: number }>(
+    `SELECT axis, floor_value, ceiling_value FROM role_persona_bounds WHERE role_id = $1`, [input.roleId],
+  );
+  const boundByAxis = new Map(bounds.rows.map((row) => [row.axis, row]));
+  for (const change of input.changes) {
+    if (!PERSONA_AXES.includes(change.axis) || !Number.isFinite(change.currentValue) || !Number.isFinite(change.proposedValue)) throw new PersonaProfileVersionConflictError("persona rollout change is invalid");
+    const current = learned.profile[change.axis] + (previousDelta[change.axis] ?? 0);
+    if (Math.abs(current - change.currentValue) > 1e-9) throw new PersonaProfileVersionConflictError(`persona rollout current ${change.axis} value is stale (${current} != ${change.currentValue})`);
+    const bound = boundByAxis.get(change.axis);
+    if (bound === undefined || change.proposedValue < bound.floor_value || change.proposedValue > bound.ceiling_value) throw new PersonaProfileVersionConflictError(`persona rollout ${change.axis} value violates its reviewed role bounds`);
+    nextDelta[change.axis] = change.proposedValue - learned.profile[change.axis];
+  }
+  if (Object.keys(nextDelta).length > 2) throw new PersonaProfileVersionConflictError("persona rollout may change at most two task-class axes");
+  for (const axis of PERSONA_AXES) {
+    const value = learned.profile[axis] + (nextDelta[axis] ?? 0);
+    if (value < 0 || value > 1) throw new PersonaProfileVersionConflictError(`persona rollout leaves ${axis} outside [0,1]`);
+  }
+  const version = (previous?.version ?? 0) + 1;
+  const reason = input.reason.trim();
+  if (reason === "" || reason.length > 256 || /[\r\n]/.test(reason)) throw new PersonaProfileVersionConflictError("persona rollout reason is invalid");
+  const inserted = await client.query<AdjustmentRow>(
+    `INSERT INTO persona_task_class_adjustments (role_id, task_class, version, delta, reason) VALUES ($1, $2, $3, $4::jsonb, $5) RETURNING role_id, task_class, version, delta, reason`,
+    [role.roleId, input.taskClass, version, JSON.stringify(nextDelta), reason],
+  );
+  const applied = adjustmentRecord(inserted.rows[0]!);
+  return { roleId: applied.roleId, taskClass: applied.taskClass, previousVersion: previous?.version ?? 0, previousDelta, appliedVersion: applied.version, appliedDelta: applied.delta };
+}
+
+/** Restores the exact prior task-class delta by appending a compensating version. */
+export async function restorePersonaTaskClassApplication(client: PoolClient, application: PersonaTaskClassApplication, reason: string): Promise<void> {
+  const current = await client.query<AdjustmentRow>(
+    `SELECT role_id, task_class, version, delta, reason FROM persona_task_class_adjustments WHERE role_id = $1 AND task_class = $2 ORDER BY version DESC LIMIT 1 FOR UPDATE`, [application.roleId, application.taskClass],
+  );
+  if (current.rowCount !== 1 || current.rows[0]!.version !== application.appliedVersion || canonicalJson(current.rows[0]!.delta) !== canonicalJson(application.appliedDelta)) {
+    throw new PersonaProfileVersionConflictError("persona rollout cannot restore an unexpected task-class version");
+  }
+  const nextVersion = application.appliedVersion + 1;
+  await client.query(
+    `INSERT INTO persona_task_class_adjustments (role_id, task_class, version, delta, reason) VALUES ($1, $2, $3, $4::jsonb, $5)`,
+    [application.roleId, application.taskClass, nextVersion, JSON.stringify(application.previousDelta), reason.trim()],
+  );
+}
+
 export async function readActivePersonaProfile(pool: Pool, roleId: string, taskClass: string, missionOverlay: Readonly<Partial<Record<PersonaAxis, number>>> = {}): Promise<ResolvedPersonaProfile> {
   const client = await pool.connect();
   try {

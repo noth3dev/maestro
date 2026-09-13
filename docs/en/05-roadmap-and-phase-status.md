@@ -13,7 +13,7 @@ Maestro follows a strict phased milestone roadmap. Code completion alone does no
 | **Phase 3** | Encore, Certification & First Usable Release | **Implementation complete; user-owned live handoff pending** | Plan 2 (host-tool, approval hierarchy, worker repair hold/requeue) and plan-3 §S1–§S4/§S3b are all merged. Routing evidence gates certification, Metronome observes approvals, Council records actual diversity, the TUI design pass landed. §S4's Step 9→10 CI harness remains a fake-provider simulation (recorded limitation); Phase 3 acceptance now rests solely on the user running the real fourteen-step live-provider scenario. |
 | **Phase 4** | Isolated Environments, Devices & Discord Incidents | **Implementation complete; live acceptance skipped (incomplete)** | Plan 4 S1–S4 implementation evidence is merged through `2631ed4`, including Goal-scoped gates, restart deduplication, and the [`test/phase4-scenario/RUNBOOK.md`](../../test/phase4-scenario/RUNBOOK.md). The user-owned live handoff was skipped; no live activation, outage/restart, provider/device effect, or certification evidence is claimed. |
 | **Phase 5** | Concurrent Goals & Portfolio Control | **Active remediation / capacity work** | Flat per-project worker admission control is present. Resource inventory, demand reservations, protected floors, and portfolio scheduling remain future work. |
-| **Phase 6** | Encore Learning & 10-Axis Adaptation | **Step 1 accepted** *(immutable digest)* | Step 1: project-private, source-bound Improvement Digests. Steps 2+ (replay, mutation, rollout, adaptation, promotion) remain deferred. |
+| **Phase 6** | Encore Learning & 10-Axis Adaptation | **Full-chain proof accepted** *(Steps 1–11)* | Durable routing and persona paths are proven through candidate evaluation, replay/synthetic/shadow, independent Council, proposal/bounded rollout, measured result, rollback, source-loss safety, and worker-profile consumption. |
 | **Phase 7** | Full Concertmaster Office & Radial Control Surface | Planned — Electron direction | Electron + Vite + React 19 desktop application, typed API/SSE interaction, and `@xyflow/react` radial portfolio visualization when the graph slice is implemented. Next.js/PWA is not the current target. |
 | **Phase 8** | Full-System Hardening & Release Certification | Planned | Adversarial stress testing, security penetration audit, recovery verification, release candidate freeze. |
 
@@ -47,6 +47,16 @@ The first production host-tool slice belongs to Phase 2 and follows Prime Agent'
 Phase 6 Step 1 is accepted as an immutable, project-private Improvement Digest slice. Each digest is source-bound to a Goal and its project, protected by lease authority and membership-scoped reads, and validated against its canonical content hash. This slice does **not** perform automatic mutation, replay, rollout, persona adaptation, or cross-project promotion. Phase 6 Steps 2+ remain deferred until separately planned, implemented, reviewed, and accepted.
 
 ---
+
+### Phase 6 full-chain evidence — accepted 2026-09-14
+
+The S11 real-PostgreSQL scenario is `test/phase6-scenario/full-chain.integration.test.ts`. It records both evidence paths and asserts durable joins rather than reconstructing them in memory:
+
+- Routing: Improvement Digest IDs → routing candidate/version/content hash → replay/synthetic/shadow evidence → independent multi-model Council judgments → judged proposal → class-enabled bounded rollout → protected-metric rollback to the exact rollback target. The routing capability baseline remains unchanged.
+- Persona: Improvement Digest IDs → persona candidate/version/content hash → replay/synthetic/shadow evidence with zero live effects → independent multi-model Council approval → judged candidate → class-enabled task-class application → measured certification. `deriveWorkerProfileForMission` reads the applied task-class template for a real bound Worker; a Metronome challenge carries the Head-selected council/department/plan/item target.
+- Safety: malformed authority/core-identity candidates are rejected before evaluator callbacks; retired source evidence blocks new rollout and rolls back an active rollout while preserving append-only candidate, evaluation, Council, and rollout history. `readImprovementCandidateDecisionHistory` supplies the durable candidate/evaluation/Council/rollout projection for history views.
+
+Focused S11 verification passed: **20/20 PostgreSQL integration tests**, plus `npm run build`, `npm run lint`, and `git diff --check`. The full serialized suite and post-merge verification are recorded in `roadmap/act-1-foundation/active/operations/progress.md`.
 
 ## Act-by-Act status (2026-09-09)
 

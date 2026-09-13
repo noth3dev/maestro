@@ -1,6 +1,6 @@
 # Phase 6 — Encore Learning, Refinement, and Ten-Axis Adaptation
 
-> **Current status (2026-09-08):** Phase 6 Step 1 (immutable project-private Improvement Digest) is accepted. IPython tool calls remain ordinary Goal evidence; temporary functions and project skills are not automatically promoted. Later replay, mutation, rollout, adaptation, and cross-project refinement remain deferred. Older Prime refinement references are historical and do not authorize new Prime coupling.
+> **Current status (2026-09-14):** Phase 6 full-chain proof (Steps 1–11) is accepted in the S11 scenario harness. The durable chain is proven for routing and persona candidates: Improvement Digest → candidate → replay/synthetic/shadow evaluation → independent Council → proposal or bounded rollout → measured certification/rollback. Persona application is task-class scoped, append-only, source-loss safe, and consumed by worker-profile derivation. IPython tool calls remain ordinary Goal evidence; temporary functions and project skills are not automatically promoted.
 
 
 ## Outcome

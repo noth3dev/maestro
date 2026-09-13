@@ -6,6 +6,7 @@ import {
   reconcileInterruptedRollout as reconcileInterruptedRolloutState,
   type ImprovementClass,
   type ImprovementCandidateRollbackTarget,
+  type PersonaAxis,
   type RolloutMetricObservation,
   type RolloutProtectedMetric,
   type RolloutScope,
@@ -13,6 +14,7 @@ import {
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
 import { withGoalAuthority } from "./goal-authority.js";
+import { applyPersonaTaskClassApplication, restorePersonaTaskClassApplication, type PersonaTaskClassApplication } from "./persona-profile.js";
 
 export { type RolloutMetricObservation, type RolloutProtectedMetric, type RolloutScope } from "@maestro/domain";
 
@@ -87,7 +89,7 @@ type RolloutRow = {
   operation_ref: string; created_at: Date; updated_at: Date;
 };
 type EventRow = { event_id: string; rollout_id: string; kind: RolloutHistoryEvent["kind"]; details: Record<string, unknown>; created_at: Date };
-type CandidateRow = { candidate_id: string; version: number; parent_candidate_id: string | null; project_id: string; goal_id: string; kind: ImprovementClass; state: string; target: Record<string, string>; rollback_target: ImprovementCandidateRollbackTarget; source_evidence_ids: string[]; content_hash: string };
+type CandidateRow = { candidate_id: string; version: number; parent_candidate_id: string | null; project_id: string; goal_id: string; kind: ImprovementClass; state: string; target: Record<string, string>; changes: readonly { readonly axis: string; readonly currentValue: number; readonly proposedValue: number }[]; rollback_target: ImprovementCandidateRollbackTarget; source_evidence_ids: string[]; content_hash: string };
 const COLUMNS = `rollout_id, candidate_id, candidate_version, project_id, goal_id, improvement_class, role_id, task_class,
   max_goal_count, window_start, window_end, protected_metrics, rollback_target, source_evidence_ids, active_candidate_id,
   active_version, last_certified_candidate_id, last_certified_version, observed_goal_count, observed_goal_ids,
@@ -200,6 +202,24 @@ export async function enableImprovementClass(pool: Pool, projectId: string, impr
   });
 }
 
+async function sourceEvidenceAvailable(client: Pick<Pool | PoolClient, "query">, evidenceIds: readonly string[], projectId: string, goalId: string): Promise<boolean> {
+  const durable = await client.query<{ count: string }>("SELECT count(*)::int AS count FROM evidence_records WHERE evidence_id = ANY($1::uuid[]) AND project_id = $2 AND goal_id = $3", [evidenceIds, projectId, goalId]);
+  return Number(durable.rows[0]?.count ?? 0) === evidenceIds.length;
+}
+
+async function assertSourceEvidenceAvailable(client: Pick<Pool | PoolClient, "query">, evidenceIds: readonly string[], projectId: string, goalId: string): Promise<void> {
+  if (!(await sourceEvidenceAvailable(client, evidenceIds, projectId, goalId))) throw new RolloutPersistenceError("Rollout candidate source evidence is missing or outside its Goal");
+}
+
+async function restorePersonaApplicationFromStartedEvent(client: PoolClient, row: RolloutRow, reason: string): Promise<void> {
+  const started = await client.query<{ details: Record<string, unknown> }>("SELECT details FROM improvement_rollout_events WHERE rollout_id = $1 AND kind = 'started'", [row.rollout_id]);
+  const value = started.rows[0]?.details.personaApplication;
+  if (value === undefined || value === null || typeof value !== "object" || Array.isArray(value)) return;
+  const application = value as PersonaTaskClassApplication;
+  if (typeof application.roleId !== "string" || typeof application.taskClass !== "string" || !Number.isSafeInteger(application.appliedVersion) || application.appliedVersion < 1 || typeof application.appliedDelta !== "object" || application.appliedDelta === null || typeof application.previousDelta !== "object" || application.previousDelta === null) throw new RolloutPersistenceError("Rollout persona application history is malformed");
+  await restorePersonaTaskClassApplication(client, application, reason);
+}
+
 export async function startBoundedRollout(pool: Pool, candidateId: string, rawScope: RolloutScope, proof: GoalLeaseProof, rawActor: RolloutActor, idempotencyKey: string, options: RolloutStartOptions = {}): Promise<ImprovementRollout> {
   const id = uuid(candidateId, "Rollout candidateId");
   const scope = assertBoundedRolloutScope(rawScope);
@@ -214,7 +234,7 @@ export async function startBoundedRollout(pool: Pool, candidateId: string, rawSc
       assertStartReplay(existing.rows[0]!, id, scope, actor, leaseDurationMs);
       return result(client, existing.rows[0]!);
     }
-    const candidate = await client.query<CandidateRow>("SELECT candidate_id, version, parent_candidate_id, project_id, goal_id, kind, state, target, rollback_target, source_evidence_ids, content_hash FROM improvement_candidates WHERE candidate_id = $1 FOR KEY SHARE", [id]);
+    const candidate = await client.query<CandidateRow>("SELECT candidate_id, version, parent_candidate_id, project_id, goal_id, kind, state, target, changes, rollback_target, source_evidence_ids, content_hash FROM improvement_candidates WHERE candidate_id = $1 FOR KEY SHARE", [id]);
     if (candidate.rowCount !== 1) throw new RolloutPersistenceError("Rollout candidate does not exist");
     const source = candidate.rows[0]!;
     if (source.goal_id !== proof.goalId.toLowerCase()) throw new RolloutPersistenceError("Rollout candidate is outside the leased Goal");
@@ -275,6 +295,10 @@ export async function startBoundedRollout(pool: Pool, candidateId: string, rawSc
     validateProtectedMetrics(protectedMetrics ?? []);
     const enabled = await client.query("SELECT 1 FROM improvement_class_enablements WHERE project_id = $1 AND improvement_class = $2 AND enabled = true", [source.project_id, source.kind]);
     assertImprovementClassEnabled(source.kind, enabled.rowCount === 1 ? [source.kind] : []);
+    await assertSourceEvidenceAvailable(client, source.source_evidence_ids, source.project_id, source.goal_id);
+    const personaApplication = source.kind === "persona_axis"
+      ? await applyPersonaTaskClassApplication(client, { roleId: scope.roleId, taskClass: scope.taskClass, changes: source.changes as readonly { axis: PersonaAxis; currentValue: number; proposedValue: number }[], reason: `rollout ${source.candidate_id}` })
+      : undefined;
     const rolloutId = randomUUID();
     const rollbackTarget = source.rollback_target;
     await authorizeWrite(client);
@@ -283,7 +307,7 @@ export async function startBoundedRollout(pool: Pool, candidateId: string, rawSc
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz, $11::timestamptz, $12::jsonb, $13::jsonb, $14::jsonb, $2, $3, $15, $16, $17, $18, $19, $20, $21::integer, transaction_timestamp() + ($21::bigint * interval '1 millisecond'), 'active', $22) RETURNING ${COLUMNS}`,
       [rolloutId, source.candidate_id, source.version, source.project_id, source.goal_id, source.kind, scope.roleId, scope.taskClass, scope.maxGoalCount, scope.windowStart, scope.windowEnd, JSON.stringify(protectedMetrics), JSON.stringify(rollbackTarget), JSON.stringify(source.source_evidence_ids), rollbackTarget.candidateId, rollbackTarget.version, actor.operatorId, actor.actorId, actor.operatorRoleId, actor.sessionRef, leaseDurationMs, op]);
     await authorizeWrite(client);
-    await client.query("INSERT INTO improvement_rollout_events (event_id, rollout_id, kind, details, operation_ref) VALUES ($1, $2, 'started', $3::jsonb, $4)", [randomUUID(), rolloutId, JSON.stringify({ candidateId: source.candidate_id, candidateVersion: source.version, actorId: actor.actorId, sessionRef: actor.sessionRef }), `${op}:event`]);
+    await client.query("INSERT INTO improvement_rollout_events (event_id, rollout_id, kind, details, operation_ref) VALUES ($1, $2, 'started', $3::jsonb, $4)", [randomUUID(), rolloutId, JSON.stringify({ candidateId: source.candidate_id, candidateVersion: source.version, actorId: actor.actorId, sessionRef: actor.sessionRef, ...(personaApplication === undefined ? {} : { personaApplication }) }), `${op}:event`]);
     return result(client, inserted.rows[0]!);
   });
 }
@@ -316,9 +340,18 @@ export async function observeBoundedRollout(pool: Pool, rolloutId: string, input
     if (observation.goalCount !== undefined && observation.goalCount !== goalCount) throw new RolloutPersistenceError("Rollout observation Goal count must advance monotonically");
     if (goalCount > row.max_goal_count) throw new RolloutPersistenceError("Rollout observation exceeds its fixed Goal-count bound");
     const nextObservedGoalIds = [...observedGoalIds, observation.goalId];
+    if (!(await sourceEvidenceAvailable(client, row.source_evidence_ids, row.project_id, row.goal_id))) {
+      await restorePersonaApplicationFromStartedEvent(client, row, "source evidence loss invalidated the active rollout");
+      await authorizeWrite(client);
+      const invalidated = await client.query<RolloutRow>(`UPDATE improvement_rollouts SET active_candidate_id = $2, active_version = $3, observed_goal_count = $4, observed_goal_ids = $5::jsonb, status = 'rolled_back', updated_at = transaction_timestamp() WHERE rollout_id = $1 RETURNING ${COLUMNS}`, [id, row.rollback_target.candidateId, row.rollback_target.version, goalCount, JSON.stringify(nextObservedGoalIds)]);
+      await authorizeWrite(client);
+      await client.query("INSERT INTO improvement_rollout_events (event_id, rollout_id, kind, details, operation_ref) VALUES ($1, $2, 'automatic_rollback', $3::jsonb, $4)", [randomUUID(), id, JSON.stringify({ goalId: observation.goalId, observedAt: observation.observedAt, goalCount, reason: "source_evidence_loss", actorId: actor.actorId, sessionRef: actor.sessionRef }), op]);
+      return result(client, invalidated.rows[0]!);
+    }
     const metricDecision = evaluateProtectedMetrics(row.protected_metrics, observation.metrics);
     const rollback = metricDecision.decision === "rollback";
     const status: ImprovementRollout["status"] = rollback ? "rolled_back" : goalCount === row.max_goal_count ? "certified" : "active";
+    if (rollback) await restorePersonaApplicationFromStartedEvent(client, row, "automatic rollback restored the exact prior persona adjustment");
     const activeCandidateId = rollback ? row.rollback_target.candidateId : row.active_candidate_id;
     const activeVersion = rollback ? row.rollback_target.version : row.active_version;
     const lastCertifiedCandidateId = rollback ? row.last_certified_candidate_id : status === "certified" ? row.candidate_id : row.last_certified_candidate_id;
@@ -352,6 +385,7 @@ async function transitionRollout(pool: Pool, rolloutId: string, status: "interru
     if (status === "interrupted" && row.status !== "active") throw new RolloutPersistenceError("Only an active rollout can be interrupted");
     if (status === "rolled_back" && row.status !== "interrupted") throw new RolloutPersistenceError("Only an interrupted rollout can be reconciled");
     const target = status === "rolled_back" ? reconcileInterruptedRolloutState({ status: "interrupted", activeCandidateId: row.active_candidate_id, activeVersion: row.active_version, lastCertifiedCandidateId: row.last_certified_candidate_id, lastCertifiedVersion: row.last_certified_version, rollbackTarget: row.rollback_target }) : undefined;
+    if (status === "rolled_back") await restorePersonaApplicationFromStartedEvent(client, row, "rollout reconciliation restored the exact prior persona adjustment");
     await authorizeWrite(client);
     const updated = await client.query<RolloutRow>(`UPDATE improvement_rollouts SET status = $2, active_candidate_id = $3, active_version = $4, updated_at = transaction_timestamp() WHERE rollout_id = $1 RETURNING ${COLUMNS}`, [id, status, target?.activeCandidateId ?? row.active_candidate_id, target?.activeVersion ?? row.active_version]);
     await authorizeWrite(client);
@@ -374,6 +408,7 @@ export async function reconcileExpiredBoundedRollouts(pool: Pool, proof: GoalLea
     const recovered: ImprovementRollout[] = [];
     for (const row of stale.rows) {
       const target = reconcileInterruptedRolloutState({ status: "interrupted", activeCandidateId: row.active_candidate_id, activeVersion: row.active_version, lastCertifiedCandidateId: row.last_certified_candidate_id, lastCertifiedVersion: row.last_certified_version, rollbackTarget: row.rollback_target });
+      await restorePersonaApplicationFromStartedEvent(client, row, "expired rollout recovery restored the exact prior persona adjustment");
       await authorizeWrite(client);
       const updated = await client.query<RolloutRow>(`UPDATE improvement_rollouts SET status = 'rolled_back', active_candidate_id = $2, active_version = $3, updated_at = transaction_timestamp() WHERE rollout_id = $1 RETURNING ${COLUMNS}`, [row.rollout_id, target.activeCandidateId, target.activeVersion]);
       await authorizeWrite(client);

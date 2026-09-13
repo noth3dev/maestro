@@ -593,6 +593,7 @@ export async function transitionImprovementCandidate(pool: Pool, candidateId: st
     if (previous.goal_id !== proof.goalId.toLowerCase()) throw new ImprovementCandidatePersistenceError("Improvement Candidate transition is outside the lease Goal");
     if (previous.kind === "routing_capability_axis" && nextState === "applied") throw new ImprovementCandidatePersistenceError("Routing capability candidates remain proposal-only and cannot be auto-applied");
     if (previous.kind === "routing_capability_axis" && nextState === "judged") throw new ImprovementCandidatePersistenceError("Routing candidate requires durable replay and Council approval before judged state");
+    if (previous.kind === "persona_axis" && nextState === "judged") throw new ImprovementCandidatePersistenceError("Persona candidate requires durable replay, shadow, and Council approval before judged state");
     if (!canTransitionImprovementCandidate(previous.state, nextState)) throw new ImprovementCandidatePersistenceError(`Improvement Candidate cannot transition from ${previous.state} to ${nextState}`);
     return appendFromPrevious(client, previous, normalizeInput(inputFromRow(previous)), proof, author, operation, nextState);
   });
@@ -657,8 +658,64 @@ function genericEvidenceIds(value: readonly string[]): string[] {
 }
 
 function genericPayload(value: unknown): Readonly<Record<string, unknown>> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new ImprovementCandidatePersistenceError("Improvement candidate evaluation payload must be an object");
+  if (value === null || typeof value !== "object" || Array.isArray(value)
+      || (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)) {
+    throw new ImprovementCandidatePersistenceError("Improvement candidate evaluation payload must be a plain object");
+  }
+  const keys = Reflect.ownKeys(value);
+  if (keys.some((key) => typeof key !== "string" || !Object.prototype.propertyIsEnumerable.call(value, key))) {
+    throw new ImprovementCandidatePersistenceError("Improvement candidate evaluation payload must contain enumerable string fields only");
+  }
   return value as Readonly<Record<string, unknown>>;
+}
+
+function evaluationObject(value: unknown, field: string): Readonly<Record<string, unknown>> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)
+      || (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)) {
+    throw new ImprovementCandidatePersistenceError(`Improvement candidate ${field} evidence is malformed`);
+  }
+  return value as Readonly<Record<string, unknown>>;
+}
+
+function evaluationArray(value: unknown, field: string): readonly unknown[] {
+  if (!Array.isArray(value) || value.length === 0 || value.some((entry) => entry === undefined)) {
+    throw new ImprovementCandidatePersistenceError(`Improvement candidate ${field} evidence is incomplete`);
+  }
+  return value;
+}
+
+function validatePersonaEvaluationPayload(candidate: CandidateRow, payload: Readonly<Record<string, unknown>>): void {
+  const keys = Object.keys(payload).sort();
+  if (keys.join(",") !== "replay,shadow,synthetic") throw new ImprovementCandidatePersistenceError("Improvement candidate evaluation must include replay, synthetic, and shadow evidence");
+  const replay = evaluationObject(payload.replay, "replay");
+  if (replay.status !== "compared" || replay.scenarioSuiteHash !== candidate.scenario_suite_hash) throw new ImprovementCandidatePersistenceError("Improvement candidate replay evidence is not bound to the frozen scenario suite");
+  const replayResults = evaluationArray(replay.results, "replay");
+  if (replayResults.some((entry) => {
+    const row = evaluationObject(entry, "replay result");
+    return typeof row.goalId !== "string" || evaluationObject(row.baseline, "replay baseline") === undefined || evaluationObject(row.candidate, "replay candidate") === undefined;
+  })) throw new ImprovementCandidatePersistenceError("Improvement candidate replay results are malformed");
+  const measurableReplay = replayResults.some((entry) => {
+    const row = entry as Record<string, unknown>;
+    const baseline = row.baseline as Record<string, unknown>;
+    const candidateMetrics = row.candidate as Record<string, unknown>;
+    return Object.keys(candidateMetrics).some((metric) => typeof baseline[metric] === "number" && typeof candidateMetrics[metric] === "number" && baseline[metric] !== candidateMetrics[metric]);
+  });
+  if (!measurableReplay) throw new ImprovementCandidatePersistenceError("Improvement candidate replay evidence must show a measurable metric difference");
+
+  const synthetic = evaluationObject(payload.synthetic, "synthetic");
+  if (synthetic.status !== "completed") throw new ImprovementCandidatePersistenceError("Improvement candidate synthetic evidence is incomplete");
+  const syntheticResults = evaluationArray(synthetic.results, "synthetic");
+  const scenarioIds = new Set(syntheticResults.map((entry) => evaluationObject(entry, "synthetic result").scenarioId));
+  if (syntheticResults.length !== candidate.scenario_suite.length || candidate.scenario_suite.some((scenario) => !scenarioIds.has(scenario))) {
+    throw new ImprovementCandidatePersistenceError("Improvement candidate synthetic evidence does not cover its frozen scenario suite");
+  }
+
+  const shadow = evaluationObject(payload.shadow, "shadow");
+  if (shadow.status !== "completed") throw new ImprovementCandidatePersistenceError("Improvement candidate shadow evidence is incomplete");
+  const shadowRecords = evaluationArray(shadow.records, "shadow");
+  if (!Array.isArray(shadow.liveEffects) || shadow.liveEffects.length !== 0 || !shadowRecords.some((entry) => evaluationObject(entry, "shadow record").matchesActive === false)) {
+    throw new ImprovementCandidatePersistenceError("Improvement candidate shadow evidence must show a zero-authority behavioral difference");
+  }
 }
 
 /** Records a candidate/version/hash-bound evaluation before its Council review. */
@@ -685,6 +742,8 @@ export async function recordImprovementCandidateEvaluation(
     const previous = await readRow(client, id, true);
     if (previous.goal_id !== proof.goalId.toLowerCase()) throw new ImprovementCandidatePersistenceError("Improvement evaluation is outside the lease Goal");
     if (previous.state !== "evaluated") throw new ImprovementCandidatePersistenceError("Improvement evaluation requires an evaluated candidate");
+    if (previous.kind !== "persona_axis") throw new ImprovementCandidatePersistenceError("Generic improvement evaluation requires a persona candidate");
+    validatePersonaEvaluationPayload(previous, payload);
     const durable = await client.query<{ count: string }>("SELECT count(*)::int AS count FROM evidence_records WHERE evidence_id = ANY($1::uuid[]) AND project_id = $2 AND goal_id = $3", [evidenceIds, previous.project_id, previous.goal_id]);
     if (Number(durable.rows[0]?.count ?? 0) !== evidenceIds.length) throw new ImprovementCandidatePersistenceError("Improvement evaluation evidence is missing or outside the candidate Goal");
     const evaluationId = randomUUID();
@@ -711,15 +770,27 @@ export async function recordImprovementCandidateCouncilApproval(
   return withGoalAuthority(pool, proof, 94, async (client) => {
     const previous = await readRow(client, id, true);
     if (previous.goal_id !== proof.goalId.toLowerCase()) throw new ImprovementCandidatePersistenceError("Improvement approval is outside the lease Goal");
-    if (previous.state !== "evaluated") throw new ImprovementCandidatePersistenceError("Improvement approval requires an evaluated candidate");
+    if (previous.kind !== "persona_axis" || previous.state !== "evaluated") throw new ImprovementCandidatePersistenceError("Improvement approval requires an evaluated persona candidate");
     const evaluation = await client.query<GenericEvaluationRow>(`SELECT evaluation_id, candidate_id, candidate_version, candidate_content_hash, project_id, goal_id, evaluation_hash, evidence_ids, evaluation_payload, created_at FROM improvement_candidate_evaluations WHERE evaluation_id = $1`, [evaluationId]);
     if (evaluation.rowCount !== 1) throw new ImprovementCandidatePersistenceError("Improvement approval evaluation is missing");
     const evaluated = evaluation.rows[0]!;
     if (evaluated.candidate_id !== id || evaluated.candidate_version !== previous.version || evaluated.candidate_content_hash !== previous.content_hash || evaluated.project_id !== previous.project_id || evaluated.goal_id !== previous.goal_id || evaluated.evaluation_hash !== input.evaluationHash) throw new ImprovementCandidatePersistenceError("Improvement approval evaluation is not bound to the exact candidate version");
-    const round = await client.query<{ goal_id: string; question: string; evidence_ids: string[]; reviewer_count: number; final_verdict: string; same_model_only: boolean; dissent_notes: string[] }>(`SELECT r.goal_id, r.question, r.evidence_ids, r.reviewer_count, s.final_verdict, s.same_model_only, s.dissent_notes FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id WHERE r.round_id = $1`, [roundId]);
+    if (evaluated.evidence_ids.some((evidenceId) => !councilEvidenceIds.includes(evidenceId)) || previous.source_evidence_ids.some((evidenceId) => !councilEvidenceIds.includes(evidenceId))) throw new ImprovementCandidatePersistenceError("Improvement approval Council evidence must include the candidate source and evaluation evidence");
+    const durableCouncilEvidence = await client.query<{ count: string }>("SELECT count(*)::int AS count FROM evidence_records WHERE evidence_id = ANY($1::uuid[]) AND project_id = $2 AND goal_id = $3", [councilEvidenceIds, previous.project_id, previous.goal_id]);
+    if (Number(durableCouncilEvidence.rows[0]?.count ?? 0) !== councilEvidenceIds.length) throw new ImprovementCandidatePersistenceError("Improvement approval Council evidence is missing or outside the candidate Goal");
+    const round = await client.query<{ goal_id: string; question: string; criteria: unknown; evidence_ids: string[]; reviewer_count: number; final_verdict: string; same_model_only: boolean; dissent_notes: string[] }>(`SELECT r.goal_id, r.question, r.criteria, r.evidence_ids, r.reviewer_count, s.final_verdict, s.same_model_only, s.dissent_notes FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id WHERE r.round_id = $1`, [roundId]);
     if (round.rowCount !== 1) throw new ImprovementCandidatePersistenceError("Improvement approval Council round is missing");
     const council = round.rows[0]!;
-    if (council.goal_id !== previous.goal_id || !council.question.includes(id) || JSON.stringify(council.evidence_ids) !== JSON.stringify(councilEvidenceIds) || council.final_verdict !== "proceed" || council.same_model_only || council.dissent_notes.length > 0) throw new ImprovementCandidatePersistenceError("Improvement approval Council round is not an exact diverse proceed judgment");
+    const requiredEvidence = [...new Set([...previous.source_evidence_ids, ...evaluated.evidence_ids])];
+    const criteria = Array.isArray(council.criteria) ? council.criteria : [];
+    const criteriaIds = new Set(criteria.flatMap((item) => item && typeof item === "object" && typeof (item as { criterionId?: unknown }).criterionId === "string" ? [(item as { criterionId: string }).criterionId] : []));
+    if (requiredEvidence.some((evidenceId) => !councilEvidenceIds.includes(evidenceId))
+        || council.goal_id !== previous.goal_id
+        || !council.question.includes(`${id} version ${previous.version}`)
+        || !council.question.includes(`contentHash ${previous.content_hash}`)
+        || JSON.stringify(council.evidence_ids) !== JSON.stringify(councilEvidenceIds)
+        || !["candidate-safety", "candidate-fit", "candidate-disclosure"].every((criterionId) => criteriaIds.has(criterionId))
+        || council.final_verdict !== "proceed" || council.same_model_only || council.dissent_notes.length > 0) throw new ImprovementCandidatePersistenceError("Improvement approval Council round is not an exact diverse proceed judgment");
     const judgments = await client.query<{ model_provider: string; model_id: string; verdict: string; cited_evidence_ids: string[] }>("SELECT model_provider, model_id, verdict, cited_evidence_ids FROM encore_council_judgments WHERE round_id = $1 ORDER BY reviewer_index", [roundId]);
     if (judgments.rowCount !== council.reviewer_count || new Set(judgments.rows.map((row) => `${row.model_provider}/${row.model_id}`)).size < 2 || judgments.rows.some((row) => row.verdict !== "proceed" || JSON.stringify(row.cited_evidence_ids) !== JSON.stringify(councilEvidenceIds))) throw new ImprovementCandidatePersistenceError("Improvement approval Council judgments are incomplete or not diverse");
     const existing = await client.query(`SELECT approval_id, candidate_id, candidate_version, candidate_content_hash, evaluation_id, evaluation_hash, council_round_id, council_evidence_ids, source_evidence_ids FROM improvement_candidate_council_approvals WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3`, [id, previous.version, previous.content_hash]);
@@ -738,7 +809,19 @@ export async function transitionImprovementCandidateAfterCouncil(pool: Pool, can
   const operation = operationRef("transition", `after-council-${idempotencyKey}`);
   return withGoalAuthority(pool, proof, 94, async (client) => {
     const existing = await client.query<CandidateRow>(`SELECT ${COLUMNS} FROM improvement_candidates WHERE operation_ref = $1 FOR UPDATE`, [operation]);
-    if (existing.rowCount === 1) return mapRow(existing.rows[0]!);
+    if (existing.rowCount === 1) {
+      const row = existing.rows[0]!;
+      const requestedId = durableUuid(candidateId, "Improvement Candidate candidateId");
+      if (row.goal_id !== proof.goalId.toLowerCase() || row.kind !== "persona_axis" || row.state !== "judged" || row.parent_candidate_id?.toLowerCase() !== requestedId) {
+        throw new ImprovementCandidatePersistenceError("Improvement Candidate Council transition idempotency key was reused with different candidate or Goal");
+      }
+      assertIdempotentReplay(row, inputFromRow(row), author, "judged", requestedId);
+      const previous = await readRow(client, requestedId, true);
+      if (previous.state !== "evaluated" || previous.kind !== "persona_axis") throw new ImprovementCandidatePersistenceError("Council-bound transition replay has no evaluated persona parent");
+      const approval = await client.query(`SELECT 1 FROM improvement_candidate_council_approvals a JOIN improvement_candidate_evaluations e ON e.evaluation_id = a.evaluation_id AND e.candidate_id = a.candidate_id AND e.candidate_version = a.candidate_version AND e.candidate_content_hash = a.candidate_content_hash AND e.evaluation_hash = a.evaluation_hash WHERE a.candidate_id = $1 AND a.candidate_version = $2 AND a.candidate_content_hash = $3 AND a.project_id = $4 AND a.goal_id = $5`, [previous.candidate_id, previous.version, previous.content_hash, previous.project_id, previous.goal_id]);
+      if (approval.rowCount !== 1) throw new ImprovementCandidatePersistenceError("Persona candidate Council approval is missing on idempotent replay");
+      return mapRow(row);
+    }
     const previous = await readRow(client, candidateId, true);
     if (previous.goal_id !== proof.goalId.toLowerCase()) throw new ImprovementCandidatePersistenceError("Improvement Candidate transition is outside the lease Goal");
     if (previous.kind !== "persona_axis" || previous.state !== "evaluated") throw new ImprovementCandidatePersistenceError("Council-bound transition requires an evaluated persona candidate");
@@ -746,4 +829,39 @@ export async function transitionImprovementCandidateAfterCouncil(pool: Pool, can
     if (approval.rowCount !== 1) throw new ImprovementCandidatePersistenceError("Persona candidate requires durable evaluation and Council approval before judged state");
     return appendFromPrevious(client, previous, normalizeInput(inputFromRow(previous)), proof, author, operation, "judged");
   });
+}
+
+
+export interface ImprovementCandidateDecisionHistory {
+  readonly candidate: ImprovementCandidate;
+  readonly evaluation: ImprovementCandidateEvaluationRecord | null;
+  readonly approval: ImprovementCandidateCouncilApproval | null;
+  readonly council: Readonly<{ roundId: string; question: string; criteria: unknown; evidenceIds: readonly string[]; reviewerCount: number; finalVerdict: string; sameModelOnly: boolean; dissentNotes: readonly string[]; judgments: readonly Readonly<Record<string, unknown>>[] }> | null;
+  readonly rollouts: readonly Readonly<{ rolloutId: string; status: string; activeCandidateId: string; activeVersion: number; history: readonly Readonly<Record<string, unknown>>[] }>[];
+  readonly explanation: Readonly<{ changedAxes: readonly string[]; expectedBehavior: string; evidenceIds: readonly string[]; rollback: ImprovementCandidateInput["rollbackTarget"]; }>
+}
+
+/** Read-only projection used by user-facing history views; all fields come from durable records. */
+export async function readImprovementCandidateDecisionHistory(pool: Pool, candidateId: string, authorization: ImprovementCandidateReadAuthorization): Promise<ImprovementCandidateDecisionHistory> {
+  const candidate = await readImprovementCandidate(pool, candidateId, authorization);
+  const evaluatedId = candidate.state === "evaluated" ? candidate.candidateId : (candidate.parentCandidateId ?? candidate.candidateId);
+  const evaluatedVersion = candidate.state === "evaluated" ? candidate.version : Math.max(1, candidate.version - 1);
+  const evaluatedHash = candidate.state === "evaluated" ? candidate.contentHash : (await pool.query<{ content_hash: string }>("SELECT content_hash FROM improvement_candidates WHERE candidate_id = $1", [evaluatedId])).rows[0]?.content_hash;
+  const evaluated = await pool.query<GenericEvaluationRow>(`SELECT evaluation_id, candidate_id, candidate_version, candidate_content_hash, project_id, goal_id, evaluation_hash, evidence_ids, evaluation_payload, created_at FROM improvement_candidate_evaluations WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3`, [evaluatedId, evaluatedVersion, evaluatedHash]);
+  const evaluation = evaluated.rowCount === 1 ? genericEvaluationRecord(evaluated.rows[0]!) : null;
+  const approvalRow = await pool.query<{ approval_id: string; candidate_id: string; candidate_version: number; candidate_content_hash: string; evaluation_id: string; evaluation_hash: string; council_round_id: string; council_evidence_ids: string[]; source_evidence_ids: string[] }>(`SELECT approval_id, candidate_id, candidate_version, candidate_content_hash, evaluation_id, evaluation_hash, council_round_id, council_evidence_ids, source_evidence_ids FROM improvement_candidate_council_approvals WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3`, [evaluatedId, evaluatedVersion, evaluation?.candidateContentHash ?? evaluatedHash ?? ""]);
+  const approval = approvalRow.rowCount === 1 ? { approvalId: approvalRow.rows[0]!.approval_id, candidateId: approvalRow.rows[0]!.candidate_id, candidateVersion: approvalRow.rows[0]!.candidate_version, candidateContentHash: approvalRow.rows[0]!.candidate_content_hash, evaluationId: approvalRow.rows[0]!.evaluation_id, evaluationHash: approvalRow.rows[0]!.evaluation_hash, councilRoundId: approvalRow.rows[0]!.council_round_id, councilEvidenceIds: approvalRow.rows[0]!.council_evidence_ids, sourceEvidenceIds: approvalRow.rows[0]!.source_evidence_ids } : null;
+  let council: ImprovementCandidateDecisionHistory["council"] = null;
+  if (approval !== null) {
+    const round = await pool.query<{ round_id: string; question: string; criteria: unknown; evidence_ids: string[]; reviewer_count: number; final_verdict: string; same_model_only: boolean; dissent_notes: string[] }>(`SELECT r.round_id, r.question, r.criteria, r.evidence_ids, r.reviewer_count, s.final_verdict, s.same_model_only, s.dissent_notes FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id WHERE r.round_id = $1`, [approval.councilRoundId]);
+    const judgments = await pool.query<Record<string, unknown>>("SELECT model_provider, model_id, verdict, confidence, reasoning, conditions, dissent_note, cited_evidence_ids FROM encore_council_judgments WHERE round_id = $1 ORDER BY reviewer_index", [approval.councilRoundId]);
+    if (round.rowCount === 1) { const row = round.rows[0]!; council = { roundId: row.round_id, question: row.question, criteria: row.criteria, evidenceIds: row.evidence_ids, reviewerCount: row.reviewer_count, finalVerdict: row.final_verdict, sameModelOnly: row.same_model_only, dissentNotes: row.dissent_notes, judgments: judgments.rows }; }
+  }
+  const rollouts = await pool.query<{ rollout_id: string; status: string; active_candidate_id: string; active_version: number }>("SELECT r.rollout_id, r.status, r.active_candidate_id, r.active_version FROM improvement_rollouts r JOIN improvement_candidates c ON c.candidate_id = r.candidate_id WHERE c.lineage_id = (SELECT lineage_id FROM improvement_candidates WHERE candidate_id = $1) ORDER BY r.created_at, r.rollout_id", [candidate.candidateId]);
+  const rolloutHistory: Array<ImprovementCandidateDecisionHistory["rollouts"][number]> = [];
+  for (const row of rollouts.rows) {
+    const events = await pool.query<Record<string, unknown>>("SELECT event_id, kind, details, created_at FROM improvement_rollout_events WHERE rollout_id = $1 ORDER BY created_at, event_id", [row.rollout_id]);
+    rolloutHistory.push({ rolloutId: row.rollout_id, status: row.status, activeCandidateId: row.active_candidate_id, activeVersion: row.active_version, history: events.rows });
+  }
+  return { candidate, evaluation, approval, council, rollouts: rolloutHistory, explanation: { changedAxes: candidate.changes.map((change) => change.axis), expectedBehavior: candidate.predictedEffect, evidenceIds: [...new Set([ ...candidate.sourceEvidenceIds, ...(evaluation?.evidenceIds ?? []), ...(approval?.councilEvidenceIds ?? []) ])], rollback: candidate.rollbackTarget } };
 }

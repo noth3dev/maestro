@@ -13,7 +13,7 @@ Maestro는 각 단계의 검증 증거가 완료되어야 다음 단계로 진�
 | **Phase 3** | Encore, Certification & First Usable Release | **구현 완료; 사용자 라이브 핸드오프 대기** | Plan 2(host-tool, 승인 계층, 워커 repair hold/requeue)와 plan-3 §S1–§S4/§S3b가 전부 병합됨. 라우팅 증거가 인증을 게이팅하고, Metronome이 승인을 관측하며, Council이 실제 다양성을 기록하고, TUI 디자인 패스가 반영됨. §S4의 Step 9→10 CI 하네스는 아직 가짜 provider 시뮬레이션(기록된 한계); Phase 3 인증은 이제 전적으로 사용자가 실제 14단계 라이브 provider 시나리오를 실행하는 데 달려 있음. |
 | **Phase 4** | Isolated Environments, Devices & Discord Incidents | **구현 완료; live acceptance 건너뜀 (미완료)** | Plan 4 S1–S4 구현 증거가 `2631ed4`까지 main에 병합됨. Goal-scoped gate, restart 중복 제거와 [`test/phase4-scenario/RUNBOOK.md`](../../test/phase4-scenario/RUNBOOK.md)가 포함됨. 사용자 소유 live handoff는 건너뛰었으므로 live activation, outage/restart, provider/device effect 또는 certification 증거를 주장하지 않음 |
 | **Phase 5** | Concurrent Goals & Portfolio Control | **활성 remediation/capacity 작업** | 프로젝트별 worker cap은 구현됨. Resource inventory, demand reservation 및 portfolio scheduling은 향후 작업 |
-| **Phase 6** | Encore Learning & 10-Axis Adaptation | **Step 1 승인 완료** *(불변 다이제스트)* | Step 1: 프로젝트 전용·출처 바인딩 Improvement Digest. Step 2 이후(리플레이, 변경, 롤아웃, 적응, 프로젝트 간 승격)는 보류 |
+| **Phase 6** | Encore Learning & 10-Axis Adaptation | **전체 체인 검증 완료** *(Step 1–11)* | 라우팅·페르소나가 candidate, replay/synthetic/shadow, 독립 Council, 제안/제한 롤아웃, 결과, 롤백, 출처 손실 안전성, Worker profile 소비까지 검증됨 |
 | **Phase 7** | Full Concertmaster Office & Radial Control Surface | 예정 — Electron 방향 | Electron + Vite + React 19 데스크톱 앱, typed API/SSE 상호작용 및 그래프 slice 구현 시 `@xyflow/react` 방사형 포트폴리오 시각화. 현재 목표는 Next.js/PWA가 아님 |
 | **Phase 8** | Full-System Hardening & Release Certification | 예정 | 적대적 장애 주입, 보안 침투 감사, 지속 부하 검증 및 릴리즈 프리즈 |
 
@@ -46,6 +46,16 @@ TUI는 두 번째 Control Plane이 아니라 운영자 표시·명령 클라이�
 Phase 6 Step 1은 불변·프로젝트 전용 Improvement Digest slice로 승인되었습니다. 각 digest는 Goal과 프로젝트에 출처 바인딩되고, lease 권한과 멤버십 범위 조회로 보호되며, canonical content hash로 검증됩니다. 이 slice는 자동 변경, 리플레이, 롤아웃, persona 적응 또는 프로젝트 간 승격을 수행하지 않습니다. Phase 6 Step 2 이후는 별도 계획·구현·리뷰·승인 전까지 보류합니다.
 
 ---
+
+### Phase 6 전체 체인 증거 — 2026-09-14 승인
+
+S11 실제 PostgreSQL 시나리오는 `test/phase6-scenario/full-chain.integration.test.ts`이며 메모리에서 재구성하지 않고 내구성 있는 연결을 검증합니다.
+
+- 라우팅: Improvement Digest → routing candidate/hash → replay/synthetic/shadow → 독립 다중 모델 Council → judged proposal → 제한 롤아웃 → 보호 지표 롤백. 기존 routing capability baseline은 변경되지 않습니다.
+- 페르소나: Improvement Digest → persona candidate/hash → replay/synthetic/shadow(실시간 효과 없음) → Council 승인 → task-class 적용 → 측정 인증. `deriveWorkerProfileForMission`이 실제 Worker의 적용된 task-class template을 읽고, Metronome challenge는 Head가 선택한 council/department/plan/item 대상을 보존합니다.
+- 안전성: authority/core-identity 위조 후보는 evaluator 호출 전에 거부되며, 출처 증거가 폐기되면 새 롤아웃을 막고 활성 롤아웃을 롤백합니다. `readImprovementCandidateDecisionHistory`가 history view용 내구성 projection을 제공합니다.
+
+S11 집중 검증은 **PostgreSQL 통합 테스트 20/20** 통과, `npm run build`, `npm run lint`, `git diff --check` 통과입니다. 전체 직렬화 및 merge 후 검증 결과는 `roadmap/act-1-foundation/active/operations/progress.md`에 기록합니다.
 
 ## Act별 현황 (2026-09-09)
 

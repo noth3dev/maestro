@@ -14,6 +14,7 @@ import {
   listImprovementCandidateVersions,
   readImprovementCandidate,
   recordImprovementCandidate,
+  recordImprovementCandidateEvaluation,
   transitionImprovementCandidate,
   type ImprovementCandidateAuthor,
 } from "./improvement-candidate.js";
@@ -63,6 +64,7 @@ describeDatabase("Improvement Candidate persistence", () => {
       confidence: 0.9, sourceRefs: [{ kind: "goal", sourceId: goalId }],
     }, proof, { actorId: author.authorId, sessionRef: author.sessionRef, operatorId });
     digestId = digest.digestId;
+    await pool.query(`INSERT INTO evidence_records (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention) VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 'improvement-digest', 'application/json', 'project_lifetime')`, [digestId, randomUUID(), randomUUID(), projectId, goalId, operatorId, digest.contentHash]);
   });
 
   afterAll(async () => { await pool.end(); await basePool.query(`DROP SCHEMA ${schema} CASCADE`); await basePool.end(); });
@@ -139,6 +141,12 @@ describeDatabase("Improvement Candidate persistence", () => {
     await expect(recordImprovementCandidate(pool, { ...input, predictedEffect: "different" }, proof, author, "idempotent")).rejects.toThrow(/idempotency|different|content/i);
   });
 
+  it("rejects a persona evaluation without fixed replay, synthetic, and shadow evidence", async () => {
+    const candidate = await recordImprovementCandidate(pool, inputFor(), proof, author, "evaluation-payload");
+    const evaluated = await transitionImprovementCandidate(pool, candidate.candidateId, "evaluated", proof, author, "evaluation-payload-evaluated");
+    await expect(recordImprovementCandidateEvaluation(pool, evaluated.candidateId, proof, { evidenceIds: [digestId], payload: {} }, "evaluation-payload-empty")).rejects.toThrow(/replay|synthetic|shadow|payload/i);
+  });
+
   it("does not replay a transition operation under another Goal lease", async () => {
     const candidate = await recordImprovementCandidate(pool, inputFor(), proof, author, "cross-goal-replay-candidate");
     const evaluated = await transitionImprovementCandidate(pool, candidate.candidateId, "evaluated", proof, author, "cross-goal-replay");
@@ -154,7 +162,6 @@ describeDatabase("Improvement Candidate persistence", () => {
     const candidate = await recordImprovementCandidate(pool, inputFor(), proof, author, "lifecycle");
     await expect(transitionImprovementCandidate(pool, candidate.candidateId, "judged", proof, author, "skip-judged")).rejects.toThrow(/transition|evaluated|state/i);
     const evaluated = await transitionImprovementCandidate(pool, candidate.candidateId, "evaluated", proof, author, "lifecycle-evaluated");
-    const judged = await transitionImprovementCandidate(pool, evaluated.candidateId, "judged", proof, author, "lifecycle-judged");
-    await expect(transitionImprovementCandidate(pool, judged.candidateId, "applied", proof, author, "lifecycle-applied")).resolves.toMatchObject({ state: "applied", version: 4 });
+    await expect(transitionImprovementCandidate(pool, evaluated.candidateId, "judged", proof, author, "lifecycle-judged")).rejects.toThrow(/approval|Council|evaluation/i);
   });
 });
