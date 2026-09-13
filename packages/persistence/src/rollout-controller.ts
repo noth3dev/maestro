@@ -220,7 +220,7 @@ export async function startBoundedRollout(pool: Pool, candidateId: string, rawSc
     if (source.goal_id !== proof.goalId.toLowerCase()) throw new RolloutPersistenceError("Rollout candidate is outside the leased Goal");
     await operatorAuthorized(client, actor, source.project_id);
     if (source.state !== "judged") throw new RolloutPersistenceError("Only a judged candidate can start a rollout");
-    if (source.target.roleId !== scope.roleId || source.target.taskClass !== scope.taskClass) throw new RolloutPersistenceError("Rollout scope cannot widen beyond the candidate target");
+    if (source.kind !== "routing_capability_axis" && (source.target.roleId !== scope.roleId || source.target.taskClass !== scope.taskClass)) throw new RolloutPersistenceError("Rollout scope cannot widen beyond the candidate target");
     const candidateDetails = await client.query<{ protected_metrics: RolloutProtectedMetric[] }>("SELECT protected_metrics FROM improvement_candidates WHERE candidate_id = $1", [id]);
     const protectedMetrics = candidateDetails.rows[0]?.protected_metrics;
     validateProtectedMetrics(protectedMetrics ?? []);
