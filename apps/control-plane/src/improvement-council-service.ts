@@ -1,5 +1,5 @@
 import type { EncoreCouncilResult, GoalLeaseProof } from "@maestro/persistence";
-import { EncoreCouncilError, readImprovementCandidate, runEncoreCouncilReview } from "@maestro/persistence";
+import { EncoreCouncilError, readImprovementCandidate, recordImprovementCandidateCouncilApproval, runEncoreCouncilReview } from "@maestro/persistence";
 import type { ExecutionAdmission, ExecutionKernelPort, ImprovementCandidate } from "@maestro/domain";
 import type { Pool } from "pg";
 
@@ -12,6 +12,9 @@ export interface ImprovementCouncilQuantitativeResult {
 export interface ImprovementCouncilEvaluationDisclosure {
   /** Durable evidence records supporting the fixed replay/synthetic/shadow results. */
   readonly evidenceIds: readonly string[];
+  /** Optional generic evaluation binding; required when the caller needs a durable approval. */
+  readonly evaluationId?: string;
+  readonly evaluationHash?: string;
   readonly quantitative: readonly ImprovementCouncilQuantitativeResult[];
   readonly qualitative: readonly string[];
 }
@@ -75,6 +78,8 @@ function assertEvaluation(disclosure: ImprovementCouncilEvaluationDisclosure): v
   }
   if (disclosure.qualitative.some((item) => typeof item !== "string" || item.trim() === "")) throw new ImprovementCouncilError("Improvement Council qualitative evidence is invalid");
   if (new Set(disclosure.evidenceIds.map((id) => id.trim())).size !== disclosure.evidenceIds.length) throw new ImprovementCouncilError("Improvement Council evaluation evidence must be unique");
+  if ((disclosure.evaluationId === undefined) !== (disclosure.evaluationHash === undefined)) throw new ImprovementCouncilError("Improvement Council evaluation id and hash must be supplied together");
+  if (disclosure.evaluationId !== undefined && (typeof disclosure.evaluationId !== "string" || disclosure.evaluationId.trim() === "" || typeof disclosure.evaluationHash !== "string" || !/^[0-9a-f]{64}$/.test(disclosure.evaluationHash))) throw new ImprovementCouncilError("Improvement Council evaluation binding is malformed");
 }
 
 function reviewQuestion(candidate: ImprovementCandidate, evaluation: ImprovementCouncilEvaluationDisclosure, authorOperatorId: string, authorRoleId: string): string {
@@ -136,12 +141,16 @@ export function createImprovementCouncilService(deps: ImprovementCouncilServiceD
         });
         const reviewerModelRefs = result.judgments.map((judgment) => `${judgment.modelProvider}/${judgment.modelId}`);
         const sameModelOnly = result.synthesis.sameModelOnly;
+        const applicationBlocked = result.synthesis.dissentNotes.length > 0 || result.synthesis.finalVerdict !== "proceed";
+        if (request.evaluation.evaluationId !== undefined && !applicationBlocked && !sameModelOnly) {
+          await recordImprovementCandidateCouncilApproval(deps.pool, { candidateId: candidate.candidateId, evaluationId: request.evaluation.evaluationId, evaluationHash: request.evaluation.evaluationHash!, councilRoundId: result.roundId, councilEvidenceIds: request.evaluation.evidenceIds }, proof);
+        }
         return {
           ...result,
           candidateId: candidate.candidateId,
           candidateVersion: candidate.version,
           disclosure: { sameModelOnly, reviewerLabel: sameModelOnly ? "same-model-independent-review" : "multi-model-independent-review", reviewerModelRefs },
-          applicationBlocked: result.synthesis.dissentNotes.length > 0 || result.synthesis.finalVerdict !== "proceed",
+          applicationBlocked,
         };
       });
     },
