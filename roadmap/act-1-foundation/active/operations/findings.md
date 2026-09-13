@@ -2086,3 +2086,15 @@ All downstream routing documentation must use this contract and must not restore
 
 - 2026-09-14 S5 review remediation passed: the final reviewer prompt discloses every durable candidate field, including the full ordered scenario suite, confidence/data sufficiency, parent and creator identity, and the PostgreSQL author operator/role. The integration harness now cleanly skips without a configured database.
 - 2026-09-14 S5 full-suite transient failures were isolated from the slice: a public-schema certification race and an IPython process-group timing test each passed on targeted rerun; final serialized verification passed 233/233 files and 1608/1608 tests.
+
+- 2026-09-14 Plan 6 §S6 review round 1 findings were accepted in scope and fixed: every rollout mutation now verifies the active project operator role; start/observation/lifecycle retries reject conflicting content; Goal observations are unique and monotonic; owner-expiry recovery can roll back active rows during startup; and class enablements cannot be updated or deleted.
+
+- 2026-09-14 S6 review round 2 replay-bypass finding was fixed. Existing operation/event replays now perform the same Goal/project/operator authorization checks as first execution before returning durable state.
+
+- 2026-09-14 S6 review round 3 expiry finding was fixed. Normal observation now requires the durable rollout owner and a live owner lease both before and during the update; expired active rows fail closed and are handled by startup reconciliation.
+
+- 2026-09-14 S6 review round 4 expiry-replay finding was fixed. Owner-bound replays now fail closed after lease expiry; only the startup expired-rollout reconciliation path may recover the row.
+
+- 2026-09-14 S6 review round 5 lease-duration replay finding was fixed. Reusing a start idempotency key with a different owner-lease duration now fails closed.
+
+- 2026-09-14 S6 final review is `REVIEW: PASS` at `b163a55`. The five-round review cap was reached; no spec-level findings remain. Additional race or operational hardening is explicitly out of scope for this slice.

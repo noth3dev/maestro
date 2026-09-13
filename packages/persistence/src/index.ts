@@ -62,3 +62,5 @@ export * from "./portfolio-council.js";
 export * from "./organizational-knowledge.js";
 
 export * from "./improvement-candidate.js";
+
+export * from "./rollout-controller.js";
