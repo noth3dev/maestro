@@ -28,7 +28,6 @@ import {
   runDeterministicCandidateGuards,
   runShadowEvaluation,
   runSyntheticAdversarialScenarios,
-  synthesizeEncoreJudgments,
   type CandidateEvaluationMetrics,
   type ImprovementCandidate,
   type ImprovementCandidateInput,
@@ -45,6 +44,7 @@ import { grantProjectMembership, grantProjectRole } from "../../packages/persist
 import { recordImprovementDigest } from "../../packages/persistence/src/improvement-digest.js";
 import { raiseMetronomeChallenge, readMetronomeChallenge } from "../../packages/persistence/src/metronome-challenge.js";
 import { runEncoreCouncilReview } from "../../packages/persistence/src/encore-council.js";
+import { createImprovementCouncilService } from "../../apps/control-plane/src/improvement-council-service.js";
 import { createHeadCouncil, submitIndependentBrief, revealCouncilBriefs, recordCouncilDecisionPacket } from "../../packages/persistence/src/council.js";
 import { createDepartmentPlan } from "../../packages/persistence/src/department-plan.js";
 import { createMissionBundle, issueMissionPersonaOverlay, readActiveMissionPersonaOverlay, type IssueMissionPersonaOverlayRequest } from "../../packages/persistence/src/mission-bundle.js";
@@ -151,8 +151,8 @@ function councilProof(candidate: ImprovementCandidate, roundId: string, evidence
     councilRoundId: roundId, evidenceIds: [...evidenceIds], judgments: [reviewer("provider-a", "model-a"), reviewer("provider-b", "model-b")] };
 }
 
-function encoreAdmission(goal: ScenarioGoal, commandId: string, index: number): ExecutionAdmission {
-  const model = index === 0 ? "provider-a/model-a" : "provider-b/model-b";
+function encoreAdmission(goal: ScenarioGoal, commandId: string, index: number, sameModel = false): ExecutionAdmission {
+  const model = sameModel || index === 0 ? "provider-a/model-a" : "provider-b/model-b";
   return {
     context: { operatorId: evaluatorOperatorId, projectId: goal.projectId, goalId: goal.goalId, missionBundleId: "encore-bundle", policyVersion: "encore-policy", fencingToken: goal.proof.fencingToken, accountRef: "account-1" },
     grant: { grantId: `phase6-encore-grant-${commandId}-${index}`, allowedTools: [], allowedSkills: ["review"], modelPolicy: [model], pathScope: [], outboundDataClasses: ["repository files only"], remaining: { modelTurns: 2, toolCalls: 0, childCalls: 0, outputTokens: 2048, wallTimeMs: 20_000, retryCount: 0 } },
@@ -160,10 +160,10 @@ function encoreAdmission(goal: ScenarioGoal, commandId: string, index: number): 
   };
 }
 
-function kernelWithAnswers(evidenceIds: readonly string[]): ExecutionKernelPort {
+function kernelWithAnswers(evidenceIds: readonly string[], sameModel = false): ExecutionKernelPort {
   let counter = 0; const namespace = randomUUID(); const invocations = new Map<string, { invocation: string; provider: string; id: string }>();
   return {
-    async spawn() { const index = counter++; const provider = index === 0 ? "provider-a" : "provider-b"; const id = index === 0 ? "model-a" : "model-b"; const execution = `${namespace}-exec-${index}`; const invocation = `${namespace}-inv-${index}`; invocations.set(execution, { invocation, provider, id }); return { execution: execution as never, invocation: invocation as never }; },
+    async spawn() { const index = counter++; const provider = sameModel || index === 0 ? "provider-a" : "provider-b"; const id = sameModel || index === 0 ? "model-a" : "model-b"; const execution = `${namespace}-exec-${index}`; const invocation = `${namespace}-inv-${index}`; invocations.set(execution, { invocation, provider, id }); return { execution: execution as never, invocation: invocation as never }; },
     async prompt() {}, async sendMessage() {},
     async observe(execution) { const item = invocations.get(execution as unknown as string); return item === undefined ? [] : [{ invocation: item.invocation as never, name: "deterministic-reviewer", status: "succeeded" as const, toolEvents: { state: "empty" as const, events: [] }, usage: { state: "available" as const, totalTokens: 1 }, answer: { state: "available" as const, text: JSON.stringify({ verdict: "proceed", confidence: "high", reasoning: "Independent evidence supports this bounded change.", conditions: [], dissentNote: null, citedEvidenceIds: [...evidenceIds] }) } }]; },
     async cancel() { return { cancelled: true }; },
@@ -174,7 +174,7 @@ function kernelWithAnswers(evidenceIds: readonly string[]): ExecutionKernelPort 
   };
 }
 
-async function shadow(pool: Pool, candidate: ImprovementCandidateInput, goal: ScenarioGoal, label: string): Promise<{ result: Awaited<ReturnType<typeof runShadowEvaluation>>; digestId: string }> {
+async function shadow(pool: Pool, candidate: ImprovementCandidateInput, goal: ScenarioGoal, label: string): Promise<{ result: Awaited<ReturnType<typeof runShadowEvaluation>>; digestId: string; shadowEvidenceId: string }> {
   const input = { request: `phase6 ${label}` }; const active: ShadowOutput = { messages: ["I will verify before acting."], plans: [{ step: "verify" }], challenges: [{ kind: "risk-review" }] };
   const processRef = `phase6-process-${label}-${randomUUID()}`; const sessionId = `phase6-session-${label}`; const shadowEvidenceId = randomUUID();
   const result = await runShadowEvaluation({ candidate, cases: [{ input, activeInput: input, active }], recordedEvidence: { [goal.evidenceId]: { observed: label }, ...Object.fromEntries(goal.digestIds.map((id) => [id, { observed: label }])) },
@@ -187,8 +187,8 @@ async function shadow(pool: Pool, candidate: ImprovementCandidateInput, goal: Sc
   const digest = await recordImprovementDigest(pool, { schemaVersion: 1, projectId: goal.projectId, goalId: goal.goalId, episodeId: `phase6-shadow-${label}`,
     trigger: "quality_signal", situation: "Shadow evaluation completed on identical input.", selectedDecision: "Retain shadow comparison as evidence.", rejectedAlternatives: ["Use live authority during shadow."],
     observedResult: JSON.stringify(result.records), metrics: [{ name: "correctness", value: 0.96, unit: "score" }], confidence: 0.95,
-    sourceRefs: [{ kind: "evidence_record", sourceId: goal.evidenceId }], }, goal.proof, { actorId: author.authorId, sessionRef: author.sessionRef });
-  return { result, digestId: digest.digestId };
+    sourceRefs: [{ kind: "evidence_record", sourceId: goal.evidenceId }, { kind: "evidence_record", sourceId: shadowEvidenceId }], }, goal.proof, { actorId: author.authorId, sessionRef: author.sessionRef });
+  return { result, digestId: digest.digestId, shadowEvidenceId };
 }
 
 async function exercisePersistentWorkerOverlay(pool: Pool, goal: ScenarioGoal, activePersona: Record<string, number>): Promise<{ readonly overlayPersona: Record<string, number>; readonly expired: boolean }> {
@@ -243,9 +243,14 @@ describeDatabase("Plan 6 full-chain proof", () => {
     expect(replay.status).toBe("compared"); expect(synthetic.status).toBe("completed");
     const routeShadow = await shadow(pool, routeInput, routeGoal, "routing");
     const routeCouncilCommandId = randomUUID();
-    const routeCouncil = await runEncoreCouncilReview(pool, kernelWithAnswers(routeGoal.digestIds), { goalId: routeGoal.goalId, proof: routeGoal.proof, commandId: routeCouncilCommandId,
-      question: "Should this bounded routing proposal proceed?", criteria: [{ criterionId: "safety", description: "preserve safety and authority" }], evidenceIds: routeGoal.digestIds, reviewerCount: 2,
-      admission: (index) => encoreAdmission(routeGoal, routeCouncilCommandId, index) });
+    const routeCouncilService = createImprovementCouncilService({ pool, kernel: kernelWithAnswers(routeGoal.digestIds), withGoalLease: async (_goalId, operation) => operation(routeGoal.proof),
+      createAdmission: (input) => encoreAdmission(routeGoal, input.commandId, input.reviewerIndex) });
+    const routeCouncil = await routeCouncilService.review({ candidateId: routeEvaluated.candidateId, goalId: routeGoal.goalId, projectId: routeGoal.projectId, operatorId: evaluatorOperatorId, reviewerCount: 2,
+      evaluation: { evidenceIds: routeGoal.digestIds, quantitative: [{ metric: "correctness", baseline: 0.96, candidate: 0.96 }, { metric: "cost", baseline: 100, candidate: 80 }], qualitative: ["Durable shadow comparison changed only the proposed behavior.", "All reviewed adversarial scenarios passed."] } }, routeCouncilCommandId);
+    const sameModelCommandId = randomUUID();
+    const sameModelCouncil = await runEncoreCouncilReview(pool, kernelWithAnswers(routeGoal.digestIds, true), { goalId: routeGoal.goalId, proof: routeGoal.proof, commandId: sameModelCommandId,
+      question: "Disclose same-model review diversity accurately.", criteria: [{ criterionId: "disclosure", description: "label same-model evidence" }], evidenceIds: routeGoal.digestIds, reviewerCount: 2,
+      admission: (index) => encoreAdmission(routeGoal, sameModelCommandId, index, true) });
     const routeEvaluation = { replay, synthetic };
     const routeEvaluationRecord = await recordRoutingCandidateEvaluation(pool, routeEvaluated.candidateId, routeGoal.proof, routeEvaluation, `phase6-eval-${randomUUID()}`);
     const routeJudgment = councilProof(routeEvaluated, routeCouncil.roundId, routeGoal.digestIds);
@@ -293,9 +298,10 @@ describeDatabase("Plan 6 full-chain proof", () => {
     expect(personaSynthetic.status).toBe("completed");
     const personaShadow = await shadow(pool, personaInput, personaGoal, "persona");
     const personaCouncilCommandId = randomUUID();
-    const personaCouncil = await runEncoreCouncilReview(pool, kernelWithAnswers(personaEvidenceIds), { goalId: personaGoal.goalId, proof: personaGoal.proof, commandId: personaCouncilCommandId,
-      question: "Should this bounded persona proposal proceed?", criteria: [{ criterionId: "diversity", description: "preserve profile diversity and floors" }], evidenceIds: personaEvidenceIds, reviewerCount: 2,
-      admission: (index) => encoreAdmission(personaGoal, personaCouncilCommandId, index) });
+    const personaCouncilService = createImprovementCouncilService({ pool, kernel: kernelWithAnswers(personaEvidenceIds), withGoalLease: async (_goalId, operation) => operation(personaGoal.proof),
+      createAdmission: (input) => encoreAdmission(personaGoal, input.commandId, input.reviewerIndex) });
+    const personaCouncil = await personaCouncilService.review({ candidateId: personaEvaluated.candidateId, goalId: personaGoal.goalId, projectId: personaGoal.projectId, operatorId: evaluatorOperatorId, reviewerCount: 2,
+      evaluation: { evidenceIds: personaEvidenceIds, quantitative: [{ metric: "correctness", baseline: 0.96, candidate: 0.98 }, { metric: "cost", baseline: 100, candidate: 80 }], qualitative: ["The candidate remains within reviewed persona floors.", "The persistent overlay and shadow comparison are bounded."] } }, personaCouncilCommandId);
     const personaJudged = await transitionImprovementCandidate(pool, personaEvaluated.candidateId, "judged", personaGoal.proof, author, `phase6-persona-judge-${randomUUID()}`);
     await enableImprovementClass(pool, personaGoal.projectId, "persona_axis", personaGoal.proof, actor, `phase6-enable-persona-${randomUUID()}`);
     const personaRollout = await startBoundedRollout(pool, personaJudged.candidateId, { roleId: "head-engineering", taskClass: "implementation", maxGoalCount: 1, windowStart: "2026-09-14T00:00:00.000Z", windowEnd: "2026-09-15T00:00:00.000Z" }, personaGoal.proof, actor, `phase6-start-persona-${randomUUID()}`);
@@ -316,7 +322,7 @@ describeDatabase("Plan 6 full-chain proof", () => {
     const routeBadSynthetic = runSyntheticAdversarialScenarios(routeForbidden, { scenarios: SYNTHETIC_SCENARIO_SPECS, evaluate: () => { replayCalls += 1; return metrics(); } });
     expect(badReplay.status).toBe("rejected"); expect(badSynthetic.status).toBe("rejected"); expect(coreBadReplay.status).toBe("rejected"); expect(challengeBadReplay.status).toBe("rejected"); expect(routeBadReplay.status).toBe("rejected"); expect(routeBadSynthetic.status).toBe("rejected"); expect(replayCalls).toBe(0);
 
-    const sameModel = synthesizeEncoreJudgments([{ modelProvider: "provider-a", modelId: "model-a", verdict: "proceed", confidence: "high", reasoning: "same", conditions: [], dissentNote: null, citedEvidenceIds: [routeGoal.evidenceId] }, { modelProvider: "provider-a", modelId: "model-a", verdict: "proceed", confidence: "high", reasoning: "same", conditions: [], dissentNote: null, citedEvidenceIds: [routeGoal.evidenceId] }]);
+    const sameModel = sameModelCouncil.synthesis;
     const hardFloor = applyCandidateHardFloors({ baseline: metrics({ correctness: 0.96 }), candidate: metrics({ correctness: 0.5, cost: 1 }), floors: { correctness: 0.9, safety: 0.9, authority: 0.9 } });
     const convergedProfile = { ...activePersona.persona, caution: personaRaw.changes[0]!.proposedValue, realism: personaRaw.changes[1]!.proposedValue };
     const diversity = runDeterministicCandidateGuards(personaInput, { baselineProfile: activePersona.persona, existingProfiles: [convergedProfile] });
@@ -340,7 +346,7 @@ describeDatabase("Plan 6 full-chain proof", () => {
       ["mission overlay expires without mutating baseline", resulting.layers.learnedProfile.profile.caution !== resulting.persona.caution && JSON.stringify(headBaselineBefore.rows) === JSON.stringify(headBaselineAfter.rows) && isMissionPersonaOverlayExpired({ expiresAt: "2026-09-14T00:00:00.000Z" }, new Date("2026-09-14T01:00:00.000Z"))],
       ["authority/core identity cannot be optimized", badReplay.status === "rejected" && coreBadReplay.status === "rejected" && routeBadReplay.status === "rejected" && challengeBadReplay.status === "rejected"],
       ["evidence/scenario/rollback are required", incompleteCandidates],
-      ["same-model evaluation is labeled", sameModel.sameModelOnly === true],
+      ["same-model evaluation is labeled", sameModel.sameModelOnly === true && sameModelCouncil.judgments.every((judgment) => judgment.modelProvider === "provider-a" && judgment.modelId === "model-a")],
       ["low-cost regression fails hard floor", hardFloor.accepted === false],
       ["diversity collapse fails", diversity.passed === false],
       ["route regression restores exact version", routeOutcome.status === "rolled_back" && routeOutcome.activeCandidateId === routeBaseline.candidateId && routeOutcome.activeVersion === routeBaseline.version && routeOutcome.rollbackTarget.contentHash === routeBaseline.contentHash],
