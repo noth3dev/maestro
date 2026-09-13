@@ -297,11 +297,12 @@ function validateDataSufficiency(value: unknown): ImprovementCandidateDataSuffic
 }
 
 function validateRollbackTarget(value: unknown): ImprovementCandidateRollbackTarget {
-  const target = ownDataProperties(value, ["candidateId", "version"], "Improvement Candidate rollbackTarget");
-  required(target, ["candidateId", "version"], "Improvement Candidate rollbackTarget");
+  const target = ownDataProperties(value, ["candidateId", "version", "contentHash"], "Improvement Candidate rollbackTarget");
+  required(target, ["candidateId", "version", "contentHash"], "Improvement Candidate rollbackTarget");
   id(target.candidateId, "Improvement Candidate rollbackTarget candidateId");
   positiveVersion(target.version, "Improvement Candidate rollbackTarget version");
-  return { candidateId: (target.candidateId as string).toLowerCase(), version: target.version as number };
+  if (typeof target.contentHash !== "string" || !SHA256.test(target.contentHash)) throw new InvalidImprovementCandidateError("Improvement Candidate rollbackTarget contentHash must be a lowercase SHA-256 hash");
+  return { candidateId: (target.candidateId as string).toLowerCase(), version: target.version as number, contentHash: target.contentHash };
 }
 
 export function assertValidImprovementCandidateInput(value: unknown): asserts value is ImprovementCandidateInput {
@@ -404,13 +405,13 @@ export function assertValidImprovementCandidate(value: unknown): asserts value i
     rollbackTarget: full.rollbackTarget,
   });
   validateIdentity({
-    candidateId: full.candidateId,
-    version: full.version,
-    parentCandidateId: full.parentCandidateId,
-    authorId: full.authorId,
-    sessionRef: full.sessionRef,
-    createdAt: full.createdAt,
-    state: full.state,
+    candidateId: full.candidateId as string,
+    version: full.version as number,
+    parentCandidateId: full.parentCandidateId as string | null,
+    authorId: full.authorId as string,
+    sessionRef: full.sessionRef as string,
+    createdAt: full.createdAt as string,
+    state: full.state as ImprovementCandidateState,
   });
   if (full.contentHash !== improvementCandidateContentHash({
     schemaVersion: full.schemaVersion as typeof IMPROVEMENT_CANDIDATE_SCHEMA_VERSION,

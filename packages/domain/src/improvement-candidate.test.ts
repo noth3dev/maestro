@@ -30,7 +30,7 @@ const candidate = (overrides: Partial<ImprovementCandidateInput> = {}): Improvem
   scenarioSuiteHash: improvementCandidateScenarioSuiteHash(["implementation-risk-review-v1"]),
   confidence: 0.84,
   dataSufficiency: { episodeCount: 3, comparableGoalCount: 2 },
-  rollbackTarget: { candidateId: BASELINE_ID, version: 1 },
+  rollbackTarget: { candidateId: BASELINE_ID, version: 1, contentHash: "0".repeat(64) },
   ...overrides,
 });
 
