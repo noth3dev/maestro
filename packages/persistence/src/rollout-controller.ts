@@ -39,8 +39,13 @@ export interface RolloutEnablement {
 export interface RolloutObservationInput {
   readonly goalId: string;
   readonly observedAt: string;
+  /** Optional assertion of the next monotonic Goal ordinal. */
   readonly goalCount?: number;
   readonly metrics: readonly RolloutMetricObservation[];
+}
+export interface RolloutStartOptions {
+  /** Short lease is used by crash-recovery tests; production callers use the default. */
+  readonly rolloutLeaseDurationMs?: number;
 }
 export interface RolloutHistoryEvent {
   readonly eventId: string;
@@ -64,6 +69,7 @@ export interface ImprovementRollout {
   readonly lastCertifiedCandidateId: string;
   readonly lastCertifiedVersion: number;
   readonly observedGoalCount: number;
+  readonly observedGoalIds: readonly string[];
   readonly status: "active" | "interrupted" | "certified" | "rolled_back";
   readonly history: readonly RolloutHistoryEvent[];
   readonly createdAt: string;
@@ -75,14 +81,17 @@ type RolloutRow = {
   improvement_class: ImprovementClass; role_id: string; task_class: string; max_goal_count: number;
   window_start: Date; window_end: Date; protected_metrics: RolloutProtectedMetric[]; rollback_target: ImprovementCandidateRollbackTarget;
   source_evidence_ids: string[]; active_candidate_id: string; active_version: number; last_certified_candidate_id: string;
-  last_certified_version: number; observed_goal_count: number; status: ImprovementRollout["status"];
+  last_certified_version: number; observed_goal_count: number; observed_goal_ids: string[];
+  owner_operator_id: string; owner_actor_id: string; owner_role_id: string; owner_session_ref: string; owner_lease_expires_at: Date;
+  status: ImprovementRollout["status"];
   operation_ref: string; created_at: Date; updated_at: Date;
 };
 type EventRow = { event_id: string; rollout_id: string; kind: RolloutHistoryEvent["kind"]; details: Record<string, unknown>; created_at: Date };
 type CandidateRow = { candidate_id: string; version: number; project_id: string; goal_id: string; kind: ImprovementClass; state: string; target: Record<string, string>; rollback_target: ImprovementCandidateRollbackTarget; source_evidence_ids: string[] };
 const COLUMNS = `rollout_id, candidate_id, candidate_version, project_id, goal_id, improvement_class, role_id, task_class,
   max_goal_count, window_start, window_end, protected_metrics, rollback_target, source_evidence_ids, active_candidate_id,
-  active_version, last_certified_candidate_id, last_certified_version, observed_goal_count, status, operation_ref, created_at, updated_at`;
+  active_version, last_certified_candidate_id, last_certified_version, observed_goal_count, observed_goal_ids,
+  owner_operator_id, owner_actor_id, owner_role_id, owner_session_ref, owner_lease_expires_at, status, operation_ref, created_at, updated_at`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function text(value: unknown, field: string): string {
@@ -102,6 +111,31 @@ function operation(prefix: string, key: string): string {
 function actorValue(actor: RolloutActor): RolloutActor {
   return { operatorId: uuid(actor?.operatorId, "Rollout operatorId"), actorId: text(actor?.actorId, "Rollout actorId"), sessionRef: text(actor?.sessionRef, "Rollout sessionRef"), operatorRoleId: text(actor?.operatorRoleId, "Rollout operatorRoleId") };
 }
+function canonical(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  return `{${Object.keys(value as Record<string, unknown>).sort().map((key) => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(",")}}`;
+}
+function assertStartReplay(row: RolloutRow, candidateId: string, scope: RolloutScope, actor: RolloutActor): void {
+  if (row.candidate_id !== candidateId || row.role_id !== scope.roleId || row.task_class !== scope.taskClass || row.max_goal_count !== scope.maxGoalCount
+      || row.window_start.toISOString() !== new Date(scope.windowStart).toISOString() || row.window_end.toISOString() !== new Date(scope.windowEnd).toISOString()
+      || row.owner_operator_id !== actor.operatorId || row.owner_actor_id !== actor.actorId || row.owner_role_id !== actor.operatorRoleId || row.owner_session_ref !== actor.sessionRef) {
+    throw new RolloutPersistenceError("Rollout idempotency key was reused with different candidate, scope, or actor");
+  }
+}
+
+function validateProtectedMetrics(metrics: readonly RolloutProtectedMetric[]): void {
+  if (!Array.isArray(metrics) || metrics.length === 0 || metrics.length > 16) throw new RolloutPersistenceError("Rollout protected metrics are invalid");
+  const names = new Set<string>();
+  for (const metric of metrics) {
+    if (!metric || typeof metric.name !== "string" || metric.name.trim() === "" || names.has(metric.name)
+        || (metric.minimum === undefined && metric.maximum === undefined)
+        || (metric.minimum !== undefined && !Number.isFinite(metric.minimum)) || (metric.maximum !== undefined && !Number.isFinite(metric.maximum))
+        || (metric.minimum !== undefined && metric.maximum !== undefined && metric.minimum > metric.maximum)) throw new RolloutPersistenceError("Rollout protected metric is invalid");
+    names.add(metric.name);
+  }
+}
+
 function map(row: RolloutRow, events: readonly EventRow[]): ImprovementRollout {
   return {
     rolloutId: row.rollout_id, candidateId: row.candidate_id, candidateVersion: row.candidate_version, projectId: row.project_id,
@@ -109,7 +143,7 @@ function map(row: RolloutRow, events: readonly EventRow[]): ImprovementRollout {
     scope: { roleId: row.role_id, taskClass: row.task_class, maxGoalCount: row.max_goal_count, windowStart: row.window_start.toISOString(), windowEnd: row.window_end.toISOString() },
     protectedMetrics: row.protected_metrics, rollbackTarget: row.rollback_target, sourceEvidenceIds: row.source_evidence_ids,
     activeCandidateId: row.active_candidate_id, activeVersion: row.active_version, lastCertifiedCandidateId: row.last_certified_candidate_id,
-    lastCertifiedVersion: row.last_certified_version, observedGoalCount: row.observed_goal_count, status: row.status,
+    lastCertifiedVersion: row.last_certified_version, observedGoalCount: row.observed_goal_count, observedGoalIds: row.observed_goal_ids, status: row.status,
     history: events.map((event) => ({ eventId: event.event_id, kind: event.kind, details: event.details, createdAt: event.created_at.toISOString() })),
     createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString(),
   };
@@ -154,14 +188,19 @@ export async function enableImprovementClass(pool: Pool, projectId: string, impr
   });
 }
 
-export async function startBoundedRollout(pool: Pool, candidateId: string, rawScope: RolloutScope, proof: GoalLeaseProof, rawActor: RolloutActor, idempotencyKey: string): Promise<ImprovementRollout> {
+export async function startBoundedRollout(pool: Pool, candidateId: string, rawScope: RolloutScope, proof: GoalLeaseProof, rawActor: RolloutActor, idempotencyKey: string, options: RolloutStartOptions = {}): Promise<ImprovementRollout> {
   const id = uuid(candidateId, "Rollout candidateId");
   const scope = assertBoundedRolloutScope(rawScope);
   const actor = actorValue(rawActor);
+  const leaseDurationMs = options.rolloutLeaseDurationMs ?? 60_000;
+  if (!Number.isSafeInteger(leaseDurationMs) || leaseDurationMs <= 0 || leaseDurationMs > 60 * 60 * 1000) throw new RolloutPersistenceError("Rollout lease duration is invalid");
   const op = operation("rollout:start:", idempotencyKey);
   return withGoalAuthority(pool, proof, 95, async (client) => {
     const existing = await client.query<RolloutRow>(`SELECT ${COLUMNS} FROM improvement_rollouts WHERE operation_ref = $1 FOR UPDATE`, [op]);
-    if (existing.rowCount === 1) return result(client, existing.rows[0]!);
+    if (existing.rowCount === 1) {
+      assertStartReplay(existing.rows[0]!, id, scope, actor);
+      return result(client, existing.rows[0]!);
+    }
     const candidate = await client.query<CandidateRow>("SELECT candidate_id, version, project_id, goal_id, kind, state, target, rollback_target, source_evidence_ids FROM improvement_candidates WHERE candidate_id = $1 FOR KEY SHARE", [id]);
     if (candidate.rowCount !== 1) throw new RolloutPersistenceError("Rollout candidate does not exist");
     const source = candidate.rows[0]!;
@@ -169,15 +208,18 @@ export async function startBoundedRollout(pool: Pool, candidateId: string, rawSc
     await operatorAuthorized(client, actor, source.project_id);
     if (source.state !== "judged") throw new RolloutPersistenceError("Only a judged candidate can start a rollout");
     if (source.target.roleId !== scope.roleId || source.target.taskClass !== scope.taskClass) throw new RolloutPersistenceError("Rollout scope cannot widen beyond the candidate target");
+    const candidateDetails = await client.query<{ protected_metrics: RolloutProtectedMetric[] }>("SELECT protected_metrics FROM improvement_candidates WHERE candidate_id = $1", [id]);
+    const protectedMetrics = candidateDetails.rows[0]?.protected_metrics;
+    validateProtectedMetrics(protectedMetrics ?? []);
     const enabled = await client.query("SELECT 1 FROM improvement_class_enablements WHERE project_id = $1 AND improvement_class = $2 AND enabled = true", [source.project_id, source.kind]);
     assertImprovementClassEnabled(source.kind, enabled.rowCount === 1 ? [source.kind] : []);
     const rolloutId = randomUUID();
     const rollbackTarget = source.rollback_target;
     await authorizeWrite(client);
     const inserted = await client.query<RolloutRow>(`INSERT INTO improvement_rollouts
-      (rollout_id, candidate_id, candidate_version, project_id, goal_id, improvement_class, role_id, task_class, max_goal_count, window_start, window_end, protected_metrics, rollback_target, source_evidence_ids, active_candidate_id, active_version, last_certified_candidate_id, last_certified_version, status, operation_ref)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz, $11::timestamptz, $12::jsonb, $13::jsonb, $14::jsonb, $2, $3, $15, $16, 'active', $17) RETURNING ${COLUMNS}`,
-      [rolloutId, source.candidate_id, source.version, source.project_id, source.goal_id, source.kind, scope.roleId, scope.taskClass, scope.maxGoalCount, scope.windowStart, scope.windowEnd, JSON.stringify((await client.query<{ protected_metrics: RolloutProtectedMetric[] }>("SELECT protected_metrics FROM improvement_candidates WHERE candidate_id = $1", [id])).rows[0]!.protected_metrics), JSON.stringify(rollbackTarget), JSON.stringify(source.source_evidence_ids), rollbackTarget.candidateId, rollbackTarget.version, op]);
+      (rollout_id, candidate_id, candidate_version, project_id, goal_id, improvement_class, role_id, task_class, max_goal_count, window_start, window_end, protected_metrics, rollback_target, source_evidence_ids, active_candidate_id, active_version, last_certified_candidate_id, last_certified_version, owner_operator_id, owner_actor_id, owner_role_id, owner_session_ref, owner_lease_expires_at, status, operation_ref)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz, $11::timestamptz, $12::jsonb, $13::jsonb, $14::jsonb, $2, $3, $15, $16, $17, $18, $19, $20, transaction_timestamp() + ($21::bigint * interval '1 millisecond'), 'active', $22) RETURNING ${COLUMNS}`,
+      [rolloutId, source.candidate_id, source.version, source.project_id, source.goal_id, source.kind, scope.roleId, scope.taskClass, scope.maxGoalCount, scope.windowStart, scope.windowEnd, JSON.stringify(protectedMetrics), JSON.stringify(rollbackTarget), JSON.stringify(source.source_evidence_ids), rollbackTarget.candidateId, rollbackTarget.version, actor.operatorId, actor.actorId, actor.operatorRoleId, actor.sessionRef, leaseDurationMs, op]);
     await authorizeWrite(client);
     await client.query("INSERT INTO improvement_rollout_events (event_id, rollout_id, kind, details, operation_ref) VALUES ($1, $2, 'started', $3::jsonb, $4)", [randomUUID(), rolloutId, JSON.stringify({ candidateId: source.candidate_id, candidateVersion: source.version, actorId: actor.actorId, sessionRef: actor.sessionRef }), `${op}:event`]);
     return result(client, inserted.rows[0]!);
@@ -188,18 +230,27 @@ export async function observeBoundedRollout(pool: Pool, rolloutId: string, input
   const id = uuid(rolloutId, "Rollout rolloutId"); const actor = actorValue(rawActor); const observation = { ...input, goalId: uuid(input.goalId, "Rollout observation goalId") };
   const op = operation("rollout:observe:", idempotencyKey);
   return withGoalAuthority(pool, proof, 95, async (client) => {
-    const existingEvent = await client.query<{ rollout_id: string }>("SELECT rollout_id FROM improvement_rollout_events WHERE operation_ref = $1", [op]);
+    const existingEvent = await client.query<{ rollout_id: string; details: Record<string, unknown> }>("SELECT rollout_id, details FROM improvement_rollout_events WHERE operation_ref = $1", [op]);
     if (existingEvent.rowCount === 1) {
-      if (existingEvent.rows[0]!.rollout_id !== id) throw new RolloutPersistenceError("Rollout observation idempotency key was reused for another rollout");
+      const prior = existingEvent.rows[0]!;
+      const priorGoalCount = prior.details.goalCount;
+      if (prior.rollout_id !== id || prior.details.goalId !== observation.goalId || prior.details.observedAt !== observation.observedAt
+          || canonical(prior.details.metrics) !== canonical(observation.metrics)
+          || (observation.goalCount !== undefined && priorGoalCount !== observation.goalCount)) throw new RolloutPersistenceError("Rollout observation idempotency key was reused with different content");
       return result(client, await readRow(client, id));
     }
     const row = await readRow(client, id, true);
     if (row.goal_id !== proof.goalId.toLowerCase() || observation.goalId !== row.goal_id) throw new RolloutPersistenceError("Rollout observation is outside its Goal");
+    await operatorAuthorized(client, actor, row.project_id);
     if (row.status !== "active") throw new RolloutPersistenceError("Rollout is not active");
     const observedAt = Date.parse(observation.observedAt);
     if (!Number.isFinite(observedAt) || observedAt < row.window_start.getTime() || observedAt > row.window_end.getTime()) throw new RolloutPersistenceError("Rollout observation is outside its fixed time window");
-    const goalCount = observation.goalCount ?? row.observed_goal_count + 1;
-    if (!Number.isSafeInteger(goalCount) || goalCount < 1 || goalCount > row.max_goal_count) throw new RolloutPersistenceError("Rollout observation exceeds its fixed Goal-count bound");
+    const observedGoalIds = row.observed_goal_ids.map((goalId) => goalId.toLowerCase());
+    if (observedGoalIds.includes(observation.goalId)) throw new RolloutPersistenceError("Rollout observation already contains this Goal");
+    const goalCount = row.observed_goal_count + 1;
+    if (observation.goalCount !== undefined && observation.goalCount !== goalCount) throw new RolloutPersistenceError("Rollout observation Goal count must advance monotonically");
+    if (goalCount > row.max_goal_count) throw new RolloutPersistenceError("Rollout observation exceeds its fixed Goal-count bound");
+    const nextObservedGoalIds = [...observedGoalIds, observation.goalId];
     const metricDecision = evaluateProtectedMetrics(row.protected_metrics, observation.metrics);
     const rollback = metricDecision.decision === "rollback";
     const status: ImprovementRollout["status"] = rollback ? "rolled_back" : goalCount === row.max_goal_count ? "certified" : "active";
@@ -208,7 +259,7 @@ export async function observeBoundedRollout(pool: Pool, rolloutId: string, input
     const lastCertifiedCandidateId = rollback ? row.last_certified_candidate_id : status === "certified" ? row.candidate_id : row.last_certified_candidate_id;
     const lastCertifiedVersion = rollback ? row.last_certified_version : status === "certified" ? row.candidate_version : row.last_certified_version;
     await authorizeWrite(client);
-    const updated = await client.query<RolloutRow>(`UPDATE improvement_rollouts SET active_candidate_id = $2, active_version = $3, last_certified_candidate_id = $4, last_certified_version = $5, observed_goal_count = $6, status = $7, updated_at = transaction_timestamp() WHERE rollout_id = $1 RETURNING ${COLUMNS}`, [id, activeCandidateId, activeVersion, lastCertifiedCandidateId, lastCertifiedVersion, goalCount, status]);
+    const updated = await client.query<RolloutRow>(`UPDATE improvement_rollouts SET active_candidate_id = $2, active_version = $3, last_certified_candidate_id = $4, last_certified_version = $5, observed_goal_count = $6, observed_goal_ids = $7::jsonb, status = $8, owner_lease_expires_at = transaction_timestamp() + interval '1 minute', updated_at = transaction_timestamp() WHERE rollout_id = $1 RETURNING ${COLUMNS}`, [id, activeCandidateId, activeVersion, lastCertifiedCandidateId, lastCertifiedVersion, goalCount, JSON.stringify(nextObservedGoalIds), status]);
     await authorizeWrite(client);
     await client.query("INSERT INTO improvement_rollout_events (event_id, rollout_id, kind, details, operation_ref) VALUES ($1, $2, $3, $4::jsonb, $5)", [randomUUID(), id, rollback ? "automatic_rollback" : "observation", JSON.stringify({ goalId: observation.goalId, observedAt: observation.observedAt, goalCount, metrics: observation.metrics, violatedMetrics: metricDecision.violatedMetrics, actorId: actor.actorId, sessionRef: actor.sessionRef }), op]);
     return result(client, updated.rows[0]!);
@@ -221,8 +272,14 @@ export async function interruptBoundedRollout(pool: Pool, rolloutId: string, pro
 async function transitionRollout(pool: Pool, rolloutId: string, status: "interrupted" | "rolled_back", eventKind: "interrupted" | "reconciled", proof: GoalLeaseProof, rawActor: RolloutActor, idempotencyKey: string): Promise<ImprovementRollout> {
   const id = uuid(rolloutId, "Rollout rolloutId"); const actor = actorValue(rawActor); const op = operation(`rollout:${eventKind}:`, idempotencyKey);
   return withGoalAuthority(pool, proof, 95, async (client) => {
+    const priorEvent = await client.query<{ rollout_id: string; kind: RolloutHistoryEvent["kind"] }>("SELECT rollout_id, kind FROM improvement_rollout_events WHERE operation_ref = $1", [op]);
+    if (priorEvent.rowCount === 1) {
+      if (priorEvent.rows[0]!.rollout_id !== id || priorEvent.rows[0]!.kind !== eventKind) throw new RolloutPersistenceError("Rollout lifecycle idempotency key was reused with different content");
+      return result(client, await readRow(client, id));
+    }
     const row = await readRow(client, id, true);
     if (row.goal_id !== proof.goalId.toLowerCase()) throw new RolloutPersistenceError("Rollout is outside its Goal");
+    await operatorAuthorized(client, actor, row.project_id);
     if (status === "interrupted" && row.status !== "active") throw new RolloutPersistenceError("Only an active rollout can be interrupted");
     if (status === "rolled_back" && row.status !== "interrupted") throw new RolloutPersistenceError("Only an interrupted rollout can be reconciled");
     const target = status === "rolled_back" ? reconcileInterruptedRolloutState({ status: "interrupted", activeCandidateId: row.active_candidate_id, activeVersion: row.active_version, lastCertifiedCandidateId: row.last_certified_candidate_id, lastCertifiedVersion: row.last_certified_version, rollbackTarget: row.rollback_target }) : undefined;
@@ -235,6 +292,27 @@ async function transitionRollout(pool: Pool, rolloutId: string, status: "interru
 }
 export async function reconcileInterruptedRollout(pool: Pool, rolloutId: string, proof: GoalLeaseProof, actor: RolloutActor, idempotencyKey: string): Promise<ImprovementRollout> {
   return transitionRollout(pool, rolloutId, "rolled_back", "reconciled", proof, actor, idempotencyKey);
+}
+
+/** Startup recovery path: a dead owner is detected by the durable rollout lease, not by a caller-supplied interruption flag. */
+export async function reconcileExpiredBoundedRollouts(pool: Pool, proof: GoalLeaseProof, rawActor: RolloutActor): Promise<readonly ImprovementRollout[]> {
+  const actor = actorValue(rawActor);
+  return withGoalAuthority(pool, proof, 95, async (client) => {
+    const goal = await client.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [proof.goalId.toLowerCase()]);
+    if (goal.rowCount !== 1) throw new RolloutPersistenceError("Rollout recovery Goal does not exist");
+    await operatorAuthorized(client, actor, goal.rows[0]!.project_id);
+    const stale = await client.query<RolloutRow>(`SELECT ${COLUMNS} FROM improvement_rollouts WHERE goal_id = $1 AND status = 'active' AND owner_lease_expires_at <= clock_timestamp() ORDER BY created_at, rollout_id FOR UPDATE`, [proof.goalId.toLowerCase()]);
+    const recovered: ImprovementRollout[] = [];
+    for (const row of stale.rows) {
+      const target = reconcileInterruptedRolloutState({ status: "interrupted", activeCandidateId: row.active_candidate_id, activeVersion: row.active_version, lastCertifiedCandidateId: row.last_certified_candidate_id, lastCertifiedVersion: row.last_certified_version, rollbackTarget: row.rollback_target });
+      await authorizeWrite(client);
+      const updated = await client.query<RolloutRow>(`UPDATE improvement_rollouts SET status = 'rolled_back', active_candidate_id = $2, active_version = $3, updated_at = transaction_timestamp() WHERE rollout_id = $1 RETURNING ${COLUMNS}`, [row.rollout_id, target.activeCandidateId, target.activeVersion]);
+      await authorizeWrite(client);
+      await client.query("INSERT INTO improvement_rollout_events (event_id, rollout_id, kind, details, operation_ref) VALUES ($1, $2, 'reconciled', $3::jsonb, $4)", [randomUUID(), row.rollout_id, JSON.stringify({ actorId: actor.actorId, sessionRef: actor.sessionRef, reason: "expired_rollout_owner_lease", rollbackTarget: row.rollback_target }), `rollout:startup-reconcile:${row.rollout_id}`]);
+      recovered.push(await result(client, updated.rows[0]!));
+    }
+    return recovered;
+  });
 }
 
 export async function readBoundedRollout(pool: Pool, rolloutId: string, authorization: { readonly operatorId: string; readonly proof: GoalLeaseProof }): Promise<ImprovementRollout> {

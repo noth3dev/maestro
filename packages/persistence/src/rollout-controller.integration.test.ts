@@ -21,6 +21,7 @@ import {
   observeBoundedRollout,
   interruptBoundedRollout,
   reconcileInterruptedRollout,
+  reconcileExpiredBoundedRollouts,
   readBoundedRollout,
   type RolloutActor,
   type RolloutScope,
@@ -83,15 +84,19 @@ const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineer
     await expect(pool.query("INSERT INTO improvement_class_enablements (project_id, improvement_class, operator_id, operator_role_id, session_ref, operation_ref) VALUES ($1, 'persona_axis', $2, 'engineering', 'session:direct', $3)", [projectId, operatorId, `direct-${randomUUID()}`])).rejects.toThrow(/secured|authorization|marker/i);
     await expect(startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, `start-${randomUUID()}`)).rejects.toThrow(/enabled|class/i);
     await enableImprovementClass(pool, projectId, "persona_axis", proof, actor, `enable-${randomUUID()}`);
+    await expect(pool.query("DELETE FROM improvement_class_enablements WHERE project_id = $1", [projectId])).rejects.toThrow(/append-only|history|mutation/i);
     await expect(startBoundedRollout(pool, candidate.candidateId, { ...scope, taskClass: "unrelated" }, proof, actor, `start-${randomUUID()}`)).rejects.toThrow(/scope|target|task/i);
-    await expect(startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, `start-${randomUUID()}`)).resolves.toMatchObject({ status: "active" });
+    const rollout = await startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, "same-start-key");
+    await expect(startBoundedRollout(pool, candidate.candidateId, { ...scope, maxGoalCount: 3 }, proof, actor, "same-start-key")).rejects.toThrow(/idempotency|different|scope/i);
+    const unauthorized = { ...actor, operatorId: randomUUID() };
+    await expect(observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T01:00:00.000Z", metrics: [{ name: "correctness", value: 0.95 }] }, proof, unauthorized, `unauthorized-${randomUUID()}`)).rejects.toThrow(/operator|authorized|member/i);
   });
 
   it("keeps each enabled improvement class isolated and bounds the rollout scope", async () => {
     await enableImprovementClass(pool, projectId, "persona_axis", proof, actor, `enable-${randomUUID()}`);
     const rollout = await startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, `start-${randomUUID()}`);
     await expect(observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T01:00:00.000Z", metrics: [{ name: "correctness", value: 0.95 }] }, proof, actor, `observe-${randomUUID()}`)).resolves.toMatchObject({ status: "active" });
-    await expect(observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T01:00:00.000Z", goalCount: 3, metrics: [{ name: "correctness", value: 0.95 }] }, proof, actor, `observe-${randomUUID()}`)).rejects.toThrow(/bound|goal|scope/i);
+    await expect(observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T01:00:00.000Z", goalCount: 3, metrics: [{ name: "correctness", value: 0.95 }] }, proof, actor, `observe-${randomUUID()}`)).rejects.toThrow(/bound|goal|scope|already|monotonic/i);
     const routing = { ...candidate, kind: "routing_capability_axis" as const };
     await expect(enableImprovementClass(pool, projectId, "routing_capability_axis", proof, actor, `enable-routing-${randomUUID()}`)).resolves.toMatchObject({ improvementClass: "routing_capability_axis" });
     expect(routing.kind).not.toBe("persona_axis");
@@ -100,11 +105,20 @@ const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineer
   it("automatically rolls back a protected-metric regression without deleting evidence history", async () => {
     await enableImprovementClass(pool, projectId, "persona_axis", proof, actor, `enable-${randomUUID()}`);
     const rollout = await startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, `start-${randomUUID()}`);
-    const rolledBack = await observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T02:00:00.000Z", metrics: [{ name: "correctness", value: 0.84 }] }, proof, actor, `observe-${randomUUID()}`);
+    const observationKey = "same-observe-key";
+    const rolledBack = await observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T02:00:00.000Z", metrics: [{ name: "correctness", value: 0.84 }] }, proof, actor, observationKey);
+    await expect(observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T02:00:00.000Z", metrics: [{ name: "correctness", value: 0.95 }] }, proof, actor, observationKey)).rejects.toThrow(/idempotency|different|content/i);
     expect(rolledBack).toMatchObject({ status: "rolled_back", activeCandidateId: candidate.rollbackTarget.candidateId, activeVersion: candidate.rollbackTarget.version, rollbackTarget: candidate.rollbackTarget });
     expect(rolledBack.sourceEvidenceIds).toContain(digestId);
     expect(rolledBack.history.some((event) => event.kind === "automatic_rollback")).toBe(true);
     await expect(readBoundedRollout(pool, rollout.rolloutId, { operatorId, proof })).resolves.toMatchObject({ status: "rolled_back", sourceEvidenceIds: [digestId] });
+  });
+
+  it("reconciles an owner-expired active rollout during startup without an explicit interrupt", async () => {
+    await enableImprovementClass(pool, projectId, "persona_axis", proof, actor, `enable-${randomUUID()}`);
+    const rollout = await startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, `start-${randomUUID()}`, { rolloutLeaseDurationMs: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await expect(reconcileExpiredBoundedRollouts(pool, proof, actor)).resolves.toEqual([expect.objectContaining({ rolloutId: rollout.rolloutId, status: "rolled_back", activeCandidateId: candidate.rollbackTarget.candidateId, activeVersion: candidate.rollbackTarget.version })]);
   });
 
   it("reconciles an interrupted rollout to the last certified state using its durable rollback target", async () => {

@@ -32,6 +32,12 @@ CREATE TABLE IF NOT EXISTS improvement_rollouts (
   last_certified_candidate_id uuid NOT NULL,
   last_certified_version integer NOT NULL CHECK (last_certified_version >= 1),
   observed_goal_count integer NOT NULL DEFAULT 0 CHECK (observed_goal_count >= 0 AND observed_goal_count <= max_goal_count),
+  observed_goal_ids jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(observed_goal_ids) = 'array' AND jsonb_array_length(observed_goal_ids) = observed_goal_count),
+  owner_operator_id uuid NOT NULL,
+  owner_actor_id text NOT NULL CHECK (btrim(owner_actor_id) <> '' AND length(owner_actor_id) <= 256 AND owner_actor_id !~ E'[\r\n]'),
+  owner_role_id text NOT NULL CHECK (btrim(owner_role_id) <> '' AND length(owner_role_id) <= 256 AND owner_role_id !~ E'[\r\n]'),
+  owner_session_ref text NOT NULL CHECK (btrim(owner_session_ref) <> '' AND length(owner_session_ref) <= 256 AND owner_session_ref !~ E'[\r\n]'),
+  owner_lease_expires_at timestamptz NOT NULL,
   status text NOT NULL CHECK (status IN ('active', 'interrupted', 'certified', 'rolled_back')),
   operation_ref text NOT NULL UNIQUE CHECK (btrim(operation_ref) <> '' AND length(operation_ref) <= 256 AND operation_ref !~ E'[\r\n]'),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
@@ -102,7 +108,9 @@ BEGIN
 END $$;
 
 DROP TRIGGER IF EXISTS improvement_rollout_enablement_guard ON improvement_class_enablements;
-CREATE TRIGGER improvement_rollout_enablement_guard BEFORE INSERT OR UPDATE OR DELETE ON improvement_class_enablements FOR EACH ROW EXECUTE FUNCTION authorize_improvement_rollout_write();
+CREATE TRIGGER improvement_rollout_enablement_guard BEFORE INSERT ON improvement_class_enablements FOR EACH ROW EXECUTE FUNCTION authorize_improvement_rollout_write();
+DROP TRIGGER IF EXISTS improvement_rollout_enablement_immutable ON improvement_class_enablements;
+CREATE TRIGGER improvement_rollout_enablement_immutable BEFORE UPDATE OR DELETE ON improvement_class_enablements FOR EACH ROW EXECUTE FUNCTION reject_improvement_rollout_delete();
 DROP TRIGGER IF EXISTS improvement_rollout_guard ON improvement_rollouts;
 CREATE TRIGGER improvement_rollout_guard BEFORE INSERT OR UPDATE ON improvement_rollouts FOR EACH ROW EXECUTE FUNCTION authorize_improvement_rollout_write();
 DROP TRIGGER IF EXISTS improvement_rollout_delete_guard ON improvement_rollouts;

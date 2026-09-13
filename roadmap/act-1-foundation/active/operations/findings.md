@@ -2086,3 +2086,5 @@ All downstream routing documentation must use this contract and must not restore
 
 - 2026-09-14 S5 review remediation passed: the final reviewer prompt discloses every durable candidate field, including the full ordered scenario suite, confidence/data sufficiency, parent and creator identity, and the PostgreSQL author operator/role. The integration harness now cleanly skips without a configured database.
 - 2026-09-14 S5 full-suite transient failures were isolated from the slice: a public-schema certification race and an IPython process-group timing test each passed on targeted rerun; final serialized verification passed 233/233 files and 1608/1608 tests.
+
+- 2026-09-14 Plan 6 §S6 review round 1 findings were accepted in scope and fixed: every rollout mutation now verifies the active project operator role; start/observation/lifecycle retries reject conflicting content; Goal observations are unique and monotonic; owner-expiry recovery can roll back active rows during startup; and class enablements cannot be updated or deleted.
