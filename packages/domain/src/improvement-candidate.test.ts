@@ -70,7 +70,7 @@ describe("Improvement Candidate contract", () => {
     const persona = materializeImprovementCandidate(candidate(), identity);
     const routing = materializeImprovementCandidate(candidate({
       kind: "routing_capability_axis",
-      target: { routingTarget: "openai/gpt-5" },
+      target: { roleId: "head-engineering", taskClass: "implementation", routingTarget: "openai/gpt-5" },
       changes: [{ axis: "verification", currentValue: 120, proposedValue: 135 }],
     }), { ...identity, candidateId: "66666666-6666-4666-8666-666666666666" });
 
@@ -112,7 +112,7 @@ describe("Improvement Candidate contract", () => {
   it("accepts the shared routing shape while enforcing its target and score semantics", () => {
     expect(() => assertValidImprovementCandidateInput(candidate({
       kind: "routing_capability_axis",
-      target: { routingTarget: "anthropic/claude-sonnet" },
+      target: { roleId: "head-engineering", taskClass: "implementation", routingTarget: "anthropic/claude-sonnet" },
       changes: [{ axis: "coding", currentValue: 100, proposedValue: 101 }],
     }))).not.toThrow();
     expect(() => assertValidImprovementCandidateInput(candidate({

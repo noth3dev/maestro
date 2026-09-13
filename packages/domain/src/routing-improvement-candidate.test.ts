@@ -81,7 +81,7 @@ function candidateInput(overrides: Partial<ImprovementCandidateInput> = {}): Imp
     projectId: PROJECT_ID,
     goalId: GOAL_ID,
     kind: "routing_capability_axis",
-    target: { routingTarget: "provider/fast" },
+    target: { roleId: "head-engineering", taskClass: "implementation", routingTarget: "provider/fast" },
     changes: [{ axis: "coding", currentValue: 120, proposedValue: 140 }],
     sourceEvidenceIds: [DIGEST_ID],
     evidencePattern: "Comparable Goals show a repeatable verification gap.",
@@ -143,8 +143,12 @@ describe("routing learning integration", () => {
 
   it("adapts a capability proposal to the shared candidate schema and blocks it before Council judgment", () => {
     const candidate = createRoutingCapabilityCandidate(candidateInput());
-    expect(candidate).toMatchObject({ kind: "routing_capability_axis", target: { routingTarget: "provider/fast" }, changes: [{ axis: "coding" }] });
+    expect(candidate).toMatchObject({ kind: "routing_capability_axis", target: { roleId: "head-engineering", taskClass: "implementation", routingTarget: "provider/fast" }, changes: [{ axis: "coding" }] });
     expect(() => selectRoutedModelWithRoutingCandidate(request({ taskDemand: { ...demand, requirements: { ...demand.requirements, coding: { level: 140, rationale: "needs the proposed increase" } } } }), materialized(), judgmentFor(materialized()))).toThrow(/Council|judg|proposal/i);
+  });
+
+  it("requires routing rollouts to carry an explicit role and task scope", () => {
+    expect(() => createRoutingCapabilityCandidate({ ...candidateInput(), target: { routingTarget: "provider/fast" } })).toThrow(/scope|roleId|taskClass/i);
   });
 
   it("keeps a project overlay independent when the human model_map baseline changes", () => {

@@ -135,7 +135,7 @@ const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineer
     const routingRollbackTargetId = randomUUID();
     await pool.query("INSERT INTO improvement_candidate_rollback_targets (target_candidate_id, target_version, project_id, goal_id, content_hash) VALUES ($1, 1, $2, $3, $4)", [routingRollbackTargetId, projectId, goalId, "b".repeat(64)]);
     const routingInput: ImprovementCandidateInput = {
-      schemaVersion: 1, projectId, goalId, kind: "routing_capability_axis", target: { routingTarget: "provider/fast" },
+      schemaVersion: 1, projectId, goalId, kind: "routing_capability_axis", target: { roleId: "head-engineering", taskClass: "implementation", routingTarget: "provider/fast" },
       changes: [{ axis: "coding", currentValue: 120, proposedValue: 140 }], sourceEvidenceIds: [digestId],
       evidencePattern: "Comparable Goals show a repeatable coding verification gap.", predictedEffect: "The local proposal can be evaluated without changing model_map.",
       expectedMetrics: [{ name: "verification_failures", unit: "count", direction: "decrease", target: 0 }], protectedMetrics: [{ name: "correctness", unit: "score", minimum: 0.9 }],
