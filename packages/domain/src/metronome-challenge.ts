@@ -9,6 +9,8 @@ export class InvalidMetronomeChallengeError extends Error {
 export interface MetronomeChallengeSubstance {
   readonly reason: string;
   readonly evidenceReferences: readonly string[];
+  /** Optional durable target identity for challenges of one worker or effect. */
+  readonly targetRef?: string;
 }
 
 function text(value: unknown, field: string): asserts value is string {
@@ -21,9 +23,10 @@ function texts(value: unknown, field: string): asserts value is readonly string[
 export function assertValidMetronomeChallengeSubstance(value: unknown): asserts value is MetronomeChallengeSubstance {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new InvalidMetronomeChallengeError("Metronome challenge substance must be an object");
   const record = value as Record<string, unknown>;
-  for (const key of Object.keys(record)) if (!["reason", "evidenceReferences"].includes(key)) throw new InvalidMetronomeChallengeError(`Metronome challenge substance has unknown field ${key}`);
+  for (const key of Object.keys(record)) if (!["reason", "evidenceReferences", "targetRef"].includes(key)) throw new InvalidMetronomeChallengeError(`Metronome challenge substance has unknown field ${key}`);
   text(record.reason, "Metronome challenge reason");
   texts(record.evidenceReferences, "Metronome challenge evidenceReferences");
+  if (record.targetRef !== undefined) text(record.targetRef, "Metronome challenge targetRef");
 }
 
 

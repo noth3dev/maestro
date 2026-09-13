@@ -61,6 +61,13 @@ export async function bootstrapPermanentOrganization(pool: Pool): Promise<void> 
            VALUES ($1, $2, $3) ON CONFLICT (role_id, axis) DO NOTHING`,
           [role.roleId, axis, role.persona[axis]],
         );
+        const floor = Math.max(0, Math.round((role.persona[axis] - 0.15) * 100) / 100);
+        const ceiling = Math.min(1, Math.round((role.persona[axis] + 0.15) * 100) / 100);
+        await client.query(
+          `INSERT INTO role_persona_bounds (role_id, axis, floor_value, ceiling_value, rationale)
+           VALUES ($1, $2, $3, $4, $5) ON CONFLICT (role_id, axis) DO NOTHING`,
+          [role.roleId, axis, floor, ceiling, `${role.provenance.reviewVersion}: reviewed duty bound for ${role.roleId}.${axis}`],
+        );
       }
       const rationale = Object.fromEntries(PERSONA_AXES.map((axis) => [axis, {
         reason: `${role.provenance.reviewVersion}: reviewed baseline for ${role.roleId} duty`,

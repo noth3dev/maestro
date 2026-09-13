@@ -1,3 +1,4 @@
+import { assertValidImprovementCandidateInput, improvementCandidateScenarioSuiteHash, type ImprovementCandidateInput, type ImprovementCandidateMetricGoal, type ImprovementCandidateMetricGuard, type ImprovementCandidateRollbackTarget } from "./improvement-candidate.js";
 import { isMissionPersonaOverlayExpired } from "./mission-bundle.js";
 import { parsePersonaProfile, PERSONA_AXES, type PersonaAxis, type PersonaLayerDelta, type PersonaProfile } from "./persona.js";
 
@@ -103,6 +104,30 @@ export function deriveWorkerProfile(input: WorkerProfileDerivationInput): Worker
 
 export function isWorkerPersonaOverlayExpired(derivation: Pick<WorkerProfileDerivation, "missionOverlayExpiresAt">, now: Date): boolean {
   return isMissionPersonaOverlayExpired({ expiresAt: derivation.missionOverlayExpiresAt }, now);
+}
+export interface WorkerPersonaImprovementCandidateRequest {
+  readonly projectId: string; readonly goalId: string; readonly roleId: string; readonly taskClass: string;
+  readonly currentProfile: PersonaProfile; readonly proposedProfile: PersonaProfile;
+  readonly sourceEvidenceIds: readonly string[]; readonly evidencePattern: string; readonly predictedEffect: string;
+  readonly expectedMetrics: readonly ImprovementCandidateMetricGoal[]; readonly protectedMetrics: readonly ImprovementCandidateMetricGuard[];
+  readonly scenarioSuite: readonly string[]; readonly confidence: number; readonly episodeCount: number; readonly comparableGoalCount: number;
+  readonly rollbackTarget: ImprovementCandidateRollbackTarget;
+}
+
+/** Adapt worker outcome evidence to the shared candidate schema without creating a second candidate format. */
+export function buildWorkerPersonaImprovementCandidate(request: WorkerPersonaImprovementCandidateRequest): ImprovementCandidateInput {
+  const current = parsePersonaProfile(request.currentProfile); const proposed = parsePersonaProfile(request.proposedProfile);
+  const changes = PERSONA_AXES.filter((axis) => current[axis] !== proposed[axis]).map((axis) => ({ axis, currentValue: current[axis], proposedValue: proposed[axis] }));
+  if (changes.length === 0 || changes.length > 2) throw new InvalidWorkerProfileDerivationError("worker persona candidates must change one or two axes");
+  const candidate: ImprovementCandidateInput = {
+    schemaVersion: 1, projectId: request.projectId, goalId: request.goalId, kind: "persona_axis",
+    target: { roleId: request.roleId, taskClass: request.taskClass }, changes, sourceEvidenceIds: request.sourceEvidenceIds,
+    evidencePattern: request.evidencePattern, predictedEffect: request.predictedEffect, expectedMetrics: request.expectedMetrics,
+    protectedMetrics: request.protectedMetrics, scenarioSuite: request.scenarioSuite, scenarioSuiteHash: improvementCandidateScenarioSuiteHash(request.scenarioSuite),
+    confidence: request.confidence, dataSufficiency: { episodeCount: request.episodeCount, comparableGoalCount: request.comparableGoalCount }, rollbackTarget: request.rollbackTarget,
+  };
+  assertValidImprovementCandidateInput(candidate);
+  return Object.freeze({ ...candidate, target: Object.freeze({ ...candidate.target }), changes: Object.freeze(candidate.changes.map((change) => Object.freeze({ ...change }))) });
 }
 
 

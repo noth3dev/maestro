@@ -1,5 +1,5 @@
 import type { MetronomeCorrectionInput, MetronomeFindingList, MetronomeResolutionInput, MetronomeSafePauseInput, RaiseMetronomeChallengeInput } from "@maestro/contracts";
-import { METRONOME_ACTOR_ID, PERSONA_AXES, type PersonaAxis } from "@maestro/domain";
+import { isMissionPersonaOverlayExpired, isTerminalWorkerStatus, METRONOME_ACTOR_ID, parsePersonaProfile, PERSONA_AXES, type PersonaAxis, type WorkerStatus } from "@maestro/domain";
 import { observeGoalForMetronome, raiseMetronomeChallenge, requestMetronomeCorrection, requestMetronomeSafePause, resolveMetronomeChallenge, type MetronomeActorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
 
@@ -7,18 +7,20 @@ export interface WorkerOverlayChallengeInput {
   readonly projectId: string;
   readonly workerId: string;
   readonly roleId: string;
-  /** The active worker overlay as observed by Metronome. */
-  readonly profile: Readonly<Partial<Record<PersonaAxis, number>>>;
+  /** Optional observation hint; the service always reloads the durable overlay. */
+  readonly profile?: Readonly<Partial<Record<PersonaAxis, number>>>;
   readonly roleFloors?: Readonly<Partial<Record<PersonaAxis, number>>>;
   readonly roleCeilings?: Readonly<Partial<Record<PersonaAxis, number>>>;
   readonly evidenceReferences: readonly string[];
 }
 export class WorkerOverlayChallengeError extends Error { constructor(message: string) { super(message); this.name = "WorkerOverlayChallengeError"; } }
+interface DurableWorkerOverlayRow { status: string; persona: unknown; expires_at: Date | string; }
+interface DurablePersonaBoundRow { axis: PersonaAxis; floor_value: string | number; ceiling_value: string | number; }
 export function findUnsafeWorkerOverlay(input: WorkerOverlayChallengeInput): readonly string[] {
   const violations: string[] = [];
   if (input.workerId.trim() === "" || input.roleId.trim() === "") violations.push("worker identity is missing");
   for (const axis of PERSONA_AXES) {
-    const value = input.profile[axis];
+    const value = input.profile?.[axis];
     const floor = input.roleFloors?.[axis]; const ceiling = input.roleCeilings?.[axis];
     if (value === undefined && (floor !== undefined || ceiling !== undefined)) { violations.push(`${axis} is missing from the worker profile`); continue; }
     if (value === undefined) continue;
@@ -26,7 +28,7 @@ export function findUnsafeWorkerOverlay(input: WorkerOverlayChallengeInput): rea
     if (floor !== undefined && (typeof floor !== "number" || !Number.isFinite(floor) || value < floor)) violations.push(`${axis} is below role floor`);
     if (ceiling !== undefined && (typeof ceiling !== "number" || !Number.isFinite(ceiling) || value > ceiling)) violations.push(`${axis} is above role ceiling`);
   }
-  for (const axis of Object.keys(input.profile)) if (!PERSONA_AXES.includes(axis as PersonaAxis)) violations.push(`unknown persona axis: ${axis}`);
+  for (const axis of Object.keys(input.profile ?? {})) if (!PERSONA_AXES.includes(axis as PersonaAxis)) violations.push(`unknown persona axis: ${axis}`);
   return Object.freeze(violations);
 }
 export interface MetronomeService {
@@ -84,10 +86,27 @@ export function createMetronomeService(deps: MetronomeServiceDependencies): Metr
     },
     async challengeWorkerOverlay(goalId, input, commandId) {
       await assertProject(goalId, input.projectId);
-      const violations = findUnsafeWorkerOverlay(input);
-      if (violations.length === 0) throw new WorkerOverlayChallengeError("worker overlay does not violate its role duty bounds");
+      if (input.evidenceReferences.length === 0) throw new WorkerOverlayChallengeError("worker overlay challenge requires durable evidence references");
+      const worker = await deps.pool.query<DurableWorkerOverlayRow>(
+        `SELECT w.status, o.persona, o.expires_at
+           FROM workers w
+           JOIN mission_persona_overlays o ON o.council_id = w.council_id AND o.department_id = w.department_id AND o.plan_version = w.plan_version AND o.item_id = w.item_id
+           JOIN head_councils c ON c.council_id = w.council_id
+          WHERE w.worker_id = $1 AND c.goal_id = $2`, [input.workerId, goalId],
+      );
+      if (worker.rowCount !== 1) throw new WorkerOverlayChallengeError("worker overlay is not bound to this Goal");
+      const durableWorker = worker.rows[0]!;
+      if (isTerminalWorkerStatus(durableWorker.status as WorkerStatus) || isMissionPersonaOverlayExpired({ expiresAt: new Date(durableWorker.expires_at).toISOString() }, new Date())) throw new WorkerOverlayChallengeError("worker overlay is no longer active");
+      let profile;
+      try { profile = parsePersonaProfile(durableWorker.persona); } catch { throw new WorkerOverlayChallengeError("stored worker overlay profile is invalid"); }
+      const bounds = await deps.pool.query<DurablePersonaBoundRow>("SELECT axis, floor_value::text, ceiling_value::text FROM role_persona_bounds WHERE role_id = $1 ORDER BY axis", [input.roleId]);
+      if (bounds.rowCount !== PERSONA_AXES.length) throw new WorkerOverlayChallengeError("reviewed role bounds are incomplete");
+      const roleFloors: Partial<Record<PersonaAxis, number>> = {}; const roleCeilings: Partial<Record<PersonaAxis, number>> = {};
+      for (const bound of bounds.rows) { roleFloors[bound.axis] = Number(bound.floor_value); roleCeilings[bound.axis] = Number(bound.ceiling_value); }
+      const violations = findUnsafeWorkerOverlay({ ...input, profile, roleFloors, roleCeilings });
+      if (violations.length === 0) throw new WorkerOverlayChallengeError("worker overlay does not violate its reviewed role duty bounds");
       const reason = `Unsafe worker overlay ${input.workerId} (${input.roleId}): ${violations.join("; ")}`;
-      return deps.withGoalLease(goalId, (proof) => raiseMetronomeChallenge(deps.pool, goalId, [], { reason, evidenceReferences: input.evidenceReferences }, proof, context(commandId)));
+      return deps.withGoalLease(goalId, (proof) => raiseMetronomeChallenge(deps.pool, goalId, [], { reason, evidenceReferences: input.evidenceReferences, targetRef: input.workerId }, proof, context(commandId)));
     },
   };
 }

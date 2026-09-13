@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS persona_goal_evidence (
   payload_hash bytea NOT NULL CHECK (octet_length(payload_hash) = 32),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   retention retention_class NOT NULL DEFAULT 'project_lifetime',
-  UNIQUE (goal_id, role_id, task_class, payload_hash)
+  UNIQUE (goal_id, role_id, task_class)
 );
 CREATE INDEX IF NOT EXISTS persona_goal_evidence_goal_idx ON persona_goal_evidence (goal_id, created_at, evidence_id);
 
@@ -66,3 +66,18 @@ DROP TRIGGER IF EXISTS persona_goal_evidence_immutable ON persona_goal_evidence;
 CREATE TRIGGER persona_goal_evidence_immutable
 BEFORE UPDATE OR DELETE ON persona_goal_evidence
 FOR EACH ROW EXECUTE FUNCTION reject_persona_goal_evidence_mutation();
+CREATE OR REPLACE FUNCTION reject_persona_goal_evidence_truncate()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  -- Empty-table truncation has no provenance to destroy and permits parent
+  -- schema reset; once evidence exists, history cannot be truncated.
+  IF EXISTS (SELECT 1 FROM persona_goal_evidence) THEN
+    RAISE EXCEPTION 'persona Goal evidence is append-only';
+  END IF;
+  RETURN NULL;
+END;
+$$;
+DROP TRIGGER IF EXISTS persona_goal_evidence_truncate_immutable ON persona_goal_evidence;
+CREATE TRIGGER persona_goal_evidence_truncate_immutable
+BEFORE TRUNCATE ON persona_goal_evidence
+FOR EACH STATEMENT EXECUTE FUNCTION reject_persona_goal_evidence_truncate();

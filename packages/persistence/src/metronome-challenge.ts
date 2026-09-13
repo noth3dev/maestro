@@ -70,7 +70,7 @@ function hash(value: unknown): string {
   return createHash("sha256").update(canonicalJson(value)).digest("hex");
 }
 
-function findingIdentity(goalId: string, rows: readonly FindingIdentityRow[], evidenceReferences: readonly string[]): Readonly<Record<string, unknown>> {
+function findingIdentity(goalId: string, rows: readonly FindingIdentityRow[], evidenceReferences: readonly string[], targetRef?: string): Readonly<Record<string, unknown>> {
   const findings = rows.map((row) => ({
     ruleId: normalizeMetronomeIdentity(row.rule_id), evidenceIdentity: normalizeMetronomeIdentity(row.evidence_identity),
     planVersion: row.plan_version,
@@ -79,6 +79,7 @@ function findingIdentity(goalId: string, rows: readonly FindingIdentityRow[], ev
     goalId: normalizeMetronomeIdentity(goalId),
     findings,
     evidenceReferences: [...new Set(evidenceReferences.map(normalizeMetronomeIdentity))].sort(),
+    ...(targetRef === undefined ? {} : { targetRef: normalizeMetronomeIdentity(targetRef) }),
   };
 }
 
@@ -225,9 +226,14 @@ export async function raiseMetronomeChallenge(
       "SELECT evidence_id FROM ensemble_router_routing_evidence WHERE goal_ref = $1 AND project_ref = $2",
       [normalizedGoalId, projectId],
     );
+    const personaEvidence = await client.query<{ evidence_id: string }>(
+      "SELECT evidence_id FROM persona_goal_evidence WHERE goal_id = $1 AND project_id = $2",
+      [normalizedGoalId, projectId],
+    );
     const durableIds = new Set([
       ...durable.rows.flatMap((row) => [normalizeMetronomeIdentity(row.evidence_id), normalizeMetronomeIdentity(row.sha256)]),
       ...routing.rows.map((row) => normalizeMetronomeIdentity(row.evidence_id)),
+      ...personaEvidence.rows.map((row) => normalizeMetronomeIdentity(row.evidence_id)),
     ]);
     for (const reference of normalizedEvidenceReferences) if (!durableIds.has(reference)) throw new MetronomeChallengeError(`Metronome challenge evidence reference is not a durable goal-scoped record: ${reference}`);
 
@@ -242,9 +248,9 @@ export async function raiseMetronomeChallenge(
         [normalizedGoalId, normalizedFindingIds],
       );
     if (found.rowCount !== normalizedFindingIds.length) throw new MetronomeChallengeError("Metronome challenge cites a finding that does not exist for this Goal");
-    const identity = findingIdentity(normalizedGoalId, found.rows, normalizedEvidenceReferences);
+    const identity = findingIdentity(normalizedGoalId, found.rows, normalizedEvidenceReferences, substance.targetRef);
     const idempotencyKey = hash(identity);
-    const requestHash = hash({ identity, findingIds: [...normalizedFindingIds].sort(), reason: substance.reason.trim() });
+    const requestHash = hash({ identity, findingIds: [...normalizedFindingIds].sort(), reason: substance.reason.trim(), targetRef: substance.targetRef });
     const inserted = await client.query<ChallengeRow>(
       `INSERT INTO metronome_challenges
          (challenge_id, goal_id, reason, evidence_references, status, raised_by, idempotency_key, request_hash)

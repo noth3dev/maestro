@@ -10,12 +10,17 @@ const describeDatabase = databaseUrl ? describe : describe.skip;
 describeDatabase("persona Goal evidence persistence", () => {
   const basePool = new Pool({ connectionString: databaseUrl }); const schema = `persona_evidence_${randomUUID().replaceAll("-", "")}`;
   const scopedUrl = databaseUrl === undefined ? undefined : (() => { const url = new URL(databaseUrl); url.searchParams.set("options", `-c search_path=${schema}`); return url.toString(); })(); let pool: Pool;
-  const goalId = randomUUID(); const projectId = randomUUID();
+  let goalId: string; let projectId: string; let contractId: string; let councilId: string;
   beforeAll(async () => { await basePool.query(`CREATE SCHEMA ${schema}`); pool = new Pool({ connectionString: scopedUrl }); await applyAllMigrations(pool); await bootstrapPermanentOrganization(pool); });
-  beforeEach(async () => { await pool.query("TRUNCATE persona_goal_evidence, goals CASCADE"); await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]); });
+  beforeEach(async () => {
+    goalId = randomUUID(); projectId = randomUUID(); contractId = randomUUID(); councilId = randomUUID();
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
+    await pool.query("INSERT INTO task_contracts (contract_id, schema_version, version, content, content_hash, launch_state) VALUES ($1, 1, 3, '{}'::jsonb, $2, 'launched')", [contractId, "a".repeat(64)]);
+    await pool.query("INSERT INTO head_councils (council_id, goal_id, contract_id, brief_deadline, state, snapshot_hash, snapshot_payload) VALUES ($1, $2, $3, transaction_timestamp() + interval '1 hour', 'collecting', $4, '{}'::jsonb)", [councilId, goalId, contractId, "b".repeat(64)]);
+  });
   afterAll(async () => { await pool.end(); await basePool.query(`DROP SCHEMA ${schema} CASCADE`); await basePool.end(); });
   const evidence = (): PersonaGoalEvidenceInput => ({
-    projectId, goalId, roleId: "head-security", taskClass: "incident-triage", taskContractVersion: 3, activeProfileVersion: 2,
+    projectId, goalId, roleId: "head-security", taskClass: "incident-triage", taskContractVersion: 3, activeProfileVersion: 1,
     missionOverlay: { caution: 0.02 }, modelRef: "openai/gpt-5", skills: ["security-review"], tools: ["git"], contextSizeTokens: 12000, budgetCents: 500,
     collaboratorSet: ["head-quality"], qualityFindings: ["one defect fixed"], securityFindings: [], safetyFindings: [], finalCertification: "passed",
     reworkCount: 1, retryCount: 0, planRevisionCount: 1, escapedDefectCount: 0, timeToFirstUsefulOutputMs: 1000, timeToCertifiedCompletionMs: 5000,
@@ -30,6 +35,8 @@ describeDatabase("persona Goal evidence persistence", () => {
   it("rejects a project/Goal mismatch and preserves append-only provenance", async () => {
     await expect(capturePersonaGoalEvidence(pool, { ...evidence(), projectId: randomUUID() })).rejects.toThrow(/project/);
     const first = await capturePersonaGoalEvidence(pool, evidence());
+    await expect(capturePersonaGoalEvidence(pool, { ...evidence(), explicitFeedback: "different" })).rejects.toThrow(/different content/);
     await expect(pool.query("DELETE FROM persona_goal_evidence WHERE evidence_id = $1", [first.evidenceId])).rejects.toThrow(/append-only/);
+    await expect(pool.query("TRUNCATE persona_goal_evidence")).rejects.toThrow(/append-only/);
   });
 });

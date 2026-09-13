@@ -68,3 +68,5 @@ export * from "./rollout-controller.js";
 export * from "./persona-profile.js";
 
 export * from "./persona-goal-evidence.js";
+
+export * from "./worker-profile-derivation.js";
