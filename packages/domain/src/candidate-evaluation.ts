@@ -16,6 +16,8 @@ export interface DeterministicCandidateGuardContext {
   readonly roleFloors?: Readonly<Record<string, number>>;
   readonly roleCeilings?: Readonly<Record<string, number>>;
   readonly mandatoryScenarioIds?: readonly string[];
+  readonly baselineProfile?: Readonly<Record<string, number>>;
+  readonly existingProfiles?: readonly Readonly<Record<string, number>>[];
   /** False when the proposed profile is known to collapse Council diversity. */
   readonly diversityPreserved?: boolean;
 }
@@ -56,6 +58,18 @@ export function runDeterministicCandidateGuards(
     if (context.mandatoryScenarioIds?.some((scenarioId) => !Array.isArray(candidate.scenarioSuite) || !candidate.scenarioSuite.includes(scenarioId))) {
       reasons.push("candidate removes mandatory challenge or escalation behavior");
     }
+    if (context.baselineProfile && context.existingProfiles && Array.isArray(candidate.changes)) {
+      const proposedProfile = { ...context.baselineProfile };
+      for (const change of candidate.changes) {
+        if (change && typeof change === "object" && typeof (change as { axis?: unknown }).axis === "string" && typeof (change as { proposedValue?: unknown }).proposedValue === "number") {
+          proposedProfile[(change as { axis: string }).axis] = (change as { proposedValue: number }).proposedValue;
+        }
+      }
+      const keys = Object.keys(proposedProfile);
+      if (context.existingProfiles.some((profile) => keys.length === Object.keys(profile).length && keys.every((key) => profile[key] === proposedProfile[key]))) {
+        reasons.push("candidate creates a known duplicate profile and reduces Council diversity");
+      }
+    }
   }
   if (context.diversityPreserved === false) reasons.push("candidate reduces Council diversity");
   return { passed: reasons.length === 0, reasons: [...new Set(reasons)] };
@@ -69,6 +83,7 @@ export interface ReplayGoalInput {
 
 export interface ReplayRequest {
   readonly scenarioSuite: readonly string[];
+  readonly guards?: DeterministicCandidateGuardContext;
   readonly goals: readonly ReplayGoalInput[];
   readonly evaluate: (input: unknown, candidate: ImprovementCandidateInput) => CandidateEvaluationMetrics;
 }
@@ -81,9 +96,12 @@ export interface ReplayComparison {
 
 export type ReplayResult =
   | { readonly status: "compared"; readonly scenarioSuiteHash: string; readonly results: readonly ReplayComparison[] }
-  | { readonly status: "invalidated"; readonly reason: string };
+  | { readonly status: "invalidated"; readonly reason: string }
+  | { readonly status: "rejected"; readonly reason: string };
 
 export function replayCandidateAgainstFrozenBaseline(candidate: ImprovementCandidateInput, request: ReplayRequest): ReplayResult {
+  const guards = runDeterministicCandidateGuards(candidate, request.guards);
+  if (!guards.passed) return { status: "rejected", reason: `deterministic candidate guard failed: ${guards.reasons.join("; ")}` };
   const scenarioSuiteHash = improvementCandidateScenarioSuiteHash(request.scenarioSuite);
   if (scenarioSuiteHash !== candidate.scenarioSuiteHash) {
     return { status: "invalidated", reason: "replay scenario suite differs from the candidate's frozen scenario set" };
@@ -164,13 +182,15 @@ export interface CandidateHardFloorResult {
   readonly weightedImprovement: number;
 }
 
+const REQUIRED_HARD_FLOORS = ["correctness", "safety", "authority"] as const;
+
 export function applyCandidateHardFloors(request: CandidateHardFloorRequest): CandidateHardFloorResult {
-  const failedFloors = Object.entries(request.floors)
-    .filter(([metric, floor]) => {
-      const value = request.candidate[metric];
-      return !Number.isFinite(floor) || typeof value !== "number" || !Number.isFinite(value) || value < floor;
-    })
-    .map(([metric]) => metric);
+  const failedFloorSet = new Set<string>(REQUIRED_HARD_FLOORS.filter((metric) => !Object.hasOwn(request.floors, metric)));
+  for (const [metric, floor] of Object.entries(request.floors)) {
+    const value = request.candidate[metric];
+    if (!Number.isFinite(floor) || typeof value !== "number" || !Number.isFinite(value) || value < floor) failedFloorSet.add(metric);
+  }
+  const failedFloors = [...failedFloorSet];
   const qualityDelta = (request.candidate.correctness - request.baseline.correctness)
     + (request.candidate.safety - request.baseline.safety)
     + (request.candidate.authority - request.baseline.authority);

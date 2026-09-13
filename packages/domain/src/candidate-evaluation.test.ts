@@ -50,7 +50,7 @@ const metrics = (overrides: Partial<CandidateEvaluationMetrics> = {}): Candidate
 describe("candidate evaluation stages", () => {
   it("rejects deterministic guard violations before any replay evaluator runs", () => {
     let evaluatorCalls = 0;
-    const evaluate = () => { evaluatorCalls += 1; };
+    const evaluate = () => { evaluatorCalls += 1; return metrics(); };
     const cases: readonly [string, unknown, Parameters<typeof runDeterministicCandidateGuards>[1]][] = [
       ["out of range", candidate({ changes: [{ axis: "caution", currentValue: 0.7, proposedValue: 1.2 }] }), {}],
       ["role floor", candidate(), { roleFloors: { caution: 0.8 } }],
@@ -64,8 +64,17 @@ describe("candidate evaluation stages", () => {
       const result = runDeterministicCandidateGuards(value, context);
       expect(result.passed, name).toBe(false);
     }
+    const rejectedReplay = replayCandidateAgainstFrozenBaseline(candidate({ sourceEvidenceIds: [] }), {
+      scenarioSuite: ["implementation-risk-review-v1"],
+      goals: [{ goalId: "goal-1", input: { request: "review" }, baseline: metrics() }],
+      evaluate,
+    });
+    expect(rejectedReplay.status).toBe("rejected");
     expect(evaluatorCalls).toBe(0);
-    expect(evaluate).toBeTypeOf("function");
+    expect(runDeterministicCandidateGuards(candidate(), {
+      baselineProfile: { caution: 0.7, realism: 0.8 },
+      existingProfiles: [{ caution: 0.76, realism: 0.8 }],
+    }).passed).toBe(false);
   });
 
   it("invalidates replay comparison when the frozen scenario set changes", () => {
@@ -108,5 +117,8 @@ describe("candidate evaluation stages", () => {
     expect(result.accepted).toBe(false);
     expect(result.failedFloors).toContain("correctness");
     expect(applyCandidateHardFloors({ baseline: metrics(), candidate: metrics({ safety: Number.NaN }), floors: { safety: 0.95 } }).accepted).toBe(false);
+    const omitted = applyCandidateHardFloors({ baseline: metrics(), candidate: metrics({ correctness: 0.1, safety: 0.1, authority: 0 }), floors: { cost: 0 } });
+    expect(omitted.accepted).toBe(false);
+    expect(omitted.failedFloors).toEqual(expect.arrayContaining(["correctness", "safety", "authority"]));
   });
 });
