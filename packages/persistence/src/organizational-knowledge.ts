@@ -75,8 +75,8 @@ function publicProjection(lesson: OrganizationalKnowledge): OrganizationalKnowle
 function authorValue(author: OrganizationalKnowledgeAuthor): void {
   if (!author || typeof author.actorId !== "string" || author.actorId.trim() === "" || author.actorId.length > 256 || typeof author.sessionRef !== "string" || author.sessionRef.trim() === "" || author.sessionRef.length > 256) throw new OrganizationalKnowledgeError("organizational knowledge author is invalid");
 }
-async function authorizePromotion(client: Pick<PoolClient, "query">, lesson: OrganizationalKnowledge, roleId: string, operatorId: string, proof: GoalLeaseProof, operationPayloadHash: string, operationPayload: string, curatorOperatorId?: string, curatorRoleId?: string): Promise<string> {
-  const result = await client.query<{ payload_hash: string | null }>("SELECT authorize_knowledge_promotion($1, $2, $3, $4, $5, $6, $7::uuid, $8::uuid, $9::uuid, $10, $11::bigint, $12::uuid, $13, $14::text) AS payload_hash", [randomUUID(), lesson.knowledgeId, lesson.revision, lesson.scope, roleId, lesson.departmentId, operatorId, lesson.sourceProjectId, lesson.sourceGoalId, proof.ownerId, proof.fencingToken, curatorOperatorId ?? null, curatorRoleId ?? null, operationPayload]);
+async function authorizePromotion(client: Pick<PoolClient, "query">, lesson: OrganizationalKnowledge, roleId: string, operatorId: string, proof: GoalLeaseProof, operationPayloadHash: string, operationPayload: string, curatorOperatorId?: string, curatorRoleId?: string, authorizationKind: "promotion" | "active_maintenance" = "promotion"): Promise<string> {
+  const result = await client.query<{ payload_hash: string | null }>("SELECT authorize_knowledge_promotion($1, $2, $3, $4, $5, $6, $7::uuid, $8::uuid, $9::uuid, $10, $11::bigint, $12::uuid, $13, $14::text, $15) AS payload_hash", [randomUUID(), lesson.knowledgeId, lesson.revision, lesson.scope, roleId, lesson.departmentId, operatorId, lesson.sourceProjectId, lesson.sourceGoalId, proof.ownerId, proof.fencingToken, curatorOperatorId ?? null, curatorRoleId ?? null, operationPayload, authorizationKind]);
   const canonicalHash = result.rows[0]?.payload_hash;
   if (canonicalHash === null || canonicalHash === undefined || canonicalHash !== operationPayloadHash) throw new OrganizationalKnowledgeError("organizational knowledge promotion payload hash is invalid");
   return canonicalHash;
@@ -295,7 +295,7 @@ export async function refreshOrganizationalKnowledge(pool: Pool, request: { read
     const maintenancePayloadHash = await canonicalPayloadHash(client, maintenancePayloadJson);
     if (maintained.status === "active" && (maintained.scope === "project_department" || maintained.scope === "global")) {
       if (maintained.promotionOperatorId === undefined || maintained.promotionRoleId === undefined) throw new OrganizationalKnowledgeError("knowledge maintenance requires durable promotion identity");
-      await authorizePromotion(client, maintained, maintained.promotionRoleId, maintained.promotionOperatorId, request.proof, maintenancePayloadHash, maintenancePayloadJson, maintained.curatorOperatorId, maintained.curatorRoleId);
+      await authorizePromotion(client, maintained, maintained.promotionRoleId, maintained.promotionOperatorId, request.proof, maintenancePayloadHash, maintenancePayloadJson, maintained.curatorOperatorId, maintained.curatorRoleId, "active_maintenance");
     }
     if (maintained.status === "unsupported" || maintained.status === "contradicted" || maintained.status === "retired") await authorizeMaintenance(client, maintained, maintained.status, request.operatorId, request.operatorRoleId, request.proof, maintained.reason!, operationRef);
     const maintenanceOperator = maintained.status === "active" ? undefined : request.operatorId;

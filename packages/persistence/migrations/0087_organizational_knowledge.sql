@@ -278,6 +278,12 @@ CREATE TABLE IF NOT EXISTS knowledge_promotion_authorizations (
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   retention retention_class NOT NULL DEFAULT 'project_lifetime'
 );
+ALTER TABLE knowledge_promotion_authorizations ADD COLUMN IF NOT EXISTS authorization_kind text;
+UPDATE knowledge_promotion_authorizations SET authorization_kind = 'promotion' WHERE authorization_kind IS NULL;
+ALTER TABLE knowledge_promotion_authorizations ALTER COLUMN authorization_kind SET DEFAULT 'promotion';
+ALTER TABLE knowledge_promotion_authorizations ALTER COLUMN authorization_kind SET NOT NULL;
+ALTER TABLE knowledge_promotion_authorizations DROP CONSTRAINT IF EXISTS knowledge_promotion_authorizations_authorization_kind_check;
+ALTER TABLE knowledge_promotion_authorizations ADD CONSTRAINT knowledge_promotion_authorizations_authorization_kind_check CHECK (authorization_kind IN ('promotion', 'active_maintenance'));
 ALTER TABLE knowledge_promotion_authorizations ADD COLUMN IF NOT EXISTS curator_operator_id uuid;
 ALTER TABLE knowledge_promotion_authorizations ADD COLUMN IF NOT EXISTS curator_department_id text;
 ALTER TABLE knowledge_promotion_authorizations ADD COLUMN IF NOT EXISTS curator_role_id text;
@@ -396,9 +402,25 @@ BEGIN
     SELECT 1 FROM organizational_knowledge prior
      WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1
        AND prior.scope = 'project_department' AND prior.status = 'active'
+       AND NOT EXISTS (SELECT 1 FROM knowledge_promotion_authorizations a WHERE a.knowledge_id = NEW.knowledge_id AND a.revision = NEW.revision AND a.authorization_kind = 'active_maintenance' AND a.authorization_transaction_id = txid_current())
+       AND (to_jsonb(prior) - ARRAY['revision','status','reason','source_session_ref','created_at','operation_payload_hash']) IS DISTINCT FROM
+           (to_jsonb(NEW) - ARRAY['revision','status','reason','source_session_ref','created_at','operation_payload_hash'])
+  ) THEN RAISE EXCEPTION 'project promotion must preserve active knowledge content'; END IF;
+  IF NEW.scope = 'project_department' AND NEW.status = 'active' AND EXISTS (
+    SELECT 1 FROM organizational_knowledge prior
+     WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1
+       AND prior.scope = 'project_department' AND prior.status = 'active'
        AND (to_jsonb(prior) - ARRAY['revision','status','reason','source_session_ref','created_at','confidence','freshness','operation_payload_hash']) IS DISTINCT FROM
            (to_jsonb(NEW) - ARRAY['revision','status','reason','source_session_ref','created_at','confidence','freshness','operation_payload_hash'])
   ) THEN RAISE EXCEPTION 'active project maintenance may only change decay metadata'; END IF;
+  IF NEW.scope = 'global' AND NEW.status = 'active' AND EXISTS (
+    SELECT 1 FROM organizational_knowledge prior
+     WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1
+       AND prior.scope = 'global' AND prior.status = 'active'
+       AND NOT EXISTS (SELECT 1 FROM knowledge_promotion_authorizations a WHERE a.knowledge_id = NEW.knowledge_id AND a.revision = NEW.revision AND a.authorization_kind = 'active_maintenance' AND a.authorization_transaction_id = txid_current())
+       AND (to_jsonb(prior) - ARRAY['revision','status','reason','source_session_ref','created_at','operation_payload_hash']) IS DISTINCT FROM
+           (to_jsonb(NEW) - ARRAY['revision','status','reason','source_session_ref','created_at','operation_payload_hash'])
+  ) THEN RAISE EXCEPTION 'global promotion must preserve active knowledge content'; END IF;
   IF NEW.scope = 'global' AND NEW.status = 'active' AND EXISTS (
     SELECT 1 FROM organizational_knowledge prior
      WHERE prior.knowledge_id = NEW.knowledge_id AND prior.revision = NEW.revision - 1
@@ -453,7 +475,7 @@ BEGIN
     SELECT 1 FROM knowledge_promotion_authorizations a
      WHERE a.knowledge_id = NEW.knowledge_id AND a.revision = NEW.revision AND a.scope = NEW.scope
        AND a.authorization_transaction_id = txid_current() AND a.payload_hash = NEW.operation_payload_hash AND a.payload_json =
-       CASE WHEN NEW.source_session_ref LIKE 'system:knowledge-decay:%' THEN jsonb_build_object(
+       CASE WHEN a.authorization_kind = 'active_maintenance' THEN jsonb_build_object(
          'knowledgeId', NEW.knowledge_id::text, 'revision', NEW.revision, 'schemaVersion', NEW.schema_version, 'sourceProjectId', NEW.source_project_id::text, 'projectId', NEW.project_id::text, 'sourceGoalId', NEW.source_goal_id::text, 'departmentId', NEW.department_id, 'scope', NEW.scope, 'status', NEW.status, 'statement', NEW.statement, 'rationale', NEW.rationale, 'sourceEvidenceIds', NEW.source_evidence_ids, 'sourceDigestIds', NEW.source_digest_ids, 'episodeIds', NEW.episode_ids, 'confidence', NEW.confidence, 'freshness', NEW.freshness, 'generalized', NEW.generalized, 'councilRoundId', NEW.council_round_id::text, 'generalizedStatement', NEW.generalized_statement, 'curatorRoleId', NEW.curator_role_id, 'curatorOperatorId', NEW.curator_operator_id::text, 'curatorDepartmentId', NEW.curator_department_id, 'authorOperatorId', NEW.author_operator_id::text, 'authorRoleId', NEW.author_role_id, 'promotionOperatorId', NEW.promotion_operator_id::text, 'promotionRoleId', NEW.promotion_role_id, 'promotionMarker', NEW.promotion_marker, 'reason', NEW.reason, 'createdBy', NEW.created_by, 'sourceSessionRef', NEW.source_session_ref, 'retention', NEW.retention::text)
        WHEN NEW.scope = 'project_department' THEN jsonb_build_object('knowledgeId', NEW.knowledge_id::text, 'promoterRoleId', lower(NEW.promotion_role_id), 'promoterOperatorId', lower(NEW.promotion_operator_id::text), 'departmentId', lower(NEW.department_id))
        ELSE jsonb_build_object('knowledgeId', NEW.knowledge_id::text, 'promoterRoleId', lower(NEW.promotion_role_id), 'promoterOperatorId', lower(NEW.promotion_operator_id::text), 'departmentId', lower(NEW.department_id), 'encoreCouncilRoundId', lower(NEW.council_round_id::text), 'corroboratingSourceIds', NEW.source_digest_ids, 'corroboratingEpisodeIds', NEW.episode_ids, 'generalizedStatement', NEW.generalized_statement, 'curatorRoleId', lower(NEW.curator_role_id), 'curatorOperatorId', lower(NEW.curator_operator_id::text), 'curatorDepartmentId', lower(NEW.curator_department_id)) END
@@ -671,7 +693,7 @@ CREATE TRIGGER source_evidence_loss_authorizations_immutable BEFORE UPDATE OR DE
 
 CREATE OR REPLACE FUNCTION authorize_knowledge_promotion_authorization_insert() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-  IF NEW.token_hash IS DISTINCT FROM encode(public.digest(NULLIF(current_setting('maestro.knowledge_promotion_token', true), ''), 'sha256'), 'hex') OR NEW.authorization_transaction_id <> txid_current() OR NOT EXISTS (SELECT 1 FROM knowledge_issuer_transaction_markers m WHERE m.transaction_id = txid_current() AND m.issuer_kind = 'promotion' AND m.token_hash = NEW.token_hash) THEN RAISE EXCEPTION 'knowledge promotion authorization must be issued by secured function'; END IF;
+  IF NEW.token_hash IS DISTINCT FROM encode(public.digest(NULLIF(current_setting('maestro.knowledge_promotion_token', true), ''), 'sha256'), 'hex') OR NEW.authorization_kind IS DISTINCT FROM NULLIF(current_setting('maestro.knowledge_promotion_kind', true), '') OR NEW.authorization_transaction_id <> txid_current() OR NOT EXISTS (SELECT 1 FROM knowledge_issuer_transaction_markers m WHERE m.transaction_id = txid_current() AND m.issuer_kind = 'promotion' AND m.token_hash = NEW.token_hash) THEN RAISE EXCEPTION 'knowledge promotion authorization must be issued by secured function'; END IF;
   DELETE FROM knowledge_issuer_transaction_markers WHERE transaction_id = txid_current() AND issuer_kind = 'promotion' AND token_hash = NEW.token_hash;
   RETURN NEW;
 END;
@@ -741,26 +763,34 @@ $$;
 DROP TRIGGER IF EXISTS knowledge_proposal_authorizations_immutable ON knowledge_proposal_authorizations;
 CREATE TRIGGER knowledge_proposal_authorizations_immutable BEFORE UPDATE OR DELETE ON knowledge_proposal_authorizations FOR EACH ROW EXECUTE FUNCTION reject_knowledge_proposal_authorization_mutation();
 
+DROP FUNCTION IF EXISTS authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint, uuid, text, text, text);
 DROP FUNCTION IF EXISTS authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint, uuid, text, text);
-CREATE OR REPLACE FUNCTION authorize_knowledge_promotion(p_token text, p_knowledge_id uuid, p_revision integer, p_scope text, p_role_id text, p_department_id text, p_operator_id uuid, p_project_id uuid, p_goal_id uuid, p_owner_id text, p_fencing_token bigint, p_curator_operator_id uuid, p_curator_role_id text, p_payload text) RETURNS text LANGUAGE plpgsql SECURITY DEFINER AS $$
+CREATE OR REPLACE FUNCTION authorize_knowledge_promotion(p_token text, p_knowledge_id uuid, p_revision integer, p_scope text, p_role_id text, p_department_id text, p_operator_id uuid, p_project_id uuid, p_goal_id uuid, p_owner_id text, p_fencing_token bigint, p_curator_operator_id uuid, p_curator_role_id text, p_payload text, p_authorization_kind text) RETURNS text LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE curator_department text; normalized_payload jsonb;
 BEGIN
   IF p_payload IS NOT NULL THEN normalized_payload := p_payload::jsonb; END IF;
   IF concat_ws('|', p_role_id, p_department_id, p_owner_id, p_curator_role_id) ~* '(authorization[[:space:]]*:[[:space:]]*bearer|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|api[_-]?key[[:space:]]*[:=]|private[_-]?key|-----BEGIN.*PRIVATE KEY-----|(^|[^a-z])(email|phone|ssn|social security|home address|personal information)([^a-z]|$))' THEN RAISE EXCEPTION 'knowledge promotion authorization contains unsafe text'; END IF;
-  IF btrim(p_token) = '' OR p_scope NOT IN ('project_department', 'global') OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_operator_id AND r.project_id = p_project_id AND r.role_id = p_role_id AND r.active = true) OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) OR NOT EXISTS (SELECT 1 FROM organizational_knowledge WHERE knowledge_id = p_knowledge_id AND revision = p_revision - 1 AND source_project_id = p_project_id AND source_goal_id = p_goal_id) THEN RAISE EXCEPTION 'knowledge promotion authorization context is invalid'; END IF;
+  IF btrim(p_token) = '' OR p_scope NOT IN ('project_department', 'global') OR p_authorization_kind NOT IN ('promotion', 'active_maintenance') OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_operator_id AND r.project_id = p_project_id AND r.role_id = p_role_id AND r.active = true) OR NOT EXISTS (SELECT 1 FROM goal_leases WHERE goal_id = p_goal_id AND owner_id = p_owner_id AND fencing_token = p_fencing_token AND expires_at > clock_timestamp()) OR NOT EXISTS (SELECT 1 FROM organizational_knowledge WHERE knowledge_id = p_knowledge_id AND revision = p_revision - 1 AND source_project_id = p_project_id AND source_goal_id = p_goal_id) THEN RAISE EXCEPTION 'knowledge promotion authorization context is invalid'; END IF;
   IF p_scope = 'global' AND (p_curator_operator_id IS NULL OR p_curator_role_id IS NULL OR p_curator_operator_id = p_operator_id OR p_curator_role_id = p_role_id OR NOT EXISTS (SELECT 1 FROM local_operators WHERE operator_id = p_curator_operator_id AND active = true) OR NOT EXISTS (SELECT 1 FROM permanent_roles WHERE role_id = p_curator_role_id AND role_kind = 'department_head' AND status = 'standing' AND department_id <> p_department_id) OR NOT EXISTS (SELECT 1 FROM operator_project_roles r JOIN operator_project_memberships m ON m.operator_id = r.operator_id AND m.project_id = r.project_id AND m.active = true WHERE r.operator_id = p_curator_operator_id AND r.project_id = p_project_id AND r.role_id = p_curator_role_id AND r.active = true)) THEN RAISE EXCEPTION 'global knowledge curator authorization context is invalid'; END IF;
   IF p_scope = 'global' THEN SELECT department_id INTO curator_department FROM permanent_roles WHERE role_id = p_curator_role_id AND role_kind = 'department_head' AND status = 'standing'; END IF;
+  PERFORM set_config('maestro.knowledge_promotion_token', p_token, true); PERFORM set_config('maestro.knowledge_promotion_kind', p_authorization_kind, true);
   INSERT INTO knowledge_issuer_transaction_markers (transaction_id, issuer_kind, token_hash) VALUES (txid_current(), 'promotion', encode(public.digest(p_token, 'sha256'), 'hex')) ON CONFLICT DO NOTHING;
-  PERFORM set_config('maestro.knowledge_promotion_token', p_token, true);
-  INSERT INTO knowledge_promotion_authorizations (token_hash, knowledge_id, revision, scope, role_id, department_id, operator_id, goal_id, owner_id, fencing_token, curator_operator_id, curator_department_id, curator_role_id, payload_hash, payload_json, authorization_transaction_id) VALUES (encode(public.digest(p_token, 'sha256'), 'hex'), p_knowledge_id, p_revision, p_scope, p_role_id, p_department_id, p_operator_id, p_goal_id, p_owner_id, p_fencing_token, p_curator_operator_id, curator_department, p_curator_role_id, CASE WHEN normalized_payload IS NULL THEN NULL ELSE encode(public.digest(normalized_payload::text, 'sha256'), 'hex') END, normalized_payload, txid_current());
+  INSERT INTO knowledge_promotion_authorizations (token_hash, knowledge_id, revision, scope, role_id, department_id, operator_id, goal_id, owner_id, fencing_token, curator_operator_id, curator_department_id, curator_role_id, payload_hash, payload_json, authorization_transaction_id, authorization_kind) VALUES (encode(public.digest(p_token, 'sha256'), 'hex'), p_knowledge_id, p_revision, p_scope, p_role_id, p_department_id, p_operator_id, p_goal_id, p_owner_id, p_fencing_token, p_curator_operator_id, curator_department, p_curator_role_id, CASE WHEN normalized_payload IS NULL THEN NULL ELSE encode(public.digest(normalized_payload::text, 'sha256'), 'hex') END, normalized_payload, txid_current(), p_authorization_kind);
   RETURN CASE WHEN normalized_payload IS NULL THEN NULL ELSE encode(public.digest(normalized_payload::text, 'sha256'), 'hex') END;
+END;
+$$;
+
+DROP FUNCTION IF EXISTS authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint, uuid, text, text);
+CREATE OR REPLACE FUNCTION authorize_knowledge_promotion(p_token text, p_knowledge_id uuid, p_revision integer, p_scope text, p_role_id text, p_department_id text, p_operator_id uuid, p_project_id uuid, p_goal_id uuid, p_owner_id text, p_fencing_token bigint, p_curator_operator_id uuid, p_curator_role_id text, p_payload text) RETURNS text LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  RETURN authorize_knowledge_promotion(p_token, p_knowledge_id, p_revision, p_scope, p_role_id, p_department_id, p_operator_id, p_project_id, p_goal_id, p_owner_id, p_fencing_token, p_curator_operator_id, p_curator_role_id, p_payload, 'promotion');
 END;
 $$;
 
 DROP FUNCTION IF EXISTS authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint, uuid, text);
 CREATE OR REPLACE FUNCTION authorize_knowledge_promotion(p_token text, p_knowledge_id uuid, p_revision integer, p_scope text, p_role_id text, p_department_id text, p_operator_id uuid, p_project_id uuid, p_goal_id uuid, p_owner_id text, p_fencing_token bigint, p_curator_operator_id uuid, p_curator_role_id text) RETURNS text LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-  RETURN authorize_knowledge_promotion(p_token, p_knowledge_id, p_revision, p_scope, p_role_id, p_department_id, p_operator_id, p_project_id, p_goal_id, p_owner_id, p_fencing_token, p_curator_operator_id, p_curator_role_id, NULL::text);
+  RETURN authorize_knowledge_promotion(p_token, p_knowledge_id, p_revision, p_scope, p_role_id, p_department_id, p_operator_id, p_project_id, p_goal_id, p_owner_id, p_fencing_token, p_curator_operator_id, p_curator_role_id, NULL::text, 'promotion');
 END;
 $$;
 
@@ -885,6 +915,7 @@ BEGIN
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_unscoped_truncate() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_evidence_source_reuse() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.reject_organizational_knowledge_schema_cleanup_mutation() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
+  EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint, uuid, text, text, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint, uuid, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_promotion_authorization_insert() SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
   EXECUTE pg_catalog.format('ALTER FUNCTION %I.authorize_knowledge_promotion(text, uuid, integer, text, text, text, uuid, uuid, uuid, text, bigint, uuid, text, text) SET search_path = pg_catalog, %I', knowledge_schema, knowledge_schema);
