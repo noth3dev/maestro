@@ -88,6 +88,9 @@ const candidateAuthor: ImprovementCandidateAuthor = { authorId: "worker-engineer
     await expect(startBoundedRollout(pool, candidate.candidateId, { ...scope, taskClass: "unrelated" }, proof, actor, `start-${randomUUID()}`)).rejects.toThrow(/scope|target|task/i);
     const rollout = await startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, "same-start-key");
     await expect(startBoundedRollout(pool, candidate.candidateId, { ...scope, maxGoalCount: 3 }, proof, actor, "same-start-key")).rejects.toThrow(/idempotency|different|scope/i);
+    const durationRollout = await startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, "duration-start-key", { rolloutLeaseDurationMs: 1000 });
+    expect(durationRollout.status).toBe("active");
+    await expect(startBoundedRollout(pool, candidate.candidateId, scope, proof, actor, "duration-start-key", { rolloutLeaseDurationMs: 2000 })).rejects.toThrow(/idempotency|duration|different/i);
     const unauthorized = { ...actor, operatorId: randomUUID() };
     await expect(observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T01:00:00.000Z", metrics: [{ name: "correctness", value: 0.95 }] }, proof, unauthorized, `unauthorized-${randomUUID()}`)).rejects.toThrow(/operator|authorized|member/i);
     const otherGoalId = randomUUID();

@@ -116,9 +116,10 @@ function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
   return `{${Object.keys(value as Record<string, unknown>).sort().map((key) => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(",")}}`;
 }
-function assertStartReplay(row: RolloutRow, candidateId: string, scope: RolloutScope, actor: RolloutActor): void {
+function assertStartReplay(row: RolloutRow, candidateId: string, scope: RolloutScope, actor: RolloutActor, leaseDurationMs: number): void {
   if (row.candidate_id !== candidateId || row.role_id !== scope.roleId || row.task_class !== scope.taskClass || row.max_goal_count !== scope.maxGoalCount
       || row.window_start.toISOString() !== new Date(scope.windowStart).toISOString() || row.window_end.toISOString() !== new Date(scope.windowEnd).toISOString()
+      || row.owner_lease_duration_ms !== leaseDurationMs
       || row.owner_operator_id !== actor.operatorId || row.owner_actor_id !== actor.actorId || row.owner_role_id !== actor.operatorRoleId || row.owner_session_ref !== actor.sessionRef) {
     throw new RolloutPersistenceError("Rollout idempotency key was reused with different candidate, scope, or actor");
   }
@@ -210,7 +211,7 @@ export async function startBoundedRollout(pool: Pool, candidateId: string, rawSc
     const existing = await client.query<RolloutRow>(`SELECT ${COLUMNS} FROM improvement_rollouts WHERE operation_ref = $1 FOR UPDATE`, [op]);
     if (existing.rowCount === 1) {
       await ownerMutationAuthorized(client, existing.rows[0]!, proof, actor);
-      assertStartReplay(existing.rows[0]!, id, scope, actor);
+      assertStartReplay(existing.rows[0]!, id, scope, actor, leaseDurationMs);
       return result(client, existing.rows[0]!);
     }
     const candidate = await client.query<CandidateRow>("SELECT candidate_id, version, project_id, goal_id, kind, state, target, rollback_target, source_evidence_ids FROM improvement_candidates WHERE candidate_id = $1 FOR KEY SHARE", [id]);

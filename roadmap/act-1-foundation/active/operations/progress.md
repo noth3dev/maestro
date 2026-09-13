@@ -4167,3 +4167,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-14 Plan 6 §S6 review round 3: reviewer found expired owner leases could still be renewed by normal observation. Added RED coverage for post-expiry observation, bound normal observe/interrupt mutations to the durable owner identity, checked expiry before renewal, and added an SQL commit-time expiry fence; startup recovery remains the only expired-row path.
 
 - 2026-09-14 Plan 6 §S6 review round 4: reviewer found owner-expired idempotent observation and interruption replays could still return before expiry enforcement. Added durable owner lease duration, RED coverage for replay after expiry, and moved the live-expiry check into owner authorization shared by all owner replay paths.
+
+- 2026-09-14 Plan 6 §S6 review round 5: reviewer found start idempotency did not bind the requested owner-lease duration. Added RED coverage and compared `rolloutLeaseDurationMs` on replay. This is the fifth consecutive review round; all planned S6 gates remain in scope and the next review result will determine PASS or any explicitly out-of-scope hardening.
