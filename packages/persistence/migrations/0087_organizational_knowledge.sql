@@ -297,7 +297,10 @@ ALTER TABLE knowledge_maintenance_authorizations ALTER COLUMN retention SET DEFA
 ALTER TABLE knowledge_maintenance_authorizations ALTER COLUMN retention SET NOT NULL;
 
 CREATE OR REPLACE FUNCTION authorize_knowledge_maintenance_authorization_insert() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE call_context text;
 BEGIN
+  GET DIAGNOSTICS call_context = PG_CONTEXT;
+  IF call_context !~ 'function authorize_knowledge_maintenance\(text,[[:space:]]*uuid,[[:space:]]*integer,[[:space:]]*text' THEN RAISE EXCEPTION 'knowledge maintenance authorization must be issued by secured function'; END IF;
   IF NEW.token_hash IS DISTINCT FROM encode(public.digest(NULLIF(current_setting('maestro.knowledge_maintenance_token', true), ''), 'sha256'), 'hex') OR NEW.operator_id::text IS DISTINCT FROM NULLIF(current_setting('maestro.knowledge_maintenance_operator', true), '') OR NEW.role_id IS DISTINCT FROM NULLIF(current_setting('maestro.knowledge_maintenance_role', true), '') OR NEW.owner_id IS DISTINCT FROM NULLIF(current_setting('maestro.knowledge_maintenance_owner', true), '') OR NEW.fencing_token IS DISTINCT FROM NULLIF(current_setting('maestro.knowledge_maintenance_fence', true), '')::bigint THEN RAISE EXCEPTION 'knowledge maintenance authorization must be issued by secured function'; END IF;
   RETURN NEW;
 END;
@@ -583,7 +586,10 @@ DROP TRIGGER IF EXISTS evidence_source_tombstones_immutable ON evidence_source_t
 CREATE TRIGGER evidence_source_tombstones_immutable BEFORE UPDATE OR DELETE ON evidence_source_tombstones FOR EACH ROW EXECUTE FUNCTION reject_evidence_source_tombstone_mutation();
 
 CREATE OR REPLACE FUNCTION authorize_source_evidence_loss_authorization_insert() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE call_context text;
 BEGIN
+  GET DIAGNOSTICS call_context = PG_CONTEXT;
+  IF call_context !~ 'function authorize_source_evidence_loss\(text,[[:space:]]*uuid,[[:space:]]*uuid,[[:space:]]*uuid' THEN RAISE EXCEPTION 'source evidence loss authorization must be issued by secured function'; END IF;
   IF NEW.token_hash IS DISTINCT FROM encode(public.digest(NULLIF(current_setting('maestro.source_evidence_loss_token', true), ''), 'sha256'), 'hex') OR NEW.owner_id IS DISTINCT FROM NULLIF(current_setting('maestro.source_loss_owner', true), '') OR NEW.fencing_token IS DISTINCT FROM NULLIF(current_setting('maestro.source_loss_fence', true), '')::bigint OR NOT EXISTS (SELECT 1 FROM permanent_roles WHERE status = 'standing' AND ((role_id = NEW.role_id AND role_kind = 'department_head') OR (NEW.role_id = 'ceo' AND role_id = 'concertmaster' AND role_kind = 'concertmaster'))) THEN RAISE EXCEPTION 'source evidence loss authorization must be issued by secured function'; END IF;
   RETURN NEW;
 END;
