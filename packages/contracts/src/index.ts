@@ -588,7 +588,7 @@ const MissionPersonaOverlayInputsSchema = z.object({
   departmentStyle: PersonaProfileInputSchema, headChoice: PersonaProfileInputSchema,
   taskAmbiguity: z.number().finite().min(0).max(1), risk: z.number().finite().min(0).max(1), collaborationDemand: z.number().finite().min(0).max(1), evidenceBurden: z.number().finite().min(0).max(1),
 }).strict();
-export const IssueMissionPersonaOverlayInputSchema = z.object({ projectId: UuidSchema, inputs: MissionPersonaOverlayInputsSchema, missionLifetimeMs: z.number().int().positive() }).strict();
+export const IssueMissionPersonaOverlayInputSchema = z.object({ projectId: UuidSchema, planVersion: z.number().int().positive(), inputs: MissionPersonaOverlayInputsSchema, missionLifetimeMs: z.number().int().positive() }).strict();
 export type IssueMissionPersonaOverlayInput = z.infer<typeof IssueMissionPersonaOverlayInputSchema>;
 export const MissionPersonaOverlaySchema = z.object({
   councilId: z.string().min(1), departmentId: z.string().min(1), planVersion: z.number().int().positive(), itemId: z.string().min(1),

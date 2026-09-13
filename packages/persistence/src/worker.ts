@@ -17,6 +17,7 @@ import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
 import { readMissionBundle } from "./mission-bundle.js";
+import { deriveWorkerProfileForMission } from "./worker-profile-derivation.js";
 import { recordNativeExecutionBindingIfSupported } from "./native-execution-binding.js";
 import { CapabilityApprovalError, CapabilityApprovalExpiredError, consumeCapabilityApprovals, createCapabilityApproval, getCapabilityApproval, RepetitionBudgetExhaustedError, type RepetitionScope } from "./capability-approval.js";
 
@@ -429,6 +430,11 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
     let spawned: import("@maestro/domain").SpawnedInvocation;
     let providerAttempted = false;
     try {
+      const workerProfile = await deriveWorkerProfileForMission(pool, {
+        workerId, councilId: request.councilId, departmentId: request.departmentId, planVersion: request.planVersion,
+        itemId: request.itemId, profileRef: bundle.substance.profileRef, roleId: `head-${request.departmentId}`, taskClass: bundle.substance.role,
+        allowDefaultMissionOverlay: true,
+      });
       const preparedCwd = request.prepareWorktree === undefined ? request.cwd : await request.prepareWorktree(workerId);
       const providerAdmission: ExecutionAdmission = {
         context: {
@@ -468,6 +474,7 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
         // Keep the legacy capability projection for injected kernels while the
         // native fields carry the complete host-owned admission contract.
         capabilities: { allowedTools: bundle.substance.allowedTools, allowedSkills: bundle.substance.allowedSkills },
+        workerProfile: { profile: workerProfile.profile, explanations: workerProfile.explanations, assignmentRef: workerProfile.assignmentRef },
         ...providerAdmission,
       };
       // The provider call cannot be made atomically with PostgreSQL. Check the

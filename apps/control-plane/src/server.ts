@@ -67,6 +67,8 @@ import {
   DepartmentPlanSchema,
   ReviseDepartmentPlanInputSchema,
   CreateMissionBundleInputSchema,
+  IssueMissionPersonaOverlayInputSchema,
+  MissionPersonaOverlaySchema,
   MissionBundleSchema,
   SpawnWorkerInputSchema,
   WorkerSchema, QueuedWorkerAdmissionSchema,
@@ -715,6 +717,17 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const planVersion = parsePositiveInteger(query.planVersion);
     const bundle = await missionBundles.get(councilId, departmentId, planVersion, itemId, projectId);
     return reply.status(200).send(MissionBundleSchema.parse(bundle));
+  });
+
+  app.post("/v1/councils/:councilId/departments/:departmentId/mission-bundles/:itemId/persona-overlay", async (request, reply) => {
+    const params = request.params as { councilId?: unknown; departmentId?: unknown; itemId?: unknown };
+    const councilId = parse(UuidSchema, params.councilId);
+    const departmentId = parseDepartmentId(params.departmentId);
+    const itemId = parseItemId(params.itemId);
+    const input = parse(IssueMissionPersonaOverlayInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const overlay = await missionBundles.issuePersonaOverlay(councilId, departmentId, itemId, input.planVersion, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(201).send(MissionPersonaOverlaySchema.parse(overlay));
   });
 
   app.post("/v1/councils/:councilId/departments/:departmentId/workers", async (request, reply) => {

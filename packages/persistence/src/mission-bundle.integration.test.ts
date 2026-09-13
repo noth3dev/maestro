@@ -4,12 +4,12 @@ import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PERSONA_AXES, CONCERTMASTER_PERSONA_BASELINE, taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type IndependentBrief, type MissionBundleSubstance, type MissionPersonaOverlayInputs, type TaskContractSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
-import { acquireGoalLease, StaleGoalLeaseError } from "./commands.js";
+import { acquireGoalLease, StaleGoalLeaseError, type GoalLeaseProof } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
 import { createDepartmentPlan } from "./department-plan.js";
 import {
   createMissionBundle,
-  issueMissionPersonaOverlay,
+  issueMissionPersonaOverlay as persistMissionPersonaOverlay,
   listMissionBundlesForPlan,
   MissionBundleError,
   MissionBundleNotFoundError,
@@ -18,9 +18,14 @@ import {
   readActiveMissionPersonaOverlay,
   readMissionBundle,
   readMissionPersonaOverlay,
+  type IssueMissionPersonaOverlayRequest,
 } from "./mission-bundle.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
+let currentOverlayProof: GoalLeaseProof = { goalId: "", ownerId: "", fencingToken: "0" };
+async function issueMissionPersonaOverlay(pool: Pool, request: IssueMissionPersonaOverlayRequest) {
+  return persistMissionPersonaOverlay(pool, request, currentOverlayProof, headContext("product"));
+}
 const describeDatabase = databaseUrl ? describe : describe.skip;
 
 function buildContractContent(projectId: string): TaskContractSubstance {
@@ -98,6 +103,7 @@ describeDatabase("Mission Bundles with PostgreSQL", () => {
 
   it("issues a Mission Bundle bound to a real Plan item by the captured Head", async () => {
     const { council, plan, proof } = await setupPlan(pool);
+    currentOverlayProof = proof;
     const bundle = await createMissionBundle(pool, { councilId: council.councilId, departmentId: "product", itemId: "scout-1", substance: bundleSubstance() }, proof, headContext("product"));
     expect(bundle.planVersion).toBe(plan.version);
     expect(bundle.itemId).toBe("scout-1");
@@ -173,6 +179,7 @@ describeDatabase("Mission Persona Overlays with PostgreSQL", () => {
 
   async function setupBundle() {
     const { council, plan, proof } = await setupPlan(pool);
+    currentOverlayProof = proof;
     const bundle = await createMissionBundle(pool, { councilId: council.councilId, departmentId: "product", itemId: "scout-1", substance: bundleSubstance() }, proof, headContext("product"));
     return { council, plan, proof, bundle };
   }

@@ -97,6 +97,7 @@ export function createMetronomeService(deps: MetronomeServiceDependencies): Metr
       );
       if (worker.rowCount !== 1) throw new WorkerOverlayChallengeError("worker overlay is not bound to this Goal");
       const durableWorker = worker.rows[0]!;
+      if (durableWorker.bundle_content_hash.trim() !== durableWorker.content_hash.trim()) throw new WorkerOverlayChallengeError("worker is bound to a different Mission Bundle content hash");
       if (isTerminalWorkerStatus(durableWorker.status as WorkerStatus) || isMissionPersonaOverlayExpired({ expiresAt: new Date(durableWorker.expires_at).toISOString() }, new Date())) throw new WorkerOverlayChallengeError("worker overlay is no longer active");
       let profile;
       try { profile = parsePersonaProfile(durableWorker.persona); } catch { throw new WorkerOverlayChallengeError("stored worker overlay profile is invalid"); }

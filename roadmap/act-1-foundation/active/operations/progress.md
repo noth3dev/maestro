@@ -4200,3 +4200,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - 2026-09-14 Plan 6 §S9 remediation: reserved migration **0092** before adding the durable reviewed role persona floor/ceiling rubric required to bind worker derivation and Metronome checks to role duty.
 - 2026-09-14 Plan 6 §S9 remediation: reserved migration **0093** before persisting Metronome worker challenge target identities for per-worker idempotency and auditability.
+
+- 2026-09-14 Plan 6 §S9 remediation: reserved migration **0094** before hardening Metronome challenge `target_ref` immutability.
