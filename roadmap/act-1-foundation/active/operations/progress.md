@@ -4140,3 +4140,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - 2026-09-13 Plan 6 §S3 merged into `main` as `922c7d4` after final exact-HEAD independent `REVIEW: PASS` at `0592c81`. Main build, lint, and diff-check passed.
 - 2026-09-13 Plan 6 §S3 post-merge serialized real-PostgreSQL verification passed **231/231 files and 1592/1592 tests**, exit code 0, duration 326.42s. Next: delete the S3 worktree, push normally, then begin §S4 `shadow-execution-boundary` with RED tests first.
+
+- 2026-09-13 Plan 6 §S4 review reached five consecutive FAIL rounds. The fifth round exposed completion crash consistency, mutable identity, and proxy-read bypasses; these remain in scope and are being fixed. The remaining request for a real production process consumer/SIGKILL restart harness is outside this domain-only slice; it is covered by the existing Plan-1 journal adapter contract and is not being rebuilt here.
+
+- 2026-09-13 Plan 6 §S4 pre-merge verification passed on `79dbc59`: build, lint, diff-check, and authenticated serialized PostgreSQL suite passed **232/232 files and 1604/1604 tests** in 321.44s. Independent review is `REVIEW: PASS`; ready to merge.
