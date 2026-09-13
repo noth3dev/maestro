@@ -42,6 +42,18 @@ export interface RoutingCandidateEvaluationEvidence {
   readonly synthetic: SyntheticRunResult;
 }
 
+function assertMetricRecord(value: unknown, name: string): void {
+  plainRecord(value, name);
+  for (const metric of ["correctness", "safety", "authority", "cost"]) {
+    if (typeof value[metric] !== "number" || !Number.isFinite(value[metric])) {
+      throw new RoutingImprovementCandidateError(`${name} requires finite ${metric}`);
+    }
+  }
+  if (Object.values(value).some((metric) => typeof metric !== "number" || !Number.isFinite(metric))) {
+    throw new RoutingImprovementCandidateError(`${name} contains an invalid metric`);
+  }
+}
+
 function assertEvaluationResultShape(evaluation: RoutingCandidateEvaluationEvidence): void {
   plainRecord(evaluation, "Routing candidate evaluation evidence");
   if (!Object.hasOwn(evaluation, "replay") || !Object.hasOwn(evaluation, "synthetic")) {
@@ -59,12 +71,24 @@ function assertEvaluationResultShape(evaluation: RoutingCandidateEvaluationEvide
   if (replayGoalIds.some((goalId) => !UUID.test(goalId)) || new Set(replayGoalIds).size !== replayGoalIds.length) {
     throw new RoutingImprovementCandidateError("Routing candidate replay evidence requires distinct durable Goal identities");
   }
+  for (const result of evaluation.replay.results) {
+    plainRecord(result, "Routing candidate replay comparison");
+    assertMetricRecord(result.baseline, "Routing candidate replay baseline");
+    assertMetricRecord(result.candidate, "Routing candidate replay result");
+  }
   if (!Array.isArray(evaluation.synthetic.results) || evaluation.synthetic.results.length !== SYNTHETIC_SCENARIO_SPECS.length) {
     throw new RoutingImprovementCandidateError("Routing candidate synthetic evidence requires the complete reviewed scenario suite");
   }
   const syntheticIds = new Set(evaluation.synthetic.results.map((result) => result && typeof result.scenarioId === "string" ? result.scenarioId : ""));
   if (syntheticIds.size !== SYNTHETIC_SCENARIO_SPECS.length || SYNTHETIC_SCENARIO_SPECS.some((scenario) => !syntheticIds.has(scenario.scenarioId))) {
     throw new RoutingImprovementCandidateError("Routing candidate synthetic evidence is missing a reviewed scenario");
+  }
+  for (const result of evaluation.synthetic.results) {
+    const expected = SYNTHETIC_SCENARIO_SPECS.find((scenario) => scenario.scenarioId === result.scenarioId);
+    if (!expected || result.kind !== expected.kind || result.reviewed !== true) {
+      throw new RoutingImprovementCandidateError("Routing candidate synthetic evidence has an invalid reviewed scenario identity");
+    }
+    assertMetricRecord(result.metrics, "Routing candidate synthetic result");
   }
 }
 
