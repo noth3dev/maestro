@@ -116,15 +116,21 @@ export interface ShadowLifecycleJournal {
   append(event: ShadowJournalEvent): Promise<void>;
 }
 
-/** Durable sink for the completed shadow comparison, separate from process recovery. */
+/** Durable evidence for one identity-bound candidate comparison. */
 export interface ShadowEvaluationEvidence {
   readonly identity: ShadowRunIdentity;
   readonly candidateContentHash: string;
   readonly result: ShadowEvaluationResult;
 }
 
+/**
+ * The sink owns one atomic completion transaction: it persists the evidence
+ * and closes the same Plan-1 process generation (orphaned, then completed)
+ * before resolving. A crash before resolve leaves only the journal's
+ * recoverable orphan boundary, never a false completed marker.
+ */
 export interface ShadowResultSink {
-  record(evidence: ShadowEvaluationEvidence): Promise<void>;
+  commit(evidence: ShadowEvaluationEvidence, lifecycle: ShadowLifecycleJournal): Promise<void>;
 }
 
 export interface ShadowEvaluationRequest {
@@ -233,20 +239,19 @@ function result(status: ShadowEvaluationResult["status"], records: readonly Shad
   return Object.freeze({ status, records: Object.freeze([...records]), deniedEffects: Object.freeze([...deniedEffects]), liveEffects: [] as const });
 }
 
-function journalIdentity(request: ShadowEvaluationRequest): ShadowRunIdentity {
-  return {
+function journalIdentity(request: ShadowEvaluationRequest, candidate: ImprovementCandidateInput): ShadowRunIdentity {
+  return Object.freeze({
     runId: request.runId,
     processRef: request.processRef,
     sessionId: request.sessionId,
     processPid: request.processPid,
     ...(request.parentPid === undefined ? {} : { parentPid: request.parentPid }),
-    projectId: request.candidate.projectId,
-    goalId: request.candidate.goalId,
-  };
+    projectId: candidate.projectId,
+    goalId: candidate.goalId,
+  });
 }
 
-function journalEvent(request: ShadowEvaluationRequest, event: ShadowJournalEvent["event"], reason?: string): ShadowJournalEvent {
-  const identity = journalIdentity(request);
+function journalEvent(identity: ShadowRunIdentity, candidateContentHash: string, event: ShadowJournalEvent["event"], reason?: string): ShadowJournalEvent {
   return {
     sessionId: identity.sessionId,
     processRef: identity.processRef,
@@ -256,23 +261,16 @@ function journalEvent(request: ShadowEvaluationRequest, event: ShadowJournalEven
     processPid: identity.processPid,
     ...(identity.parentPid === undefined ? {} : { parentPid: identity.parentPid }),
     ...(reason === undefined ? {} : { reason }),
-    details: {
-      shadow_run_id: identity.runId,
-      candidate_content_hash: improvementCandidateContentHash(request.candidate),
-    },
+    details: { shadow_run_id: identity.runId, candidate_content_hash: candidateContentHash },
   };
 }
 
-async function journalOrphan(request: ShadowEvaluationRequest, reason: string): Promise<void> {
-  await request.journal.append(journalEvent(request, "orphaned", reason));
+async function journalOrphan(identity: ShadowRunIdentity, candidateContentHash: string, lifecycle: ShadowLifecycleJournal, reason: string): Promise<void> {
+  await lifecycle.append(journalEvent(identity, candidateContentHash, "orphaned", reason));
 }
 
-async function journalCompleted(request: ShadowEvaluationRequest, recordCount: number): Promise<void> {
-  await request.journal.append(journalEvent(request, "completed", `shadow_run_completed:${recordCount}`));
-}
-
-async function journalOrphanBestEffort(request: ShadowEvaluationRequest, reason: string): Promise<void> {
-  try { await journalOrphan(request, reason); } catch { /* preserve the original shadow failure */ }
+async function journalOrphanBestEffort(identity: ShadowRunIdentity, candidateContentHash: string, lifecycle: ShadowLifecycleJournal, reason: string): Promise<void> {
+  try { await journalOrphan(identity, candidateContentHash, lifecycle, reason); } catch { /* preserve the original shadow failure */ }
 }
 
 /**
@@ -281,7 +279,9 @@ async function journalOrphanBestEffort(request: ShadowEvaluationRequest, reason:
  * this boundary owns the denial, snapshot, lifecycle, and comparison rules.
  */
 export async function runShadowEvaluation(request: ShadowEvaluationRequest): Promise<ShadowEvaluationResult> {
-  assertValidImprovementCandidateInput(request.candidate);
+  const candidate = snapshot(request.candidate, "candidate");
+  assertValidImprovementCandidateInput(candidate);
+  const candidateContentHash = improvementCandidateContentHash(candidate);
   if (!Array.isArray(request.cases) || request.cases.length === 0) throw new InvalidShadowOutputError("shadow cases must be a non-empty array");
   for (let index = 0; index < request.cases.length; index += 1) if (!Object.hasOwn(request.cases, index)) throw new InvalidShadowOutputError("shadow cases must not be sparse");
   if (request.recordedEvidence !== undefined && (typeof request.recordedEvidence !== "object" || request.recordedEvidence === null || Array.isArray(request.recordedEvidence))) throw new InvalidShadowOutputError("recorded evidence must be an object");
@@ -291,6 +291,7 @@ export async function runShadowEvaluation(request: ShadowEvaluationRequest): Pro
   if (!Number.isSafeInteger(request.processPid) || request.processPid <= 1) throw new InvalidShadowOutputError("shadow processPid is invalid");
   if (request.parentPid !== undefined && (!Number.isSafeInteger(request.parentPid) || request.parentPid <= 0)) throw new InvalidShadowOutputError("shadow parentPid is invalid");
 
+  const identity = journalIdentity(request, candidate);
   const evidence = snapshot(request.recordedEvidence ?? {}, "recorded evidence");
   const cases = request.cases.map((shadowCase, index) => {
     if (!shadowCase || typeof shadowCase !== "object") throw new InvalidShadowOutputError(`shadow case ${index} must be an object`);
@@ -300,12 +301,12 @@ export async function runShadowEvaluation(request: ShadowEvaluationRequest): Pro
     return Object.freeze({ input, activeInput, active: copyOutput(shadowCase.active) });
   });
 
-  await request.journal.append(journalEvent(request, "started"));
+  await request.journal.append(journalEvent(identity, candidateContentHash, "started"));
   const records: ShadowEvaluationRecord[] = [];
   const deniedEffects: ShadowEffectRequest[] = [];
   for (const shadowCase of cases) {
     if (request.signal?.aborted) {
-      await journalOrphan(request, "shadow_run_interrupted_before_case");
+      await journalOrphan(identity, candidateContentHash, request.journal, "shadow_run_interrupted_before_case");
       return result("interrupted", records, deniedEffects);
     }
     const readEvidenceIds: string[] = [];
@@ -315,9 +316,11 @@ export async function runShadowEvaluation(request: ShadowEvaluationRequest): Pro
         readEvidenceIds.push(evidenceId);
         return snapshot(evidence[evidenceId], `recorded evidence ${evidenceId}`);
       },
-      attemptEffect: async (effectRequest: ShadowEffectRequest, effect: () => Promise<unknown>) => {
-        deniedEffects.push(Object.freeze({ ...effectRequest }));
-        return await denyShadowEffect(effectRequest, effect);
+      attemptEffect: async (_effectRequest: ShadowEffectRequest, effect: () => Promise<unknown>) => {
+        // Deny before reading any attacker-controlled request property.
+        const denied = { action: "shadow-denied", target: "shadow-denied" } as const;
+        deniedEffects.push(Object.freeze(denied));
+        return await denyShadowEffect(denied, effect);
       },
       ...(request.kernel === undefined ? {} : { kernel: createShadowKernelPort(request.kernel) }),
     });
@@ -325,11 +328,11 @@ export async function runShadowEvaluation(request: ShadowEvaluationRequest): Pro
     try {
       proposed = copyOutput(await request.evaluate(shadowCase.input, context));
     } catch (error) {
-      await journalOrphanBestEffort(request, "shadow_run_failed_before_terminal_evidence");
+      await journalOrphanBestEffort(identity, candidateContentHash, request.journal, "shadow_run_failed_before_terminal_evidence");
       throw error;
     }
     if (request.signal?.aborted) {
-      await journalOrphan(request, "shadow_run_interrupted_after_case");
+      await journalOrphan(identity, candidateContentHash, request.journal, "shadow_run_interrupted_after_case");
       return result("interrupted", records, deniedEffects);
     }
     const active = copyOutput(shadowCase.active);
@@ -345,16 +348,12 @@ export async function runShadowEvaluation(request: ShadowEvaluationRequest): Pro
   }
 
   const complete = result("completed", records, deniedEffects);
-  // Plan-1's hardened process journal requires orphan evidence before a
-  // terminal event. A clean shadow completion uses that same protocol, then
-  // records the terminal completed marker; restart reconciliation therefore
-  // never mistakes a successful run for an unresolved started process.
-  await journalOrphan(request, "shadow_run_completed");
   try {
-    await request.resultSink.record({ identity: journalIdentity(request), candidateContentHash: improvementCandidateContentHash(request.candidate), result: complete });
-    await journalCompleted(request, complete.records.length);
+    // The sink must persist the comparison and append the compatible
+    // orphaned->completed journal markers in one transaction under identity.
+    await request.resultSink.commit({ identity, candidateContentHash, result: complete }, request.journal);
   } catch (error) {
-    await journalOrphanBestEffort(request, "shadow_run_result_not_durably_recorded");
+    await journalOrphanBestEffort(identity, candidateContentHash, request.journal, "shadow_run_result_not_durably_recorded");
     throw error;
   }
   return complete;

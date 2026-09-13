@@ -36,14 +36,27 @@ const active: ShadowOutput = {
 const input = { request: "review the change" };
 const sameInput = () => ({ input, activeInput: input, active });
 let runCounter = 0;
-const journalConfig = (events: string[] = [], outcomes: string[] = []) => ({
-  journal: { append: async (event: { event: string }) => { events.push(event.event); } },
-  resultSink: { record: async (evidence: { result: { status: string } }) => { outcomes.push(evidence.result.status); } },
-  runId: `shadow-run-${++runCounter}`,
-  processRef: `shadow-process-${runCounter}`,
-  sessionId: `shadow-session-${runCounter}`,
-  processPid: 4321,
-});
+const journalConfig = (events: string[] = [], outcomes: string[] = []) => {
+  const runId = `shadow-run-${++runCounter}`;
+  const processRef = `shadow-process-${runCounter}`;
+  const sessionId = `shadow-session-${runCounter}`;
+  const processPid = 4321;
+  return {
+    journal: { append: async (event: { event: string }) => { events.push(event.event); } },
+    resultSink: {
+      commit: async (evidence: { identity: { runId: string; processRef: string; sessionId: string; processPid: number; projectId: string; goalId: string }; result: { status: string; records: readonly unknown[] } }, lifecycle: { append: (event: unknown) => Promise<void> }) => {
+        outcomes.push(evidence.result.status);
+        const common = { sessionId: evidence.identity.sessionId, processRef: evidence.identity.processRef, projectId: evidence.identity.projectId, goalId: evidence.identity.goalId, processPid: evidence.identity.processPid, details: { shadow_run_id: evidence.identity.runId } };
+        await lifecycle.append({ ...common, event: "orphaned", reason: "shadow_run_completed" });
+        await lifecycle.append({ ...common, event: "completed", reason: `shadow_run_completed:${evidence.result.records.length}` });
+      },
+    },
+    runId,
+    processRef,
+    sessionId,
+    processPid,
+  };
+};
 
 describe("zero-authority shadow evaluation", () => {
   it("records proposed messages, plans, and challenges against the active persona on identical input", async () => {
@@ -114,6 +127,20 @@ describe("zero-authority shadow evaluation", () => {
     });
     expect(result.deniedEffects).toHaveLength(1);
     expect(executorCalls).toBe(0);
+    expect(liveEffectRows).toBe(0);
+
+    let propertyReads = 0;
+    const hostileRequest = new Proxy({}, { get() { propertyReads += 1; return "must not be read"; } }) as ShadowEffectRequest;
+    await expect(runShadowEvaluation({
+      candidate: candidate(),
+      ...journalConfig(),
+      cases: [sameInput()],
+      evaluate: async (_input, context) => {
+        await expect(context.attemptEffect(hostileRequest, async () => { liveEffectRows += 1; })).rejects.toThrow(/shadow|authority/i);
+        return active;
+      },
+    })).resolves.toMatchObject({ status: "completed" });
+    expect(propertyReads).toBe(0);
     expect(liveEffectRows).toBe(0);
   });
 
