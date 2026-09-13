@@ -143,6 +143,7 @@ const setupStepLabels: Record<LocalBootstrapStepName, string> = {
   migrations: "Migrations",
   "control-plane-up": "Control Plane",
   "model-gateway-up": "Model gateway",
+  "local-operator": "Local operator",
 };
 
 function setupStepGlyph(status: SetupStep["status"]): string {

@@ -90,7 +90,13 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     tui.start();
   };
   startTui();
-  const initialized = await initializeTui({ ...options, onSetupStep: updateSetupStep });
+  let initialized: Awaited<ReturnType<typeof initializeTui>>;
+  try {
+    initialized = await initializeTui({ ...options, onSetupStep: updateSetupStep });
+  } catch (error) {
+    tui.stop();
+    throw error;
+  }
   Object.assign(liveState, initialized.state);
   let { workspace, startupError, connection, session, project, projectDiscoveryNotice, client } = initialized;
   const state = liveState;
@@ -113,7 +119,6 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     );
     let conversation: ConversationTranscriptState = createConversationTranscript();
     let activity: GoalEvent[] = [];
-    const splash = createSplashController();
     let recovery: RecoverySummary = reconcileTuiSession(workspace.cwd, session);
     let pendingConfirmation: { summary: ApprovalDialogSummary; resolve: (decision: ConfirmationResult) => void } | undefined;
     const syncPendingDecisionState = (): void => {

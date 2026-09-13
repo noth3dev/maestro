@@ -174,8 +174,9 @@ describe("resolveLocalConnection", () => {
       "docker-check",
       "postgres-ready",
       "model-gateway-up",
-      "migrations",
       "control-plane-up",
+      "migrations",
+      "local-operator",
     ]);
     expect(result.kind).toBe("configured");
     if (result.kind === "configured") {
@@ -258,6 +259,7 @@ describe("resolveLocalConnection", () => {
     const startModelGateway = vi.fn(async (): Promise<LocalProcessHandle> => ({ stop: gatewayStop }));
     const startControlPlane = vi.fn(async () => undefined);
     const runCommand = vi.fn(async () => ({ code: 1, stdout: "", stderr: "bootstrap failed" }));
+    const setupEvents: LocalBootstrapStepEvent[] = [];
     const result = await resolveLocalConnection({
       env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
       fetch,
@@ -266,8 +268,10 @@ describe("resolveLocalConnection", () => {
       startModelGateway,
       startControlPlane,
       retryDelayMs: 0,
+      onStep: (event) => setupEvents.push(event),
     });
     expect(result).toMatchObject({ kind: "setup-required", reason: "Local operator bootstrap failed; check PostgreSQL and Control Plane logs" });
+    expect(setupEvents.at(-1)).toMatchObject({ step: "local-operator", status: "failed", message: expect.stringContaining("Local operator bootstrap failed") });
     expect(gatewayStop).toHaveBeenCalledOnce();
   });
 
@@ -284,6 +288,7 @@ describe("resolveLocalConnection", () => {
     const controlPlaneHandle: LocalProcessHandle = { stop: controlPlaneStop };
     const startModelGateway = vi.fn(async () => gatewayHandle);
     const startControlPlane = vi.fn(async () => controlPlaneHandle);
+    const setupEvents: LocalBootstrapStepEvent[] = [];
     const result = await resolveLocalConnection({
       env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
       fetch,
@@ -292,8 +297,11 @@ describe("resolveLocalConnection", () => {
       startModelGateway,
       startControlPlane,
       retryDelayMs: 0,
+      onStep: (event) => setupEvents.push(event),
     });
     expect(result.kind).toBe("setup-required");
+    expect(setupEvents).toContainEqual(expect.objectContaining({ step: "control-plane-up", status: "failed", message: expect.stringContaining("Control Plane startup failed") }));
+    expect(setupEvents).not.toContainEqual(expect.objectContaining({ step: "migrations", status: "failed" }));
     expect(gatewayStop).toHaveBeenCalledOnce();
     expect(controlPlaneStop).toHaveBeenCalledOnce();
   });
@@ -386,6 +394,66 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     const runCommand = vi.fn(async () => ({ code: 0, stdout: "accepting connections", stderr: "" }));
     await expect(resolveLocalConnection({ env: { MAESTRO_MODEL_GATEWAY_URL: "http://192.0.2.10:4321" }, fetch, secretStore: secretStore(), runCommand, retryDelayMs: 0 })).resolves.toEqual({ kind: "setup-required", reason: "Local model gateway auto-start requires a loopback host" });
     expect(runCommand).not.toHaveBeenCalled();
+  });
+
+  it("reports keychain persistence failure as a failed local-operator step", async () => {
+    const setupEvents: LocalBootstrapStepEvent[] = [];
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(response({ status: "ok" }))
+      .mockRejectedValueOnce(new Error("gateway is down"))
+      .mockResolvedValueOnce(response({ status: "ok" }))
+      .mockResolvedValueOnce(response([]));
+    const runCommand = vi.fn(async () => ({
+      code: 0,
+      stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }),
+      stderr: "",
+    }));
+    const store: LocalSecretStore = {
+      read: () => undefined,
+      write: () => { throw new Error("keychain unavailable"); },
+      clear: vi.fn(),
+    };
+
+    const result = await resolveLocalConnection({
+      env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      fetch,
+      secretStore: store,
+      runCommand,
+      startModelGateway: vi.fn(async () => undefined),
+      retryDelayMs: 0,
+      onStep: (event) => setupEvents.push(event),
+    });
+
+    expect(result).toMatchObject({ kind: "setup-required", reason: expect.stringContaining("OS keychain") });
+    expect(setupEvents.at(-1)).toMatchObject({ step: "local-operator", status: "failed", message: expect.stringContaining("OS keychain") });
+  });
+
+  it("reports final Control Plane authentication failure as a failed local-operator step", async () => {
+    const setupEvents: LocalBootstrapStepEvent[] = [];
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(response({ status: "ok" }))
+      .mockRejectedValueOnce(new Error("gateway is down"))
+      .mockResolvedValueOnce(response({ status: "ok" }))
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(response({ error: { code: "authentication_required", message: "invalid credential" } }, 401));
+    const runCommand = vi.fn(async () => ({
+      code: 0,
+      stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }),
+      stderr: "",
+    }));
+
+    const result = await resolveLocalConnection({
+      env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      fetch,
+      secretStore: secretStore(),
+      runCommand,
+      startModelGateway: vi.fn(async () => undefined),
+      retryDelayMs: 0,
+      onStep: (event) => setupEvents.push(event),
+    });
+
+    expect(result).toMatchObject({ kind: "setup-required", reason: "Local operator bootstrap completed but Control Plane authentication failed" });
+    expect(setupEvents.at(-1)).toMatchObject({ step: "local-operator", status: "failed", message: "Local operator bootstrap completed but Control Plane authentication failed" });
   });
 
   it("reports the bootstrap step that failed", async () => {
