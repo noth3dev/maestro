@@ -386,23 +386,25 @@ export async function recordRoutingCandidateEvaluation(
 ): Promise<RoutingCandidateEvaluationRecord> {
   const id = durableUuid(candidateId, "Routing evaluation candidateId");
   const operation = operationRef("evaluation", idempotencyKey);
+  let evaluationHash: string;
+  try { evaluationHash = routingCandidateEvaluationHash(evaluation); }
+  catch (error) { throw new ImprovementCandidatePersistenceError(error instanceof Error ? error.message : "Routing candidate evaluation evidence is invalid"); }
   return withGoalAuthority(pool, proof, 94, async (client) => {
+    const existing = await client.query<EvaluationRow>(`SELECT evaluation_id, candidate_id, candidate_version, candidate_content_hash, project_id, goal_id, scenario_suite_hash, evaluation_hash, replay_payload, synthetic_payload, created_at
+      FROM routing_candidate_evaluations WHERE operation_ref = $1 FOR UPDATE`, [operation]);
+    if (existing.rowCount === 1) {
+      const row = existing.rows[0]!;
+      if (row.goal_id !== proof.goalId.toLowerCase() || row.candidate_id !== id || row.evaluation_hash !== evaluationHash) {
+        throw new ImprovementCandidatePersistenceError("Routing evaluation idempotency key was reused with different content or Goal");
+      }
+      return mapEvaluationRow(row);
+    }
     const previous = await readRow(client, id, true);
     if (previous.goal_id !== proof.goalId.toLowerCase()) throw new ImprovementCandidatePersistenceError("Routing evaluation is outside the lease Goal");
     if (previous.kind !== "routing_capability_axis" || previous.state !== "evaluated") throw new ImprovementCandidatePersistenceError("Routing evaluation requires an evaluated routing candidate");
     const candidate = mapRow(previous);
     try { assertValidRoutingCandidateEvaluation(candidate, evaluation); }
     catch (error) { throw new ImprovementCandidatePersistenceError(error instanceof Error ? error.message : "Routing candidate evaluation evidence is invalid"); }
-    const evaluationHash = routingCandidateEvaluationHash(evaluation);
-    const existing = await client.query<EvaluationRow>(`SELECT evaluation_id, candidate_id, candidate_version, candidate_content_hash, project_id, goal_id, scenario_suite_hash, evaluation_hash, replay_payload, synthetic_payload, created_at
-      FROM routing_candidate_evaluations WHERE operation_ref = $1 FOR UPDATE`, [operation]);
-    if (existing.rowCount === 1) {
-      const row = existing.rows[0]!;
-      if (row.candidate_id !== previous.candidate_id || row.candidate_version !== previous.version || row.candidate_content_hash !== previous.content_hash || row.evaluation_hash !== evaluationHash) {
-        throw new ImprovementCandidatePersistenceError("Routing evaluation idempotency key was reused with different content");
-      }
-      return mapEvaluationRow(row);
-    }
     const token = randomUUID();
     await client.query("SELECT set_config('maestro.routing_candidate_evaluation_token', $1, true)", [token]);
     await client.query("INSERT INTO routing_candidate_evaluation_mutation_markers (transaction_id, token_hash) VALUES (txid_current(), encode(public.digest($1, 'sha256'), 'hex'))", [token]);
