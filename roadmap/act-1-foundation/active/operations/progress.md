@@ -4155,3 +4155,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-14 Plan 6 §S5 final pre-merge verification passed on `a309e97`: build, lint, diff-check, and authenticated serialized PostgreSQL suite passed **233/233 files and 1608/1608 tests** in 323.83s. Earlier full-suite runs had one transient public-schema race and one pre-existing IPython process-group timing failure; targeted reruns passed (certification 15/15, IPython 18/18), and final full rerun passed. Ready to merge.
 
 - 2026-09-14 Plan 6 §S5 merged into `main` as `59e3750` after exact-HEAD independent `REVIEW: PASS` at `a309e97`. Main post-merge build, lint, and diff-check passed; authenticated serialized PostgreSQL verification passed **233/233 files and 1608/1608 tests** in 316.22s. The known non-fatal `fatal: Needed a single revision` stderr remains historical fixture output. S5 is closed; next: delete the S5 worktree, push normally, then begin §S6.
+
+- 2026-09-14 Plan 6 §S6 `bounded-rollout-and-auto-rollback`: reserved migration **0089** before writing the migration file. RED tests are next for explicit per-class enablement, fixed rollout scope, automatic protected-metric rollback, durable evidence/history, interrupted-run reconciliation, and class-isolation.
+
+- 2026-09-14 Plan 6 §S6 RED: added domain and authenticated PostgreSQL integration coverage for the six rollout gates. Baseline targeted run failed as expected because `rollout-controller.ts` does not yet exist; migration `0089` remains reserved but unwritten.
