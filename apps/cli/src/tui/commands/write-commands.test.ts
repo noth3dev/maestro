@@ -30,6 +30,7 @@ function api(): ApiClient {
     certifyConditionalWorker: vi.fn().mockResolvedValue({ workerId: "worker-1", status: "certified" }),
     spawnWorker: vi.fn().mockResolvedValue({ workerId: "worker-1", status: "running" }),
     runEncoreReview: vi.fn().mockResolvedValue({ roundId: "round-1" }),
+    generateConcertmasterReport: vi.fn(),
   } as unknown as ApiClient;
 }
 
@@ -158,4 +159,39 @@ describe("TUI write commands", () => {
     await executeWriteCommand({ client, projectId, confirm: vi.fn() }, command);
     expect(vi.mocked(client.pauseGoal).mock.calls.map((call) => call[2])).toEqual([commandId, commandId]);
   });
+
+  it("generates a Concertmaster report with a fresh command ID and renders its verdict and summary", async () => {
+    const client = api();
+    const report = {
+      reportId: "44444444-4444-4444-8444-444444444444", goalId, success: false,
+      blockers: [{ reason: "missing_evidence", detail: "Need evidence" }], ceoRequest: "Review evidence",
+      whatChanged: "No changes", userVisibleBehaviorPassed: false, participatingDepartments: [],
+      keyDecisions: [], dissent: [], independentValidation: [], costCents: 2, budgetCents: 3,
+      incidents: [], knownLimitations: [], criticalActionAwaitingApproval: false, evidenceBundleId: "55555555-5555-4555-8555-555555555555",
+    };
+    vi.mocked(client.generateConcertmasterReport).mockResolvedValue(report as never);
+    const result = await executeWriteCommand({ client, projectId, confirm: vi.fn() }, {
+      name: "concertmaster-report", action: "generate", options: { "goal-id": goalId },
+    });
+    expect(client.generateConcertmasterReport).toHaveBeenCalledWith(goalId, { projectId }, expect.any(String));
+    expect(result).toEqual({ title: "Concertmaster report", lines: ["blocked · No changes"] });
+  });
+
+  it("reuses a supplied command ID on retry so the idempotent server returns the same report", async () => {
+    const client = api();
+    const report = { reportId: "44444444-4444-4444-8444-444444444444", goalId, success: true, whatChanged: "Shipped", blockers: [] };
+    let generated = 0;
+    vi.mocked(client.generateConcertmasterReport).mockImplementation(async (_goalId, _query, id) => {
+      generated += 1;
+      return { ...report, reportId: id === commandId ? report.reportId : "different" } as never;
+    });
+    const command = { name: "concertmaster-report", action: "generate", options: { "goal-id": goalId, "command-id": commandId } } as const;
+    const first = await executeWriteCommand({ client, projectId, confirm: vi.fn() }, command);
+    const retry = await executeWriteCommand({ client, projectId, confirm: vi.fn() }, command);
+    expect(client.generateConcertmasterReport).toHaveBeenNthCalledWith(1, goalId, { projectId }, commandId);
+    expect(client.generateConcertmasterReport).toHaveBeenNthCalledWith(2, goalId, { projectId }, commandId);
+    expect(first).toEqual(retry);
+    expect(generated).toBe(2);
+  });
+
 });

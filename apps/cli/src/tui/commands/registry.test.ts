@@ -48,6 +48,8 @@ describe("TUI command registry", () => {
     expect(registry.find("mode")?.actions.find((action) => action.name === "maestro")?.kind).toBe("write");
     expect(registry.find("flashmob")?.actions.find((action) => action.name === "toggle")?.kind).toBe("write");
     expect(registry.find("models")?.actions.find((action) => action.name === "use")?.kind).toBe("write");
+    expect(registry.find("concertmaster-report")?.actions.find((action) => action.name === "get")?.kind).toBe("read");
+    expect(registry.find("concertmaster-report")?.actions.find((action) => action.name === "generate")?.kind).toBe("write");
   });
 
   it("autocomplete filters command names", () => {
