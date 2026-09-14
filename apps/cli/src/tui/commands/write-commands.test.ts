@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "@maestro/api-client";
 import { executeWriteCommand } from "./write-commands.js";
+import { loadChannel as secretaryLoadChannel } from "../../../../carnegie/src/lib/channel-data.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
@@ -296,6 +297,44 @@ describe("TUI write commands", () => {
     const registry = (await import("./registry.js")).createCommandRegistry();
     expect(registry.find("worker")?.actions.find((action) => action.name === "message")?.kind).toBe("write");
     expect(registry.find("git")?.actions.find((action) => action.name === "worker-advance")?.kind).toBe("write");
+  });
+
+  it("posts channel messages through the channel API, never the conversation path", async () => {
+    const postChannelMessage = vi.fn().mockResolvedValue({ channelId: "44444444-4444-4444-8444-444444444444", messageId: "55555555-5555-4555-8555-555555555555", sequence: "1" });
+    const sendConversationTurn = vi.fn();
+    const client = api();
+    Object.assign(client, { postChannelMessage, sendConversationTurn });
+    const result = await executeWriteCommand({ client, projectId, goalId, confirm: vi.fn() }, { name: "channel", action: "post", options: { "channel-kind": "department", "channel-id": "engineering", content: "hello", "command-id": commandId } });
+    expect(result).toEqual({ title: "Channel", lines: ["44444444-4444-4444-8444-444444444444 · message 55555555-5555-4555-8555-555555555555 · sequence 1"] });
+    expect(postChannelMessage).toHaveBeenCalledWith(goalId, { kind: "department", channelId: "engineering" }, { projectId, content: "hello" }, commandId);
+    expect(sendConversationTurn).not.toHaveBeenCalled();
+  });
+
+  it("preserves shared API authority rejection when the project role is not covered", async () => {
+    const postChannelMessage = vi.fn().mockRejectedValue(new Error("project role is not covered"));
+    const client = api();
+    Object.assign(client, { postChannelMessage });
+    await expect(executeWriteCommand({ client, projectId, goalId, confirm: vi.fn() }, { name: "channel", action: "post", options: { "channel-kind": "department", "channel-id": "engineering", content: "hello", "command-id": commandId } })).rejects.toThrow("project role is not covered");
+  });
+
+  it("keeps TUI and Secretary on one durable channel API read path", async () => {
+    const message = { messageId: "55555555-5555-4555-8555-555555555555", channelId: "44444444-4444-4444-8444-444444444444", sequence: "1", author: { kind: "operator" as const, id: "operator-1" }, content: "hello", createdAt: "2025-01-01T00:00:00.000Z" };
+    const read = { channel: { channelId: message.channelId, projectId, goalId, state: "active" as const, kind: "department" as const, scopeId: "engineering", displayName: "#engineering" }, messages: [] as typeof message[], members: [] };
+    const getChannel = vi.fn(async () => ({ ...read, messages: [...read.messages] }));
+    const postChannelMessage = vi.fn(async () => { read.messages.push(message); return message; });
+    const client = api();
+    Object.assign(client, { getChannel, postChannelMessage });
+    await executeWriteCommand({ client, projectId, goalId, confirm: vi.fn() }, { name: "channel", action: "post", options: { "channel-kind": "department", "channel-id": "engineering", content: "hello", "command-id": message.messageId } });
+    await expect(secretaryLoadChannel({ getChannel }, goalId, { kind: "department", channelId: "engineering" }, projectId)).resolves.toMatchObject({ messages: [message] });
+    expect(getChannel).toHaveBeenCalledWith(goalId, { kind: "department", channelId: "engineering" }, { projectId });
+  });
+
+  it("rejects an uncovered channel selector before posting", async () => {
+    const postChannelMessage = vi.fn();
+    const client = api();
+    Object.assign(client, { postChannelMessage });
+    await expect(executeWriteCommand({ client, projectId, goalId, confirm: vi.fn() }, { name: "channel", action: "post", options: { "channel-kind": "not-a-kind", "channel-id": "engineering", content: "hello", "command-id": commandId } })).resolves.toEqual({ title: "Unavailable", lines: ["--channel-kind and --channel-id do not identify a valid channel"] });
+    expect(postChannelMessage).not.toHaveBeenCalled();
   });
 
 });

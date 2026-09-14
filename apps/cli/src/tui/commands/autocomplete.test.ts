@@ -29,6 +29,12 @@ describe("command argument autocomplete", () => {
     expect(projection?.getArgumentCompletions?.("read --hea")).toEqual([expect.objectContaining({ value: "--head-id " })]);
   });
 
+  it("suggests channel selector and post options", () => {
+    const channel = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "channel");
+    expect(channel?.getArgumentCompletions?.("read --channel-k")).toEqual([expect.objectContaining({ value: "--channel-kind " })]);
+    expect(channel?.getArgumentCompletions?.("post --con")).toEqual([expect.objectContaining({ value: "--content " })]);
+  });
+
   it("suggests the exact model option for conversations", () => {
     const conversation = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "conversation");
     expect(conversation?.getArgumentCompletions?.("create --m")).toEqual([expect.objectContaining({ value: "--model " })]);

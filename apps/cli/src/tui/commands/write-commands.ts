@@ -15,6 +15,7 @@ import {
   SubmitCouncilBriefInputSchema,
   TransitionGoalInputSchema,
   UpdateTaskContractInputSchema,
+  ChannelSelectorSchema,
 } from "@maestro/contracts";
 import type { ParsedCommand } from "./parser.js";
 import { createCommandRegistry } from "./registry.js";
@@ -43,6 +44,15 @@ function required(command: ParsedCommand, name: string): string | WriteCommandRe
 
 function selectedGoal(command: ParsedCommand, context: WriteCommandContext): string | WriteCommandResult {
   return option(command, "goal-id") ?? context.goalId ?? unavailable("No Goal is selected; use --goal-id or /goal select");
+}
+
+function channelSelector(command: ParsedCommand): import("@maestro/domain").ChannelSelector | WriteCommandResult {
+  const kind = required(command, "channel-kind");
+  const channelId = required(command, "channel-id");
+  if (typeof kind !== "string") return kind;
+  if (typeof channelId !== "string") return channelId;
+  const parsed = ChannelSelectorSchema.safeParse({ kind, channelId });
+  return parsed.success ? parsed.data : unavailable("--channel-kind and --channel-id do not identify a valid channel");
 }
 
 function integer(command: ParsedCommand, name: string): number | WriteCommandResult {
@@ -97,7 +107,7 @@ const supportedKeys = new Set([
   "admin:project-access", "task-contract:create", "task-contract:amend", "task-contract:select-roles", "task-contract:confirm", "task-contract:launch",
   "goal:create", "goal:transition", "goal:pause", "goal:stop", "goal:resume", "goal:emergency-stop", "head:activate",
   "council:create", "council:submit-brief", "council:reveal", "council:decide", "department-plan:create", "department-plan:revise", "mission-bundle:create",
-  "worker:spawn", "worker:observe", "worker:cancel", "worker:message", "worker:accept", "worker:certify", "worker:certify-conditional", "certification:certify", "git:goal-branch", "git:department-branch", "git:worker-worktree", "git:goal-revision", "git:worker-advance",
+  "worker:spawn", "worker:observe", "worker:cancel", "worker:message", "worker:accept", "worker:certify", "worker:certify-conditional", "certification:certify", "channel:post", "git:goal-branch", "git:department-branch", "git:worker-worktree", "git:goal-revision", "git:worker-advance",
   "metronome:scan", "metronome:challenge", "metronome:correct", "metronome:safe-pause", "metronome:resolve", "encore:review", "concertmaster-report:generate", "approval:approve-and-run", "critical-action:request", "critical-action:approve-and-run", "capability:select-full-access-mode", "evidence:capture", "conversation:create", "conversation:turn", "conversation:cancel",
 ]);
 
@@ -162,6 +172,17 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
   const id = commandId(command);
   const cancelled = await confirmIfCritical(context, command, target, id);
   if (cancelled !== undefined) return cancelled;
+
+  if (key === "channel:post") {
+    const goalId = selectedGoal(command, context);
+    const selector = channelSelector(command);
+    const content = required(command, "content");
+    if (typeof goalId !== "string") return goalId;
+    if ("title" in selector) return selector;
+    if (typeof content !== "string") return content;
+    const message = await context.client.postChannelMessage(goalId, selector, { projectId: context.projectId, content }, id);
+    return { title: "Channel", lines: [`${message.channelId} · message ${message.messageId} · sequence ${message.sequence}`] };
+  }
 
   if (command.name === "goal" && command.action === "create") {
     const contractId = option(command, "contract-id");

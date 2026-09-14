@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 import type { Pool, PoolClient } from "pg";
-import { postChannelMessage } from "./channel.js";
+import { getChannel, postChannelMessage } from "./channel.js";
 
 const projectId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01";
 const goalId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02";
@@ -48,4 +48,27 @@ it("rechecks and locks project authorization inside the message transaction", as
   expect(authorizationIndex).toBeGreaterThan(beginIndex);
   expect(calls[authorizationIndex]).toContain("FOR SHARE");
   expect(pool.connect).toHaveBeenCalledOnce();
+});
+
+it("rejects channel reads when project membership lacks the channel role", async () => {
+  const client = {
+    query: vi.fn(async (sql: string) => {
+      if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") return { rowCount: 0, rows: [] };
+      if (sql.includes("SELECT project_id, state FROM goals")) return { rowCount: 1, rows: [{ project_id: projectId, state: "active" }] };
+      return { rowCount: 0, rows: [] };
+    }),
+    release: vi.fn(),
+  };
+  const pool = {
+    query: vi.fn(async (sql: string) => sql.includes("operator_project_roles")
+      ? { rowCount: 0, rows: [] }
+      : sql.includes("operator_project_memberships")
+        ? { rowCount: 1, rows: [{}] }
+        : { rowCount: 0, rows: [] }),
+    connect: vi.fn(async () => client),
+  } as unknown as Pool;
+
+  await expect(getChannel(pool, {
+    operatorId, projectId, goalId, selector: { kind: "department", channelId: "engineering" },
+  })).rejects.toThrow(/active .* role/);
 });

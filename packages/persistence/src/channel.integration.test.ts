@@ -49,6 +49,7 @@ describeDatabase("channel persistence", () => {
     await insertGoal(pool, projectId, goalId);
     const { operatorId } = await bootstrapLocalOperator(pool, { secret: "channel-reader" });
     await grantProjectMembership(pool, operatorId, projectId);
+    await grantProjectRole(pool, operatorId, projectId, "head-engineering");
     const selector = { kind: "department" as const, channelId: "engineering" };
     expect((await getChannel(pool, { operatorId, projectId, goalId, selector })).members.some((member) => member.identityId === "head:engineering")).toBe(true);
     await pool.query("UPDATE goal_head_participations SET status = 'sleeping', active_session_ref = NULL WHERE goal_id = $1 AND department_id = 'engineering'", [goalId]);
@@ -67,6 +68,7 @@ describeDatabase("channel persistence", () => {
     await pool.query("INSERT INTO workers (worker_id, council_id, department_id, plan_version, item_id, bundle_content_hash, attempt, execution_ref, invocation_ref, status) VALUES ($1, $2, 'engineering', 1, 'item-1', $3, 1, 'execution', 'invocation', 'running')", [workerId, councilId, "e".repeat(64)]);
     const { operatorId } = await bootstrapLocalOperator(pool, { secret: "worker-roster" });
     await grantProjectMembership(pool, operatorId, projectId);
+    await grantProjectRole(pool, operatorId, projectId, "head-engineering");
     const selector = { kind: "department" as const, channelId: "engineering" };
     expect((await getChannel(pool, { operatorId, projectId, goalId, selector })).members.some((member) => member.identityId === workerId)).toBe(true);
     await pool.query("UPDATE workers SET status = 'succeeded' WHERE worker_id = $1", [workerId]);
@@ -79,6 +81,9 @@ describeDatabase("channel persistence", () => {
     await pool.query("INSERT INTO goal_head_participations (goal_id, department_id, head_role_id, contract_id, status, active_session_ref) VALUES ($1, 'product', 'head:product', $2, 'active', 'session:product')", [goalId, contractId]);
     const { operatorId } = await bootstrapLocalOperator(pool, { secret: "channel-scope-roster" });
     await grantProjectMembership(pool, operatorId, projectId);
+    await grantProjectRole(pool, operatorId, projectId, "concertmaster");
+    await grantProjectRole(pool, operatorId, projectId, "encore-council-1");
+    await grantProjectRole(pool, operatorId, projectId, "encore-metronome");
     const general = await getChannel(pool, { operatorId, projectId, goalId, selector: { kind: "organization", channelId: "general" } });
     const headCouncil = await getChannel(pool, { operatorId, projectId, goalId, selector: { kind: "organization", channelId: "head-council" } });
     const encoreCouncil = await getChannel(pool, { operatorId, projectId, goalId, selector: { kind: "encore", channelId: "encore-council" } });

@@ -71,7 +71,7 @@ function displayName(selector: ChannelSelector): string {
   return `#${selector.channelId}`;
 }
 
-async function assertCanPost(pool: Queryable, request: ChannelRequest): Promise<void> {
+async function assertChannelRole(pool: Queryable, request: ChannelRequest): Promise<void> {
   const roles = channelRoleIds(request.selector);
   const result = await pool.query<{ role_id: string }>(
     `SELECT r.role_id FROM operator_project_roles r
@@ -199,6 +199,7 @@ async function assertInternalAuthor(client: Queryable, channel: ChannelRow, auth
 export async function getChannel(pool: Pool, request: ChannelRequest): Promise<ChannelRead> {
   const parsed = parseRequest(request);
   await assertProjectMembership(pool, parsed.operatorId, parsed.projectId);
+  await assertChannelRole(pool, parsed);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -241,7 +242,7 @@ export async function postChannelMessage(pool: Pool, request: PostChannelMessage
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await assertCanPost(client, parsed);
+    await assertChannelRole(client, parsed);
     const channel = await resolveChannel(client, parsed);
     const existingBeforeLifecycle = await client.query<MessageRow>(
       `SELECT message_id, message_sequence, channel_id, author_kind, author_id, content, created_at

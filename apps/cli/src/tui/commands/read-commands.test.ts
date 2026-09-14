@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ApiClient } from "@maestro/api-client";
+import { CHANNEL_SELECTORS, type ApiClient } from "@maestro/api-client";
 import type { ProjectionReadModel } from "@maestro/contracts";
 import { discoverWorkspaceProject, discoverWorkspaceProjectFromControlPlane, executeReadCommand, readDashboard } from "./read-commands.js";
 
@@ -142,4 +142,36 @@ describe("workspace read commands", () => {
     const result = await readDashboard({ client: client({ listGoals: vi.fn().mockResolvedValue({ goals: [] }) }), projectId });
     expect(result).toEqual({ projectId, goals: [], selectedGoal: undefined, budget: undefined, workerCount: undefined });
   });
+
+  it("lists only channels exposed by the shared API roster", async () => {
+    const channel = (kind: "department" | "organization" | "encore", scopeId: string, members: readonly unknown[]) => ({
+      channel: { channelId: "44444444-4444-4444-8444-444444444444", projectId, goalId, state: "active" as const, kind, scopeId, displayName: `#${scopeId}` },
+      messages: [], members,
+    });
+    const getChannel = vi.fn((_goalId: string, selector: { kind: "department" | "organization" | "encore"; channelId: string }) => {
+      if (selector.kind === "department" && selector.channelId === "engineering") return Promise.resolve(channel("department", "engineering", [{ identityId: "head:engineering" }]));
+      if (selector.kind === "department" && selector.channelId === "product") return Promise.reject(new Error("role not covered"));
+      return Promise.resolve(channel(selector.kind, selector.channelId, []));
+    });
+    const api = client({ getChannel });
+    const result = await executeReadCommand({ client: api, projectId, goalId }, { name: "channel", action: "list", options: {} });
+    expect(result.title).toBe("Channels");
+    expect(result.lines.join("\n")).toContain("#engineering");
+    expect(result.lines.join("\n")).not.toContain("#general");
+    expect(getChannel).toHaveBeenCalledTimes(CHANNEL_SELECTORS.length);
+  });
+
+  it("reads a selected channel through the shared API and preserves message order", async () => {
+    const getChannel = vi.fn().mockResolvedValue({
+      channel: { channelId: "44444444-4444-4444-8444-444444444444", projectId, goalId, state: "active" as const, kind: "department" as const, scopeId: "engineering", displayName: "#engineering" },
+      messages: [
+        { messageId: "55555555-5555-4555-8555-555555555555", channelId: "44444444-4444-4444-8444-444444444444", sequence: "2", author: { kind: "operator" as const, id: "operator-1" }, content: "second", createdAt: "2025-01-01T00:00:02.000Z" },
+        { messageId: "66666666-6666-4666-8666-666666666666", channelId: "44444444-4444-4444-8444-444444444444", sequence: "1", author: { kind: "operator" as const, id: "operator-1" }, content: "first", createdAt: "2025-01-01T00:00:01.000Z" },
+      ], members: [],
+    });
+    const result = await executeReadCommand({ client: client({ getChannel }), projectId, goalId }, { name: "channel", action: "read", options: { "channel-kind": "department", "channel-id": "engineering" } });
+    expect(result).toEqual({ title: "#engineering", lines: ["• 1 · operator:operator-1 · first", "• 2 · operator:operator-1 · second"] });
+    expect(getChannel).toHaveBeenCalledWith(goalId, { kind: "department", channelId: "engineering" }, { projectId });
+  });
+
 });
