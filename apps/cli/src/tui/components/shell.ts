@@ -136,11 +136,6 @@ export function renderPendingDecisionDetails(state: TuiShellState, width: number
     .map((decision) => fitPlain(`⏸ ${decision.tier} · ${decision.action} · requested by ${decision.actor}`, width));
 }
 
-function recommendedAction(command: string, action: string): string | undefined {
-  const definition = createCommandRegistry().find(command);
-  return definition?.actions.some((item) => item.name === action) === true ? `/${command} ${action}` : undefined;
-}
-
 function nextActionText(): string {
   const registry = createCommandRegistry();
   const createActions = registry
