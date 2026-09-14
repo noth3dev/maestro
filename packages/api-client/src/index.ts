@@ -35,6 +35,7 @@ import {
   ProviderAccountLoginStartResultSchema,
   ProviderAccountLoginStatusSchema,
   GoalBudgetSummarySchema,
+  BillingReadModelSchema,
   GoalResultSchema,
   CriticalActionInputSchema,
   CriticalActionApprovalInputSchema,
@@ -126,6 +127,7 @@ import {
   type ProviderAccountLoginStartResult,
   type ProviderAccountLoginStatus,
   type GoalBudgetSummary,
+  type BillingReadModel,
   type GoalResult,
   type CriticalActionInput,
   type CriticalActionApprovalInput,
@@ -260,6 +262,7 @@ export interface ApiClient {
   resolveMetronomeChallenge(challengeId: string, input: MetronomeResolutionInput, commandId: string): Promise<MetronomeChallenge>;
   runEncoreReview(goalId: string, input: EncoreReviewInput, commandId: string): Promise<EncoreCouncilResult>;
   getBudgetSummary(goalId: string, query: GoalQuery): Promise<GoalBudgetSummary>;
+  getBillingSummary(projectId: string): Promise<BillingReadModel>;
   listEvents(query: EventQuery): Promise<GoalEventPage>;
   streamEvents(query: EventQuery, options?: { signal?: AbortSignal }): AsyncIterable<GoalEvent>;
   listMetronomeChallenges(goalId: string, query: GoalQuery): Promise<MetronomeChallengeList>;
@@ -440,6 +443,10 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
     listGoals(projectId) {
       const parsedProjectId = UuidSchema.parse(projectId);
       return request(`v1/goals?${new URLSearchParams({ projectId: parsedProjectId })}`, { headers }, GoalListSchema);
+    },
+    getBillingSummary(projectId) {
+      const parsedProjectId = UuidSchema.parse(projectId);
+      return request(`v1/billing?${new URLSearchParams({ projectId: parsedProjectId })}`, { headers }, BillingReadModelSchema);
     },
     listProjects() {
       return request("v1/projects", { headers }, ProjectListSchema);
@@ -819,6 +826,6 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
   };
 }
 
-export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, OrganizationReadModel, ChannelSelector, ChannelQuery, ChannelMessageInput, ChannelMessage, ChannelRead, ProjectionQuery, ProjectionReadModel, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, EvidenceBundleRead, GoalGitIntegrationState, WorkerList, WorkerObservation, ImprovementDigestList };
+export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, OrganizationReadModel, ChannelSelector, ChannelQuery, ChannelMessageInput, ChannelMessage, ChannelRead, ProjectionQuery, ProjectionReadModel, GoalBudgetSummary, BillingReadModel, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, EvidenceBundleRead, GoalGitIntegrationState, WorkerList, WorkerObservation, ImprovementDigestList };
 
 export { CHANNEL_SELECTORS };
