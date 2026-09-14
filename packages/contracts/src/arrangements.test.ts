@@ -19,4 +19,8 @@ describe("Arrangements read contract", () => {
   it("keeps every stage empty when no durable arrangements exist", () => {
     expect(ArrangementsReadSchema.parse({ active: [], candidates: [], encoreCouncil: [], negativeEvidence: [] })).toEqual({ active: [], candidates: [], encoreCouncil: [], negativeEvidence: [] });
   });
+
+  it("allows a rejected latest candidate with no Council row and no fabricated reason", () => {
+    expect(ArrangementsReadSchema.parse({ active: [], candidates: [], encoreCouncil: [], negativeEvidence: [{ candidateId: ids.candidateId, state: "rejected", reason: null, roundId: null, judgments: [] }] }).negativeEvidence[0]?.reason).toBeNull();
+  });
 });

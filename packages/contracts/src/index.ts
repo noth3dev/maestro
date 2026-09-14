@@ -883,7 +883,7 @@ const ArrangementCouncilSchema = z.object({
   reviewerCount: z.number().int().positive(), sameModelOnly: z.boolean(), escalated: z.boolean(), dissentNotes: z.array(z.string()), judgments: z.array(ArrangementCouncilJudgmentSchema),
 }).strict();
 const ArrangementNegativeEvidenceSchema = z.object({
-  candidateId: UuidSchema, state: z.literal("rejected"), reason: z.string().min(1), roundId: UuidSchema.nullable(), judgments: z.array(ArrangementCouncilJudgmentSchema),
+  candidateId: UuidSchema, state: z.literal("rejected"), reason: z.string().min(1).nullable(), roundId: UuidSchema.nullable(), judgments: z.array(ArrangementCouncilJudgmentSchema),
 }).strict();
 export const ArrangementsReadSchema = z.object({
   active: z.array(ArrangementCandidateSchema), candidates: z.array(ArrangementCandidateSchema), encoreCouncil: z.array(ArrangementCouncilSchema), negativeEvidence: z.array(ArrangementNegativeEvidenceSchema),

@@ -910,6 +910,19 @@ export interface ImprovementCandidateArrangementRecord {
 
 type ArrangementEvaluationRow = { evaluation_id: string; evaluation_hash: string; replay_payload: unknown; synthetic_payload: unknown; evaluation_payload: unknown };
 type ArrangementCouncilRow = { round_id: string; question: string; reviewer_count: number; final_verdict: string; same_model_only: boolean; escalated: boolean; dissent_notes: unknown };
+export interface ArrangementCouncilApprovalRow {
+  readonly council_round_id: string;
+  readonly candidate_id: string;
+  readonly candidate_version: number;
+  readonly candidate_content_hash: string;
+}
+/** Stable ordering for append-only approval rows returned from multiple stores. */
+export function selectArrangementCouncilApproval(rows: readonly ArrangementCouncilApprovalRow[]): ArrangementCouncilApprovalRow | undefined {
+  return [...rows].sort((left, right) => right.candidate_version - left.candidate_version
+    || right.candidate_content_hash.localeCompare(left.candidate_content_hash)
+    || left.candidate_id.localeCompare(right.candidate_id)
+    || left.council_round_id.localeCompare(right.council_round_id))[0];
+}
 type ArrangementJudgmentRow = { model_provider: string; model_id: string; verdict: string; confidence: string; reasoning: string; conditions: unknown; dissent_note: string | null; cited_evidence_ids: unknown };
 
 function finiteMetric(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value); }
@@ -987,10 +1000,18 @@ export async function listImprovementCandidateArrangements(
           evaluation = { evaluationId: evaluationRow.evaluation_id, evaluationHash: evaluationRow.evaluation_hash, stages: evaluationStages(payload), metricDeltas: metricDeltas(payload) };
         }
       }
-      const lineageIds = (await client.query<{ candidate_id: string }>("SELECT candidate_id FROM improvement_candidates WHERE lineage_id = $1", [row.lineage_id])).rows.map((item) => item.candidate_id);
-      const approvals = await client.query<{ council_round_id: string }>(`SELECT council_round_id FROM improvement_candidate_council_approvals WHERE candidate_id = ANY($1::uuid[]) UNION ALL SELECT council_round_id FROM routing_candidate_approvals WHERE candidate_id = ANY($1::uuid[])`, [lineageIds]);
+      const approvals = await client.query<ArrangementCouncilApprovalRow>(`SELECT council_round_id, candidate_id, candidate_version, candidate_content_hash
+        FROM (
+          SELECT a.council_round_id, a.candidate_id, a.candidate_version, a.candidate_content_hash, c.lineage_id, a.project_id, a.goal_id
+            FROM improvement_candidate_council_approvals a JOIN improvement_candidates c ON c.candidate_id = a.candidate_id
+          UNION ALL
+          SELECT a.council_round_id, a.candidate_id, a.candidate_version, a.candidate_content_hash, c.lineage_id, a.project_id, a.goal_id
+            FROM routing_candidate_approvals a JOIN improvement_candidates c ON c.candidate_id = a.candidate_id
+        ) approvals
+        WHERE lineage_id = $1 AND project_id = $2 AND goal_id = $3
+        ORDER BY candidate_version DESC, candidate_content_hash DESC, candidate_id ASC, council_round_id ASC`, [row.lineage_id, row.project_id, row.goal_id]);
       let council: ImprovementCandidateArrangementCouncil | null = null;
-      const roundId = approvals.rows[0]?.council_round_id;
+      const roundId = selectArrangementCouncilApproval(approvals.rows)?.council_round_id;
       if (roundId !== undefined) {
         const round = await client.query<ArrangementCouncilRow>(`SELECT r.round_id, r.question, r.reviewer_count, s.final_verdict, s.same_model_only, s.escalated, s.dissent_notes FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id WHERE r.round_id = $1`, [roundId]);
         const judgmentRows = await client.query<ArrangementJudgmentRow>("SELECT model_provider, model_id, verdict, confidence, reasoning, conditions, dissent_note, cited_evidence_ids FROM encore_council_judgments WHERE round_id = $1 ORDER BY reviewer_index", [roundId]);
@@ -1000,7 +1021,10 @@ export async function listImprovementCandidateArrangements(
           council = { roundId: roundRow.round_id, question: roundRow.question, reviewerCount: roundRow.reviewer_count, finalVerdict: roundRow.final_verdict, sameModelOnly: roundRow.same_model_only, escalated: roundRow.escalated, dissentNotes: stringArray(roundRow.dissent_notes), judgments };
         }
       }
-      const rollout = await client.query<{ rollout_id: string; status: ImprovementCandidateArrangementRollout["status"]; active_candidate_id: string; active_version: number; content_hash: string }>(`SELECT r.rollout_id, r.status, r.active_candidate_id, r.active_version, c.content_hash FROM improvement_rollouts r JOIN improvement_candidates c ON c.candidate_id = r.active_candidate_id WHERE r.candidate_id = ANY($1::uuid[]) ORDER BY r.created_at DESC, r.rollout_id DESC LIMIT 1`, [lineageIds]);
+      const rollout = await client.query<{ rollout_id: string; status: ImprovementCandidateArrangementRollout["status"]; active_candidate_id: string; active_version: number; content_hash: string }>(`SELECT r.rollout_id, r.status, r.active_candidate_id, r.active_version, c.content_hash
+        FROM improvement_rollouts r JOIN improvement_candidates source ON source.candidate_id = r.candidate_id JOIN improvement_candidates c ON c.candidate_id = r.active_candidate_id
+        WHERE source.lineage_id = $1 AND source.project_id = $2 AND source.goal_id = $3
+        ORDER BY r.created_at DESC, r.rollout_id DESC LIMIT 1`, [row.lineage_id, row.project_id, row.goal_id]);
       const rolloutRow = rollout.rows[0];
       records.push({ candidate, evaluation, council, rollout: rolloutRow === undefined ? null : { rolloutId: rolloutRow.rollout_id, status: rolloutRow.status, activeCandidateId: rolloutRow.active_candidate_id, activeVersion: rolloutRow.active_version, contentHash: rolloutRow.content_hash } });
     }

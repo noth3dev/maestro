@@ -34,9 +34,9 @@ function arrangementCandidate(record: Awaited<ReturnType<typeof listImprovementC
 function arrangementCouncil(candidateId: string, council: NonNullable<Awaited<ReturnType<typeof listImprovementCandidateArrangements>>[number]["council"]>): ArrangementCouncil {
   return { candidateId, ...council };
 }
-function arrangementNegativeEvidence(candidateId: string, council: NonNullable<Awaited<ReturnType<typeof listImprovementCandidateArrangements>>[number]["council"]>): ArrangementNegativeEvidence {
-  const reason = council.judgments.find((judgment) => judgment.verdict !== "proceed")?.reasoning ?? `Encore Council verdict: ${council.finalVerdict}`;
-  return { candidateId, state: "rejected", reason, roundId: council.roundId, judgments: council.judgments };
+function arrangementNegativeEvidence(candidateId: string, council: Awaited<ReturnType<typeof listImprovementCandidateArrangements>>[number]["council"]): ArrangementNegativeEvidence {
+  const reason = council === null ? null : council.judgments.find((judgment) => judgment.verdict !== "proceed")?.reasoning ?? `Encore Council verdict: ${council.finalVerdict}`;
+  return { candidateId, state: "rejected", reason, roundId: council?.roundId ?? null, judgments: council?.judgments ?? [] };
 }
 
 export function createReadStateService(pool: Pool): ReadStateService {
@@ -96,7 +96,7 @@ export function createReadStateService(pool: Pool): ReadStateService {
       const active = records.filter((record) => record.candidate.state === "applied").map(arrangementCandidate);
       const candidates = records.filter((record) => ["candidate", "evaluated", "judged"].includes(record.candidate.state)).map(arrangementCandidate);
       const encoreCouncil = records.filter((record) => record.council !== null).map((record) => arrangementCouncil(record.candidate.candidateId, record.council!));
-      const negativeEvidence = records.filter((record) => record.candidate.state === "rejected" && record.council !== null && record.council.finalVerdict !== "proceed").map((record) => arrangementNegativeEvidence(record.candidate.candidateId, record.council!));
+      const negativeEvidence = records.filter((record) => record.candidate.state === "rejected").map((record) => arrangementNegativeEvidence(record.candidate.candidateId, record.council));
       return { active, candidates, encoreCouncil, negativeEvidence };
     },
   };

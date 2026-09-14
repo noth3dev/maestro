@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Icon } from "../icons.js";
 import { EmptyState } from "../components/EmptyState.js";
 import { useConnection } from "../connection.js";
@@ -47,7 +47,7 @@ function NegativeEvidenceItem({ entry }: { entry: ArrangementNegativeEvidence })
       <div className="arr-icon" style={{ background: "var(--rust-bg)", color: "var(--rust-text)" }}><Icon name="ban" /></div>
       <div className="arr-body">
         <div className="arr-title">rejected candidate · {entry.candidateId}</div>
-        <div className="arr-meta">reason: {entry.reason}{entry.roundId === null ? "" : ` · Council round ${entry.roundId}`}</div>
+        <div className="arr-meta">reason: {entry.reason ?? "unavailable in durable rejection records"}{entry.roundId === null ? "" : ` · Council round ${entry.roundId}`}</div>
         {entry.judgments.map((judgment, index) => <div key={`${judgment.modelProvider}/${judgment.modelId}:${index}`} className="arr-meta">{judgment.modelProvider}/{judgment.modelId} · {judgment.reasoning}</div>)}
       </div>
     </div>
@@ -64,7 +64,7 @@ export function Arrangements() {
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div className="dash-head" style={{ padding: "14px 20px 0" }}><div className="dash-title">arrangements</div></div>
+      <div className="dash-head" style={{ padding: "14px 20px 0" }}><div className="dash-title">Arrangements</div></div>
       <div className="dash-sub" style={{ padding: "0 20px" }}>Act 3 · verified improvement state from durable candidates, Encore Council judgments, and bounded rollouts</div>
       <div className="page-tabs">
         {(["active", "candidates", "encoreCouncil", "negativeEvidence"] as const).map((name) => (
