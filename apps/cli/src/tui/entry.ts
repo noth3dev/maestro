@@ -199,6 +199,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let accountLoginId: string | undefined;
     let accountLoginUrl: string | undefined;
     let connectionGeneration = client === undefined ? 0 : 1;
+    let loginInteractionGeneration = 0;
     const automaticProviderSignInGate = createAutomaticProviderSignInGate();
     const syncModelState = (): void => {
       const model = options.env.MAESTRO_MODEL?.trim() || session?.model;
@@ -535,11 +536,12 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       if (client === undefined) return;
       const candidateClient = client;
       const candidateGeneration = connectionGeneration;
+      const candidateLoginInteractionGeneration = loginInteractionGeneration;
       void runAutomaticProviderSignInOffer({
         client: candidateClient,
         getConfiguredModel: () => options.env.MAESTRO_MODEL?.trim() || session?.model,
         gate: automaticProviderSignInGate,
-        isCurrent: () => !stopped && client === candidateClient && connectionGeneration === candidateGeneration && state.connection.kind === "connected",
+        isCurrent: () => !stopped && client === candidateClient && connectionGeneration === candidateGeneration && loginInteractionGeneration === candidateLoginInteractionGeneration && state.connection.kind === "connected",
         isManualLoginActive: () => isProviderLoginActive(pendingProviderLogin, providerLoginInFlight, accountLoginSelection),
         onOffer: () => {
           accountLoginSelection = 0;
@@ -578,12 +580,14 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         if (parsed.kind === "command" && parsed.name === "help") {
           append(`Commands: ${createCommandPalette().map((item) => `${item.label} [${item.description}]`).join(" · ")}`);
         } else if (parsed.kind === "command" && parsed.name === "login" && parsed.action === undefined) {
+          loginInteractionGeneration += 1;
           accountLoginSelection = 0;
           accountLoginState = "selecting";
           editor.hidden = true;
           editor.setText("");
           render();
         } else if (parsed.kind === "command" && parsed.name === "login" && parsed.action === "openai-codex") {
+          loginInteractionGeneration += 1;
           accountLoginSelection = 0;
           accountLoginState = "selecting";
           editor.hidden = true;
@@ -594,6 +598,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           if (client === undefined) {
             appendWarning("Provider login is unavailable until the Control Plane is connected.");
           } else {
+            loginInteractionGeneration += 1;
             pendingProviderLogin = parsed.action;
             editor.hidden = true;
             editor.setText("");
