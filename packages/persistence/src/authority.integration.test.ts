@@ -16,6 +16,7 @@ import {
   resumeGoal,
   revokeAuthorityRecord,
   listPendingAuthorityApprovals,
+  hasPendingAuthorityApproval,
 } from "./authority.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -129,6 +130,18 @@ describeDatabase("durable authorized effects with PostgreSQL", () => {
       [second.commandId],
     )).resolves.toMatchObject({ rows: [{ decided_at: new Date("2029-01-01T00:00:00Z") }] });
     await expect(listPendingAuthorityApprovals(pool, authorityProjectId)).resolves.toEqual([]);
+  });
+
+  it("keeps an actor A request pending when only actor B has a terminal decision", async () => {
+    const current = { ...request(), action: "git.remote.push", target: "origin/main" };
+    const otherActor = { ...current, actorId: "operator-2" };
+    const executor = new AuthorizedEffectExecutor(repository, () => new Date("2029-01-01T00:00:00Z"));
+    await expect(executor.execute(current, async () => undefined)).resolves.toMatchObject({ effect: "require_approval" });
+    await expect(executor.deny(otherActor, "operator_rejected")).resolves.toMatchObject({ effect: "deny", reason: "operator_rejected" });
+    await expect(hasPendingAuthorityApproval(pool, current)).resolves.toBe(true);
+    await expect(listPendingAuthorityApprovals(pool, authorityProjectId)).resolves.toEqual([
+      expect.objectContaining({ commandId: current.commandId, actorId: current.actorId, action: current.action, target: current.target }),
+    ]);
   });
 
   it("does not re-list an authorized request after its approval expires", async () => {
