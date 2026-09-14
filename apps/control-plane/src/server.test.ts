@@ -153,6 +153,29 @@ describe("project access provisioning route", () => {
   });
 });
 
+describe("billing read route", () => {
+  it("returns durable daily spend, explicit department availability, and reconciled cross-Goal totals", async () => {
+    const summary = {
+      projectId: goal.projectId,
+      dailySpend: [{ date: "2026-09-14", costCents: 7 }],
+      goals: [
+        { goalId: goal.goalId, budgetCents: 100, reservedCents: 20, costCents: 7 },
+        { goalId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f07", budgetCents: 200, reservedCents: 30, costCents: 11 },
+      ],
+      totals: { budgetCents: 300, reservedCents: 50, costCents: 18 },
+      departmentBreakdown: { available: false, reason: "Actual costs are tracked at Goal scope only" },
+    };
+    const getBillingSummary = vi.fn(async () => summary);
+    const billingReadState = { ...state, getBillingSummary } as unknown as ReadStateService;
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readStateService: billingReadState });
+    const response = await app.inject({ method: "GET", url: `/v1/billing?projectId=${goal.projectId}`, headers: { authorization: "Bearer test-secret" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(summary);
+    expect(getBillingSummary).toHaveBeenCalledWith(goal.projectId);
+    await app.close();
+  });
+});
+
 describe("read state routes", () => {
   it("lists Goals and returns a project-bound budget summary", async () => {
     const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readStateService: state });
