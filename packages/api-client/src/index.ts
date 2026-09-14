@@ -14,6 +14,8 @@ import {
   GoalListSchema,
   ProjectListSchema,
   OrganizationReadModelSchema,
+  ProjectionQuerySchema,
+  ProjectionReadModelSchema,
   ConversationSchema,
   CreateConversationInputSchema,
   ConversationTurnInputSchema,
@@ -99,6 +101,8 @@ import {
   type GoalList,
   type ProjectList,
   type OrganizationReadModel,
+  type ProjectionQuery,
+  type ProjectionReadModel,
   type Conversation,
   type CreateConversationInput,
   type ConversationTurnInput,
@@ -187,6 +191,7 @@ export interface ApiClient {
   listGoals(projectId: string): Promise<GoalList>;
   listProjects(): Promise<ProjectList>;
   getOrganization(): Promise<OrganizationReadModel>;
+  getProjection(query: ProjectionQuery): Promise<ProjectionReadModel>;
   listModels(): Promise<readonly ModelCatalogEntry[]>;
   loginProvider(input: ProviderCredentialLoginInput): Promise<ProviderCredentialBinding>;
   logoutProvider(providerId: "openai" | "anthropic"): Promise<void>;
@@ -428,6 +433,13 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
     },
     getOrganization() {
       return request("v1/organization", { headers }, OrganizationReadModelSchema);
+    },
+    getProjection(query) {
+      const parsed = ProjectionQuerySchema.parse(query);
+      const params = new URLSearchParams();
+      if (parsed.projectId !== undefined) params.set("projectId", parsed.projectId);
+      if (parsed.goalId !== undefined) params.set("goalId", parsed.goalId);
+      return request(`v1/projection?${params.toString()}`, { headers }, ProjectionReadModelSchema);
     },
     listModels() {
       return request("v1/models", { headers }, { parse(body: unknown) {
@@ -778,4 +790,4 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
   };
 }
 
-export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, EvidenceBundleRead, GoalGitIntegrationState, WorkerList, WorkerObservation, ImprovementDigestList };
+export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, OrganizationReadModel, ProjectionQuery, ProjectionReadModel, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, EvidenceBundleRead, GoalGitIntegrationState, WorkerList, WorkerObservation, ImprovementDigestList };

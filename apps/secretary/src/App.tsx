@@ -29,7 +29,7 @@ function Shell({ eventState }: { eventState: DurableEventState }) {
   const body = (() => {
     switch (view) {
       case "home": return <Home onNavigate={setView} mode={homeMode} onModeChange={setHomeMode} />;
-      case "dashboard": return <Dashboard onNavigate={setView} />;
+      case "dashboard": return <Dashboard onNavigate={setView} eventState={eventState} />;
       case "channel": return <Channel onNavigate={setView} />;
       case "git": return <Git onBack={() => setView("channel")} />;
       case "floor": return <Floor onBack={() => setView("home")} />;
