@@ -86,9 +86,30 @@ function valueLines<T>(title: string, items: readonly T[], format: (item: T) => 
   return { title, lines: items.length === 0 ? ["No records found."] : items.map(format) };
 }
 
+function contentRecords(content: Record<string, unknown>): readonly Record<string, unknown>[] {
+  const records = content.evidenceRecords;
+  if (!Array.isArray(records)) return [];
+  return records.filter((record): record is Record<string, unknown> => record !== null && typeof record === "object" && !Array.isArray(record));
+}
+
+function recordField(record: Record<string, unknown>, ...names: string[]): string | undefined {
+  for (const name of names) {
+    const value = record[name];
+    if (typeof value === "string" && value.trim() !== "") return value;
+  }
+  return undefined;
+}
+
+function formatEvidenceRecord(record: Record<string, unknown>): string {
+  const id = recordField(record, "evidenceId", "evidence_id") ?? "unknown-id";
+  const kind = recordField(record, "kind") ?? "unknown-kind";
+  const createdAt = recordField(record, "createdAt", "created_at");
+  return `• ${id} · ${kind}${createdAt === undefined ? "" : ` · ${createdAt}`}`;
+}
+
 export async function executeReadCommand(context: ReadCommandContext, command: ParsedCommand): Promise<ReadCommandResult> {
   const key = `${command.name}:${command.action ?? ""}`;
-  if (!["projects:list", "task-contract:get", "goals:list", "goal:get", "budget:get", "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "worker:list", "workers:get", "workers:list", "git:status", "metronome-challenges:list", "encore-council:list", "certification:list", "certifications:list", "concertmaster-report:get", "events:list", "events:stream", "improvement-digests:list"].includes(key)) {
+  if (!["projects:list", "task-contract:get", "goals:list", "goal:get", "budget:get", "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "worker:list", "workers:get", "workers:list", "git:status", "metronome-challenges:list", "encore-council:list", "certification:list", "certifications:list", "concertmaster-report:get", "evidence:list", "evidence:bundle", "events:list", "events:stream", "improvement-digests:list"].includes(key)) {
     const definition = createCommandRegistry().find(command.name);
     const action = definition?.actions.find((item) => item.name === command.action);
     if (action?.kind !== "read") return unavailable(`${command.name} ${command.action ?? ""} is a mutation; use the write command path`.trim());
@@ -148,6 +169,17 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     if (typeof goalId !== "string") return goalId;
     const budget = await context.client.getBudgetSummary(goalId, { projectId: context.projectId });
     return { title: "Budget", lines: [`• ${budget.goalId} · spent ${budget.costCents}/${budget.budgetCents} cents · reserved ${budget.reservedCents}`] };
+  }
+  if (key === "evidence:list" || key === "evidence:bundle") {
+    const goalId = selectedGoal(command, context);
+    if (typeof goalId !== "string") return goalId;
+    const bundle = await context.client.getEvidenceBundle(goalId, { projectId: context.projectId });
+    const content = bundle.content as Record<string, unknown>;
+    const records = contentRecords(content);
+    if (key === "evidence:list") return valueLines("Evidence", records, formatEvidenceRecord);
+    const lines = [`• ${bundle.bundleId} · ${bundle.hash}`];
+    for (const [name, value] of Object.entries(content)) lines.push(`• ${name}: ${JSON.stringify(value)}`);
+    return { title: "Evidence bundle", lines };
   }
   if (key === "events:list") {
     const page = await context.client.listEvents({ projectId: context.projectId, after: option(command, "after") ?? "0" });
