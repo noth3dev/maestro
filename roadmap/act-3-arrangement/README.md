@@ -158,7 +158,52 @@ Meta-Arrangements follow the identical certification path and cannot relax Act 1
 
 ---
 
-### 8. Relationship between Acts
+### 8. Muze — External Ingestion Path
+
+**Muze** is not a separate system. It is one more way an Arrangement Proposal can originate — alongside "Evidence / User Instruction" in § 3's lifecycle — by feeding Muze an external source (a GitHub repository, or a non-code source such as a technical article/wiki page describing a concept or technique) and having it absorb, digest, and transform that source into one or more Arrangement candidates. Everything downstream of "Arrangement Proposal" in § 3 — Shadow Replay, Negative-Evidence Veto Check, Causal Lineage Conflict Check, Certification, application, retirement — is identical for a Muze-sourced candidate and an internally-sourced one. Muze does not introduce a parallel pipeline, a parallel registry, or a parallel safety mechanism.
+
+#### 8.1 What Muze ingests
+
+- **Code sources** (a GitHub repository): absorbed toward the capability axis — a reusable pattern, a whole subsystem, a runnable tool, or a structural technique Maestro's own architecture could adopt.
+- **Non-code sources** (an article, a wiki page, a written explanation of a concept or technique — not runnable code): absorbed as strategy/technique, feeding Encore's own capability judgment and knowledge machinery (`roadmap/act-1-foundation/phase-06-learning-adaptation.md`) rather than becoming a code Arrangement directly.
+
+A single ingested source is not required to produce exactly one Arrangement candidate. A large or multi-part repository may be digested into several independent candidates, each following its own Shadow Replay/Certification path — an operator or Conductor can accept one part and reject another without an all-or-nothing decision.
+
+#### 8.2 What Muze can transform into
+
+Depending on what a source actually contains, digestion may produce any of:
+
+- **A capability Arrangement** — the source's functionality reimplemented as Maestro capability.
+- **A tool or skill**, registered through the **existing Luthiery registry** (`docs/assets/design/mockup.html`'s Luthiery view; the same certify/reuse/reject flow already used for natively-generated tools) — Muze never creates a second tool registry.
+- **A structural Arrangement** — the source's own architecture or organizational pattern reshapes a bounded part of Maestro's own structure (§ 6 still applies: the never-touch list below is absolute regardless of source).
+- **Learning/strategy material** feeding Encore's judgment machinery, for a non-code source that has no direct capability form.
+
+#### 8.3 Triggers
+
+- **User-directed:** an operator hands Muze a specific source to ingest.
+- **Autonomous:** the organization (Concertmaster, a Department Head, or Encore) may decide on its own that a specific external source is worth investigating and begin ingestion without asking first.
+
+In both cases, **exploration and digestion require no approval — only Application does.** Muze may freely fetch, analyze, and produce candidate Arrangements on its own initiative; per § 3's lifecycle, a candidate still cannot move past Certification into `applied` without the same approval gate every other Arrangement already requires (Conductor approval for high-impact scope, per § 3).
+
+#### 8.4 External-source scrutiny (stricter than internal candidates)
+
+A Muze-sourced candidate is held to a **higher evidentiary bar** than one proposed from Maestro's own internal evidence, because it originates from untrusted third-party material:
+
+- Source code is analyzed only inside an isolated sandbox — never executed against production state during digestion.
+- License and provenance (source URL, commit/revision digested, license terms) are recorded as a mandatory field on the resulting candidate — an Arrangement with no recorded provenance cannot be certified.
+- Certification applies the same Shadow Replay and Negative-Evidence checks as any Arrangement, at a stricter pass bar for externally-sourced candidates specifically (the exact threshold is a Certification-configuration detail, not a design constraint fixed here).
+
+#### 8.5 Rejected-source memory
+
+A source that is digested and then rejected (quality, safety, redundancy, or any other Certification denial) becomes a **Negative Evidence Bundle** under § 5, exactly like any other rejected Arrangement. Re-ingesting the same source is blocked by the same Negative-Evidence Veto Check every new candidate already passes through — a repeat attempt must explain how it overcomes the prior rejection, or it is auto-vetoed. This is not a new mechanism; it is § 5 applied to an external source instead of an internally-authored one.
+
+#### 8.6 The never-touch list still applies, without exception
+
+Everything § 6 already forbids any Arrangement from modifying — `AuthorizedEffectExecutor`, fencing-token/lease machinery, the Audit-Before-Effect path, Separation-of-Powers boundaries, Certification/Metronome core logic, the Negative Evidence store, Treasury security primitives or payment signing roots — remains off-limits for a Muze-sourced Arrangement with zero exception. An external repository proposing a structural change to any of these is rejected at Certification regardless of how well-evidenced or well-reasoned the proposal otherwise is.
+
+---
+
+### 9. Relationship between Acts
 
 | Aspect                  | Act 1 Foundation                    | Act 2 Flashmob                                 | Act 3 Arrangement                                         |
 | ----------------------- | ----------------------------------- | ---------------------------------------------- | --------------------------------------------------------- |
