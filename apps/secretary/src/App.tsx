@@ -32,7 +32,7 @@ function Shell({ eventState }: { eventState: DurableEventState }) {
       case "dashboard": return <Dashboard onNavigate={setView} eventState={eventState} />;
       case "channel": return <Channel onNavigate={setView} />;
       case "git": return <Git onBack={() => setView("channel")} />;
-      case "floor": return <Floor onBack={() => setView("home")} />;
+      case "floor": return <Floor onBack={() => setView("home")} eventCursor={eventState.cursor} />;
       case "inbox": return <Inbox onNavigate={setView} />;
       case "evlog": return <EvidenceLog onNavigate={setView} />;
       case "billing": return <Billing />;
