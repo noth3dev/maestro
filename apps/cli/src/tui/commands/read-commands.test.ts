@@ -100,6 +100,21 @@ describe("workspace read commands", () => {
     expect(api.getMissionBundle).toHaveBeenCalledWith(councilId, "product", 4, "item-1", projectId);
   });
 
+  it("keeps already-returned Task Contract fields on the shared read-command path", async () => {
+    const api = client({ getTaskContract: vi.fn().mockResolvedValue({
+      contractId,
+      launchState: "launched",
+      version: 3,
+      contentHash: "b".repeat(64),
+      desiredOutcome: "durable outcome",
+      decisionHistory: [{ decisionId: "66666666-6666-4666-8666-666666666666", kind: "created", evidence: { source: "route" } }],
+    }) });
+    const result = await executeReadCommand({ client: api, projectId }, { name: "task-contract", action: "get", options: { "contract-id": contractId } });
+    expect(result.lines.join("\n")).toContain("durable outcome");
+    expect(result.lines.join("\n")).toContain(`content hash: ${"b".repeat(64)}`);
+    expect(result.lines.join("\n")).toContain("created");
+  });
+
   it("rejects an invalid mission bundle plan version before calling the client", async () => {
     const getMissionBundle = vi.fn();
     const api = client({ getMissionBundle });
