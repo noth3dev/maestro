@@ -20,6 +20,18 @@ describe("channel client", () => {
   });
 });
 
+describe("persona client", () => {
+  it("serializes the Goal binding when reading persona inspection", async () => {
+    const profile = Object.fromEntries(["agreeableness", "extraversion", "imagination", "realism", "conscientiousness", "caution", "initiative", "empathy", "adaptability", "sociability"].map((axis) => [axis, 0.5]));
+    const model = { roleId: "concertmaster", taskClass: "implementation", profile, version: 1, coreIdentity: { mission: "mission", authority: ["coordinate"], truthfulness: "truth", safety: "safety", prohibitedBehavior: ["invent"] }, taskClassAdjustment: { roleId: "concertmaster", taskClass: "implementation", version: 1, delta: {}, reason: "baseline" }, missionOverlay: {}, candidates: [], rollouts: [] };
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(model), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+
+    await expect(client.getPersona({ projectId, goalId, roleId: "concertmaster", taskClass: "implementation" })).resolves.toEqual(model);
+    expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/persona?projectId=${projectId}&goalId=${goalId}&roleId=concertmaster&taskClass=implementation`, expect.objectContaining({ headers: { authorization: "Bearer top-secret" } }));
+  });
+});
+
 describe("createApiClient", () => {
   it("lists authenticated project memberships for first-run workspace discovery", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ projects: [projectId] }), { status: 200 }));

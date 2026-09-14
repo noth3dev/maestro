@@ -815,7 +815,7 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
     },
     getPersona(query) {
       const parsed = PersonaReadQuerySchema.parse(query);
-      return request(`v1/persona?${new URLSearchParams({ projectId: parsed.projectId, roleId: parsed.roleId, taskClass: parsed.taskClass })}`, { headers }, PersonaInspectionSchema);
+      return request(`v1/persona?${new URLSearchParams({ projectId: parsed.projectId, goalId: parsed.goalId, roleId: parsed.roleId, taskClass: parsed.taskClass })}`, { headers }, PersonaInspectionSchema);
     },
     proposePersona(input, commandId) {
       const parsed = PersonaProposalInputSchema.parse(input);
