@@ -26,17 +26,21 @@ function arrangementCandidate(record: Awaited<ReturnType<typeof listImprovementC
   return {
     candidateId: record.candidate.candidateId, version: record.candidate.version, parentCandidateId: record.candidate.parentCandidateId,
     projectId: record.candidate.projectId, goalId: record.candidate.goalId, kind: record.candidate.kind, state: record.candidate.state,
-    target: record.candidate.target, changes: record.candidate.changes, sourceEvidenceIds: record.candidate.sourceEvidenceIds,
-    predictedEffect: record.candidate.predictedEffect, contentHash: record.candidate.contentHash, evaluation: record.evaluation,
+    target: record.candidate.target, changes: [...record.candidate.changes], sourceEvidenceIds: [...record.candidate.sourceEvidenceIds],
+    predictedEffect: record.candidate.predictedEffect, contentHash: record.candidate.contentHash,
+    evaluation: record.evaluation === null ? null : {
+      evaluationId: record.evaluation.evaluationId, evaluationHash: record.evaluation.evaluationHash, stages: record.evaluation.stages,
+      metricDeltas: record.evaluation.metricDeltas.map((delta) => ({ ...delta })),
+    },
     rollout: record.rollout, rejectionReason,
   };
 }
 function arrangementCouncil(candidateId: string, council: NonNullable<Awaited<ReturnType<typeof listImprovementCandidateArrangements>>[number]["council"]>): ArrangementCouncil {
-  return { candidateId, ...council };
+  return { candidateId, ...council, dissentNotes: [...council.dissentNotes], judgments: council.judgments.map((judgment) => ({ ...judgment, conditions: [...judgment.conditions], citedEvidenceIds: [...judgment.citedEvidenceIds] })) };
 }
 function arrangementNegativeEvidence(candidateId: string, council: Awaited<ReturnType<typeof listImprovementCandidateArrangements>>[number]["council"]): ArrangementNegativeEvidence {
   const reason = council === null ? null : council.judgments.find((judgment) => judgment.verdict !== "proceed")?.reasoning ?? `Encore Council verdict: ${council.finalVerdict}`;
-  return { candidateId, state: "rejected", reason, roundId: council?.roundId ?? null, judgments: council?.judgments ?? [] };
+  return { candidateId, state: "rejected", reason, roundId: council?.roundId ?? null, judgments: (council?.judgments ?? []).map((judgment) => ({ ...judgment, conditions: [...judgment.conditions], citedEvidenceIds: [...judgment.citedEvidenceIds] })) };
 }
 
 export function createReadStateService(pool: Pool): ReadStateService {
