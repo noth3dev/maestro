@@ -2104,3 +2104,13 @@ All downstream routing documentation must use this contract and must not restore
 - 2026-09-14 S7 review round 2 findings were fixed. Revision rollback restoration is predecessor-bound; hook mutation is rejected; post-construction enablement mutation cannot authorize new classes.
 
 - 2026-09-14 S7 final review is `REVIEW: PASS` at `2247dc9`; no spec-level findings remain.
+
+## 2026-09-14 — Plan 7-a §S3 architecture blocker
+
+The independent no-edit review at exact HEAD `aa0d75c` is **REVIEW: FAIL** after the portable-input remediation. The review found three acceptance blockers:
+
+1. **No live organization/pressure read source:** `TuiShellState.organization` starts empty, `refreshDashboard` only hydrates Goal/workers/budget, and the API client/control plane have no organization-read route. Persistence has canonical `listPermanentOrganization`, but it is not wired to the CLI.
+2. **No attached-Goal pressure source:** `GoalResultSchema` is strict and contains no pressure projection; `refreshDashboard` only maps `goalId` and `state`, so `goal.value.pressureBand` cannot be populated in production.
+3. **Registry actions are not state-valid:** generated no-Goal output advertises `/task-contract create`, `/goal create`, and `/council create`; the first requires additional arguments and the last requires a selected Goal. They are not concrete executable next actions in the displayed state.
+
+The first two items require choosing or adding an architecture outside the current slice. Plan 7-a §S3 explicitly limits implementation to `apps/cli/src/tui/**` and says the organization read model/pressure is already fetched, which is false at this repository HEAD. Adding an API/contract/persistence read path or inventing local data would be an unplanned architectural decision. The branch retains the portable remediation commits (`95984e6`, `aa0d75c`) but is not merged. Resume only after the plan/source boundary is resolved; do not dismiss these as out-of-scope hardening because they are explicit S3 acceptance requirements.
