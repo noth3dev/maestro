@@ -20,6 +20,8 @@ import {
   recordImprovementCandidate,
   recordImprovementCandidateEvaluation,
   recordImprovementCandidateCouncilApproval,
+  appendImprovementCandidateVersion,
+  listImprovementCandidateArrangements,
   transitionImprovementCandidateAfterCouncil,
   transitionImprovementCandidate,
   transitionRoutingCandidateToJudged,
@@ -133,6 +135,22 @@ function routingCouncilJudgment(candidate: ImprovementCandidate, roundId: string
     candidate = await transitionImprovementCandidateAfterCouncil(pool, evaluated.candidateId, proof, candidateAuthor, `judged-${randomUUID()}`);
   });
   afterAll(async () => { await pool.end(); await basePool.query(`DROP SCHEMA ${schema} CASCADE`); await basePool.end(); });
+
+
+  it("projects an older candidate targeted by a certified rollout after a retained revision", async () => {
+    await enableImprovementClass(pool, projectId, "persona_axis", proof, actor, `enable-arrangements-${randomUUID()}`);
+    const rollout = await startBoundedRollout(pool, candidate.candidateId, { ...scope, maxGoalCount: 1 }, proof, actor, `arrangements-start-${randomUUID()}`);
+    const certified = await observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T01:00:00.000Z", metrics: [{ name: "correctness", value: 0.95 }] }, proof, actor, `arrangements-observe-${randomUUID()}`);
+    expect(certified.status).toBe("certified");
+    const retained = await appendImprovementCandidateVersion(pool, candidate.candidateId, candidate, proof, candidateAuthor, `arrangements-retained-${randomUUID()}`);
+
+    const records = await listImprovementCandidateArrangements(pool, { operatorId, projectId }, goalId);
+    expect(records.find((record) => record.candidate.candidateId === candidate.candidateId)).toMatchObject({
+      candidate: { candidateId: candidate.candidateId, version: candidate.version },
+      rollout: { rolloutId: rollout.rolloutId, status: "certified", activeCandidateId: candidate.candidateId, activeVersion: candidate.version },
+    });
+    expect(records.find((record) => record.candidate.candidateId === retained.candidateId)?.candidate.state).toBe("retained");
+  });
 
 
   it("denies applying a judged candidate until its exact improvement class is enabled", async () => {

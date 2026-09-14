@@ -923,6 +923,21 @@ export function selectArrangementCouncilApproval(rows: readonly ArrangementCounc
     || left.candidate_id.localeCompare(right.candidate_id)
     || left.council_round_id.localeCompare(right.council_round_id))[0];
 }
+export interface ArrangementCandidateSelectionRow {
+  readonly candidate_id: string;
+  readonly version: number;
+  readonly state: string;
+}
+/** Keeps latest lineage rows, rejected history, and exact active rollout targets. */
+export function selectArrangementCandidateRows<T extends ArrangementCandidateSelectionRow>(
+  rows: readonly T[],
+  latestCandidateIds: ReadonlySet<string>,
+  activeRolloutTargetKeys: ReadonlySet<string>,
+): T[] {
+  return rows.filter((row) => latestCandidateIds.has(row.candidate_id)
+    || row.state === "rejected"
+    || activeRolloutTargetKeys.has(`${row.candidate_id}:${row.version}`));
+}
 
 interface ArrangementCouncilCandidateBinding {
   readonly candidateId: string;
@@ -993,6 +1008,16 @@ export async function listImprovementCandidateArrangements(
     await assertProjectMembership(client, authorization.operatorId, authorization.projectId);
     const candidateRows = await client.query<CandidateRow>(`SELECT ${COLUMNS}
       FROM improvement_candidates WHERE project_id = $1 AND goal_id = $2 ORDER BY lineage_id, version DESC, candidate_id ASC`, [authorization.projectId, goalId]);
+    const activeRolloutTargets = await client.query<{ active_candidate_id: string; active_version: number }>(`SELECT DISTINCT r.active_candidate_id, r.active_version
+      FROM improvement_rollouts r
+      JOIN improvement_candidates target
+        ON target.candidate_id = r.active_candidate_id AND target.version = r.active_version
+       AND target.project_id = r.project_id AND target.goal_id = r.goal_id
+      JOIN improvement_candidates source
+        ON source.candidate_id = r.candidate_id AND source.lineage_id = target.lineage_id
+       AND source.project_id = r.project_id AND source.goal_id = r.goal_id
+      WHERE r.project_id = $1 AND r.goal_id = $2 AND r.status IN ('active', 'certified')`, [authorization.projectId, goalId]);
+    const activeRolloutTargetKeys = new Set(activeRolloutTargets.rows.map((target) => `${target.active_candidate_id}:${target.active_version}`));
     const latestCandidateIds = new Set<string>();
     const latestLineages = new Set<string>();
     for (const row of candidateRows.rows) {
@@ -1001,7 +1026,7 @@ export async function listImprovementCandidateArrangements(
         latestCandidateIds.add(row.candidate_id);
       }
     }
-    const rows = candidateRows.rows.filter((row) => latestCandidateIds.has(row.candidate_id) || row.state === "rejected");
+    const rows = selectArrangementCandidateRows(candidateRows.rows, latestCandidateIds, activeRolloutTargetKeys);
     const records: ImprovementCandidateArrangementRecord[] = [];
     for (const row of rows) {
       const candidate = mapRow(row);
