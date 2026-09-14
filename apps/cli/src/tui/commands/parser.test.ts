@@ -31,7 +31,7 @@ describe("TUI command parser", () => {
   it("parses Flashmob mode shortcuts", () => {
     expect(parseSlashCommand("/flashmob")).toEqual({ kind: "command", name: "flashmob", options: {} });
     expect(parseSlashCommand("/mode flashmob")).toEqual({ kind: "command", name: "mode", action: "flashmob", options: {} });
-    expect(parseSlashCommand("/mode maestro")).toEqual({ kind: "command", name: "mode", action: "maestro", options: {} });
+    expect(parseSlashCommand("/mode carnegie")).toEqual({ kind: "command", name: "mode", action: "carnegie", options: {} });
   });
 
   it("keeps natural language as text", () => {

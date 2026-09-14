@@ -1,6 +1,6 @@
 # Act 1 — Foundation
 
-Act 1 is Maestro's safety and capability substrate. It must be certified before the Flashmob fast path or Arrangement self-modification layer can begin.
+Act 1 is Carnegie's safety and capability substrate. It must be certified before the Flashmob fast path or Arrangement self-modification layer can begin.
 
 ## Phases
 
@@ -28,7 +28,7 @@ Historical “code complete” and “accepted” markers remain in append-only 
 ## Active work
 
 - [Act 1 execution plan](active/act1-execution.md)
-- [Maestro TUI implementation plan](active/2026-09-06-maestro-tui.md)
+- [Carnegie TUI implementation plan](active/2026-09-06-maestro-tui.md)
 - [Native agent backend plan](active/2026-09-07-maestro-native-agent-backend.md)
 - [Native cutover record](active/2026-09-08-native-prime-removal-cutover.md)
 - [Ensemble Router — Automatic Routing design](active/2026-09-08-ensemble-router-routing-design.md)

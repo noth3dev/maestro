@@ -5,7 +5,7 @@ const session = { workspacePath: "/work/acme", projectId: "11111111-1111-4111-81
 
 describe("TUI session recovery", () => {
   it("reports a new workspace without pretending it is attached", () => {
-    expect(reconcileTuiSession("/work/acme", undefined)).toEqual({ kind: "new", message: "No saved Maestro session for this workspace" });
+    expect(reconcileTuiSession("/work/acme", undefined)).toEqual({ kind: "new", message: "No saved Carnegie session for this workspace" });
   });
 
   it("restores identity and cursor without cancelling server-owned work", () => {

@@ -37,7 +37,7 @@ import {
   CONCERTMASTER_PERSONA_BASELINE,
   type ExecutionAdmission,
   type ExecutionKernelPort,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import { applyAllMigrations } from "../../packages/persistence/src/test-migrations.js";
 import { acquireGoalLease, type GoalLeaseProof } from "../../packages/persistence/src/commands.js";
 import { bootstrapPermanentOrganization } from "../../packages/persistence/src/organization.js";

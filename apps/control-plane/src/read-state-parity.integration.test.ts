@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { localGitPort } from "../../../test/git-port.js";
-import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance } from "@maestro/domain";
+import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance } from "@carnegie/domain";
 import {
   bootstrapPermanentOrganization,
   bootstrapLocalOperator,
@@ -30,8 +30,8 @@ import {
   raiseMetronomeChallenge,
   runEncoreCouncilReview,
   generateConcertmasterFinalReport,
-} from "@maestro/persistence";
-import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
+} from "@carnegie/persistence";
+import { grantProjectMembership, grantProjectRole } from "@carnegie/persistence/testing";
 import { executeCli } from "../../cli/src/main.js";
 import { createControlPlane } from "./main.js";
 import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
@@ -238,7 +238,7 @@ describeDatabase("App/API and CLI durable read-state parity (roadmap/act-1-found
       // Prove the api-client (the same client the CLI itself uses) sees
       // identical facts through the real HTTP surface, not merely that the
       // CLI's own formatting happens to match.
-      const { createApiClient } = await import("@maestro/api-client");
+      const { createApiClient } = await import("@carnegie/api-client");
       const client = createApiClient({ baseUrl: apiUrl, token: bearerToken });
       const apiGoals = await client.listGoals(projectId);
       const apiBudget = await client.getBudgetSummary(goalId, { projectId });

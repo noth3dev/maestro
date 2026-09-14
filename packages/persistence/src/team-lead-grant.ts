@@ -9,7 +9,7 @@ import {
   type MissionBundle,
   type TeamLeadGrantSubstance,
   type Worker,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";

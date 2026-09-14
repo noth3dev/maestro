@@ -1,6 +1,6 @@
 import { realpathSync, statSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
-import { GitOperationError } from "@maestro/domain";
+import { GitOperationError } from "@carnegie/domain";
 
 const WORKTREE_ROOT_ENV = "MAESTRO_WORKTREE_ROOT";
 

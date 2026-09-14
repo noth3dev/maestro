@@ -1,9 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { Pool } from "pg";
-import { createBoundedProjectFileReader, createDeviceAgentServer, DeviceFenceState } from "@maestro/device-agent";
-import { readDevice } from "@maestro/persistence";
-import { claimDeviceAgentCommand, completeDeviceAgentCommand, consumeCapabilityApproval, findCapabilityApproval, loadDeviceAgentAuthorization, markUnresolvedDeviceAgentCommandsUnknown } from "@maestro/persistence";
-import { closeDeviceAgentSession, openDeviceAgentSession, touchDeviceAgentSession } from "@maestro/persistence";
+import { createBoundedProjectFileReader, createDeviceAgentServer, DeviceFenceState } from "@carnegie/device-agent";
+import { readDevice } from "@carnegie/persistence";
+import { claimDeviceAgentCommand, completeDeviceAgentCommand, consumeCapabilityApproval, findCapabilityApproval, loadDeviceAgentAuthorization, markUnresolvedDeviceAgentCommandsUnknown } from "@carnegie/persistence";
+import { closeDeviceAgentSession, openDeviceAgentSession, touchDeviceAgentSession } from "@carnegie/persistence";
 
 interface Config {
   databaseUrl: string; host: string; port: number; deviceId: string; identityFingerprint: string; issuerKeyId: string; issuerPublicKey: string;

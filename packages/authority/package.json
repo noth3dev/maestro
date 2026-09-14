@@ -1,5 +1,5 @@
 {
-  "name": "@maestro/authority",
+  "name": "@carnegie/authority",
   "private": true,
   "type": "module",
   "exports": {

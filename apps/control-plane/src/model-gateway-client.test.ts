@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ModelCatalogEntry, ModelTurnResult } from "@maestro/agent-runtime";
+import type { ModelCatalogEntry, ModelTurnResult } from "@carnegie/agent-runtime";
 import { createModelGatewayClient } from "./model-gateway-client.js";
 
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });

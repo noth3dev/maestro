@@ -25,7 +25,7 @@
   <rect width="900" height="960" class="bg" rx="16" />
 
   <!-- HEADER -->
-  <text x="450" y="45" text-anchor="middle" class="title-main" font-size="20" letter-spacing="2">MAESTRO ARCHITECTURE</text>
+  <text x="450" y="45" text-anchor="middle" class="title-main" font-size="20" letter-spacing="2">CARNEGIE ARCHITECTURE</text>
   <text x="450" y="68" text-anchor="middle" class="title-sub">Durable Control Plane, Hierarchical Execution &amp; Fail-Closed Security</text>
 
   <!-- 1. CONDUCTOR / OPERATOR -->
@@ -158,5 +158,5 @@
 
   <!-- FOOTER BOUNDARY -->
   <rect x="50" y="870" width="800" height="40" rx="8" fill="#121218" stroke="#252533" />
-  <text x="450" y="894" text-anchor="middle" class="text-dim">Maestro native runtime + authenticated Model Gateway</text>
+  <text x="450" y="894" text-anchor="middle" class="text-dim">Carnegie native runtime + authenticated Model Gateway</text>
 </svg>

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { ExecutionKernelPort } from "@maestro/domain";
+import type { ExecutionKernelPort } from "@carnegie/domain";
 import { listSemanticReviews, requestSemanticReview } from "./semantic-review.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;

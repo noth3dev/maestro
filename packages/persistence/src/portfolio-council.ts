@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { assertValidPortfolioCouncilDecision, canonicalJson, requiresImmediateSafePause, type PortfolioCouncilDecision, type PortfolioExecutionFence } from "@maestro/domain";
+import { assertValidPortfolioCouncilDecision, canonicalJson, requiresImmediateSafePause, type PortfolioCouncilDecision, type PortfolioExecutionFence } from "@carnegie/domain";
 import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen } from "./council.js";

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { HeadParticipationInput, HeadParticipation } from "@maestro/contracts";
-import type { ExecutionAdmission, ExecutionKernelPort, GoalHeadParticipation } from "@maestro/domain";
+import type { HeadParticipationInput, HeadParticipation } from "@carnegie/contracts";
+import type { ExecutionAdmission, ExecutionKernelPort, GoalHeadParticipation } from "@carnegie/domain";
 import {
   activateHeadParticipation,
   markHeadActivationSpawnStarted,
@@ -12,7 +12,7 @@ import {
   assertProjectRole,
   type OperatorContext,
   recordNativeExecutionBindingIfSupported,
-} from "@maestro/persistence";
+} from "@carnegie/persistence";
 import type { Pool } from "pg";
 
 export interface HeadParticipationService {
@@ -25,8 +25,8 @@ export interface HeadParticipationServiceDependencies {
   withGoalLease: <T>(
     goalId: string,
     operation: (
-      proof: import("@maestro/persistence").GoalLeaseProof,
-      renew?: () => Promise<import("@maestro/persistence").GoalLeaseProof>,
+      proof: import("@carnegie/persistence").GoalLeaseProof,
+      renew?: () => Promise<import("@carnegie/persistence").GoalLeaseProof>,
     ) => Promise<T>,
   ) => Promise<T>;
   /** Heartbeat period while a provider call is in flight. */
@@ -103,7 +103,7 @@ export function createHeadParticipationService(deps: HeadParticipationServiceDep
         if (reserved.status === "active") return toWire(reserved);
         const shouldSpawn = await markHeadActivationSpawnStarted(deps.pool, goalId, reserved.departmentId, _commandId, proof);
         if (!shouldSpawn) return toWire(reserved);
-        let spawned: import("@maestro/domain").SpawnedInvocation;
+        let spawned: import("@carnegie/domain").SpawnedInvocation;
         let admission: ExecutionAdmission | undefined;
         try {
           // Keep the successful provider result if the post-call heartbeat
@@ -186,8 +186,8 @@ export function createHeadParticipationService(deps: HeadParticipationServiceDep
 
 async function withLeaseHeartbeat<T>(
   call: () => Promise<T>,
-  renewGoalLease: (() => Promise<import("@maestro/persistence").GoalLeaseProof>) | undefined,
-  updateProof: (proof: import("@maestro/persistence").GoalLeaseProof) => void,
+  renewGoalLease: (() => Promise<import("@carnegie/persistence").GoalLeaseProof>) | undefined,
+  updateProof: (proof: import("@carnegie/persistence").GoalLeaseProof) => void,
   intervalMs = 10_000,
   failOnRenewalError = true,
 ): Promise<T> {

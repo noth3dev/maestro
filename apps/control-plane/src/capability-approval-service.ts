@@ -13,9 +13,9 @@ import {
   type CapabilityConsumptionResult,
   type CapabilitySession,
   type CapabilitySessionInput,
-} from "@maestro/persistence";
-import type { CapabilityTier, FullAccessMode } from "@maestro/persistence";
-import { classifyHostEffects, isExternalCapabilityKind, type ExternalCapabilityActivation, type ExternalCapabilityKind, type ExternalCapabilityRepetitionScope } from "@maestro/domain";
+} from "@carnegie/persistence";
+import type { CapabilityTier, FullAccessMode } from "@carnegie/persistence";
+import { classifyHostEffects, isExternalCapabilityKind, type ExternalCapabilityActivation, type ExternalCapabilityKind, type ExternalCapabilityRepetitionScope } from "@carnegie/domain";
 
 export type ApprovalActorKind = "department_head" | "encore_council" | "user";
 

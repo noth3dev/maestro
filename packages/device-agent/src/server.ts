@@ -2,7 +2,7 @@ import { randomUUID, X509Certificate } from "node:crypto";
 import { createServer, type Server } from "node:https";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { TLSSocket } from "node:tls";
-import { deviceIdentityFingerprint, type DeviceEnrollment, type DeviceGrantEnvelope, type DeviceGrantScope, type ExternalCapabilityGate, type LocalDevicePolicy } from "@maestro/domain";
+import { deviceIdentityFingerprint, type DeviceEnrollment, type DeviceGrantEnvelope, type DeviceGrantScope, type ExternalCapabilityGate, type LocalDevicePolicy } from "@carnegie/domain";
 import { assertLocallyExecutableDeviceGrant, type LocalDeviceGrantContext, LocalDeviceGrantDeniedError } from "./local.js";
 import { DeviceFenceState } from "./fence-state.js";
 import type { DeviceFileExecutor } from "./file-executor.js";

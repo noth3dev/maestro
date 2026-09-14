@@ -3,7 +3,7 @@ import {
   assertValidDeviceCommandResult, evaluateLocalDevicePolicy, isGoalState, isTerminalGoalState, type DeviceEnrollment, type DeviceGrantEnvelope, type DeviceGrantScope,
   type GoalState,
   type LocalDevicePolicy, type DeviceGrantState,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import type { Pool, PoolClient } from "pg";
 import { assertGoalControlOpen } from "./council.js";
 import { DeviceGrantAuthorizationError, DeviceGrantError, DeviceGrantExpiredError, DeviceGrantRevokedError } from "./device-grant.js";

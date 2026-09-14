@@ -2,7 +2,7 @@
 
 ## 1. 아키텍처 철학 (Architectural Philosophy)
 
-Maestro는 단일 에이전트 루프 시스템의 근본적인 신뢰성 부족, 메모리 표류(Memory Drift), 권한 유출 문제를 해결하기 위해 설계되었습니다. 단일 프롬프트 루프에 의존하는 대신, Maestro는 엄격한 **권력 분립(Separation of Powers)**, **내구성 있는 영속성(Durable Persistence)**, **Fail-Closed 보안 게이트**를 갖춘 **기업 조직 모델**을 구현합니다.
+Carnegie는 단일 에이전트 루프 시스템의 근본적인 신뢰성 부족, 메모리 표류(Memory Drift), 권한 유출 문제를 해결하기 위해 설계되었습니다. 단일 프롬프트 루프에 의존하는 대신, Carnegie는 엄격한 **권력 분립(Separation of Powers)**, **내구성 있는 영속성(Durable Persistence)**, **Fail-Closed 보안 게이트**를 갖춘 **기업 조직 모델**을 구현합니다.
 
 ```mermaid
 flowchart TD
@@ -10,7 +10,7 @@ flowchart TD
         CONDUCTOR[Conductor / 사용자<br/>• 자연어 목표 및 범위 정의<br/>• 단일 단행 승인 Single Launch Confirmation]
     end
 
-    subgraph ControlPlaneLayer [Maestro 제어 평면 Control Plane]
+    subgraph ControlPlaneLayer [Carnegie 제어 평면 Control Plane]
         CONCERTMASTER[🎼 Concertmaster / 비서실<br/>• 목표 수신 및 라이프사이클 상태 머신 제어]
         OVERTURE[🎶 Overture Intake Crew<br/>• Conversation Lead • Architecture Analyst • Security Evaluator<br/>• task.md 작업 계약서 작성]
         DEPARTMENTS[👥 영구 부서장 Wake-on-Demand<br/>• Product • Tech • Intelligence • Assurance 그룹<br/>• Head Council 봉인 심의 Sealed Submissions]
@@ -48,16 +48,16 @@ flowchart TD
 2. **권력 분립 (Separation of Powers)**: 실행 에이전트(Workers/Heads)는 자신의 작업 결과를 스스로 승인하거나 검증할 수 없습니다. 검증은 Quality 및 Encore (Metronome & Encore Council)에 의해 독립적으로 수행됩니다.
 3. **Fail-Closed & Default-Deny 보안**: 모든 도구 호출 및 부작용(Side Effects)은 `AuthorizedEffectExecutor`를 통과해야 합니다. 분류되지 않거나 권한이 없거나 범위 밖의 액션은 즉시 거부됩니다.
 4. **암호화적 감사 가능성 (Content-Addressed Auditability)**: 모든 입력, 계획, 의견서 및 결과물은 SHA-256 정규화 직렬화(`Sealed Submission`)를 사용하여 해시화되어 불변의 감사 이력을 보장합니다.
-5. **네이티브 런타임 소유권 (Native Runtime Ownership)**: Maestro가 provider-neutral 에이전트 런타임, model gateway 경계, 대화 라이프사이클 및 권한 검사를 소유합니다. 워커 경로는 인증된 Model Gateway 위의 네이티브 실행 커널 라우터를 사용합니다.
+5. **네이티브 런타임 소유권 (Native Runtime Ownership)**: Carnegie가 provider-neutral 에이전트 런타임, model gateway 경계, 대화 라이프사이클 및 권한 검사를 소유합니다. 워커 경로는 인증된 Model Gateway 위의 네이티브 실행 커널 라우터를 사용합니다.
 6. **증거 기반 자가 개선 (Shadow-First Self-Improvement & Evolution)**: 앙코르(Encore)가 마일스톤 실행 증거를 **Improvement Digest**로 큐레이션하여 Shadow/Replay 실행 모드에서 페르소나 10축, 역할 가이드라인 및 라우팅 템플릿을 피드백하고 최적화하되, 보안 권한이나 안전 경계를 임의 변경하지 못하도록 엄격히 격리합니다.
 
 ---
 
 ## 3. 네이티브 런타임, Provider Gateway 및 레거시 워커 브리지
 
-Maestro는 모델 I/O, 에이전트 동작 및 내구성 있는 권한을 분리된 경계로 유지합니다:
+Carnegie는 모델 I/O, 에이전트 동작 및 내구성 있는 권한을 분리된 경계로 유지합니다:
 
-| 책임 영역 | Maestro 네이티브 런타임 / gateway | Maestro 제어 평면 (`apps/control-plane`) |
+| 책임 영역 | Carnegie 네이티브 런타임 / gateway | Carnegie 제어 평면 (`apps/control-plane`) |
 | :--- | :--- | :--- |
 | **모델 & 대화 관리** | `packages/agent-runtime`, provider plugins, 인증된 `apps/model-gateway` | 대화/Goal 라이프사이클, 모델 정책, 프로젝트 멤버십, 예산 한도 |
 | **워커 실행 브리지** | `ExecutionKernelPort`; 인증된 Model Gateway를 통한 네이티브 라우터 사용 | 워커 승인, 권한 검사, 리스, 사전 감사 로그 |
@@ -74,7 +74,7 @@ Maestro는 모델 I/O, 에이전트 동작 및 내구성 있는 권한을 분리
 
 ## 4. 저장소 구조 개요 (Repository Layout Overview)
 
-Maestro는 **npm workspaces** 기반의 모노레포 구조로 정리되어 있습니다:
+Carnegie는 **npm workspaces** 기반의 모노레포 구조로 정리되어 있습니다:
 
 * **`apps/control-plane`**: 내구성 있는 명령 및 실시간 상태 스트리밍을 위한 Fastify 5 REST & SSE 서버.
 * **`apps/cli`**: 제어 평면 API와 완전한 기능적 패리티를 제공하는 명령줄 인터페이스.
@@ -85,7 +85,7 @@ Maestro는 **npm workspaces** 기반의 모노레포 구조로 정리되어 있�
 * **`packages/persistence`**: PostgreSQL 17 스키마 정의, `pg` 쿼리 및 마이그레이션.
 * **`packages/authority`**: 권한 평가 엔진, 액션 분류 행렬 및 `AuthorizedEffectExecutor`.
 * **`packages/evidence`**: SHA-256 증거 번들 생성기 및 암호화 검증.
-* **`packages/agent-runtime`**: Maestro가 소유하는 provider-neutral 모델/도구/서브에이전트 런타임.
+* **`packages/agent-runtime`**: Carnegie가 소유하는 provider-neutral 모델/도구/서브에이전트 런타임.
 * **`apps/model-gateway`**: API key와 관리형 Codex 로그인 상태를 소유하는 인증된 provider 프로세스.
 * **네이티브 execution kernel**: 명시적 grant와 durable identity를 포함한 모든 admission을 인증된 Model Gateway로 라우팅합니다.
 * **`packages/git-adapter`**: 격리된 Git 워크트리 관리자, 브랜치 실행기 및 디프 수집기.

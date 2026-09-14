@@ -9,8 +9,8 @@ import {
   VStack,
   matchesKey,
 } from "@earendil-works/pi-tui";
-import { createApiClient, type ApiClient, type GoalEvent } from "@maestro/api-client";
-import type { ConversationEvent, ModelCatalogEntry } from "@maestro/contracts";
+import { createApiClient, type ApiClient, type GoalEvent } from "@carnegie/api-client";
+import type { ConversationEvent, ModelCatalogEntry } from "@carnegie/contracts";
 
 import { resolveWorkspace } from "./workspace.js";
 
@@ -249,7 +249,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       const from = getModeAccentProgress();
       const to = enabled ? 1 : 0;
       flashmobMode = enabled;
-      state.mode = enabled ? "flashmob" : "maestro";
+      state.mode = enabled ? "flashmob" : "carnegie";
       const steps = 12;
       for (let step = 1; step <= steps; step += 1) {
         if (animationId !== flashmobAnimationId) return;
@@ -427,7 +427,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     };
     const retryConnection = async () => {
       connectionGeneration += 1;
-      appendWarning("Retrying Maestro startup checks…");
+      appendWarning("Retrying Carnegie startup checks…");
       if (startupError !== undefined) {
         try {
           workspace = await resolveWorkspace(options.cwd);
@@ -635,10 +635,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         } else if (parsed.kind === "command" && parsed.name === "flashmob" && (parsed.action === undefined || parsed.action === "toggle")) {
           await animateFlashmobMode(!flashmobMode);
         } else if (parsed.kind === "command" && parsed.name === "mode" && (parsed.action === undefined || parsed.action === "list")) {
-          append(`Mode: ${flashmobMode ? "flashmob" : "maestro"} · use /mode flashmob, /mode maestro, or /flashmob to toggle`);
+          append(`Mode: ${flashmobMode ? "flashmob" : "carnegie"} · use /mode flashmob, /mode carnegie, or /flashmob to toggle`);
         } else if (parsed.kind === "command" && parsed.name === "mode" && parsed.action === "flashmob") {
           await animateFlashmobMode(true);
-        } else if (parsed.kind === "command" && parsed.name === "mode" && (parsed.action === "maestro" || parsed.action === "standard")) {
+        } else if (parsed.kind === "command" && parsed.name === "mode" && (parsed.action === "carnegie" || parsed.action === "standard")) {
           await animateFlashmobMode(false);
         } else if (parsed.kind === "command" && parsed.name === "session") {
           if (parsed.action === "retry") {
@@ -818,7 +818,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             appendWarning("Concertmaster requires an attached workspace project.");
           } else if (flashmobMode) {
             append(
-              "Flashmob is a planned bounded fast path, but its Vanguard runtime is not wired yet. Switch to /mode maestro for governed conversation.",
+              "Flashmob is a planned bounded fast path, but its Vanguard runtime is not wired yet. Switch to /mode carnegie for governed conversation.",
             );
           } else if (session?.goalId === undefined) {
             appendWarning("Select a Goal before sending a Concertmaster message (use /goal select --goal-id <id>).");

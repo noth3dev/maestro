@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { DeviceGrantScope } from "@maestro/domain";
+import type { DeviceGrantScope } from "@carnegie/domain";
 import { applyAllMigrations } from "./test-migrations.js";
 import { acquireGoalLease, StaleGoalLeaseError } from "./commands.js";
 import { enrollDevice, revokeDevice } from "./device.js";

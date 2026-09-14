@@ -16,7 +16,7 @@ import {
   type IndependentBrief,
   type SealedSubmissionParticipant,
   type SealedSubmissionSnapshot,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 

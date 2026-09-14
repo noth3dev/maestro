@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { capacityDemand, type CapacityDemand } from "@maestro/domain";
+import { capacityDemand, type CapacityDemand } from "@carnegie/domain";
 import type { Pool } from "pg";
 
 export class CapacityReservationError extends Error {

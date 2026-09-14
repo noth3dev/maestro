@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { CodexAppServerClient, type CodexAppServerTransport } from "@maestro/model-provider-openai";
-import { applyAllMigrations, bootstrapLocalOperator } from "@maestro/persistence";
+import { CodexAppServerClient, type CodexAppServerTransport } from "@carnegie/model-provider-openai";
+import { applyAllMigrations, bootstrapLocalOperator } from "@carnegie/persistence";
 import { InMemoryCredentialStore } from "../../model-gateway/src/credential-store.js";
-import { ProviderRegistry, type ModelProviderPort, type ProviderPlugin } from "@maestro/agent-runtime";
+import { ProviderRegistry, type ModelProviderPort, type ProviderPlugin } from "@carnegie/agent-runtime";
 import { createModelGateway } from "../../model-gateway/src/gateway.js";
 import { buildModelGatewayServer } from "../../model-gateway/src/rpc.js";
 import { createControlPlane } from "./main.js";
@@ -57,7 +57,7 @@ describeDatabase("real account-login acceptance: authenticated HTTP + real Model
     await applyAllMigrations(pool);
     const credentials = new InMemoryCredentialStore();
     transport = new FakeCodexTransport();
-    const codex = new CodexAppServerClient({ transport, clientInfo: { name: "maestro", title: "Maestro", version: "test" } });
+    const codex = new CodexAppServerClient({ transport, clientInfo: { name: "carnegie", title: "Carnegie", version: "test" } });
     const registry = new ProviderRegistry();
     registry.register(fakeOpenAiPlugin());
     const gateway = createModelGateway({ registry, credentials, operatorId: GATEWAY_OPERATOR_ID, instanceId: "acceptance-gateway", codex });
@@ -102,7 +102,7 @@ describeDatabase("real account-login acceptance: authenticated HTTP + real Model
       expect(started.status).toBe(200);
       const startedBody = await started.json() as { providerId: string; loginId: string; authUrl: string };
       expect(startedBody).toMatchObject({ providerId: "openai-codex", authUrl: "https://chatgpt.com/oauth?state=opaque" });
-      // The client-facing loginId is Maestro's own durable identity, never
+      // The client-facing loginId is Carnegie's own durable identity, never
       // the raw provider session id the fake transport assigned above.
       expect(startedBody.loginId).not.toBe("provider-login-1");
 

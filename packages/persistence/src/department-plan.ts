@@ -7,7 +7,7 @@ import {
   isExecutableDecisionPacket,
   type DepartmentPlan,
   type DepartmentPlanSubstance,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext, type HeadCouncil } from "./council.js";

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { ActionRequest } from "@maestro/authority";
+import type { ActionRequest } from "@carnegie/authority";
 import {
   assertValidBrowserCommandRequest,
   assertValidEnvironmentRecord,
@@ -12,7 +12,7 @@ import {
   type BrowserExecutionPort,
   type EnvironmentRecord,
   type ExternalCapabilityGate,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import {
   EnvironmentAuthorizationError,
   EnvironmentBoundaryError,

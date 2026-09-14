@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, readFileSync }
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
-import type { AuthorityDecision, AuthorityRepository } from "@maestro/authority";
-import { AuthorizedEffectExecutor } from "@maestro/authority";
+import type { AuthorityDecision, AuthorityRepository } from "@carnegie/authority";
+import { AuthorizedEffectExecutor } from "@carnegie/authority";
 import { createAuthorizedFileEditPort, FileEditAuthorizationError, FileEditBoundaryError, FileEditOutcomeUnknownError } from "./file-edit-adapter.js";
 
 function context() {

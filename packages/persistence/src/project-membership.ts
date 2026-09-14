@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ProjectAccessProvisionInput, ProjectAccessProvisionResult } from "@maestro/contracts";
+import type { ProjectAccessProvisionInput, ProjectAccessProvisionResult } from "@carnegie/contracts";
 import type { Pool, PoolClient } from "pg";
 
 export class ProjectMembershipError extends Error {}

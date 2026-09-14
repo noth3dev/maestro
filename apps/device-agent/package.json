@@ -1,8 +1,8 @@
 {
-  "name": "@maestro/device-agent-app",
+  "name": "@carnegie/device-agent-app",
   "private": true,
   "type": "module",
   "main": "./dist/main.js",
-  "dependencies": { "@maestro/device-agent": "*", "@maestro/domain": "*", "@maestro/persistence": "*", "pg": "^8.23.0" },
+  "dependencies": { "@carnegie/device-agent": "*", "@carnegie/domain": "*", "@carnegie/persistence": "*", "pg": "^8.23.0" },
   "scripts": { "start": "node ./dist/main.js" }
 }

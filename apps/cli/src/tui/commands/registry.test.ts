@@ -45,7 +45,7 @@ describe("TUI command registry", () => {
     expect(registry.find("workers")?.actions.find((action) => action.name === "list")?.kind).toBe("read");
     expect(registry.find("metronome")?.actions.find((action) => action.name === "scan")?.kind).toBe("write");
     expect(registry.find("mode")?.actions.find((action) => action.name === "flashmob")?.kind).toBe("write");
-    expect(registry.find("mode")?.actions.find((action) => action.name === "maestro")?.kind).toBe("write");
+    expect(registry.find("mode")?.actions.find((action) => action.name === "carnegie")?.kind).toBe("write");
     expect(registry.find("flashmob")?.actions.find((action) => action.name === "toggle")?.kind).toBe("write");
     expect(registry.find("models")?.actions.find((action) => action.name === "use")?.kind).toBe("write");
   });

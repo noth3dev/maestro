@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { isTerminalGoalState, toExecutionRef, toInvocationRef, type ExecutionKernelPort, type GoalState } from "@maestro/domain";
+import { isTerminalGoalState, toExecutionRef, toInvocationRef, type ExecutionKernelPort, type GoalState } from "@carnegie/domain";
 import { recoverStaleCapacityReservations } from "./capacity-reservation.js";
 import type { Pool } from "pg";
 import {

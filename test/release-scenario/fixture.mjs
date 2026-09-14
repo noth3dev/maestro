@@ -74,7 +74,7 @@ export async function createReleaseScenarioFixture(options = {}) {
   ]);
   await execFile("git", ["init", "--quiet", root]);
   await execFile("git", ["-C", root, "config", "user.email", "release-scenario@example.invalid"]);
-  await execFile("git", ["-C", root, "config", "user.name", "Maestro Release Scenario"]);
+  await execFile("git", ["-C", root, "config", "user.name", "Carnegie Release Scenario"]);
   await execFile("git", ["-C", root, "add", "."]);
   await execFile("git", ["-C", root, "commit", "--quiet", "-m", "fixture: seed release scenario"]);
 

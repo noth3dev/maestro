@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { CONCERTMASTER_PERSONA_BASELINE, PERSONA_AXES, type LearnedPersonaProfileVersionInput, type TaskClassPersonaAdjustmentInput } from "@maestro/domain";
+import { CONCERTMASTER_PERSONA_BASELINE, PERSONA_AXES, type LearnedPersonaProfileVersionInput, type TaskClassPersonaAdjustmentInput } from "@carnegie/domain";
 import { applyAllMigrations } from "./test-migrations.js";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { listLearnedPersonaProfileVersions, readActivePersonaProfile, storeLearnedPersonaProfileVersion, storeTaskClassPersonaAdjustment } from "./persona-profile.js";

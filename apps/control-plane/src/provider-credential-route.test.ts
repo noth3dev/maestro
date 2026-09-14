@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildServer, type GoalService, type OperatorAuthenticator, type ProviderCredentialService } from "./server.js";
 import { ModelGatewayClientError } from "./model-gateway-client.js";
-import type { AccountLoginStore } from "@maestro/persistence";
+import type { AccountLoginStore } from "@carnegie/persistence";
 
 const operator = { operatorId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05", credentialId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f06" };
 const goalService = { createGoal: vi.fn(), transitionGoal: vi.fn(), pauseGoal: vi.fn(), stopGoal: vi.fn(), resumeGoal: vi.fn(), emergencyStopGoal: vi.fn(), getGoal: vi.fn() } as unknown as GoalService;

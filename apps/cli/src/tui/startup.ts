@@ -1,4 +1,4 @@
-import { createApiClient, type ApiClient } from "@maestro/api-client";
+import { createApiClient, type ApiClient } from "@carnegie/api-client";
 import { resolveWorkspace, type Workspace } from "./workspace.js";
 import { resolveConnection } from "./connection.js";
 import { ensureLocalControlPlane } from "./local-control-plane.js";
@@ -103,7 +103,7 @@ export async function initializeTui(options: InteractiveTuiOptions): Promise<{
     workspace,
     ...(setupSteps.length === 0 ? {} : { setupSteps }),
     ...(initialModel === undefined ? {} : { model: initialModel }),
-    mode: "maestro",
+    mode: "carnegie",
     connection:
       startupError !== undefined
         ? { kind: "error", message: `Workspace unavailable: ${startupError}` }

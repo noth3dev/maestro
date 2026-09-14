@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { TaskContract } from "@maestro/contracts";
+import type { TaskContract } from "@carnegie/contracts";
 import { Icon } from "../icons.js";
 import { useConnection } from "../connection.js";
 import type { ViewName } from "../views.js";
@@ -62,7 +62,7 @@ export function Home({ onNavigate, mode, onModeChange }: { onNavigate: (view: Vi
     setError(undefined);
     try {
       const substance = buildTaskContractDraft(config.projectId, text);
-      const created = await createTaskContractDraft(window.maestro.api, { projectId: config.projectId, substance });
+      const created = await createTaskContractDraft(window.carnegie.api, { projectId: config.projectId, substance });
       setDraft(created);
       setDraftForm(formFromContract(created));
       setConfirmed(false);
@@ -80,7 +80,7 @@ export function Home({ onNavigate, mode, onModeChange }: { onNavigate: (view: Vi
     setBusy(true);
     setError(undefined);
     try {
-      const updated = await updateTaskContractDraft(window.maestro.api, draft, {
+      const updated = await updateTaskContractDraft(window.carnegie.api, draft, {
         desiredOutcome: draftForm.desiredOutcome,
         successCriteria: lines(draftForm.successCriteria),
         project: {
@@ -103,7 +103,7 @@ export function Home({ onNavigate, mode, onModeChange }: { onNavigate: (view: Vi
     setBusy(true);
     setError(undefined);
     try {
-      await confirmTaskContractDraft(window.maestro.api, draft);
+      await confirmTaskContractDraft(window.carnegie.api, draft);
       setConfirmed(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -117,7 +117,7 @@ export function Home({ onNavigate, mode, onModeChange }: { onNavigate: (view: Vi
     setBusy(true);
     setError(undefined);
     try {
-      setDraft(await launchTaskContractDraft(window.maestro.api, draft));
+      setDraft(await launchTaskContractDraft(window.carnegie.api, draft));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -133,7 +133,7 @@ export function Home({ onNavigate, mode, onModeChange }: { onNavigate: (view: Vi
         <textarea id="home-brief" placeholder="brief the concertmaster" value={text} onChange={(event) => setText(event.target.value)} />
         <div className="home-composer-row">
           <div className="pill-toggle" role="group" aria-label="Home mode">
-            <button type="button" className={mode === "maestro" ? "on" : ""} onClick={() => onModeChange("maestro")}>maestro</button>
+            <button type="button" className={mode === "carnegie" ? "on" : ""} onClick={() => onModeChange("carnegie")}>carnegie</button>
             <button type="button" className={isFlashmob ? "on flashmob" : ""} onClick={() => onModeChange("flashmob")}>flashmob</button>
           </div>
           <button className={`btn btn-primary btn-sm home-send-btn${isFlashmob ? " mode-flashmob" : ""}`} style={{ marginLeft: "auto" }} disabled={busy || text.trim() === ""} type="submit">

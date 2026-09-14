@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import type { GoalBudgetSummary } from "@maestro/api-client";
-import type { Certification } from "@maestro/contracts";
+import type { GoalBudgetSummary } from "@carnegie/api-client";
+import type { Certification } from "@carnegie/contracts";
 import { loadGoalPageData, type GoalPageData } from "./lib/goal-data.js";
 import { useConnection } from "./connection.js";
 import { useGoals } from "./goals.js";
@@ -26,9 +26,9 @@ export function useGoalDetail(): { detail: GoalDetail | undefined; loading: bool
     setError(undefined);
     const query = { projectId: config.projectId, goalId: selectedGoalId };
     Promise.all([
-      loadGoalPageData(window.maestro.api, query),
-      window.maestro.api.getBudgetSummary(selectedGoalId, { projectId: config.projectId }),
-      window.maestro.api.listCertifications(selectedGoalId, { projectId: config.projectId }),
+      loadGoalPageData(window.carnegie.api, query),
+      window.carnegie.api.getBudgetSummary(selectedGoalId, { projectId: config.projectId }),
+      window.carnegie.api.listCertifications(selectedGoalId, { projectId: config.projectId }),
     ])
       .then(([page, budget, certificationList]) => {
         if (cancelled) return;

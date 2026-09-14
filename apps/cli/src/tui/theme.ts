@@ -52,7 +52,7 @@ const animatedForeground =
   (text) =>
     foreground(interpolateHex(warm, modeTarget, modeAccentProgress), ansi16Code)(text);
 
-/** 0 is Maestro/Warm Earth; 1 is the Flashmob execution-profile blue accent. Intermediate values are rendered. */
+/** 0 is Carnegie/Warm Earth; 1 is the Flashmob execution-profile blue accent. Intermediate values are rendered. */
 export function setModeAccentProgress(progress: number): void {
   if (!Number.isFinite(progress)) throw new RangeError("Mode accent progress must be finite");
   modeAccentProgress = Math.max(0, Math.min(1, progress));

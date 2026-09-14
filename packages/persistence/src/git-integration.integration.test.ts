@@ -7,7 +7,7 @@ import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { localGitPort } from "../../../test/git-port.js";
-import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance } from "@maestro/domain";
+import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance } from "@carnegie/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease, StaleGoalLeaseError } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";

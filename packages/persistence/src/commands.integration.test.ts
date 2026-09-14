@@ -11,7 +11,7 @@ import {
 } from "./commands.js";
 import { listGoalEvents } from "./events.js";
 import { createDurableTaskContract, launchConfirmedTaskContract, recordExactTaskContractConfirmation } from "./task-contract.js";
-import type { TaskContractSubstance } from "@maestro/domain";
+import type { TaskContractSubstance } from "@carnegie/domain";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -250,7 +250,7 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
     const projectId = randomUUID();
     const goalId = randomUUID();
     const proof = await lease(goalId, "control-plane");
-    const command = async (to: import("@maestro/domain").GoalState, expectedVersion: number) =>
+    const command = async (to: import("@carnegie/domain").GoalState, expectedVersion: number) =>
       executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "operator", type: "TransitionGoal", expectedVersion, to }, proof);
 
     await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "operator", type: "CreateGoal", expectedVersion: 0 }, proof);

@@ -1,5 +1,5 @@
-import type { AcceptWorkerInput, CertifyWorkerInput, DepartmentAcceptance, Certification } from "@maestro/contracts";
-import { assertProjectRole, acceptDepartmentWorkerOutput, certifyConditional, certifyQuality, readHeadCouncil, readWorker, type CouncilActorContext, type OperatorContext } from "@maestro/persistence";
+import type { AcceptWorkerInput, CertifyWorkerInput, DepartmentAcceptance, Certification } from "@carnegie/contracts";
+import { assertProjectRole, acceptDepartmentWorkerOutput, certifyConditional, certifyQuality, readHeadCouncil, readWorker, type CouncilActorContext, type OperatorContext } from "@carnegie/persistence";
 import type { Pool } from "pg";
 
 export interface CertificationService {
@@ -9,7 +9,7 @@ export interface CertificationService {
 }
 export interface CertificationServiceDependencies {
   pool: Pool;
-  withGoalLease: <T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
+  withGoalLease: <T>(goalId: string, operation: (proof: import("@carnegie/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
 }
 export class CertificationProjectMismatchError extends Error { constructor() { super("Certification project does not match the Goal project"); this.name = "CertificationProjectMismatchError"; } }
 

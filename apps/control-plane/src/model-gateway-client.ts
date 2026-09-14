@@ -1,4 +1,4 @@
-import type { GatewayAccountLoginStartRequest, GatewayAccountLoginStartResult, GatewayAccountLoginStatusRequest, GatewayAccountLoginStatusResult, GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialBinding, GatewayCredentialRevokeRequest, GatewayModelListRequest, GatewayTurnRequest, ModelCatalogEntry, ModelGatewayPort, ModelProviderPort, ModelStreamEvent, ModelTurnResult, ProviderCancellationOutcome, ProviderCapability } from "@maestro/agent-runtime";
+import type { GatewayAccountLoginStartRequest, GatewayAccountLoginStartResult, GatewayAccountLoginStatusRequest, GatewayAccountLoginStatusResult, GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialBinding, GatewayCredentialRevokeRequest, GatewayModelListRequest, GatewayTurnRequest, ModelCatalogEntry, ModelGatewayPort, ModelProviderPort, ModelStreamEvent, ModelTurnResult, ProviderCancellationOutcome, ProviderCapability } from "@carnegie/agent-runtime";
 
 export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 

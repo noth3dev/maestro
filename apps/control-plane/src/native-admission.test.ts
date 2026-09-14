@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CapabilityGrant, InvocationContext, RoutingSelection } from "@maestro/domain";
+import type { CapabilityGrant, InvocationContext, RoutingSelection } from "@carnegie/domain";
 import { parseConfig } from "./config.js";
 import {
   createNativeAdmissionFromRouting,

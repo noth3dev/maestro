@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { InvalidDeviceInventoryError, deviceIdentityFingerprint, type DeviceInventory, type LocalDevicePolicyInput } from "@maestro/domain";
+import { InvalidDeviceInventoryError, deviceIdentityFingerprint, type DeviceInventory, type LocalDevicePolicyInput } from "@carnegie/domain";
 import { applyAllMigrations } from "./test-migrations.js";
 import {
   DeviceAuthorizationError,

@@ -1,6 +1,6 @@
 # Design artifacts
 
-This directory contains the committed web design reference used by Maestro UI work.
+This directory contains the committed web design reference used by Carnegie UI work.
 
 - `design-system.html` is the canonical Warm Earth token reference. The CLI TUI mirrors its dark-theme palette in `apps/cli/src/tui/theme.ts`.
 

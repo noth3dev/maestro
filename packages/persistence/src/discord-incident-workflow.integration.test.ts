@@ -19,7 +19,7 @@ import {
   type IndependentBrief,
   type MissionBundleSubstance,
   type TaskContractSubstance,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease, executeGoalCommand, StaleGoalLeaseError } from "./commands.js";
 import { createDurableTaskContract, launchConfirmedTaskContract, recordExactTaskContractConfirmation } from "./task-contract.js";

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { CreateTaskContractInputSchema, type TaskContract, type TaskContractSubstance } from "@maestro/contracts";
+import { CreateTaskContractInputSchema, type TaskContract, type TaskContractSubstance } from "@carnegie/contracts";
 import {
   buildTaskContractDraft,
   confirmTaskContractDraft,

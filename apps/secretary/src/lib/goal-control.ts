@@ -1,5 +1,5 @@
-import type { GoalResult } from "@maestro/api-client";
-import type { GoalControlInput } from "@maestro/contracts";
+import type { GoalResult } from "@carnegie/api-client";
+import type { GoalControlInput } from "@carnegie/contracts";
 
 export type GoalControlAction = "pause" | "resume" | "stop" | "emergency-stop";
 

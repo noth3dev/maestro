@@ -2,7 +2,7 @@ import { open, realpath } from "node:fs/promises";
 import { constants, realpathSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { TextDecoder } from "node:util";
-import type { ActionRequest, AuthorityDecision } from "@maestro/authority";
+import type { ActionRequest, AuthorityDecision } from "@carnegie/authority";
 
 export interface ReadOnlyFileAuthorityGateway {
   execute(request: ActionRequest, effect: () => Promise<unknown>): Promise<AuthorityDecision>;

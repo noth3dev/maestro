@@ -10,13 +10,13 @@ import {
   type RolloutMetricObservation,
   type RolloutProtectedMetric,
   type RolloutScope,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
 import { withGoalAuthority } from "./goal-authority.js";
 import { applyPersonaTaskClassApplication, restorePersonaTaskClassApplication, type PersonaTaskClassApplication } from "./persona-profile.js";
 
-export { type RolloutMetricObservation, type RolloutProtectedMetric, type RolloutScope } from "@maestro/domain";
+export { type RolloutMetricObservation, type RolloutProtectedMetric, type RolloutScope } from "@carnegie/domain";
 
 export class RolloutPersistenceError extends Error {
   constructor(message: string) { super(message); this.name = "RolloutPersistenceError"; }

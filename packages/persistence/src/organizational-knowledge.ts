@@ -3,7 +3,7 @@ import {
   assertValidOrganizationalKnowledgeProposal, createWorkerProposedKnowledge, decayOrganizationalKnowledge as decayKnowledge, promoteKnowledgeToGlobal, promoteKnowledgeToProject,
   retireOrganizationalKnowledge as retireKnowledge, type GlobalKnowledgePromotion, type OrganizationalKnowledge,
   type OrganizationalKnowledgeProposal, type OrganizationalKnowledgeStatus,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
 import { withGoalAuthority } from "./goal-authority.js";

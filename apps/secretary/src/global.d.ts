@@ -1,4 +1,4 @@
-import type { ApiClient } from "@maestro/api-client";
+import type { ApiClient } from "@carnegie/api-client";
 import type { ExposedApiMethod } from "../electron/apiBridge.js";
 import type { LocalePreference, ThemePreference } from "../electron/preferences.js";
 
@@ -18,7 +18,7 @@ export interface Preferences {
   locale: LocalePreference;
 }
 
-export interface MaestroBridge {
+export interface CarnegieBridge {
   api: BridgedApi;
   config: {
     get(): Promise<PublicConnectionConfig | undefined>;
@@ -33,6 +33,6 @@ export interface MaestroBridge {
 
 declare global {
   interface Window {
-    maestro: MaestroBridge;
+    carnegie: CarnegieBridge;
   }
 }

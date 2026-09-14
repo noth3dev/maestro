@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { GoalHeadParticipation, HeadParticipationStatus } from "@maestro/domain";
+import type { GoalHeadParticipation, HeadParticipationStatus } from "@carnegie/domain";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen } from "./council.js";
 import type { Pool, PoolClient } from "pg";

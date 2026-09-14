@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   assertSafeImprovementDigestText, normalizeImprovementDigestInput, improvementDigestContentHash, IMPROVEMENT_DIGEST_SCHEMA_VERSION, type ImprovementDigest, type ImprovementDigestInput,
   type ImprovementDigestMetric, type ImprovementDigestSourceRef,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
 import { withGoalAuthority } from "./goal-authority.js";

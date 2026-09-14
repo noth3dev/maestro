@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import type { ActionRequest, AuthorityDecisionAudit, AuthorityRecord, AuthorityRepository, ControlRecheck } from "@maestro/authority";
+import type { ActionRequest, AuthorityDecisionAudit, AuthorityRecord, AuthorityRepository, ControlRecheck } from "@carnegie/authority";
 import { createCriticalActionService } from "./critical-action-service.js";
 
 const operator = { operatorId: "operator-1", credentialId: "credential-1" };

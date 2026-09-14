@@ -1,4 +1,4 @@
-import type { GoalResult, CreateGoalInput, TransitionGoalInput, GoalControlInput } from "@maestro/contracts";
+import type { GoalResult, CreateGoalInput, TransitionGoalInput, GoalControlInput } from "@carnegie/contracts";
 import {
   acquireGoalLease,
   renewGoalLease,
@@ -8,9 +8,9 @@ import {
   StaleGoalLeaseError as PersistenceStaleGoalLeaseError,
   type CommandResult,
   type GoalCommand,
-} from "@maestro/persistence";
+} from "@carnegie/persistence";
 import type { Pool } from "pg";
-import type { OperatorContext } from "@maestro/persistence";
+import type { OperatorContext } from "@carnegie/persistence";
 
 export type { GoalControlInput };
 
@@ -27,8 +27,8 @@ export interface GoalService {
   withGoalLease?<T>(
     goalId: string,
     operation: (
-      proof: import("@maestro/persistence").GoalLeaseProof,
-      renew?: () => Promise<import("@maestro/persistence").GoalLeaseProof>,
+      proof: import("@carnegie/persistence").GoalLeaseProof,
+      renew?: () => Promise<import("@carnegie/persistence").GoalLeaseProof>,
     ) => Promise<T>,
   ): Promise<T>;
 }
@@ -59,9 +59,9 @@ export interface DurableGoalServiceOptions {
 
 export function createDurableGoalService(options: DurableGoalServiceOptions): GoalService {
   const leaseDurationMs = options.leaseDurationMs ?? 30_000;
-  const leaseProofs = new Map<string, import("@maestro/persistence").GoalLeaseProof>();
+  const leaseProofs = new Map<string, import("@carnegie/persistence").GoalLeaseProof>();
 
-  async function leaseFor(goalId: string): Promise<import("@maestro/persistence").GoalLeaseProof> {
+  async function leaseFor(goalId: string): Promise<import("@carnegie/persistence").GoalLeaseProof> {
     const currentProof = leaseProofs.get(goalId);
     if (currentProof) {
       try {

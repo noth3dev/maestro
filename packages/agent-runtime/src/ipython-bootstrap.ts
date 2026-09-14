@@ -1,6 +1,6 @@
 /**
  * Constrained Python session bootstrap used by an injected child-process adapter.
- * The child has no Maestro credentials and receives no raw host I/O capability.
+ * The child has no Carnegie credentials and receives no raw host I/O capability.
  * All useful project access goes through the versioned host-request bridge.
  */
 export const IPYTHON_PYTHON_BOOTSTRAP = String.raw`import ast

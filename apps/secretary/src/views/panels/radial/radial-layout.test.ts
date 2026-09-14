@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ProjectionReadModel } from "@maestro/contracts";
+import type { ProjectionReadModel } from "@carnegie/contracts";
 import { buildRadialLayout, filterRadialEdges } from "./radial-layout.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";

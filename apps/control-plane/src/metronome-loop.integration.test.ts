@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { taskContractContentHash } from "@maestro/domain";
+import { taskContractContentHash } from "@carnegie/domain";
 import {
   acquireGoalLease, applyAllMigrations, bootstrapPermanentOrganization, createDepartmentPlan, createHeadCouncil,
   createMissionBundle, observeWorker, readWorker, recordCouncilDecisionPacket, revealCouncilBriefs,
   spawnWorker, submitIndependentBrief,
-} from "@maestro/persistence";
+} from "@carnegie/persistence";
 import { createDurableGoalService } from "./goal-service.js";
 import { createMetronomeLoop } from "./metronome-loop.js";
 

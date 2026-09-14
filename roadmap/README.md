@@ -1,6 +1,6 @@
-# Maestro Roadmap
+# Carnegie Roadmap
 
-This directory is the planning and evidence map for Maestro. It is organized by delivery **Act**, while preserving the live execution ledger, implementation plans, design specifications, and historical decisions.
+This directory is the planning and evidence map for Carnegie. It is organized by delivery **Act**, while preserving the live execution ledger, implementation plans, design specifications, and historical decisions.
 
 ## Acts
 

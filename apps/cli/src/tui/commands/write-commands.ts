@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ApiClient } from "@maestro/api-client";
+import type { ApiClient } from "@carnegie/api-client";
 import {
   CertifyWorkerInputSchema,
   CreateDepartmentPlanInputSchema,
@@ -15,7 +15,7 @@ import {
   SubmitCouncilBriefInputSchema,
   TransitionGoalInputSchema,
   UpdateTaskContractInputSchema,
-} from "@maestro/contracts";
+} from "@carnegie/contracts";
 import type { ParsedCommand } from "./parser.js";
 import { createCommandRegistry } from "./registry.js";
 import { confirmCriticalAction, type ConfirmationPrompt } from "../confirmation.js";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyAction } from "@maestro/authority";
+import { classifyAction } from "@carnegie/authority";
 import { classifyHostEffects, HostEffectClassificationError } from "./host-effect-classification.js";
 
 describe("host effect classification", () => {

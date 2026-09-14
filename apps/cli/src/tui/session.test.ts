@@ -13,7 +13,7 @@ import {
 
 describe("workspace session", () => {
   it("round trips non-secret workspace session metadata", async () => {
-    const baseDir = "/tmp/maestro-session-test";
+    const baseDir = "/tmp/carnegie-session-test";
     const session = {
       workspacePath: "/work/acme",
       projectId: "project-1",
@@ -32,7 +32,7 @@ describe("workspace session", () => {
   });
 
   it("rejects malformed or secret-bearing session records", async () => {
-    const baseDir = "/tmp/maestro-session-invalid";
+    const baseDir = "/tmp/carnegie-session-invalid";
     const file = sessionFileFor("/work/acme", baseDir);
     await mkdir(baseDir, { recursive: true });
     await writeFile(file, JSON.stringify({ workspacePath: "/work/acme", token: "secret" }));
@@ -123,6 +123,6 @@ describe("workspace session", () => {
   });
 
   it("returns undefined for a workspace without a saved session", async () => {
-    await expect(loadWorkspaceSession("/work/unknown", "/tmp/maestro-session-empty")).resolves.toBeUndefined();
+    await expect(loadWorkspaceSession("/work/unknown", "/tmp/carnegie-session-empty")).resolves.toBeUndefined();
   });
 });

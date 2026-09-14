@@ -12,7 +12,7 @@ import {
   type MissionRepairRepetitionScope,
   type Worker,
   type WorkerStatus,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
@@ -427,7 +427,7 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
       [workerId, request.councilId, request.departmentId, request.planVersion, request.itemId, bundle.contentHash, nextAttempt, pendingExecution, pendingExecution, proof.ownerId, proof.fencingToken, ownerLeaseExpiresAt, request.commandId ?? null, requestHash ?? null],
     );
     await client.query("COMMIT"); open = false;
-    let spawned: import("@maestro/domain").SpawnedInvocation;
+    let spawned: import("@carnegie/domain").SpawnedInvocation;
     let providerAttempted = false;
     try {
       const workerProfile = await deriveWorkerProfileForMission(pool, {
@@ -595,7 +595,7 @@ export async function cancelUnboundWorkerAfterBindingFailure(
 export async function bindWorkerInvocation(
   pool: Pool,
   workerId: string,
-  spawned: import("@maestro/domain").SpawnedInvocation,
+  spawned: import("@carnegie/domain").SpawnedInvocation,
   proof: GoalLeaseProof,
 ): Promise<Worker> {
   const client = await pool.connect();

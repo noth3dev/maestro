@@ -2,7 +2,7 @@
 
 ## 1. Architectural Philosophy
 
-Maestro is designed to solve the fundamental unreliability, memory drift, and authority leakage inherent in single-loop agent systems. Rather than relying on a monolithic prompt-loop, Maestro implements an **enterprise organizational model** with strict **separation of powers**, **durable persistence**, and **fail-closed authority gates**.
+Carnegie is designed to solve the fundamental unreliability, memory drift, and authority leakage inherent in single-loop agent systems. Rather than relying on a monolithic prompt-loop, Carnegie implements an **enterprise organizational model** with strict **separation of powers**, **durable persistence**, and **fail-closed authority gates**.
 
 ```mermaid
 flowchart TD
@@ -10,7 +10,7 @@ flowchart TD
         CONDUCTOR[Conductor / User<br/>• Natural Language Outcome & Scope<br/>• Single Launch Confirmation]
     end
 
-    subgraph ControlPlaneLayer [Maestro Control Plane]
+    subgraph ControlPlaneLayer [Carnegie Control Plane]
         CONCERTMASTER[🎼 Concertmaster / Secretary Office<br/>• Intakes Goals & Coordinates Lifecycle State Machine]
         OVERTURE[🎶 Overture Intake Crew<br/>• Conversation Lead • Architecture Analyst • Security Evaluator<br/>• Drafts task.md Task Contract]
         DEPARTMENTS[👥 Permanent Department Heads - Wake-on-Demand<br/>• Product Group • Tech Group • Intelligence Group • Assurance Group<br/>• Sealed Submissions Deliberation in Head Council]
@@ -48,16 +48,16 @@ flowchart TD
 2. **Separation of Powers**: Executing agents (Workers/Heads) are strictly prohibited from certifying their own work. Verification is handled independently by Quality and Encore (Metronome & Encore Council).
 3. **Fail-Closed & Default-Deny Security**: All tool calls and side effects must pass through `AuthorizedEffectExecutor`. Any unclassified, unauthorized, or out-of-scope effect is denied immediately.
 4. **Content-Addressed Auditability**: All inputs, plans, briefs, and deliverables are hashed using SHA-256 canonical serialization (`Sealed Submission`), ensuring cryptographically immutable record lineage.
-5. **Native Runtime Ownership**: Maestro owns the provider-neutral agent runtime, model gateway boundary, conversation lifecycle, and authority checks. The worker path uses the native execution-kernel over the authenticated Model Gateway; Ensemble Router selection is not implemented.
+5. **Native Runtime Ownership**: Carnegie owns the provider-neutral agent runtime, model gateway boundary, conversation lifecycle, and authority checks. The worker path uses the native execution-kernel over the authenticated Model Gateway; Ensemble Router selection is not implemented.
 6. **Evidence-Driven Self-Improvement (Shadow-First Evolution)**: Encore curates execution evidence into compact Improvement Digests to optimize persona axes, role guidance, and routing templates in replay/synthetic shadow runs—without permitting autonomous changes to security authority or safety boundaries.
 
 ---
 
 ## 3. Native Agent Runtime and Provider Gateway
 
-Maestro keeps model I/O, agent behavior, and durable authority in separate boundaries:
+Carnegie keeps model I/O, agent behavior, and durable authority in separate boundaries:
 
-| Responsibility Area | Native runtime / gateway | Maestro Control Plane (`apps/control-plane`) |
+| Responsibility Area | Native runtime / gateway | Carnegie Control Plane (`apps/control-plane`) |
 | :--- | :--- | :--- |
 | **Model & Conversation Management** | `packages/agent-runtime`, provider plugins, authenticated `apps/model-gateway` | Conversation/Goal lifecycle, model policy, project membership, budget ceilings |
 | **Worker execution** | `ExecutionKernelPort`; native Model Gateway router | Worker admission, authority checks, leases, audit pre-logging |
@@ -74,7 +74,7 @@ The current code implements the routing artifacts, not automatic model selection
 
 ## 4. Repository Layout Overview
 
-Maestro is structured as an **npm workspace monorepo**:
+Carnegie is structured as an **npm workspace monorepo**:
 
 * **`apps/control-plane`**: Fastify 5 REST & Server-Sent Events (SSE) server for durable commands and real-time state streaming.
 * **`apps/cli`**: Authenticated command-line client for the implemented Control Plane API; unsupported surfaces fail rather than being simulated.
@@ -87,7 +87,7 @@ Maestro is structured as an **npm workspace monorepo**:
 * **`packages/persistence`**: PostgreSQL 17 schema definitions, `pg` queries, and migration files.
 * **`packages/authority`**: Authorization engine, action classification matrix, and `AuthorizedEffectExecutor`.
 * **`packages/evidence`**: SHA-256 evidence bundle generator and cryptographic verification.
-* **`packages/agent-runtime`**: Maestro-owned provider-neutral model/tool/child-agent runtime.
+* **`packages/agent-runtime`**: Carnegie-owned provider-neutral model/tool/child-agent runtime.
 * **`packages/environment-adapter`**: Bounded environment and browser adapters.
 * **`packages/device-agent`**: Device grants, signed envelopes, fencing, and command protocol support.
 * **`packages/environment-adapter`**: Bounded environment and browser adapters.

@@ -2,13 +2,13 @@
   <a href="../README.md">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="assets/logo.svg">
-      <img alt="Maestro" src="assets/logo-light.svg" width="280" style="max-width: 100%;">
+      <img alt="Carnegie" src="assets/logo-light.svg" width="280" style="max-width: 100%;">
     </picture>
   </a>
 </p>
 
 <h3 align="center">
-Maestro: Self-Improving &amp; Durable Agent Orchestration for Versatile Tasks
+Carnegie: Self-Improving &amp; Durable Agent Orchestration for Versatile Tasks
 </h3>
 <p align="center">
   <a href="en/README.md"><b>Documentation (EN)</b></a> &bull;
@@ -28,12 +28,12 @@ Maestro: Self-Improving &amp; Durable Agent Orchestration for Versatile Tasks
 
 ---
 
-Maestro is an open-source enterprise AI orchestration framework designed for reliable, long-running, multi-agent goal execution. Its current conversation path is owned by the **Maestro native agent runtime** and an authenticated provider gateway. All execution paths are owned by the native Maestro runtime and authenticated model gateway. Maestro models real human organization structures—incorporating separation of powers, permanent domain departments, monotonic fencing leases, and cryptographic auditability to ensure zero unapproved side effects.
+Carnegie is an open-source enterprise AI orchestration framework designed for reliable, long-running, multi-agent goal execution. Its current conversation path is owned by the **Carnegie native agent runtime** and an authenticated provider gateway. All execution paths are owned by the native Carnegie runtime and authenticated model gateway. Carnegie models real human organization structures—incorporating separation of powers, permanent domain departments, monotonic fencing leases, and cryptographic auditability to ensure zero unapproved side effects.
 
 ## Current Runtime Boundary
 
 - **Conversation path:** `MaestroAgentRuntime` in the Control Plane, using the authenticated `apps/model-gateway` process.
-- **Provider authentication:** API keys stay in the gateway credential store. OpenAI ChatGPT subscription login is delegated to the documented Codex app-server; Maestro persists only login metadata and state.
+- **Provider authentication:** API keys stay in the gateway credential store. OpenAI ChatGPT subscription login is delegated to the documented Codex app-server; Carnegie persists only login metadata and state.
 - **Worker path:** `ExecutionKernelPort` uses the authenticated Model Gateway transport; the pure Ensemble Router selector exists, but production selector/native-admission wiring is not implemented. Every admission carries host context, capability grant, model policy, account binding, and idempotency. Production host tools are not registered yet; unregistered tools fail closed and native Workers are text/evidence-only.
 - **Terminal UI:** `@earendil-works/pi-tui` is used for presentation only and has no execution authority.
 
@@ -53,7 +53,7 @@ The repository contains the routing **artifact contracts**, not a production sel
 
 ## Core Architecture & Pillars
 
-Maestro is built around four core architectural guarantees:
+Carnegie is built around four core architectural guarantees:
 
 - **Hierarchical Organization & Separation of Powers:**
   - **Concertmaster (Secretary Office)** orchestrates natural-language goals with the Conductor.
@@ -158,7 +158,7 @@ npm run check
 
 ## CLI Usage
 
-The Maestro CLI (`apps/cli`) is an authenticated command client for the implemented Control Plane REST API. Unsupported surfaces fail rather than being simulated:
+The Carnegie CLI (`apps/cli`) is an authenticated command client for the implemented Control Plane REST API. Unsupported surfaces fail rather than being simulated:
 
 ```bash
 # Query details for a Goal
@@ -201,5 +201,5 @@ Please review our [Security Policy](../SECURITY.md) for details on vulnerability
 
 ## License
 
-Maestro is fully open source and released under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.  
+Carnegie is fully open source and released under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
 See the [LICENSE](../LICENSE) file for details.

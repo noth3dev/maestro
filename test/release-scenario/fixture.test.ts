@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { MissionBundleSubstanceSchema } from "@maestro/contracts";
+import { MissionBundleSubstanceSchema } from "@carnegie/contracts";
 import { describe, expect, it } from "vitest";
 import { createReleaseScenarioFixture } from "./fixture.mjs";
 

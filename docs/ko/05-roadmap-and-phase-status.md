@@ -1,6 +1,6 @@
 # 05. 단계별 로드맵 및 구현 현황 (Roadmap & Phase Status)
 
-Maestro는 각 단계의 검증 증거가 완료되어야 다음 단계로 진입하는 엄격한 단계별(Phased) 릴리즈 모델을 따릅니다.
+Carnegie는 각 단계의 검증 증거가 완료되어야 다음 단계로 진입하는 엄격한 단계별(Phased) 릴리즈 모델을 따릅니다.
 
 ---
 
@@ -19,7 +19,7 @@ Maestro는 각 단계의 검증 증거가 완료되어야 다음 단계로 진�
 
 ### 네이티브 에이전트 백엔드 마이그레이션 — 현재 경계
 
-Maestro 네이티브 런타임과 인증된 model gateway가 대화와 워커 실행을 모두 담당합니다. ChatGPT account-login recovery도 내구성 상태, fenced status/cancel 작업 및 metadata-only 저장을 포함하여 통합되었습니다. 네이티브 admission은 host context, immutable grant, 정확한 provider-qualified model policy, account binding 및 idempotency를 포함하며, 모든 native 호출 지점(Worker, Head, semantic review, Encore reviewer, team-lead helper)이 selected/actual 모델과 gateway binding identity를 append-only `native_execution_bindings` 테이블에 durable하게 기록합니다. 깨끗한 disposable 컨테이너에서 실행한 단일 worker 전체 real-PostgreSQL 재실행이 **162/162 파일, 1066/1066 테스트, 실패 0건**으로 통과했습니다(2026-09-09), kill/restart 복구, fencing, authority denial, loopback Model Gateway HTTP acceptance 테스트, 그리고 실제 Model Gateway를 사용하는 전체 Control Plane + PostgreSQL + Worker acceptance 테스트(`native-worker-acceptance.integration.test.ts`)를 포함합니다. 이 테스트를 만드는 과정에서 실제 wire-schema 결함(`limitsFor()`가 10분을 넘는 모든 Mission Bundle time ceiling에 대해 clamp되지 않은 per-call timeout을 보냄)도 발견해 수정했습니다. 남은 Phase 1 항목은 하나입니다: 실제 gateway 경로를 통한 production native host-tool 등록/집행 -- `ToolRegistry`는 fail-closed로 올바르게 구현되어 있지만 production에는 아직 등록된 Maestro-callback tool이 없고, OpenAI Codex adapter는 모든 세션을 read-only로 실행하므로 현재 native Worker는 텍스트 생성만 가능합니다.
+Carnegie 네이티브 런타임과 인증된 model gateway가 대화와 워커 실행을 모두 담당합니다. ChatGPT account-login recovery도 내구성 상태, fenced status/cancel 작업 및 metadata-only 저장을 포함하여 통합되었습니다. 네이티브 admission은 host context, immutable grant, 정확한 provider-qualified model policy, account binding 및 idempotency를 포함하며, 모든 native 호출 지점(Worker, Head, semantic review, Encore reviewer, team-lead helper)이 selected/actual 모델과 gateway binding identity를 append-only `native_execution_bindings` 테이블에 durable하게 기록합니다. 깨끗한 disposable 컨테이너에서 실행한 단일 worker 전체 real-PostgreSQL 재실행이 **162/162 파일, 1066/1066 테스트, 실패 0건**으로 통과했습니다(2026-09-09), kill/restart 복구, fencing, authority denial, loopback Model Gateway HTTP acceptance 테스트, 그리고 실제 Model Gateway를 사용하는 전체 Control Plane + PostgreSQL + Worker acceptance 테스트(`native-worker-acceptance.integration.test.ts`)를 포함합니다. 이 테스트를 만드는 과정에서 실제 wire-schema 결함(`limitsFor()`가 10분을 넘는 모든 Mission Bundle time ceiling에 대해 clamp되지 않은 per-call timeout을 보냄)도 발견해 수정했습니다. 남은 Phase 1 항목은 하나입니다: 실제 gateway 경로를 통한 production native host-tool 등록/집행 -- `ToolRegistry`는 fail-closed로 올바르게 구현되어 있지만 production에는 아직 등록된 Carnegie-callback tool이 없고, OpenAI Codex adapter는 모든 세션을 read-only로 실행하므로 현재 native Worker는 텍스트 생성만 가능합니다.
 
 CLI TUI는 `@earendil-works/pi-tui` `0.85.1` 터미널 primitive를 사용합니다. 이는 provider나 실행 권한이 없는 표현 계층 의존성입니다.
 
@@ -29,7 +29,7 @@ A/D/E domain contract, B provider facts, C operational overlay와 순수 Goal sn
 
 ### TUI 단계 경계
 
-TUI는 두 번째 Control Plane이 아니라 운영자 표시·명령 클라이언트입니다. 권위 있는 상태 조회와 명령 전송은 `@maestro/api-client` 및 인증된 Control Plane route를 통해서만 수행합니다. PostgreSQL, Model Gateway, provider API, device transport에 직접 연결하지 않습니다. 단계 승인에는 동일한 실제 Goal에 대한 API/TUI parity, SSE cursor 보존 재연결, 명시적인 loading/error/stale 상태 표시, terminal state와 로그에 credential·prompt·raw gateway binding·secret-bearing output이 없다는 증거가 필요합니다. 터미널 입력은 lease, fencing, capability grant, approval, idempotency를 우회할 수 없습니다.
+TUI는 두 번째 Control Plane이 아니라 운영자 표시·명령 클라이언트입니다. 권위 있는 상태 조회와 명령 전송은 `@carnegie/api-client` 및 인증된 Control Plane route를 통해서만 수행합니다. PostgreSQL, Model Gateway, provider API, device transport에 직접 연결하지 않습니다. 단계 승인에는 동일한 실제 Goal에 대한 API/TUI parity, SSE cursor 보존 재연결, 명시적인 loading/error/stale 상태 표시, terminal state와 로그에 credential·prompt·raw gateway binding·secret-bearing output이 없다는 증거가 필요합니다. 터미널 입력은 lease, fencing, capability grant, approval, idempotency를 우회할 수 없습니다.
 
 ### Production IPython host-tool 경계 — 2026-09-09
 
@@ -99,7 +99,7 @@ flowchart LR
 
 ### 2) Autonomous Treasury & Real Capital Wallet (자율 재무부 지갑)
 
-**Autonomous Treasury**(Phase 9/10 후보)는 Maestro 시스템에 영속적인 자율 지갑을 내장하여, 외부 API, 클라우드 컴퓨팅 자원, Web3 스마트 컨트랙트 결제를 직접 집행할 수 있는 자산 자율성을 부여합니다 ([`roadmap/act-1-foundation/phase-10-autonomous-treasury.md`](../../roadmap/act-1-foundation/phase-10-autonomous-treasury.md)).
+**Autonomous Treasury**(Phase 9/10 후보)는 Carnegie 시스템에 영속적인 자율 지갑을 내장하여, 외부 API, 클라우드 컴퓨팅 자원, Web3 스마트 컨트랙트 결제를 직접 집행할 수 있는 자산 자율성을 부여합니다 ([`roadmap/act-1-foundation/phase-10-autonomous-treasury.md`](../../roadmap/act-1-foundation/phase-10-autonomous-treasury.md)).
 
 #### Treasury 핵심 원칙
 1. **사용자 충전식 예치금 모델**: Conductor(사용자)가 미리 충전한 예치금(Web3 암호화폐 USDC/ETH/Solana 및 Stripe/Plaid 전통 금융 결제) 기반 작동.

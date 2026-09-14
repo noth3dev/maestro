@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { MODEL_CAPABILITY_AXES, assertValidRoutingEvidence, canonicalJson, assertValidTaskContractSubstance, certificationsConflict, evaluateCertificationCompleteness, requiredConditionalCertifications, taskContractContentHash, type CertificationRecordFact, type RoutingEvidence } from "@maestro/domain";
-import type { EvidenceContentReader } from "@maestro/evidence";
+import { MODEL_CAPABILITY_AXES, assertValidRoutingEvidence, canonicalJson, assertValidTaskContractSubstance, certificationsConflict, evaluateCertificationCompleteness, requiredConditionalCertifications, taskContractContentHash, type CertificationRecordFact, type RoutingEvidence } from "@carnegie/domain";
+import type { EvidenceContentReader } from "@carnegie/evidence";
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
 import { withGoalAuthority } from "./goal-authority.js";

@@ -1,7 +1,7 @@
 import { constants, realpathSync } from "node:fs";
 import { open } from "node:fs/promises";
 import { basename, dirname, relative, resolve, sep } from "node:path";
-import type { ActionRequest, AuthorityDecision } from "@maestro/authority";
+import type { ActionRequest, AuthorityDecision } from "@carnegie/authority";
 
 export interface FileEditAuthorityGateway {
   execute(request: ActionRequest, effect: () => Promise<unknown>): Promise<AuthorityDecision>;

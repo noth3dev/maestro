@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { WorkerList } from "@maestro/api-client";
+import type { WorkerList } from "@carnegie/api-client";
 import { useConnection } from "./connection.js";
 import { useGoals } from "./goals.js";
 
@@ -15,7 +15,7 @@ export function useGoalWorkers(): { workers: WorkerList["workers"] | undefined; 
     let cancelled = false;
     setLoading(true);
     setError(undefined);
-    window.maestro.api
+    window.carnegie.api
       .listWorkersForGoal(selectedGoalId, { projectId: config.projectId })
       .then((result) => {
         if (!cancelled) setWorkers(result.workers);

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { assertValidDepartmentAcceptanceSubstance, assertValidQualityCertificationSubstance, assertValidWaiverSubstance, certificationsConflict, type DepartmentAcceptanceSubstance, type QualityCertificationSubstance, type QualityVerdict, type WaiverSubstance } from "@maestro/domain";
-import { verifyEvidenceRecord, type EvidenceContentReader } from "@maestro/evidence";
+import { assertValidDepartmentAcceptanceSubstance, assertValidQualityCertificationSubstance, assertValidWaiverSubstance, certificationsConflict, type DepartmentAcceptanceSubstance, type QualityCertificationSubstance, type QualityVerdict, type WaiverSubstance } from "@carnegie/domain";
+import { verifyEvidenceRecord, type EvidenceContentReader } from "@carnegie/evidence";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
 import type { Pool, PoolClient } from "pg";

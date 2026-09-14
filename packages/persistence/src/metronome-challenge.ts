@@ -8,7 +8,7 @@ import {
   METRONOME_ACTOR_ID,
   type MetronomeChallengeStatus,
   type MetronomeChallengeSubstance,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import { requestPauseGoalInTransaction } from "./authority.js";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import type { CouncilActorContext } from "./council.js";

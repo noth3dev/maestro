@@ -1,4 +1,4 @@
-import type { ApiClient, GoalResult } from "@maestro/api-client";
+import type { ApiClient, GoalResult } from "@carnegie/api-client";
 import type { WorkspaceSession } from "../session.js";
 import { createCommandRegistry } from "./registry.js";
 import type { ParsedCommand } from "./parser.js";

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { vi } from "vitest";
-vi.mock("@maestro/persistence", async () => ({
-  ...(await vi.importActual<typeof import("@maestro/persistence")>("@maestro/persistence")),
+vi.mock("@carnegie/persistence", async () => ({
+  ...(await vi.importActual<typeof import("@carnegie/persistence")>("@carnegie/persistence")),
   raiseMetronomeChallenge: vi.fn().mockResolvedValue({ challengeId: "challenge-1", status: "open" }),
 }));
 import { createMetronomeService, type WorkerOverlayChallengeInput } from "./metronome-service.js";
-import { PERSONA_AXES } from "@maestro/domain";
+import { PERSONA_AXES } from "@carnegie/domain";
 
 describe("Metronome worker overlay challenge", () => {
   it("allows the Metronome to challenge a worker overlay below the role floor", async () => {

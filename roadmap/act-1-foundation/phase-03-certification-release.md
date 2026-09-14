@@ -7,7 +7,7 @@
 
 ## Outcome
 
-Complete the first usable Maestro by adding continuous Metronome observation, selective Council adjudication, independent Quality certification, and an evidence-backed CEO report. The complete Phase 1–3 system must pass one real Goal with forced restart and critical-action denial.
+Complete the first usable Carnegie by adding continuous Metronome observation, selective Council adjudication, independent Quality certification, and an evidence-backed CEO report. The complete Phase 1–3 system must pass one real Goal with forced restart and critical-action denial.
 
 Encore is outside the production command hierarchy. It observes and judges; it does not own product direction, rewrite Department Plans, or spawn production workers.
 
@@ -15,7 +15,7 @@ Encore is outside the production command hierarchy. It observes and judges; it d
 
 The CLI TUI is part of the Phase 3 first-usable-release surface under **CLI/App parity**. Phase 1 defines only its authority and data boundaries; Phase 3 verifies that the TUI is operationally truthful:
 
-- reads Goal, event, worker, Metronome, Encore, certification, and report state through `@maestro/api-client` and authenticated Control Plane routes;
+- reads Goal, event, worker, Metronome, Encore, certification, and report state through `@carnegie/api-client` and authenticated Control Plane routes;
 - sends commands through the same lease, fencing, capability, approval, and idempotency path as every other client;
 - preserves the server event cursor across disconnect/reconnect and never duplicates or invents visible events;
 - renders loading, empty, stale, authorization-denied, gateway-unavailable, and recovery states explicitly;
@@ -205,7 +205,7 @@ Static parsing, mocked Council answers, screenshots, and worker-reported tests c
 
 ## Exit gate
 
-All fourteen live steps pass. No critical finding remains open. The evidence bundle reconstructs every material decision and effect. The first usable Maestro may then be used for bounded local Goals; external devices, Discord, multiple concurrent Goals, automatic improvement, and the full radial interface remain disabled.
+All fourteen live steps pass. No critical finding remains open. The evidence bundle reconstructs every material decision and effect. The first usable Carnegie may then be used for bounded local Goals; external devices, Discord, multiple concurrent Goals, automatic improvement, and the full radial interface remain disabled.
 
 ## Requirements preserved in this phase
 

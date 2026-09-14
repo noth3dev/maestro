@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { MODEL_CAPABILITY_AXES, type PortfolioCouncilInput, type PortfolioGoalInput, decidePortfolioCouncil, declareTaskDemand, type ModelCapabilityVector } from "@maestro/domain";
+import { MODEL_CAPABILITY_AXES, type PortfolioCouncilInput, type PortfolioGoalInput, decidePortfolioCouncil, declareTaskDemand, type ModelCapabilityVector } from "@carnegie/domain";
 import { applyAllMigrations } from "./test-migrations.js";
 import { acquireGoalLease } from "./commands.js";
 import { listPortfolioCouncilDecisions, readPortfolioCouncilDecision, recordPortfolioCouncilDecision } from "./portfolio-council.js";

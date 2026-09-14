@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ConcertmasterFinalReport } from "@maestro/contracts";
-import { applyAllMigrations, bootstrapLocalOperator, type GoalLeaseProof } from "@maestro/persistence";
+import type { ConcertmasterFinalReport } from "@carnegie/contracts";
+import { applyAllMigrations, bootstrapLocalOperator, type GoalLeaseProof } from "@carnegie/persistence";
 
 const { mockGenerate } = vi.hoisted(() => ({ mockGenerate: vi.fn() }));
-vi.mock("@maestro/persistence", async (importOriginal) => ({ ...await importOriginal<typeof import("@maestro/persistence")>(), generateConcertmasterFinalReport: mockGenerate }));
-import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
+vi.mock("@carnegie/persistence", async (importOriginal) => ({ ...await importOriginal<typeof import("@carnegie/persistence")>(), generateConcertmasterFinalReport: mockGenerate }));
+import { grantProjectMembership, grantProjectRole } from "@carnegie/persistence/testing";
 import { createConcertmasterReportService } from "./concertmaster-report-service.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
