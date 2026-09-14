@@ -12,22 +12,30 @@ export function Settings() {
   const [disconnecting, setDisconnecting] = useState(false);
   const [panel, setPanel] = useState<Panel>("profile");
   const [settings, setSettings] = useState<Awaited<ReturnType<typeof window.maestro.api.getSettings>> | undefined>();
+  const [settingsError, setSettingsError] = useState<string | undefined>();
+  const [settingsLoading, setSettingsLoading] = useState(true);
   const [modelTab, setModelTab] = useState<"inuse" | "available">("inuse");
   const [modelSearch, setModelSearch] = useState("");
   const [providerSecret, setProviderSecret] = useState("");
   const [providerBusy, setProviderBusy] = useState<string | undefined>();
   const isDark = theme === "dark";
 
-  useEffect(() => { void window.maestro.api.getSettings().then(setSettings).catch(() => undefined); }, []);
-  const updatePreferences = (patch: Parameters<typeof window.maestro.api.updateSettingsPreferences>[0]) => { void window.maestro.api.updateSettingsPreferences(patch).then(setSettings); };
-  const updateDefaults = (patch: Parameters<typeof window.maestro.api.updateSettingsAuthorityDefaults>[0]) => { void window.maestro.api.updateSettingsAuthorityDefaults(patch).then(setSettings); };
+  const loadSettings = () => {
+    setSettingsLoading(true);
+    setSettingsError(undefined);
+    void window.maestro.api.getSettings().then((value) => { setSettings(value); }).catch(() => { setSettings(undefined); setSettingsError("Durable settings are unavailable. No settings were loaded."); }).finally(() => setSettingsLoading(false));
+  };
+  useEffect(() => { loadSettings(); }, []);
+  const settingsReady = settings !== undefined && settingsError === undefined;
+  const updatePreferences = (patch: Parameters<typeof window.maestro.api.updateSettingsPreferences>[0]) => { void window.maestro.api.updateSettingsPreferences(patch).then(setSettings).catch(() => setSettingsError("Durable settings update failed; displayed values may be stale.")); };
+  const updateDefaults = (patch: Parameters<typeof window.maestro.api.updateSettingsAuthorityDefaults>[0]) => { void window.maestro.api.updateSettingsAuthorityDefaults(patch).then(setSettings).catch(() => setSettingsError("Durable settings update failed; displayed values may be stale.")); };
   const models = settings?.models ?? [];
   const filteredAvailable = models.filter((model) => !model.inUse && model.modelRef.toLowerCase().includes(modelSearch.toLowerCase()));
   const inUseModels = models.filter((model) => model.inUse);
   const providers = settings?.providers ?? [];
   const providerAction = async (providerId: "openai" | "anthropic") => {
     setProviderBusy(providerId);
-    try { if (providers.some((provider) => provider.providerId === providerId && provider.connected)) await window.maestro.api.logoutProvider(providerId); else if (providerSecret.trim() !== "") await window.maestro.api.loginProvider({ providerId, authMode: "api-key", secret: providerSecret }); else return; setProviderSecret(""); setSettings(await window.maestro.api.getSettings()); } finally { setProviderBusy(undefined); }
+    try { if (providers.some((provider) => provider.providerId === providerId && provider.connected)) await window.maestro.api.logoutProvider(providerId); else if (providerSecret.trim() !== "") await window.maestro.api.loginProvider({ providerId, authMode: "api-key", secret: providerSecret }); else return; setProviderSecret(""); setSettings(await window.maestro.api.getSettings()); setSettingsError(undefined); } catch { setSettingsError("Provider status is unavailable; no connection state was changed."); } finally { setProviderBusy(undefined); }
   };
 
   const navItem = (id: Panel, icon: string, label: string) => (
@@ -53,6 +61,10 @@ export function Settings() {
 
         <div className="settings-nav-divider" />
         {navItem("danger", "triangle-alert", "danger zone")}
+      </div>
+
+      <div className="settings-panel" role="status" style={{ marginBottom: 12 }}>
+        {settingsLoading ? <span>Loading durable settings…</span> : settingsError ? <><span role="alert">{settingsError}</span> <button className="btn btn-sm" onClick={loadSettings}>retry</button></> : <span>Durable settings loaded.</span>}
       </div>
 
       {panel === "profile" && (
@@ -85,7 +97,7 @@ export function Settings() {
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">compact sidebar</div><div className="settings-row-hint">start collapsed on launch</div></div>
-            <ToggleSwitch on={settings?.preferences.compactSidebar ?? false} onToggle={() => updatePreferences({ compactSidebar: !(settings?.preferences.compactSidebar ?? false) })} />
+            {settingsReady ? <ToggleSwitch on={settings.preferences.compactSidebar} onToggle={() => updatePreferences({ compactSidebar: !settings.preferences.compactSidebar })} /> : <span className="badge">unavailable</span>}
           </div>
         </div>
       )}
@@ -128,15 +140,15 @@ export function Settings() {
           <div className="settings-section-sub">how you hear about approvals and certifications</div>
           <div className="settings-row">
             <div><div className="settings-row-label">desktop push</div><div className="settings-row-hint">approval needed, certification complete</div></div>
-            <ToggleSwitch on={settings?.preferences.desktopPush ?? true} onToggle={() => updatePreferences({ desktopPush: !(settings?.preferences.desktopPush ?? true) })} />
+            {settingsReady ? <ToggleSwitch on={settings.preferences.desktopPush} onToggle={() => updatePreferences({ desktopPush: !settings.preferences.desktopPush })} /> : <span className="badge">unavailable</span>}
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">email digest</div><div className="settings-row-hint">daily summary of goal activity</div></div>
-            <ToggleSwitch on={settings?.preferences.emailDigest ?? false} onToggle={() => updatePreferences({ emailDigest: !(settings?.preferences.emailDigest ?? false) })} />
+            {settingsReady ? <ToggleSwitch on={settings.preferences.emailDigest} onToggle={() => updatePreferences({ emailDigest: !settings.preferences.emailDigest })} /> : <span className="badge">unavailable</span>}
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">slack webhook</div><div className="settings-row-hint">mirror #general into a workspace channel</div></div>
-            <ToggleSwitch on={settings?.preferences.slackWebhook ?? false} onToggle={() => updatePreferences({ slackWebhook: !(settings?.preferences.slackWebhook ?? false) })} />
+            {settingsReady ? <ToggleSwitch on={settings.preferences.slackWebhook} onToggle={() => updatePreferences({ slackWebhook: !settings.preferences.slackWebhook })} /> : <span className="badge">unavailable</span>}
           </div>
         </div>
       )}
@@ -145,8 +157,10 @@ export function Settings() {
         <div className="settings-panel">
           <div className="settings-section-title">providers</div>
           <div className="settings-section-sub">provider credentials are stored by the authenticated Model Gateway</div>
-          <div className="form-field" style={{ marginBottom: 14 }}><label className="form-label">API key</label><input className="input" type="password" value={providerSecret} onChange={(event) => setProviderSecret(event.target.value)} placeholder="enter only when connecting" /></div>
-          {(["openai", "anthropic"] as const).map((providerId) => { const connected = providers.some((provider) => provider.providerId === providerId && provider.connected); return <div key={providerId} className="provider-row"><Icon name="server" /><span className="provider-row-name">{providerId}</span><span className="badge">{connected ? "connected" : "not connected"}</span><button className="btn btn-sm" disabled={providerBusy === providerId || (!connected && providerSecret.trim() === "")} onClick={() => void providerAction(providerId)}>{providerBusy === providerId ? "working…" : connected ? "disconnect" : "connect"}</button></div>; })}
+          {settingsReady ? <>
+            <div className="form-field" style={{ marginBottom: 14 }}><label className="form-label">API key</label><input className="input" type="password" value={providerSecret} onChange={(event) => setProviderSecret(event.target.value)} placeholder="enter only when connecting" /></div>
+            {(["openai", "anthropic"] as const).map((providerId) => { const connected = providers.some((provider) => provider.providerId === providerId && provider.connected); return <div key={providerId} className="provider-row"><Icon name="server" /><span className="provider-row-name">{providerId}</span><span className="badge">{connected ? "connected" : "not connected"}</span><button className="btn btn-sm" disabled={providerBusy === providerId || (!connected && providerSecret.trim() === "")} onClick={() => void providerAction(providerId)}>{providerBusy === providerId ? "working…" : connected ? "disconnect" : "connect"}</button></div>; })}
+          </> : <p role="status">Provider status unavailable until durable settings load successfully.</p>}
         </div>
       )}
       {panel === "authority" && (
@@ -155,15 +169,15 @@ export function Settings() {
           <div className="settings-section-sub">durable defaults applied when new Goals are created</div>
           <div className="form-field" style={{ marginBottom: 14 }}>
             <label className="form-label">default spend ceiling per goal</label>
-            <input className="input" type="number" min="0" value={(settings?.authorityDefaults.spendCeilingCents ?? 5000) / 100} onChange={(event) => updateDefaults({ spendCeilingCents: Math.max(0, Math.round(Number(event.target.value || 0) * 100)) })} />
+            <input className="input" type="number" min="0" value={settingsReady ? settings.authorityDefaults.spendCeilingCents / 100 : ""} placeholder={settingsReady ? undefined : "unavailable"} disabled={!settingsReady} onChange={(event) => updateDefaults({ spendCeilingCents: Math.max(0, Math.round(Number(event.target.value || 0) * 100)) })} />
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">critical actions always require approval</div><div className="settings-row-hint">deletes, deploys, credential changes</div></div>
-            <ToggleSwitch on={settings?.authorityDefaults.criticalActionsRequireApproval ?? true} onToggle={() => updateDefaults({ criticalActionsRequireApproval: !(settings?.authorityDefaults.criticalActionsRequireApproval ?? true) })} />
+            {settingsReady ? <ToggleSwitch on={settings.authorityDefaults.criticalActionsRequireApproval} onToggle={() => updateDefaults({ criticalActionsRequireApproval: !settings.authorityDefaults.criticalActionsRequireApproval })} /> : <span className="badge">unavailable</span>}
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">allow flashmob by default</div><div className="settings-row-hint">light tasks skip full council deliberation</div></div>
-            <ToggleSwitch on={settings?.authorityDefaults.allowFlashmob ?? true} onToggle={() => updateDefaults({ allowFlashmob: !(settings?.authorityDefaults.allowFlashmob ?? true) })} />
+            {settingsReady ? <ToggleSwitch on={settings.authorityDefaults.allowFlashmob} onToggle={() => updateDefaults({ allowFlashmob: !settings.authorityDefaults.allowFlashmob })} /> : <span className="badge">unavailable</span>}
           </div>
         </div>
       )}
@@ -172,6 +186,7 @@ export function Settings() {
         <div className="settings-panel">
           <div className="settings-section-title">Ensemble Router</div>
           <div className="settings-section-sub">human-owned model_map entries and operator pool</div>
+          {!settingsReady && <p role="status">Model pool unavailable until durable settings load successfully.</p>}
 
           <div className="settings-row" style={{ marginBottom: 6 }}>
             <div><div className="settings-row-label">auto-select models</div><div className="settings-row-hint">orchestrator swaps models on the fly to fit each task. off · strictly uses the assignments below</div></div>

@@ -42,6 +42,17 @@ describe("durable goal service leases", () => {
     expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(2, expect.anything(), expect.objectContaining({ commandId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f04" }), proof);
   });
 
+  it("uses safe compatibility defaults when operator_settings is absent", async () => {
+    persistence.acquireGoalLease.mockResolvedValue(proof);
+    persistence.executeGoalCommand.mockResolvedValue({ outcome: "succeeded", goalId: commandId, state: "draft", version: 1 });
+    const missingSettings = Object.assign(new Error("relation does not exist"), { code: "42P01" });
+    const pool = { query: vi.fn(async () => { throw missingSettings; }) };
+    const service = createDurableGoalService({ pool: pool as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+    await expect(service.createGoal({ projectId }, commandId, operator)).resolves.toEqual(expect.objectContaining({ goalId: commandId, state: "draft", version: 1 }));
+    expect(persistence.acquireGoalLease).toHaveBeenCalledWith(pool, expect.objectContaining({ goalId: commandId }));
+    expect(persistence.executeGoalCommand).toHaveBeenCalledWith(pool, expect.objectContaining({ authorityDefaults: { spendCeilingCents: 5000, criticalActionsRequireApproval: true, allowFlashmob: true } }), proof);
+  });
+
   it("does not hide durable settings read failures when creating a Goal", async () => {
     const error = Object.assign(new Error("database unavailable"), { code: "57P01" });
     const pool = { query: vi.fn(async () => { throw error; }) };
