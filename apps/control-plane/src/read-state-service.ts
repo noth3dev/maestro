@@ -43,6 +43,15 @@ function arrangementNegativeEvidence(candidateId: string, council: Awaited<Retur
   return { candidateId, state: "rejected", reason, roundId: council?.roundId ?? null, judgments: (council?.judgments ?? []).map((judgment) => ({ ...judgment, conditions: [...judgment.conditions], citedEvidenceIds: [...judgment.citedEvidenceIds] })) };
 }
 
+export function isArrangementActive(record: {
+  readonly candidate: { readonly candidateId: string; readonly version: number };
+  readonly rollout: { readonly status: string; readonly activeCandidateId: string; readonly activeVersion: number } | null;
+}): boolean {
+  return (record.rollout?.status === "active" || record.rollout?.status === "certified")
+    && record.rollout.activeCandidateId === record.candidate.candidateId
+    && record.rollout.activeVersion === record.candidate.version;
+}
+
 export function createReadStateService(pool: Pool): ReadStateService {
   async function assertGoalProject(goalId: string, projectId: string): Promise<void> {
     const result = await pool.query("SELECT 1 FROM goals WHERE goal_id = $1 AND project_id = $2", [goalId, projectId]);
@@ -97,9 +106,9 @@ export function createReadStateService(pool: Pool): ReadStateService {
     async listArrangementsForGoal(goalId, projectId, operatorId) {
       await assertGoalProject(goalId, projectId);
       const records = await listImprovementCandidateArrangements(pool, { operatorId, projectId }, goalId);
-      const active = records.filter((record) => record.rollout?.status === "active" && record.rollout.activeCandidateId === record.candidate.candidateId && record.rollout.activeVersion === record.candidate.version).map(arrangementCandidate);
+      const active = records.filter(isArrangementActive).map(arrangementCandidate);
       const candidates = records.filter((record) => ["candidate", "evaluated", "judged"].includes(record.candidate.state)
-        && !(record.rollout?.status === "active" && record.rollout.activeCandidateId === record.candidate.candidateId && record.rollout.activeVersion === record.candidate.version)).map(arrangementCandidate);
+        && !isArrangementActive(record)).map(arrangementCandidate);
       const encoreCouncil = records.filter((record) => record.council !== null).map((record) => arrangementCouncil(record.candidate.candidateId, record.council!));
       const negativeEvidence = records.filter((record) => record.candidate.state === "rejected").map((record) => arrangementNegativeEvidence(record.candidate.candidateId, record.council));
       return { active, candidates, encoreCouncil, negativeEvidence };

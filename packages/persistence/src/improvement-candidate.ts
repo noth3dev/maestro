@@ -923,6 +923,19 @@ export function selectArrangementCouncilApproval(rows: readonly ArrangementCounc
     || left.candidate_id.localeCompare(right.candidate_id)
     || left.council_round_id.localeCompare(right.council_round_id))[0];
 }
+
+interface ArrangementCouncilCandidateBinding {
+  readonly candidateId: string;
+  readonly version: number;
+  readonly contentHash: string;
+  readonly kind: ImprovementCandidate["kind"];
+}
+function escapeRegex(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+/** Matches only the canonical candidate identity embedded in a durable Council question. */
+export function arrangementCouncilQuestionMatchesCandidate(question: string, candidate: ArrangementCouncilCandidateBinding): boolean {
+  const pattern = new RegExp(String.raw`^Candidate: ${escapeRegex(candidate.candidateId)} version ${candidate.version} schemaVersion [0-9]+ contentHash ${escapeRegex(candidate.contentHash)} \(${escapeRegex(candidate.kind)}\)$`);
+  return question.split("\n").some((line) => pattern.test(line));
+}
 type ArrangementJudgmentRow = { model_provider: string; model_id: string; verdict: string; confidence: string; reasoning: string; conditions: unknown; dissent_note: string | null; cited_evidence_ids: unknown };
 
 function finiteMetric(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value); }
@@ -1009,7 +1022,7 @@ export async function listImprovementCandidateArrangements(
           evaluation = { evaluationId: evaluationRow.evaluation_id, evaluationHash: evaluationRow.evaluation_hash, stages: evaluationStages(payload), metricDeltas: metricDeltas(payload) };
         }
       }
-      const councilBinding = candidate.kind === "persona_axis" && evaluatedRow !== undefined
+      const councilBinding = evaluatedRow !== undefined && (candidate.kind === "persona_axis" || candidate.state === "rejected")
         ? evaluatedRow
         : { candidate_id: candidate.candidateId, version: candidate.version, content_hash: candidate.contentHash };
       const approvals = await client.query<ArrangementCouncilApprovalRow>(`SELECT council_round_id, candidate_id, candidate_version, candidate_content_hash
@@ -1023,7 +1036,20 @@ export async function listImprovementCandidateArrangements(
         WHERE lineage_id = $1 AND project_id = $2 AND goal_id = $3 AND candidate_id = $4 AND candidate_version = $5 AND candidate_content_hash = $6
         ORDER BY candidate_id ASC, candidate_version ASC, candidate_content_hash ASC, council_round_id ASC`, [row.lineage_id, row.project_id, row.goal_id, councilBinding.candidate_id, councilBinding.version, councilBinding.content_hash]);
       let council: ImprovementCandidateArrangementCouncil | null = null;
-      const roundId = selectArrangementCouncilApproval(approvals.rows)?.council_round_id;
+      let roundId = candidate.state === "rejected" ? undefined : selectArrangementCouncilApproval(approvals.rows)?.council_round_id;
+      if (roundId === undefined) {
+        const rounds = await client.query<{ round_id: string; question: string; final_verdict: "proceed" | "do_not_proceed" | "escalate" }>(`SELECT r.round_id, r.question, s.final_verdict
+          FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id JOIN goals g ON g.goal_id = r.goal_id
+          WHERE r.goal_id = $1 AND g.project_id = $2
+          ORDER BY r.created_at DESC, r.round_id ASC`, [row.goal_id, row.project_id]);
+        const matchedRound = rounds.rows.find((round) => arrangementCouncilQuestionMatchesCandidate(round.question, {
+          candidateId: councilBinding.candidate_id,
+          version: councilBinding.version,
+          contentHash: councilBinding.content_hash,
+          kind: candidate.kind,
+        }) && (candidate.state !== "rejected" || round.final_verdict !== "proceed"));
+        roundId = matchedRound?.round_id;
+      }
       if (roundId !== undefined) {
         const round = await client.query<ArrangementCouncilRow>(`SELECT r.round_id, r.question, r.reviewer_count, s.final_verdict, s.same_model_only, s.escalated, s.dissent_notes FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id JOIN goals g ON g.goal_id = r.goal_id WHERE r.round_id = $1 AND r.goal_id = $2 AND g.project_id = $3`, [roundId, row.goal_id, row.project_id]);
         const judgmentRows = await client.query<ArrangementJudgmentRow>("SELECT j.model_provider, j.model_id, j.verdict, j.confidence, j.reasoning, j.conditions, j.dissent_note, j.cited_evidence_ids FROM encore_council_judgments j JOIN encore_council_rounds r ON r.round_id = j.round_id JOIN goals g ON g.goal_id = r.goal_id WHERE j.round_id = $1 AND r.goal_id = $2 AND g.project_id = $3 ORDER BY j.reviewer_index", [roundId, row.goal_id, row.project_id]);
