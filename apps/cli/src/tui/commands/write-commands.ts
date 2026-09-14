@@ -97,7 +97,7 @@ const supportedKeys = new Set([
   "goal:create", "goal:transition", "goal:pause", "goal:stop", "goal:resume", "goal:emergency-stop", "head:activate",
   "council:create", "council:submit-brief", "council:reveal", "council:decide", "department-plan:create", "department-plan:revise", "mission-bundle:create",
   "worker:spawn", "worker:observe", "worker:cancel", "worker:accept", "worker:certify", "worker:certify-conditional", "certification:certify", "git:goal-branch", "git:department-branch", "git:worker-worktree", "git:goal-revision",
-  "metronome:scan", "metronome:challenge", "metronome:correct", "metronome:safe-pause", "metronome:resolve", "encore:review", "approval:approve-and-run", "critical-action:request", "critical-action:approve-and-run",
+  "metronome:scan", "metronome:challenge", "metronome:correct", "metronome:safe-pause", "metronome:resolve", "encore:review", "concertmaster-report:generate", "approval:approve-and-run", "critical-action:request", "critical-action:approve-and-run",
 ]);
 
 function flag(command: ParsedCommand, name: string): boolean { return command.options[name] === true || option(command, name) === "true"; }
@@ -382,6 +382,12 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
     const input = parseInput("review-json", { ...review, projectId: context.projectId }, EncoreReviewInputSchema);
     if (isWriteError(input)) return input;
     const reviewed = await context.client.runEncoreReview(goalId, input, id); return { title: "Encore", lines: [JSON.stringify(reviewed)] };
+  }
+  if (key === "concertmaster-report:generate") {
+    const goalId = selectedGoal(command, context);
+    if (typeof goalId !== "string") return goalId;
+    const report = await context.client.generateConcertmasterReport(goalId, { projectId: context.projectId }, id);
+    return { title: "Concertmaster report", lines: [`${report.success ? "passed" : "blocked"} · ${report.whatChanged}`] };
   }
   if (key === "approval:approve-and-run" || key === "critical-action:approve-and-run") {
     const goalId = selectedGoal(command, context); const actionName = required(command, "action"); const targetName = required(command, "target"); const version = integer(command, "version"); const budgetEffectCents = integer(command, "budget-effect-cents"); const expiresAt = required(command, "expires-at");

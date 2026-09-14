@@ -175,7 +175,7 @@ const definitions: CommandDefinition[] = (
     ["metronome-challenges", "Metronome challenge records", [["list", "read"]]],
     ["encore-council", "Encore Council records", [["list", "read"]]],
     ["certifications", "Worker certification records", [["list", "read"]]],
-    ["concertmaster-report", "Concertmaster report", [["get", "read"]]],
+    ["concertmaster-report", "Concertmaster report", [["get", "read"], ["generate", "write"]]],
     [
       "metronome",
       "process integrity oversight",
