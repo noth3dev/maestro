@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ConnectionProvider, useConnection } from "./connection.js";
 import { GoalsProvider } from "./goals.js";
 import { ThemeProvider } from "./theme.js";
-import { I18nProvider } from "./i18n/index.js";
+import { I18nProvider, localeFromPreferences, type Locale } from "./i18n/index.js";
 import { Sidebar } from "./components/Sidebar.js";
 import { Setup } from "./views/Setup.js";
 import { Home } from "./views/Home.js";
@@ -77,9 +77,18 @@ function Connected() {
   return <ConnectedWorkspace projectId={config.projectId} />;
 }
 
-export function App() {
+function LocalizedApp() {
+  const [locale, setLocale] = useState<Locale>("en");
+
+  useEffect(() => {
+    if (typeof window === "undefined" || window.maestro === undefined) return;
+    void window.maestro.preferences.get()
+      .then((preferences) => setLocale(localeFromPreferences(preferences.locale)))
+      .catch(() => undefined);
+  }, []);
+
   return (
-    <I18nProvider locale="en">
+    <I18nProvider locale={locale}>
       <ThemeProvider>
         <ConnectionProvider>
           <Connected />
@@ -87,4 +96,8 @@ export function App() {
       </ThemeProvider>
     </I18nProvider>
   );
+}
+
+export function App() {
+  return <LocalizedApp />;
 }

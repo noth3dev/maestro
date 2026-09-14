@@ -125,7 +125,7 @@ export function LinearAlternative({ nodes, selectedNodeId, onSelect, operations 
               <span className="radial-linear-node-meta">{node.kind} · {status}</span>
               <span className="sr-only">{node.synthetic ? "synthetic" : "projection"}{node.compressed ? " · compressed" : ""}{node.collapsed ? " · collapsed" : ""}</span>
             </button>
-            <button type="button" className="btn btn-sm radial-linear-details" onClick={(event) => openDetails(node, event.currentTarget)}>{t.radial.nodeDetails}</button>
+            <button type="button" className="btn btn-sm radial-linear-details" aria-label={`${t.radial.nodeDetails}: ${node.label}`} onClick={(event) => openDetails(node, event.currentTarget)}>{t.radial.nodeDetails}</button>
           </li>;
         })}
       </ul>
