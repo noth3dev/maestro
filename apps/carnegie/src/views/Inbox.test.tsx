@@ -13,7 +13,7 @@ vi.mock("../useGoalDetail.js", () => ({ useGoalDetail: () => ({ detail: undefine
 describe("Inbox view", () => {
   it("renders durable pending approval actions and Concertmaster discussion affordance", () => {
     const html = renderToStaticMarkup(<Inbox onNavigate={vi.fn()} />);
-    expect(html).toContain("pending approvals and certifications across visible Goals");
+    expect(html).toContain("Pending approvals across visible Goals; certifications for the selected Goal.");
     expect(html).not.toContain("Pending critical-action approvals aren't listable here yet");
   });
 });
