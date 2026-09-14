@@ -990,3 +990,4 @@ export const ChannelReadSchema = z.object({ channel: ChannelSchema, messages: z.
 export type ChannelRead = z.infer<typeof ChannelReadSchema>;
 
 export * from "./settings.js";
+export * from "./persona.js";

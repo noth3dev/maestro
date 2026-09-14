@@ -85,6 +85,7 @@ import {
   WorkerListSchema, type WorkerList,
   ImprovementDigestListSchema, type ImprovementDigestList,
   ArrangementsReadSchema, type ArrangementsRead, type ArrangementCandidate, type ArrangementCouncil, type ArrangementNegativeEvidence,
+  PersonaInspectionSchema, PersonaReadQuerySchema, PersonaProposalInputSchema, ImprovementCandidateResponseSchema, type PersonaInspection, type PersonaReadQuery, type PersonaProposalInput, type ImprovementCandidate,
   StableApiErrorSchema,
   ProjectAccessProvisionInputSchema,
   ProjectAccessProvisionResultSchema,
@@ -287,6 +288,9 @@ export interface ApiClient {
   listWorkersForGoal(goalId: string, query: GoalQuery): Promise<WorkerList>;
   listImprovementDigestsForGoal(goalId: string, query: GoalQuery): Promise<ImprovementDigestList>;
   getArrangements(goalId: string, query: GoalQuery): Promise<ArrangementsRead>;
+  getPersona(query: PersonaReadQuery): Promise<PersonaInspection>;
+  proposePersona(input: PersonaProposalInput, commandId: string): Promise<ImprovementCandidate>;
+  editPersonaCandidate(candidateId: string, input: PersonaProposalInput, commandId: string): Promise<ImprovementCandidate>;
 }
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -849,6 +853,18 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
       const parsed = GoalQuerySchema.parse(query);
       return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/arrangements?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, ArrangementsReadSchema);
     },
+    getPersona(query) {
+      const parsed = PersonaReadQuerySchema.parse(query);
+      return request(`v1/persona?${new URLSearchParams({ projectId: parsed.projectId, goalId: parsed.goalId, roleId: parsed.roleId, taskClass: parsed.taskClass })}`, { headers }, PersonaInspectionSchema);
+    },
+    proposePersona(input, commandId) {
+      const parsed = PersonaProposalInputSchema.parse(input);
+      return request("v1/persona/proposals", { method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) }, body: JSON.stringify(parsed) }, ImprovementCandidateResponseSchema);
+    },
+    editPersonaCandidate(candidateId, input, commandId) {
+      const parsed = PersonaProposalInputSchema.parse(input);
+      return request(`v1/persona/candidates/${encodeURIComponent(UuidSchema.parse(candidateId))}/edits`, { method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) }, body: JSON.stringify(parsed) }, ImprovementCandidateResponseSchema);
+    },
     listEvents(query) {
       const parsed = EventQuerySchema.parse(query);
       return request(`v1/events?${new URLSearchParams({ projectId: parsed.projectId, after: parsed.after })}`, { headers }, GoalEventPageSchema);
@@ -859,6 +875,6 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
   };
 }
 
-export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, OrganizationReadModel, ChannelSelector, ChannelQuery, ChannelMessageInput, ChannelMessage, ChannelRead, ProjectionQuery, ProjectionReadModel, GoalBudgetSummary, BillingReadModel, GoalResult, InboxRead, CriticalActionApprovalInput, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, EvidenceBundleRead, GoalGitIntegrationState, WorkerList, WorkerObservation, ImprovementDigestList, ArrangementsRead, ArrangementCandidate, ArrangementCouncil, ArrangementNegativeEvidence };
+export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, OrganizationReadModel, ChannelSelector, ChannelQuery, ChannelMessageInput, ChannelMessage, ChannelRead, ProjectionQuery, ProjectionReadModel, GoalBudgetSummary, BillingReadModel, GoalResult, InboxRead, CriticalActionApprovalInput, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, EvidenceBundleRead, GoalGitIntegrationState, WorkerList, WorkerObservation, ImprovementDigestList, ArrangementsRead, ArrangementCandidate, ArrangementCouncil, ArrangementNegativeEvidence, PersonaInspection, PersonaReadQuery, PersonaProposalInput, ImprovementCandidate };
 
 export { CHANNEL_SELECTORS };

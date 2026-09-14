@@ -6,6 +6,8 @@ import {
 } from "./api-error.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { AccountLoginRecord, AccountLoginStore, OperatorAuthentication, OperatorContext } from "@maestro/persistence";
+import { PersonaProposalInputSchema, PersonaReadQuerySchema, PersonaInspectionSchema } from "@maestro/contracts";
+import type { PersonaInspectionService } from "./persona-inspection-service.js";
 
 
 
@@ -292,7 +294,7 @@ async function waitForAccountLoginStart(store: AccountLoginStore, operatorId: st
   throw new Error("account login start is still in progress");
 }
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, inboxService, evidenceCaptureService, personaGoalEvidenceService, concertmasterReportService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, organizationService, channelService, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService, projectionService, settingsService }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, inboxService, evidenceCaptureService, personaGoalEvidenceService, concertmasterReportService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, organizationService, channelService, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService, projectionService, settingsService, personaInspectionService }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
@@ -347,6 +349,8 @@ export function buildServer({ goalService, authenticator, eventService, critical
   /** Durable projection composition over existing source tables for Carnegie panels. */
   projectionService?: ProjectionService;
   settingsService?: SettingsService;
+  /** Durable learned persona inspection and candidate proposal/edit boundary. */
+  personaInspectionService?: PersonaInspectionService;
 }): FastifyInstance {
   const app: FastifyInstance = https === undefined ? Fastify() : Fastify({ https });
   const activeStreams = new Set<() => void>();
@@ -365,6 +369,11 @@ export function buildServer({ goalService, authenticator, eventService, critical
     read: async () => { throw new DurableStoreUnavailableError(); },
     compose: async () => { throw new DurableStoreUnavailableError(); },
   } satisfies ProjectionService;
+  const personaInspection = personaInspectionService ?? {
+    read: async () => { throw new DurableStoreUnavailableError(); },
+    propose: async () => { throw new DurableStoreUnavailableError(); },
+    edit: async () => { throw new DurableStoreUnavailableError(); },
+  } satisfies PersonaInspectionService;
   const readState = readStateService ?? {
     listGoals: async () => { throw new DurableStoreUnavailableError(); },
     getBudgetSummary: async () => { throw new DurableStoreUnavailableError(); },
@@ -720,6 +729,27 @@ export function buildServer({ goalService, authenticator, eventService, critical
       providerId,
     });
     return reply.status(200).send({ revoked: true });
+  });
+
+  app.get("/v1/persona", async (request, reply) => {
+    const query = parse(PersonaReadQuerySchema, request.query);
+    const model = await personaInspection.read(query, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(PersonaInspectionSchema.parse(model));
+  });
+
+  app.post("/v1/persona/proposals", async (request, reply) => {
+    const input = parse(PersonaProposalInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const result = await personaInspection.propose(input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(201).send(result);
+  });
+
+  app.post("/v1/persona/candidates/:candidateId/edits", async (request, reply) => {
+    const candidateId = parse(UuidSchema, (request.params as { candidateId?: unknown }).candidateId);
+    const input = parse(PersonaProposalInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const result = await personaInspection.edit(candidateId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(201).send(result);
   });
 
   app.post("/v1/goals", async (request, reply) => {

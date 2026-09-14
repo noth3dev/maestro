@@ -8,6 +8,7 @@ import type { Worker } from "@maestro/contracts";
 import { ProjectMembershipRequiredError, ProjectAccessAdminRequiredError, StaleGoalLeaseError, HeadActivationRequesterInactiveError, CapabilityApprovalConflictError } from "@maestro/persistence";
 import { CapabilityApprovalUnauthorizedError, CapabilityApprovalInvalidRequestError } from "./capability-approval-service.js";
 import { EvidenceCaptureError } from "./evidence-capture-service.js";
+import { PersonaInspectionError, type PersonaInspectionService } from "./persona-inspection-service.js";
 
 const goal = { goalId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02", projectId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01", state: "draft" as const, version: 1 };
 
@@ -173,6 +174,21 @@ describe("billing read route", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(summary);
     expect(getBillingSummary).toHaveBeenCalledWith(goal.projectId);
+    await app.close();
+  });
+});
+
+describe("persona proposal routes", () => {
+  it("returns the server rejection when a proposal attempts to change authority", async () => {
+    const persona: PersonaInspectionService = {
+      read: async () => { throw new Error("unused"); },
+      propose: async () => { throw new PersonaInspectionError("Persona candidate cannot change core identity or authority"); },
+      edit: async () => { throw new Error("unused"); },
+    };
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), personaInspectionService: persona });
+    const response = await app.inject({ method: "POST", url: "/v1/persona/proposals", headers: { authorization: "Bearer test-secret", "idempotency-key": goal.goalId }, payload: { projectId: goal.projectId, goalId: goal.goalId, candidate: { changes: [{ axis: "authority", proposedValue: 1 }] } } });
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error.message).toContain("core identity or authority");
     await app.close();
   });
 });
