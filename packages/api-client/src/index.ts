@@ -40,6 +40,7 @@ import {
   CriticalActionInputSchema,
   CriticalActionApprovalInputSchema,
   CriticalActionResultSchema,
+  InboxReadSchema,
   HeadParticipationInputSchema,
   HeadParticipationSchema,
   CreateHeadCouncilInputSchema,
@@ -133,6 +134,7 @@ import {
   type CriticalActionInput,
   type CriticalActionApprovalInput,
   type CriticalActionResult,
+  type InboxRead,
   type HeadParticipationInput,
   type HeadParticipation,
   type CreateHeadCouncilInput,
@@ -204,6 +206,7 @@ export interface ApiClient {
   confirmTaskContract(contractId: string, input: TaskContractConfirmationInput, commandId?: string): Promise<void>;
   launchTaskContract(contractId: string, projectId: string, commandId?: string): Promise<TaskContract>;
   listGoals(projectId: string): Promise<GoalList>;
+  listInbox(projectId: string): Promise<InboxRead>;
   listProjects(): Promise<ProjectList>;
   getOrganization(): Promise<OrganizationReadModel>;
   getChannel(goalId: string, selector: ChannelSelector, query: ChannelQuery): Promise<ChannelRead>;
@@ -236,6 +239,7 @@ export interface ApiClient {
   emergencyStopGoal(goalId: string, input: GoalControlInput, commandId: string): Promise<GoalResult>;
   requestCriticalAction(goalId: string, input: CriticalActionInput, commandId: string): Promise<CriticalActionResult>;
   approveAndRunCriticalAction(goalId: string, input: CriticalActionApprovalInput, commandId: string): Promise<CriticalActionResult>;
+  denyCriticalAction(goalId: string, input: CriticalActionInput, commandId: string): Promise<void>;
   selectFullAccessMode(goalId: string, input: CapabilitySessionSelectionInput): Promise<CapabilitySession>;
   captureEvidence(goalId: string, input: EvidenceCaptureInput): Promise<EvidenceRecord>;
   activateHead(goalId: string, input: HeadParticipationInput, commandId: string): Promise<HeadParticipation>;
@@ -455,6 +459,10 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
       const parsedProjectId = UuidSchema.parse(projectId);
       return request(`v1/billing?${new URLSearchParams({ projectId: parsedProjectId })}`, { headers }, BillingReadModelSchema);
     },
+    listInbox(projectId) {
+      const parsedProjectId = UuidSchema.parse(projectId);
+      return request(`v1/inbox?${new URLSearchParams({ projectId: parsedProjectId })}`, { headers }, InboxReadSchema);
+    },
     listProjects() {
       return request("v1/projects", { headers }, ProjectListSchema);
     },
@@ -605,6 +613,13 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
         headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
         body: JSON.stringify(CriticalActionApprovalInputSchema.parse(input)),
       }, CriticalActionResultSchema);
+    },
+    denyCriticalAction(goalId, input, commandId) {
+      return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/critical-actions/deny`, {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
+        body: JSON.stringify(CriticalActionInputSchema.parse(input)),
+      }, { parse: () => undefined });
     },
     selectFullAccessMode(goalId, input) {
       return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/capabilities/full-access-mode`, {
@@ -838,6 +853,6 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
   };
 }
 
-export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, OrganizationReadModel, ChannelSelector, ChannelQuery, ChannelMessageInput, ChannelMessage, ChannelRead, ProjectionQuery, ProjectionReadModel, GoalBudgetSummary, BillingReadModel, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, EvidenceBundleRead, GoalGitIntegrationState, WorkerList, WorkerObservation, ImprovementDigestList };
+export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, OrganizationReadModel, ChannelSelector, ChannelQuery, ChannelMessageInput, ChannelMessage, ChannelRead, ProjectionQuery, ProjectionReadModel, GoalBudgetSummary, BillingReadModel, GoalResult, InboxRead, CriticalActionApprovalInput, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, EvidenceBundleRead, GoalGitIntegrationState, WorkerList, WorkerObservation, ImprovementDigestList };
 
 export { CHANNEL_SELECTORS };

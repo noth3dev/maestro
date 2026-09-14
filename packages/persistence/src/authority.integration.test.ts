@@ -15,6 +15,7 @@ import {
   requestStopGoal,
   resumeGoal,
   revokeAuthorityRecord,
+  listPendingAuthorityApprovals,
 } from "./authority.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -104,6 +105,38 @@ describeDatabase("durable authorized effects with PostgreSQL", () => {
     await expect(executor.execute({ ...current, commandId: randomUUID() }, async () => { calls += 1; })).resolves.toMatchObject({ effect: "require_approval" });
     await expect(pool.query("SELECT count(*) FILTER (WHERE outcome = 'allow')::int AS allowed, count(*) FILTER (WHERE outcome = 'require_approval')::int AS pending FROM authority_decisions")).resolves.toMatchObject({ rows: [{ allowed: 1, pending: 1 }] });
     expect(calls).toBe(1);
+  });
+
+  it("aggregates pending critical approvals across Goals and removes an exact approved request", async () => {
+    const secondGoalId = "33333333-3333-4333-8333-333333333333";
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [secondGoalId, authorityProjectId]);
+    const executor = new AuthorizedEffectExecutor(repository, () => new Date("2029-01-01T00:00:00Z"));
+    const first = { ...request(), action: "git.remote.push", target: "origin/main" };
+    const second = { ...request(), goalId: secondGoalId, action: "deployment.release", target: "production" };
+    await expect(executor.execute(first, async () => undefined)).resolves.toMatchObject({ effect: "require_approval" });
+    await expect(executor.execute(second, async () => undefined)).resolves.toMatchObject({ effect: "require_approval" });
+    await expect(listPendingAuthorityApprovals(pool, authorityProjectId)).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ goalId: authorityGoalId, action: first.action, target: first.target }),
+      expect.objectContaining({ goalId: secondGoalId, action: second.action, target: second.target }),
+    ]));
+    await bootstrapAuthorityRecord(pool, { ...first, recordId: randomUUID(), kind: "approval", expiresAt: new Date("2030-01-01T00:00:00Z") });
+    const remaining = await listPendingAuthorityApprovals(pool, authorityProjectId);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.goalId).toBe(secondGoalId);
+    await expect(executor.deny(second, "operator_rejected")).resolves.toMatchObject({ effect: "deny", reason: "operator_rejected" });
+    await expect(listPendingAuthorityApprovals(pool, authorityProjectId)).resolves.toEqual([]);
+  });
+
+  it("does not re-list an authorized request after its approval expires", async () => {
+    const current = { ...request(), action: "git.remote.push", target: "origin/main" };
+    const executor = new AuthorizedEffectExecutor(repository, () => new Date());
+    await expect(executor.execute(current, async () => undefined)).resolves.toMatchObject({ effect: "require_approval" });
+    const approval = await bootstrapAuthorityRecord(pool, {
+      ...current, recordId: randomUUID(), kind: "approval", expiresAt: new Date(Date.now() + 250),
+    });
+    await expect(executor.execute(current, async () => undefined)).resolves.toMatchObject({ effect: "allow" });
+    await expect.poll(async () => (await pool.query<{ active: boolean }>("SELECT expires_at > clock_timestamp() AS active FROM authority_records WHERE record_id = $1", [approval.recordId])).rows[0]?.active).toBe(false);
+    await expect(listPendingAuthorityApprovals(pool, authorityProjectId)).resolves.toEqual([]);
   });
 
   it("fails closed without effects when durable record reads or decision writes fail", async () => {

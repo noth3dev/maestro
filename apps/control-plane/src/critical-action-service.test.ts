@@ -178,4 +178,62 @@ describe("critical action service", () => {
 
     expect(seen).toMatchObject({ actorId: operator.operatorId, goalId, projectId, controlEpoch: "42" });
   });
+
+  it("denies an exact pending critical action through the real denyCriticalAction implementation", async () => {
+    const goalId = randomUUID();
+    const projectId = randomUUID();
+    const commandId = randomUUID();
+    const pool = { query: vi.fn(async () => ({ rows: [{ found: 1 }], rowCount: 1 })) } as unknown as import("pg").Pool;
+    const service = createCriticalActionService({
+      repository: fakeRepository(),
+      effect: vi.fn(async () => {}),
+      getControlEpoch: async () => "1",
+      pool,
+    });
+    const decision = await service.denyCriticalAction(goalId, { projectId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0 }, commandId, operator);
+    expect(decision.effect).toBe("deny");
+  });
+
+  it("replays the same terminal denial when the deny command is retried", async () => {
+    let pending = true;
+    const audits: AuthorityDecisionAudit[] = [];
+    const pool = {
+      query: vi.fn(async (sql: string) => {
+        if (sql.includes("d.outcome = 'deny'")) {
+          return pending ? { rows: [], rowCount: 0 } : {
+            rows: [{ decision_id: "decision-1", reason: "operator_rejected", classification: "critical" }], rowCount: 1,
+          };
+        }
+        return pending ? { rows: [{ found: 1 }], rowCount: 1 } : { rows: [], rowCount: 0 };
+      }),
+    } as unknown as import("pg").Pool;
+    const service = createCriticalActionService({
+      repository: fakeRepository({ appendDecision: async (audit) => { audits.push(audit); pending = false; } }),
+      effect: vi.fn(async () => {}),
+      getControlEpoch: async () => "1",
+      pool,
+    });
+    const goalId = randomUUID();
+    const projectId = randomUUID();
+    const commandId = randomUUID();
+    const input = { projectId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0 };
+
+    await expect(service.denyCriticalAction(goalId, input, commandId, operator)).resolves.toMatchObject({ effect: "deny", reason: "operator_rejected" });
+    await expect(service.denyCriticalAction(goalId, input, commandId, operator)).resolves.toMatchObject({ effect: "deny", reason: "operator_rejected" });
+    expect(audits).toHaveLength(1);
+  });
+
+  it("rejects a deny call for an action that is not actually pending, through the real denyCriticalAction implementation", async () => {
+    const goalId = randomUUID();
+    const projectId = randomUUID();
+    const commandId = randomUUID();
+    const pool = { query: vi.fn(async () => ({ rows: [], rowCount: 0 })) } as unknown as import("pg").Pool;
+    const service = createCriticalActionService({
+      repository: fakeRepository(),
+      effect: vi.fn(async () => {}),
+      getControlEpoch: async () => "1",
+      pool,
+    });
+    await expect(service.denyCriticalAction(goalId, { projectId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0 }, commandId, operator)).rejects.toThrow("critical_action_not_pending");
+  });
 });

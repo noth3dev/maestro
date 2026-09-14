@@ -5,6 +5,7 @@ export default defineConfig({
     alias: {
       "@maestro/api-client": new URL("./packages/api-client/src/index.ts", import.meta.url).pathname,
       "@maestro/contracts": new URL("./packages/contracts/src/index.ts", import.meta.url).pathname,
+      "@maestro/persistence": new URL("./packages/persistence/src/index.ts", import.meta.url).pathname,
     },
   },
   test: {

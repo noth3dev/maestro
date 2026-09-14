@@ -37,6 +37,22 @@ describe("billing client", () => {
   });
 });
 
+describe("inbox client", () => {
+  it("reads pending approvals aggregated across two Goals", async () => {
+    const firstGoal = "22222222-2222-4222-8222-222222222222";
+    const secondGoal = "66666666-6666-4666-8666-666666666666";
+    const read = { projectId, items: [
+      { decisionId: commandId, commandId, projectId, goalId: firstGoal, actorId: "operator-1", action: "deployment.release", target: "production", policyVersion: 1, budgetEffectCents: 0, classification: "critical", reason: "critical_action", decidedAt: "2025-01-01T00:00:00.000Z" },
+      { decisionId: "77777777-7777-4777-8777-777777777777", commandId: "88888888-8888-4888-8888-888888888888", projectId, goalId: secondGoal, actorId: "operator-1", action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0, classification: "critical", reason: "critical_action", decidedAt: "2025-01-01T00:00:01.000Z" },
+    ],
+  };
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(read), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+    await expect(client.listInbox(projectId)).resolves.toEqual(read);
+    expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/inbox?projectId=${projectId}`, expect.objectContaining({ headers: { authorization: "Bearer top-secret" } }));
+  });
+});
+
 describe("createApiClient", () => {
   it("lists authenticated project memberships for first-run workspace discovery", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ projects: [projectId] }), { status: 200 }));
@@ -208,6 +224,14 @@ describe("createApiClient", () => {
     const input = { projectId, action: "deploy", target: "staging", policyVersion: 2, budgetEffectCents: 0 };
     await expect(client.requestCriticalAction(goalId, input, commandId)).resolves.toMatchObject({ effect: "allow" });
     expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/critical-actions`, expect.objectContaining({ method: "POST", body: JSON.stringify(input), headers: expect.objectContaining({ "idempotency-key": commandId }) }));
+  });
+
+  it("denies a pending critical action through the Goal-scoped denial route", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+    const input = { projectId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0 };
+    await expect(client.denyCriticalAction(goalId, input, commandId)).resolves.toBeUndefined();
+    expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/critical-actions/deny`, expect.objectContaining({ method: "POST", body: JSON.stringify(input), headers: expect.objectContaining({ "idempotency-key": commandId }) }));
   });
 
   it("sends project-bound idempotent Goal control operations", async () => {
