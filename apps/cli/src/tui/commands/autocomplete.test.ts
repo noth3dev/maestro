@@ -54,3 +54,12 @@ describe("command argument autocomplete", () => {
     expect(items.find((item) => item.name === "git")?.getArgumentCompletions?.("worker-")).toEqual(expect.arrayContaining([expect.objectContaining({ value: "worker-advance" })]));
   });
 });
+
+
+  it("does not autocomplete dead Group B entries", () => {
+    const items = createCommandAutocompleteItems(createCommandRegistry());
+    for (const [name, action] of [["head", "sleep"], ["head", "resume"], ["worker", "request-help"], ["git", "commit"], ["git", "integrate"], ["git", "cleanup"], ["environment", "list"], ["environment", "get"], ["environment", "create"], ["environment", "cleanup"], ["device", "list"], ["device", "enroll"], ["device", "grant"], ["device", "revoke"], ["device", "dispatch"], ["discord", "list"], ["discord", "triage"], ["discord", "remediate"], ["discord", "close"], ["budget", "forecast"], ["approval", "list"], ["portfolio", "list"], ["portfolio", "prioritize"], ["portfolio", "pause"], ["evidence", "report"], ["improvement-digests", "inspect"]] as const) {
+      const item = items.find((candidate) => candidate.name === name);
+      expect(item?.getArgumentCompletions?.(action) ?? [], `${name} ${action}`).toEqual([]);
+    }
+  });

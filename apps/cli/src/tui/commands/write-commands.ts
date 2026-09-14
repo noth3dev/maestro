@@ -103,7 +103,7 @@ function isWriteError(value: unknown): value is WriteCommandResult {
 }
 
 
-const supportedKeys = new Set([
+export const TUI_WRITE_COMMAND_KEYS = new Set([
   "admin:project-access", "task-contract:create", "task-contract:amend", "task-contract:select-roles", "task-contract:confirm", "task-contract:launch",
   "goal:create", "goal:transition", "goal:pause", "goal:stop", "goal:resume", "goal:emergency-stop", "head:activate",
   "council:create", "council:submit-brief", "council:reveal", "council:decide", "department-plan:create", "department-plan:revise", "mission-bundle:create",
@@ -155,11 +155,10 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
   if (action === undefined) return unavailable(`Unknown command: ${command.name} ${command.action ?? ""}`.trim());
   if (action.kind === "read") return unavailable(`${command.name} ${command.action ?? ""} is a read; use the read command path`.trim());
   const key = `${command.name}:${command.action ?? ""}`;
-  if (!supportedKeys.has(key)) return unavailable(`${key} is not available from the typed Control Plane client`);
-  // A local keypress is not a durable CEO approval. Until a critical operation
-  // has a server-side approve-and-run binding, fail closed before prompting or
-  // invoking any mutation-capable client method.
-  const serverAuthorizedCriticalKeys = new Set(["goal:emergency-stop", "metronome:safe-pause", "capability:select-full-access-mode"]);
+  if (!TUI_WRITE_COMMAND_KEYS.has(key)) return unavailable(`${key} is not available from the typed Control Plane client`);
+  // A local keypress is not durable authority. Only routes with an explicit
+  // server-authorized critical boundary may proceed through local confirmation.
+  const serverAuthorizedCriticalKeys = new Set(["admin:project-access", "goal:emergency-stop", "metronome:safe-pause", "capability:select-full-access-mode"]);
   if (action.kind === "critical" && key !== "approval:approve-and-run" && key !== "critical-action:approve-and-run" && !serverAuthorizedCriticalKeys.has(key)) {
     return unavailable("Critical action requires the durable Control Plane approval path; no mutation was sent.");
   }

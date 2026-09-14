@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createCommandRegistry } from "./registry.js";
+import { TUI_READ_COMMAND_KEYS } from "./read-commands.js";
+import { TUI_WRITE_COMMAND_KEYS } from "./write-commands.js";
 
 describe("TUI command registry", () => {
   it("contains the complete supported command families", () => {
@@ -15,9 +17,6 @@ describe("TUI command registry", () => {
       "mission-bundle",
       "worker",
       "git",
-      "environment",
-      "device",
-      "discord",
       "metronome",
       "encore",
       "certification",
@@ -68,3 +67,36 @@ describe("TUI command registry", () => {
     ).toEqual(["metronome-challenges", "metronome"]);
   });
 });
+
+
+  it("does not advertise Group B entries with no backing below the TUI", () => {
+    const registry = createCommandRegistry();
+    const deadEntries = [
+      ["head", "sleep"], ["head", "resume"], ["worker", "request-help"],
+      ["git", "commit"], ["git", "integrate"], ["git", "cleanup"],
+      ["environment", "list"], ["environment", "get"], ["environment", "create"], ["environment", "cleanup"],
+      ["device", "list"], ["device", "enroll"], ["device", "grant"], ["device", "revoke"], ["device", "dispatch"],
+      ["discord", "list"], ["discord", "triage"], ["discord", "remediate"], ["discord", "close"],
+      ["budget", "forecast"], ["approval", "list"], ["portfolio", "list"], ["portfolio", "prioritize"], ["portfolio", "pause"],
+      ["evidence", "report"], ["improvement-digests", "inspect"],
+    ] as const;
+    for (const [name, action] of deadEntries) {
+      expect(registry.find(name)?.actions.some((candidate) => candidate.name === action) ?? false, `${name} ${action}`).toBe(false);
+    }
+  });
+
+
+  it("maps every registered action to a reachable read, write, or local interactive handler", () => {
+    const localInteractiveKeys = new Set([
+      "help:list", "login:openai-codex", "login:openai", "login:anthropic",
+      "logout:openai-codex", "logout:openai", "logout:anthropic",
+      "models:list", "models:use", "model:list", "model:use",
+      "mode:list", "mode:flashmob", "mode:maestro", "mode:standard", "flashmob:toggle",
+      "goal:select", "session:list", "session:attach", "session:new", "session:retry",
+    ]);
+    const registry = createCommandRegistry();
+    for (const command of registry.all()) for (const action of command.actions) {
+      const key = `${command.name}:${action.name}`;
+      expect(TUI_READ_COMMAND_KEYS.has(key) || TUI_WRITE_COMMAND_KEYS.has(key) || localInteractiveKeys.has(key), key).toBe(true);
+    }
+  });
