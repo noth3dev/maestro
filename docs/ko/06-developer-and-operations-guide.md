@@ -13,7 +13,7 @@ Maestro는 **npm workspaces** 기반의 모노레포 구조로 관리됩니다:
 │   ├── control-plane/     # Fastify 5 REST & SSE 제어 평면 백엔드 서버
 │   ├── model-gateway/     # Provider SDK 및 credential 전용 프로세스
 │   ├── cli/               # Maestro 명령줄 인터페이스 (CLI)
-│   ├── secretary/         # Electron + React Concertmaster Office 데스크톱 클라이언트
+│   ├── carnegie/          # Electron + React Concertmaster Office 데스크톱 클라이언트
 │   └── discord/           # 아웃오브밴드 Discord 인시던트 감지 데몬
 ├── packages/
 │   ├── contracts/         # Zod 스키마, API 계약 및 이벤트 정의
@@ -122,7 +122,7 @@ node apps/cli/dist/main.js report get <goalId>
 - Native `ToolRegistry`는 등록된 도구의 이름·입력·출력 schema와 grant/data class를 검증하지만, production composition에는 현재 host tool이 **0개** 등록되어 있습니다. 미등록 도구는 거부됩니다.
 - OpenAI Codex app-server adapter는 tool-bearing turn을 거부하고 read-only sandbox/no-approval로 동작합니다. 현재 native Worker는 제한된 text generation 경계입니다.
 - Git adapter는 `AuthorizedEffectExecutor`를 통과하는 명시적 Control Plane Git 작업을 제공합니다. remote push와 critical effect는 별도 승인과 구체적 adapter가 필요합니다.
-- CLI/TUI와 Secretary는 API client일 뿐 PostgreSQL, provider, gateway credential 또는 device transport에 직접 연결하지 않습니다.
+- CLI/TUI와 Carnegie는 API client일 뿐 PostgreSQL, provider, gateway credential 또는 device transport에 직접 연결하지 않습니다.
 
 도구·권한·파일시스템 범위·네트워크 범위를 문서화하려면 먼저 이름 있는 계약, action 분류, 구체적 adapter 및 실제 gateway/process acceptance가 필요합니다.
 

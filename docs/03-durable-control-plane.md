@@ -7,7 +7,7 @@ Maestro guarantees strict state integrity, crash resilience, and concurrency pro
 ## 1. System Control Plane Architecture
 
 ```text
-[HTTP REST / SSE Clients] (Secretary Web / CLI)
+[HTTP REST / SSE Clients] (Carnegie / CLI)
           │
           ▼
 ┌──────────────────────────────────────────────┐

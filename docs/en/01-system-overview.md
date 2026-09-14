@@ -78,7 +78,7 @@ Maestro is structured as an **npm workspace monorepo**:
 
 * **`apps/control-plane`**: Fastify 5 REST & Server-Sent Events (SSE) server for durable commands and real-time state streaming.
 * **`apps/cli`**: Authenticated command-line client for the implemented Control Plane API; unsupported surfaces fail rather than being simulated.
-* **`apps/secretary`**: Electron + React desktop client for the Control Plane (Concertmaster Office).
+* **`apps/carnegie`**: Electron + React desktop client for the Control Plane (Concertmaster Office).
 * **`apps/discord`** (Discord Daemon): Independent out-of-band Discord daemon for incident detection and system health probes.
 * **`apps/device-agent`**: Separately running mTLS device protocol process for enrolled, grant-scoped local operations.
 * **`apps/device-agent`**: Separately running mTLS device protocol process for enrolled, grant-scoped local operations.

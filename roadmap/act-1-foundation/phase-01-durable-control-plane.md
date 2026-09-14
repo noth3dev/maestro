@@ -21,7 +21,7 @@ This phase establishes the technical rules every later phase must use. Later pha
 ```text
 apps/control-plane
 apps/model-gateway
-apps/secretary                 # Electron + React client
+apps/carnegie                 # Electron + React client
 apps/cli
 apps/discord                   # Phase 4 watchdog
 apps/device-agent              # Phase 4 device protocol
@@ -70,8 +70,8 @@ The following boundary describes the original design only. It is retained for mi
 
 ### UI and CLI foundation
 
-- Electron + React + Vite for the Secretary desktop client; `@earendil-works/pi-tui` for the terminal client.
-- Secretary and CLI are authenticated clients over the same server API; neither owns durable state.
+- Electron + React + Vite for the Carnegie desktop client; `@earendil-works/pi-tui` for the terminal client.
+- Carnegie and CLI are authenticated clients over the same server API; neither owns durable state.
 - The app stores presentation state only. Durable Goal state always returns from the control plane.
 - CLI uses Node's built-in `util.parseArgs`, human-readable output, and stable `--json` output.
 

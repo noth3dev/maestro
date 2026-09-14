@@ -38,7 +38,7 @@
       "path": "apps/cli"
     },
     {
-      "path": "apps/secretary"
+      "path": "apps/carnegie"
     },
     {
       "path": "apps/control-plane"

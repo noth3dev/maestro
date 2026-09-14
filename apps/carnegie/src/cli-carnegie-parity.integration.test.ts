@@ -12,12 +12,12 @@ import { loadGoalPageData } from "./lib/goal-data.js";
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 
 if (!databaseUrl) {
-  describe.skip("CLI and Secretary durable-truth parity", () => {
+  describe.skip("CLI and Carnegie durable-truth parity", () => {
     it("requires MAESTRO_TEST_DATABASE_URL", () => {});
   });
 } else {
-  describe("CLI and Secretary durable-truth parity", () => {
-    const schema = `cli_secretary_parity_${randomUUID().replaceAll("-", "")}`;
+  describe("CLI and Carnegie durable-truth parity", () => {
+    const schema = `cli_carnegie_parity_${randomUUID().replaceAll("-", "")}`;
     const basePool = new Pool({ connectionString: databaseUrl });
     const scopedUrl = (() => {
       const url = new URL(databaseUrl);
@@ -44,21 +44,22 @@ if (!databaseUrl) {
       await basePool.end();
     });
 
-    it("shows the exact CLI-created durable Goal and event history in Secretary", async () => {
-      const secret = "cli-secretary-parity-test-secret";
+    it("shows the exact CLI-created durable Goal and event history in Carnegie", async () => {
+      const secret = "cli-carnegie-parity-test-secret";
       const projectId = randomUUID();
       const goalId = randomUUID();
       const { credentialId, operatorId } = await bootstrapLocalOperator(setupPool, { secret });
       await grantProjectMembership(setupPool, operatorId, projectId);
-    await grantProjectRole(setupPool, operatorId, projectId, "concertmaster");
+      await grantProjectRole(setupPool, operatorId, projectId, "concertmaster");
       const bearerToken = `${credentialId}.${secret}`;
       const controlPlane = createControlPlane({
         databaseUrl: scopedUrl,
-        evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp",
+        evidenceDir: "/tmp/maestro-evidence",
+        worktreeRoot: "/tmp",
         host: "127.0.0.1",
         port: 0,
-                actorId: "maestro-control-plane",
-        leaseOwnerId: `cli-secretary-parity-${randomUUID()}`,
+        actorId: "maestro-control-plane",
+        leaseOwnerId: `cli-carnegie-parity-${randomUUID()}`,
         reconcilerLeaseDurationMs: 30_000,
         modelRoutingMode: "pin",
         modelGatewayOperatorId: "test-gateway-operator",
@@ -71,31 +72,54 @@ if (!databaseUrl) {
       const env = { MAESTRO_API_URL: apiUrl, MAESTRO_API_TOKEN: bearerToken };
       const stdout: string[] = [];
       const stderr: string[] = [];
-      const io = { stdout: (line: string) => { stdout.push(line); }, stderr: (line: string) => { stderr.push(line); } };
+      const io = {
+        stdout: (line: string) => {
+          stdout.push(line);
+        },
+        stderr: (line: string) => {
+          stderr.push(line);
+        },
+      };
 
       try {
         expect(await executeCli(["goal", "create", "--project-id", projectId, "--command-id", goalId, "--json"], env, io)).toBe(0);
         const created = JSON.parse(stdout.at(-1)!) as { goalId: string; projectId: string; state: string; version: number };
         expect(created).toEqual({ goalId, projectId, state: "draft", version: 1 });
 
-        expect(await executeCli([
-          "goal", "transition", "--goal-id", goalId, "--project-id", projectId,
-          "--expected-version", String(created.version), "--to", "ready_for_confirmation",
-          "--command-id", randomUUID(), "--json",
-        ], env, io)).toBe(0);
+        expect(
+          await executeCli(
+            [
+              "goal",
+              "transition",
+              "--goal-id",
+              goalId,
+              "--project-id",
+              projectId,
+              "--expected-version",
+              String(created.version),
+              "--to",
+              "ready_for_confirmation",
+              "--command-id",
+              randomUUID(),
+              "--json",
+            ],
+            env,
+            io,
+          ),
+        ).toBe(0);
         const transitioned = JSON.parse(stdout.at(-1)!) as typeof created;
         expect(transitioned).toEqual({ ...created, state: "ready_for_confirmation", version: 2 });
 
         expect(await executeCli(["events", "list", "--project-id", projectId, "--json"], env, io)).toBe(0);
         const cliEvents = JSON.parse(stdout.at(-1)!) as { events: unknown[]; nextCursor: string };
         const api = createApiClient({ baseUrl: apiUrl, token: bearerToken });
-        const secretary = await loadGoalPageData(api, { projectId, goalId });
+        const carnegie = await loadGoalPageData(api, { projectId, goalId });
 
         expect(stderr).toEqual([]);
-        expect(secretary.goal).toEqual(transitioned);
-        expect(secretary.goal.goalId).toBe(created.goalId);
-        expect(secretary.goal.version).toBe(transitioned.version);
-        expect(secretary.events).toEqual(cliEvents.events);
+        expect(carnegie.goal).toEqual(transitioned);
+        expect(carnegie.goal.goalId).toBe(created.goalId);
+        expect(carnegie.goal.version).toBe(transitioned.version);
+        expect(carnegie.events).toEqual(cliEvents.events);
       } finally {
         await controlPlane.close();
       }

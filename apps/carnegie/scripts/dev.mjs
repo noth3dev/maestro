@@ -33,7 +33,7 @@ const vite = run("vite", []);
 await waitForDevServer();
 
 const electron = run("electron", ["."], {
-  env: { ...process.env, MAESTRO_SECRETARY_DEV_SERVER_URL: devServerUrl },
+  env: { ...process.env, MAESTRO_CARNEGIE_DEV_SERVER_URL: devServerUrl },
 });
 
 const shutdown = () => {

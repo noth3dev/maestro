@@ -166,7 +166,7 @@ Against plan/phase1.md's exit gate and Tests section, still missing:
 1. An actual process kill-and-restart acceptance test against a running control-plane process with an active Goal (durable reconciliation exists as a scaffold/library, but has not been exercised against a real killed/restarted process).
 2. fast-check property-based fencing tests across every state-changing repository method (Tests #3); current fencing coverage is example-based, not generative.
 3. A concrete example wiring `AuthorizedEffectExecutor` to at least one real effect call site (e.g. a stub critical-action adapter) so "block an unauthorized critical action" is demonstrated end-to-end, not only unit-level.
-4. The Secretary Next.js app shell (CLI exists; app does not). Test #6 requires identical durable state shown by both app and CLI.
+4. The Carnegie Next.js app shell (CLI exists; app does not). Test #6 requires identical durable state shown by both app and CLI.
 5. A failure-injection harness (work sequence item 10) and corrupted-evidence-hash rejection proof (Tests #9).
 
 ## 2026-09-01 — Fencing property tests (Tests #3)
@@ -270,7 +270,7 @@ The provider-neutral `ExecutionKernelPort` cannot atomically commit an external 
 
 ## 2026-09-05 — Phase 5 Track B1-B2 device authority plan
 
-- Scope is limited to a separately running `apps/device-agent` and its `packages/device-agent` support package, signed Goal/project/device/path/fence/policy envelopes, mTLS certificate-to-enrollment binding, durable device-agent sessions, and a pre-effect server-side grant sequence claim. Worker runtime and Secretary files remain out of scope.
+- Scope is limited to a separately running `apps/device-agent` and its `packages/device-agent` support package, signed Goal/project/device/path/fence/policy envelopes, mTLS certificate-to-enrollment binding, durable device-agent sessions, and a pre-effect server-side grant sequence claim. Worker runtime and Carnegie files remain out of scope.
 - The first ordinary operation is a bounded project-file read rooted at an explicitly configured temporary project directory. The injected executor receives only a validated target below the configured root and a byte ceiling; it cannot shell out or escape the root.
 - The control plane (or test issuer) signs the grant envelope with an ephemeral Ed25519 issuer key. The device agent verifies that signature, its own enrolled identity, Goal/project/grant/device binding, expiry, policy version, Goal fence, command sequence, and application/data/network scope before the OS read. The client certificate proves possession through standard mutual TLS.
 - Private device/issuer keys, capability tokens, TLS challenge material, and file contents never enter PostgreSQL, evidence, logs, or prompts. PostgreSQL stores only hashes, scope, session identity metadata, sequence claims, and bounded result summaries.
@@ -283,7 +283,7 @@ The provider-neutral `ExecutionKernelPort` cannot atomically commit an external 
 - A digest will contain only bounded curated summaries, typed metrics, confidence, explicit trigger/source references, and a canonical content hash. Raw prompts, file bytes, credentials, capability tokens, and provider secrets are excluded by schema and validator checks.
 - Require every source reference to identify a durable project/Goal record; a digest cannot be written from an unbound or cross-project source. The digest writer will use the existing Goal lease/actor boundary for an active Goal and will not infer authority from model text.
 - Acceptance for this slice: tenacity/idempotent retry by content identity, changed-content conflict rejection, append-only database protection, source/project/Goal mismatch rejection, bounds and secret-like summary rejection, and a real PostgreSQL migration double-apply check.
-- Explicit non-goals: automatic improvement, candidate evaluation, persona-axis changes, global knowledge promotion, live routing changes, and UI/Secretary updates.
+- Explicit non-goals: automatic improvement, candidate evaluation, persona-axis changes, global knowledge promotion, live routing changes, and UI/Carnegie updates.
 
 
 ## 2026-09-05 — Phase 5 Track B1-B2 device authority implementation and verification
@@ -530,9 +530,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Final clean verification evidence remains: `npm run check` — 106 files passed, 1 skipped; 802 tests passed, 2 skipped; 0 failed. `npm run build` and `git diff --check` passed.
 - No repository ESLint, Prettier, Biome, or Oxlint configuration/local binary is available; this exact limitation is documented by inspection.
 - Phase 6 Step 1 is closed. Phase 6 Steps 2+ remain intentionally deferred; no mutation, replay, rollout, adaptation, or cross-project promotion work was started.
-## 2026-09-06 — Secretary Electron shell is a fully mocked prototype, not a wired console
+## 2026-09-06 — Carnegie Electron shell is a fully mocked prototype, not a wired console
 
-- `apps/secretary` is an Electron app (migrated from Next.js in `hardening/lifecycle`'s `e55146b`),
+- `apps/carnegie` is the Carnegie Electron app (migrated from Next.js in `hardening/lifecycle`'s `e55146b`),
   not the single-Goal Next.js page `plan/operations/task_plan.md`'s Phase 5 Track A7 section still describes.
 - Real, unit-tested data plumbing exists end to end: `connection.tsx` (IPC-backed connection
   config get/save/clear), `goals.tsx` (`GoalsProvider`, lists/selects a Goal via
@@ -542,8 +542,8 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   `getBudgetSummary`, `listEvents`, the full Task Contract lifecycle, `pauseGoal`/`resumeGoal`/
   `stopGoal`/`emergencyStopGoal`, `listCertifications`, `listMetronomeChallenges`,
   `listEncoreCouncilRounds`, `getConcertmasterReport` from the renderer).
-- Despite that, `grep -rl 'useGoalDetail|useGoals()|window.maestro' apps/secretary/src/views
-  apps/secretary/src/*.tsx` matches only the provider files themselves (`connection.tsx`,
+- Despite that, `grep -rl 'useGoalDetail|useGoals()|window.maestro' apps/carnegie/src/views
+  apps/carnegie/src/*.tsx` matches only the provider files themselves (`connection.tsx`,
   `goals.tsx`, `theme.tsx`) — never a single one of the 13 views (`home`, `dashboard`, `channel`,
   `git`, `floor`, `inbox`, `evlog`, `billing`, `settings`, `luthiery`, `arrangements`, `flashmob`,
   `flashmobSession`). Every view renders hardcoded constants: `Dashboard.tsx`'s `departments`
@@ -570,7 +570,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Main worktree's `node_modules/@maestro/` was missing `device-agent` and `device-agent-app`
   symlinks that every other workspace package already had (`api-client`, `authority`, `cli`,
   `contracts`, `control-plane`, `discord`, `domain`, `environment-adapter`, `evidence`,
-  `git-adapter`, `persistence`, `prime-adapter`, `secretary`). This caused `npm run build` to fail
+  `git-adapter`, `persistence`, `prime-adapter`, `carnegie`). This caused `npm run build` to fail
   with `Cannot find module '@maestro/device-agent'` purely from local disk state, unrelated to any
   code change. `npm install` recreated exactly those two symlinks with zero `package-lock.json`
   diff (confirmed via `git status`/`git diff --stat` before and after: no changes). `npm run build`
@@ -610,7 +610,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 ## 2026-09-06 — Documentation drift confirmed during progress check
 
-- `plan/operations/task_plan.md` contains historical Phase 5 status wording that understates the current implementation. Live code confirms the broader authenticated API surface and the Electron Secretary architecture described in the later reconciliation entry.
+- `plan/operations/task_plan.md` contains historical Phase 5 status wording that understates the current implementation. Live code confirms the broader authenticated API surface and the Carnegie Electron architecture described in the later reconciliation entry.
 - The current `main` tip is `95bef8e` (not the older `hardening/lifecycle`/`ce94c3d` reference in the historical entry).
 - No source defect was found in this check. The remaining evidence limitation is environmental: PostgreSQL integration suites cannot run here.
 
@@ -913,7 +913,7 @@ No source behavior was changed in this documentation slice. The audit did not au
 
 ## 2026-09-08 — Phase 7 client alignment
 
-- `apps/secretary/package.json` and `electron/main.ts` confirm the current client is Electron + Vite + React 19 with a main-process credential/API boundary and sandboxed, context-isolated renderer.
+- `apps/carnegie/package.json` and `electron/main.ts` confirm the current Carnegie client is Electron + Vite + React 19 with a main-process credential/API boundary and sandboxed, context-isolated renderer.
 - Product decision: retain that desktop app. The Phase 7 Next.js/Tailwind/shadcn/PWA/“Do not add Electron” wording was roadmap drift and is now superseded, not an active migration plan.
 - The current Phase 7 contract keeps the radial UI goal while deferring `@xyflow/react` and `d3-hierarchy` dependency adoption until the graph slice is implemented and verified.
 

@@ -171,7 +171,7 @@ The original Phase 1/2 execution assumptions below are retained as history. They
 - [complete] 5. Head Council sealed-submission slice (P2S5) accepted after independent review and real-PostgreSQL verification on `phase2/p2s5-integration` (7a627a2): 254 passed, 1 intentional skip, 0 failed. See "Phase 2 detailed status" below for accepted boundary. Department Plans (P2S6) and beyond not started; in_progress.
 - [complete_pending_independent_review] 6. Full Phase 2 work-sequence (steps 6-12) implemented and self-audited on `phase2/p2s5-integration` (fc79c6c): 331 passed, 0 failed. A cross-cutting Council departmentOwnership authorization gap (Department Plan/budget/Git-branch creation) was found and fixed in this final self-audit. P2S5/P2S6 independently reviewed; P2S7-P2S12 self-reviewed only (subagent independent review unavailable throughout this session's back half). Proceeding to Phase 3 per user direction.
 - [complete] 7. Phase 3 (roadmap/act-1-foundation/phase-03-certification-release.md) work-sequence steps 1-10 on `phase3/integration` (`699dee1`), real-PostgreSQL verified: 453 passed, 1 intentional provider live-gate skip, 0 failed.
-- [complete] 8. Phase 3 step 11 (complete live release scenario) fully closed: live Prime worker execution proven (`MAESTRO_LIVE_PRIME=1`), full unsupported-assertion Encore Council round proven, forced mid-flight restart/reconciliation proven, and Tests item 18 (CLI/app parity) proven with a real-PostgreSQL end-to-end fixture (`apps/control-plane/src/read-state-parity.integration.test.ts`) asserting the CLI and `@maestro/api-client` return identical Metronome challenge, Encore Council round, certification, and Concertmaster report state for the same real Goal through a live HTTP server. Final real-PostgreSQL `npm run check`: 459 passed, 2 provider live-gate cases skipped by default, 0 failed. **Phase 3 exit gate: all 13 live-gate steps and all 18 Tests items evidenced.** Secretary UI has no dedicated panel for these four record kinds yet (Goal/event loaders only) -- a UI-layer follow-up, not a gap in the API/CLI parity claim itself.
+- [complete] 8. Phase 3 step 11 (complete live release scenario) fully closed: live Prime worker execution proven (`MAESTRO_LIVE_PRIME=1`), full unsupported-assertion Encore Council round proven, forced mid-flight restart/reconciliation proven, and Tests item 18 (CLI/app parity) proven with a real-PostgreSQL end-to-end fixture (`apps/control-plane/src/read-state-parity.integration.test.ts`) asserting the CLI and `@maestro/api-client` return identical Metronome challenge, Encore Council round, certification, and Concertmaster report state for the same real Goal through a live HTTP server. Final real-PostgreSQL `npm run check`: 459 passed, 2 provider live-gate cases skipped by default, 0 failed. **Phase 3 exit gate: all 13 live-gate steps and all 18 Tests items evidenced.** Carnegie UI has no dedicated panel for these four record kinds yet (Goal/event loaders only) -- a UI-layer follow-up, not a gap in the API/CLI parity claim itself.
 - [pending] 7. Run Phase 1–2 acceptance scenarios, document gaps, and report.
 - [in_progress] 9. Phase 4 (roadmap/act-1-foundation/phase-04-environments-devices-incidents.md) preparation: baseline branch `phase4/integration` created from accepted Phase 3 exit gate (`1effc49`), worktree `.worktrees/p4` added, build verified clean. Recommended two-track work-sequence split recorded in roadmap/act-1-foundation/active/operations/progress.md (Track A: environments+devices, steps 1-5; Track B: Discord, steps 6-9; step 10 integrates both). Playwright dependency not yet added (needed for step 3). Implementation not yet started.
 
@@ -258,13 +258,13 @@ The native runtime boundary remains provider-neutral and supports future gateway
 
 
 ## Phase 3 step 11 split — CLI/app parity finding (2026-09-03)
-- **Tests item 18 status: blocked by missing read surfaces.** Control-plane currently serves only Goal and event reads (`GET /v1/goals/:goalId`, `GET /v1/events`, and event SSE). CLI currently provides `goal get` and `events list`; Secretary loads and renders only Goal/events.
-- No route, typed API-client method, CLI command, or Secretary loader exists for Metronome challenges, Encore Council state, certification state, or Concertmaster reports, although the durable domain/persistence modules exist. This branch records the evidence and does not invent a new aggregate endpoint.
+- **Tests item 18 status: blocked by missing read surfaces.** Control-plane currently serves only Goal and event reads (`GET /v1/goals/:goalId`, `GET /v1/events`, and event SSE). CLI currently provides `goal get` and `events list`; Carnegie loads and renders only Goal/events.
+- No route, typed API-client method, CLI command, or Carnegie loader exists for Metronome challenges, Encore Council state, certification state, or Concertmaster reports, although the durable domain/persistence modules exist. This branch records the evidence and does not invent a new aggregate endpoint.
 - The minimal read contract is now implemented across control-plane, API client, and CLI. A real PostgreSQL app/API/CLI parity composition fixture remains to be added before claiming the item fully proven.
 
 ## 2026-09-03 — P3S11 CLI/app parity read contract implemented
 - Added authenticated read-only control-plane routes for Metronome challenges, Encore Council rounds (including judgments and synthesis), Quality/conditional certifications, and Concertmaster final reports, backed by durable persistence reads. Added matching zod contracts, typed API-client methods, and CLI commands.
-- Control-plane route tests prove all four shapes and missing-report handling. Secretary UI was not changed: it consumes the same API client but has no existing state-panel architecture for these four records; the control-plane is the app backing API.
+- Control-plane route tests prove all four shapes and missing-report handling. Carnegie UI was not changed: it consumes the same API client but has no existing state-panel architecture for these four records; the control-plane is the app backing API.
 - Verification: `MAESTRO_TEST_DATABASE_URL=...55440... npm run check` passed with **458 passed, 2 skipped, 0 failed** (74 test files passed, 1 skipped; skips are the intentional live-Prime cases).
 - Tests item 18 is now covered at the shared read-contract level (control-plane/API client/CLI); a full real-domain parity fixture remains limited to existing persistence integration coverage.
 
@@ -297,7 +297,7 @@ feature-completeness audit before treating Phase 4 as usable.
    Fixed: bearer tokens are now a strict `credentialId.secret` envelope; the selector is
    canonical-UUID validated and looked up by indexed `WHERE c.credential_id = $1` (one row)
    before any KDF work runs; a missing/malformed selector or unknown credential never reaches
-   scrypt. No raw-secret fallback; all callers/fixtures (control-plane, CLI, Secretary parity
+   scrypt. No raw-secret fallback; all callers/fixtures (control-plane, CLI, Carnegie parity
    tests) migrated to the new envelope. Independently reviewed (parent-session direct review,
    not a subagent, after two review-subagent spawns died without replying and were deleted per
    dead-child protocol). Full real-PostgreSQL `npm run check` on `main` after merge: 94/95 files,
@@ -543,7 +543,7 @@ the re-patch execution order moves on to Phase 2's remaining items below.
 7. Already-known Phase 3-rooted P0s from the first audit wave: no production write-command API
    surface for Metronome/Council/certification/report actions; Metronome is a one-shot callable, not
    a continuous scheduled/event-driven loop, and its rule set omits several plan-required finding
-   types; App/CLI/UI parity is read-contract-only, no forms/write surface, no dedicated Secretary
+   types; App/CLI/UI parity is read-contract-only, no forms/write surface, no dedicated Carnegie
    panels for these four record kinds.
 
 ### Phase 4 — remaining open items
@@ -557,7 +557,7 @@ avoid duplicate item IDs.
 
 ### Feature-completeness (real-world usability) sweep — completed directly 2026-09-04
 The dispatched subagent aborted mid-run with no findings (see above); the parent session completed
-this sweep directly by reading `apps/cli/src/main.ts`, `apps/secretary/src/goal-page.tsx`,
+this sweep directly by reading `apps/cli/src/main.ts`, `apps/carnegie/src/goal-page.tsx`,
 `apps/control-plane/src/server.ts`, `apps/discord/src/main.ts`, and roadmap/act-1-foundation/phase-02-hierarchical-execution.md's Concertmaster/Task
 Contract flow. This is additional to (not a duplicate of) the known "no write-command API surface"
 P0 items already listed per-phase above; it grounds two of those gaps in their single sharpest
@@ -578,14 +578,14 @@ concrete illustration each, plus two smaller cross-cutting gaps not previously c
    plane unavailable) Discord exists to handle.
 3. **[Medium, cross-cutting, new]** No "list/browse Goals" capability exists anywhere. Confirmed
    `apps/control-plane/src/server.ts` has only `GET /v1/goals/:goalId` (requires already knowing
-   the UUID), never a bare `GET /v1/goals` listing route; the CLI and Secretary UI inherit the same
+   the UUID), never a bare `GET /v1/goals` listing route; the CLI and Carnegie UI inherit the same
    limit. An operator with no memorized Goal UUID has no way to discover what Goals exist.
 4. **[Medium, cross-cutting, new]** No cost/budget-at-a-glance surface anywhere for a human: no CLI
-   command, no route, and no Secretary panel surfaces `budget_reservations` data, even though (per
+   command, no route, and no Carnegie panel surfaces `budget_reservations` data, even though (per
    the Phase 2/3 domain-correctness findings above) that data already has real accounting-integrity
    problems worth seeing before they compound.
-5. Confirms with direct evidence (no new finding, closes the open question): Secretary
-   (`apps/secretary/src/goal-page.tsx`) is a single, config-fixed-`goalId`, fully read-only page —
+5. Confirms with direct evidence (no new finding, closes the open question): Carnegie
+   (`apps/carnegie/src/goal-page.tsx`) is a single, config-fixed-`goalId`, fully read-only page —
    zero forms, zero navigation between Goals, zero Council/certification/Concertmaster-report panels. The
    CLI (`apps/cli/src/main.ts`) totals 2 write commands (`goal create`, `goal transition`) and 5
    read commands (`goal get`, 3x `*.list`, `concertmaster-report get`, `events list`) — no command exists for
@@ -636,7 +636,7 @@ Two independent read-only audits (P1-P3 usability audit, P4 enrolled-device audi
 4. **Project-scoped operator authorization.** `server.ts` authenticates but never checks project membership/role/capability; `goal-service.ts` forwards any authenticated operator to any supplied project/Goal ID. Required: add project/role/capability authorization checks on every route, not just authentication. Test: an authenticated operator without project membership is rejected reading/writing another project's Goal.
 5. **User-facing CEO approval/critical-action completion.** No endpoint/CLI/UI records a required approval and reruns the concrete effect; `CreateGoalInputSchema` has no outcome/Task-Contract/confirmation fields. Required: add the minimal approve-and-rerun command path end-to-end (API + CLI at least). Test: a critical action that requires approval is approved through a real user-facing command and then actually executes the effect exactly once.
 6. **Continuous Metronome observation (P1, not blocking exit but required before "usable").** `scanGoalForMetronomeFindings` is a one-shot callable with no scheduler/consumer composed in `main.ts`, and its rule set omits unsupported-claims/circular-discussion/activation-cycle/scope-budget-authority-divergence/unreviewed-integration findings from the plan. Required: compose a real scheduled/event-driven Metronome loop and complete its rule set. Test: a seeded violation is caught by the running loop without being manually invoked.
-7. **App/CLI/UI operational parity (P1).** Secretary is read-only single-Goal view with no forms/SSE and no challenge/Council/certification/report display; CLI covers only Goal/event read+create+transition. Required: extend both to the write/read surface from item 3, matching this project's own "same state through app and CLI" requirement, not just a shared read contract.
+7. **App/CLI/UI operational parity (P1).** Carnegie is read-only single-Goal view with no forms/SSE and no challenge/Council/certification/report display; CLI covers only Goal/event read+create+transition. Required: extend both to the write/read surface from item 3, matching this project's own "same state through app and CLI" requirement, not just a shared read contract.
 
 ### Track B — P4 enrolled-device runtime lanes (blocking, P0 unless noted)
 1. **Real device-agent transport and mutual authentication.** No TLS/mTLS listener, certificate/key proof, or authenticated device session exists; `device.ts` explicitly defers this. Required: implement a real device-agent process with TLS/mTLS (or an equivalent standard authenticated-TLS design) and proof-of-possession. Test: a separately running device-agent process (not in-process construction) completes an authenticated round trip.
@@ -701,7 +701,7 @@ The provider-neutral `ExecutionKernelPort` cannot atomically commit an external 
 
 ## 2026-09-05 — Phase 5 Track B1-B2 device authority plan
 
-- Scope is limited to a separately running `apps/device-agent` and its `packages/device-agent` support package, signed Goal/project/device/path/fence/policy envelopes, mTLS certificate-to-enrollment binding, durable device-agent sessions, and a pre-effect server-side grant sequence claim. Worker runtime and Secretary files remain out of scope.
+- Scope is limited to a separately running `apps/device-agent` and its `packages/device-agent` support package, signed Goal/project/device/path/fence/policy envelopes, mTLS certificate-to-enrollment binding, durable device-agent sessions, and a pre-effect server-side grant sequence claim. Worker runtime and Carnegie files remain out of scope.
 - The first ordinary operation is a bounded project-file read rooted at an explicitly configured temporary project directory. The injected executor receives only a validated target below the configured root and a byte ceiling; it cannot shell out or escape the root.
 - The control plane (or test issuer) signs the grant envelope with an ephemeral Ed25519 issuer key. The device agent verifies that signature, its own enrolled identity, Goal/project/grant/device binding, expiry, policy version, Goal fence, command sequence, and application/data/network scope before the OS read. The client certificate proves possession through standard mutual TLS.
 - Private device/issuer keys, capability tokens, TLS challenge material, and file contents never enter PostgreSQL, evidence, logs, or prompts. PostgreSQL stores only hashes, scope, session identity metadata, sequence claims, and bounded result summaries.
@@ -714,7 +714,7 @@ The provider-neutral `ExecutionKernelPort` cannot atomically commit an external 
 - A digest will contain only bounded curated summaries, typed metrics, confidence, explicit trigger/source references, and a canonical content hash. Raw prompts, file bytes, credentials, capability tokens, and provider secrets are excluded by schema and validator checks.
 - Require every source reference to identify a durable project/Goal record; a digest cannot be written from an unbound or cross-project source. The digest writer will use the existing Goal lease/actor boundary for an active Goal and will not infer authority from model text.
 - Acceptance for this slice: tenacity/idempotent retry by content identity, changed-content conflict rejection, append-only database protection, source/project/Goal mismatch rejection, bounds and secret-like summary rejection, and a real PostgreSQL migration double-apply check.
-- Explicit non-goals: automatic improvement, candidate evaluation, persona-axis changes, global knowledge promotion, live routing changes, and UI/Secretary updates.
+- Explicit non-goals: automatic improvement, candidate evaluation, persona-axis changes, global knowledge promotion, live routing changes, and UI/Carnegie updates.
 
 
 ## 2026-09-05 — Phase 5 Track B1-B2 device authority implementation and verification
@@ -990,9 +990,9 @@ actual repo state, verified directly against `git log`/file contents on `hardeni
    Track A item 3's remaining-work wording ("dependent write commands ... still need authenticated
    routes") is now largely obsolete; the real remaining gap is UI/CLI wiring to this surface, not
    the routes themselves. Do not re-implement any of the above; audit for gaps and wire to it.
-3. **Secretary migrated from the Next.js single-Goal read-only page (as Track A7 above still
-   describes) to an Electron desktop app** (`apps/secretary`, main.js entry, IPC bridge in
-   `apps/secretary/electron/`) with thirteen views (`home`, `dashboard`, `channel`, `git`, `floor`,
+3. **Carnegie migrated from the Next.js single-Goal read-only page (as Track A7 above still
+   describes) to an Electron desktop app** (`apps/carnegie`, main.js entry, IPC bridge in
+   `apps/carnegie/electron/`) with thirteen views (`home`, `dashboard`, `channel`, `git`, `floor`,
    `inbox`, `evlog`, `billing`, `settings`, `luthiery`, `arrangements`, `flashmob`,
    `flashmobSession`). This is a substantially larger UI surface than Track A7 describes, but:
    - **Real, tested plumbing exists** and is wired correctly: `connection.tsx` (config get/save/
@@ -1005,7 +1005,7 @@ actual repo state, verified directly against `git log`/file contents on `hardeni
      `listEncoreCouncilRounds`, `getConcertmasterReport`).
    - **Every one of the 13 views is 100% static mock data with zero connection to the real
      plumbing.** Direct `grep` for `useGoalDetail`/`useGoals()`/`window.maestro` usage across
-     `apps/secretary/src/views/*.tsx` and the top-level `.tsx` files returns only `connection.tsx`,
+     `apps/carnegie/src/views/*.tsx` and the top-level `.tsx` files returns only `connection.tsx`,
      `goals.tsx`, and `theme.tsx` — the providers themselves, never a consumer view. `Dashboard.tsx`,
      `Billing.tsx`, `Channel.tsx`, `Git.tsx`, `EvidenceLog.tsx` (and by the same pattern, the
      remaining unaudited views) render hardcoded arrays (e.g. `Billing.tsx`'s `spendByDay`/
@@ -1029,13 +1029,13 @@ actual repo state, verified directly against `git log`/file contents on `hardeni
 4. A stale git-worktree-base defect was found and corrected as pure workflow hygiene, no code
    impact: `.worktrees/phase5-secretary-console` was still parented at `d0ff587`, which predates
    both the Track A1 runtime-ownership Worker-type changes and the Electron migration on
-   `hardening/lifecycle`. Attempting new Secretary (then-Next.js-shaped) work there produced
+   `hardening/lifecycle`. Attempting new Carnegie (then-Next.js-shaped) work there produced
    irrelevant local `tsc -b` errors unrelated to any change in this session, and would have
    produced a diff against an architecture (Next.js pages/route handlers) the project no longer
    uses. No code was committed from that attempt; the worktree was reset to `hardening/lifecycle`
    HEAD (`git reset --hard hardening/lifecycle` + `git clean -fd` for stray build output) before
    any further work. Recreate/rebase a Phase 5 worktree from the current `hardening/lifecycle` tip
-   before starting Secretary UI wiring work, not from an older Phase 5 slice branch.
+   before starting Carnegie UI wiring work, not from an older Phase 5 slice branch.
 5. **Local-environment defect found and fixed (no source change):** the main worktree's
    `node_modules/@maestro/` was missing the `device-agent`/`device-agent-app` workspace symlinks
    (present for every other package), causing `npm run build` to fail with `Cannot find module
@@ -1054,10 +1054,10 @@ actual repo state, verified directly against `git log`/file contents on `hardeni
    Fix is straightforward (guard the URL construction the same way the other DB-gated suites do)
    but is left open as a small follow-up, not bundled into this session's unrelated findings.
 7. **Subagent quota exhaustion:** `openai-codex/gpt-5.6-luna` returned `usage_limit_reached` on
-   every turn for a dispatched Secretary-console child this session (zero real work produced,
+   every turn for a dispatched Carnegie-console child this session (zero real work produced,
    deleted per dead-child protocol); Codex reported `resets_in_seconds` around 74000 at
    2026-09-06T12:46 UTC (~20h). No subagent work is available on the required model until that
-   resets; this session's Secretary/Operator-lane work must proceed directly (no subagent) until
+   resets; this session's Carnegie/Operator-lane work must proceed directly (no subagent) until
    then, per this project's model-restriction policy.
 
 
@@ -1102,7 +1102,7 @@ worker-device link and pause state against that concrete case rather than a hypo
 
 - Actual repository state is `main` at `95bef8e`, synchronized with `origin/main`, with a clean working tree.
 - Phase 5 Track A1 and Track B1-B2 are complete in code and verification history; older status wording that calls them in-progress/not-started is historical and must not be used as the current pointer.
-- The authenticated control-plane/API-client write surface is broader than the older Phase 5 status wording: Task Contract, Goal lifecycle, approvals, Head/Council/Plan/Mission/worker/Git, Metronome, certification, reporting, and project-scoped reads are present. The remaining operational gap is primarily Secretary renderer wiring and missing CLI/renderer exposure for parts of the write surface.
+- The authenticated control-plane/API-client write surface is broader than the older Phase 5 status wording: Task Contract, Goal lifecycle, approvals, Head/Council/Plan/Mission/worker/Git, Metronome, certification, reporting, and project-scoped reads are present. The remaining operational gap is primarily Carnegie renderer wiring and missing CLI/renderer exposure for parts of the write surface.
 - Current Phase 5 slice: project-wide active-worker admission control via `MAESTRO_MAX_CONCURRENT_WORKERS_PER_PROJECT`; this is a deliberate first slice, not completion of the full resource-capacity model or queue behavior.
 - Local verification on this environment: `npm run build` passed; `npm test` passed with 61 files/469 tests passed and 51 files/360 tests skipped because no PostgreSQL URL is available. Full PostgreSQL verification remains blocked by the environment.
 - Next actionable work: extend the capacity model with resource inventory, demand reservations, protected floors, and admission behavior, while preserving the explicit flat-worker-cap boundary until each additional resource has a defined contract.

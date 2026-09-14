@@ -7,7 +7,7 @@ Maestro는 프로세스 다운, 메모리 유실, 분산 경합 환경에서도 
 ## 1. 제어 평면 아키텍처 (Control Plane Architecture)
 
 ```text
-[HTTP REST / SSE Clients] (Secretary Web / CLI)
+[HTTP REST / SSE Clients] (Carnegie / CLI)
           │
           ▼
 ┌──────────────────────────────────────────────┐
