@@ -86,7 +86,7 @@ export async function hasPendingAuthorityApproval(pool: Pool, input: Pick<Action
         AND d.action = $5 AND d.target = $6 AND d.policy_version = $7 AND d.budget_effect_cents = $8::bigint
         AND d.outcome = 'require_approval' AND d.classification = 'critical'
         AND NOT EXISTS (SELECT 1 FROM authority_decisions resolved WHERE resolved.command_id = d.command_id AND resolved.project_id = d.project_id AND resolved.goal_id = d.goal_id AND resolved.actor_id = d.actor_id AND resolved.action = d.action AND resolved.target = d.target AND resolved.policy_version = d.policy_version AND resolved.budget_effect_cents = d.budget_effect_cents AND resolved.outcome IN ('allow', 'deny') AND resolved.decided_at >= d.decided_at)
-        AND NOT EXISTS (SELECT 1 FROM authority_records approval WHERE approval.kind = 'approval' AND approval.command_id = d.command_id AND approval.project_id = d.project_id AND approval.goal_id = d.goal_id AND approval.action = d.action AND approval.target = d.target AND approval.policy_version = d.policy_version AND approval.budget_effect_cents = d.budget_effect_cents AND approval.revoked_at IS NULL AND approval.expires_at > clock_timestamp())
+        AND NOT EXISTS (SELECT 1 FROM authority_records approval WHERE approval.kind = 'approval' AND approval.command_id = d.command_id AND approval.project_id = d.project_id AND approval.goal_id = d.goal_id AND approval.actor_id = d.actor_id AND approval.action = d.action AND approval.target = d.target AND approval.policy_version = d.policy_version AND approval.budget_effect_cents = d.budget_effect_cents AND approval.revoked_at IS NULL AND approval.expires_at > clock_timestamp())
       LIMIT 1`,
     [input.commandId, input.projectId, input.goalId, input.actorId, input.action, input.target, input.policyVersion, String(input.budgetEffectCents)],
   );
@@ -166,7 +166,7 @@ export async function listPendingAuthorityApprovals(pool: Pool, projectId: strin
         AND NOT EXISTS (
           SELECT 1 FROM authority_records approval
            WHERE approval.kind = 'approval' AND approval.project_id = d.project_id AND approval.goal_id = d.goal_id
-             AND approval.command_id = d.command_id AND approval.action = d.action AND approval.target = d.target
+             AND approval.command_id = d.command_id AND approval.actor_id = d.actor_id AND approval.action = d.action AND approval.target = d.target
              AND approval.policy_version = d.policy_version AND approval.budget_effect_cents = d.budget_effect_cents
              AND approval.revoked_at IS NULL AND approval.expires_at > clock_timestamp()
         )
