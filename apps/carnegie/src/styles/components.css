@@ -139,6 +139,15 @@
 .home-card-title { font-size:12px; font-weight:600; margin-top:7px; }
 .home-card-sub { font-size:11px; color:var(--text-muted); margin-top:2px; }
 
+/* ── selected radial node actions ── */
+.radial-node-actions { padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.radial-node-actions h3 { margin: 0 0 7px; font-size: 11px; color: var(--text-secondary); }
+.radial-node-actions [role="group"] { display: flex; flex-wrap: wrap; gap: 7px; }
+.radial-action-disabled { color: var(--text-muted); font-size: 11px; overflow-wrap: anywhere; }
+.radial-critical-confirmation { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 12px; margin: 9px 0 0; font-size: 11px; }
+.radial-critical-confirmation dt { color: var(--text-muted); }
+.radial-critical-confirmation dd { margin: 1px 0 0; overflow-wrap: anywhere; }
+
 /* ── dashboard ── */
 .dash-main { flex:1; overflow-y:auto; padding:20px 24px; min-width:0; }
 .dash-head { display:flex; align-items:center; gap:10px; margin-bottom:4px; }

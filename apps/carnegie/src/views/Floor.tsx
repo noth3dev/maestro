@@ -15,5 +15,5 @@ export function Floor({ onBack, eventCursor = "0" }: { onBack: () => void; event
   if (projectionState.error !== undefined && projectionState.projection === undefined) return <div className="floor-wrap"><div className="floor-empty alert alert-warning" role="alert">Could not load the organization projection: {projectionState.error}</div></div>;
   if (projectionState.projection === undefined) return <div className="floor-wrap"><div className="floor-empty" role="status">The organization projection is not available yet.</div></div>;
 
-  return <RadialGraph projection={projectionState.projection} selectedGoalId={goalId} onSelectGoal={selectGoal} onBack={onBack} />;
+  return <RadialGraph projection={projectionState.projection} selectedGoalId={goalId} onSelectGoal={selectGoal} onBack={onBack} api={window.maestro.api} />;
 }
