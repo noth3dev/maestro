@@ -7,7 +7,8 @@
     "dev": "node scripts/dev.mjs",
     "build": "tsc -b && tsc -p tsconfig.renderer.json --noEmit && vite build",
     "start": "electron .",
-    "test:radial-electron": "node scripts/electron-radial-renderer-smoke.mjs"
+    "test:radial-electron": "node scripts/electron-radial-renderer-smoke.mjs",
+    "test:a11y": "playwright test --config=playwright.config.ts"
   },
   "dependencies": {
     "@maestro/api-client": "*",
@@ -25,6 +26,8 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.0.0",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "axe-core": "^4.11.0",
+    "@playwright/test": "1.62.1"
   }
 }
