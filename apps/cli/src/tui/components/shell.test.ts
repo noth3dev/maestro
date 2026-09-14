@@ -49,6 +49,64 @@ describe("Maestro TUI shell", () => {
     expect(renderStatusHeader(state, 120, 30)).toHaveLength(1);
   });
 
+  it("uses distinct addressee-aware placeholders for idle, work, and pending decisions", () => {
+    const idle = renderTuiLayout(state, 80, 30).input[0];
+    const working = renderTuiLayout({ ...state, working: true }, 80, 30).input[0];
+    const pending = renderTuiLayout({
+      ...state,
+      pendingDecisions: [{ identity: "decision-1", tier: "Council", action: "approve", actor: "operator" }],
+    }, 80, 30).input[0];
+    expect(idle).toBe("message to Concertmaster · Enter to send");
+    expect(working).toContain("in progress");
+    expect(pending).toContain("Council");
+    expect(new Set([idle, working, pending]).size).toBe(3);
+  });
+
+  it("does not invent a running Department Head or worker identity", () => {
+    const input = renderTuiLayout({ ...state, working: true }, 80, 30).input[0];
+    expect(input).toContain("Concertmaster");
+    expect(input).not.toContain("Department Head");
+    expect(input).not.toContain("worker");
+  });
+
+  it("uses known Goal and worker values when work is in flight", () => {
+    const input = renderTuiLayout({
+      ...state,
+      working: true,
+      goal: { kind: "value", value: { name: "auth-refactor", state: "running" } },
+      workers: { kind: "value", value: 2 },
+    }, 80, 30).input[0];
+    expect(input).toContain("auth-refactor");
+    expect(input).toContain("2 workers");
+  });
+
+  it("keeps pending placeholder tier and count aligned with the decision region", () => {
+    const pendingState = {
+      ...state,
+      pendingDecisions: [
+        { identity: "decision-1", tier: "Council", action: "approve", actor: "operator" },
+        { identity: "decision-2", tier: "Council", action: "reject", actor: "operator" },
+      ],
+    };
+    const frame = renderTuiLayout(pendingState, 80, 30);
+    expect(frame.input[0]).toContain("Council");
+    expect(frame.input[0]).toContain("2 pending decisions");
+    expect(frame.decisions.join("\n")).toContain("Council");
+    expect(frame.decisions.join("\n")).toContain("approve");
+    expect(frame.decisions.join("\n")).toContain("reject");
+  });
+
+  it("bounds addressee-aware placeholders at existing terminal widths", () => {
+    const states = [
+      state,
+      { ...state, working: true },
+      { ...state, pendingDecisions: [{ identity: "decision-1", tier: "Council", action: "approve", actor: "operator" }] },
+    ];
+    for (const width of [40, 60, 80, 120]) {
+      for (const candidate of states) expect(renderTuiLayout(candidate, width, 30).input[0].length).toBeLessThanOrEqual(width);
+    }
+  });
+
   it("renders the first-frame splash as a bounded region", () => {
     const splash = renderTuiLayout(state, 120, 30, { showSplash: true }).splash;
     expect(splash[0]).toContain("MAESTRO");

@@ -104,8 +104,12 @@ export function renderStatusRow(state: TuiShellState, width: number): string {
   return `${tuiTheme.text(left)}${pendingPaint(fitPlain(pending, width - baseWidth))}`;
 }
 
+function pendingDecisionRows(state: TuiShellState): PendingDecision[] {
+  return (state.pendingDecisions ?? []).filter((decision) => typeof decision.identity === "string" && decision.identity.trim() !== "");
+}
+
 function decisionRows(state: TuiShellState, width: number, height: number): string[] {
-  const decisions = (state.pendingDecisions ?? []).filter((decision) => typeof decision.identity === "string" && decision.identity.trim() !== "");
+  const decisions = pendingDecisionRows(state);
   if (decisions.length === 0) return [];
   if (width < 60) return [fitPlain(`⏸ ${decisions.length} pending decisions · ctrl+a to review`, width)];
   const maxVisible = height < 24 ? 1 : 2;
@@ -140,7 +144,22 @@ function nextActionText(): string {
 }
 
 function hasPendingDecisionRows(state: TuiShellState): boolean {
-  return (state.pendingDecisions ?? []).some((decision) => typeof decision.identity === "string" && decision.identity.trim() !== "");
+  return pendingDecisionRows(state).length > 0;
+}
+
+export function renderInputPlaceholder(state: TuiShellState, width: number): string {
+  const decisions = pendingDecisionRows(state);
+  if (decisions.length > 0) {
+    const tier = decisions[0]?.tier ?? "authority";
+    const count = decisions.length;
+    return fitPlain(`⏸ ${tier} · ${count} pending decision${count === 1 ? "" : "s"} · operator response required`, width);
+  }
+  if (state.working === true) {
+    const work = state.goal.kind === "value" ? `working on ${state.goal.value.name}` : "Concertmaster in progress";
+    const workers = state.workers.kind === "value" ? ` · ${workerText(state)}` : "";
+    return fitPlain(`${work}${workers} · esc stop`, width);
+  }
+  return fitPlain("message to Concertmaster · Enter to send", width);
 }
 
 export function renderSplash(state: TuiShellState, width: number): string[] {
@@ -227,7 +246,7 @@ export function renderTuiLayout(state: TuiShellState, width: number, height: num
   const splash = options.showSplash === true && width >= 40 && height >= 16 ? renderSplash(state, width) : [];
   const status = [renderStatusRow(state, width)];
   const decisions = renderDecisionRegion(state, width, height);
-  const input = [fitPlain(options.input?.[0] ?? "message to Concertmaster · Enter to send", width)];
+  const input = [fitPlain(options.input?.[0] ?? renderInputPlaceholder(state, width), width)];
   const hints = [renderHints(state, width)];
   if (height < 16) return { splash, status, stream: [], decisions: [], input, hints: [] };
   const streamHeight = Math.max(0, height - status.length - decisions.length - input.length - hints.length - splash.length);

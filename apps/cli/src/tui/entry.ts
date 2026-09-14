@@ -45,7 +45,7 @@ import { mergeEvents, runActivityStream, subscribeToEvents } from "./activity-st
 import { addConversationMessage, applyConversationEvent, createConversationTranscript, isTerminalConversationEvent, renderUnifiedStreamEntries, type ConversationTranscriptState } from "./conversation-transcript.js";
 import { pendingDecisionsFromActivity, toActivityTimelineEvent } from "./components/activity-timeline.js";
 import { createDecisionRegion, createDynamicRegion, createStatusRegion } from "./components/regions.js";
-import { createSplashController, renderPendingDecisionDetails, renderTuiFooter, type TuiShellState } from "./components/shell.js";
+import { createSplashController, renderInputPlaceholder, renderPendingDecisionDetails, renderTuiFooter, type TuiShellState } from "./components/shell.js";
 import { getModeAccentProgress, setModeAccentProgress, tuiTheme, type TranscriptLine } from "./theme.js";
 
 import { copyToClipboard, openExternalUrl } from "../external-url.js";
@@ -168,9 +168,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
   return await new Promise<number>((resolve) => {
     const editor = new SecretEditor(tui, editorTheme, { paddingX: 2, autocompleteMaxVisible: 6 });
     const inputPanel = new Box(1, 0, tuiTheme.inputSurface);
-    inputPanel.addChild(
-      new Text(`${tuiTheme.muted("message to Concertmaster")} ${tuiTheme.border("·")} ${tuiTheme.dim("Enter to send")}`, 0, 0),
-    );
+    const inputLabel = createDynamicRegion((width) => [tuiTheme.muted(renderInputPlaceholder(state, width))]);
+    inputPanel.addChild(inputLabel);
     inputPanel.addChild(editor);
     const composer = new FramedComposer(inputPanel);
     const footer = new Text("", 0, 0);
