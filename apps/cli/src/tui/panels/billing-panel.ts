@@ -23,6 +23,8 @@ export function renderBillingPanel(state: PanelState<BillingReadModel>, width: n
     panelLine(`• actual spend: ${formatCents(value.totals.costCents)}`, width),
     panelLine(`• ceiling: ${formatCents(value.totals.budgetCents)}`, width),
     panelLine(`• reserved: ${formatCents(value.totals.reservedCents)}`, width),
+    "Goals",
+    ...value.goals.map((goal) => panelLine(`• ${goal.goalId} · budget ${formatCents(goal.budgetCents)} · reserved ${formatCents(goal.reservedCents)} · actual ${formatCents(goal.costCents)}`, width)),
   ];
 
   lines.push("Per-department cost · unavailable", panelLine(`• ${value.departmentBreakdown.reason}`, width));
