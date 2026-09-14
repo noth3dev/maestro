@@ -2,6 +2,8 @@ import React, { useMemo, useState, type KeyboardEvent, type MouseEvent } from "r
 import { ReactFlow, ReactFlowProvider, useReactFlow, type Edge, type Node, type NodeMouseHandler, type Viewport } from "@xyflow/react";
 import type { ProjectionReadModel } from "@maestro/contracts";
 import { buildRadialLayout, type RadialGraphNode } from "./radial-layout.js";
+import { NodeActionControls } from "./NodeActionControls.js";
+import type { NodeActionsApi } from "../../../lib/node-actions.js";
 import "@xyflow/react/dist/style.css";
 
 interface RadialNodeData extends Record<string, unknown> {
@@ -26,6 +28,7 @@ export interface RadialGraphProps {
   selectedGoalId?: string;
   onSelectGoal?: (goalId: string) => void;
   onBack: () => void;
+  api?: NodeActionsApi;
 }
 
 function stateClass(state: string | undefined): string {
@@ -69,7 +72,7 @@ function flowEdges(edges: ReturnType<typeof buildRadialLayout>["edges"]): Edge[]
   }));
 }
 
-function GraphCanvas({ layout, selectedNodeId, onSelect }: { layout: ReturnType<typeof buildRadialLayout>; selectedNodeId: string | undefined; onSelect: (nodeId: string) => void }) {
+function GraphCanvas({ layout, selectedNodeId, onSelect, selectedProjectionNode, api }: { layout: ReturnType<typeof buildRadialLayout>; selectedNodeId: string | undefined; onSelect: (nodeId: string) => void; selectedProjectionNode?: import("@maestro/contracts").ProjectionNode; api?: NodeActionsApi }) {
   const { zoomIn, zoomOut, fitView, getViewport, setViewport, setCenter } = useReactFlow();
   const [query, setQuery] = useState("");
   const nodes = useMemo(() => flowNodes(layout.nodes, selectedNodeId), [layout.nodes, selectedNodeId]);
@@ -125,6 +128,7 @@ function GraphCanvas({ layout, selectedNodeId, onSelect }: { layout: ReturnType<
       {selected?.data.kind === "department_plan" && selected.data.ownerId !== null && selected.data.ownerId !== undefined && (
         <div className="radial-head-detail" role="status">Department Head: {selected.data.ownerId} · projection node {selected.id} · version {selected.data.version ?? "—"}</div>
       )}
+      {selectedProjectionNode !== undefined && api !== undefined && <NodeActionControls node={selectedProjectionNode} api={api} />}
       <div className="radial-accessible-nodes" aria-label="Radial graph nodes">
         {nodes.map((node) => (
           <button key={node.id} type="button" className="radial-node-link" data-radial-node-id={node.id} data-radial-node-version={node.data.version === undefined ? "" : String(node.data.version)} aria-pressed={node.selected === true} onClick={() => onSelect(node.id)}>
@@ -136,7 +140,7 @@ function GraphCanvas({ layout, selectedNodeId, onSelect }: { layout: ReturnType<
   );
 }
 
-export function RadialGraph({ projection, selectedGoalId, onSelectGoal, onBack }: RadialGraphProps) {
+export function RadialGraph({ projection, selectedGoalId, onSelectGoal, onBack, api }: RadialGraphProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>(undefined);
   const layout = useMemo(() => buildRadialLayout(projection, {
     ...(selectedGoalId === undefined ? {} : { selectedGoalId }),
@@ -162,7 +166,7 @@ export function RadialGraph({ projection, selectedGoalId, onSelectGoal, onBack }
         {selected !== undefined && <span className="radial-selection" role="status">selected: {selected.label} · {selected.state ?? selected.kind}</span>}
       </div>
       <ReactFlowProvider>
-        <GraphCanvas layout={layout} selectedNodeId={selectedNodeId} onSelect={onSelectNode} />
+        <GraphCanvas layout={layout} selectedNodeId={selectedNodeId} onSelect={onSelectNode} selectedProjectionNode={projection.nodes.find((node) => node.nodeId === selectedNodeId && !node.removed)} api={api} />
       </ReactFlowProvider>
       <div className="floor-legend radial-legend" aria-label="Radial graph legend">
         <span><span className="legend-dot" style={{ background: "var(--terracotta)" }} /> Concertmaster</span>

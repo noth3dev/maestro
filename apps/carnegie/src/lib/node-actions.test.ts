@@ -34,6 +34,24 @@ describe("Carnegie node actions", () => {
     expect(client.pauseGoal).toHaveBeenCalledWith(goalId, { projectId, expectedVersion: 4 }, commandId);
   });
 
+  it("surfaces a server rejection without converting it into a different action", async () => {
+    const client = api();
+    vi.mocked(client.pauseGoal).mockRejectedValueOnce(new Error("authority denied"));
+    await expect(runNodeAction(client, { kind: "command", command: "pauseGoal", node }, commandId)).rejects.toThrow("authority denied");
+    expect(client.resumeGoal).not.toHaveBeenCalled();
+  });
+
+  it("deduplicates repeated controls while preserving their order", () => {
+    const actions = buildNodeActions(node, { controls: ["pauseGoal", "pauseGoal", "stopGoal"], actor: { kind: "user", authorized: true } });
+    expect(actions.map((action) => action.command)).toEqual(["pauseGoal", "stopGoal"]);
+  });
+
+  it("carries the exact policy and budget input into the critical command", async () => {
+    const client = api();
+    await runNodeAction(client, { kind: "critical", command: "requestCriticalAction", node, critical: { action: "deploy", target: "staging", goalId, expiresAt: "2026-01-01T00:00:00.000Z", expectedEffect: "Release", rollbackFeasibility: "feasible" }, criticalInput: { projectId, policyVersion: 7, budgetEffectCents: 41 } }, commandId);
+    expect(client.requestCriticalAction).toHaveBeenCalledWith(goalId, { projectId, action: "deploy", target: "staging", policyVersion: 7, budgetEffectCents: 41 }, commandId);
+  });
+
   it("preserves the exact critical confirmation fields", () => {
     expect(buildNodeActions(node, { actor: { kind: "user", authorized: true }, critical: { action: "deploy", target: "production", goalId, expiresAt: "2026-01-01T00:00:00.000Z", expectedEffect: "Release build", rollbackFeasibility: "rollback available" } }).find((action) => action.kind === "critical")?.confirmation).toEqual({ action: "deploy", target: "production", goalId, expiresAt: "2026-01-01T00:00:00.000Z", expectedEffect: "Release build", rollbackFeasibility: "rollback available" });
   });

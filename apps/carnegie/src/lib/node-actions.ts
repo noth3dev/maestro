@@ -25,10 +25,12 @@ export interface CriticalConfirmation {
   readonly decision?: "pending" | "approved" | "declined";
 }
 
+export type CriticalCommandInput = Pick<CriticalActionInput, "policyVersion" | "budgetEffectCents"> & Partial<Pick<CriticalActionInput, "projectId">>;
+
 export interface NodeActionContext {
-  readonly actor: NodeActionActor;
+  readonly actor?: NodeActionActor;
   readonly critical?: CriticalConfirmation;
-  readonly criticalInput?: Pick<CriticalActionInput, "policyVersion" | "budgetEffectCents">;
+  readonly criticalInput?: CriticalCommandInput;
   readonly criticalCommand?: "requestCriticalAction" | "approveAndRunCriticalAction";
   readonly controls?: readonly NodeControlCommand[];
 }
@@ -36,18 +38,21 @@ export interface NodeActionContext {
 export interface NodeActionBase {
   readonly nodeId: string;
   readonly label: string;
-  readonly command: NodeActionCommand;
 }
 export interface NodeCommandAction extends NodeActionBase {
+  readonly command: NodeControlCommand;
   readonly kind: "command";
   readonly enabled: boolean;
 }
 export interface NodeCriticalAction extends NodeActionBase {
+  readonly command: "requestCriticalAction" | "approveAndRunCriticalAction";
   readonly kind: "critical";
   readonly enabled: true;
   readonly confirmation: CriticalConfirmation;
+  readonly criticalInput?: CriticalCommandInput;
 }
 export interface NodeUnauthorizedAction extends NodeActionBase {
+  readonly command: NodeActionCommand;
   readonly kind: "unauthorized";
   readonly enabled: false;
   readonly reason: string;
@@ -63,9 +68,9 @@ const CONTROL_LABELS: Readonly<Record<NodeControlCommand, string>> = {
 };
 const DEFAULT_CONTROLS: readonly NodeControlCommand[] = ["pauseGoal", "resumeGoal", "stopGoal", "emergencyStopGoal"];
 
-function actionForControl(node: ProjectionNode, command: NodeControlCommand, actor: NodeActionActor): NodeAction {
+function actionForControl(node: ProjectionNode, command: NodeControlCommand, actor: NodeActionActor | undefined): NodeAction {
   const common = { nodeId: node.nodeId, label: CONTROL_LABELS[command], command } as const;
-  if (!actor.authorized) return { ...common, kind: "unauthorized", enabled: false, reason: actor.reason ?? "This actor is not authorized for this control.", decisionPath: actor.decisionPath ?? "Request the required Goal decision." };
+  if (actor?.authorized === false) return { ...common, kind: "unauthorized", enabled: false, reason: actor.reason ?? "This actor is not authorized for this control.", decisionPath: actor.decisionPath ?? "Request the required Goal decision." };
   return { ...common, kind: "command", enabled: true };
 }
 
@@ -74,13 +79,13 @@ function actionForControl(node: ProjectionNode, command: NodeControlCommand, act
  * The server remains authoritative; unauthorized controls stay visible with their path.
  */
 export function buildNodeActions(node: ProjectionNode, context: NodeActionContext): readonly NodeAction[] {
-  const controls = context.controls ?? (node.kind === "goal" ? DEFAULT_CONTROLS : []);
+  const controls = [...new Set(context.controls ?? (node.kind === "goal" ? DEFAULT_CONTROLS : []))];
   const actions: NodeAction[] = controls.map((command) => actionForControl(node, command, context.actor));
   const critical = context.critical;
   if (critical !== undefined && critical.goalId === node.goalId && critical.classification !== "forbidden" && critical.decision !== "declined") {
     const criticalCommand = context.criticalCommand ?? "approveAndRunCriticalAction";
-    const base = { nodeId: node.nodeId, label: `${criticalCommand === "requestCriticalAction" ? "Review" : "Approve"} ${critical.action}`, command: criticalCommand, confirmation: critical };
-    if (!context.actor.authorized) actions.push({ ...base, kind: "unauthorized", enabled: false, reason: context.actor.reason ?? "This actor is not authorized for this critical action.", decisionPath: context.actor.decisionPath ?? "Request the required approval." });
+    const base = { nodeId: node.nodeId, label: `${criticalCommand === "requestCriticalAction" ? "Review" : "Approve"} ${critical.action}`, command: criticalCommand, confirmation: critical, ...(context.criticalInput === undefined ? {} : { criticalInput: { ...context.criticalInput, projectId: context.criticalInput.projectId ?? node.projectId } }) };
+    if (context.actor?.authorized === false) actions.push({ ...base, kind: "unauthorized", enabled: false, reason: context.actor?.reason ?? "This actor is not authorized for this critical action.", decisionPath: context.actor?.decisionPath ?? "Request the required approval." });
     else actions.push({ ...base, kind: "critical", enabled: true as const });
   }
   return actions;
@@ -88,7 +93,7 @@ export function buildNodeActions(node: ProjectionNode, context: NodeActionContex
 
 export type RunNodeActionInput =
   | { readonly kind: "command"; readonly command: NodeControlCommand; readonly node: ProjectionNode }
-  | { readonly kind: "critical"; readonly command: "requestCriticalAction" | "approveAndRunCriticalAction"; readonly node: ProjectionNode; readonly critical: CriticalConfirmation; readonly input?: Pick<CriticalActionInput, "policyVersion" | "budgetEffectCents" | "projectId"> }
+  | { readonly kind: "critical"; readonly command: "requestCriticalAction" | "approveAndRunCriticalAction"; readonly node: ProjectionNode; readonly critical: CriticalConfirmation; readonly criticalInput?: CriticalCommandInput; readonly input?: CriticalCommandInput }
   | { readonly kind: "full-access"; readonly node: ProjectionNode; readonly mode: FullAccessMode; readonly sessionId: string };
 
 /** Execute exactly one exposed server command. No action can be composed into another command. */
@@ -110,9 +115,9 @@ export function runNodeAction(api: NodeActionsApi, action: RunNodeActionInput, c
   if (action.critical.decision === "declined") throw new Error("declined critical actions cannot be silently downgraded");
   if (action.critical.goalId !== action.node.goalId) throw new Error("Critical action Goal does not match the selected node");
   const input: CriticalActionInput & { expiresAt?: string } = {
-    projectId: action.input?.projectId ?? action.node.projectId,
+    projectId: action.input?.projectId ?? action.criticalInput?.projectId ?? action.node.projectId,
     action: action.critical.action, target: action.critical.target,
-    policyVersion: action.input?.policyVersion ?? 1, budgetEffectCents: action.input?.budgetEffectCents ?? 0,
+    policyVersion: action.input?.policyVersion ?? action.criticalInput?.policyVersion ?? 1, budgetEffectCents: action.input?.budgetEffectCents ?? action.criticalInput?.budgetEffectCents ?? 0,
     ...(action.command === "approveAndRunCriticalAction" ? { expiresAt: action.critical.expiresAt } : {}),
   };
   if (action.command === "requestCriticalAction") return api.requestCriticalAction(action.node.goalId, input, commandId);

@@ -139,15 +139,11 @@
 .home-card-title { font-size:12px; font-weight:600; margin-top:7px; }
 .home-card-sub { font-size:11px; color:var(--text-muted); margin-top:2px; }
 
-/* ── IPython approval panel ── */
-.ipython-approval-panel { display: flex; flex-direction: column; gap: 12px; }
-.office-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.ipython-approval-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 14px; margin: 0; }
-.ipython-approval-facts div { min-width: 0; }
-.ipython-approval-facts dt { color: var(--text-muted); font-size: 10.5px; }
-.ipython-approval-facts dd { color: var(--text-primary); font-size: 12px; margin: 2px 0 0; overflow-wrap: anywhere; }
-.ipython-approval-panel [role="group"] { display: flex; flex-wrap: wrap; gap: 8px; }
-.ipython-approval-panel [aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); }
+/* ── selected radial node actions ── */
+.radial-node-actions { padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.radial-node-actions h3 { margin: 0 0 7px; font-size: 11px; color: var(--text-secondary); }
+.radial-node-actions [role="group"] { display: flex; flex-wrap: wrap; gap: 7px; }
+.radial-action-disabled { color: var(--text-muted); font-size: 11px; overflow-wrap: anywhere; }
 
 /* ── dashboard ── */
 .dash-main { flex:1; overflow-y:auto; padding:20px 24px; min-width:0; }
