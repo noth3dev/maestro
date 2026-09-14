@@ -88,7 +88,7 @@ function valueLines<T>(title: string, items: readonly T[], format: (item: T) => 
 
 export async function executeReadCommand(context: ReadCommandContext, command: ParsedCommand): Promise<ReadCommandResult> {
   const key = `${command.name}:${command.action ?? ""}`;
-  if (!["projects:list", "task-contract:get", "goals:list", "goal:get", "budget:get", "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "worker:list", "workers:get", "workers:list", "git:status", "metronome-challenges:list", "encore-council:list", "certification:list", "certifications:list", "concertmaster-report:get", "events:list", "events:stream", "improvement-digests:list"].includes(key)) {
+  if (!["projects:list", "task-contract:get", "goals:list", "goal:get", "budget:get", "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "worker:list", "workers:get", "workers:list", "git:status", "metronome-challenges:list", "encore-council:list", "certification:list", "certifications:list", "concertmaster-report:get", "conversation:get", "events:list", "events:stream", "improvement-digests:list"].includes(key)) {
     const definition = createCommandRegistry().find(command.name);
     const action = definition?.actions.find((item) => item.name === command.action);
     if (action?.kind !== "read") return unavailable(`${command.name} ${command.action ?? ""} is a mutation; use the write command path`.trim());
@@ -108,6 +108,12 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     if (typeof contractId !== "string") return contractId;
     const contract = await context.client.getTaskContract(contractId, { projectId: context.projectId });
     return { title: "Task Contract", lines: [`• ${contract.contractId} · ${contract.launchState} · v${contract.version}`] };
+  }
+  if (key === "conversation:get") {
+    const conversationId = required(command, "conversation-id");
+    if (typeof conversationId !== "string") return conversationId;
+    const conversation = await context.client.getConversation(conversationId, { projectId: context.projectId });
+    return { title: "Conversation", lines: [`• ${conversation.conversationId} · ${conversation.status} · v${conversation.version} · ${conversation.model}`] };
   }
   if (key === "council:get") {
     const councilId = required(command, "council-id");

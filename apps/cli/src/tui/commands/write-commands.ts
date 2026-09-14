@@ -24,6 +24,7 @@ export interface WriteCommandContext {
   client: ApiClient;
   projectId: string;
   goalId?: string;
+  model?: string;
   confirm: ConfirmationPrompt;
 }
 
@@ -97,7 +98,7 @@ const supportedKeys = new Set([
   "goal:create", "goal:transition", "goal:pause", "goal:stop", "goal:resume", "goal:emergency-stop", "head:activate",
   "council:create", "council:submit-brief", "council:reveal", "council:decide", "department-plan:create", "department-plan:revise", "mission-bundle:create",
   "worker:spawn", "worker:observe", "worker:cancel", "worker:accept", "worker:certify", "worker:certify-conditional", "certification:certify", "git:goal-branch", "git:department-branch", "git:worker-worktree", "git:goal-revision",
-  "metronome:scan", "metronome:challenge", "metronome:correct", "metronome:safe-pause", "metronome:resolve", "encore:review", "approval:approve-and-run", "critical-action:request", "critical-action:approve-and-run",
+  "metronome:scan", "metronome:challenge", "metronome:correct", "metronome:safe-pause", "metronome:resolve", "encore:review", "conversation:create", "conversation:turn", "conversation:cancel", "approval:approve-and-run", "critical-action:request", "critical-action:approve-and-run",
 ]);
 
 function flag(command: ParsedCommand, name: string): boolean { return command.options[name] === true || option(command, name) === "true"; }
@@ -163,6 +164,29 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
     const created = await context.client.createGoal({ projectId: context.projectId, ...(contractId === undefined ? {} : { contractId }) }, id);
     return result("Goal", created);
   }
+  if (key === "conversation:create") {
+    const goalId = required(command, "goal-id");
+    const model = option(command, "model") ?? context.model;
+    if (typeof goalId !== "string") return goalId;
+    if (model === undefined) return unavailable("Missing required option --model or selected model");
+    const created = await context.client.createConversation({ projectId: context.projectId, goalId, model }, { idempotencyKey: id });
+    return { title: "Conversation", lines: [`${created.conversationId} · ${created.status} · ${created.model}`] };
+  }
+  if (key === "conversation:turn") {
+    const conversationId = required(command, "conversation-id");
+    const text = required(command, "text");
+    if (typeof conversationId !== "string") return conversationId;
+    if (typeof text !== "string") return text;
+    const turned = await context.client.sendConversationTurn(conversationId, { projectId: context.projectId, text }, { idempotencyKey: id });
+    return { title: "Conversation", lines: [`${turned.turn.conversationId} · ${turned.turn.status} · ${turned.turn.content}`] };
+  }
+  if (key === "conversation:cancel") {
+    const conversationId = required(command, "conversation-id");
+    if (typeof conversationId !== "string") return conversationId;
+    const cancelled = await context.client.cancelConversation(conversationId, { projectId: context.projectId });
+    return { title: "Conversation", lines: [`${cancelled.conversationId} · ${cancelled.status}`] };
+  }
+
   if (command.name === "goal" && command.action === "transition") {
     const goalId = selectedGoal(command, context); const expectedVersion = integer(command, "expected-version"); const to = required(command, "to");
     if (typeof goalId !== "string") return goalId;

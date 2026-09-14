@@ -773,12 +773,18 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             }
           }
         } else if (parsed.kind === "command" && parsed.name === "conversation" && parsed.action === "cancel") {
-          if (client === undefined || project.kind !== "attached" || session?.conversationId === undefined)
-            appendWarning("No active conversation is available to cancel.");
-          else {
-            conversationTurnController?.abort();
-            const cancelled = await client.cancelConversation(session.conversationId, { projectId: project.projectId });
-            appendWarning(`Conversation ${cancelled.conversationId}: ${cancelled.status}`);
+          if (client === undefined || project.kind !== "attached") {
+            appendWarning("Conversation cancellation is unavailable until a workspace project is attached.");
+          } else {
+            const requestedConversationId = parsed.options["conversation-id"];
+            if (requestedConversationId === session?.conversationId) conversationTurnController?.abort();
+            const cancelResult = await executeWriteCommand({
+              client,
+              projectId: project.projectId,
+              ...(session?.goalId === undefined ? {} : { goalId: session.goalId }),
+              confirm,
+            }, parsed);
+            append(`${cancelResult.title}: ${cancelResult.lines.join(" · ")}`);
           }
         } else if (parsed.kind === "command" && client !== undefined && project.kind === "attached") {
           const action = registry.find(parsed.name)?.actions.find((item) => item.name === parsed.action);
@@ -789,10 +795,15 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             );
             append(`${readResult.title}: ${readResult.lines.join(" · ")}`);
           } else if (action !== undefined) {
-            const writeResult = await executeWriteCommand(
-              { client, projectId: project.projectId, ...(session?.goalId === undefined ? {} : { goalId: session.goalId }), confirm },
-              parsed,
-            );
+            const writeContext = {
+              client,
+              projectId: project.projectId,
+              ...(session?.goalId === undefined ? {} : { goalId: session.goalId }),
+              confirm,
+            } as Parameters<typeof executeWriteCommand>[0];
+            const selectedModel = options.env.MAESTRO_MODEL?.trim() || session?.model;
+            if (selectedModel !== undefined) writeContext.model = selectedModel;
+            const writeResult = await executeWriteCommand(writeContext, parsed);
             pendingConfirmation = undefined;
             syncPendingDecisionState();
             append(`${writeResult.title}: ${writeResult.lines.join(" · ")}`);
