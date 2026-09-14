@@ -10,12 +10,17 @@ describe("Inbox durable actions", () => {
     await expect(loadPendingApprovalCount({ listInbox: vi.fn(async () => ({ projectId, items: [item, { ...item, decisionId: "66666666-6666-4666-8666-666666666666" }] })) }, projectId)).resolves.toBe(2);
   });
 
-  it("keeps approval expiry stable for retries of the same pending item", () => {
+  it("keeps approval expiry stable by command identity across decision changes and renderer reload", () => {
     let now = 1_000;
-    const expiry = createInboxApprovalExpiry(() => now);
-    expect(expiry(item)).toBe(expiry(item));
+    const values = new Map<string, string>();
+    const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } };
+    const expiry = createInboxApprovalExpiry(() => now, storage);
+    const first = expiry(item);
     now = 2_000;
-    expect(expiry({ ...item, decisionId: "66666666-6666-4666-8666-666666666666" })).not.toBe(expiry(item));
+    const changedDecision = { ...item, decisionId: "66666666-6666-4666-8666-666666666666" };
+    expect(expiry(changedDecision)).toBe(first);
+    const reloadedExpiry = createInboxApprovalExpiry(() => now, storage);
+    expect(reloadedExpiry(changedDecision)).toBe(first);
   });
 
   it("approves through the existing Goal-scoped approval route", async () => {

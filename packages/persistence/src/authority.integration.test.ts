@@ -123,7 +123,7 @@ describeDatabase("durable authorized effects with PostgreSQL", () => {
     const remaining = await listPendingAuthorityApprovals(pool, authorityProjectId);
     expect(remaining).toHaveLength(1);
     expect(remaining[0]!.goalId).toBe(secondGoalId);
-    await expect(executor.deny({ ...second, commandId: randomUUID() }, "operator_rejected")).resolves.toMatchObject({ effect: "deny", reason: "operator_rejected" });
+    await expect(executor.deny(second, "operator_rejected")).resolves.toMatchObject({ effect: "deny", reason: "operator_rejected" });
     await expect(listPendingAuthorityApprovals(pool, authorityProjectId)).resolves.toEqual([]);
   });
 

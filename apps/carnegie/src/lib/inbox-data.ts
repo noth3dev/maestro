@@ -4,13 +4,34 @@ export function loadInbox(api: Pick<ApiClient, "listInbox">, projectId: string):
   return api.listInbox(projectId);
 }
 
-export function createInboxApprovalExpiry(now: () => number = Date.now): (item: Pick<InboxRead["items"][number], "decisionId">) => string {
+interface ApprovalExpiryStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
+function browserApprovalExpiryStorage(): ApprovalExpiryStorage | undefined {
+  try {
+    return (globalThis as typeof globalThis & { localStorage?: ApprovalExpiryStorage }).localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+export function createInboxApprovalExpiry(
+  now: () => number = Date.now,
+  storage: ApprovalExpiryStorage | undefined = browserApprovalExpiryStorage(),
+): (item: Pick<InboxRead["items"][number], "commandId">) => string {
   const expiries = new Map<string, string>();
   return (item) => {
-    const existing = expiries.get(item.decisionId);
-    if (existing !== undefined) return existing;
+    const key = `maestro:inbox-approval-expiry:${item.commandId}`;
+    const existing = expiries.get(key) ?? storage?.getItem(key) ?? undefined;
+    if (existing !== undefined) {
+      expiries.set(key, existing);
+      return existing;
+    }
     const value = new Date(now() + 60 * 60 * 1000).toISOString();
-    expiries.set(item.decisionId, value);
+    expiries.set(key, value);
+    try { storage?.setItem(key, value); } catch { /* Storage may be unavailable or full. */ }
     return value;
   };
 }
