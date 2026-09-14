@@ -266,3 +266,6 @@
 .home-draft-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
 .home-suggestions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; width:100%; max-width:440px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto !important; transition-duration:0.01ms !important; animation-duration:0.01ms !important; animation-iteration-count:1 !important; } }
+
+.app-content { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
+.event-stale-banner { flex-shrink:0; padding:8px 16px; border-bottom:1px solid var(--border-strong); background:var(--ochre-bg); color:var(--ochre-text); font-size:12px; }
