@@ -20,6 +20,7 @@ export function Billing() {
       return;
     }
     let cancelled = false;
+    setBilling(undefined);
     setBillingError(undefined);
     void window.maestro.api.getBillingSummary(config.projectId)
       .then((loaded) => { if (!cancelled) setBilling(loaded); })
@@ -64,7 +65,7 @@ export function Billing() {
         <EmptyState title="No Goal selected" hint="Select a Goal from the Dashboard to see its real budget here." />
       )}
 
-      <div className="dash-section-title" style={{ marginTop: 20 }}>daily spend, usage by group, and cross-Goal totals</div>
+      <div className="dash-section-title" style={{ marginTop: 20 }}>daily spend and cross-Goal totals</div>
       {billing !== undefined && (
         <>
           <div className="dash-panel">
@@ -92,7 +93,7 @@ export function Billing() {
       )}
       <div className="dash-panel" style={{ marginTop: 16 }}>
         <div className="dash-panel-head"><span>per-department cost</span><strong>unavailable</strong></div>
-        <p className="muted">Department attribution is not tracked by durable actual-cost records, so no breakdown is shown.</p>
+        <p className="muted">{billing?.departmentBreakdown.reason ?? "No durable department breakdown is available."}</p>
       </div>
     </div>
   );
