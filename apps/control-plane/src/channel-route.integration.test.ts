@@ -115,7 +115,7 @@ describeDatabase("channel route durability", () => {
       const tuiRead = await executeReadCommand({ client: reloadedClient, projectId, goalId }, {
         name: "channel", action: "read", options: { "channel-kind": selector.kind, "channel-id": selector.channelId },
       });
-      expect(tuiRead.lines).toContain(`• 1 · operator:${operatorId} · one durable message`);
+      expect(tuiRead.lines).toContain(`• ${secretaryRead.messages[0]!.sequence} · operator:${operatorId} · one durable message`);
     } finally { await reloaded.close(); }
   });
 
