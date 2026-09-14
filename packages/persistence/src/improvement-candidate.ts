@@ -18,6 +18,7 @@ import {
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
 import { withGoalAuthority } from "./goal-authority.js";
+import { assertProjectMembership } from "./project-membership.js";
 
 export class ImprovementCandidatePersistenceError extends Error {
   constructor(message: string) {
@@ -864,4 +865,133 @@ export async function readImprovementCandidateDecisionHistory(pool: Pool, candid
     rolloutHistory.push({ rolloutId: row.rollout_id, status: row.status, activeCandidateId: row.active_candidate_id, activeVersion: row.active_version, history: events.rows });
   }
   return { candidate, evaluation, approval, council, rollouts: rolloutHistory, explanation: { changedAxes: candidate.changes.map((change) => change.axis), expectedBehavior: candidate.predictedEffect, evidenceIds: [...new Set([ ...candidate.sourceEvidenceIds, ...(evaluation?.evidenceIds ?? []), ...(approval?.councilEvidenceIds ?? []) ])], rollback: candidate.rollbackTarget } };
+}
+
+
+export interface ImprovementCandidateArrangementEvaluation {
+  readonly evaluationId: string;
+  readonly evaluationHash: string;
+  readonly metricDeltas: readonly { readonly name: string; readonly baseline: number; readonly candidate: number; readonly delta: number }[];
+}
+export interface ImprovementCandidateArrangementJudgment {
+  readonly modelProvider: string;
+  readonly modelId: string;
+  readonly verdict: "proceed" | "do_not_proceed" | "escalate";
+  readonly confidence: "low" | "medium" | "high";
+  readonly reasoning: string;
+  readonly conditions: readonly string[];
+  readonly dissentNote: string | null;
+  readonly citedEvidenceIds: readonly string[];
+}
+export interface ImprovementCandidateArrangementCouncil {
+  readonly roundId: string;
+  readonly question: string;
+  readonly finalVerdict: "proceed" | "do_not_proceed" | "escalate";
+  readonly reviewerCount: number;
+  readonly sameModelOnly: boolean;
+  readonly escalated: boolean;
+  readonly dissentNotes: readonly string[];
+  readonly judgments: readonly ImprovementCandidateArrangementJudgment[];
+}
+export interface ImprovementCandidateArrangementRollout {
+  readonly rolloutId: string;
+  readonly status: "active" | "interrupted" | "certified" | "rolled_back";
+  readonly activeCandidateId: string;
+  readonly activeVersion: number;
+  readonly contentHash: string;
+}
+export interface ImprovementCandidateArrangementRecord {
+  readonly candidate: ImprovementCandidate;
+  readonly evaluation: ImprovementCandidateArrangementEvaluation | null;
+  readonly council: ImprovementCandidateArrangementCouncil | null;
+  readonly rollout: ImprovementCandidateArrangementRollout | null;
+}
+
+type ArrangementEvaluationRow = { evaluation_id: string; evaluation_hash: string; replay_payload: unknown; evaluation_payload: unknown };
+type ArrangementCouncilRow = { round_id: string; question: string; reviewer_count: number; final_verdict: string; same_model_only: boolean; escalated: boolean; dissent_notes: unknown };
+type ArrangementJudgmentRow = { model_provider: string; model_id: string; verdict: string; confidence: string; reasoning: string; conditions: unknown; dissent_note: string | null; cited_evidence_ids: unknown };
+
+function finiteMetric(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value); }
+function metricDeltas(payload: unknown): readonly { readonly name: string; readonly baseline: number; readonly candidate: number; readonly delta: number }[] {
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return [];
+  const replay = (payload as Record<string, unknown>).replay;
+  if (replay === null || typeof replay !== "object" || Array.isArray(replay)) return [];
+  const results = (replay as Record<string, unknown>).results;
+  if (!Array.isArray(results)) return [];
+  const totals = new Map<string, { baseline: number; candidate: number; count: number }>();
+  for (const item of results) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) continue;
+    const row = item as Record<string, unknown>;
+    if (row.baseline === null || typeof row.baseline !== "object" || Array.isArray(row.baseline)
+      || row.candidate === null || typeof row.candidate !== "object" || Array.isArray(row.candidate)) continue;
+    const baseline = row.baseline as Record<string, unknown>;
+    const candidate = row.candidate as Record<string, unknown>;
+    for (const [name, base] of Object.entries(baseline)) {
+      const next = candidate[name];
+      if (!finiteMetric(base) || !finiteMetric(next)) continue;
+      const prior = totals.get(name) ?? { baseline: 0, candidate: 0, count: 0 };
+      prior.baseline += base; prior.candidate += next; prior.count += 1; totals.set(name, prior);
+    }
+  }
+  return [...totals.entries()].map(([name, values]) => {
+    const baseline = values.baseline / values.count; const candidate = values.candidate / values.count;
+    return { name, baseline, candidate, delta: candidate - baseline };
+  }).sort((left, right) => left.name.localeCompare(right.name));
+}
+function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []; }
+function arrangementJudgment(row: ArrangementJudgmentRow): ImprovementCandidateArrangementJudgment | null {
+  if ((row.verdict !== "proceed" && row.verdict !== "do_not_proceed" && row.verdict !== "escalate") || (row.confidence !== "low" && row.confidence !== "medium" && row.confidence !== "high") || row.reasoning.trim() === "") return null;
+  return { modelProvider: row.model_provider, modelId: row.model_id, verdict: row.verdict, confidence: row.confidence, reasoning: row.reasoning, conditions: stringArray(row.conditions), dissentNote: row.dissent_note, citedEvidenceIds: stringArray(row.cited_evidence_ids) };
+}
+
+/** Lists the latest durable candidate version in each lineage for the authenticated Goal. */
+export async function listImprovementCandidateArrangements(
+  pool: Pool,
+  authorization: { readonly operatorId: string; readonly projectId: string },
+  goalId: string,
+): Promise<readonly ImprovementCandidateArrangementRecord[]> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await assertProjectMembership(client, authorization.operatorId, authorization.projectId);
+    const rows = await client.query<CandidateRow>(`SELECT DISTINCT ON (lineage_id) ${COLUMNS}
+      FROM improvement_candidates WHERE project_id = $1 AND goal_id = $2 ORDER BY lineage_id, version DESC`, [authorization.projectId, goalId]);
+    const records: ImprovementCandidateArrangementRecord[] = [];
+    for (const row of rows.rows) {
+      const candidate = mapRow(row);
+      const evaluated = await client.query<{ candidate_id: string; version: number; content_hash: string }>(`SELECT candidate_id, version, content_hash FROM improvement_candidates WHERE lineage_id = $1 AND state = 'evaluated' ORDER BY version DESC LIMIT 1`, [row.lineage_id]);
+      const evaluatedRow = evaluated.rows[0];
+      let evaluation: ImprovementCandidateArrangementEvaluation | null = null;
+      if (evaluatedRow !== undefined) {
+        let evaluationRow: ArrangementEvaluationRow | undefined;
+        if (candidate.kind === "persona_axis") {
+          const result = await client.query<ArrangementEvaluationRow>(`SELECT evaluation_id, evaluation_hash, NULL::jsonb AS replay_payload, evaluation_payload FROM improvement_candidate_evaluations WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3`, [evaluatedRow.candidate_id, evaluatedRow.version, evaluatedRow.content_hash]);
+          evaluationRow = result.rows[0];
+        } else {
+          const result = await client.query<ArrangementEvaluationRow>(`SELECT evaluation_id, evaluation_hash, replay_payload, NULL::jsonb AS evaluation_payload FROM routing_candidate_evaluations WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3`, [evaluatedRow.candidate_id, evaluatedRow.version, evaluatedRow.content_hash]);
+          evaluationRow = result.rows[0];
+        }
+        if (evaluationRow !== undefined) evaluation = { evaluationId: evaluationRow.evaluation_id, evaluationHash: evaluationRow.evaluation_hash, metricDeltas: metricDeltas(evaluationRow.evaluation_payload ?? evaluationRow.replay_payload) };
+      }
+      const lineageIds = (await client.query<{ candidate_id: string }>("SELECT candidate_id FROM improvement_candidates WHERE lineage_id = $1", [row.lineage_id])).rows.map((item) => item.candidate_id);
+      const approvals = await client.query<{ council_round_id: string }>(`SELECT council_round_id FROM improvement_candidate_council_approvals WHERE candidate_id = ANY($1::uuid[]) UNION ALL SELECT council_round_id FROM routing_candidate_approvals WHERE candidate_id = ANY($1::uuid[])`, [lineageIds]);
+      let council: ImprovementCandidateArrangementCouncil | null = null;
+      const roundId = approvals.rows[0]?.council_round_id;
+      if (roundId !== undefined) {
+        const round = await client.query<ArrangementCouncilRow>(`SELECT r.round_id, r.question, r.reviewer_count, s.final_verdict, s.same_model_only, s.escalated, s.dissent_notes FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id WHERE r.round_id = $1`, [roundId]);
+        const judgmentRows = await client.query<ArrangementJudgmentRow>("SELECT model_provider, model_id, verdict, confidence, reasoning, conditions, dissent_note, cited_evidence_ids FROM encore_council_judgments WHERE round_id = $1 ORDER BY reviewer_index", [roundId]);
+        const roundRow = round.rows[0];
+        const judgments = judgmentRows.rows.flatMap((item) => { const mapped = arrangementJudgment(item); return mapped === null ? [] : [mapped]; });
+        if (roundRow !== undefined && (roundRow.final_verdict === "proceed" || roundRow.final_verdict === "do_not_proceed" || roundRow.final_verdict === "escalate")) {
+          council = { roundId: roundRow.round_id, question: roundRow.question, reviewerCount: roundRow.reviewer_count, finalVerdict: roundRow.final_verdict, sameModelOnly: roundRow.same_model_only, escalated: roundRow.escalated, dissentNotes: stringArray(roundRow.dissent_notes), judgments };
+        }
+      }
+      const rollout = await client.query<{ rollout_id: string; status: ImprovementCandidateArrangementRollout["status"]; active_candidate_id: string; active_version: number; content_hash: string }>(`SELECT r.rollout_id, r.status, r.active_candidate_id, r.active_version, c.content_hash FROM improvement_rollouts r JOIN improvement_candidates c ON c.candidate_id = r.active_candidate_id WHERE r.candidate_id = ANY($1::uuid[]) ORDER BY r.created_at DESC, r.rollout_id DESC LIMIT 1`, [lineageIds]);
+      const rolloutRow = rollout.rows[0];
+      records.push({ candidate, evaluation, council, rollout: rolloutRow === undefined ? null : { rolloutId: rolloutRow.rollout_id, status: rolloutRow.status, activeCandidateId: rolloutRow.active_candidate_id, activeVersion: rolloutRow.active_version, contentHash: rolloutRow.content_hash } });
+    }
+    await client.query("COMMIT");
+    return records;
+  } catch (error) { await client.query("ROLLBACK"); throw error; }
+  finally { client.release(); }
 }
