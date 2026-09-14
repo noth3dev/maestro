@@ -328,6 +328,7 @@ async function appendFromPrevious(
 ): Promise<ImprovementCandidate> {
   if (input.projectId !== previous.project_id || input.goalId !== previous.goal_id) throw new ImprovementCandidatePersistenceError("Improvement Candidate revision cannot change project or Goal");
   if (input.kind !== previous.kind) throw new ImprovementCandidatePersistenceError("Improvement Candidate revision cannot change candidate kind");
+  if (input.target.roleId !== previous.target.roleId || input.target.taskClass !== previous.target.taskClass) throw new ImprovementCandidatePersistenceError("Improvement Candidate revision cannot change target role or task class");
   const candidateId = randomUUID();
   return insertCandidate(client, input, proof, author, operation, { candidateId, lineageId: previous.lineage_id, version: previous.version + 1, parentCandidateId: previous.candidate_id, state });
 }

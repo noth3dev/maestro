@@ -119,6 +119,7 @@ describeDatabase("Improvement Candidate persistence", () => {
     await expect(readImprovementCandidate(pool, first.candidateId, { operatorId, proof })).resolves.toEqual(first);
     await expect(listImprovementCandidateVersions(pool, first.candidateId, { operatorId, proof })).resolves.toEqual([first, second]);
     await expect(readImprovementCandidate(pool, first.candidateId, { operatorId: randomUUID(), proof })).rejects.toThrow(/authorized|project|Goal/i);
+    await expect(appendImprovementCandidateVersion(pool, first.candidateId, inputFor({ target: { roleId: "head-security", taskClass: "implementation" } }), proof, author, "revision-retarget")).rejects.toThrow(/target role|task class|target/i);
     await expect(pool.query("UPDATE improvement_candidates SET predicted_effect = 'tampered' WHERE candidate_id = $1", [first.candidateId])).rejects.toThrow(/append-only|immutable|mutation/i);
     await expect(pool.query("DELETE FROM improvement_candidates WHERE candidate_id = $1", [first.candidateId])).rejects.toThrow(/append-only|immutable|mutation/i);
     await expect(pool.query("TRUNCATE improvement_candidates")).rejects.toThrow(/truncat|forbidden|append-only/i);

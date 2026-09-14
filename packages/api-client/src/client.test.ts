@@ -21,6 +21,15 @@ describe("channel client", () => {
 });
 
 describe("persona client", () => {
+  it("posts an initial persona candidate through the typed Goal-bound proposal route", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ candidateId: "55555555-5555-4555-8555-555555555555" }), { status: 201 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+    const candidate = { schemaVersion: 1, projectId, goalId, kind: "persona_axis", target: { roleId: "concertmaster", taskClass: "implementation" }, changes: [{ axis: "caution", currentValue: 0.5, proposedValue: 0.6 }] };
+
+    await client.proposePersona({ projectId, goalId, candidate }, "66666666-6666-4666-8666-666666666666");
+    expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/persona/proposals", expect.objectContaining({ method: "POST", body: JSON.stringify({ projectId, goalId, candidate }), headers: expect.objectContaining({ "idempotency-key": "66666666-6666-4666-8666-666666666666" }) }));
+  });
+
   it("serializes the Goal binding when reading persona inspection", async () => {
     const profile = Object.fromEntries(["agreeableness", "extraversion", "imagination", "realism", "conscientiousness", "caution", "initiative", "empathy", "adaptability", "sociability"].map((axis) => [axis, 0.5]));
     const model = { roleId: "concertmaster", taskClass: "implementation", profile, version: 1, coreIdentity: { mission: "mission", authority: ["coordinate"], truthfulness: "truth", safety: "safety", prohibitedBehavior: ["invent"] }, taskClassAdjustment: { roleId: "concertmaster", taskClass: "implementation", version: 1, delta: {}, reason: "baseline" }, missionOverlay: {}, candidates: [], rollouts: [] };
