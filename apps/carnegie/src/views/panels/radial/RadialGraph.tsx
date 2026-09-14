@@ -140,7 +140,7 @@ function GraphCanvas({ layout, selectedNodeId, onSelect, onBack }: { layout: Ret
         </span>
         {layout.virtualized && <span className="radial-virtualized" role="status">large organization · virtualized</span>}
       </div>
-      <div className="radial-flow" aria-label="Organization radial graph">
+      <div className="radial-flow" aria-label={t.radial.graph}>
         <ReactFlow
           nodes={nodes}
           edges={edges}

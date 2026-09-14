@@ -46,6 +46,7 @@ export const ko: Translations = {
     title: "조직 플로어",
     back: "뒤로",
     controls: "방사형 그래프 제어",
+    graph: "조직 방사형 그래프",
     linearAlternative: "선형 대안",
     linearHint: "캔버스를 사용하지 않아도 모든 그래프 노드와 작업을 이용할 수 있습니다.",
     searchLabel: "그래프 노드 검색",

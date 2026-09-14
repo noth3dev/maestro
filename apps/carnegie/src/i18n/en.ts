@@ -44,6 +44,7 @@ export const en = {
     title: "organization floor",
     back: "back",
     controls: "Radial graph controls",
+    graph: "Organization radial graph",
     linearAlternative: "Linear alternative",
     linearHint: "Every graph node and operation is available without using the canvas.",
     searchLabel: "Search graph nodes",
