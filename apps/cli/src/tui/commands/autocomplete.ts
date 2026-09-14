@@ -13,6 +13,7 @@ const options: Record<string, readonly string[]> = {
   "goal emergency-stop": ["--goal-id", "--project-id", "--reason", "--command-id"],
   "models use": ["--model"],
   "model use": ["--model"],
+  "concertmaster-report generate": ["--goal-id", "--command-id"],
   "conversation create": ["--project-id", "--goal-id", "--model"],
   "conversation get": ["--conversation-id", "--project-id"],
   "conversation turn": ["--conversation-id", "--project-id", "--text"],
