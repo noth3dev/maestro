@@ -18,4 +18,12 @@ describe("command argument autocomplete", () => {
     const conversation = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "conversation");
     expect(conversation?.getArgumentCompletions?.("create --m")).toEqual([expect.objectContaining({ value: "--model " })]);
   });
+
+  it("suggests full-access and evidence options", () => {
+    const items = createCommandAutocompleteItems(createCommandRegistry());
+    const capability = items.find((item) => item.name === "capability");
+    const evidence = items.find((item) => item.name === "evidence");
+    expect(capability?.getArgumentCompletions?.("select-full-access-mode --f")).toEqual([expect.objectContaining({ value: "--full-access-mode " })]);
+    expect(evidence?.getArgumentCompletions?.("capture --c")).toEqual(expect.arrayContaining([expect.objectContaining({ value: "--content-base64 " }), expect.objectContaining({ value: "--correlation-id " })]));
+  });
 });

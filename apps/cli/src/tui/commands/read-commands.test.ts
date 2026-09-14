@@ -96,6 +96,19 @@ describe("workspace read commands", () => {
     expect(getMissionBundle).not.toHaveBeenCalled();
   });
 
+  it("reads real evidence records and bundle contents through the typed client", async () => {
+    const evidenceId = "55555555-5555-4555-8555-555555555555";
+    const createdAt = "2025-01-01T00:00:00.000Z";
+    const bundle = { bundleId: "66666666-6666-4666-8666-666666666666", goalId, hash: "a".repeat(64), content: {
+      evidenceRecords: [{ evidence_id: evidenceId, kind: "test-result", created_at: createdAt }],
+      workers: [{ worker_id: "worker-1" }],
+    } };
+    const api = client({ getEvidenceBundle: vi.fn().mockResolvedValue(bundle) });
+    await expect(executeReadCommand({ client: api, projectId, goalId }, { name: "evidence", action: "list", options: {} })).resolves.toEqual({ title: "Evidence", lines: [`• ${evidenceId} · test-result · ${createdAt}`] });
+    await expect(executeReadCommand({ client: api, projectId, goalId }, { name: "evidence", action: "bundle", options: {} })).resolves.toEqual({ title: "Evidence bundle", lines: [`• ${bundle.bundleId} · ${bundle.hash}`, `• evidenceRecords: ${JSON.stringify(bundle.content.evidenceRecords)}`, `• workers: ${JSON.stringify(bundle.content.workers)}`] });
+    expect(api.getEvidenceBundle).toHaveBeenCalledWith(goalId, { projectId });
+  });
+
   it("executes a read command and rejects writes at the read boundary", async () => {
     const api = client();
     await expect(executeReadCommand({ client: api, projectId, goalId }, { name: "goals", action: "list", options: {} })).resolves.toEqual({ title: "Goals", lines: ["• active · v2 · " + goalId] });
