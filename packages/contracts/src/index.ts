@@ -116,8 +116,8 @@ const OrganizationDepartmentSchema = z.object({
 }).strict();
 /** Standing organization taxonomy exposed for the authenticated TUI orientation view. */
 export const OrganizationReadModelSchema = z.object({
-  groups: z.array(OrganizationGroupSchema),
-  departments: z.array(OrganizationDepartmentSchema),
+  groups: z.array(OrganizationGroupSchema).readonly(),
+  departments: z.array(OrganizationDepartmentSchema).readonly(),
 }).strict();
 export type OrganizationReadModel = z.infer<typeof OrganizationReadModelSchema>;
 
