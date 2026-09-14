@@ -1,6 +1,14 @@
 import type { ApiClient, GoalResult } from "@maestro/api-client";
 import type { WorkspaceSession } from "../session.js";
 import { renderProjectionPanel, type ProjectionPanelValue } from "../panels/projection-panel.js";
+import { renderTaskContractPanel } from "../panels/task-contract-panel.js";
+import { renderCouncilPanel } from "../panels/council-panel.js";
+import { renderDepartmentPlanPanel } from "../panels/department-plan-panel.js";
+import { renderWorkerPanel } from "../panels/worker-panel.js";
+import { renderMetronomePanel } from "../panels/metronome-panel.js";
+import { renderEncorePanel } from "../panels/encore-panel.js";
+import { renderCertificationPanel } from "../panels/certification-panel.js";
+import { renderBudgetPanel } from "../panels/budget-panel.js";
 import { createCommandRegistry } from "./registry.js";
 import type { ParsedCommand } from "./parser.js";
 
@@ -143,7 +151,8 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     const contractId = required(command, "contract-id");
     if (typeof contractId !== "string") return contractId;
     const contract = await context.client.getTaskContract(contractId, { projectId: context.projectId });
-    return { title: "Task Contract", lines: [`• ${contract.contractId} · ${contract.launchState} · v${contract.version}`] };
+    const rendered = renderTaskContractPanel({ kind: "value", value: contract }, 120);
+    return { title: rendered[0]!, lines: rendered.slice(1) };
   }
   if (key === "conversation:get") {
     const conversationId = required(command, "conversation-id");
@@ -155,7 +164,8 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     const councilId = required(command, "council-id");
     if (typeof councilId !== "string") return councilId;
     const council = await context.client.getCouncil(councilId, context.projectId);
-    return { title: "Council", lines: [`• ${council.councilId} · ${council.state}`] };
+    const rendered = renderCouncilPanel({ kind: "value", value: council }, 120);
+    return { title: rendered[0]!, lines: rendered.slice(1) };
   }
   if (key === "department-plan:get") {
     const councilId = required(command, "council-id");
@@ -163,7 +173,8 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     if (typeof councilId !== "string") return councilId;
     if (typeof departmentId !== "string") return departmentId;
     const plan = await context.client.getDepartmentPlan(councilId, departmentId, context.projectId);
-    return { title: "Department Plan", lines: [`• ${councilId}/${departmentId} · v${plan.version}`] };
+    const rendered = renderDepartmentPlanPanel({ kind: "value", value: plan }, 120);
+    return { title: rendered[0]!, lines: rendered.slice(1) };
   }
   if (key === "mission-bundle:get") {
     const councilId = required(command, "council-id");
@@ -189,7 +200,8 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     const goalId = selectedGoal(command, context);
     if (typeof goalId !== "string") return goalId;
     const budget = await context.client.getBudgetSummary(goalId, { projectId: context.projectId });
-    return { title: "Budget", lines: [`• ${budget.goalId} · spent ${budget.costCents}/${budget.budgetCents} cents · reserved ${budget.reservedCents}`] };
+    const rendered = renderBudgetPanel({ kind: "value", value: budget }, 120);
+    return { title: rendered[0]!, lines: rendered.slice(1) };
   }
   if (key === "evidence:list" || key === "evidence:bundle") {
     const goalId = selectedGoal(command, context);
@@ -219,7 +231,8 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     const workerId = required(command, "worker-id");
     if (typeof workerId !== "string") return workerId;
     const worker = await context.client.getWorker(workerId, context.projectId);
-    return { title: "Worker", lines: [`• ${worker.workerId} · ${worker.status}`] };
+    const rendered = renderWorkerPanel({ kind: "value", value: worker }, 120);
+    return { title: rendered[0]!, lines: rendered.slice(1) };
   }
   if (key === "git:status") {
     const goalId = selectedGoal(command, context);
@@ -231,19 +244,22 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     const goalId = selectedGoal(command, context);
     if (typeof goalId !== "string") return goalId;
     const challenges = await context.client.listMetronomeChallenges(goalId, { projectId: context.projectId });
-    return { title: "Metronome", lines: challenges.challenges.length === 0 ? ["No challenges found."] : challenges.challenges.map((challenge) => `• ${challenge.challengeId} · ${challenge.status}`) };
+    const rendered = renderMetronomePanel({ kind: "value", value: challenges.challenges }, 120);
+    return { title: rendered[0]!, lines: rendered.slice(1) };
   }
   if (key === "encore-council:list") {
     const goalId = selectedGoal(command, context);
     if (typeof goalId !== "string") return goalId;
     const rounds = await context.client.listEncoreCouncilRounds(goalId, { projectId: context.projectId });
-    return { title: "Encore", lines: rounds.rounds.length === 0 ? ["No Encore rounds found."] : rounds.rounds.map((round) => `• ${round.roundId}`) };
+    const rendered = renderEncorePanel({ kind: "value", value: rounds.rounds }, 120);
+    return { title: rendered[0]!, lines: rendered.slice(1) };
   }
   if (key === "certification:list" || key === "certifications:list") {
     const goalId = selectedGoal(command, context);
     if (typeof goalId !== "string") return goalId;
     const certifications = await context.client.listCertifications(goalId, { projectId: context.projectId });
-    return { title: "Certifications", lines: certifications.certifications.length === 0 ? ["No certifications found."] : certifications.certifications.map((certification) => `• ${certification.certificationId} · ${certification.verdict}`) };
+    const rendered = renderCertificationPanel({ kind: "value", value: certifications.certifications }, 120);
+    return { title: rendered[0]!, lines: rendered.slice(1) };
   }
   if (key === "concertmaster-report:get") {
     const goalId = selectedGoal(command, context);
