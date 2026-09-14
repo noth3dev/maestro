@@ -127,6 +127,10 @@ function renderGroup(value: ProjectionPanelValue, width: number): string[] {
 
 function renderHead(value: ProjectionPanelValue, width: number): string[] {
   const department = value.departmentId!;
+  const actualGroup = groupFor(value, department);
+  if (value.groupId !== undefined && (actualGroup === undefined || actualGroup.groupId !== value.groupId)) {
+    return ["Organization projection", `Group ${value.groupId} is not present for this Department.`];
+  }
   const plans = departmentPlans(value).filter((plan) => departmentId(plan) === department && plan.ownerId === value.headId);
   if (plans.length === 0) return ["Organization projection", `Head ${value.headId ?? ""} is not present for this Department.`];
   const workers = reachableWorkers(value.projection, plans);
