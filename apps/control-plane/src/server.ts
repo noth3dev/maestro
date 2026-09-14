@@ -359,6 +359,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
     getGitIntegrationState: async () => { throw new DurableStoreUnavailableError(); },
     listWorkersForGoal: async () => { throw new DurableStoreUnavailableError(); },
     listImprovementDigestsForGoal: async () => { throw new DurableStoreUnavailableError(); },
+    listArrangementsForGoal: async () => { throw new DurableStoreUnavailableError(); },
   };
   const criticalActions = criticalActionService ?? {
     performCriticalAction: async () => { throw new CriticalActionUnavailableError(); },

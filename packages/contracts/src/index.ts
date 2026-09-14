@@ -868,7 +868,7 @@ const ArrangementRolloutSchema = z.object({
 }).strict();
 const ArrangementCouncilJudgmentSchema = z.object({
   modelProvider: z.string().min(1), modelId: z.string().min(1), verdict: z.enum(["proceed", "do_not_proceed", "escalate"]),
-  confidence: z.enum(["low", "medium", "high"]), reasoning: z.string().min(1), dissentNote: z.string().nullable(),
+  confidence: z.enum(["low", "medium", "high"]), reasoning: z.string().min(1), conditions: z.array(z.string()), dissentNote: z.string().nullable(), citedEvidenceIds: z.array(UuidSchema),
 }).strict();
 const ArrangementCandidateSchema = z.object({
   candidateId: UuidSchema, version: z.number().int().positive(), parentCandidateId: UuidSchema.nullable(), projectId: UuidSchema, goalId: UuidSchema,
