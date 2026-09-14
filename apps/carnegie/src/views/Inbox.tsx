@@ -58,7 +58,7 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
   };
 
   const discuss = async (item: InboxRead["items"][number]) => {
-    if (discussionId !== undefined || config === undefined || discussionText.trim() === "") return;
+    if (busyId !== undefined || config === undefined || discussionText.trim() === "") return;
     setBusyId(item.decisionId);
     setError(undefined);
     try {
