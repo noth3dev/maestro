@@ -29,6 +29,8 @@ function api(): ApiClient {
     approveAndRunCriticalAction: vi.fn().mockResolvedValue({ effect: "allow", reason: "approved" }),
     certifyConditionalWorker: vi.fn().mockResolvedValue({ workerId: "worker-1", status: "certified" }),
     spawnWorker: vi.fn().mockResolvedValue({ workerId: "worker-1", status: "running" }),
+    sendWorkerMessage: vi.fn(),
+    advanceWorkerIntegration: vi.fn(),
     runEncoreReview: vi.fn().mockResolvedValue({ roundId: "round-1" }),
   } as unknown as ApiClient;
 }
@@ -158,4 +160,36 @@ describe("TUI write commands", () => {
     await executeWriteCommand({ client, projectId, confirm: vi.fn() }, command);
     expect(vi.mocked(client.pauseGoal).mock.calls.map((call) => call[2])).toEqual([commandId, commandId]);
   });
+  it("sends a Worker message with the workspace project and renders the returned Worker", async () => {
+    const client = api();
+    const worker = { workerId: "44444444-4444-4444-8444-444444444444", councilId: "55555555-5555-4555-8555-555555555555", departmentId: "engineering", planVersion: 1, itemId: "item-1", bundleContentHash: "a".repeat(64), attempt: 1, executionRef: "exec-1", invocationRef: "inv-1", status: "running" as const, answerText: "acknowledged", usageTotalTokens: 12 };
+    vi.mocked(client.sendWorkerMessage).mockResolvedValue(worker);
+    const result = await executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "worker", action: "message", options: { "worker-id": worker.workerId, message: "Please continue", "command-id": commandId } });
+    expect(client.sendWorkerMessage).toHaveBeenCalledWith(worker.workerId, { projectId, message: "Please continue" }, commandId);
+    expect(result).toEqual({ title: "Worker", lines: [`${worker.workerId} · ${worker.status} · ${worker.answerText}`] });
+  });
+
+  it("advances Worker integration and renders the returned commit", async () => {
+    const client = api();
+    const commit = { workerId: "44444444-4444-4444-8444-444444444444", commitSha: "a".repeat(40), message: "Implement worker change", evidenceReferences: ["evidence-1"] };
+    vi.mocked(client.advanceWorkerIntegration).mockResolvedValue(commit);
+    const result = await executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "git", action: "worker-advance", options: { "worker-id": commit.workerId, message: commit.message, "evidence-references": JSON.stringify(commit.evidenceReferences), "command-id": commandId } });
+    expect(client.advanceWorkerIntegration).toHaveBeenCalledWith(commit.workerId, { projectId, message: commit.message, evidenceReferences: commit.evidenceReferences }, commandId);
+    expect(result).toEqual({ title: "Git", lines: [`${commit.commitSha} · ${commit.message} · ${commit.evidenceReferences.join(", ")}`] });
+  });
+
+  it("uses the shared unavailable result for missing worker message and advance arguments", async () => {
+    const client = api();
+    await expect(executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "worker", action: "message", options: {} })).resolves.toEqual({ title: "Unavailable", lines: ["Missing required option --worker-id"] });
+    await expect(executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "git", action: "worker-advance", options: { "worker-id": "worker-1" } })).resolves.toEqual({ title: "Unavailable", lines: ["Missing required option --message"] });
+    expect(client.sendWorkerMessage).not.toHaveBeenCalled();
+    expect(client.advanceWorkerIntegration).not.toHaveBeenCalled();
+  });
+
+  it("uses ordinary write tiers for worker message and integration advance", async () => {
+    const registry = (await import("./registry.js")).createCommandRegistry();
+    expect(registry.find("worker")?.actions.find((action) => action.name === "message")?.kind).toBe("write");
+    expect(registry.find("git")?.actions.find((action) => action.name === "worker-advance")?.kind).toBe("write");
+  });
+
 });
