@@ -83,10 +83,12 @@ function createWindow(): void {
   });
 
   window.webContents.on("console-message", (_event, _level, message) => console.log("[renderer]", message));
-  window.webContents.on("did-fail-load", (_event, errorCode, errorDescription) => console.log("[did-fail-load]", errorCode, errorDescription));
+  window.webContents.on("did-fail-load", (_event, errorCode, errorDescription) =>
+    console.log("[did-fail-load]", errorCode, errorDescription),
+  );
   window.webContents.on("render-process-gone", (_event, details) => console.log("[render-process-gone]", details));
 
-  const devServerUrl = process.env["MAESTRO_SECRETARY_DEV_SERVER_URL"];
+  const devServerUrl = process.env["MAESTRO_CARNEGIE_DEV_SERVER_URL"];
   if (devServerUrl !== undefined) {
     void window.loadURL(devServerUrl);
   } else {

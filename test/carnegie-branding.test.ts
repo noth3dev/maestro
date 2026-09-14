@@ -1,9 +1,15 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = process.cwd();
 const carnegieScope = "@carnegie/";
+const appDirectory = ["apps", "carnegie"].join("/");
+const legacyAppDirectory = ["apps", "secretary"].join("/");
+const appPackage = ["@maestro", "carnegie"].join("/");
+const legacyAppPackage = ["@maestro", "secretary"].join("/");
+const appDevServerEnv = ["MAESTRO", "CARNEGIE", "DEV_SERVER_URL"].join("_");
+const legacyAppDevServerEnv = ["MAESTRO", "SECRETARY", "DEV_SERVER_URL"].join("_");
 
 function textFiles(directory: string): string[] {
   const result: string[] = [];
@@ -20,7 +26,7 @@ function read(path: string): string {
   return readFileSync(join(root, path), "utf8");
 }
 
-describe("Maestro product and Carnegie Secretary boundary", () => {
+describe("Maestro product and Carnegie app boundary", () => {
   it("keeps Maestro as the root product and workspace package scope", () => {
     expect(JSON.parse(read("package.json"))).toMatchObject({ name: "maestro" });
 
@@ -47,20 +53,35 @@ describe("Maestro product and Carnegie Secretary boundary", () => {
     expect(shell).not.toContain("CARNEGIE");
   });
 
-  it("keeps Maestro identifiers at the Secretary integration boundary", () => {
-    const preload = read("apps/secretary/electron/preload.cts");
-    const main = read("apps/secretary/electron/main.ts");
-    const globals = read("apps/secretary/src/global.d.ts");
+  it("moves the desktop app to the Carnegie directory and package", () => {
+    expect(existsSync(join(root, appDirectory))).toBe(true);
+    expect(existsSync(join(root, legacyAppDirectory))).toBe(false);
+    expect(read(`${appDirectory}/package.json`)).toContain(`"name": "${appPackage}"`);
+    expect(read(`${appDirectory}/README.md`)).toContain("# Carnegie");
+    expect(read(`${appDirectory}/src/index.html`)).toContain("<title>Carnegie</title>");
+  });
+
+  it("keeps Maestro identifiers at the Carnegie integration boundary", () => {
+    const preload = read(`${appDirectory}/electron/preload.cts`);
+    const main = read(`${appDirectory}/electron/main.ts`);
+    const globals = read(`${appDirectory}/src/global.d.ts`);
     expect(preload).toContain('contextBridge.exposeInMainWorld("maestro"');
     expect(preload).toContain('ipcRenderer.invoke("maestro:api"');
     expect(main).toContain('ipcMain.handle("maestro:api"');
     expect(globals).toContain("maestro:");
-    expect(read("apps/secretary/package.json")).toContain('"name": "@maestro/secretary"');
   });
 
-  it("keeps Carnegie as the Secretary desktop app brand", () => {
-    expect(read("apps/secretary/README.md")).toContain("# Carnegie");
-    expect(read("apps/secretary/src/index.html")).toContain("<title>Carnegie</title>");
+  it("does not leave the old desktop path, package, or development environment behind", () => {
+    const textPaths = textFiles(root);
+    const legacyPathPattern = new RegExp(`${legacyAppDirectory.replace("/", "\\/")}(?=[/\`"' )]|$)`);
+    for (const path of textPaths) {
+      const text = readFileSync(path, "utf8");
+      expect(text, relative(root, path)).not.toMatch(legacyPathPattern);
+      expect(text, relative(root, path)).not.toContain(legacyAppPackage);
+      expect(text, relative(root, path)).not.toContain(legacyAppDevServerEnv);
+    }
+    expect(read(`${appDirectory}/electron/main.ts`)).toContain(appDevServerEnv);
+    expect(read(`${appDirectory}/scripts/dev.mjs`)).toContain(appDevServerEnv);
   });
 
   it("keeps MAESTRO environment variables and database compatibility identifiers", () => {

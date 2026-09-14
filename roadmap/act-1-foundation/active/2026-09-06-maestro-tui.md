@@ -211,10 +211,10 @@
 ### Task 10: Rename user-facing Secretary labels to Maestro and verify client parity
 
 **Files:**
-- Modify: `apps/secretary/electron/main.ts`
-- Modify: `apps/secretary/src/**/*.tsx` only where user-facing labels/titles are present
+- Modify: `apps/carnegie/electron/main.ts`
+- Modify: `apps/carnegie/src/**/*.tsx` only where user-facing labels/titles are present
 - Modify: `apps/cli/src/**/*.ts` for help/title copy
-- Test: `apps/secretary/src/branding.test.ts`
+- Test: `apps/carnegie/src/branding.test.ts`
 - Test: `apps/cli/src/main.test.ts`
 
 **Interfaces:**

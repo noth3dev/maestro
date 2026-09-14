@@ -833,7 +833,7 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     await expect(readWorker(pool, worker.workerId)).resolves.toMatchObject({ status: "unknown", recoveryState: "fenced" });
   });
 
-  it("lists every worker whose Head Council is bound to the Goal, for the Secretary/CLI roster view", async () => {
+  it("lists every worker whose Head Council is bound to the Goal, for the Carnegie/CLI roster view", async () => {
     const { goalId, council, plan, bundle, proof } = await setupBundle();
     const kernel = fakeKernel();
     const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: bundle.itemId }, proof, headContext("product"));

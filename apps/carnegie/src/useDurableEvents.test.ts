@@ -18,7 +18,7 @@ function apiFor(streamEvents: DurableEventsApi["streamEvents"], listEvents: Dura
   return streamEvents === undefined ? { listEvents } : { streamEvents, listEvents };
 }
 
-describe("durable Secretary events", () => {
+describe("durable Carnegie events", () => {
   it("reconnects from the latest cursor and emits no duplicate event", async () => {
     const calls: string[] = [];
     let connection = 0;

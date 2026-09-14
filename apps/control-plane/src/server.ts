@@ -327,7 +327,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
   /** Dependency probe used by /readyz. Liveness never calls this check. */
   readinessCheck?: () => Promise<void>;
   conversationService?: ConversationService;
-  /** Durable projection composition over existing source tables for Secretary panels. */
+  /** Durable projection composition over existing source tables for Carnegie panels. */
   projectionService?: ProjectionService;
 }): FastifyInstance {
   const app: FastifyInstance = https === undefined ? Fastify() : Fastify({ https });

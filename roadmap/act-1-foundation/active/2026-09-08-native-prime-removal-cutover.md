@@ -257,7 +257,7 @@ Commit: `feat(runtime): add bounded native control-plane tools`.
 
 **Files:**
 - Modify: `apps/control-plane/src/config.ts`, `config.test.ts`, `main.ts`.
-- Modify: all config fixtures in `apps/control-plane/src/*.test.ts`, `apps/device-agent/src/main.integration.test.ts`, and `apps/secretary/src/cli-secretary-parity.integration.test.ts`.
+- Modify: all config fixtures in `apps/control-plane/src/*.test.ts`, `apps/device-agent/src/main.integration.test.ts`, and `apps/carnegie/src/cli-carnegie-parity.integration.test.ts`.
 - Modify: `apps/model-gateway/src/main.ts`, gateway tests, and `apps/control-plane/src/model-gateway-client.test.ts` only where contract gaps are found.
 - Modify: `README.md`, `.env.example` if present, `SECURITY.md`, and operator docs.
 

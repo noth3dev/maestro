@@ -17,7 +17,7 @@ Three Luna reviews compared the Phase 5 Track A/B gaps and agreed on this order:
 
 1. **Runtime first:** Phase 5 Track A item 1 — durable worker/provider ownership and restart recovery.
 2. **Device second:** Phase 5 Track B items 1–2 — a real separately-running device-agent authority path. It may implement in parallel with Runtime because it owns separate device tables and packages, but its acceptance follows the Runtime contract review.
-3. **Operator third:** Secretary Safety Console and live durable event stream. It consumes the frozen runtime/device read surfaces and must not become a second authority or scheduler.
+3. **Operator third:** Carnegie Safety Console and live durable event stream. It consumes the frozen runtime/device read surfaces and must not become a second authority or scheduler.
 
 The ordering prevents a UI from presenting process-local worker state as trustworthy, and prevents multiple independent process/reconciliation protocols from being introduced at once.
 
@@ -33,16 +33,16 @@ Acceptance requires disposable PostgreSQL plus a separately-running process-back
 ## Slice 2 — Device authority path
 
 **Owner:** Security/device lane.  
-**Scope:** new device-grant envelope domain/contracts, `packages/device-agent`, `apps/device-agent`, device grant/session persistence, and dedicated device config/key boundary. Do not modify worker runtime bindings or Secretary files. Track B items 3–8 remain explicitly open.
+**Scope:** new device-grant envelope domain/contracts, `packages/device-agent`, `apps/device-agent`, device grant/session persistence, and dedicated device config/key boundary. Do not modify worker runtime bindings or Carnegie files. Track B items 3–8 remain explicitly open.
 
 Implement one narrow ordinary project-file action through a separately-running device agent: authenticated TLS with certificate-to-enrolled-device binding and proof of possession; a signed, Goal/project/device/path/fence/policy-bound short-lived grant; local monotonic fence and expiry validation; server-side durable grant/session rechecks; injected bounded executor. Private keys and challenge plaintext never enter PostgreSQL, evidence, logs, or prompts. Missing key, stale Goal/lease/fence, revoked/expired grant, wrong certificate/signature, and scope escape must deny before the OS effect.
 
 Acceptance requires real PostgreSQL and real agent/control-plane processes, ephemeral CA/certificates and Ed25519 keys, actual temp-project effect, restart replay rejection, and negative cases with zero effect. Command outbox/signed result receipts, revocation cascade, typed application/data/network scope, disconnect pause, and Metronome device rules belong to later slices.
 
-## Slice 3 — Secretary safety console and durable stream
+## Slice 3 — Carnegie safety console and durable stream
 
 **Owner:** Operator lane.  
-**Scope:** `apps/secretary`, `packages/api-client` stream/request cancellation seam, CLI parity, and only the minimal existing contracts/routes needed. Do not add a second scheduler, worker state, or browser-held authority.
+**Scope:** `apps/carnegie`, `packages/api-client` stream/request cancellation seam, CLI parity, and only the minimal existing contracts/routes needed. Do not add a second scheduler, worker state, or browser-held authority.
 
 Provide project-scoped Goal discovery/selection, durable Goal/budget/challenge/certification/report/event reads, existing lifecycle controls, Metronome correction/safe-pause/resolve, and critical-action request/CEO approve-and-run through server-authenticated routes. Add cursor-safe SSE with bounded polling fallback and per-call abort. Browser actions use server-side proxies so bearer credentials do not enter client state. The CLI remains the parity oracle. UI disconnect/abort must affect transport only, never cancel Goal execution.
 
@@ -65,7 +65,7 @@ The provider-neutral `ExecutionKernelPort` cannot atomically commit an external 
 
 ## 2026-09-05 — Phase 5 Track B1-B2 device authority plan
 
-- Scope is limited to a separately running `apps/device-agent` and its `packages/device-agent` support package, signed Goal/project/device/path/fence/policy envelopes, mTLS certificate-to-enrollment binding, durable device-agent sessions, and a pre-effect server-side grant sequence claim. Worker runtime and Secretary files remain out of scope.
+- Scope is limited to a separately running `apps/device-agent` and its `packages/device-agent` support package, signed Goal/project/device/path/fence/policy envelopes, mTLS certificate-to-enrollment binding, durable device-agent sessions, and a pre-effect server-side grant sequence claim. Worker runtime and Carnegie files remain out of scope.
 - The first ordinary operation is a bounded project-file read rooted at an explicitly configured temporary project directory. The injected executor receives only a validated relative target and a byte ceiling; it cannot shell out or escape the root.
 - The control plane (or test issuer) signs the grant envelope with an ephemeral Ed25519 issuer key. The device agent verifies that signature, its own enrolled identity, Goal/project/grant/device binding, expiry, policy version, Goal fence, command sequence, and application/data/network scope before the OS read. The client certificate proves possession through standard mutual TLS.
 - Private device/issuer keys, capability tokens, TLS challenge material, and file contents never enter PostgreSQL, evidence, logs, or prompts. PostgreSQL stores only hashes, scope, session identity metadata, sequence claims, and bounded result summaries.

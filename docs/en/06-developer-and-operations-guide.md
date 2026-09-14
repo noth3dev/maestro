@@ -13,7 +13,7 @@ Maestro uses **npm workspaces** to manage packages and applications:
 │   ├── control-plane/     # Fastify 5 REST & SSE authoritative service
 │   ├── model-gateway/     # Credential-owning provider process
 │   ├── cli/               # Authenticated command client and TUI
-│   ├── secretary/         # Electron + React desktop client
+│   ├── carnegie/          # Electron + React desktop client
 │   ├── discord/           # Out-of-band Discord incident daemon
 │   └── device-agent/      # Enrolled-device protocol process
 ├── packages/
@@ -94,7 +94,7 @@ The following boundaries are current production behavior, not design intent:
 | OpenAI Codex app-server adapter | Text turns through the public app-server protocol | Tool-bearing turns are rejected; sessions use read-only sandbox and no approvals. |
 | Git adapter | Local branch/worktree/commit operations through `AuthorizedEffectExecutor` | Remote push and other critical effects require explicit approval and a concrete effect adapter. |
 | Critical-action route | Records exact approval and invokes an injected effect seam | Production has no default no-op effect: an absent adapter throws instead of claiming success. |
-| CLI/TUI and Secretary | Authenticated API client only | Neither client connects directly to PostgreSQL, providers, gateway credentials, or device transports. |
+| CLI/TUI and Carnegie | Authenticated API client only | Neither client connects directly to PostgreSQL, providers, gateway credentials, or device transports. |
 
 Do not document a tool, permission, filesystem scope, or network scope until it has a named contract, an authority classification, a concrete adapter, and acceptance coverage through the real gateway/process boundary. The current native Worker is therefore a bounded text-generation path, not a general shell or file-editing agent.
 
@@ -105,7 +105,7 @@ Do not document a tool, permission, filesystem scope, or network scope until it 
 The domain and wire artifact contracts are present for A/D/E, B provider facts, C operational overlay plus pure Goal snapshot, and four pressure bands. Pure [`routing-selector.ts`](../../packages/domain/src/routing-selector.ts) selection enforces A↔D weakest-link checks and B/C hard filters. Migration [`0072_ensemble_router_artifacts.sql`](../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql) and [`ensemble-router-artifacts.ts`](../../packages/persistence/src/ensemble-router-artifacts.ts) provide durable overlay/Goal snapshot and append-only routing-evidence storage; the real PostgreSQL gate is [`ensemble-router-artifacts.integration.test.ts`](../../packages/persistence/src/ensemble-router-artifacts.integration.test.ts). The domain `model_map` validator and empty human-owned `config/model_map.json` baseline are also present. Production selector/native-admission wiring, fixed-model evidence migration, host-tool writes/effects, and live acceptance remain open. Do not describe `MAESTRO_NATIVE_MODEL` or the singleton `modelPolicy` as automatic routing; they are explicit fixed-model/admission boundaries until migration is complete.
 ## 5. Command-Line Interface (CLI) Usage
 
-The Maestro CLI (`apps/cli`) is an authenticated command client for the control plane HTTP REST API. It exposes the currently implemented lifecycle, review, Git, budget, and reporting commands; the TUI and Secretary remain client layers rather than independent runtimes.
+The Maestro CLI (`apps/cli`) is an authenticated command client for the control plane HTTP REST API. It exposes the currently implemented lifecycle, review, Git, budget, and reporting commands; the TUI and Carnegie remain client layers rather than independent runtimes.
 
 ```bash
 # Get details for a specific Goal

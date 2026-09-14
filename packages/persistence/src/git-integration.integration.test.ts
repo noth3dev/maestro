@@ -292,7 +292,7 @@ describeDatabase("Git integration evidence with PostgreSQL and a real local repo
     await expect(pool.query("UPDATE goal_integration_branches SET branch_name = 'tampered' WHERE goal_id = $1", [goalId])).rejects.toThrow();
   });
 
-  it("reads the real durable Goal integration branch and latest frozen revision for the Secretary/CLI Git status view", async () => {
+  it("reads the real durable Goal integration branch and latest frozen revision for the Carnegie/CLI Git status view", async () => {
     const { goalId, council, worker, proof } = await setupPlan();
     const empty = await getGoalGitIntegrationState(pool, goalId);
     expect(empty.branch).toBeUndefined();
