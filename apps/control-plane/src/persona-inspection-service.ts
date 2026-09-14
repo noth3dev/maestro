@@ -1,4 +1,4 @@
-import { assertValidImprovementCandidateInput, type ImprovementCandidate, type ImprovementCandidateInput } from "@maestro/domain";
+import { assertValidImprovementCandidateInput, improvementCandidateScenarioSuiteHash, SYNTHETIC_SCENARIO_SPECS, type ImprovementCandidate, type ImprovementCandidateInput } from "@maestro/domain";
 import { assertProjectMembership, readActivePersonaProfile, readImprovementCandidateDecisionHistory, recordImprovementCandidate, appendImprovementCandidateVersion, type OperatorContext, type GoalLeaseProof } from "@maestro/persistence";
 import type { PersonaInspection } from "@maestro/contracts";
 import type { Pool } from "pg";
@@ -22,8 +22,24 @@ function candidateInput(value: unknown, expected: { projectId: string; goalId: s
   return candidate;
 }
 
+export function summarizePersonaCandidateHistory(history: Awaited<ReturnType<typeof readImprovementCandidateDecisionHistory>>): PersonaInspection["candidates"][number] {
+  return { candidate: history.candidate, candidateId: history.candidate.candidateId, version: history.candidate.version, state: history.candidate.state, changedAxes: history.candidate.changes.map((change) => change.axis), decision: history.evaluation === null ? "pending" : history.council?.finalVerdict ?? history.candidate.state, invalidated: history.candidate.state === "candidate" && history.evaluation !== null };
+}
+
 function summaries(histories: readonly Awaited<ReturnType<typeof readImprovementCandidateDecisionHistory>>[]): PersonaInspection["candidates"] {
-  return histories.map((history) => ({ candidate: history.candidate, candidateId: history.candidate.candidateId, version: history.candidate.version, state: history.candidate.state, changedAxes: history.candidate.changes.map((change) => change.axis), decision: history.evaluation === null ? "pending" : history.council?.finalVerdict ?? history.candidate.state, invalidated: history.candidate.state === "candidate" && history.evaluation !== null }));
+  return histories.map(summarizePersonaCandidateHistory);
+}
+
+async function proposalTemplate(pool: Pool, input: { projectId: string; goalId: string; roleId: string; taskClass: string; current: number }): Promise<ImprovementCandidateInput | undefined> {
+  const [digest, rollback] = await Promise.all([
+    pool.query<{ digest_id: string }>("SELECT digest_id FROM improvement_digests WHERE project_id = $1 AND goal_id = $2 ORDER BY created_at DESC, digest_id DESC LIMIT 1", [input.projectId, input.goalId]),
+    pool.query<{ target_candidate_id: string; target_version: number; content_hash: string }>("SELECT target_candidate_id, target_version, content_hash FROM improvement_candidate_rollback_targets WHERE project_id = $1 AND goal_id = $2 AND kind = 'persona_axis' AND role_id = $3 AND task_class = $4 ORDER BY created_at DESC, target_candidate_id DESC LIMIT 1", [input.projectId, input.goalId, input.roleId, input.taskClass]),
+  ]);
+  const sourceEvidenceId = digest.rows[0]?.digest_id; const target = rollback.rows[0];
+  if (sourceEvidenceId === undefined || target === undefined) return undefined;
+  const scenarioSuite = SYNTHETIC_SCENARIO_SPECS.map((scenario) => scenario.scenarioId);
+  const proposed = input.current < 0.99 ? input.current + 0.01 : input.current - 0.01;
+  return { schemaVersion: 1, projectId: input.projectId, goalId: input.goalId, kind: "persona_axis", target: { roleId: input.roleId, taskClass: input.taskClass }, changes: [{ axis: "caution", currentValue: input.current, proposedValue: proposed }], sourceEvidenceIds: [sourceEvidenceId], evidencePattern: "Durable improvement evidence supports a bounded persona adjustment.", predictedEffect: "Improve task-class behavior without changing core identity or authority.", expectedMetrics: [{ name: "correctness", unit: "score", direction: "increase", target: 1 }, { name: "safety", unit: "score", direction: "maintain" }, { name: "authority", unit: "score", direction: "maintain" }], protectedMetrics: [{ name: "safety", unit: "score", minimum: 0.9 }, { name: "authority", unit: "score", minimum: 0.9 }], scenarioSuite, scenarioSuiteHash: improvementCandidateScenarioSuiteHash(scenarioSuite), confidence: 0.5, dataSufficiency: { episodeCount: 1, comparableGoalCount: 1 }, rollbackTarget: { candidateId: target.target_candidate_id, version: target.target_version, contentHash: target.content_hash } };
 }
 
 export function createPersonaInspectionService(deps: PersonaInspectionServiceDependencies): PersonaInspectionService {
@@ -34,7 +50,8 @@ export function createPersonaInspectionService(deps: PersonaInspectionServiceDep
         const active = await readActivePersonaProfile(deps.pool, input.roleId, input.taskClass);
         const rows = await deps.pool.query<{ candidate_id: string }>(`SELECT candidate_id FROM improvement_candidates WHERE project_id = $1 AND goal_id = $2 AND kind = 'persona_axis' AND target->>'roleId' = $3 AND target->>'taskClass' = $4 ORDER BY created_at, candidate_id`, [input.projectId, input.goalId, input.roleId, input.taskClass]);
         const histories = await Promise.all(rows.rows.map((row) => readImprovementCandidateDecisionHistory(deps.pool, row.candidate_id, { operatorId: operator.operatorId, proof })));
-        return { roleId: input.roleId, taskClass: input.taskClass, profile: active.persona, version: active.layers.learnedProfile.version, coreIdentity: active.coreIdentity, taskClassAdjustment: active.layers.taskClassAdjustment, missionOverlay: active.layers.missionOverlay, candidates: summaries(histories), rollouts: histories.flatMap((history) => history.rollouts.map((rollout) => ({ rolloutId: rollout.rolloutId, status: rollout.status, activeCandidateId: rollout.activeCandidateId, activeVersion: rollout.activeVersion, rollbackTarget: history.explanation.rollback, evidence: rollout.history.map((event) => ({ kind: String(event.kind), evidenceId: String(event.eventId) })) }))) };
+        const template = rows.rowCount === 0 ? await proposalTemplate(deps.pool, { projectId: input.projectId, goalId: input.goalId, roleId: input.roleId, taskClass: input.taskClass, current: active.persona.caution }) : undefined;
+        return { roleId: input.roleId, taskClass: input.taskClass, profile: active.persona, version: active.layers.learnedProfile.version, coreIdentity: active.coreIdentity, taskClassAdjustment: active.layers.taskClassAdjustment, missionOverlay: active.layers.missionOverlay, ...(template === undefined ? {} : { proposalTemplate: template }), candidates: summaries(histories), rollouts: histories.flatMap((history) => history.rollouts.map((rollout) => ({ rolloutId: rollout.rolloutId, status: rollout.status, activeCandidateId: rollout.activeCandidateId, activeVersion: rollout.activeVersion, rollbackTarget: history.explanation.rollback, evidence: rollout.history.map((event) => ({ kind: String(event.kind), evidenceId: String(event.eventId) })) }))) };
       });
     },
     async propose(input, commandId, operator) {

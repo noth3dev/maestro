@@ -14,7 +14,7 @@ export interface PersonaRolloutSummary {
 export interface PersonaInspectionModel {
   readonly roleId: string; readonly taskClass: string; readonly profile: PersonaProfile; readonly version: number; readonly coreIdentity: PersonaCoreIdentity;
   readonly taskClassAdjustment: { readonly roleId: string; readonly taskClass: string; readonly version: number; readonly delta: Readonly<Partial<Record<PersonaAxis, number>>>; readonly reason: string };
-  readonly missionOverlay: Readonly<Partial<Record<PersonaAxis, number>>>; readonly candidates: readonly PersonaCandidateSummary[]; readonly rollouts: readonly PersonaRolloutSummary[];
+  readonly missionOverlay: Readonly<Partial<Record<PersonaAxis, number>>>; readonly proposalTemplate?: Record<string, unknown>; readonly candidates: readonly PersonaCandidateSummary[]; readonly rollouts: readonly PersonaRolloutSummary[];
 }
 
 const DISTINCTIVE_AXES: readonly PersonaAxis[] = ["caution", "initiative", "conscientiousness"];
