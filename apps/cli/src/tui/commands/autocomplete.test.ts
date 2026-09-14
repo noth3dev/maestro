@@ -14,6 +14,17 @@ describe("command argument autocomplete", () => {
     expect(createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "model")).toBeDefined();
   });
 
+
+  it("suggests projection navigation options, including typed prefixes", () => {
+    const projection = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "projection");
+    expect(projection?.getArgumentCompletions?.("read --g")).toEqual([
+      expect.objectContaining({ value: "--goal-id " }),
+      expect.objectContaining({ value: "--group-id " }),
+    ]);
+    expect(projection?.getArgumentCompletions?.("read --dep")).toEqual([expect.objectContaining({ value: "--department-id " })]);
+    expect(projection?.getArgumentCompletions?.("read --hea")).toEqual([expect.objectContaining({ value: "--head-id " })]);
+  });
+
   it("suggests the exact model option for conversations", () => {
     const conversation = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "conversation");
     expect(conversation?.getArgumentCompletions?.("create --m")).toEqual([expect.objectContaining({ value: "--model " })]);

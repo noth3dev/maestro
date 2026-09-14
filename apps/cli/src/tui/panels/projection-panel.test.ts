@@ -46,6 +46,13 @@ describe("projection panel", () => {
     expect(head.join("\n")).not.toContain("{\"nodes\"");
   });
 
+
+  it("rejects a Head selection whose supplied Group is not its actual ancestor", () => {
+    const mismatched = renderProjectionPanel({ kind: "value", value: { projection, organization, departmentId: "engineering", groupId: "product", headId: "head-engineering" } }, 120);
+    expect(mismatched.join("\n")).toContain("Group product is not present for this Department");
+    expect(mismatched.join("\n")).not.toContain("worker-one");
+  });
+
   it("renders an honest empty state when no Department nodes are projected", () => {
     const empty: ProjectionReadModel = { nodes: [], edges: [], eventCursor: "0" };
     expect(renderProjectionPanel({ kind: "value", value: { projection: empty, organization } }, 80)).toEqual(["Organization projection", "No Departments are present in the projection."]);
