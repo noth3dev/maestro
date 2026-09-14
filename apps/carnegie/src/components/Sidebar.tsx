@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Icon } from "../icons.js";
 import { useT } from "../i18n/index.js";
 import { useTheme } from "../theme.js";
@@ -15,7 +15,7 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
   const [collapsed, setCollapsed] = useState(false);
   const [pendingApprovalCount, setPendingApprovalCount] = useState<number | undefined>(undefined);
 
-  useEffect(() => {
+  const refreshInboxCount = useCallback(() => {
     if (config === undefined) { setPendingApprovalCount(undefined); return; }
     let cancelled = false;
     void loadPendingApprovalCount(window.maestro.api, config.projectId)
@@ -23,6 +23,13 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
       .catch(() => { if (!cancelled) setPendingApprovalCount(undefined); });
     return () => { cancelled = true; };
   }, [config]);
+
+  useEffect(() => {
+    let cancel = refreshInboxCount();
+    const onInboxUpdated = () => { cancel?.(); cancel = refreshInboxCount(); };
+    window.addEventListener("maestro:inbox-updated", onInboxUpdated);
+    return () => { cancel?.(); window.removeEventListener("maestro:inbox-updated", onInboxUpdated); };
+  }, [refreshInboxCount]);
 
   const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   const selectedGoal = goals?.find((goal) => goal.goalId === selectedGoalId);

@@ -210,10 +210,10 @@ describe("createApiClient", () => {
   });
 
   it("denies a pending critical action through the Goal-scoped denial route", async () => {
-    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ goalId, effect: "deny", reason: "operator_rejected", classification: "critical" }), { status: 200 }));
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
     const input = { projectId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0 };
-    await expect(client.denyCriticalAction(goalId, input, commandId)).resolves.toMatchObject({ effect: "deny" });
+    await expect(client.denyCriticalAction(goalId, input, commandId)).resolves.toBeUndefined();
     expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/critical-actions/deny`, expect.objectContaining({ method: "POST", body: JSON.stringify(input), headers: expect.objectContaining({ "idempotency-key": commandId }) }));
   });
 

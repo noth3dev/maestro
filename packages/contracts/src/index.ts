@@ -783,10 +783,6 @@ export const CriticalActionResultSchema = z.object({
   recordId: UuidSchema.optional(),
 }).strict();
 export type CriticalActionResult = z.infer<typeof CriticalActionResultSchema>;
-export const CriticalActionDenialResultSchema = z.object({
-  goalId: UuidSchema, effect: z.literal("deny"), reason: z.string().min(1), classification: ActionClassificationSchema,
-}).strict();
-export type CriticalActionDenialResult = z.infer<typeof CriticalActionDenialResultSchema>;
 
 /** A durable critical-action request that still requires an exact approval. */
 export const InboxApprovalSchema = z.object({

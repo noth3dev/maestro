@@ -78,6 +78,21 @@ export async function revokeAuthorityRecord(pool: Pool, recordId: string): Promi
   if (result.rowCount !== 1) throw new Error("Authority record is missing or already revoked");
 }
 
+export async function hasPendingAuthorityApproval(pool: Pool, input: Pick<ActionRequest, "commandId" | "projectId" | "goalId" | "action" | "target" | "policyVersion" | "budgetEffectCents">): Promise<boolean> {
+  const result = await pool.query(
+    `SELECT 1
+       FROM authority_decisions d
+      WHERE d.command_id = $1 AND d.project_id = $2 AND d.goal_id = $3
+        AND d.action = $4 AND d.target = $5 AND d.policy_version = $6 AND d.budget_effect_cents = $7::bigint
+        AND d.outcome = 'require_approval' AND d.classification = 'critical'
+        AND NOT EXISTS (SELECT 1 FROM authority_decisions resolved WHERE resolved.command_id = d.command_id AND resolved.project_id = d.project_id AND resolved.goal_id = d.goal_id AND resolved.action = d.action AND resolved.target = d.target AND resolved.policy_version = d.policy_version AND resolved.budget_effect_cents = d.budget_effect_cents AND resolved.outcome IN ('allow', 'deny') AND resolved.decided_at > d.decided_at)
+        AND NOT EXISTS (SELECT 1 FROM authority_records approval WHERE approval.kind = 'approval' AND approval.command_id = d.command_id AND approval.project_id = d.project_id AND approval.goal_id = d.goal_id AND approval.action = d.action AND approval.target = d.target AND approval.policy_version = d.policy_version AND approval.budget_effect_cents = d.budget_effect_cents AND approval.revoked_at IS NULL AND approval.expires_at > clock_timestamp())
+      LIMIT 1`,
+    [input.commandId, input.projectId, input.goalId, input.action, input.target, input.policyVersion, String(input.budgetEffectCents)],
+  );
+  return result.rowCount === 1;
+}
+
 export interface PendingAuthorityApproval {
   decisionId: string;
   commandId: string;
@@ -101,7 +116,7 @@ export interface PendingAuthorityApproval {
 export async function listPendingAuthorityApprovals(pool: Pool, projectId: string): Promise<readonly PendingAuthorityApproval[]> {
   if (typeof projectId !== "string" || projectId.trim() === "") throw new Error("projectId is required");
   const result = await pool.query<{ decision_id: string; command_id: string; project_id: string; goal_id: string; actor_id: string; action: string; target: string; policy_version: number; budget_effect_cents: string; classification: "critical"; reason: string; decided_at: Date }>(
-    `SELECT DISTINCT ON (d.goal_id, d.actor_id, d.action, d.target, d.policy_version, d.budget_effect_cents)
+    `SELECT DISTINCT ON (d.goal_id, d.command_id, d.actor_id, d.action, d.target, d.policy_version, d.budget_effect_cents)
             d.decision_id, d.command_id, d.project_id, d.goal_id, d.actor_id, d.action, d.target,
             d.policy_version, d.budget_effect_cents, d.classification, d.reason, d.decided_at
        FROM authority_decisions d
@@ -109,18 +124,18 @@ export async function listPendingAuthorityApprovals(pool: Pool, projectId: strin
         AND NOT EXISTS (
           SELECT 1 FROM authority_decisions resolved
            WHERE resolved.project_id = d.project_id AND resolved.goal_id = d.goal_id
-             AND resolved.actor_id = d.actor_id AND resolved.action = d.action AND resolved.target = d.target
+             AND resolved.command_id = d.command_id AND resolved.action = d.action AND resolved.target = d.target
              AND resolved.policy_version = d.policy_version AND resolved.budget_effect_cents = d.budget_effect_cents
              AND resolved.outcome = 'deny' AND resolved.reason = 'operator_rejected' AND resolved.decided_at >= d.decided_at
         )
         AND NOT EXISTS (
           SELECT 1 FROM authority_records approval
            WHERE approval.kind = 'approval' AND approval.project_id = d.project_id AND approval.goal_id = d.goal_id
-             AND approval.actor_id = d.actor_id AND approval.action = d.action AND approval.target = d.target
+             AND approval.command_id = d.command_id AND approval.action = d.action AND approval.target = d.target
              AND approval.policy_version = d.policy_version AND approval.budget_effect_cents = d.budget_effect_cents
              AND approval.revoked_at IS NULL AND approval.expires_at > clock_timestamp()
         )
-      ORDER BY d.goal_id, d.actor_id, d.action, d.target, d.policy_version, d.budget_effect_cents, d.decided_at DESC, d.decision_id DESC`,
+      ORDER BY d.goal_id, d.command_id, d.actor_id, d.action, d.target, d.policy_version, d.budget_effect_cents, d.decided_at DESC, d.decision_id DESC`,
     [projectId],
   );
   return result.rows.map((row) => ({

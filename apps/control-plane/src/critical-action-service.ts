@@ -1,5 +1,5 @@
 import type { CriticalActionApprovalInput, CriticalActionInput } from "@maestro/contracts";
-import { AuthorityApprovalConflictError, issueAuthorityApproval, type OperatorContext } from "@maestro/persistence";
+import { AuthorityApprovalConflictError, hasPendingAuthorityApproval, issueAuthorityApproval, type OperatorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
 import {
   AuthorizedEffectExecutor,
@@ -137,9 +137,14 @@ export function createCriticalActionService(deps: CriticalActionServiceDependenc
     },
     async denyCriticalAction(goalId, input, commandId, operator) {
       await deps.assertGoalProjectBinding?.(input.projectId, goalId);
+      if (deps.pool === undefined) throw new CriticalActionUnavailableError();
       let controlEpoch: string;
       try { controlEpoch = await deps.getControlEpoch(input.projectId, goalId); } catch { throw new CriticalActionUnavailableError(); }
-      return executor.deny({ commandId, projectId: input.projectId, goalId, actorId: operator.operatorId, action: input.action, target: input.target, policyVersion: input.policyVersion, budgetEffectCents: input.budgetEffectCents, controlEpoch }, "operator_rejected");
+      const request = { commandId, projectId: input.projectId, goalId, actorId: operator.operatorId, action: input.action, target: input.target, policyVersion: input.policyVersion, budgetEffectCents: input.budgetEffectCents, controlEpoch };
+      if (!(await hasPendingAuthorityApproval(deps.pool, request))) throw new CriticalActionDeniedError("critical_action_not_pending");
+      const decision = await executor.deny(request, "operator_rejected");
+      if (decision.reason === "authority_unavailable") throw new CriticalActionUnavailableError();
+      return decision;
     },
   };
 }

@@ -39,7 +39,6 @@ import {
   CriticalActionInputSchema,
   CriticalActionApprovalInputSchema,
   CriticalActionResultSchema,
-  CriticalActionDenialResultSchema,
   InboxReadSchema,
   HeadParticipationInputSchema,
   HeadParticipationSchema,
@@ -132,7 +131,6 @@ import {
   type CriticalActionInput,
   type CriticalActionApprovalInput,
   type CriticalActionResult,
-  type CriticalActionDenialResult,
   type InboxRead,
   type HeadParticipationInput,
   type HeadParticipation,
@@ -232,7 +230,7 @@ export interface ApiClient {
   emergencyStopGoal(goalId: string, input: GoalControlInput, commandId: string): Promise<GoalResult>;
   requestCriticalAction(goalId: string, input: CriticalActionInput, commandId: string): Promise<CriticalActionResult>;
   approveAndRunCriticalAction(goalId: string, input: CriticalActionApprovalInput, commandId: string): Promise<CriticalActionResult>;
-  denyCriticalAction(goalId: string, input: CriticalActionInput, commandId: string): Promise<CriticalActionDenialResult>;
+  denyCriticalAction(goalId: string, input: CriticalActionInput, commandId: string): Promise<void>;
   selectFullAccessMode(goalId: string, input: CapabilitySessionSelectionInput): Promise<CapabilitySession>;
   captureEvidence(goalId: string, input: EvidenceCaptureInput): Promise<EvidenceRecord>;
   activateHead(goalId: string, input: HeadParticipationInput, commandId: string): Promise<HeadParticipation>;
@@ -602,7 +600,7 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
         method: "POST",
         headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
         body: JSON.stringify(CriticalActionInputSchema.parse(input)),
-      }, CriticalActionDenialResultSchema);
+      }, { parse: () => undefined });
     },
     selectFullAccessMode(goalId, input) {
       return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/capabilities/full-access-mode`, {

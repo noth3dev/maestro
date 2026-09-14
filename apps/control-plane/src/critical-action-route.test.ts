@@ -170,13 +170,12 @@ describe("critical-action route wired to the real durable authority gateway", ()
 
 describe("critical-action denial route", () => {
   it("records a durable operator rejection without invoking the effect", async () => {
-    const appendDecision = vi.fn(async () => {});
-    const criticalActionService = createCriticalActionService({ repository: fakeRepository({ appendDecision }), effect: vi.fn(async () => {}), getControlEpoch: async () => "1" });
+    const denyCriticalAction = vi.fn(async () => ({ effect: "deny" as const, reason: "operator_rejected", classification: "critical" as const, request: { commandId: randomUUID(), projectId: goal.projectId, goalId: goal.goalId, actorId: operator.operatorId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0, controlEpoch: "1" } }));
+    const criticalActionService = { denyCriticalAction, performCriticalAction: vi.fn(), approveAndPerformCriticalAction: vi.fn() };
     const app = buildServer({ goalService: fakeGoalService(), authenticator: authenticated(), criticalActionService });
     const response = await app.inject({ method: "POST", url: `/v1/goals/${goal.goalId}/critical-actions/deny`, headers: { authorization: "Bearer test-secret", "idempotency-key": randomUUID() }, payload: requestBody() });
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ goalId: goal.goalId, effect: "deny", reason: "operator_rejected", classification: "critical" });
-    expect(appendDecision).toHaveBeenCalledOnce();
+    expect(response.statusCode).toBe(204);
+    expect(denyCriticalAction).toHaveBeenCalledOnce();
     await app.close();
   });
 });

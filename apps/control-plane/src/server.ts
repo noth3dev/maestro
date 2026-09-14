@@ -14,7 +14,6 @@ import {
   CriticalActionInputSchema,
   CriticalActionApprovalInputSchema,
   CriticalActionResultSchema,
-  CriticalActionDenialResultSchema,
   InboxReadSchema,
   GoalQuerySchema,
   GoalListSchema,
@@ -1054,8 +1053,8 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
     const input = parse(CriticalActionInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const decision = await criticalActions.denyCriticalAction(goalId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(200).send(CriticalActionDenialResultSchema.parse({ goalId, effect: "deny", reason: decision.reason, classification: decision.classification }));
+    await criticalActions.denyCriticalAction(goalId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(204).send();
   });
 
   app.post("/v1/task-contracts", async (request, reply) => {

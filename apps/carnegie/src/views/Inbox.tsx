@@ -38,7 +38,8 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
     setBusyId(item.decisionId);
     setError(undefined);
     try {
-      await approveInboxItem(window.maestro.api, item, expiry(), crypto.randomUUID());
+      await approveInboxItem(window.maestro.api, item, expiry(), item.commandId);
+      window.dispatchEvent(new Event("maestro:inbox-updated"));
       refresh();
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : "Could not approve action");
@@ -50,7 +51,8 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
     setBusyId(item.decisionId);
     setError(undefined);
     try {
-      await denyInboxItem(window.maestro.api, item, crypto.randomUUID());
+      await denyInboxItem(window.maestro.api, item, item.commandId);
+      window.dispatchEvent(new Event("maestro:inbox-updated"));
       refresh();
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : "Could not deny action");
@@ -89,7 +91,7 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
               <div className="inbox-actions">
                 <button className="inbox-link" disabled={busyId !== undefined} onClick={() => void approve(item)}><Icon name="check" /> {busyId === item.decisionId ? "approving…" : "approve and run"}</button>
                 <button className="inbox-link" disabled={busyId !== undefined} onClick={() => void deny(item)}><Icon name="x" /> deny</button>
-                <button className="inbox-link" disabled={busyId !== undefined} onClick={() => setDiscussionId(item.decisionId)}><Icon name="message-circle" /> Discuss with Concertmaster</button>
+                <button className="inbox-link" data-discuss-path="conversation" disabled={busyId !== undefined} onClick={() => setDiscussionId(item.decisionId)}><Icon name="message-circle" /> Discuss with Concertmaster</button>
               </div>
               {discussionId === item.decisionId && <div className="inbox-discuss">
                 <label className="sr-only" htmlFor={`inbox-discuss-${item.decisionId}`}>Discuss with Concertmaster</label>
