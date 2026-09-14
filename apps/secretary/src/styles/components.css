@@ -250,3 +250,19 @@
 .fm-thread-head { padding:11px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
 .fm-thread-back { display:flex; align-items:center; gap:5px; cursor:pointer; color:var(--text-secondary); font-size:12px; background:none; border:none; }
 .fm-thread-messages { flex:1; overflow-y:auto; padding:16px 18px; }
+
+
+/* ── task contract authoring ── */
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.pill-toggle { display:flex; gap:2px; padding:2px; border-radius:var(--radius-full); background:var(--surface-1); }
+.pill-toggle button { border:0; border-radius:var(--radius-full); padding:3px 8px; background:transparent; color:var(--text-muted); font:inherit; font-size:11px; cursor:pointer; }
+.pill-toggle button.on { background:var(--surface-2); color:var(--text-primary); box-shadow:var(--shadow); }
+.home-authoring-error { width:100%; max-width:440px; }
+.home-draft { width:100%; max-width:560px; max-height:70vh; overflow-y:auto; padding:16px; border:1px solid var(--border-strong); border-radius:var(--radius-lg); background:var(--surface-2); box-shadow:var(--shadow); }
+.home-draft-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.home-draft-head h2 { font-size:14px; font-weight:600; }
+.home-draft-head p { margin-top:3px; color:var(--text-muted); font-size:11px; overflow-wrap:anywhere; }
+.home-draft form { display:flex; flex-direction:column; gap:10px; }
+.home-draft-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+.home-suggestions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; width:100%; max-width:440px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto !important; transition-duration:0.01ms !important; animation-duration:0.01ms !important; animation-iteration-count:1 !important; } }
