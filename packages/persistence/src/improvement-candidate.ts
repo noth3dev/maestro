@@ -908,7 +908,7 @@ export interface ImprovementCandidateArrangementRecord {
   readonly rollout: ImprovementCandidateArrangementRollout | null;
 }
 
-type ArrangementEvaluationRow = { evaluation_id: string; evaluation_hash: string; replay_payload: unknown; evaluation_payload: unknown };
+type ArrangementEvaluationRow = { evaluation_id: string; evaluation_hash: string; replay_payload: unknown; synthetic_payload: unknown; evaluation_payload: unknown };
 type ArrangementCouncilRow = { round_id: string; question: string; reviewer_count: number; final_verdict: string; same_model_only: boolean; escalated: boolean; dissent_notes: unknown };
 type ArrangementJudgmentRow = { model_provider: string; model_id: string; verdict: string; confidence: string; reasoning: string; conditions: unknown; dissent_note: string | null; cited_evidence_ids: unknown };
 
@@ -976,14 +976,14 @@ export async function listImprovementCandidateArrangements(
       if (evaluatedRow !== undefined) {
         let evaluationRow: ArrangementEvaluationRow | undefined;
         if (candidate.kind === "persona_axis") {
-          const result = await client.query<ArrangementEvaluationRow>(`SELECT evaluation_id, evaluation_hash, NULL::jsonb AS replay_payload, evaluation_payload FROM improvement_candidate_evaluations WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3`, [evaluatedRow.candidate_id, evaluatedRow.version, evaluatedRow.content_hash]);
+          const result = await client.query<ArrangementEvaluationRow>(`SELECT evaluation_id, evaluation_hash, NULL::jsonb AS replay_payload, NULL::jsonb AS synthetic_payload, evaluation_payload FROM improvement_candidate_evaluations WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3`, [evaluatedRow.candidate_id, evaluatedRow.version, evaluatedRow.content_hash]);
           evaluationRow = result.rows[0];
         } else {
-          const result = await client.query<ArrangementEvaluationRow>(`SELECT evaluation_id, evaluation_hash, replay_payload, NULL::jsonb AS evaluation_payload FROM routing_candidate_evaluations WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3`, [evaluatedRow.candidate_id, evaluatedRow.version, evaluatedRow.content_hash]);
+          const result = await client.query<ArrangementEvaluationRow>(`SELECT evaluation_id, evaluation_hash, replay_payload, synthetic_payload, NULL::jsonb AS evaluation_payload FROM routing_candidate_evaluations WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3`, [evaluatedRow.candidate_id, evaluatedRow.version, evaluatedRow.content_hash]);
           evaluationRow = result.rows[0];
         }
         if (evaluationRow !== undefined) {
-          const payload = evaluationRow.evaluation_payload ?? evaluationRow.replay_payload;
+          const payload = evaluationRow.evaluation_payload ?? { replay: evaluationRow.replay_payload, synthetic: evaluationRow.synthetic_payload };
           evaluation = { evaluationId: evaluationRow.evaluation_id, evaluationHash: evaluationRow.evaluation_hash, stages: evaluationStages(payload), metricDeltas: metricDeltas(payload) };
         }
       }
