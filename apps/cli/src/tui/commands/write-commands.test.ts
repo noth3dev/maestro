@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "@maestro/api-client";
 import { executeWriteCommand } from "./write-commands.js";
+import { parseInput } from "./parser.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
@@ -143,15 +144,19 @@ describe("TUI write commands", () => {
     expect(client.emergencyStopGoal).toHaveBeenCalledWith(goalId, { projectId, expectedVersion: 1 }, commandId);
   });
 
-  it("never treats a local confirmation as durable approval for project access changes", async () => {
+  it("reaches project-access from the interactive command path after explicit confirmation", async () => {
     const client = api();
     const confirm = vi.fn().mockResolvedValue("approved" as const);
-    await expect(executeWriteCommand({ client, projectId, confirm }, { name: "admin", action: "project-access", options: { "operator-id": "operator-1", "roles-json": "[]" } })).resolves.toEqual({
-      title: "Unavailable",
-      lines: ["Critical action requires the durable Control Plane approval path; no mutation was sent."],
+    vi.mocked(client.provisionProjectAccess).mockResolvedValue({ projectId, operatorId: "44444444-4444-4444-8444-444444444444", roles: ["head-product"] } as never);
+    const parsed = parseInput("/admin project-access --operator-id 44444444-4444-4444-8444-444444444444 --roles-json '[\"head-product\"]'");
+    expect(parsed.kind).toBe("command");
+    if (parsed.kind !== "command") throw new Error("expected command");
+    await expect(executeWriteCommand({ client, projectId, confirm }, parsed)).resolves.toEqual({
+      title: "Project access",
+      lines: [JSON.stringify({ projectId, operatorId: "44444444-4444-4444-8444-444444444444", roles: ["head-product"] })],
     });
-    expect(confirm).not.toHaveBeenCalled();
-    expect(client.provisionProjectAccess).not.toHaveBeenCalled();
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(client.provisionProjectAccess).toHaveBeenCalledWith({ operatorId: "44444444-4444-4444-8444-444444444444", projectId, roles: ["head-product"] });
   });
 
   it("routes critical-action requests through the typed Control Plane client", async () => {

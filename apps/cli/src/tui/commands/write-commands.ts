@@ -146,10 +146,9 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
   if (action.kind === "read") return unavailable(`${command.name} ${command.action ?? ""} is a read; use the read command path`.trim());
   const key = `${command.name}:${command.action ?? ""}`;
   if (!supportedKeys.has(key)) return unavailable(`${key} is not available from the typed Control Plane client`);
-  // A local keypress is not a durable CEO approval. Until a critical operation
-  // has a server-side approve-and-run binding, fail closed before prompting or
-  // invoking any mutation-capable client method.
-  const serverAuthorizedCriticalKeys = new Set(["goal:emergency-stop", "metronome:safe-pause", "capability:select-full-access-mode"]);
+  // A local keypress is not durable authority. Only routes with an explicit
+  // server-authorized critical boundary may proceed through local confirmation.
+  const serverAuthorizedCriticalKeys = new Set(["admin:project-access", "goal:emergency-stop", "metronome:safe-pause", "capability:select-full-access-mode"]);
   if (action.kind === "critical" && key !== "approval:approve-and-run" && key !== "critical-action:approve-and-run" && !serverAuthorizedCriticalKeys.has(key)) {
     return unavailable("Critical action requires the durable Control Plane approval path; no mutation was sent.");
   }

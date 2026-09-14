@@ -64,19 +64,12 @@ const definitions: CommandDefinition[] = (
     [
       "budget",
       "budget and cost state",
-      [
-        ["get", "read"],
-        ["forecast", "read"],
-      ],
+      [["get", "read"]],
     ],
     [
       "head",
       "Head activation and participation",
-      [
-        ["activate", "write"],
-        ["sleep", "write"],
-        ["resume", "write"],
-      ],
+      [["activate", "write"]],
     ],
     [
       "council",
@@ -119,7 +112,6 @@ const definitions: CommandDefinition[] = (
         ["accept", "write"],
         ["certify", "write"],
         ["certify-conditional", "write"],
-        ["request-help", "write"],
       ],
     ],
     [
@@ -140,40 +132,6 @@ const definitions: CommandDefinition[] = (
         ["worker-worktree", "write"],
         ["goal-revision", "write"],
         ["worker-advance", "write"],
-        ["commit", "critical"],
-        ["integrate", "critical"],
-        ["cleanup", "critical"],
-      ],
-    ],
-    [
-      "environment",
-      "task environments and browsers",
-      [
-        ["list", "read"],
-        ["get", "read"],
-        ["create", "write"],
-        ["cleanup", "critical"],
-      ],
-    ],
-    [
-      "device",
-      "enrolled devices and grants",
-      [
-        ["list", "read"],
-        ["enroll", "critical"],
-        ["grant", "write"],
-        ["revoke", "critical"],
-        ["dispatch", "write"],
-      ],
-    ],
-    [
-      "discord",
-      "external signals and incidents",
-      [
-        ["list", "read"],
-        ["triage", "write"],
-        ["remediate", "critical"],
-        ["close", "write"],
       ],
     ],
     ["metronome-challenges", "Metronome challenge records", [["list", "read"]]],
@@ -206,17 +164,13 @@ const definitions: CommandDefinition[] = (
       [
         ["list", "read"],
         ["bundle", "read"],
-        ["report", "read"],
         ["capture", "write"],
       ],
     ],
     [
       "approval",
       "critical action approvals",
-      [
-        ["list", "read"],
-        ["approve-and-run", "critical"],
-      ],
+      [["approve-and-run", "critical"]],
     ],
     [
       "events",
@@ -292,20 +246,10 @@ const definitions: CommandDefinition[] = (
       ],
     ],
     [
-      "portfolio",
-      "concurrent Goal capacity and priority",
-      [
-        ["list", "read"],
-        ["prioritize", "write"],
-        ["pause", "critical"],
-      ],
-    ],
-    [
       "improvement-digests",
       "Encore improvement artifacts",
       [
         ["list", "read"],
-        ["inspect", "read"],
       ],
     ],
   ] as [string, string, CommandActionDefinition[]][]

@@ -15,9 +15,6 @@ describe("TUI command registry", () => {
       "mission-bundle",
       "worker",
       "git",
-      "environment",
-      "device",
-      "discord",
       "metronome",
       "encore",
       "certification",
@@ -66,3 +63,20 @@ describe("TUI command registry", () => {
     ).toEqual(["metronome-challenges", "metronome"]);
   });
 });
+
+
+  it("does not advertise Group B entries with no backing below the TUI", () => {
+    const registry = createCommandRegistry();
+    const deadEntries = [
+      ["head", "sleep"], ["head", "resume"], ["worker", "request-help"],
+      ["git", "commit"], ["git", "integrate"], ["git", "cleanup"],
+      ["environment", "list"], ["environment", "get"], ["environment", "create"], ["environment", "cleanup"],
+      ["device", "list"], ["device", "enroll"], ["device", "grant"], ["device", "revoke"], ["device", "dispatch"],
+      ["discord", "list"], ["discord", "triage"], ["discord", "remediate"], ["discord", "close"],
+      ["budget", "forecast"], ["approval", "list"], ["portfolio", "list"], ["portfolio", "prioritize"], ["portfolio", "pause"],
+      ["evidence", "report"], ["improvement-digests", "inspect"],
+    ] as const;
+    for (const [name, action] of deadEntries) {
+      expect(registry.find(name)?.actions.some((candidate) => candidate.name === action) ?? false, `${name} ${action}`).toBe(false);
+    }
+  });

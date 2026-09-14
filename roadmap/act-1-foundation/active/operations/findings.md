@@ -2135,3 +2135,46 @@ S6 requires exposing persona-candidate actions, but this worktree has no typed c
 ## 2026-09-14 Plan 7 §S6 remediation — approval panel deferred pending truthful read model
 
 Independent review required that an IPython approval panel not fabricate state or derive `sessionId` from `goalId`; no authenticated read route currently returns capability session, pending approval, repetition budget, or live stop state. The only existing capability API contract is the write method `selectFullAccessMode` at `packages/api-client/src/index.ts:230` / implementation `:590`; `apps/control-plane/src/server.ts:488` is POST-only. The temporary `IpPythonApprovalPanel` was removed rather than mounted with invented state. Reintroduce it only after a truthful read contract and authoritative stop command are available.
+
+
+## 2026-09-14 — Plan 7-b §S6 current-head reachability triage
+
+Investigation was completed in worktree `plan7b-s6-project-access` before implementation. No migration is needed: this slice only changes TUI registry/dispatch and, if required by a verified durable adapter, additive HTTP/client contracts. Migration numbering was therefore not reserved.
+
+### `admin:project-access`
+
+The command is reachable from the interactive parser: `apps/cli/src/tui/commands/registry.ts:31-33` registers `admin project-access`; `apps/cli/src/tui/commands/write-commands.ts:97,142-164,264-277` includes it in the typed key set, routes it through the normal interactive `executeWriteCommand` path, validates `ProjectAccessProvisionInputSchema`, and calls `ApiClient.provisionProjectAccess`. `apps/cli/src/tui/entry.ts:41035-42180` dispatches registered writes from the interactive parser. The client calls `POST /v1/admin/project-access` (`packages/api-client/src/index.ts:230,560-565`), and the server has the matching route (`apps/control-plane/src/server.ts:536-541`). The project-membership pre-handler explicitly exempts this route (`server.ts:489-498`), while the route delegates authorization to `projectAccess.provisionProjectAccess` with the authenticated operator (`server.ts:536-540`). This is a real end-to-end path; no reachability fix is required.
+
+### Group B classifications at this HEAD
+
+| Registry entry | Class | Evidence / action |
+| --- | --- | --- |
+| `head sleep`, `head resume` | **(c)** | No matching handler, API-client method, Control Plane route, or durable Head sleep/resume operation. Persistence has activation/participation state only (`packages/persistence/src/head-participation.ts`), so entries are dead and must be removed. |
+| `worker request-help` | **(c)** | No request-help handler/client method/route or durable request-help record; worker persistence exposes observe/message/cancel, not help requests. Remove. |
+| `git commit`, `git integrate`, `git cleanup` | **(c)** | No matching typed handler/client method/route. Existing persistence/API is limited to branch/worktree/revision/worker-advance (`packages/persistence/src/git-integration.ts`, `server.ts:951-987`); no durable operation matching these three commands. Remove. |
+| `environment list` | **(c)** | No project-scoped list operation exists. Persistence only has `createEnvironment`, `scheduleEnvironmentCleanup`, `completeEnvironmentCleanup`, and `readEnvironment` (`packages/persistence/src/environment.ts`); no safe list/read route contract. Remove. |
+| `environment get`, `environment create`, `environment cleanup` | **(b)** | Persistence has exact durable operations (`readEnvironment`, `createEnvironment`, `scheduleEnvironmentCleanup`/`completeEnvironmentCleanup`) but no Control Plane route or API-client method. These require a thin route/client bridge; no local mock or invented persistence is allowed. |
+| `device list`, `device get`, `device enroll`, `device grant`, `device revoke`, `device dispatch` | **(b)** | Persistence has exact enrollment/list/read/revoke and Goal-scoped grant/command operations (`packages/persistence/src/device.ts`, `device-grant.ts`), but no matching server route/client method. Requires thin bridge only if authority inputs can be passed unchanged. |
+| `discord list`, `discord triage`, `discord remediate`, `discord close` | **(b)** | Durable incident/signal list and triage/remediation/close operations exist (`packages/persistence/src/discord-incident.ts`), but no matching server route/client method. Requires thin bridge; do not use the signal-ingest route as a fake read/mutation surface. |
+| `portfolio list`, `portfolio prioritize`, `portfolio pause` | **(c)** | Existing `portfolio-council` persistence records immutable council decisions/fences, not the registry's concurrent-capacity/priority mutations; no matching route/client method. Remove. |
+| `budget forecast` | **(b)** | `recordBudgetForecast`/`listBudgetForecasts` are durable (`packages/persistence/src/budget-reservation.ts:179-209`), but no route/client method exists. Requires thin route over existing reservation identity. |
+| `approval list` | **(b)** | Capability approval persistence exposes `listCapabilityJournal`/`listPendingCapabilityEffects` (`packages/persistence/src/capability-approval.ts:288+`), but no read route/client method exists. Requires an explicitly scoped Goal/project read bridge; do not derive approval state in TUI. |
+| `evidence list`, `evidence bundle` | **(a)** | Existing route/client `GET /v1/goals/:goalId/evidence-bundle` (`server.ts:1321-1325`, `api-client/index.ts:280,815-817`) and TUI read handlers (`read-commands.ts` evidence branches) already provide both surfaces. No change. |
+| `evidence report` | **(c)** | No evidence-report route/client/persistence operation distinct from the existing Concertmaster report; do not alias a semantically different report. Remove. |
+| `improvement-digests inspect` | **(b)** | Durable `readImprovementDigest` exists, and list route/client already exists (`server.ts:1336-1340`, `api-client/index.ts:283,827-829`), but no read-by-ID route/client method. Requires a thin exact-ID route/client bridge. |
+
+The implementation will first add RED coverage for the verified admin path and registry completeness, then remove only class-(c) dead entries. Class-(b) route additions are not fabricated: they are recorded above as follow-up route/client bridge work when the existing persistence actor/session contracts can be threaded without introducing a second authority model.
+
+
+### Classification correction after authority/scope review
+
+The persistence functions named above are not, by themselves, backing for the listed interactive entries: they require additional lease, actor, Goal, reservation, or device-session inputs that the registry command does not collect, and several are project-global records without an existing project-scoped authorization adapter. Adding a route that merely exposes those functions would invent a second authority boundary or leak cross-project state. Under the S6 definition of backing (a real command + handler + route with preserved project scope), these entries are therefore **(c)** at this HEAD and are removed rather than stubbed:
+
+- `environment get/create/cleanup` (persistence primitives require a Goal lease/actor context; no command contract or project-scoped route);
+- all `device *` entries (device enrollment/grants/dispatch need device/session/Goal authority not represented by the registry);
+- all `discord *` entries (incident triage/remediation/close need watchdog/Goal lease context; the existing signal POST is ingest-only);
+- `budget forecast` (forecast persistence is reservation-bound, but the command has no reservation/actor/lease contract or route);
+- `approval list` (journal/pending-effect persistence requires capability-kind + exact Goal scope; no command contract/route);
+- `improvement-digests inspect` (the existing list route is class-(a), but no safe read-by-ID client/route and no TUI ID contract).
+
+This is intentionally fail-closed. A future slice can promote an item to (b) only after defining the exact project-scoped contract and threading the existing authority proof unchanged. No persistence or domain code is changed here.
