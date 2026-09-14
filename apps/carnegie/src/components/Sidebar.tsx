@@ -1,15 +1,28 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "../icons.js";
 import { useT } from "../i18n/index.js";
 import { useTheme } from "../theme.js";
 import { useGoals } from "../goals.js";
+import { useConnection } from "../connection.js";
+import { loadPendingApprovalCount } from "../lib/inbox-data.js";
 import type { ViewName } from "../views.js";
 
 export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (view: ViewName) => void }) {
   const t = useT();
   const { theme, setTheme } = useTheme();
   const { goals, selectedGoalId, selectGoal } = useGoals();
+  const { config } = useConnection();
   const [collapsed, setCollapsed] = useState(false);
+  const [pendingApprovalCount, setPendingApprovalCount] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (config === undefined) { setPendingApprovalCount(undefined); return; }
+    let cancelled = false;
+    void loadPendingApprovalCount(window.maestro.api, config.projectId)
+      .then((count) => { if (!cancelled) setPendingApprovalCount(count); })
+      .catch(() => { if (!cancelled) setPendingApprovalCount(undefined); });
+    return () => { cancelled = true; };
+  }, [config]);
 
   const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   const selectedGoal = goals?.find((goal) => goal.goalId === selectedGoalId);
@@ -34,7 +47,7 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
       <div className="sb-scroll">
         <div className="sb-menu">
           {navItem("home", "search", t.nav.search)}
-          {navItem("inbox", "inbox", t.nav.inbox)}
+          {navItem("inbox", "inbox", t.nav.inbox, pendingApprovalCount)}
           {navItem("dashboard", "layout-dashboard", t.nav.dashboard)}
           {navItem("flashmob", "zap", t.nav.flashmob)}
         </div>

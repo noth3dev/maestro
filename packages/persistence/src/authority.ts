@@ -78,6 +78,58 @@ export async function revokeAuthorityRecord(pool: Pool, recordId: string): Promi
   if (result.rowCount !== 1) throw new Error("Authority record is missing or already revoked");
 }
 
+export interface PendingAuthorityApproval {
+  decisionId: string;
+  commandId: string;
+  projectId: string;
+  goalId: string;
+  actorId: string;
+  action: string;
+  target: string;
+  policyVersion: number;
+  budgetEffectCents: number;
+  classification: "critical";
+  reason: string;
+  decidedAt: Date;
+}
+
+/**
+ * Reads the existing append-only authority decision audit. A request is pending
+ * until an unrevoked, unexpired exact approval record exists; no inbox table or
+ * second approval mechanism is introduced.
+ */
+export async function listPendingAuthorityApprovals(pool: Pool, projectId: string): Promise<readonly PendingAuthorityApproval[]> {
+  if (typeof projectId !== "string" || projectId.trim() === "") throw new Error("projectId is required");
+  const result = await pool.query<{ decision_id: string; command_id: string; project_id: string; goal_id: string; actor_id: string; action: string; target: string; policy_version: number; budget_effect_cents: string; classification: "critical"; reason: string; decided_at: Date }>(
+    `SELECT DISTINCT ON (d.goal_id, d.actor_id, d.action, d.target, d.policy_version, d.budget_effect_cents)
+            d.decision_id, d.command_id, d.project_id, d.goal_id, d.actor_id, d.action, d.target,
+            d.policy_version, d.budget_effect_cents, d.classification, d.reason, d.decided_at
+       FROM authority_decisions d
+      WHERE d.project_id = $1 AND d.outcome = 'require_approval' AND d.classification = 'critical'
+        AND NOT EXISTS (
+          SELECT 1 FROM authority_decisions resolved
+           WHERE resolved.project_id = d.project_id AND resolved.goal_id = d.goal_id
+             AND resolved.actor_id = d.actor_id AND resolved.action = d.action AND resolved.target = d.target
+             AND resolved.policy_version = d.policy_version AND resolved.budget_effect_cents = d.budget_effect_cents
+             AND resolved.outcome = 'deny' AND resolved.reason = 'operator_rejected' AND resolved.decided_at >= d.decided_at
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM authority_records approval
+           WHERE approval.kind = 'approval' AND approval.project_id = d.project_id AND approval.goal_id = d.goal_id
+             AND approval.actor_id = d.actor_id AND approval.action = d.action AND approval.target = d.target
+             AND approval.policy_version = d.policy_version AND approval.budget_effect_cents = d.budget_effect_cents
+             AND approval.revoked_at IS NULL AND approval.expires_at > clock_timestamp()
+        )
+      ORDER BY d.goal_id, d.actor_id, d.action, d.target, d.policy_version, d.budget_effect_cents, d.decided_at DESC, d.decision_id DESC`,
+    [projectId],
+  );
+  return result.rows.map((row) => ({
+    decisionId: row.decision_id, commandId: row.command_id, projectId: row.project_id, goalId: row.goal_id,
+    actorId: row.actor_id, action: row.action, target: row.target, policyVersion: row.policy_version,
+    budgetEffectCents: Number(row.budget_effect_cents), classification: row.classification, reason: row.reason, decidedAt: row.decided_at,
+  }));
+}
+
 export class PostgresAuthorityRepository implements AuthorityRepository {
   constructor(private readonly pool: Pool) {}
 

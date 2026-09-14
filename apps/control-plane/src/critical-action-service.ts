@@ -21,6 +21,7 @@ export interface CriticalActionService {
     commandId: string,
     operator: OperatorContext,
   ): Promise<AuthorityDecision>;
+  denyCriticalAction(goalId: string, input: CriticalActionInput, commandId: string, operator: OperatorContext): Promise<AuthorityDecision>;
 }
 
 export interface CriticalActionServiceDependencies {
@@ -133,6 +134,12 @@ export function createCriticalActionService(deps: CriticalActionServiceDependenc
         throw error;
       }
       return this.performCriticalAction(goalId, input, commandId, operator);
+    },
+    async denyCriticalAction(goalId, input, commandId, operator) {
+      await deps.assertGoalProjectBinding?.(input.projectId, goalId);
+      let controlEpoch: string;
+      try { controlEpoch = await deps.getControlEpoch(input.projectId, goalId); } catch { throw new CriticalActionUnavailableError(); }
+      return executor.deny({ commandId, projectId: input.projectId, goalId, actorId: operator.operatorId, action: input.action, target: input.target, policyVersion: input.policyVersion, budgetEffectCents: input.budgetEffectCents, controlEpoch }, "operator_rejected");
     },
   };
 }

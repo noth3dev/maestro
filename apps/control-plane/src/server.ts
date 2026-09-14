@@ -14,6 +14,8 @@ import {
   CriticalActionInputSchema,
   CriticalActionApprovalInputSchema,
   CriticalActionResultSchema,
+  CriticalActionDenialResultSchema,
+  InboxReadSchema,
   GoalQuerySchema,
   GoalListSchema,
   ConversationSchema,
@@ -213,6 +215,10 @@ export interface ProjectDiscoveryService {
   listProjects(operatorId: string): Promise<readonly string[]>;
 }
 
+export interface InboxService {
+  listPendingApprovals(projectId: string, operator: OperatorContext): Promise<import("@maestro/contracts").InboxRead>;
+}
+
 export interface ChannelService {
   get(input: { operatorId: string; projectId: string; goalId: string; selector: import("@maestro/domain").ChannelSelector }): Promise<import("@maestro/contracts").ChannelRead>;
   post(input: { operatorId: string; projectId: string; goalId: string; selector: import("@maestro/domain").ChannelSelector; content: string; messageId: string }): Promise<import("@maestro/contracts").ChannelMessage>;
@@ -276,12 +282,13 @@ async function waitForAccountLoginStart(store: AccountLoginStore, operatorId: st
   throw new Error("account login start is still in progress");
 }
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, evidenceCaptureService, personaGoalEvidenceService, concertmasterReportService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, organizationService, channelService, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService, projectionService }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, inboxService, evidenceCaptureService, personaGoalEvidenceService, concertmasterReportService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, organizationService, channelService, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService, projectionService }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
   criticalActionService?: CriticalActionService;
   capabilityApprovalService?: CapabilityApprovalService;
+  inboxService?: InboxService;
   evidenceCaptureService?: EvidenceCaptureService;
   personaGoalEvidenceService?: PersonaGoalEvidenceService;
   concertmasterReportService?: ConcertmasterReportService;
@@ -362,7 +369,11 @@ export function buildServer({ goalService, authenticator, eventService, critical
   const criticalActions = criticalActionService ?? {
     performCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
     approveAndPerformCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
+    denyCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
   };
+  const inbox = inboxService ?? {
+    listPendingApprovals: async () => { throw new DurableStoreUnavailableError(); },
+  } satisfies InboxService;
   const capabilityApprovals = capabilityApprovalService ?? {
     selectFullAccessMode: async () => { throw new DurableStoreUnavailableError(); },
   } satisfies Pick<CapabilityApprovalService, "selectFullAccessMode">;
@@ -483,6 +494,12 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const candidate = requestProjectId(request);
     if (candidate === undefined) return;
     await projectMembership.assertProjectMembership(operator.operatorId, candidate);
+  });
+
+  app.get("/v1/inbox", async (request, reply) => {
+    const query = parse(GoalQuerySchema, request.query);
+    const result = await inbox.listPendingApprovals(query.projectId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(InboxReadSchema.parse(result));
   });
 
   app.post("/v1/goals/:goalId/capabilities/full-access-mode", async (request, reply) => {
@@ -1031,6 +1048,14 @@ export function buildServer({ goalService, authenticator, eventService, critical
       classification: decision.classification,
       ...(decision.recordId === undefined ? {} : { recordId: decision.recordId }),
     }));
+  });
+
+  app.post("/v1/goals/:goalId/critical-actions/deny", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const input = parse(CriticalActionInputSchema, request.body);
+    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const decision = await criticalActions.denyCriticalAction(goalId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(CriticalActionDenialResultSchema.parse({ goalId, effect: "deny", reason: decision.reason, classification: decision.classification }));
   });
 
   app.post("/v1/task-contracts", async (request, reply) => {
