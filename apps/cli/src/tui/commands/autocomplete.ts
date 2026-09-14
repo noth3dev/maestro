@@ -19,6 +19,10 @@ const options: Record<string, readonly string[]> = {
   "conversation turn": ["--conversation-id", "--project-id", "--text"],
   "conversation cancel": ["--conversation-id", "--project-id"],
   "session attach": ["--project-id"],
+  "capability select-full-access-mode": ["--goal-id", "--project-id", "--capability-kind", "--session-id", "--full-access-mode"],
+  "evidence capture": ["--goal-id", "--project-id", "--correlation-id", "--command-id", "--kind", "--media-type", "--content-base64"],
+  "evidence list": ["--goal-id", "--project-id"],
+  "evidence bundle": ["--goal-id", "--project-id"],
 };
 
 export function createCommandAutocompleteItems(registry: CommandRegistry): SlashCommand[] {

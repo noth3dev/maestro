@@ -50,6 +50,8 @@ describe("TUI command registry", () => {
     expect(registry.find("models")?.actions.find((action) => action.name === "use")?.kind).toBe("write");
     expect(registry.find("concertmaster-report")?.actions.find((action) => action.name === "get")?.kind).toBe("read");
     expect(registry.find("concertmaster-report")?.actions.find((action) => action.name === "generate")?.kind).toBe("write");
+    expect(registry.find("capability")?.actions.find((action) => action.name === "select-full-access-mode")?.kind).toBe("critical");
+    expect(registry.find("evidence")?.actions.find((action) => action.name === "capture")?.kind).toBe("write");
   });
 
   it("autocomplete filters command names", () => {

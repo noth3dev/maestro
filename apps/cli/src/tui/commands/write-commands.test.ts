@@ -31,10 +31,40 @@ function api(): ApiClient {
     spawnWorker: vi.fn().mockResolvedValue({ workerId: "worker-1", status: "running" }),
     runEncoreReview: vi.fn().mockResolvedValue({ roundId: "round-1" }),
     generateConcertmasterReport: vi.fn(),
+    selectFullAccessMode: vi.fn(),
+    captureEvidence: vi.fn(),
   } as unknown as ApiClient;
 }
 
 describe("TUI write commands", () => {
+  it("confirms full-access mode through the existing critical-action path", async () => {
+    const client = api();
+    vi.mocked(client.selectFullAccessMode).mockResolvedValue({ sessionId: goalId, capabilityKind: "ipython", projectId, goalId, fullAccessMode: "skip_intermediate_approvals", selectedBy: "operator", selectedAt: "2025-01-01T00:00:00.000Z" });
+    const confirm = vi.fn().mockResolvedValue("approved" as const);
+    const result = await executeWriteCommand({ client, projectId, confirm }, { name: "capability", action: "select-full-access-mode", options: { "goal-id": goalId, "capability-kind": "ipython", "session-id": goalId, "full-access-mode": "skip_intermediate_approvals" } });
+    expect(result).toEqual({ title: "Full-access mode", lines: [`${goalId} · skip_intermediate_approvals`] });
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ action: "capability.select-full-access-mode", tier: "user", tierTrigger: "effect" }));
+    expect(client.selectFullAccessMode).toHaveBeenCalledWith(goalId, { projectId, capabilityKind: "ipython", sessionId: goalId, fullAccessMode: "skip_intermediate_approvals" });
+  });
+
+  it("rejects an unsupported full-access mode before invoking the client or confirmation", async () => {
+    const client = api();
+    const confirm = vi.fn();
+    const result = await executeWriteCommand({ client, projectId, confirm }, { name: "capability", action: "select-full-access-mode", options: { "goal-id": goalId, "capability-kind": "ipython", "session-id": goalId, "full-access-mode": "full_access" } });
+    expect(result).toEqual({ title: "Unavailable", lines: ["--full-access-mode must be retain_intermediate_approvals or skip_intermediate_approvals"] });
+    expect(confirm).not.toHaveBeenCalled();
+    expect(client.selectFullAccessMode).not.toHaveBeenCalled();
+  });
+
+  it("captures evidence and displays the created record identity", async () => {
+    const client = api();
+    const evidence = { evidenceId: "55555555-5555-4555-8555-555555555555", kind: "test-result", createdAt: "2025-01-01T00:00:00.000Z" };
+    vi.mocked(client.captureEvidence).mockResolvedValue(evidence as never);
+    const result = await executeWriteCommand({ client, projectId, goalId, confirm: vi.fn() }, { name: "evidence", action: "capture", options: { "correlation-id": goalId, "command-id": commandId, kind: "test-result", "media-type": "text/plain", "content-base64": "dGVzdA==" } });
+    expect(result).toEqual({ title: "Evidence", lines: [`${evidence.evidenceId} · ${evidence.kind} · ${evidence.createdAt}`] });
+    expect(client.captureEvidence).toHaveBeenCalledWith(goalId, { projectId, correlationId: goalId, commandId, kind: "test-result", mediaType: "text/plain", contentBase64: "dGVzdA==" });
+  });
+
   it("passes stable command identity to a safe Goal mutation", async () => {
     const client = api();
     await executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "goal", action: "pause", options: { "goal-id": goalId, "expected-version": "1", "command-id": commandId } });

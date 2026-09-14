@@ -42,6 +42,7 @@ const definitions: CommandDefinition[] = (
     ],
     ["goals", "Goal discovery", [["list", "read"]]],
     ["projects", "Authenticated project discovery", [["list", "read"]]],
+    ["capability", "Goal capability access", [["select-full-access-mode", "critical"]]],
     // Emergency stop is the server-authorized fail-safe lifecycle command. It
     // still requires explicit local confirmation; the Control Plane enforces the
     // concertmaster role and records the durable Goal command.
@@ -203,6 +204,7 @@ const definitions: CommandDefinition[] = (
         ["list", "read"],
         ["bundle", "read"],
         ["report", "read"],
+        ["capture", "write"],
       ],
     ],
     [
