@@ -1,6 +1,6 @@
 import type { CriticalActionApprovalInput, CriticalActionInput } from "@maestro/contracts";
 import { CriticalActionDeniedError } from "./server-input.js";
-import { AuthorityApprovalConflictError, hasPendingAuthorityApproval, issueAuthorityApproval, type OperatorContext } from "@maestro/persistence";
+import { AuthorityApprovalConflictError, findOperatorRejectedAuthorityDecision, hasPendingAuthorityApproval, issueAuthorityApproval, type OperatorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
 import {
   AuthorizedEffectExecutor,
@@ -142,6 +142,10 @@ export function createCriticalActionService(deps: CriticalActionServiceDependenc
       let controlEpoch: string;
       try { controlEpoch = await deps.getControlEpoch(input.projectId, goalId); } catch { throw new CriticalActionUnavailableError(); }
       const request = { commandId, projectId: input.projectId, goalId, actorId: operator.operatorId, action: input.action, target: input.target, policyVersion: input.policyVersion, budgetEffectCents: input.budgetEffectCents, controlEpoch };
+      const priorRejection = await findOperatorRejectedAuthorityDecision(deps.pool, request);
+      if (priorRejection !== undefined) {
+        return { effect: "deny", reason: priorRejection.reason, classification: priorRejection.classification, request };
+      }
       if (!(await hasPendingAuthorityApproval(deps.pool, request))) throw new CriticalActionDeniedError("critical_action_not_pending");
       const decision = await executor.deny(request, "operator_rejected");
       if (decision.reason === "authority_unavailable") throw new CriticalActionUnavailableError();

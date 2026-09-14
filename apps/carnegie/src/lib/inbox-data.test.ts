@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { approveInboxItem, denyInboxItem, discussWithConcertmaster, loadPendingApprovalCount } from "./inbox-data.js";
+import { approveInboxItem, createInboxApprovalExpiry, denyInboxItem, discussWithConcertmaster, loadPendingApprovalCount } from "./inbox-data.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
@@ -8,6 +8,14 @@ const item = { decisionId: "33333333-3333-4333-8333-333333333333", commandId: "4
 describe("Inbox durable actions", () => {
   it("derives the sidebar badge from the aggregated durable response", async () => {
     await expect(loadPendingApprovalCount({ listInbox: vi.fn(async () => ({ projectId, items: [item, { ...item, decisionId: "66666666-6666-4666-8666-666666666666" }] })) }, projectId)).resolves.toBe(2);
+  });
+
+  it("keeps approval expiry stable for retries of the same pending item", () => {
+    let now = 1_000;
+    const expiry = createInboxApprovalExpiry(() => now);
+    expect(expiry(item)).toBe(expiry(item));
+    now = 2_000;
+    expect(expiry({ ...item, decisionId: "66666666-6666-4666-8666-666666666666" })).not.toBe(expiry(item));
   });
 
   it("approves through the existing Goal-scoped approval route", async () => {

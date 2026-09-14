@@ -1,15 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.js";
 import { EmptyState } from "../components/EmptyState.js";
 import { useConnection } from "../connection.js";
 import { useGoalDetail } from "../useGoalDetail.js";
-import { loadInbox, approveInboxItem, denyInboxItem, discussWithConcertmaster } from "../lib/inbox-data.js";
+import { createInboxApprovalExpiry, loadInbox, approveInboxItem, denyInboxItem, discussWithConcertmaster } from "../lib/inbox-data.js";
 import type { InboxRead } from "@maestro/api-client";
 import type { ViewName } from "../views.js";
-
-function expiry(): string {
-  return new Date(Date.now() + 60 * 60 * 1000).toISOString();
-}
 
 export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) {
   const { config } = useConnection();
@@ -20,6 +16,7 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
   const [busyId, setBusyId] = useState<string | undefined>(undefined);
   const [discussionId, setDiscussionId] = useState<string | undefined>(undefined);
   const [discussionText, setDiscussionText] = useState("");
+  const approvalExpiry = useRef(createInboxApprovalExpiry()).current;
 
   const refresh = () => {
     if (config === undefined) return;
@@ -38,7 +35,7 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
     setBusyId(item.decisionId);
     setError(undefined);
     try {
-      await approveInboxItem(window.maestro.api, item, expiry(), item.commandId);
+      await approveInboxItem(window.maestro.api, item, approvalExpiry(item), item.commandId);
       window.dispatchEvent(new Event("maestro:inbox-updated"));
       refresh();
     } catch (cause: unknown) {

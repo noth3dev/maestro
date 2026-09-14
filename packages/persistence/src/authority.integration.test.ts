@@ -127,6 +127,18 @@ describeDatabase("durable authorized effects with PostgreSQL", () => {
     await expect(listPendingAuthorityApprovals(pool, authorityProjectId)).resolves.toEqual([]);
   });
 
+  it("does not re-list an authorized request after its approval expires", async () => {
+    const current = { ...request(), action: "git.remote.push", target: "origin/main" };
+    const executor = new AuthorizedEffectExecutor(repository, () => new Date());
+    await expect(executor.execute(current, async () => undefined)).resolves.toMatchObject({ effect: "require_approval" });
+    const approval = await bootstrapAuthorityRecord(pool, {
+      ...current, recordId: randomUUID(), kind: "approval", expiresAt: new Date(Date.now() + 250),
+    });
+    await expect(executor.execute(current, async () => undefined)).resolves.toMatchObject({ effect: "allow" });
+    await expect.poll(async () => (await pool.query<{ active: boolean }>("SELECT expires_at > clock_timestamp() AS active FROM authority_records WHERE record_id = $1", [approval.recordId])).rows[0]?.active).toBe(false);
+    await expect(listPendingAuthorityApprovals(pool, authorityProjectId)).resolves.toEqual([]);
+  });
+
   it("fails closed without effects when durable record reads or decision writes fail", async () => {
     const current = request();
     await bootstrapAuthorityRecord(pool, { ...current, recordId: randomUUID(), kind: "grant", commandId: null, expiresAt: new Date("2030-01-01T00:00:00Z") });

@@ -4,6 +4,17 @@ export function loadInbox(api: Pick<ApiClient, "listInbox">, projectId: string):
   return api.listInbox(projectId);
 }
 
+export function createInboxApprovalExpiry(now: () => number = Date.now): (item: Pick<InboxRead["items"][number], "decisionId">) => string {
+  const expiries = new Map<string, string>();
+  return (item) => {
+    const existing = expiries.get(item.decisionId);
+    if (existing !== undefined) return existing;
+    const value = new Date(now() + 60 * 60 * 1000).toISOString();
+    expiries.set(item.decisionId, value);
+    return value;
+  };
+}
+
 export function approveInboxItem(
   api: Pick<ApiClient, "approveAndRunCriticalAction">,
   item: InboxRead["items"][number],

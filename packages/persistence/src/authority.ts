@@ -93,6 +93,39 @@ export async function hasPendingAuthorityApproval(pool: Pool, input: Pick<Action
   return result.rowCount === 1;
 }
 
+export interface OperatorRejectedAuthorityDecision {
+  decisionId: string;
+  reason: "operator_rejected";
+  classification: "critical";
+  decidedAt: Date;
+}
+
+/**
+ * Reads the latest exact request decision for deny-command replay. A replay is
+ * valid only when the latest decision for the complete request identity is the
+ * operator's terminal rejection; unrelated terminal decisions never qualify.
+ */
+export async function findOperatorRejectedAuthorityDecision(
+  pool: Pool,
+  input: Pick<ActionRequest, "commandId" | "projectId" | "goalId" | "actorId" | "action" | "target" | "policyVersion" | "budgetEffectCents">,
+): Promise<OperatorRejectedAuthorityDecision | undefined> {
+  const result = await pool.query<{ decision_id: string; reason: "operator_rejected"; classification: "critical"; decided_at: Date }>(
+    `SELECT decision_id, reason, classification, decided_at
+       FROM (
+         SELECT decision_id, outcome, reason, classification, decided_at
+           FROM authority_decisions
+          WHERE command_id = $1 AND project_id = $2 AND goal_id = $3 AND actor_id = $4
+            AND action = $5 AND target = $6 AND policy_version = $7 AND budget_effect_cents = $8::bigint
+          ORDER BY decided_at DESC, decision_id DESC
+          LIMIT 1
+       ) d
+      WHERE d.outcome = 'deny' AND d.reason = 'operator_rejected' AND d.classification = 'critical'`,
+    [input.commandId, input.projectId, input.goalId, input.actorId, input.action, input.target, input.policyVersion, String(input.budgetEffectCents)],
+  );
+  const row = result.rows[0];
+  return row === undefined ? undefined : { decisionId: row.decision_id, reason: row.reason, classification: row.classification, decidedAt: row.decided_at };
+}
+
 export interface PendingAuthorityApproval {
   decisionId: string;
   commandId: string;
@@ -126,7 +159,7 @@ export async function listPendingAuthorityApprovals(pool: Pool, projectId: strin
            WHERE resolved.project_id = d.project_id AND resolved.goal_id = d.goal_id
              AND resolved.command_id = d.command_id AND resolved.action = d.action AND resolved.target = d.target
              AND resolved.policy_version = d.policy_version AND resolved.budget_effect_cents = d.budget_effect_cents
-             AND resolved.outcome = 'deny' AND resolved.reason = 'operator_rejected' AND resolved.decided_at >= d.decided_at
+             AND resolved.outcome IN ('allow', 'deny') AND resolved.decided_at > d.decided_at
         )
         AND NOT EXISTS (
           SELECT 1 FROM authority_records approval
