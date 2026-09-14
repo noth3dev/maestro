@@ -27,6 +27,7 @@ import {
   readDashboard,
 } from "./commands/read-commands.js";
 import { executeWriteCommand } from "./commands/write-commands.js";
+import { dispatchInteractiveWriteCommand } from "./commands/interactive-dispatch.js";
 import { renderApprovalDialog } from "./components/approval-dialog.js";
 import { renderProviderLoginDialog, type AccountLoginProviderSelection } from "./components/provider-login-dialog.js";
 import { reconcileTuiSession, type RecoverySummary } from "./recovery.js";
@@ -803,7 +804,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             } as Parameters<typeof executeWriteCommand>[0];
             const selectedModel = options.env.MAESTRO_MODEL?.trim() || session?.model;
             if (selectedModel !== undefined) writeContext.model = selectedModel;
-            const writeResult = await executeWriteCommand(writeContext, parsed);
+            const writeResult = await dispatchInteractiveWriteCommand(writeContext, parsed);
             pendingConfirmation = undefined;
             syncPendingDecisionState();
             append(`${writeResult.title}: ${writeResult.lines.join(" · ")}`);

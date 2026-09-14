@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createCommandRegistry } from "./registry.js";
+import { TUI_READ_COMMAND_KEYS } from "./read-commands.js";
+import { TUI_WRITE_COMMAND_KEYS } from "./write-commands.js";
 
 describe("TUI command registry", () => {
   it("contains the complete supported command families", () => {
@@ -78,5 +80,21 @@ describe("TUI command registry", () => {
     ] as const;
     for (const [name, action] of deadEntries) {
       expect(registry.find(name)?.actions.some((candidate) => candidate.name === action) ?? false, `${name} ${action}`).toBe(false);
+    }
+  });
+
+
+  it("maps every registered action to a reachable read, write, or local interactive handler", () => {
+    const localInteractiveKeys = new Set([
+      "help:list", "login:openai-codex", "login:openai", "login:anthropic",
+      "logout:openai-codex", "logout:openai", "logout:anthropic",
+      "models:list", "models:use", "model:list", "model:use",
+      "mode:list", "mode:flashmob", "mode:maestro", "mode:standard", "flashmob:toggle",
+      "goal:select", "session:list", "session:attach", "session:new", "session:retry",
+    ]);
+    const registry = createCommandRegistry();
+    for (const command of registry.all()) for (const action of command.actions) {
+      const key = `${command.name}:${action.name}`;
+      expect(TUI_READ_COMMAND_KEYS.has(key) || TUI_WRITE_COMMAND_KEYS.has(key) || localInteractiveKeys.has(key), key).toBe(true);
     }
   });
