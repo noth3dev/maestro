@@ -779,7 +779,7 @@ export async function recordImprovementCandidateCouncilApproval(
     if (evaluated.evidence_ids.some((evidenceId) => !councilEvidenceIds.includes(evidenceId)) || previous.source_evidence_ids.some((evidenceId) => !councilEvidenceIds.includes(evidenceId))) throw new ImprovementCandidatePersistenceError("Improvement approval Council evidence must include the candidate source and evaluation evidence");
     const durableCouncilEvidence = await client.query<{ count: string }>("SELECT count(*)::int AS count FROM evidence_records WHERE evidence_id = ANY($1::uuid[]) AND project_id = $2 AND goal_id = $3", [councilEvidenceIds, previous.project_id, previous.goal_id]);
     if (Number(durableCouncilEvidence.rows[0]?.count ?? 0) !== councilEvidenceIds.length) throw new ImprovementCandidatePersistenceError("Improvement approval Council evidence is missing or outside the candidate Goal");
-    const round = await client.query<{ goal_id: string; question: string; criteria: unknown; evidence_ids: string[]; reviewer_count: number; final_verdict: string; same_model_only: boolean; dissent_notes: string[] }>(`SELECT r.goal_id, r.question, r.criteria, r.evidence_ids, r.reviewer_count, s.final_verdict, s.same_model_only, s.dissent_notes FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id WHERE r.round_id = $1`, [roundId]);
+    const round = await client.query<{ goal_id: string; question: string; criteria: unknown; evidence_ids: string[]; reviewer_count: number; final_verdict: string; same_model_only: boolean; dissent_notes: string[] }>(`SELECT r.goal_id, r.question, r.criteria, r.evidence_ids, r.reviewer_count, s.final_verdict, s.same_model_only, s.dissent_notes FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id WHERE r.round_id = $1 AND r.goal_id = $2`, [roundId, previous.goal_id]);
     if (round.rowCount !== 1) throw new ImprovementCandidatePersistenceError("Improvement approval Council round is missing");
     const council = round.rows[0]!;
     const requiredEvidence = [...new Set([...previous.source_evidence_ids, ...evaluated.evidence_ids])];
@@ -792,7 +792,7 @@ export async function recordImprovementCandidateCouncilApproval(
         || JSON.stringify(council.evidence_ids) !== JSON.stringify(councilEvidenceIds)
         || !["candidate-safety", "candidate-fit", "candidate-disclosure"].every((criterionId) => criteriaIds.has(criterionId))
         || council.final_verdict !== "proceed" || council.same_model_only || council.dissent_notes.length > 0) throw new ImprovementCandidatePersistenceError("Improvement approval Council round is not an exact diverse proceed judgment");
-    const judgments = await client.query<{ model_provider: string; model_id: string; verdict: string; cited_evidence_ids: string[] }>("SELECT model_provider, model_id, verdict, cited_evidence_ids FROM encore_council_judgments WHERE round_id = $1 ORDER BY reviewer_index", [roundId]);
+    const judgments = await client.query<{ model_provider: string; model_id: string; verdict: string; cited_evidence_ids: string[] }>("SELECT j.model_provider, j.model_id, j.verdict, j.cited_evidence_ids FROM encore_council_judgments j JOIN encore_council_rounds r ON r.round_id = j.round_id WHERE j.round_id = $1 AND r.goal_id = $2 ORDER BY j.reviewer_index", [roundId, previous.goal_id]);
     if (judgments.rowCount !== council.reviewer_count || new Set(judgments.rows.map((row) => `${row.model_provider}/${row.model_id}`)).size < 2 || judgments.rows.some((row) => row.verdict !== "proceed" || JSON.stringify(row.cited_evidence_ids) !== JSON.stringify(councilEvidenceIds))) throw new ImprovementCandidatePersistenceError("Improvement approval Council judgments are incomplete or not diverse");
     const existing = await client.query(`SELECT approval_id, candidate_id, candidate_version, candidate_content_hash, evaluation_id, evaluation_hash, council_round_id, council_evidence_ids, source_evidence_ids FROM improvement_candidate_council_approvals WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3`, [id, previous.version, previous.content_hash]);
     if (existing.rowCount === 1) { const row = existing.rows[0]!; if (row.evaluation_id !== evaluationId || row.evaluation_hash !== input.evaluationHash || row.council_round_id !== roundId) throw new ImprovementCandidatePersistenceError("Improvement approval already exists with different binding"); return { approvalId: row.approval_id, candidateId: row.candidate_id, candidateVersion: row.candidate_version, candidateContentHash: row.candidate_content_hash, evaluationId: row.evaluation_id, evaluationHash: row.evaluation_hash, councilRoundId: row.council_round_id, councilEvidenceIds: row.council_evidence_ids, sourceEvidenceIds: row.source_evidence_ids }; }
@@ -848,7 +848,7 @@ export async function readImprovementCandidateDecisionHistory(pool: Pool, candid
   const evaluatedId = candidate.state === "evaluated" ? candidate.candidateId : (candidate.parentCandidateId ?? candidate.candidateId);
   const evaluatedVersion = candidate.state === "evaluated" ? candidate.version : Math.max(1, candidate.version - 1);
   const evaluatedHash = candidate.state === "evaluated" ? candidate.contentHash : (await pool.query<{ content_hash: string }>("SELECT content_hash FROM improvement_candidates WHERE candidate_id = $1", [evaluatedId])).rows[0]?.content_hash;
-  const evaluated = await pool.query<GenericEvaluationRow>(`SELECT evaluation_id, candidate_id, candidate_version, candidate_content_hash, project_id, goal_id, evaluation_hash, evidence_ids, evaluation_payload, created_at FROM improvement_candidate_evaluations WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3`, [evaluatedId, evaluatedVersion, evaluatedHash]);
+  const evaluated = await pool.query<GenericEvaluationRow>(`SELECT evaluation_id, candidate_id, candidate_version, candidate_content_hash, project_id, goal_id, evaluation_hash, evidence_ids, evaluation_payload, created_at FROM improvement_candidate_evaluations WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3 AND project_id = $4 AND goal_id = $5`, [evaluatedId, evaluatedVersion, evaluatedHash]);
   const evaluation = evaluated.rowCount === 1 ? genericEvaluationRecord(evaluated.rows[0]!) : null;
   const approvalRow = await pool.query<{ approval_id: string; candidate_id: string; candidate_version: number; candidate_content_hash: string; evaluation_id: string; evaluation_hash: string; council_round_id: string; council_evidence_ids: string[]; source_evidence_ids: string[] }>(`SELECT approval_id, candidate_id, candidate_version, candidate_content_hash, evaluation_id, evaluation_hash, council_round_id, council_evidence_ids, source_evidence_ids FROM improvement_candidate_council_approvals WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3`, [evaluatedId, evaluatedVersion, evaluation?.candidateContentHash ?? evaluatedHash ?? ""]);
   const approval = approvalRow.rowCount === 1 ? { approvalId: approvalRow.rows[0]!.approval_id, candidateId: approvalRow.rows[0]!.candidate_id, candidateVersion: approvalRow.rows[0]!.candidate_version, candidateContentHash: approvalRow.rows[0]!.candidate_content_hash, evaluationId: approvalRow.rows[0]!.evaluation_id, evaluationHash: approvalRow.rows[0]!.evaluation_hash, councilRoundId: approvalRow.rows[0]!.council_round_id, councilEvidenceIds: approvalRow.rows[0]!.council_evidence_ids, sourceEvidenceIds: approvalRow.rows[0]!.source_evidence_ids } : null;
@@ -968,7 +968,7 @@ function arrangementJudgment(row: ArrangementJudgmentRow): ImprovementCandidateA
   return { modelProvider: row.model_provider, modelId: row.model_id, verdict: row.verdict, confidence: row.confidence, reasoning: row.reasoning, conditions: stringArray(row.conditions), dissentNote: row.dissent_note, citedEvidenceIds: stringArray(row.cited_evidence_ids) };
 }
 
-/** Lists the latest durable candidate version in each lineage for the authenticated Goal. */
+/** Lists latest candidate versions plus every rejected version for append-only negative evidence. */
 export async function listImprovementCandidateArrangements(
   pool: Pool,
   authorization: { readonly operatorId: string; readonly projectId: string },
@@ -978,21 +978,30 @@ export async function listImprovementCandidateArrangements(
   try {
     await client.query("BEGIN");
     await assertProjectMembership(client, authorization.operatorId, authorization.projectId);
-    const rows = await client.query<CandidateRow>(`SELECT DISTINCT ON (lineage_id) ${COLUMNS}
-      FROM improvement_candidates WHERE project_id = $1 AND goal_id = $2 ORDER BY lineage_id, version DESC`, [authorization.projectId, goalId]);
+    const candidateRows = await client.query<CandidateRow>(`SELECT ${COLUMNS}
+      FROM improvement_candidates WHERE project_id = $1 AND goal_id = $2 ORDER BY lineage_id, version DESC, candidate_id ASC`, [authorization.projectId, goalId]);
+    const latestCandidateIds = new Set<string>();
+    const latestLineages = new Set<string>();
+    for (const row of candidateRows.rows) {
+      if (!latestLineages.has(row.lineage_id)) {
+        latestLineages.add(row.lineage_id);
+        latestCandidateIds.add(row.candidate_id);
+      }
+    }
+    const rows = candidateRows.rows.filter((row) => latestCandidateIds.has(row.candidate_id) || row.state === "rejected");
     const records: ImprovementCandidateArrangementRecord[] = [];
-    for (const row of rows.rows) {
+    for (const row of rows) {
       const candidate = mapRow(row);
-      const evaluated = await client.query<{ candidate_id: string; version: number; content_hash: string }>(`SELECT candidate_id, version, content_hash FROM improvement_candidates WHERE lineage_id = $1 AND state = 'evaluated' ORDER BY version DESC LIMIT 1`, [row.lineage_id]);
+      const evaluated = await client.query<{ candidate_id: string; version: number; content_hash: string }>(`SELECT candidate_id, version, content_hash FROM improvement_candidates WHERE project_id = $1 AND goal_id = $2 AND lineage_id = $3 AND version <= $4 AND state = 'evaluated' ORDER BY version DESC, candidate_id ASC LIMIT 1`, [row.project_id, row.goal_id, row.lineage_id, row.version]);
       const evaluatedRow = evaluated.rows[0];
       let evaluation: ImprovementCandidateArrangementEvaluation | null = null;
       if (evaluatedRow !== undefined) {
         let evaluationRow: ArrangementEvaluationRow | undefined;
         if (candidate.kind === "persona_axis") {
-          const result = await client.query<ArrangementEvaluationRow>(`SELECT evaluation_id, evaluation_hash, NULL::jsonb AS replay_payload, NULL::jsonb AS synthetic_payload, evaluation_payload FROM improvement_candidate_evaluations WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3`, [evaluatedRow.candidate_id, evaluatedRow.version, evaluatedRow.content_hash]);
+          const result = await client.query<ArrangementEvaluationRow>(`SELECT evaluation_id, evaluation_hash, NULL::jsonb AS replay_payload, NULL::jsonb AS synthetic_payload, evaluation_payload FROM improvement_candidate_evaluations WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3 AND project_id = $4 AND goal_id = $5`, [evaluatedRow.candidate_id, evaluatedRow.version, evaluatedRow.content_hash, row.project_id, row.goal_id]);
           evaluationRow = result.rows[0];
         } else {
-          const result = await client.query<ArrangementEvaluationRow>(`SELECT evaluation_id, evaluation_hash, replay_payload, synthetic_payload, NULL::jsonb AS evaluation_payload FROM routing_candidate_evaluations WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3`, [evaluatedRow.candidate_id, evaluatedRow.version, evaluatedRow.content_hash]);
+          const result = await client.query<ArrangementEvaluationRow>(`SELECT evaluation_id, evaluation_hash, replay_payload, synthetic_payload, NULL::jsonb AS evaluation_payload FROM routing_candidate_evaluations WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3 AND project_id = $4 AND goal_id = $5`, [evaluatedRow.candidate_id, evaluatedRow.version, evaluatedRow.content_hash, row.project_id, row.goal_id]);
           evaluationRow = result.rows[0];
         }
         if (evaluationRow !== undefined) {
@@ -1000,21 +1009,24 @@ export async function listImprovementCandidateArrangements(
           evaluation = { evaluationId: evaluationRow.evaluation_id, evaluationHash: evaluationRow.evaluation_hash, stages: evaluationStages(payload), metricDeltas: metricDeltas(payload) };
         }
       }
+      const councilBinding = candidate.kind === "persona_axis" && evaluatedRow !== undefined
+        ? evaluatedRow
+        : { candidate_id: candidate.candidateId, version: candidate.version, content_hash: candidate.contentHash };
       const approvals = await client.query<ArrangementCouncilApprovalRow>(`SELECT council_round_id, candidate_id, candidate_version, candidate_content_hash
         FROM (
           SELECT a.council_round_id, a.candidate_id, a.candidate_version, a.candidate_content_hash, c.lineage_id, a.project_id, a.goal_id
-            FROM improvement_candidate_council_approvals a JOIN improvement_candidates c ON c.candidate_id = a.candidate_id
+            FROM improvement_candidate_council_approvals a JOIN improvement_candidates c ON c.candidate_id = a.candidate_id AND c.version = a.candidate_version AND c.content_hash = a.candidate_content_hash AND c.project_id = a.project_id AND c.goal_id = a.goal_id
           UNION ALL
           SELECT a.council_round_id, a.candidate_id, a.candidate_version, a.candidate_content_hash, c.lineage_id, a.project_id, a.goal_id
-            FROM routing_candidate_approvals a JOIN improvement_candidates c ON c.candidate_id = a.candidate_id
+            FROM routing_candidate_approvals a JOIN improvement_candidates c ON c.candidate_id = a.candidate_id AND c.version = a.candidate_version AND c.content_hash = a.candidate_content_hash AND c.project_id = a.project_id AND c.goal_id = a.goal_id
         ) approvals
-        WHERE lineage_id = $1 AND project_id = $2 AND goal_id = $3
-        ORDER BY candidate_version DESC, candidate_content_hash DESC, candidate_id ASC, council_round_id ASC`, [row.lineage_id, row.project_id, row.goal_id]);
+        WHERE lineage_id = $1 AND project_id = $2 AND goal_id = $3 AND candidate_id = $4 AND candidate_version = $5 AND candidate_content_hash = $6
+        ORDER BY candidate_id ASC, candidate_version ASC, candidate_content_hash ASC, council_round_id ASC`, [row.lineage_id, row.project_id, row.goal_id, councilBinding.candidate_id, councilBinding.version, councilBinding.content_hash]);
       let council: ImprovementCandidateArrangementCouncil | null = null;
       const roundId = selectArrangementCouncilApproval(approvals.rows)?.council_round_id;
       if (roundId !== undefined) {
-        const round = await client.query<ArrangementCouncilRow>(`SELECT r.round_id, r.question, r.reviewer_count, s.final_verdict, s.same_model_only, s.escalated, s.dissent_notes FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id WHERE r.round_id = $1`, [roundId]);
-        const judgmentRows = await client.query<ArrangementJudgmentRow>("SELECT model_provider, model_id, verdict, confidence, reasoning, conditions, dissent_note, cited_evidence_ids FROM encore_council_judgments WHERE round_id = $1 ORDER BY reviewer_index", [roundId]);
+        const round = await client.query<ArrangementCouncilRow>(`SELECT r.round_id, r.question, r.reviewer_count, s.final_verdict, s.same_model_only, s.escalated, s.dissent_notes FROM encore_council_rounds r JOIN encore_council_syntheses s ON s.round_id = r.round_id JOIN goals g ON g.goal_id = r.goal_id WHERE r.round_id = $1 AND r.goal_id = $2 AND g.project_id = $3`, [roundId, row.goal_id, row.project_id]);
+        const judgmentRows = await client.query<ArrangementJudgmentRow>("SELECT j.model_provider, j.model_id, j.verdict, j.confidence, j.reasoning, j.conditions, j.dissent_note, j.cited_evidence_ids FROM encore_council_judgments j JOIN encore_council_rounds r ON r.round_id = j.round_id JOIN goals g ON g.goal_id = r.goal_id WHERE j.round_id = $1 AND r.goal_id = $2 AND g.project_id = $3 ORDER BY j.reviewer_index", [roundId, row.goal_id, row.project_id]);
         const roundRow = round.rows[0];
         const judgments = judgmentRows.rows.flatMap((item) => { const mapped = arrangementJudgment(item); return mapped === null ? [] : [mapped]; });
         if (roundRow !== undefined && (roundRow.final_verdict === "proceed" || roundRow.final_verdict === "do_not_proceed" || roundRow.final_verdict === "escalate")) {
@@ -1022,9 +1034,11 @@ export async function listImprovementCandidateArrangements(
         }
       }
       const rollout = await client.query<{ rollout_id: string; status: ImprovementCandidateArrangementRollout["status"]; active_candidate_id: string; active_version: number; content_hash: string }>(`SELECT r.rollout_id, r.status, r.active_candidate_id, r.active_version, c.content_hash
-        FROM improvement_rollouts r JOIN improvement_candidates source ON source.candidate_id = r.candidate_id JOIN improvement_candidates c ON c.candidate_id = r.active_candidate_id
-        WHERE source.lineage_id = $1 AND source.project_id = $2 AND source.goal_id = $3
-        ORDER BY r.created_at DESC, r.rollout_id DESC LIMIT 1`, [row.lineage_id, row.project_id, row.goal_id]);
+        FROM improvement_rollouts r
+        JOIN improvement_candidates source ON source.candidate_id = r.candidate_id AND source.version = r.candidate_version AND source.project_id = r.project_id AND source.goal_id = r.goal_id
+        JOIN improvement_candidates c ON c.candidate_id = r.active_candidate_id AND c.version = r.active_version AND c.project_id = r.project_id AND c.goal_id = r.goal_id
+        WHERE r.project_id = $1 AND r.goal_id = $2 AND r.active_candidate_id = $3 AND r.active_version = $4 AND c.candidate_id = $3 AND c.content_hash = $5
+        ORDER BY r.created_at DESC, r.rollout_id DESC LIMIT 1`, [row.project_id, row.goal_id, row.candidate_id, row.version, row.content_hash]);
       const rolloutRow = rollout.rows[0];
       records.push({ candidate, evaluation, council, rollout: rolloutRow === undefined ? null : { rolloutId: rolloutRow.rollout_id, status: rolloutRow.status, activeCandidateId: rolloutRow.active_candidate_id, activeVersion: rolloutRow.active_version, contentHash: rolloutRow.content_hash } });
     }

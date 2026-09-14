@@ -93,8 +93,9 @@ export function createReadStateService(pool: Pool): ReadStateService {
     async listArrangementsForGoal(goalId, projectId, operatorId) {
       await assertGoalProject(goalId, projectId);
       const records = await listImprovementCandidateArrangements(pool, { operatorId, projectId }, goalId);
-      const active = records.filter((record) => record.candidate.state === "applied").map(arrangementCandidate);
-      const candidates = records.filter((record) => ["candidate", "evaluated", "judged"].includes(record.candidate.state)).map(arrangementCandidate);
+      const active = records.filter((record) => record.rollout?.status === "active" && record.rollout.activeCandidateId === record.candidate.candidateId && record.rollout.activeVersion === record.candidate.version).map(arrangementCandidate);
+      const candidates = records.filter((record) => ["candidate", "evaluated", "judged"].includes(record.candidate.state)
+        && !(record.rollout?.status === "active" && record.rollout.activeCandidateId === record.candidate.candidateId && record.rollout.activeVersion === record.candidate.version)).map(arrangementCandidate);
       const encoreCouncil = records.filter((record) => record.council !== null).map((record) => arrangementCouncil(record.candidate.candidateId, record.council!));
       const negativeEvidence = records.filter((record) => record.candidate.state === "rejected").map((record) => arrangementNegativeEvidence(record.candidate.candidateId, record.council));
       return { active, candidates, encoreCouncil, negativeEvidence };

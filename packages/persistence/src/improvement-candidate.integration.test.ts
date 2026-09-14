@@ -12,6 +12,7 @@ import { recordImprovementDigest } from "./improvement-digest.js";
 import {
   appendImprovementCandidateVersion,
   listImprovementCandidateVersions,
+  listImprovementCandidateArrangements,
   readImprovementCandidate,
   recordImprovementCandidate,
   recordImprovementCandidateEvaluation,
@@ -145,6 +146,16 @@ describeDatabase("Improvement Candidate persistence", () => {
     const candidate = await recordImprovementCandidate(pool, inputFor(), proof, author, "evaluation-payload");
     const evaluated = await transitionImprovementCandidate(pool, candidate.candidateId, "evaluated", proof, author, "evaluation-payload-evaluated");
     await expect(recordImprovementCandidateEvaluation(pool, evaluated.candidateId, proof, { evidenceIds: [digestId], payload: {} }, "evaluation-payload-empty")).rejects.toThrow(/replay|synthetic|shadow|payload/i);
+  });
+
+  it("retains every rejected version in arrangements evidence after a later retained revision", async () => {
+    const rejected = await transitionImprovementCandidate(pool, (await recordImprovementCandidate(pool, inputFor(), proof, author, "arrangements-rejected" )).candidateId, "rejected", proof, author, "arrangements-rejected-transition");
+    const retained = await appendImprovementCandidateVersion(pool, rejected.candidateId, inputFor({ predictedEffect: "Retain the rejected version for historical evidence." }), proof, author, "arrangements-retained-revision");
+    const records = await listImprovementCandidateArrangements(pool, { operatorId, projectId }, goalId);
+    expect(records.map((record) => record.candidate.candidateId)).toContain(rejected.candidateId);
+    expect(records.find((record) => record.candidate.candidateId === rejected.candidateId)?.candidate.state).toBe("rejected");
+    expect(records.find((record) => record.candidate.candidateId === retained.candidateId)?.candidate.state).toBe("retained");
+    expect(records.find((record) => record.candidate.candidateId === rejected.candidateId)?.council).toBeNull();
   });
 
   it("does not replay a transition operation under another Goal lease", async () => {
