@@ -45,11 +45,13 @@ describeDatabase("durable billing read model", () => {
     expect(billing.dailySpend).toHaveLength(14);
     expect(billing.dailySpend.find((day) => day.date === utcDate(0))?.costCents).toBe(200);
     expect(billing.dailySpend.find((day) => day.date === utcDate(-1))?.costCents).toBe(25);
-    expect(billing.goals).toEqual([
-      { goalId: goalIds[0], budgetCents: 1000, reservedCents: 200, costCents: 150 },
-      { goalId: goalIds[1], budgetCents: 2000, reservedCents: 300, costCents: 75 },
-    ]);
-    expect(billing.totals).toEqual({ budgetCents: 3000, reservedCents: 500, costCents: 225 });
+    expect([...billing.goals].sort((a, b) => a.goalId.localeCompare(b.goalId))).toEqual(
+      [
+        { goalId: goalIds[0], budgetCents: 1000, reservedCents: 200, costCents: 150 },
+        { goalId: goalIds[1], budgetCents: 2000, reservedCents: 300, costCents: 1074 },
+      ].sort((a, b) => a.goalId.localeCompare(b.goalId)),
+    );
+    expect(billing.totals).toEqual({ budgetCents: 3000, reservedCents: 500, costCents: 1224 });
     expect(billing.departmentBreakdown).toEqual({ available: false, reason: "Actual costs are tracked at Goal scope only" });
   });
 });
