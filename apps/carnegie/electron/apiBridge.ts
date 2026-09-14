@@ -7,7 +7,7 @@ export const exposedApiMethods = [
   "createTaskContract", "getTaskContract", "updateTaskContract", "selectOvertureRoles", "confirmTaskContract", "launchTaskContract",
   "pauseGoal", "resumeGoal", "stopGoal", "emergencyStopGoal",
   "requestCriticalAction", "approveAndRunCriticalAction", "denyCriticalAction", "listInbox",
-  "createConversation", "sendConversationTurn",
+  "listModels", "createConversation", "sendConversationTurn",
   "createCouncil", "submitCouncilBrief", "revealCouncil", "decideCouncil",
   "createDepartmentPlan", "createMissionBundle", "spawnWorker", "cancelWorker",
   "createGoalIntegrationBranch", "createDepartmentBranch", "createWorkerWorktree",

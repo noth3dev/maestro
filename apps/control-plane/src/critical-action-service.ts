@@ -1,4 +1,5 @@
 import type { CriticalActionApprovalInput, CriticalActionInput } from "@maestro/contracts";
+import { CriticalActionDeniedError } from "./server-input.js";
 import { AuthorityApprovalConflictError, hasPendingAuthorityApproval, issueAuthorityApproval, type OperatorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
 import {

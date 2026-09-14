@@ -178,4 +178,33 @@ describe("critical action service", () => {
 
     expect(seen).toMatchObject({ actorId: operator.operatorId, goalId, projectId, controlEpoch: "42" });
   });
+
+  it("denies an exact pending critical action through the real denyCriticalAction implementation", async () => {
+    const goalId = randomUUID();
+    const projectId = randomUUID();
+    const commandId = randomUUID();
+    const pool = { query: vi.fn(async () => ({ rows: [{ found: 1 }], rowCount: 1 })) } as unknown as import("pg").Pool;
+    const service = createCriticalActionService({
+      repository: fakeRepository(),
+      effect: vi.fn(async () => {}),
+      getControlEpoch: async () => "1",
+      pool,
+    });
+    const decision = await service.denyCriticalAction(goalId, { projectId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0 }, commandId, operator);
+    expect(decision.effect).toBe("deny");
+  });
+
+  it("rejects a deny call for an action that is not actually pending, through the real denyCriticalAction implementation", async () => {
+    const goalId = randomUUID();
+    const projectId = randomUUID();
+    const commandId = randomUUID();
+    const pool = { query: vi.fn(async () => ({ rows: [], rowCount: 0 })) } as unknown as import("pg").Pool;
+    const service = createCriticalActionService({
+      repository: fakeRepository(),
+      effect: vi.fn(async () => {}),
+      getControlEpoch: async () => "1",
+      pool,
+    });
+    await expect(service.denyCriticalAction(goalId, { projectId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0 }, commandId, operator)).rejects.toThrow("critical_action_not_pending");
+  });
 });
