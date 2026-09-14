@@ -1,7 +1,7 @@
 import type { Workspace } from "../workspace.js";
 import { LOCAL_BOOTSTRAP_STEP_ORDER, type LocalBootstrapStepEvent, type LocalBootstrapStepName } from "../local-bootstrap.js";
 import type { OrganizationReadModel } from "../panels/organization-panel.js";
-import { createCommandRegistry } from "../commands/registry.js";
+import { getZeroArgumentNoGoalActions } from "../commands/registry.js";
 import { fitPlain, tuiTheme } from "../theme.js";
 
 export type AsyncState<T> = { kind: "loading" } | { kind: "empty" } | { kind: "error"; message: string } | { kind: "value"; value: T };
@@ -133,13 +133,10 @@ export function renderPendingDecisionDetails(state: TuiShellState, width: number
 }
 
 function nextActionText(): string {
-  const registry = createCommandRegistry();
-  const createActions = registry
-    .all()
-    .flatMap((definition) => definition.actions
-      .filter((action) => action.kind === "write" && action.name === "create")
-      .map((action) => `/${definition.name} ${action.name}`));
-  return createActions.slice(0, 3).join(" · ");
+  return getZeroArgumentNoGoalActions()
+    .slice(0, 3)
+    .map((action) => `/${action.command} ${action.action}`)
+    .join(" · ");
 }
 
 function hasPendingDecisionRows(state: TuiShellState): boolean {

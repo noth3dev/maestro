@@ -3,12 +3,18 @@ export interface CommandAction {
   name: string;
   kind: CommandKind;
   description: string;
+  /** Explicitly marked when the action is executable without parser options. */
+  requiresArguments?: boolean;
+  /** Explicitly marked when the action needs an attached Goal context. */
+  requiresGoal?: boolean;
 }
 export interface CommandDefinition {
   name: string;
   description: string;
   actions: CommandAction[];
 }
+
+type CommandActionDefinition = [string, CommandKind, (Pick<CommandAction, "requiresArguments" | "requiresGoal">)?];
 
 const definitions: CommandDefinition[] = (
   [
@@ -43,7 +49,7 @@ const definitions: CommandDefinition[] = (
       "goal",
       "Goal lifecycle and control",
       [
-        ["create", "write"],
+        ["create", "write", { requiresArguments: false, requiresGoal: false }],
         ["get", "read"],
         ["select", "write"],
         ["transition", "write"],
@@ -297,11 +303,11 @@ const definitions: CommandDefinition[] = (
         ["inspect", "read"],
       ],
     ],
-  ] as [string, string, [string, CommandKind][]][]
+  ] as [string, string, CommandActionDefinition[]][]
 ).map(([name, description, actions]) => ({
   name,
   description,
-  actions: actions.map(([action, kind]) => ({ name: action, kind, description: `${name} ${action}` })),
+  actions: actions.map(([action, kind, requirements]) => ({ name: action, kind, description: `${name} ${action}`, ...(requirements ?? {}) })),
 }));
 
 export class CommandRegistry {
@@ -319,4 +325,10 @@ export class CommandRegistry {
 
 export function createCommandRegistry(): CommandRegistry {
   return new CommandRegistry(definitions);
+}
+
+export function getZeroArgumentNoGoalActions(registry: CommandRegistry = createCommandRegistry()): readonly { command: string; action: string }[] {
+  return registry.all().flatMap((definition) => definition.actions
+    .filter((action) => action.kind === "write" && action.requiresArguments === false && action.requiresGoal === false)
+    .map((action) => ({ command: definition.name, action: action.name })));
 }
