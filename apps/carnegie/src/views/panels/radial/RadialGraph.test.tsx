@@ -49,6 +49,8 @@ describe("RadialGraph", () => {
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-modal="true"');
     expect(html).toContain("Node details");
+    expect(html).toContain('aria-label="Node details: Goal"');
+    expect((html.match(/aria-label="Node details:/g) ?? [])).toHaveLength(5);
   });
 
   it("renders the graph controls with a reduced-motion-safe operation mode", () => {
