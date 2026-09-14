@@ -97,7 +97,7 @@ const supportedKeys = new Set([
   "goal:create", "goal:transition", "goal:pause", "goal:stop", "goal:resume", "goal:emergency-stop", "head:activate",
   "council:create", "council:submit-brief", "council:reveal", "council:decide", "department-plan:create", "department-plan:revise", "mission-bundle:create",
   "worker:spawn", "worker:observe", "worker:cancel", "worker:accept", "worker:certify", "worker:certify-conditional", "certification:certify", "git:goal-branch", "git:department-branch", "git:worker-worktree", "git:goal-revision",
-  "metronome:scan", "metronome:challenge", "metronome:correct", "metronome:safe-pause", "metronome:resolve", "encore:review", "approval:approve-and-run", "critical-action:request", "critical-action:approve-and-run",
+  "metronome:scan", "metronome:challenge", "metronome:correct", "metronome:safe-pause", "metronome:resolve", "encore:review", "approval:approve-and-run", "critical-action:request", "critical-action:approve-and-run", "capability:select-full-access-mode", "evidence:capture",
 ]);
 
 function flag(command: ParsedCommand, name: string): boolean { return command.options[name] === true || option(command, name) === "true"; }
@@ -148,7 +148,7 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
   // A local keypress is not a durable CEO approval. Until a critical operation
   // has a server-side approve-and-run binding, fail closed before prompting or
   // invoking any mutation-capable client method.
-  const serverAuthorizedSafetyKeys = new Set(["goal:emergency-stop", "metronome:safe-pause"]);
+  const serverAuthorizedSafetyKeys = new Set(["goal:emergency-stop", "metronome:safe-pause", "capability:select-full-access-mode"]);
   if (action.kind === "critical" && key !== "approval:approve-and-run" && key !== "critical-action:approve-and-run" && !serverAuthorizedSafetyKeys.has(key)) {
     return unavailable("Critical action requires the durable Control Plane approval path; no mutation was sent.");
   }
@@ -192,6 +192,33 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
     return { title: "Metronome", lines: [`${updated.challengeId} · ${updated.status}`] };
   }
 
+  if (key === "capability:select-full-access-mode") {
+    const goalId = selectedGoal(command, context);
+    const capabilityKind = required(command, "capability-kind");
+    const sessionId = required(command, "session-id");
+    const fullAccessMode = required(command, "full-access-mode");
+    if (typeof goalId !== "string") return goalId;
+    if (typeof capabilityKind !== "string") return capabilityKind;
+    if (typeof sessionId !== "string") return sessionId;
+    if (typeof fullAccessMode !== "string") return fullAccessMode;
+    if (fullAccessMode !== "retain_intermediate_approvals" && fullAccessMode !== "skip_intermediate_approvals") return unavailable("--full-access-mode must be retain_intermediate_approvals or skip_intermediate_approvals");
+    const selected = await context.client.selectFullAccessMode(goalId, { projectId: context.projectId, capabilityKind, sessionId, fullAccessMode });
+    return { title: "Full-access mode", lines: [`${selected.goalId} · ${selected.fullAccessMode}`] };
+  }
+  if (key === "evidence:capture") {
+    const goalId = selectedGoal(command, context);
+    const correlationId = required(command, "correlation-id");
+    const kind = required(command, "kind");
+    const mediaType = required(command, "media-type");
+    const contentBase64 = required(command, "content-base64");
+    if (typeof goalId !== "string") return goalId;
+    if (typeof correlationId !== "string") return correlationId;
+    if (typeof kind !== "string") return kind;
+    if (typeof mediaType !== "string") return mediaType;
+    if (typeof contentBase64 !== "string") return contentBase64;
+    const captured = await context.client.captureEvidence(goalId, { projectId: context.projectId, correlationId, commandId: id, kind, mediaType, contentBase64 });
+    return { title: "Evidence", lines: [`${captured.evidenceId} · ${captured.kind} · ${captured.createdAt}`] };
+  }
   if (key === "critical-action:request") {
     const goalId = selectedGoal(command, context);
     const actionName = required(command, "action");

@@ -30,6 +30,8 @@ function api(): ApiClient {
     certifyConditionalWorker: vi.fn().mockResolvedValue({ workerId: "worker-1", status: "certified" }),
     spawnWorker: vi.fn().mockResolvedValue({ workerId: "worker-1", status: "running" }),
     runEncoreReview: vi.fn().mockResolvedValue({ roundId: "round-1" }),
+    selectFullAccessMode: vi.fn(),
+    captureEvidence: vi.fn(),
   } as unknown as ApiClient;
 }
 
@@ -42,6 +44,13 @@ describe("TUI write commands", () => {
     expect(result).toEqual({ title: "Full-access mode", lines: [`${goalId} · skip_intermediate_approvals`] });
     expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ action: "capability.select-full-access-mode", tier: "user", tierTrigger: "effect" }));
     expect(client.selectFullAccessMode).toHaveBeenCalledWith(goalId, { projectId, capabilityKind: "ipython", sessionId: goalId, fullAccessMode: "skip_intermediate_approvals" });
+  });
+
+  it("rejects an unsupported full-access mode before invoking the client", async () => {
+    const client = api();
+    const result = await executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "capability", action: "select-full-access-mode", options: { "goal-id": goalId, "capability-kind": "ipython", "session-id": goalId, "full-access-mode": "full_access" } });
+    expect(result).toEqual({ title: "Unavailable", lines: ["--full-access-mode must be retain_intermediate_approvals or skip_intermediate_approvals"] });
+    expect(client.selectFullAccessMode).not.toHaveBeenCalled();
   });
 
   it("captures evidence and displays the created record identity", async () => {
