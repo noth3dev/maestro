@@ -147,6 +147,7 @@ export function RadialGraph({ projection, selectedGoalId, onSelectGoal, onBack, 
     ...(selectedNodeId === undefined ? {} : { selectedNodeId }),
   }), [projection, selectedGoalId, selectedNodeId]);
   const selected = layout.nodes.find((node) => node.id === selectedNodeId);
+  const selectedProjectionNode = projection.nodes.find((node) => node.nodeId === selectedNodeId && !node.removed);
   const onShellClick = (event: MouseEvent<HTMLDivElement>) => {
     if (event.target === event.currentTarget) setSelectedNodeId(undefined);
   };
@@ -166,7 +167,13 @@ export function RadialGraph({ projection, selectedGoalId, onSelectGoal, onBack, 
         {selected !== undefined && <span className="radial-selection" role="status">selected: {selected.label} · {selected.state ?? selected.kind}</span>}
       </div>
       <ReactFlowProvider>
-        <GraphCanvas layout={layout} selectedNodeId={selectedNodeId} onSelect={onSelectNode} selectedProjectionNode={projection.nodes.find((node) => node.nodeId === selectedNodeId && !node.removed)} api={api} />
+        <GraphCanvas
+          layout={layout}
+          selectedNodeId={selectedNodeId}
+          onSelect={onSelectNode}
+          {...(api === undefined ? {} : { api })}
+          {...(selectedProjectionNode === undefined ? {} : { selectedProjectionNode })}
+        />
       </ReactFlowProvider>
       <div className="floor-legend radial-legend" aria-label="Radial graph legend">
         <span><span className="legend-dot" style={{ background: "var(--terracotta)" }} /> Concertmaster</span>

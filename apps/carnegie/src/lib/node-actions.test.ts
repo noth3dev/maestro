@@ -52,8 +52,14 @@ describe("Carnegie node actions", () => {
     expect(client.requestCriticalAction).toHaveBeenCalledWith(goalId, { projectId, action: "deploy", target: "staging", policyVersion: 7, budgetEffectCents: 41 }, commandId);
   });
 
+  it("does not create a selectable critical action without exact policy and budget", () => {
+    const actions = buildNodeActions(node, { actor: { kind: "user", authorized: true }, critical: { action: "deploy", target: "production", goalId, expiresAt: "2026-01-01T00:00:00.000Z", expectedEffect: "Release", rollbackFeasibility: "feasible" } });
+    expect(actions.some((action) => action.kind === "critical")).toBe(false);
+    expect(() => runNodeAction(api(), { kind: "critical", command: "approveAndRunCriticalAction", node, critical: { action: "deploy", target: "production", goalId, expiresAt: "2026-01-01T00:00:00.000Z", expectedEffect: "Release", rollbackFeasibility: "feasible" } }, commandId)).toThrow("criticalInput is required");
+  });
+
   it("preserves the exact critical confirmation fields", () => {
-    expect(buildNodeActions(node, { actor: { kind: "user", authorized: true }, critical: { action: "deploy", target: "production", goalId, expiresAt: "2026-01-01T00:00:00.000Z", expectedEffect: "Release build", rollbackFeasibility: "rollback available" } }).find((action) => action.kind === "critical")?.confirmation).toEqual({ action: "deploy", target: "production", goalId, expiresAt: "2026-01-01T00:00:00.000Z", expectedEffect: "Release build", rollbackFeasibility: "rollback available" });
+    expect(buildNodeActions(node, { actor: { kind: "user", authorized: true }, critical: { action: "deploy", target: "production", goalId, expiresAt: "2026-01-01T00:00:00.000Z", expectedEffect: "Release build", rollbackFeasibility: "rollback available" }, criticalInput: { policyVersion: 1, budgetEffectCents: 0 } }).find((action) => action.kind === "critical")?.confirmation).toEqual({ action: "deploy", target: "production", goalId, expiresAt: "2026-01-01T00:00:00.000Z", expectedEffect: "Release build", rollbackFeasibility: "rollback available" });
   });
 
   it("keeps unauthorized controls visible with the reason and decision path", () => {

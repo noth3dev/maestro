@@ -82,7 +82,7 @@ export function buildNodeActions(node: ProjectionNode, context: NodeActionContex
   const controls = [...new Set(context.controls ?? (node.kind === "goal" ? DEFAULT_CONTROLS : []))];
   const actions: NodeAction[] = controls.map((command) => actionForControl(node, command, context.actor));
   const critical = context.critical;
-  if (critical !== undefined && critical.goalId === node.goalId && critical.classification !== "forbidden" && critical.decision !== "declined") {
+  if (critical !== undefined && context.criticalInput !== undefined && critical.goalId === node.goalId && critical.classification !== "forbidden" && critical.decision !== "declined") {
     const criticalCommand = context.criticalCommand ?? "approveAndRunCriticalAction";
     const base = { nodeId: node.nodeId, label: `${criticalCommand === "requestCriticalAction" ? "Review" : "Approve"} ${critical.action}`, command: criticalCommand, confirmation: critical, ...(context.criticalInput === undefined ? {} : { criticalInput: { ...context.criticalInput, projectId: context.criticalInput.projectId ?? node.projectId } }) };
     if (context.actor?.authorized === false) actions.push({ ...base, kind: "unauthorized", enabled: false, reason: context.actor?.reason ?? "This actor is not authorized for this critical action.", decisionPath: context.actor?.decisionPath ?? "Request the required approval." });
@@ -114,10 +114,12 @@ export function runNodeAction(api: NodeActionsApi, action: RunNodeActionInput, c
   if (action.critical.classification === "forbidden") throw new Error("forbidden actions cannot be approved or executed");
   if (action.critical.decision === "declined") throw new Error("declined critical actions cannot be silently downgraded");
   if (action.critical.goalId !== action.node.goalId) throw new Error("Critical action Goal does not match the selected node");
+  const exactInput = action.input ?? action.criticalInput;
+  if (exactInput === undefined) throw new Error("criticalInput is required before a critical action can be selected");
   const input: CriticalActionInput & { expiresAt?: string } = {
-    projectId: action.input?.projectId ?? action.criticalInput?.projectId ?? action.node.projectId,
+    projectId: exactInput.projectId ?? action.node.projectId,
     action: action.critical.action, target: action.critical.target,
-    policyVersion: action.input?.policyVersion ?? action.criticalInput?.policyVersion ?? 1, budgetEffectCents: action.input?.budgetEffectCents ?? action.criticalInput?.budgetEffectCents ?? 0,
+    policyVersion: exactInput.policyVersion, budgetEffectCents: exactInput.budgetEffectCents,
     ...(action.command === "approveAndRunCriticalAction" ? { expiresAt: action.critical.expiresAt } : {}),
   };
   if (action.command === "requestCriticalAction") return api.requestCriticalAction(action.node.goalId, input, commandId);

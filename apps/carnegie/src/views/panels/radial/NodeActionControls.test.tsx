@@ -17,6 +17,14 @@ describe("selected radial node actions", () => {
     expect(html).toContain("Request Head approval");
   });
 
+  it("renders exact critical confirmation fields only with the exact server input", () => {
+    const html = renderToStaticMarkup(<NodeActionControls node={node} api={api} critical={{ action: "deploy", target: "production", goalId, expiresAt: "2026-01-01T00:00:00.000Z", expectedEffect: "Release", rollbackFeasibility: "rollback available" }} criticalInput={{ policyVersion: 3, budgetEffectCents: 12 }} />);
+    expect(html).toContain("Critical action confirmation");
+    expect(html).toContain("production");
+    expect(html).toContain("rollback available");
+    expect(html).toContain("2026-01-01T00:00:00.000Z");
+  });
+
   it("renders the actual Goal control commands in the selected-node path", () => {
     const html = renderToStaticMarkup(<NodeActionControls node={node} api={api} />);
     expect(html).toContain("Pause Goal");
