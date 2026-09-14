@@ -34,8 +34,10 @@ describe("TUI command parser", () => {
     expect(parseSlashCommand("/mode maestro")).toEqual({ kind: "command", name: "mode", action: "maestro", options: {} });
   });
 
-  it("keeps natural language as text", () => {
+  it("keeps implicit current-conversation chat input as natural language beside explicit commands", () => {
     expect(parseInput("현재 Goal 상태를 요약해줘")).toEqual({ kind: "natural-language", text: "현재 Goal 상태를 요약해줘" });
+    expect(parseInput("/conversation turn --conversation-id 55555555-5555-4555-8555-555555555555 --text 요약"))
+      .toEqual({ kind: "command", name: "conversation", action: "turn", options: { "conversation-id": "55555555-5555-4555-8555-555555555555", text: "요약" } });
   });
 
   it("rejects an unterminated quote", () => {

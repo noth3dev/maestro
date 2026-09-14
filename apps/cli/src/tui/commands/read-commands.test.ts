@@ -6,6 +6,7 @@ const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
 const contractId = "33333333-3333-4333-8333-333333333333";
 const councilId = "44444444-4444-4444-8444-444444444444";
+const conversationId = "55555555-5555-4555-8555-555555555555";
 const goal = { goalId, projectId, state: "active" as const, version: 2 };
 
 function client(overrides: Partial<ApiClient> = {}): ApiClient {
@@ -73,6 +74,13 @@ describe("workspace read commands", () => {
     const result = await readDashboard({ client: client({ listGoals: vi.fn().mockResolvedValue({ goals: [draft, goal] }), listWorkersForGoal: vi.fn().mockResolvedValue({ workers }) }), projectId });
     expect(result.selectedGoal).toEqual(goal);
     expect(result.workerCount).toBe(2);
+  });
+
+  it("reads an arbitrary conversation by its explicit ID and returns real state", async () => {
+    const conversation = { conversationId, projectId, goalId, model: "openai/gpt-5", status: "running" as const, version: 3 };
+    const api = client({ getConversation: vi.fn().mockResolvedValue(conversation) });
+    await expect(executeReadCommand({ client: api, projectId, goalId }, { name: "conversation", action: "get", options: { "conversation-id": conversationId } })).resolves.toEqual({ title: "Conversation", lines: [`• ${conversationId} · ${conversation.status} · v${conversation.version} · ${conversation.model}`] });
+    expect(api.getConversation).toHaveBeenCalledWith(conversationId, { projectId });
   });
 
   it("routes the remaining typed lifecycle reads instead of reporting them as unavailable", async () => {

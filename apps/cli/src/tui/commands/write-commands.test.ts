@@ -5,6 +5,9 @@ import { executeWriteCommand } from "./write-commands.js";
 const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
 const commandId = "33333333-3333-4333-8333-333333333333";
+const conversationId = "55555555-5555-4555-8555-555555555555";
+const otherConversationId = "66666666-6666-4666-8666-666666666666";
+const conversation = { conversationId, projectId, goalId, model: "openai/gpt-5", status: "active" as const, version: 1 };
 const goal = { goalId, projectId, state: "pausing" as const, version: 2 };
 const contractSubstance = {
   desiredOutcome: "Ship",
@@ -30,10 +33,46 @@ function api(): ApiClient {
     certifyConditionalWorker: vi.fn().mockResolvedValue({ workerId: "worker-1", status: "certified" }),
     spawnWorker: vi.fn().mockResolvedValue({ workerId: "worker-1", status: "running" }),
     runEncoreReview: vi.fn().mockResolvedValue({ roundId: "round-1" }),
+    createConversation: vi.fn(),
+    sendConversationTurn: vi.fn(),
+    cancelConversation: vi.fn(),
   } as unknown as ApiClient;
 }
 
 describe("TUI write commands", () => {
+  it("creates an explicitly requested conversation and returns its real identity", async () => {
+    const client = api();
+    vi.mocked(client.createConversation).mockResolvedValue(conversation);
+    await expect(executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "conversation", action: "create", options: { "goal-id": goalId, model: conversation.model, "command-id": commandId } })).resolves.toEqual({ title: "Conversation", lines: [`${conversation.conversationId} · ${conversation.status} · ${conversation.model}`] });
+    expect(client.createConversation).toHaveBeenCalledWith({ projectId, goalId, model: conversation.model }, { idempotencyKey: commandId });
+  });
+
+  it("uses the selected model when explicit creation omits --model", async () => {
+    const client = api();
+    vi.mocked(client.createConversation).mockResolvedValue(conversation);
+    await executeWriteCommand({ client, projectId, model: conversation.model, confirm: vi.fn() }, { name: "conversation", action: "create", options: { "goal-id": goalId } });
+    expect(client.createConversation).toHaveBeenCalledWith({ projectId, goalId, model: conversation.model }, expect.objectContaining({ idempotencyKey: expect.any(String) }));
+  });
+
+  it("sends a turn to the explicitly requested conversation", async () => {
+    const client = api();
+    vi.mocked(client.sendConversationTurn).mockResolvedValue({ conversation, turn: { turnId: commandId, conversationId, role: "assistant", content: "returned answer", status: "completed", cursor: "1", createdAt: "2026-09-15T00:00:00.000Z" } });
+    await expect(executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "conversation", action: "turn", options: { "conversation-id": conversationId, text: "hello", "command-id": commandId } })).resolves.toEqual({ title: "Conversation", lines: [`${conversationId} · completed · returned answer`] });
+    expect(client.sendConversationTurn).toHaveBeenCalledWith(conversationId, { projectId, text: "hello" }, { idempotencyKey: commandId });
+  });
+
+  it("cancels an arbitrary conversation instead of the active session conversation", async () => {
+    const client = api();
+    vi.mocked(client.cancelConversation).mockResolvedValue({ ...conversation, conversationId: otherConversationId, status: "cancelled" });
+    await expect(executeWriteCommand({ client, projectId, goalId, confirm: vi.fn() }, { name: "conversation", action: "cancel", options: { "conversation-id": otherConversationId } })).resolves.toEqual({ title: "Conversation", lines: [`${otherConversationId} · cancelled`] });
+    expect(client.cancelConversation).toHaveBeenCalledWith(otherConversationId, { projectId });
+  });
+
+  it("rejects missing explicit conversation arguments before invoking the client", async () => {
+    const client = api();
+    await expect(executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "conversation", action: "turn", options: { text: "hello" } })).resolves.toEqual({ title: "Unavailable", lines: ["Missing required option --conversation-id"] });
+    expect(client.sendConversationTurn).not.toHaveBeenCalled();
+  });
   it("passes stable command identity to a safe Goal mutation", async () => {
     const client = api();
     await executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "goal", action: "pause", options: { "goal-id": goalId, "expected-version": "1", "command-id": commandId } });
