@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { parseInput } from "./commands/parser.js";
-import { createAutomaticProviderSignInGate, isProviderLoginActive, isSplashRestoreShortcut, runAutomaticProviderSignInOffer, shouldOfferAutomaticProviderSignIn } from "./entry.js";
+import { createAutomaticProviderSignInGate, hydrateOrganizationOnReconnect, isProviderLoginActive, isSplashRestoreShortcut, runAutomaticProviderSignInOffer, shouldOfferAutomaticProviderSignIn } from "./entry.js";
+import type { TuiShellState } from "./components/shell.js";
 
 const model = (provider: string, id: string) => ({
   identity: { provider, id },
@@ -12,6 +13,19 @@ const model = (provider: string, id: string) => ({
     trainsOnCustomerData: false,
     regions: ["US"],
   },
+});
+
+describe("organization hydration on reconnect", () => {
+  it("refreshes the visible organization state after a successful connection retry", async () => {
+    const state: Pick<TuiShellState, "organization"> = { organization: { kind: "empty" } };
+    await hydrateOrganizationOnReconnect(state, {
+      getOrganization: async () => ({
+        groups: [{ groupId: "product", displayName: "Product Group" }],
+        departments: [{ departmentId: "product", groupId: "product", displayName: "Product Department", status: "sleeping", activeSessionId: null, goalContext: null }],
+      }),
+    });
+    expect(state.organization).toEqual({ kind: "value", value: { departments: ["Product Department"] } });
+  });
 });
 
 describe("automatic provider sign-in", () => {

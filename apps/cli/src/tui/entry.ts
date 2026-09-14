@@ -53,12 +53,20 @@ import { editorTheme, SecretEditor } from "./components/editors.js";
 import { ConversationViewport, FramedComposer } from "./components/conversation-viewport.js";
 
 export { type InteractiveTuiOptions } from "./startup.js";
-import { initializeTui, shouldAutoBootstrapLocal, type InteractiveTuiOptions } from "./startup.js";
+import { hydrateOrganizationState, initializeTui, shouldAutoBootstrapLocal, type InteractiveTuiOptions } from "./startup.js";
 
 /** A selected model is only resolvable when the gateway exposes that exact model. */
 /** Ctrl+/ is sent as US (0x1f) by common terminals; Kitty/modifyOtherKeys uses matchesKey. */
 export function isSplashRestoreShortcut(data: string): boolean {
   return data === "\x1f" || matchesKey(data, "ctrl+/");
+}
+
+export async function hydrateOrganizationOnReconnect(
+  state: Pick<TuiShellState, "organization">,
+  client: Pick<ApiClient, "getOrganization">,
+): Promise<void> {
+  state.organization = { kind: "loading" };
+  state.organization = await hydrateOrganizationState(client);
 }
 
 export function shouldOfferAutomaticProviderSignIn(
@@ -480,6 +488,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         } else {
           projectDiscoveryNotice = discovered.reason;
         }
+        await hydrateOrganizationOnReconnect(state, client);
         state.connection = { kind: "connected" };
         recovery = reconcileTuiSession(workspace.cwd, session);
         appendSuccess("Control Plane connected.");
