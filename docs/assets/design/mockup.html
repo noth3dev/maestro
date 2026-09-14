@@ -1,0 +1,1800 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>maestro — UI wireframe</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js" defer></script>
+<style>
+/* ===== base design system (from repo designsystem.html) ===== */
+:root {
+  --bg-page: #f5f4f1;
+  --surface-1: #eeece6;
+  --surface-2: #ffffff;
+  --surface-3: #f9f8f5;
+  --text-primary: #1a1a18;
+  --text-secondary: #6b6a64;
+  --text-muted: #8a8880;
+  --border: rgba(0,0,0,0.08);
+  --border-strong: rgba(0,0,0,0.14);
+  --shadow: 0 4px 20px rgba(0,0,0,0.06);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.1);
+
+  --font-sans: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  --duration-fast: 0.15s;
+  --duration: 0.2s;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --terracotta: #b5603f; --terracotta-bg: #f2e3da; --terracotta-text: #7a3c26;
+  --rust: #a34b3a;       --rust-bg: #f3ddd6;       --rust-text: #732f22;
+  --ochre: #c08a3e;      --ochre-bg: #f4e6cd;      --ochre-text: #7d5620;
+  --clay: #c17b6e;       --clay-bg: #f5e2dd;       --clay-text: #85473a;
+  --olive: #8a8355;      --olive-bg: #ecead9;      --olive-text: #5c5636;
+
+  --p-blue: #5a7a9a;   --p-blue-bg: #d9e2eb;   --p-blue-text: #2e4a6a;
+  --p-teal: #5a9a8a;   --p-teal-bg: #d9ebe6;   --p-teal-text: #2e6a5a;
+  --p-violet: #7a6a9a; --p-violet-bg: #e4e0eb; --p-violet-text: #4a3e6a;
+  --p-orange: #c47a3e; --p-orange-bg: #f5e6d4; --p-orange-text: #8a5520;
+  --p-slate: #6a6a64;  --p-slate-bg: #e8e8e4;  --p-slate-text: #3e3e3a;
+
+  --accent: var(--terracotta); --accent-bg: var(--terracotta-bg); --accent-text: var(--terracotta-text);
+}
+[data-theme="dark"] {
+  --bg-page: #171614; --surface-1: #232220; --surface-2: #1d1c1a; --surface-3: #22211f;
+  --text-primary: #ede9e2; --text-secondary: #a8a59c; --text-muted: #75726a;
+  --border: rgba(255,255,255,0.08); --border-strong: rgba(255,255,255,0.14);
+  --terracotta: #c97855; --terracotta-bg: #3a2a20; --terracotta-text: #e8a67f;
+  --rust: #c86a58;       --rust-bg: #3a2620;       --rust-text: #e8a08f;
+  --ochre: #d4a85a;      --ochre-bg: #3a3220;      --ochre-text: #e8c987;
+  --clay: #d48a7a;       --clay-bg: #3a2622;       --clay-text: #e8ab9c;
+  --olive: #a8a06a;      --olive-bg: #303221;      --olive-text: #c9c48f;
+  --p-blue: #6a9aba;   --p-blue-bg: #242e34;   --p-blue-text: #a4bcd4;
+  --p-teal: #6abaaa;   --p-teal-bg: #243430;   --p-teal-text: #a4d4c8;
+  --p-violet: #8a7aba; --p-violet-bg: #2c2834; --p-violet-text: #bcb0d4;
+  --p-orange: #d49a6a; --p-orange-bg: #3a3024; --p-orange-text: #e8c4a4;
+  --p-slate: #8a8a84;  --p-slate-bg: #2c2c2a;  --p-slate-text: #c0c0ba;
+  --accent: var(--terracotta); --accent-bg: var(--terracotta-bg); --accent-text: var(--terracotta-text);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg-page); font-family: var(--font-sans); color: var(--text-primary); line-height: 1.5; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button, input, textarea { font-family: inherit; }
+
+/* ── buttons ── */
+.btn { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius); font-size:13px; font-weight:500; border:1px solid var(--border-strong); background:var(--surface-2); color:var(--text-primary); cursor:pointer; transition:all var(--duration-fast); }
+.btn:hover { background:var(--surface-1); }
+.btn-primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+.btn-primary:hover { opacity:0.9; }
+.btn-ghost { border-color:transparent; background:transparent; }
+.btn-ghost:hover { background:var(--surface-1); }
+.btn-sm { padding:4px 10px; font-size:12px; }
+.btn-icon { width:32px; height:32px; padding:0; justify-content:center; }
+.btn-icon svg { width:16px; height:16px; }
+
+/* ── avatar ── */
+.avatar { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:500; flex-shrink:0; color:#fff; }
+.avatar-sm { width:22px; height:22px; font-size:10px; }
+.avatar-lg { width:44px; height:44px; font-size:15px; }
+.av-blue { background:var(--p-blue); } .av-teal { background:var(--p-teal); }
+.av-violet { background:var(--p-violet); } .av-orange { background:var(--p-orange); }
+.av-slate { background:var(--p-slate); } .av-terracotta { background:var(--terracotta); }
+
+/* ── badge / tag ── */
+.badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:500; padding:2px 9px; border-radius:var(--radius-full); }
+.badge-olive { background:var(--olive-bg); color:var(--olive-text); }
+.badge-ochre { background:var(--ochre-bg); color:var(--ochre-text); }
+.badge-rust { background:var(--rust-bg); color:var(--rust-text); }
+.badge-slate { background:var(--p-slate-bg); color:var(--p-slate-text); }
+
+/* ── alert (used for inline approval) ── */
+.alert { display:flex; align-items:flex-start; gap:10px; padding:11px 14px; border-radius:var(--radius-lg); font-size:12px; }
+.alert svg { width:16px; height:16px; flex-shrink:0; margin-top:1px; }
+.alert-warning { background:var(--ochre-bg); color:var(--ochre-text); }
+.alert-success { background:var(--olive-bg); color:var(--olive-text); }
+
+/* ── chat msg ── */
+.msg { display:flex; gap:9px; margin-bottom:14px; align-items:flex-start; }
+.msg-body { flex:1; min-width:0; }
+.msg-head { display:flex; align-items:baseline; gap:7px; margin-bottom:2px; }
+.msg-name { font-size:12px; font-weight:500; }
+.msg-time { font-size:10px; color:var(--text-muted); }
+.msg-text { font-size:12px; color:var(--text-secondary); }
+
+/* ── stat card (base, from repo design system) ── */
+.stat-card { border-radius:var(--radius-lg); padding:14px 16px; }
+.stat-label { font-size:12px; opacity:0.75; margin-bottom:3px; }
+.stat-value { font-size:24px; font-weight:500; letter-spacing:-0.02em; }
+.stat-terracotta { background:var(--accent-bg); color:var(--accent-text); }
+.stat-ochre { background:var(--ochre-bg); color:var(--ochre-text); }
+.stat-olive { background:var(--olive-bg); color:var(--olive-text); }
+.stat-rust { background:var(--rust-bg); color:var(--rust-text); }
+
+/* ── form basics (base, from repo design system) ── */
+.form-field { display:flex; flex-direction:column; gap:5px; }
+.form-label { font-size:12px; font-weight:500; color:var(--text-secondary); }
+.form-hint { font-size:11px; color:var(--text-muted); }
+.input { width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface-3); font-family:inherit; font-size:12.5px; color:var(--text-primary); outline:none; transition:border-color var(--duration-fast); }
+.input::placeholder { color:var(--text-muted); }
+.input:focus { border-color:var(--accent); }
+.toggle { position:relative; width:38px; height:21px; background:var(--surface-1); border-radius:var(--radius-full); border:1px solid var(--border); cursor:pointer; transition:all var(--duration); flex-shrink:0; }
+.toggle::after { content:''; position:absolute; top:1px; left:1px; width:17px; height:17px; border-radius:50%; background:var(--surface-2); box-shadow:0 1px 3px rgba(0,0,0,0.12); transition:transform var(--duration); }
+.toggle.on { background:var(--accent); border-color:var(--accent); }
+.toggle.on::after { transform:translateX(17px); }
+.progress-wrap { display:flex; flex-direction:column; gap:6px; }
+.progress-label { display:flex; justify-content:space-between; font-size:11.5px; color:var(--text-secondary); }
+.progress { height:8px; background:var(--surface-1); border-radius:var(--radius-full); overflow:hidden; }
+.progress-bar { height:100%; border-radius:var(--radius-full); transition:width 0.5s var(--ease); }
+.progress-bar.ochre { background:var(--ochre); }
+.progress-bar.olive { background:var(--olive); }
+.progress-bar.rust { background:var(--rust); }
+
+/* ===== app shell ===== */
+.app { width:100vw; height:100vh; overflow:hidden; background:var(--surface-2); }
+.app.flashmob-theme { --accent: var(--p-blue); --accent-bg: var(--p-blue-bg); --accent-text: var(--p-blue-text); }
+
+.view { display:none; height:100vh; }
+.view.on { display:flex; }
+
+/* ── sidebar ── */
+.sidebar { width:212px; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; background:var(--surface-3); flex-shrink:0; transition:width var(--duration) var(--ease); }
+.sb-scroll { flex:1; overflow-y:auto; overflow-x:hidden; min-height:0; }
+.sb-fixed-menu-group { height:1px; background:var(--border); margin:6px 12px; }
+.sidebar.collapsed .sb-fixed-menu-group { margin:6px 8px; }
+.sidebar.collapsed { width:56px; }
+.sidebar.collapsed .lbl,
+.sidebar.collapsed .sb-logo-text,
+.sidebar.collapsed .sb-count,
+.sidebar.collapsed .sb-badge-pct,
+.sidebar.collapsed .sb-divider,
+.sidebar.collapsed .sb-goalswitch,
+.sidebar.collapsed .sb-channels,
+.sidebar.collapsed .sb-group,
+.sidebar.collapsed .sb-bottom span { display:none; }
+.sidebar.collapsed .sb-bottom .avatar { display:none; }
+.sidebar.collapsed .sb-item { justify-content:center; }
+.sidebar.collapsed .sb-newgoal button { padding:7px; justify-content:center; }
+.sidebar.collapsed .sb-bottom { justify-content:center; }
+.sidebar.collapsed .sb-bottom-icons { margin-left:0; }
+.sidebar.collapsed .sb-logo { justify-content:center; padding:14px 8px 8px; }
+.sidebar.collapsed .sb-logo-mark { display:none; }
+.sidebar.collapsed .sb-collapse-btn { margin-left:0; }
+.sb-logo { display:flex; align-items:center; gap:8px; padding:14px 14px 8px; }
+.sb-logo-mark { width:22px; height:22px; border-radius:6px; background:var(--accent); flex-shrink:0; }
+.sb-logo-text { font-size:13px; font-weight:600; white-space:nowrap; }
+.sb-collapse-btn { margin-left:auto; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--surface-2); cursor:pointer; color:var(--text-secondary); flex-shrink:0; }
+.sb-collapse-btn:hover { background:var(--surface-1); border-color:var(--border-strong); }
+.sb-collapse-btn svg { width:13px; height:13px; }
+.sb-newgoal { padding:2px 10px 10px; }
+.sb-newgoal button { width:100%; justify-content:center; }
+.sb-menu { padding:0 8px 6px; }
+.sb-item { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:var(--radius); font-size:12.5px; color:var(--text-secondary); cursor:pointer; position:relative; }
+.sb-item:hover { background:var(--surface-1); }
+.sb-item.on { background:var(--surface-1); color:var(--text-primary); font-weight:500; }
+.sb-item svg { width:15px; height:15px; flex-shrink:0; color:currentColor; opacity:0.75; }
+.sb-count { margin-left:auto; background:var(--rust); color:#fff; font-size:9px; border-radius:8px; padding:1px 6px; font-weight:600; }
+.sb-badge-pct { margin-left:auto; font-size:9.5px; font-weight:600; padding:1px 7px; border-radius:8px; }
+.sb-divider { height:1px; background:var(--border); margin:6px 12px; }
+.sb-goalswitch { display:flex; align-items:center; gap:6px; padding:8px 14px 6px; font-size:12.5px; font-weight:600; cursor:pointer; }
+.sb-goalswitch svg { width:13px; height:13px; color:var(--text-muted); }
+.sb-group-label { display:flex; align-items:center; gap:4px; padding:9px 10px 3px; font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.03em; cursor:pointer; user-select:none; }
+.sb-group-label svg { width:11px; height:11px; }
+.sb-group.dim { opacity:0.45; }
+.sb-group.dim .sb-item { display:none; }
+.sb-channels { padding:0 8px; }
+.sb-chan { display:flex; align-items:center; gap:7px; padding:5px 10px 5px 20px; border-radius:var(--radius); font-size:12.5px; color:var(--text-secondary); cursor:pointer; }
+.sb-chan:hover { background:var(--surface-1); }
+.sb-chan.on { background:var(--surface-1); color:var(--text-primary); font-weight:500; }
+.sb-chan svg { width:14px; height:14px; opacity:0.7; flex-shrink:0; }
+.sb-chan .stack { margin-left:auto; display:flex; }
+.sb-chan .stack .avatar { width:13px; height:13px; font-size:0; border:1.5px solid var(--surface-3); margin-left:-4px; }
+.sb-spacer { flex:1; }
+.sb-bottom { border-top:1px solid var(--border); padding:9px 12px; display:flex; align-items:center; gap:8px; }
+.sb-bottom span { font-size:12px; font-weight:500; }
+.sb-bottom .sb-bottom-icons { margin-left:auto; display:flex; align-items:center; gap:8px; }
+.sb-bottom .sb-bottom-icons svg { width:15px; height:15px; color:var(--text-muted); cursor:pointer; }
+.sb-bottom .sb-bottom-icons svg:hover { color:var(--text-primary); }
+
+/* ── home ── */
+.home-main { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; padding:30px; }
+.home-title { font-size:19px; font-weight:600; text-align:center; min-height:26px; }
+.home-composer { width:100%; max-width:440px; border:1px solid var(--border-strong); border-radius:var(--radius-lg); padding:14px; background:var(--surface-2); transition:border-color var(--duration) var(--ease); }
+.home-composer.mode-flashmob { border-color:var(--p-blue); }
+.home-composer textarea { width:100%; border:none; outline:none; resize:none; min-height:52px; font-size:13px; background:transparent; color:var(--text-primary); }
+.home-composer textarea::placeholder { color:var(--text-muted); }
+.home-composer-row { display:flex; align-items:center; gap:8px; margin-top:8px; }
+.pill-toggle { display:flex; border:1px solid var(--border); border-radius:var(--radius-full); overflow:hidden; font-size:11px; }
+.pill-toggle div { padding:5px 13px; color:var(--text-muted); cursor:pointer; transition:background var(--duration-fast), color var(--duration-fast); }
+.pill-toggle div.on { background:var(--terracotta-bg); color:var(--terracotta-text); font-weight:500; }
+.pill-toggle div.on.flashmob { background:var(--p-blue-bg); color:var(--p-blue-text); }
+.home-send-btn { transition:background var(--duration) var(--ease), border-color var(--duration) var(--ease); }
+.home-send-btn.mode-flashmob { background:var(--p-blue); border-color:var(--p-blue); }
+.home-suggestions { display:none; flex-wrap:wrap; gap:6px; justify-content:center; width:100%; max-width:440px; }
+.home-suggestions.show { display:flex; }
+.home-cards { display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; max-width:440px; }
+.home-cards.hide { display:none; }
+.home-card { background:var(--surface-1); border-radius:var(--radius-lg); padding:12px 14px; cursor:pointer; transition:background var(--duration-fast); }
+.home-card:hover { background:var(--surface-3); border:1px solid var(--border-strong); }
+.home-card svg { width:17px; height:17px; color:var(--text-secondary); }
+.home-card-title { font-size:12px; font-weight:600; margin-top:7px; }
+.home-card-sub { font-size:11px; color:var(--text-muted); margin-top:2px; }
+
+/* ── dashboard ── */
+.dash-main { flex:1; overflow-y:auto; padding:20px 24px; min-width:0; }
+.dash-body { flex:1; display:flex; overflow:hidden; }
+.dash-head { display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+.dash-title { font-size:17px; font-weight:600; }
+.dash-status { font-size:11px; padding:2px 9px; border-radius:var(--radius-full); background:var(--olive-bg); color:var(--olive-text); font-weight:500; }
+.dash-sub { font-size:12px; color:var(--text-muted); margin-bottom:18px; }
+.dash-stats { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:10px; margin-bottom:22px; }
+.dash-section-title { font-size:11.5px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.03em; margin-bottom:10px; }
+.dept-grid { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:10px; margin-bottom:24px; }
+.dept-card { background:var(--surface-1); border-radius:var(--radius-lg); padding:12px; border:1px solid transparent; }
+.dept-card.awake { border-color:var(--border-strong); background:var(--surface-2); }
+.dept-card.asleep { opacity:0.5; }
+.dept-card-head { display:flex; align-items:center; gap:7px; }
+.dept-card-head svg { width:15px; height:15px; color:var(--text-secondary); }
+.dept-card-name { font-size:12px; font-weight:600; }
+.dept-card-state { font-size:10.5px; color:var(--text-muted); margin-top:6px; }
+.dept-card-state.on { color:var(--olive-text); }
+.kanban { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; }
+.kanban-col-head { display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:var(--text-secondary); margin-bottom:8px; }
+.kanban-col-head .n { margin-left:auto; font-size:10.5px; color:var(--text-muted); font-weight:400; }
+.kanban-col { background:var(--surface-3); border-radius:var(--radius-lg); padding:10px; min-height:120px; }
+.kcard { background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius); padding:10px 11px; margin-bottom:8px; cursor:pointer; }
+.kcard:hover { border-color:var(--border-strong); }
+.kcard-title { font-size:12px; font-weight:500; }
+.kcard-meta { display:flex; align-items:center; gap:6px; margin-top:7px; }
+.kcard-dept { display:flex; align-items:center; gap:4px; font-size:10px; color:var(--text-muted); }
+.kcard-dept svg { width:11px; height:11px; }
+.kcard-badge { margin-left:auto; }
+.kcard-cert { display:flex; align-items:center; gap:4px; font-size:10px; color:var(--olive-text); font-weight:500; margin-top:7px; }
+.kcard-cert svg { width:11px; height:11px; }
+
+/* ── channel view ── */
+.channel-wrap { flex:1; display:flex; overflow:hidden; }
+.channel-feed { flex:1; display:flex; flex-direction:column; border-right:1px solid var(--border); min-width:0; }
+.channel-head { padding:11px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:7px; font-size:12.5px; }
+.channel-head svg { width:14px; height:14px; color:var(--text-muted); }
+.channel-head .goalname { margin-left:auto; font-size:11px; color:var(--text-muted); }
+.channel-messages { flex:1; overflow-y:auto; padding:16px 18px; }
+.channel-input { padding:10px 14px; border-top:1px solid var(--border); }
+.chan-composer { border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface-3); transition:border-color var(--duration-fast); }
+.chan-composer:focus-within { border-color:var(--accent); }
+.chan-composer-input { width:100%; border:none; outline:none; background:transparent; resize:none; min-height:20px; max-height:120px; padding:10px 12px 4px; font-size:12.5px; font-family:inherit; color:var(--text-primary); }
+.chan-composer-input::placeholder { color:var(--text-muted); }
+.chan-composer-toolbar { display:flex; align-items:center; padding:2px 8px 8px; }
+.chan-composer-actions { display:flex; gap:2px; }
+.chan-composer-actions .btn-icon { width:28px; height:28px; color:var(--text-muted); border:none; background:transparent; }
+.chan-composer-actions .btn-icon:hover { color:var(--text-primary); background:var(--surface-1); }
+.chan-composer-actions .btn-icon svg { width:15px; height:15px; }
+.chan-composer-send { margin-left:auto; width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center; border-radius:var(--radius); border:none; background:var(--accent); color:#fff; cursor:pointer; opacity:0.4; pointer-events:none; transition:opacity var(--duration-fast); }
+.chan-composer-send.ready { opacity:1; pointer-events:auto; }
+.chan-composer-send:hover.ready { opacity:0.9; }
+.chan-composer-send svg { width:14px; height:14px; }
+
+/* ── roster ── */
+.roster { width:210px; flex-shrink:0; display:flex; flex-direction:column; overflow-y:auto; border-left:1px solid var(--border); transition:width var(--duration) var(--ease); }
+.roster.hide { width:0; border-left:none; overflow:hidden; }
+.roster-toggle-btn { width:28px; height:28px; border-radius:var(--radius); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text-muted); margin-left:8px; }
+.roster-toggle-btn:hover { background:var(--surface-1); }
+.roster-toggle-btn svg { width:15px; height:15px; }
+.roster-head { padding:11px 14px; border-bottom:1px solid var(--border); font-size:12px; color:var(--text-secondary); font-weight:500; }
+.roster-section { padding:8px 14px 2px; font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.03em; }
+.roster-item { display:flex; align-items:center; gap:8px; padding:6px 14px; cursor:pointer; }
+.roster-item:hover { background:var(--surface-1); }
+.roster-item span { font-size:12px; }
+.roster-role-badge { font-size:9.5px; color:var(--text-muted); background:var(--surface-1); padding:1px 6px; border-radius:4px; font-weight:500; }
+.roster-dot { width:6px; height:6px; border-radius:50%; margin-left:auto; }
+.dot-active { background:var(--olive); } .dot-idle { background:var(--text-muted); }
+
+/* ── agent detail overlay ── */
+.overlay { position:absolute; inset:0; background:rgba(0,0,0,0.25); display:none; z-index:10; }
+.overlay.on { display:block; }
+.agent-panel { position:absolute; top:0; right:0; bottom:0; width:300px; background:var(--surface-2); border-left:1px solid var(--border); display:flex; flex-direction:column; box-shadow:var(--shadow-lg); }
+.agent-panel-head { padding:11px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; font-size:12px; color:var(--text-secondary); }
+.agent-panel-head svg { width:16px; height:16px; margin-left:auto; cursor:pointer; color:var(--text-muted); }
+.agent-panel-body { flex:1; overflow-y:auto; padding:18px; }
+.agent-panel-id { display:flex; align-items:center; gap:11px; }
+.agent-panel-name { font-size:14px; font-weight:600; }
+.agent-panel-role { font-size:11px; color:var(--text-muted); }
+.agent-section-label { font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.03em; margin:16px 0 6px; }
+.agent-mission { background:var(--surface-1); border-radius:var(--radius); padding:9px 11px; font-size:12px; }
+.agent-mission-sub { font-size:10.5px; color:var(--text-muted); margin-top:3px; }
+.scope-row { display:flex; align-items:center; gap:7px; font-size:12px; margin-bottom:5px; }
+.scope-row svg { width:14px; height:14px; color:var(--text-muted); }
+.scope-deny svg, .scope-deny { color:var(--rust); }
+.activity-row { font-size:12px; margin-bottom:8px; }
+.activity-row .t { font-size:10.5px; color:var(--text-muted); margin-right:5px; }
+.agent-evidence-link { display:flex; align-items:center; gap:7px; background:var(--surface-1); border-radius:var(--radius); padding:9px 11px; font-size:12px; cursor:pointer; }
+.agent-evidence-link svg { width:14px; height:14px; color:var(--text-muted); }
+.agent-evidence-link svg.chev { margin-left:auto; }
+
+/* ── git view ── */
+.gitbar { display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid var(--border); font-size:12px; }
+.gitbar-back { display:flex; align-items:center; gap:5px; cursor:pointer; color:var(--text-secondary); }
+.gitbar-back svg { width:15px; height:15px; }
+.gitbar-path { display:flex; align-items:center; gap:6px; color:var(--text-secondary); }
+.gitbar-path svg { width:13px; height:13px; color:var(--text-muted); }
+.gitbar-branch { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:var(--radius); background:var(--surface-1); font-size:11.5px; font-weight:500; }
+.gitbar-branch svg { width:12px; height:12px; color:var(--text-muted); }
+.gitbar-tabs { margin-left:auto; display:flex; gap:4px; }
+.gitbar-tabs button { font-size:11px; padding:4px 10px; border-radius:var(--radius); border:1px solid transparent; background:transparent; color:var(--text-secondary); cursor:pointer; }
+.gitbar-tabs button.on { background:var(--surface-1); color:var(--text-primary); font-weight:500; }
+.git-body { flex:1; display:flex; overflow:hidden; }
+.git-files { width:200px; border-right:1px solid var(--border); overflow-y:auto; padding:8px; }
+.git-files-label { font-size:10.5px; color:var(--text-muted); padding:5px 8px; text-transform:uppercase; letter-spacing:0.03em; }
+.git-file-item { display:flex; align-items:center; gap:7px; padding:6px 8px; border-radius:var(--radius); font-size:12px; cursor:pointer; }
+.git-file-item:hover, .git-file-item.on { background:var(--surface-1); }
+.git-file-item .name { font-family: ui-monospace, Menlo, monospace; font-size:11.5px; }
+.git-file-item .stat { margin-left:auto; width:16px; height:16px; border-radius:4px; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.stat-M { background:var(--ochre-bg); color:var(--ochre-text); }
+.stat-A { background:var(--olive-bg); color:var(--olive-text); }
+.diff-pane { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.diff-head { padding:9px 14px; border-bottom:1px solid var(--border); font-size:12px; color:var(--text-secondary); display:flex; align-items:center; }
+.diff-cert { margin-left:auto; display:flex; align-items:center; gap:5px; background:var(--olive-bg); color:var(--olive-text); font-size:10.5px; padding:3px 9px; border-radius:var(--radius-full); font-weight:500; }
+.diff-cert svg { width:12px; height:12px; }
+.diff-code { flex:1; overflow-y:auto; font-family: ui-monospace, Menlo, monospace; font-size:12px; line-height:1.7; padding:6px 0; }
+.diff-line { padding:1px 16px; white-space:pre; }
+.diff-line.rm { background:var(--rust-bg); color:var(--rust-text); }
+.diff-line.add { background:var(--olive-bg); color:var(--olive-text); }
+.diff-line.ctx { color:var(--text-muted); }
+
+/* ── floor (radial) ── */
+.floor-wrap { flex:1; display:flex; flex-direction:column; }
+.floor-head { padding:11px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; font-size:12.5px; }
+.floor-head .sub { margin-left:auto; font-size:11px; color:var(--text-muted); }
+.floor-stage { flex:1; position:relative; }
+.floor-legend { display:flex; gap:14px; padding:9px 16px; border-top:1px solid var(--border); font-size:11px; color:var(--text-secondary); }
+.floor-legend span { display:flex; align-items:center; gap:5px; }
+.legend-dot { width:8px; height:8px; border-radius:50%; }
+
+/* ── inbox ── */
+.inbox-main { flex:1; display:flex; flex-direction:column; overflow-y:auto; }
+.inbox-list { padding:0 20px 6px; }
+.inbox-item { display:flex; gap:12px; padding:12px 12px; border-radius:var(--radius-lg); margin-bottom:6px; }
+.inbox-item.pending { background:var(--ochre-bg); }
+.inbox-item.info { background:var(--surface-1); }
+.inbox-icon { width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.inbox-icon svg { width:15px; height:15px; }
+.inbox-body { flex:1; }
+.inbox-title { font-size:12.5px; font-weight:500; }
+.inbox-sub { font-size:11.5px; color:var(--text-muted); margin-top:2px; }
+.inbox-actions { display:flex; gap:6px; margin-top:8px; align-items:center; flex-wrap:wrap; }
+.inbox-link { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--text-secondary); cursor:pointer; background:none; border:none; padding:4px 2px; }
+.inbox-link:hover { color:var(--text-primary); text-decoration:underline; }
+.inbox-link svg { width:12px; height:12px; }
+.inbox-discuss { display:none; margin-top:10px; border-top:1px solid var(--border-strong); padding-top:10px; }
+.inbox-discuss.open { display:block; }
+.inbox-discuss-msgs { display:flex; flex-direction:column; gap:8px; margin-bottom:8px; }
+.inbox-discuss-row { display:flex; gap:6px; }
+.inbox-discuss-row input { flex:1; }
+
+/* ── evidence log ── */
+.evlog-main { flex:1; overflow-y:auto; padding:0; }
+.evlog-item { display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid var(--border); cursor:pointer; }
+.evlog-item:hover { background:var(--surface-1); }
+.evlog-icon { width:30px; height:30px; border-radius:50%; background:var(--olive-bg); color:var(--olive-text); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.evlog-icon svg { width:15px; height:15px; }
+.evlog-title { font-size:12.5px; font-weight:500; }
+.evlog-sub { font-size:11px; color:var(--text-muted); margin-top:2px; font-family: ui-monospace, Menlo, monospace; }
+.evlog-time { margin-left:auto; font-size:11px; color:var(--text-muted); }
+
+/* ── billing chart ── */
+.spend-chart { display:flex; align-items:flex-end; gap:5px; height:110px; padding:10px 4px 0; }
+.spend-bar-wrap { flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; }
+.spend-bar { width:100%; border-radius:3px 3px 0 0; background:var(--accent); min-height:3px; }
+.spend-bar.today { background:var(--rust); }
+.spend-bar-day { font-size:9px; color:var(--text-muted); }
+.dept-bar-row { display:flex; align-items:center; gap:10px; padding:7px 0; }
+.dept-bar-row svg { width:14px; height:14px; color:var(--text-secondary); flex-shrink:0; }
+.dept-bar-name { font-size:11.5px; width:90px; flex-shrink:0; }
+.dept-bar-track { flex:1; height:6px; background:var(--surface-1); border-radius:var(--radius-full); overflow:hidden; }
+.dept-bar-fill { height:100%; border-radius:var(--radius-full); background:var(--accent); }
+.dept-bar-amt { font-size:11px; color:var(--text-muted); width:38px; text-align:right; flex-shrink:0; }
+
+/* ── settings ── */
+.settings-wrap { flex:1; display:flex; overflow:hidden; }
+.settings-nav { width:180px; border-right:1px solid var(--border); padding:14px 8px; flex-shrink:0; }
+.settings-nav-item { display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:var(--radius); font-size:12.5px; color:var(--text-secondary); cursor:pointer; }
+.settings-nav-item svg { width:15px; height:15px; opacity:0.8; }
+.settings-nav-item:hover { background:var(--surface-1); }
+.settings-nav-item.on { background:var(--surface-1); color:var(--text-primary); font-weight:500; }
+.settings-nav-group-label { font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.03em; padding:10px 10px 4px; }
+.settings-nav-group-label:first-child { padding-top:2px; }
+.settings-nav-divider { height:1px; background:var(--border); margin:8px 6px; }
+.settings-panel { flex:1; overflow-y:auto; padding:24px 28px; max-width:520px; }
+.settings-panel.hidden { display:none; }
+.settings-section-title { font-size:15px; font-weight:600; margin-bottom:4px; }
+.settings-section-sub { font-size:12px; color:var(--text-muted); margin-bottom:18px; }
+.settings-row { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); gap:16px; }
+.settings-row:last-child { border-bottom:none; }
+.settings-row-label { font-size:12.5px; font-weight:500; }
+.settings-row-hint { font-size:11px; color:var(--text-muted); margin-top:2px; }
+.provider-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+.provider-row:last-child { border-bottom:none; }
+.provider-row svg { width:16px; height:16px; color:var(--text-secondary); }
+.provider-row-name { font-size:12.5px; font-weight:500; flex:1; }
+.model-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+.model-row:last-child { border-bottom:none; }
+.model-name { font-size:12.5px; font-weight:500; width:150px; flex-shrink:0; }
+.model-score-track { width:70px; height:6px; background:var(--surface-1); border-radius:var(--radius-full); overflow:hidden; flex-shrink:0; }
+.model-score-fill { height:100%; border-radius:var(--radius-full); background:var(--accent); }
+.model-score-label { font-size:10px; color:var(--text-muted); width:16px; flex-shrink:0; }
+.model-assign { margin-left:auto; display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.model-mode-chip { font-size:10.5px; padding:3px 9px; border-radius:var(--radius-full); border:1px solid var(--border); cursor:pointer; color:var(--text-secondary); }
+.model-mode-chip.on { background:var(--terracotta-bg); border-color:var(--terracotta); color:var(--terracotta-text); font-weight:500; }
+.model-manual-target { font-size:10.5px; color:var(--text-muted); }
+.model-role-tag { font-size:10px; color:var(--text-muted); }
+.model-list-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+.model-list-toolbar input { flex:1; }
+
+/* ── chip (base, from repo design system) ── */
+.chip { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:500; padding:4px 11px; border-radius:var(--radius-full); border:1px solid var(--border-strong); background:var(--surface-2); color:var(--text-secondary); cursor:pointer; transition:all var(--duration-fast); }
+.chip:hover { border-color:var(--accent); color:var(--accent-text); }
+.chip.active { background:var(--accent-bg); border-color:var(--accent); color:var(--accent-text); }
+.tag-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+.reg-toolbar { display:flex; flex-direction:column; gap:10px; margin-bottom:14px; }
+.reg-item-tags { display:flex; gap:5px; margin-top:5px; }
+.reg-item-tag { font-size:9.5px; color:var(--text-muted); background:var(--surface-2); border-radius:4px; padding:1px 6px; }
+.danger-box { border:1px solid var(--rust); border-radius:var(--radius-lg); padding:14px 16px; margin-top:6px; }
+.danger-box-title { font-size:12.5px; font-weight:600; color:var(--rust-text); }
+.danger-box-hint { font-size:11.5px; color:var(--text-muted); margin:4px 0 10px; }
+
+/* ── luthiery / arrangements ── */
+.page-tabs { display:flex; gap:4px; padding:0 20px; border-bottom:1px solid var(--border); }
+.page-tab { font-size:12px; padding:10px 4px; color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; }
+.page-tab.on { color:var(--text-primary); font-weight:500; border-bottom-color:var(--accent); }
+.page-body { flex:1; overflow-y:auto; padding:16px 20px; }
+.page-body.hidden { display:none; }
+.reg-item { display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:var(--radius-lg); background:var(--surface-1); margin-bottom:8px; }
+.reg-item svg { width:16px; height:16px; color:var(--text-secondary); flex-shrink:0; }
+.reg-item-body { flex:1; min-width:0; }
+.reg-item-title { font-size:12.5px; font-weight:500; }
+.reg-item-sub { font-size:11px; color:var(--text-muted); margin-top:2px; font-family: ui-monospace, Menlo, monospace; }
+.reg-item-meta { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.arr-item { display:flex; gap:12px; padding:12px; border-radius:var(--radius-lg); background:var(--surface-1); margin-bottom:8px; }
+.arr-icon { width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.arr-icon svg { width:15px; height:15px; }
+.arr-body { flex:1; min-width:0; }
+.arr-title { font-size:12.5px; font-weight:500; }
+.arr-meta { font-size:11px; color:var(--text-muted); margin-top:3px; }
+.arr-deltas { display:flex; gap:12px; margin-top:6px; font-size:10.5px; }
+.arr-deltas span { color:var(--olive-text); }
+.arr-deltas span.neg { color:var(--rust-text); }
+
+/* ── flashmob ── */
+.fm-session { display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:var(--radius-lg); background:var(--surface-1); margin-bottom:8px; cursor:pointer; }
+.fm-session:hover { background:var(--surface-3); }
+.fm-session-icon { width:30px; height:30px; border-radius:50%; background:var(--p-blue-bg); color:var(--p-blue-text); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.fm-session-icon svg { width:15px; height:15px; }
+.fm-session-body { flex:1; min-width:0; }
+.fm-session-title { font-size:12.5px; font-weight:500; }
+.fm-session-sub { font-size:11px; color:var(--text-muted); margin-top:2px; }
+.fm-thread { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.fm-thread-head { padding:11px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+.fm-thread-back { display:flex; align-items:center; gap:5px; cursor:pointer; color:var(--text-secondary); font-size:12px; }
+.fm-thread-back svg { width:15px; height:15px; }
+.fm-thread-title { font-size:12.5px; font-weight:600; }
+.fm-thread-messages { flex:1; overflow-y:auto; padding:16px 18px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============ SIDEBAR (shared markup, reused across app views) ============ -->
+  <!-- NOTE: Home / Channel / Inbox / Evidence log all include the sidebar. Floor and Git are standalone pages. -->
+
+  <!-- ============ HOME ============ -->
+  <div class="view on" id="view-home">
+    <div class="sidebar" id="sidebar-home"></div>
+    <div class="home-main">
+      <div class="home-title" id="homeTitle">what should the floor work on</div>
+      <div class="home-composer" id="homeComposer">
+        <textarea id="homeTextarea" placeholder="brief the concertmaster"></textarea>
+        <div class="home-composer-row">
+          <div class="pill-toggle" id="modeToggle">
+            <div class="on" onclick="setMode('maestro')">maestro</div>
+            <div onclick="setMode('flashmob')">flashmob</div>
+          </div>
+          <button class="btn btn-primary btn-sm home-send-btn" id="sendBtn" style="margin-left:auto;">send <i data-lucide="send" style="width:12px;height:12px;"></i></button>
+        </div>
+      </div>
+      <div class="home-suggestions" id="homeSuggestions">
+        <div class="chip" onclick="fillHomePrompt('fix the pricing page copy')">fix the pricing page copy</div>
+        <div class="chip" onclick="fillHomePrompt('audit the auth flow for gaps')">audit the auth flow</div>
+        <div class="chip" onclick="fillHomePrompt('clean up legacy docs')">clean up legacy docs</div>
+      </div>
+      <div class="home-cards" id="homeCards">
+        <div class="home-card" onclick="showView('floor')">
+          <i data-lucide="chart-pie"></i>
+          <div class="home-card-title">open floor view</div>
+          <div class="home-card-sub">see the whole org work</div>
+        </div>
+        <div class="home-card" onclick="showView('inbox')">
+          <i data-lucide="inbox"></i>
+          <div class="home-card-title">3 pending approvals</div>
+          <div class="home-card-sub">waiting on you</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DASHBOARD ============ -->
+  <div class="view" id="view-dashboard">
+    <div class="sidebar" id="sidebar-dashboard"></div>
+    <div class="dash-main">
+
+      <div class="dash-head">
+        <div class="dash-title">launch page</div>
+        <span class="dash-status">active</span>
+      </div>
+      <div class="dash-sub">movement 2 of 4 · started 3 days ago</div>
+
+      <div class="dash-stats">
+        <div class="stat-card stat-terracotta"><p class="stat-label">missions in flight</p><p class="stat-value">4</p></div>
+        <div class="stat-card stat-ochre"><p class="stat-label">pending approvals</p><p class="stat-value">3</p></div>
+        <div class="stat-card stat-olive"><p class="stat-label">certified</p><p class="stat-value">7</p></div>
+        <div class="stat-card stat-rust"><p class="stat-label">departments awake</p><p class="stat-value">2 / 5</p></div>
+      </div>
+
+      <div class="dash-section-title">groups</div>
+      <div class="dept-grid">
+        <div class="dept-card awake">
+          <div class="dept-card-head"><i data-lucide="package"></i><span class="dept-card-name">product</span></div>
+          <div class="dept-card-state on">2 active</div>
+        </div>
+        <div class="dept-card awake">
+          <div class="dept-card-head"><i data-lucide="code"></i><span class="dept-card-name">tech</span></div>
+          <div class="dept-card-state on">3 active</div>
+        </div>
+        <div class="dept-card asleep">
+          <div class="dept-card-head"><i data-lucide="flask-conical"></i><span class="dept-card-name">intelligence</span></div>
+          <div class="dept-card-state">asleep</div>
+        </div>
+        <div class="dept-card asleep">
+          <div class="dept-card-head"><i data-lucide="clipboard-check"></i><span class="dept-card-name">assurance</span></div>
+          <div class="dept-card-state">asleep</div>
+        </div>
+        <div class="dept-card asleep">
+          <div class="dept-card-head"><i data-lucide="settings"></i><span class="dept-card-name">operations</span></div>
+          <div class="dept-card-state">asleep</div>
+        </div>
+      </div>
+
+      <div class="dash-section-title">pipeline</div>
+      <div class="kanban">
+
+        <div>
+          <div class="kanban-col-head"><i data-lucide="file-text" style="width:13px;height:13px;"></i> task contract <span class="n">1</span></div>
+          <div class="kanban-col">
+            <div class="kcard" onclick="showView('channel')">
+              <div class="kcard-title">launch page — overall scope</div>
+              <div class="kcard-meta">
+                <div class="kcard-dept"><i data-lucide="compass"></i> overture</div>
+                <span class="badge badge-olive kcard-badge">sealed</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="kanban-col-head"><i data-lucide="clipboard-list" style="width:13px;height:13px;"></i> department plan <span class="n">2</span></div>
+          <div class="kanban-col">
+            <div class="kcard" onclick="showView('channel')">
+              <div class="kcard-title">hero section rebuild</div>
+              <div class="kcard-meta">
+                <div class="kcard-dept"><i data-lucide="code"></i> engineering</div>
+                <span class="badge badge-ochre kcard-badge">planning</span>
+              </div>
+            </div>
+            <div class="kcard">
+              <div class="kcard-title">pricing table copy</div>
+              <div class="kcard-meta">
+                <div class="kcard-dept"><i data-lucide="package"></i> product</div>
+                <span class="badge badge-ochre kcard-badge">planning</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="kanban-col-head"><i data-lucide="loader" style="width:13px;height:13px;"></i> mission bundle <span class="n">1</span></div>
+          <div class="kanban-col">
+            <div class="kcard" onclick="showView('channel')">
+              <div class="kcard-title">hero section — write scope</div>
+              <div class="kcard-meta">
+                <div class="kcard-dept"><i data-lucide="code"></i> engineering</div>
+                <span class="badge badge-rust kcard-badge">in progress</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="kanban-col-head"><i data-lucide="shield-check" style="width:13px;height:13px;"></i> certified <span class="n">1</span></div>
+          <div class="kanban-col">
+            <div class="kcard" onclick="showView('git')">
+              <div class="kcard-title">hero section</div>
+              <div class="kcard-meta">
+                <div class="kcard-dept"><i data-lucide="code"></i> engineering</div>
+              </div>
+              <div class="kcard-cert"><i data-lucide="check"></i> sha256 4f2a…</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  <div class="view" id="view-channel">
+    <div class="sidebar" id="sidebar-channel"></div>
+    <div class="channel-wrap" style="position:relative;">
+      <div class="channel-feed">
+        <div class="channel-head">
+          <i data-lucide="code"></i> engineering
+          <span class="goalname">launch page</span>
+          <div class="roster-toggle-btn" onclick="toggleRoster(this)" title="toggle roster"><i data-lucide="panel-right"></i></div>
+        </div>
+        <div class="channel-messages">
+
+          <div class="msg">
+            <div class="avatar avatar-sm av-teal">TH</div>
+            <div class="msg-body">
+              <div class="msg-head"><span class="msg-name">tech head</span><span class="msg-time">10:04</span></div>
+              <div class="msg-text">mission bundle dispatched — hero section, read scope: /repo/marketing</div>
+            </div>
+          </div>
+
+          <div class="msg">
+            <div class="avatar avatar-sm av-terracotta">S1</div>
+            <div class="msg-body">
+              <div class="msg-head"><span class="msg-name">scout-1</span><span class="msg-time">10:06</span></div>
+              <div class="msg-text">worktree created at .worktrees/hero-section</div>
+            </div>
+          </div>
+
+          <div class="alert alert-warning" style="margin:4px 0 14px 41px; flex-direction:column; align-items:flex-start;">
+            <div style="display:flex; align-items:center; gap:8px; font-weight:600;"><i data-lucide="triangle-alert"></i> approval needed</div>
+            <span>scout-1 requests write access outside allowlist: /repo/marketing/assets</span>
+            <div style="display:flex; gap:6px; margin-top:8px;">
+              <button class="btn btn-sm">deny</button>
+              <button class="btn btn-primary btn-sm">approve</button>
+            </div>
+          </div>
+
+          <div class="msg" onclick="showView('git')" style="cursor:pointer;">
+            <div class="avatar avatar-sm" style="background:var(--olive);"><i data-lucide="check" style="width:12px;height:12px;"></i></div>
+            <div class="msg-body">
+              <div class="msg-head"><span class="msg-name" style="color:var(--olive-text);">metronome</span><span class="msg-time">10:22</span></div>
+              <div class="msg-text" style="color:var(--olive-text);">certified: hero section — evidence sha256 4f2a… (click to view diff)</div>
+            </div>
+          </div>
+
+        </div>
+        <div class="channel-input">
+          <div class="chan-composer">
+            <textarea class="chan-composer-input" placeholder="message #engineering" rows="1"
+              oninput="this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,120)+'px'; toggleChanSend(this)"></textarea>
+            <div class="chan-composer-toolbar">
+              <div class="chan-composer-actions">
+                <button class="btn-icon" title="attach file"><i data-lucide="paperclip"></i></button>
+                <button class="btn-icon" title="mention"><i data-lucide="at-sign"></i></button>
+                <button class="btn-icon" title="emoji"><i data-lucide="smile"></i></button>
+              </div>
+              <button class="chan-composer-send" id="chanSendBtn"><i data-lucide="send"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="roster">
+        <div class="roster-head">roster · 4</div>
+        <div class="roster-section">active</div>
+        <div class="roster-item" onclick="openAgentPanel()"><div class="avatar avatar-sm av-teal">TH</div><span>tech head</span><span class="roster-role-badge">head</span><div class="roster-dot dot-active"></div></div>
+        <div class="roster-item" onclick="openAgentPanel()"><div class="avatar avatar-sm av-terracotta">S1</div><span>scout-1</span><span class="roster-role-badge">scout</span><div class="roster-dot dot-active"></div></div>
+        <div class="roster-item" onclick="openAgentPanel()"><div class="avatar avatar-sm av-terracotta">S2</div><span>scout-2</span><span class="roster-role-badge">scout</span><div class="roster-dot dot-active"></div></div>
+        <div class="roster-section">idle</div>
+        <div class="roster-item" onclick="openAgentPanel()"><div class="avatar avatar-sm av-slate">W3</div><span>worker-3</span><span class="roster-role-badge">worker</span><div class="roster-dot dot-idle"></div></div>
+      </div>
+
+      <!-- agent detail overlay -->
+      <div class="overlay" id="agentOverlay" onclick="closeAgentPanel(event)">
+        <div class="agent-panel" onclick="event.stopPropagation()">
+          <div class="agent-panel-head">agent <i data-lucide="x" onclick="closeAgentPanel()"></i></div>
+          <div class="agent-panel-body">
+            <div class="agent-panel-id">
+              <div class="avatar avatar-lg av-terracotta">S1</div>
+              <div>
+                <div class="agent-panel-name">scout-1</div>
+                <div class="agent-panel-role">execution worker · engineering</div>
+              </div>
+            </div>
+
+            <div class="agent-section-label">current mission</div>
+            <div class="agent-mission">
+              hero section rebuild
+              <div class="agent-mission-sub">worktree: .worktrees/hero-section</div>
+            </div>
+
+            <div class="agent-section-label">mission bundle scope</div>
+            <div class="scope-row"><i data-lucide="eye"></i> read: /repo/marketing</div>
+            <div class="scope-row"><i data-lucide="pencil"></i> write: /repo/marketing/hero</div>
+            <div class="scope-row scope-deny"><i data-lucide="wifi-off"></i> network: denied</div>
+
+            <div class="agent-section-label">activity</div>
+            <div class="activity-row"><span class="t">10:06</span> worktree created</div>
+            <div class="activity-row"><span class="t">10:14</span> wrote 3 files</div>
+            <div class="activity-row" style="color:var(--olive-text);"><span class="t">10:22</span> evidence bundle certified</div>
+
+            <div class="agent-section-label">evidence bundle</div>
+            <div class="agent-evidence-link" onclick="showView('git')">
+              <i data-lucide="git-branch"></i> view diff &amp; logs <i data-lucide="chevron-right" class="chev"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ GIT (independent page, no sidebar) ============ -->
+  <div class="view" id="view-git">
+    <div style="flex:1; display:flex; flex-direction:column;">
+      <div class="gitbar">
+        <div class="gitbar-back" onclick="showView('channel')"><i data-lucide="arrow-left"></i> back</div>
+        <div class="gitbar-path"><i data-lucide="folder"></i> .worktrees/hero-section</div>
+        <div class="gitbar-branch"><i data-lucide="git-branch"></i> scout-1/hero-section</div>
+        <div class="gitbar-tabs">
+          <button class="on">changes</button>
+          <button>history</button>
+          <button>compare</button>
+        </div>
+      </div>
+      <div class="git-body">
+        <div class="git-files">
+          <div class="git-files-label">changed files · 3</div>
+          <div class="git-file-item on"><i data-lucide="file" style="width:14px;height:14px;color:var(--text-muted);"></i><span class="name">hero.tsx</span><span class="stat stat-M">M</span></div>
+          <div class="git-file-item"><i data-lucide="file" style="width:14px;height:14px;color:var(--text-muted);"></i><span class="name">hero.module.css</span><span class="stat stat-M">M</span></div>
+          <div class="git-file-item"><i data-lucide="file-plus" style="width:14px;height:14px;color:var(--text-muted);"></i><span class="name">hero.test.tsx</span><span class="stat stat-A">A</span></div>
+          <div class="git-files-label" style="margin-top:10px;">evidence bundle</div>
+          <div class="git-file-item"><i data-lucide="clipboard-check" style="width:14px;height:14px;color:var(--text-muted);"></i><span class="name">test logs</span></div>
+          <div class="git-file-item"><i data-lucide="hash" style="width:14px;height:14px;color:var(--text-muted);"></i><span class="name">sha256 4f2a…</span></div>
+        </div>
+        <div class="diff-pane">
+          <div class="diff-head">hero.tsx
+            <div class="diff-cert"><i data-lucide="check"></i> certified</div>
+          </div>
+          <div class="diff-code">
+            <div class="diff-line ctx">12   export function Hero() {</div>
+            <div class="diff-line rm">13 - &nbsp; return &lt;div className="old"&gt;</div>
+            <div class="diff-line add">13 + &nbsp; return &lt;section className={styles.hero}&gt;</div>
+            <div class="diff-line add">14 + &nbsp;&nbsp;&nbsp; &lt;h1&gt;{title}&lt;/h1&gt;</div>
+            <div class="diff-line ctx">15   &nbsp;&nbsp; &lt;p&gt;{subtitle}&lt;/p&gt;</div>
+            <div class="diff-line rm">16 - &nbsp; &lt;/div&gt;</div>
+            <div class="diff-line add">16 + &nbsp; &lt;/section&gt;</div>
+            <div class="diff-line ctx">17 }</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FLOOR (independent page, radial) ============ -->
+  <div class="view" id="view-floor">
+    <div class="floor-wrap">
+      <div class="floor-head">
+        <div class="gitbar-back" onclick="showView('home')" style="margin-right:10px;"><i data-lucide="arrow-left"></i> back</div>
+        floor
+        <span class="sub">launch page · movement 2 of 4</span>
+      </div>
+      <div class="floor-stage">
+        <svg viewBox="0 0 480 420" width="100%" height="100%">
+          <path d="M 40 380 A 240 240 0 0 1 440 380" fill="none" stroke="var(--border)" stroke-dasharray="2 5"/>
+          <path d="M 90 380 A 190 190 0 0 1 390 380" fill="none" stroke="var(--border)" stroke-dasharray="2 5"/>
+          <path d="M 150 380 A 130 130 0 0 1 330 380" fill="none" stroke="var(--border)" stroke-dasharray="2 5"/>
+
+          <rect x="215" y="365" width="50" height="14" rx="2" fill="var(--terracotta)"/>
+          <circle cx="240" cy="352" r="18" fill="var(--terracotta)"/>
+          <text x="240" y="355" text-anchor="middle" font-size="8" fill="#fff">concertmaster</text>
+
+          <line x1="240" y1="334" x2="240" y2="255" stroke="var(--terracotta)" stroke-width="1.5" stroke-dasharray="4 4">
+            <animate attributeName="stroke-dashoffset" from="16" to="0" dur="0.8s" repeatCount="indefinite"/>
+          </line>
+
+          <circle cx="240" cy="255" r="17" fill="var(--p-teal)"><animate attributeName="opacity" values="1;0.55;1" dur="2.2s" repeatCount="indefinite"/></circle>
+          <text x="240" y="258" text-anchor="middle" font-size="7" fill="#fff">tech head</text>
+          <circle cx="330" cy="270" r="17" fill="var(--p-teal)"/><text x="330" y="273" text-anchor="middle" font-size="7" fill="#fff">product head</text>
+          <circle cx="150" cy="270" r="17" fill="var(--p-teal)"/><text x="150" y="273" text-anchor="middle" font-size="7" fill="#fff">ops head</text>
+          <circle cx="395" cy="310" r="17" fill="var(--p-teal)"/><text x="395" y="313" text-anchor="middle" font-size="7" fill="#fff">quality head</text>
+          <circle cx="85" cy="310" r="17" fill="var(--p-teal)"/><text x="85" y="313" text-anchor="middle" font-size="7" fill="#fff">security head</text>
+
+          <circle cx="240" cy="150" r="12" fill="var(--terracotta)"><animate attributeName="opacity" values="1;0.5;1" dur="1.6s" repeatCount="indefinite"/></circle>
+          <text x="240" y="128" text-anchor="middle" font-size="7" fill="var(--text-secondary)">scout-1</text>
+          <circle cx="310" cy="160" r="12" fill="var(--terracotta)"/><text x="310" y="138" text-anchor="middle" font-size="7" fill="var(--text-secondary)">scout-2</text>
+          <circle cx="170" cy="160" r="12" fill="var(--terracotta)"><animate attributeName="opacity" values="1;0.5;1" dur="1.9s" repeatCount="indefinite"/></circle>
+          <text x="170" y="138" text-anchor="middle" font-size="7" fill="var(--text-secondary)">scout-7</text>
+          <circle cx="375" cy="185" r="12" fill="var(--terracotta)"/><text x="375" y="163" text-anchor="middle" font-size="7" fill="var(--text-secondary)">worker-3</text>
+          <circle cx="105" cy="185" r="12" fill="var(--text-muted)"/><text x="105" y="163" text-anchor="middle" font-size="7" fill="var(--text-secondary)">idle</text>
+          <circle cx="430" cy="225" r="12" fill="var(--terracotta)"/><text x="430" y="203" text-anchor="middle" font-size="7" fill="var(--text-secondary)">worker-4</text>
+          <circle cx="50" cy="225" r="12" fill="var(--text-muted)"/><text x="50" y="203" text-anchor="middle" font-size="7" fill="var(--text-secondary)">idle</text>
+          <circle cx="450" cy="280" r="12" fill="var(--terracotta)"/><text x="450" y="258" text-anchor="middle" font-size="7" fill="var(--text-secondary)">worker-5</text>
+          <circle cx="30" cy="280" r="12" fill="var(--text-muted)"/><text x="30" y="258" text-anchor="middle" font-size="7" fill="var(--text-secondary)">idle</text>
+
+          <circle cx="450" cy="30" r="4" fill="var(--olive)"><animate attributeName="opacity" values="0.3;1;0.3" dur="1s" repeatCount="indefinite"/></circle>
+          <text x="440" y="34" text-anchor="end" font-size="7" fill="var(--text-muted)">metronome</text>
+
+          <g transform="translate(60,40)">
+            <path d="M -10 0 A 10 10 0 0 1 10 0" fill="none" stroke="var(--ochre)" stroke-width="1.5"/>
+            <circle cx="0" cy="-4" r="1.6" fill="var(--ochre)"/>
+            <text x="14" y="4" text-anchor="start" font-size="7" fill="var(--ochre-text)">1 approval pending</text>
+          </g>
+        </svg>
+      </div>
+      <div class="floor-legend">
+        <span><span class="legend-dot" style="background:var(--terracotta);"></span> concertmaster</span>
+        <span><span class="legend-dot" style="background:var(--p-teal);"></span> head</span>
+        <span><span class="legend-dot" style="background:var(--terracotta);"></span> active worker</span>
+        <span><span class="legend-dot" style="background:var(--text-muted);"></span> idle</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ INBOX ============ -->
+  <div class="view" id="view-inbox">
+    <div class="sidebar" id="sidebar-inbox"></div>
+    <div class="inbox-main">
+      <div class="dash-head" style="padding:20px 20px 0;"><div class="dash-title">inbox</div></div>
+      <div class="dash-sub" style="padding:0 20px 14px;">approvals waiting on you, plus recent certifications</div>
+      <div class="inbox-list">
+
+        <div class="inbox-item pending">
+          <div class="inbox-icon" style="background:var(--ochre-bg); color:var(--ochre-text);"><i data-lucide="triangle-alert"></i></div>
+          <div class="inbox-body">
+            <div class="inbox-title">engineering — approval needed</div>
+            <div class="inbox-sub">scout-1 requests write access outside allowlist: /repo/marketing/assets</div>
+            <div class="inbox-actions">
+              <button class="inbox-link" onclick="showView('channel')"><i data-lucide="external-link"></i> view message</button>
+              <button class="inbox-link" onclick="toggleInboxDiscuss(this)"><i data-lucide="message-circle"></i> discuss with concertmaster</button>
+              <span style="flex:1;"></span>
+              <button class="btn btn-sm">deny</button>
+              <button class="btn btn-primary btn-sm">approve</button>
+            </div>
+            <div class="inbox-discuss">
+              <div class="inbox-discuss-msgs">
+                <div class="msg"><div class="avatar avatar-sm av-terracotta">CM</div><div class="msg-body"><div class="msg-head"><span class="msg-name">concertmaster</span></div><div class="msg-text">scout-1 needs the assets folder to place the optimized hero images. want me to narrow the grant to read-only, or approve the write as scoped?</div></div></div>
+              </div>
+              <div class="inbox-discuss-row">
+                <input class="input" type="text" placeholder="ask a follow-up">
+                <button class="btn btn-sm" onclick="sendInboxDiscuss(this)">send</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="inbox-item pending">
+          <div class="inbox-icon" style="background:var(--ochre-bg); color:var(--ochre-text);"><i data-lucide="triangle-alert"></i></div>
+          <div class="inbox-body">
+            <div class="inbox-title">billing refactor — budget ceiling notice</div>
+            <div class="inbox-sub">department plan estimates 40% over goal budget</div>
+            <div class="inbox-actions">
+              <button class="inbox-link" onclick="showView('dashboard')"><i data-lucide="external-link"></i> view message</button>
+              <button class="inbox-link" onclick="toggleInboxDiscuss(this)"><i data-lucide="message-circle"></i> discuss with concertmaster</button>
+              <span style="flex:1;"></span>
+              <button class="btn btn-sm">deny</button>
+              <button class="btn btn-primary btn-sm">approve</button>
+            </div>
+            <div class="inbox-discuss">
+              <div class="inbox-discuss-msgs">
+                <div class="msg"><div class="avatar avatar-sm av-terracotta">CM</div><div class="msg-body"><div class="msg-head"><span class="msg-name">concertmaster</span></div><div class="msg-text">tech group is driving most of the overage — auth migration turned out more involved than the sealed brief estimated. raise the ceiling, or have me ask tech head to descope?</div></div></div>
+              </div>
+              <div class="inbox-discuss-row">
+                <input class="input" type="text" placeholder="ask a follow-up">
+                <button class="btn btn-sm" onclick="sendInboxDiscuss(this)">send</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="inbox-item pending">
+          <div class="inbox-icon" style="background:var(--ochre-bg); color:var(--ochre-text);"><i data-lucide="triangle-alert"></i></div>
+          <div class="inbox-body">
+            <div class="inbox-title">docs cleanup — critical action</div>
+            <div class="inbox-sub">worker-9 requests deletion of /docs/legacy (12 files)</div>
+            <div class="inbox-actions">
+              <button class="inbox-link" onclick="showView('git')"><i data-lucide="external-link"></i> view message</button>
+              <button class="inbox-link" onclick="toggleInboxDiscuss(this)"><i data-lucide="message-circle"></i> discuss with concertmaster</button>
+              <span style="flex:1;"></span>
+              <button class="btn btn-sm">deny</button>
+              <button class="btn btn-primary btn-sm">approve</button>
+            </div>
+            <div class="inbox-discuss">
+              <div class="inbox-discuss-msgs">
+                <div class="msg"><div class="avatar avatar-sm av-terracotta">CM</div><div class="msg-body"><div class="msg-head"><span class="msg-name">concertmaster</span></div><div class="msg-text">deletion is classified critical, so it needs your sign-off regardless. the 12 files were superseded by the new docs three weeks ago — worker-9's evidence bundle has the diff if you want to check first.</div></div></div>
+              </div>
+              <div class="inbox-discuss-row">
+                <input class="input" type="text" placeholder="ask a follow-up">
+                <button class="btn btn-sm" onclick="sendInboxDiscuss(this)">send</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="inbox-item info">
+          <div class="inbox-icon" style="background:var(--olive-bg); color:var(--olive-text);"><i data-lucide="check"></i></div>
+          <div class="inbox-body">
+            <div class="inbox-title">launch page — hero section certified</div>
+            <div class="inbox-sub">metronome · 2 hours ago</div>
+            <div class="inbox-actions">
+              <button class="inbox-link" onclick="showView('git')"><i data-lucide="external-link"></i> view message</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ EVIDENCE LOG ============ -->
+  <div class="view" id="view-evlog">
+    <div class="sidebar" id="sidebar-evlog"></div>
+    <div class="evlog-main">
+      <div class="dash-head" style="padding:20px 20px 0;"><div class="dash-title">evidence log</div></div>
+      <div class="dash-sub" style="padding:0 20px 14px;">certified work across every goal, most recent first</div>
+
+      <div class="evlog-item" onclick="showView('git')">
+        <div class="evlog-icon"><i data-lucide="check"></i></div>
+        <div>
+          <div class="evlog-title">hero section — launch page</div>
+          <div class="evlog-sub">sha256 4f2a7c1e… · engineering</div>
+        </div>
+        <div class="evlog-time">10:22</div>
+      </div>
+
+      <div class="evlog-item" onclick="showView('git')">
+        <div class="evlog-icon"><i data-lucide="check"></i></div>
+        <div>
+          <div class="evlog-title">pricing table copy — launch page</div>
+          <div class="evlog-sub">sha256 9b0e21aa… · product</div>
+        </div>
+        <div class="evlog-time">09:47</div>
+      </div>
+
+      <div class="evlog-item" onclick="showView('git')">
+        <div class="evlog-icon"><i data-lucide="check"></i></div>
+        <div>
+          <div class="evlog-title">auth migration step 3 — billing refactor</div>
+          <div class="evlog-sub">sha256 3ac880fd… · engineering</div>
+        </div>
+        <div class="evlog-time">yesterday</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ BILLING (usage, pre-Treasury) ============ -->
+  <div class="view" id="view-billing">
+    <div class="sidebar" id="sidebar-billing"></div>
+    <div class="dash-main">
+      <div class="dash-head">
+        <div class="dash-title">billing</div>
+      </div>
+      <div class="dash-sub">token &amp; compute usage · treasury not yet wired (phase 10)</div>
+
+      <div class="dash-stats">
+        <div class="stat-card stat-terracotta"><p class="stat-label">used this month</p><p class="stat-value">$186</p></div>
+        <div class="stat-card stat-ochre"><p class="stat-label">ceiling</p><p class="stat-value">$300</p></div>
+        <div class="stat-card stat-olive"><p class="stat-label">avg / goal</p><p class="stat-value">$14.20</p></div>
+        <div class="stat-card stat-rust"><p class="stat-label">days left in cycle</p><p class="stat-value">9</p></div>
+      </div>
+
+      <div class="progress-wrap" style="margin-bottom:24px;">
+        <div class="progress-label"><span>monthly ceiling</span><span>$186 / $300 · 62%</span></div>
+        <div class="progress"><div class="progress-bar ochre" style="width:62%;"></div></div>
+      </div>
+
+      <div class="dash-section-title">daily spend · last 14 days</div>
+      <div class="spend-chart">
+        <div class="spend-bar-wrap"><div class="spend-bar" style="height:22%;"></div><span class="spend-bar-day">1</span></div>
+        <div class="spend-bar-wrap"><div class="spend-bar" style="height:38%;"></div><span class="spend-bar-day">2</span></div>
+        <div class="spend-bar-wrap"><div class="spend-bar" style="height:14%;"></div><span class="spend-bar-day">3</span></div>
+        <div class="spend-bar-wrap"><div class="spend-bar" style="height:55%;"></div><span class="spend-bar-day">4</span></div>
+        <div class="spend-bar-wrap"><div class="spend-bar" style="height:31%;"></div><span class="spend-bar-day">5</span></div>
+        <div class="spend-bar-wrap"><div class="spend-bar" style="height:8%;"></div><span class="spend-bar-day">6</span></div>
+        <div class="spend-bar-wrap"><div class="spend-bar" style="height:12%;"></div><span class="spend-bar-day">7</span></div>
+        <div class="spend-bar-wrap"><div class="spend-bar" style="height:64%;"></div><span class="spend-bar-day">8</span></div>
+        <div class="spend-bar-wrap"><div class="spend-bar" style="height:47%;"></div><span class="spend-bar-day">9</span></div>
+        <div class="spend-bar-wrap"><div class="spend-bar" style="height:29%;"></div><span class="spend-bar-day">10</span></div>
+        <div class="spend-bar-wrap"><div class="spend-bar" style="height:71%;"></div><span class="spend-bar-day">11</span></div>
+        <div class="spend-bar-wrap"><div class="spend-bar" style="height:40%;"></div><span class="spend-bar-day">12</span></div>
+        <div class="spend-bar-wrap"><div class="spend-bar" style="height:59%;"></div><span class="spend-bar-day">13</span></div>
+        <div class="spend-bar-wrap"><div class="spend-bar today" style="height:83%;"></div><span class="spend-bar-day">14</span></div>
+      </div>
+
+      <div class="dash-section-title" style="margin-top:20px;">usage by group</div>
+      <div class="dept-bar-row">
+        <i data-lucide="code"></i><span class="dept-bar-name">tech</span>
+        <div class="dept-bar-track"><div class="dept-bar-fill" style="width:53%;"></div></div>
+        <span class="dept-bar-amt">$98</span>
+      </div>
+      <div class="dept-bar-row">
+        <i data-lucide="clipboard-check"></i><span class="dept-bar-name">assurance</span>
+        <div class="dept-bar-track"><div class="dept-bar-fill" style="width:22%;"></div></div>
+        <span class="dept-bar-amt">$41</span>
+      </div>
+      <div class="dept-bar-row">
+        <i data-lucide="package"></i><span class="dept-bar-name">product</span>
+        <div class="dept-bar-track"><div class="dept-bar-fill" style="width:17%;"></div></div>
+        <span class="dept-bar-amt">$32</span>
+      </div>
+      <div class="dept-bar-row">
+        <i data-lucide="settings"></i><span class="dept-bar-name">operations</span>
+        <div class="dept-bar-track"><div class="dept-bar-fill" style="width:8%;"></div></div>
+        <span class="dept-bar-amt">$15</span>
+      </div>
+      <div class="dept-bar-row">
+        <i data-lucide="flask-conical"></i><span class="dept-bar-name">intelligence</span>
+        <div class="dept-bar-track"><div class="dept-bar-fill" style="width:0%;"></div></div>
+        <span class="dept-bar-amt">$0</span>
+      </div>
+
+      <div class="dash-section-title" style="margin-top:20px;">recent goals</div>
+      <div class="list" style="background:var(--surface-1); border-radius:var(--radius-lg); overflow:hidden;">
+        <div class="list-item" style="padding:11px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center;">
+          <span style="font-size:12px;">launch page</span>
+          <span style="margin-left:auto; font-size:12px; color:var(--text-secondary);">$61.40</span>
+        </div>
+        <div class="list-item" style="padding:11px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center;">
+          <span style="font-size:12px;">billing refactor</span>
+          <span style="margin-left:auto; font-size:12px; color:var(--text-secondary);">$79.10</span>
+        </div>
+        <div class="list-item" style="padding:11px 14px; display:flex; align-items:center;">
+          <span style="font-size:12px;">docs cleanup</span>
+          <span style="margin-left:auto; font-size:12px; color:var(--text-secondary);">$45.90</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SETTINGS ============ -->
+  <div class="view" id="view-settings">
+    <div class="sidebar" id="sidebar-settings"></div>
+    <div class="settings-wrap">
+      <div class="settings-nav" id="settingsNav">
+        <div class="settings-nav-group-label">account</div>
+        <div class="settings-nav-item on" data-panel="profile" onclick="showSettingsPanel(this)"><i data-lucide="user"></i> profile</div>
+        <div class="settings-nav-item" data-panel="appearance" onclick="showSettingsPanel(this)"><i data-lucide="palette"></i> appearance</div>
+        <div class="settings-nav-item" data-panel="notifications" onclick="showSettingsPanel(this)"><i data-lucide="bell"></i> notifications</div>
+
+        <div class="settings-nav-group-label">workspace</div>
+        <div class="settings-nav-item" data-panel="providers" onclick="showSettingsPanel(this)"><i data-lucide="plug"></i> providers</div>
+        <div class="settings-nav-item" data-panel="models" onclick="showSettingsPanel(this)"><i data-lucide="cpu"></i> model pool</div>
+        <div class="settings-nav-item" data-panel="authority" onclick="showSettingsPanel(this)"><i data-lucide="shield"></i> approvals &amp; authority</div>
+
+        <div class="settings-nav-divider"></div>
+        <div class="settings-nav-item" data-panel="danger" onclick="showSettingsPanel(this)"><i data-lucide="triangle-alert"></i> danger zone</div>
+      </div>
+
+      <div class="settings-panel" data-panel-content="profile">
+        <div class="settings-section-title">profile</div>
+        <div class="settings-section-sub">how the concertmaster addresses you</div>
+        <div style="display:flex; align-items:center; gap:14px; margin-bottom:20px;">
+          <div class="avatar avatar-lg av-slate">ND</div>
+          <button class="btn btn-sm">change avatar</button>
+        </div>
+        <div class="form-field" style="margin-bottom:14px;">
+          <label class="form-label">display name</label>
+          <input class="input" type="text" value="ntdv">
+        </div>
+        <div class="form-field">
+          <label class="form-label">email</label>
+          <input class="input" type="text" value="ntdv@notth3.dev">
+          <span class="form-hint">used for critical-action email alerts</span>
+        </div>
+      </div>
+
+      <div class="settings-panel hidden" data-panel-content="appearance">
+        <div class="settings-section-title">appearance</div>
+        <div class="settings-section-sub">theme and density</div>
+        <div class="settings-row">
+          <div><div class="settings-row-label">dark mode</div><div class="settings-row-hint">follows this toggle, not the OS setting</div></div>
+          <div class="toggle on" onclick="this.classList.toggle('on'); toggleTheme();"></div>
+        </div>
+        <div class="settings-row">
+          <div><div class="settings-row-label">compact sidebar</div><div class="settings-row-hint">start collapsed on launch</div></div>
+          <div class="toggle" onclick="this.classList.toggle('on')"></div>
+        </div>
+      </div>
+
+      <div class="settings-panel hidden" data-panel-content="notifications">
+        <div class="settings-section-title">notifications</div>
+        <div class="settings-section-sub">how you hear about approvals and certifications</div>
+        <div class="settings-row">
+          <div><div class="settings-row-label">desktop push</div><div class="settings-row-hint">approval needed, certification complete</div></div>
+          <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div class="settings-row">
+          <div><div class="settings-row-label">email digest</div><div class="settings-row-hint">daily summary of goal activity</div></div>
+          <div class="toggle" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div class="settings-row">
+          <div><div class="settings-row-label">slack webhook</div><div class="settings-row-hint">mirror #general into a workspace channel</div></div>
+          <div class="toggle" onclick="this.classList.toggle('on')"></div>
+        </div>
+      </div>
+
+      <div class="settings-panel hidden" data-panel-content="providers">
+        <div class="settings-section-title">providers</div>
+        <div class="settings-section-sub">agent CLIs and model keys, bring-your-own</div>
+        <div class="provider-row"><i data-lucide="terminal"></i><span class="provider-row-name">claude code</span><span class="badge badge-olive">connected</span></div>
+        <div class="provider-row"><i data-lucide="terminal"></i><span class="provider-row-name">codex</span><span class="badge badge-olive">connected</span></div>
+        <div class="provider-row"><i data-lucide="terminal"></i><span class="provider-row-name">gemini cli</span><button class="btn btn-sm">connect</button></div>
+        <div class="provider-row"><i data-lucide="server"></i><span class="provider-row-name">local model (ollama)</span><button class="btn btn-sm">connect</button></div>
+      </div>
+
+      <div class="settings-panel hidden" data-panel-content="authority">
+        <div class="settings-section-title">approvals &amp; authority</div>
+        <div class="settings-section-sub">default thresholds for new goals — sets the starting policy, still overridable per goal</div>
+        <div class="form-field" style="margin-bottom:14px;">
+          <label class="form-label">default spend ceiling per goal</label>
+          <input class="input" type="text" value="$50">
+        </div>
+        <div class="settings-row">
+          <div><div class="settings-row-label">critical actions always require approval</div><div class="settings-row-hint">deletes, deploys, credential changes</div></div>
+          <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div class="settings-row">
+          <div><div class="settings-row-label">allow flashmob by default</div><div class="settings-row-hint">light tasks skip full council deliberation</div></div>
+          <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+        </div>
+      </div>
+
+      <div class="settings-panel hidden" data-panel-content="models">
+        <div class="settings-section-title">model pool</div>
+        <div class="settings-section-sub">score reflects weight/capability &mdash; heavier models cost more</div>
+
+        <div class="settings-row" style="margin-bottom:6px;">
+          <div><div class="settings-row-label">auto-select models</div><div class="settings-row-hint">orchestrator swaps models on the fly to fit each task. off &middot; strictly uses the assignments below</div></div>
+          <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+        </div>
+
+        <div class="page-tabs" style="padding:0; margin:14px 0 0;">
+          <div class="page-tab on" data-tab="inuse" onclick="showPageTab(this,'models')">in use</div>
+          <div class="page-tab" data-tab="available" onclick="showPageTab(this,'models')">available <span style="font-size:10px;">(search)</span></div>
+        </div>
+
+        <div class="page-body" data-tab-content="inuse" style="padding:14px 0 0;">
+          <div class="model-row">
+            <span class="model-name">claude-opus-5</span>
+            <div class="model-score-track"><div class="model-score-fill" style="width:95%;"></div></div>
+            <span class="model-score-label">9.5</span>
+            <span class="model-role-tag" style="margin-left:auto;">department heads, encore council</span>
+          </div>
+          <div class="model-row">
+            <span class="model-name">claude-sonnet-5</span>
+            <div class="model-score-track"><div class="model-score-fill" style="width:65%;"></div></div>
+            <span class="model-score-label">6.5</span>
+            <span class="model-role-tag" style="margin-left:auto;">default worker</span>
+          </div>
+          <div class="model-row">
+            <span class="model-name">claude-haiku-4.5</span>
+            <div class="model-score-track"><div class="model-score-fill" style="width:30%;"></div></div>
+            <span class="model-score-label">3.0</span>
+            <span class="model-role-tag" style="margin-left:auto;">flashmob, scouts</span>
+          </div>
+          <div class="model-row">
+            <span class="model-name">gpt-5-codex</span>
+            <div class="model-score-track"><div class="model-score-fill" style="width:80%;"></div></div>
+            <span class="model-score-label">8.0</span>
+            <span class="model-role-tag" style="margin-left:auto;">engineering workers</span>
+          </div>
+        </div>
+
+        <div class="page-body hidden" data-tab-content="available" style="padding:14px 0 0;">
+          <div class="model-list-toolbar">
+            <input class="input" type="text" placeholder="search models" oninput="filterModelList(this)">
+          </div>
+          <div id="modelAvailableList">
+            <div class="model-row" data-model-name="claude fable 5.1">
+              <span class="model-name">claude fable 5.1</span>
+              <div class="model-score-track"><div class="model-score-fill" style="width:90%;"></div></div>
+              <span class="model-score-label">9.0</span>
+              <button class="btn btn-sm" style="margin-left:auto;">add to pool</button>
+            </div>
+            <div class="model-row" data-model-name="grok-code">
+              <span class="model-name">grok-code</span>
+              <div class="model-score-track"><div class="model-score-fill" style="width:70%;"></div></div>
+              <span class="model-score-label">7.0</span>
+              <button class="btn btn-sm" style="margin-left:auto;">add to pool</button>
+            </div>
+            <div class="model-row" data-model-name="kimi-code">
+              <span class="model-name">kimi-code</span>
+              <div class="model-score-track"><div class="model-score-fill" style="width:55%;"></div></div>
+              <span class="model-score-label">5.5</span>
+              <button class="btn btn-sm" style="margin-left:auto;">add to pool</button>
+            </div>
+            <div class="model-row" data-model-name="qwen3-coder">
+              <span class="model-name">qwen3-coder</span>
+              <div class="model-score-track"><div class="model-score-fill" style="width:45%;"></div></div>
+              <span class="model-score-label">4.5</span>
+              <button class="btn btn-sm" style="margin-left:auto;">add to pool</button>
+            </div>
+            <div class="model-row" data-model-name="local (ollama llama)">
+              <span class="model-name">local (ollama llama)</span>
+              <div class="model-score-track"><div class="model-score-fill" style="width:15%;"></div></div>
+              <span class="model-score-label">1.5</span>
+              <button class="btn btn-sm" style="margin-left:auto;">add to pool</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-panel hidden" data-panel-content="danger">
+        <div class="settings-section-title">danger zone</div>
+        <div class="settings-section-sub">irreversible actions</div>
+        <div class="danger-box">
+          <div class="danger-box-title">reset workspace</div>
+          <div class="danger-box-hint">clears goals, evidence log, and roster history. cannot be undone.</div>
+          <button class="btn btn-sm" style="border-color:var(--rust); color:var(--rust-text);">reset workspace</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+<!-- (app container closes after all views below) -->
+
+  <!-- ============ LUTHIERY (global, skills / tools) ============ -->
+  <div class="view" id="view-luthiery">
+    <div class="sidebar" id="sidebar-luthiery"></div>
+    <div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+      <div class="dash-head" style="padding:14px 20px 0;">
+        <div class="dash-title">luthiery</div>
+      </div>
+      <div class="dash-sub" style="padding:0 20px;">tool &amp; skill workshop &middot; cross-goal registry, owned by infrastructure</div>
+      <div class="page-tabs">
+        <div class="page-tab on" data-tab="skills" onclick="showPageTab(this,'luthiery')">skills</div>
+        <div class="page-tab" data-tab="tools" onclick="showPageTab(this,'luthiery')">tools</div>
+      </div>
+      <div class="page-body" data-tab-content="skills">
+        <div class="reg-toolbar">
+          <input class="input" type="text" placeholder="search skills" oninput="filterRegistry(this, 'skillsTagRow')">
+          <div class="tag-row" id="skillsTagRow">
+            <div class="chip" onclick="toggleTagChip(this,'skillsList')">docs</div>
+            <div class="chip" onclick="toggleTagChip(this,'skillsList')">data</div>
+            <div class="chip" onclick="toggleTagChip(this,'skillsList')">design</div>
+            <div class="chip" onclick="toggleTagChip(this,'skillsList')">generation</div>
+          </div>
+        </div>
+        <div id="skillsList">
+          <div class="reg-item" data-name="docx generation" data-tags="docs generation">
+            <i data-lucide="file-code"></i>
+            <div class="reg-item-body">
+              <div class="reg-item-title">docx generation</div>
+              <div class="reg-item-sub">built-in &middot; used by product, tech</div>
+              <div class="reg-item-tags"><span class="reg-item-tag">#docs</span><span class="reg-item-tag">#generation</span></div>
+            </div>
+            <div class="reg-item-meta"><span class="badge badge-olive">available</span></div>
+          </div>
+          <div class="reg-item" data-name="data analysis" data-tags="data">
+            <i data-lucide="chart-bar"></i>
+            <div class="reg-item-body">
+              <div class="reg-item-title">data analysis</div>
+              <div class="reg-item-sub">built-in &middot; used by intelligence</div>
+              <div class="reg-item-tags"><span class="reg-item-tag">#data</span></div>
+            </div>
+            <div class="reg-item-meta"><span class="badge badge-olive">available</span></div>
+          </div>
+          <div class="reg-item" data-name="frontend design" data-tags="design generation">
+            <i data-lucide="palette"></i>
+            <div class="reg-item-body">
+              <div class="reg-item-title">frontend design</div>
+              <div class="reg-item-sub">built-in &middot; used by design</div>
+              <div class="reg-item-tags"><span class="reg-item-tag">#design</span><span class="reg-item-tag">#generation</span></div>
+            </div>
+            <div class="reg-item-meta"><span class="badge badge-olive">available</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="page-body hidden" data-tab-content="tools">
+        <div class="reg-toolbar">
+          <input class="input" type="text" placeholder="search tools" oninput="filterRegistry(this, 'toolsTagRow')">
+          <div class="tag-row" id="toolsTagRow">
+            <div class="chip" onclick="toggleTagChip(this,'toolsList')">payments</div>
+            <div class="chip" onclick="toggleTagChip(this,'toolsList')">sync</div>
+            <div class="chip" onclick="toggleTagChip(this,'toolsList')">webhook</div>
+            <div class="chip" onclick="toggleTagChip(this,'toolsList')">rejected</div>
+          </div>
+        </div>
+        <div id="toolsList">
+          <div class="reg-item" data-name="stripe-webhook-relay mcp" data-tags="payments webhook">
+            <i data-lucide="hash"></i>
+            <div class="reg-item-body">
+              <div class="reg-item-title">stripe-webhook-relay mcp</div>
+              <div class="reg-item-sub">sha256 8e21c0&hellip; &middot; generated by infrastructure worker-2</div>
+              <div class="reg-item-tags"><span class="reg-item-tag">#payments</span><span class="reg-item-tag">#webhook</span></div>
+            </div>
+            <div class="reg-item-meta"><span class="badge badge-olive">certified</span><span style="font-size:10.5px; color:var(--text-muted);">reused &times;4</span></div>
+          </div>
+          <div class="reg-item" data-name="notion-sync mcp" data-tags="sync">
+            <i data-lucide="hash"></i>
+            <div class="reg-item-body">
+              <div class="reg-item-title">notion-sync mcp</div>
+              <div class="reg-item-sub">sha256 2f9a71&hellip; &middot; generated by infrastructure worker-5</div>
+              <div class="reg-item-tags"><span class="reg-item-tag">#sync</span></div>
+            </div>
+            <div class="reg-item-meta"><span class="badge badge-olive">certified</span><span style="font-size:10.5px; color:var(--text-muted);">reused &times;1</span></div>
+          </div>
+          <div class="reg-item" data-name="raw-shell-exec mcp" data-tags="rejected">
+            <i data-lucide="ban"></i>
+            <div class="reg-item-body">
+              <div class="reg-item-title">raw-shell-exec mcp</div>
+              <div class="reg-item-sub">rejected &middot; missing AuthorizedEffectExecutor wrapper</div>
+              <div class="reg-item-tags"><span class="reg-item-tag">#rejected</span></div>
+            </div>
+            <div class="reg-item-meta"><span class="badge badge-rust">rejected</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FLASHMOB (global, flat sessions, no departments) ============ -->
+  <div class="view" id="view-flashmob">
+    <div class="sidebar" id="sidebar-flashmob"></div>
+    <div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+      <div class="dash-head" style="padding:20px 20px 0;"><div class="dash-title">flashmob</div></div>
+      <div class="dash-sub" style="padding:0 20px 14px;">fast lane for light tasks &middot; solo or tiny temp crew, no council, no certification</div>
+      <div class="page-body" style="padding-top:0;">
+        <div class="fm-session" onclick="showView('flashmobSession')">
+          <div class="fm-session-icon"><i data-lucide="message-square"></i></div>
+          <div class="fm-session-body">
+            <div class="fm-session-title">fix the pricing page copy</div>
+            <div class="fm-session-sub">claude-haiku-4.5 &middot; active &middot; started 4 min ago</div>
+          </div>
+          <span class="badge badge-olive">active</span>
+        </div>
+        <div class="fm-session">
+          <div class="fm-session-icon"><i data-lucide="message-square"></i></div>
+          <div class="fm-session-body">
+            <div class="fm-session-title">summarize competitor pricing pages</div>
+            <div class="fm-session-sub">claude-haiku-4.5 &middot; done &middot; 1 hour ago</div>
+          </div>
+          <span class="badge badge-slate">done</span>
+        </div>
+        <div class="fm-session">
+          <div class="fm-session-icon"><i data-lucide="arrow-up-right"></i></div>
+          <div class="fm-session-body">
+            <div class="fm-session-title">auth flow security audit</div>
+            <div class="fm-session-sub">scope grew beyond grant &middot; promoted to goal "billing refactor"</div>
+          </div>
+          <span class="badge badge-ochre">promoted</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FLASHMOB SESSION (single thread, no roster) ============ -->
+  <div class="view" id="view-flashmobSession">
+    <div class="fm-thread">
+      <div class="fm-thread-head">
+        <div class="fm-thread-back" onclick="showView('flashmob')"><i data-lucide="arrow-left"></i> flashmob</div>
+        <div class="fm-thread-title">fix the pricing page copy</div>
+        <span class="badge badge-olive" style="margin-left:4px;">active</span>
+        <button class="btn btn-sm" style="margin-left:auto;" onclick="promoteFlashmob(this)"><i data-lucide="arrow-up-right" style="width:12px;height:12px;"></i> promote to goal</button>
+      </div>
+      <div class="fm-thread-messages">
+        <div class="msg">
+          <div class="avatar avatar-sm av-slate">ND</div>
+          <div class="msg-body"><div class="msg-head"><span class="msg-name">you</span></div><div class="msg-text">the pricing page copy is stale, the enterprise tier still says "coming soon". fix it.</div></div>
+        </div>
+        <div class="msg">
+          <div class="avatar avatar-sm" style="background:var(--p-blue-bg); color:var(--p-blue-text);">FM</div>
+          <div class="msg-body"><div class="msg-head"><span class="msg-name">flashmob worker</span></div><div class="msg-text">found it in /marketing/pricing.tsx. updating the enterprise tier copy and removing the "coming soon" badge now.</div></div>
+        </div>
+        <div class="msg">
+          <div class="avatar avatar-sm" style="background:var(--p-blue-bg); color:var(--p-blue-text);">FM</div>
+          <div class="msg-body"><div class="msg-head"><span class="msg-name">flashmob worker</span></div><div class="msg-text">done. small patch, within the allowlisted path &mdash; auto-accepted under policy.</div></div>
+        </div>
+      </div>
+      <div class="channel-input">
+        <div class="chan-composer">
+          <textarea class="chan-composer-input" placeholder="message this session" rows="1"
+            oninput="this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,120)+'px';"></textarea>
+          <div class="chan-composer-toolbar">
+            <div class="chan-composer-actions">
+              <button class="btn-icon" title="attach file"><i data-lucide="paperclip"></i></button>
+            </div>
+            <button class="chan-composer-send ready"><i data-lucide="send"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ARRANGEMENTS (global, self-improvement) ============ -->
+  <div class="view" id="view-arrangements">
+    <div class="sidebar" id="sidebar-arrangements"></div>
+    <div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+      <div class="dash-head" style="padding:14px 20px 0;">
+        <div class="dash-title">arrangements</div>
+      </div>
+      <div class="dash-sub" style="padding:0 20px;">system self-improvement &middot; certified, lineage-aware changes only</div>
+      <div class="page-tabs">
+        <div class="page-tab on" data-tab="active" onclick="showPageTab(this,'arrangements')">active</div>
+        <div class="page-tab" data-tab="candidates" onclick="showPageTab(this,'arrangements')">candidates</div>
+        <div class="page-tab" data-tab="council" onclick="showPageTab(this,'arrangements')">encore council</div>
+        <div class="page-tab" data-tab="negative" onclick="showPageTab(this,'arrangements')">negative evidence</div>
+      </div>
+      <div class="page-body" data-tab-content="active">
+        <div class="arr-item">
+          <div class="arr-icon" style="background:var(--olive-bg); color:var(--olive-text);"><i data-lucide="check"></i></div>
+          <div class="arr-body">
+            <div class="arr-title">shorten department-plan briefs by 30%</div>
+            <div class="arr-meta">applied &middot; scope: all goals &middot; capability axis</div>
+            <div class="arr-deltas"><span>&Delta;quality +2%</span><span>&Delta;cost -18%</span></div>
+          </div>
+        </div>
+        <div class="arr-item">
+          <div class="arr-icon" style="background:var(--olive-bg); color:var(--olive-text);"><i data-lucide="check"></i></div>
+          <div class="arr-body">
+            <div class="arr-title">default to flashmob for docs-only tasks</div>
+            <div class="arr-meta">applied &middot; scope: goalClass=docs &middot; personalization axis</div>
+            <div class="arr-deltas"><span>&Delta;userFit +12%</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="page-body hidden" data-tab-content="candidates">
+        <div class="arr-item">
+          <div class="arr-icon" style="background:var(--ochre-bg); color:var(--ochre-text);"><i data-lucide="clock"></i></div>
+          <div class="arr-body">
+            <div class="arr-title">route security-sensitive tasks through extra council round</div>
+            <div class="arr-meta">shadow replay in progress &middot; parent: none (root)</div>
+          </div>
+        </div>
+      </div>
+      <div class="page-body hidden" data-tab-content="council">
+        <div class="dash-sub" style="padding:0 0 12px;">deliberating: "route security-sensitive tasks through extra council round"</div>
+
+        <div class="msg">
+          <div class="avatar avatar-sm av-violet">M</div>
+          <div class="msg-body">
+            <div class="msg-head"><span class="msg-name">metronome</span><span class="msg-time">shadow replay</span></div>
+            <div class="msg-text">replay set: 42 historical security-class goals. quality delta +4%, latency delta +9%.</div>
+          </div>
+        </div>
+        <div class="msg">
+          <div class="avatar avatar-sm av-violet">EC</div>
+          <div class="msg-body">
+            <div class="msg-head"><span class="msg-name">encore council &middot; seat 1</span></div>
+            <div class="msg-text">latency cost acceptable given the quality gain. no conflict with currently applied arrangements in this scope.</div>
+          </div>
+        </div>
+        <div class="msg">
+          <div class="avatar avatar-sm av-violet">EC</div>
+          <div class="msg-body">
+            <div class="msg-head"><span class="msg-name">encore council &middot; seat 2</span></div>
+            <div class="msg-text">checked against negative evidence &mdash; no semantic match to prior rejections. no objection.</div>
+          </div>
+        </div>
+        <div class="alert alert-success" style="margin-top:4px;">
+          <i data-lucide="circle-check"></i><span>convergence reached after 1 round &middot; proceeding to certification</span>
+        </div>
+      </div>
+      <div class="page-body hidden" data-tab-content="negative">
+        <div class="arr-item">
+          <div class="arr-icon" style="background:var(--rust-bg); color:var(--rust-text);"><i data-lucide="x"></i></div>
+          <div class="arr-body">
+            <div class="arr-title">auto-approve sub-$5 spend without conductor review</div>
+            <div class="arr-meta">rejected &middot; certification denied, spend velocity anomaly in replay</div>
+            <div class="arr-deltas"><span class="neg">vetoes future similar proposals</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function renderIcons(){
+  try { if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons(); }
+  catch (e) { console.warn('lucide icons unavailable, continuing without them', e); }
+}
+
+function showView(name){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('on'));
+  var el = document.getElementById('view-' + name);
+  if (el) el.classList.add('on');
+}
+
+function toggleTagChip(chip, listId){
+  var row = chip.parentElement;
+  var wasActive = chip.classList.contains('active');
+  row.querySelectorAll('.chip').forEach(function(c){ c.classList.remove('active'); });
+  if (!wasActive) chip.classList.add('active');
+  applyRegistryFilter(listId, row);
+}
+
+function applyRegistryFilter(listId, tagRow){
+  var activeChip = tagRow ? tagRow.querySelector('.chip.active') : null;
+  var tag = activeChip ? activeChip.textContent.trim() : null;
+  var toolbar = tagRow ? tagRow.closest('.reg-toolbar') : null;
+  var searchInput = toolbar ? toolbar.querySelector('input.input') : null;
+  var q = searchInput ? searchInput.value.toLowerCase() : '';
+  document.querySelectorAll('#' + listId + ' .reg-item').forEach(function(item){
+    var tags = (item.dataset.tags || '').split(' ');
+    var name = (item.dataset.name || '').toLowerCase();
+    var matchesTag = !tag || tags.indexOf(tag) !== -1;
+    var matchesSearch = !q || name.includes(q);
+    item.style.display = (matchesTag && matchesSearch) ? '' : 'none';
+  });
+}
+
+function filterRegistry(input, tagRowId){
+  var tagRow = document.getElementById(tagRowId);
+  var listId = tagRow ? tagRow.id.replace('TagRow', 'List') : null;
+  if (listId) applyRegistryFilter(listId, tagRow);
+}
+
+var HOME_TITLES = [
+  'what should the floor work on',
+  'give the floor a brief',
+  'what needs the orchestra today',
+  'what should the concertmaster take on'
+];
+
+function setRandomHomeTitle(){
+  var el = document.getElementById('homeTitle');
+  if (!el) return;
+  el.textContent = HOME_TITLES[Math.floor(Math.random() * HOME_TITLES.length)];
+}
+
+function setMode(mode){
+  var pills = document.querySelectorAll('#modeToggle > div');
+  pills.forEach(function(p){ p.classList.remove('on', 'flashmob'); });
+  var target = mode === 'flashmob' ? pills[1] : pills[0];
+  target.classList.add('on');
+  if (mode === 'flashmob') target.classList.add('flashmob');
+
+  var appEl = document.querySelector('.app');
+  if (appEl) appEl.classList.toggle('flashmob-theme', mode === 'flashmob');
+
+  var composer = document.getElementById('homeComposer');
+  var sendBtn = document.getElementById('sendBtn');
+  var cards = document.getElementById('homeCards');
+  var suggestions = document.getElementById('homeSuggestions');
+  if (mode === 'flashmob') {
+    composer.classList.add('mode-flashmob');
+    sendBtn.classList.add('mode-flashmob');
+    cards.classList.add('hide');
+    suggestions.classList.add('show');
+  } else {
+    composer.classList.remove('mode-flashmob');
+    sendBtn.classList.remove('mode-flashmob');
+    cards.classList.remove('hide');
+    suggestions.classList.remove('show');
+  }
+}
+
+function fillHomePrompt(text){
+  var ta = document.getElementById('homeTextarea');
+  if (ta) { ta.value = text; ta.focus(); }
+}
+
+function toggleChanSend(textarea){
+  var btn = document.getElementById('chanSendBtn');
+  if (btn) btn.classList.toggle('ready', textarea.value.trim().length > 0);
+}
+
+function toggleInboxDiscuss(btn){
+  var item = btn.closest('.inbox-body');
+  var panel = item.querySelector('.inbox-discuss');
+  if (panel) panel.classList.toggle('open');
+}
+
+function sendInboxDiscuss(btn){
+  var row = btn.closest('.inbox-discuss-row');
+  var input = row.querySelector('input');
+  var msgs = row.parentElement.querySelector('.inbox-discuss-msgs');
+  var text = input.value.trim();
+  if (!text) return;
+  var userMsg = document.createElement('div');
+  userMsg.className = 'msg';
+  userMsg.innerHTML = '<div class="avatar avatar-sm av-slate">ND</div><div class="msg-body"><div class="msg-head"><span class="msg-name">you</span></div><div class="msg-text"></div></div>';
+  userMsg.querySelector('.msg-text').textContent = text;
+  msgs.appendChild(userMsg);
+  input.value = '';
+
+  var reply = document.createElement('div');
+  reply.className = 'msg';
+  reply.innerHTML = '<div class="avatar avatar-sm av-terracotta">CM</div><div class="msg-body"><div class="msg-head"><span class="msg-name">concertmaster</span></div><div class="msg-text">noted &mdash; I&#39;ll factor that in. still your call on approve or deny above.</div></div>';
+  msgs.appendChild(reply);
+}
+
+function promoteFlashmob(btn){
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="check" style="width:12px;height:12px;"></i> promoted';
+  renderIcons();
+  showView('dashboard');
+}
+
+function filterModelList(input){
+  var q = input.value.toLowerCase();
+  document.querySelectorAll('#modelAvailableList .model-row').forEach(function(row){
+    var name = (row.dataset.modelName || '').toLowerCase();
+    row.style.display = name.includes(q) ? '' : 'none';
+  });
+}
+
+function showPageTab(el, viewName){
+  var scope = el.closest('.page-tabs').parentElement;
+  scope.querySelectorAll('.page-tab').forEach(function(t){ t.classList.remove('on'); });
+  el.classList.add('on');
+  var name = el.dataset.tab;
+  scope.querySelectorAll('[data-tab-content]').forEach(function(p){
+    p.classList.toggle('hidden', p.dataset.tabContent !== name);
+  });
+}
+
+function showSettingsPanel(el){
+  document.querySelectorAll('#settingsNav .settings-nav-item').forEach(function(i){ i.classList.remove('on'); });
+  el.classList.add('on');
+  var name = el.dataset.panel;
+  document.querySelectorAll('.settings-panel').forEach(function(p){
+    p.classList.toggle('hidden', p.dataset.panelContent !== name);
+  });
+}
+
+function toggleSidebar(btn){
+  var sb = btn.closest('.sidebar');
+  if (!sb) return;
+  sb.classList.toggle('collapsed');
+  var icon = btn.querySelector('i');
+  if (icon) icon.setAttribute('data-lucide', sb.classList.contains('collapsed') ? 'panel-left-open' : 'panel-left-close');
+  renderIcons();
+}
+
+function toggleRoster(btn){
+  var wrap = btn.closest('.channel-wrap') || btn.closest('.dash-body');
+  if (!wrap) return;
+  var roster = wrap.querySelector('.roster');
+  if (roster) roster.classList.toggle('hide');
+}
+function closeAgentPanel(e){ if(e) e.stopPropagation(); document.getElementById('agentOverlay').classList.remove('on'); }
+
+function toggleTheme(){
+  var html = document.documentElement;
+  var next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  document.querySelectorAll('.js-theme-icon').forEach(function(icon){
+    icon.setAttribute('data-lucide', next === 'dark' ? 'sun' : 'moon');
+  });
+  renderIcons();
+}
+
+// ---- shared sidebar markup, injected into every app-shell view ----
+var sidebarHTML = `
+  <div class="sb-logo">
+    <div class="sb-logo-mark"></div>
+    <div class="sb-logo-text">maestro</div>
+    <div class="sb-collapse-btn" onclick="toggleSidebar(this)"><i data-lucide="panel-left-close"></i></div>
+  </div>
+  <div class="sb-newgoal"><button class="btn btn-sm"><i data-lucide="plus" style="width:13px;height:13px;"></i> <span class="lbl">new goal</span></button></div>
+
+  <div class="sb-scroll">
+  <div class="sb-menu">
+    <div class="sb-item" onclick="showView('home')"><i data-lucide="search"></i> <span class="lbl">search</span></div>
+    <div class="sb-item" onclick="showView('inbox')"><i data-lucide="inbox"></i> <span class="lbl">inbox</span> <span class="sb-count">3</span></div>
+    <div class="sb-item" onclick="showView('dashboard')"><i data-lucide="layout-dashboard"></i> <span class="lbl">dashboard</span></div>
+    <div class="sb-item" onclick="showView('flashmob')"><i data-lucide="zap"></i> <span class="lbl">flashmob</span></div>
+  </div>
+  <div class="sb-fixed-menu-group"></div>
+  <div class="sb-menu">
+    <div class="sb-item" onclick="showView('floor')"><i data-lucide="chart-pie"></i> <span class="lbl">floor view</span></div>
+    <div class="sb-item" onclick="showView('evlog')"><i data-lucide="shield-check"></i> <span class="lbl">evidence log</span></div>
+    <div class="sb-item" onclick="showView('billing')"><i data-lucide="credit-card"></i> <span class="lbl">billing</span> <span class="sb-badge-pct" style="background:var(--ochre-bg); color:var(--ochre-text);">62%</span></div>
+  </div>
+  <div class="sb-fixed-menu-group"></div>
+  <div class="sb-menu">
+    <div class="sb-item" onclick="showView('luthiery')"><i data-lucide="hammer"></i> <span class="lbl">luthiery</span></div>
+    <div class="sb-item" onclick="showView('arrangements')"><i data-lucide="git-merge"></i> <span class="lbl">arrangements</span></div>
+  </div>
+  <div class="sb-divider"></div>
+  <div class="sb-goalswitch" onclick="showView('dashboard')" style="cursor:pointer;"><span class="lbl">launch page</span> <i data-lucide="chevron-down"></i></div>
+
+  <div class="sb-channels">
+    <div class="sb-chan on" onclick="showView('channel')"><i data-lucide="crown"></i> <span class="lbl">concertmaster</span>
+      <div class="stack"><div class="avatar av-terracotta">·</div></div>
+    </div>
+    <div class="sb-chan"><i data-lucide="home"></i> <span class="lbl">general</span></div>
+    <div class="sb-chan"><i data-lucide="users"></i> <span class="lbl">head council</span></div>
+  </div>
+
+  <div class="sb-group">
+    <div class="sb-group-label" onclick="this.parentElement.classList.toggle('dim')"><i data-lucide="chevron-down"></i> encore</div>
+    <div class="sb-channels">
+      <div class="sb-chan"><i data-lucide="scale"></i> <span class="lbl">encore council</span></div>
+      <div class="sb-chan"><i data-lucide="activity"></i> <span class="lbl">metronome</span></div>
+    </div>
+  </div>
+
+  <div class="sb-group">
+    <div class="sb-group-label" onclick="this.parentElement.classList.toggle('dim')"><i data-lucide="chevron-down"></i> product group</div>
+    <div class="sb-channels">
+      <div class="sb-chan"><i data-lucide="package"></i> <span class="lbl">product</span></div>
+      <div class="sb-chan"><i data-lucide="palette"></i> <span class="lbl">design</span></div>
+    </div>
+  </div>
+
+  <div class="sb-group">
+    <div class="sb-group-label" onclick="this.parentElement.classList.toggle('dim')"><i data-lucide="chevron-down"></i> tech group</div>
+    <div class="sb-channels">
+      <div class="sb-chan on" onclick="showView('channel')"><i data-lucide="code"></i> <span class="lbl">engineering</span>
+        <div class="stack"><div class="avatar av-terracotta">·</div><div class="avatar av-terracotta">·</div></div>
+      </div>
+      <div class="sb-chan"><i data-lucide="shield"></i> <span class="lbl">security</span></div>
+      <div class="sb-chan"><i data-lucide="server"></i> <span class="lbl">infrastructure</span></div>
+    </div>
+  </div>
+
+  <div class="sb-group dim">
+    <div class="sb-group-label" onclick="this.parentElement.classList.toggle('dim')"><i data-lucide="chevron-right"></i> intelligence group</div>
+    <div class="sb-channels">
+      <div class="sb-chan"><i data-lucide="flask-conical"></i> <span class="lbl">research</span></div>
+      <div class="sb-chan"><i data-lucide="chart-bar"></i> <span class="lbl">data &amp; analysis</span></div>
+    </div>
+  </div>
+
+  <div class="sb-group dim">
+    <div class="sb-group-label" onclick="this.parentElement.classList.toggle('dim')"><i data-lucide="chevron-right"></i> assurance group</div>
+    <div class="sb-channels">
+      <div class="sb-chan"><i data-lucide="clipboard-check"></i> <span class="lbl">quality</span></div>
+      <div class="sb-chan"><i data-lucide="shield-check"></i> <span class="lbl">safety &amp; compliance</span></div>
+    </div>
+  </div>
+
+  <div class="sb-group dim">
+    <div class="sb-group-label" onclick="this.parentElement.classList.toggle('dim')"><i data-lucide="chevron-right"></i> operations group</div>
+    <div class="sb-channels">
+      <div class="sb-chan"><i data-lucide="settings"></i> <span class="lbl">operations</span></div>
+    </div>
+  </div>
+  </div>
+
+  <div class="sb-bottom">
+    <div class="avatar avatar-sm av-slate">ND</div>
+    <span>ntdv</span>
+    <div class="sb-bottom-icons">
+      <i data-lucide="sun" class="js-theme-icon" onclick="toggleTheme()"></i>
+      <i data-lucide="settings" onclick="showView('settings')" style="cursor:pointer;"></i>
+    </div>
+  </div>
+`;
+
+function init(){
+  ['home','dashboard','channel','inbox','evlog','billing','settings','luthiery','arrangements','flashmob','flashmobSession'].forEach(function(id){
+    var el = document.getElementById('sidebar-' + id);
+    if (el) el.innerHTML = sidebarHTML;
+  });
+
+  setRandomHomeTitle();
+
+  renderIcons();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+</script>
+</body>
+</html>
