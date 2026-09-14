@@ -10,6 +10,7 @@ import {
   WorkerError, WorkerNotFoundError, CapacityReservationError,
   ProjectAccessAdminRequiredError, ProjectAccessRoleNotFoundError, ProjectAccessTargetNotFoundError,
   ProjectMembershipRequiredError, ProjectRoleRequiredError,
+  ChannelError, ChannelNotFoundError, ChannelConflictError, ChannelClosedError,
 } from "@maestro/persistence";
 import {
   StableApiErrorSchema,
@@ -129,6 +130,10 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   if (error instanceof ProjectAccessAdminRequiredError) return apiError(403, "authority_denied", error.message);
   if (error instanceof ProjectAccessTargetNotFoundError || error instanceof ProjectAccessRoleNotFoundError) return apiError(400, "validation_error", "Invalid project access request");
   if (error instanceof ProjectMembershipRequiredError || error instanceof ProjectRoleRequiredError) return apiError(403, "project_access_forbidden", error.message);
+  if (error instanceof ChannelNotFoundError) return apiError(404, "channel_not_found", error.message);
+  if (error instanceof ChannelClosedError) return apiError(409, "channel_closed", error.message);
+  if (error instanceof ChannelConflictError) return apiError(409, "channel_conflict", error.message);
+  if (error instanceof ChannelError) return apiError(400, "validation_error", error.message);
   return apiError(503, "durable_store_unavailable", "Durable store is unavailable");
 }
 

@@ -5,6 +5,21 @@ const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
 const commandId = "33333333-3333-4333-8333-333333333333";
 
+describe("channel client", () => {
+  it("reads and posts a typed Goal-bound channel with a stable message key", async () => {
+    const selector = { kind: "department" as const, channelId: "engineering" };
+    const channel = { channelId: "44444444-4444-4444-8444-444444444444", projectId, goalId, state: "active" as const, kind: "department" as const, scopeId: "engineering", displayName: "#engineering" };
+    const message = { messageId: commandId, channelId: channel.channelId, sequence: "1", author: { kind: "operator" as const, id: "55555555-5555-4555-8555-555555555555" }, content: "hello", createdAt: "2025-01-01T00:00:00.000Z" };
+    const read = { channel, messages: [message], members: [] };
+    const fetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(read), { status: 200 })).mockResolvedValueOnce(new Response(JSON.stringify(message), { status: 201 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+    await expect(client.getChannel(goalId, selector, { projectId })).resolves.toEqual(read);
+    await expect(client.postChannelMessage(goalId, selector, { projectId, content: "hello" }, commandId)).resolves.toEqual(message);
+    expect(fetch).toHaveBeenNthCalledWith(1, `https://maestro.test/v1/goals/${goalId}/channels/department/engineering?projectId=${projectId}`, expect.objectContaining({ headers: { authorization: "Bearer top-secret" } }));
+    expect(fetch).toHaveBeenNthCalledWith(2, `https://maestro.test/v1/goals/${goalId}/channels/department/engineering/messages`, expect.objectContaining({ method: "POST", body: JSON.stringify({ projectId, content: "hello" }), headers: expect.objectContaining({ "idempotency-key": commandId }) }));
+  });
+});
+
 describe("createApiClient", () => {
   it("lists authenticated project memberships for first-run workspace discovery", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ projects: [projectId] }), { status: 200 }));

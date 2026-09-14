@@ -41,6 +41,11 @@ import {
   EvidenceBundleReadSchema,
   GoalGitIntegrationStateSchema,
   WorkerListSchema,
+  ChannelSelectorSchema,
+  ChannelQuerySchema,
+  ChannelMessageInputSchema,
+  ChannelMessageSchema,
+  ChannelReadSchema,
   ImprovementDigestListSchema,
   AuthenticatedDiscordSignalSchema,
   StoredDiscordSignalSchema,
@@ -208,6 +213,11 @@ export interface ProjectDiscoveryService {
   listProjects(operatorId: string): Promise<readonly string[]>;
 }
 
+export interface ChannelService {
+  get(input: { operatorId: string; projectId: string; goalId: string; selector: import("@maestro/domain").ChannelSelector }): Promise<import("@maestro/contracts").ChannelRead>;
+  post(input: { operatorId: string; projectId: string; goalId: string; selector: import("@maestro/domain").ChannelSelector; content: string; messageId: string }): Promise<import("@maestro/contracts").ChannelMessage>;
+}
+
 export interface OrganizationService {
   /** Returns the standing taxonomy; authentication is enforced by the route hook. */
   listOrganization(): Promise<import("@maestro/contracts").OrganizationReadModel>;
@@ -266,7 +276,7 @@ async function waitForAccountLoginStart(store: AccountLoginStore, operatorId: st
   throw new Error("account login start is still in progress");
 }
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, evidenceCaptureService, personaGoalEvidenceService, concertmasterReportService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, organizationService, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService, projectionService }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, evidenceCaptureService, personaGoalEvidenceService, concertmasterReportService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, organizationService, channelService, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService, projectionService }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
@@ -304,6 +314,8 @@ export function buildServer({ goalService, authenticator, eventService, critical
   projectDiscovery?: ProjectDiscoveryService;
   /** Authenticated standing organization taxonomy used for first-run orientation. */
   organizationService?: OrganizationService;
+  /** Goal-bound Department/organization/Encore channel persistence. */
+  channelService?: ChannelService;
   /** Provider credential lifecycle delegated to the separately authenticated gateway. */
   providerCredentials?: ProviderCredentialService;
   /** Durable account-login idempotency and restart state. Production always supplies this. */
@@ -323,6 +335,10 @@ export function buildServer({ goalService, authenticator, eventService, critical
   const maxActiveStreams = 128;
   const loginOwnerId = accountLoginOwnerId ?? `control-plane-${randomUUID()}`;
   const loginOperationStaleAfterMs = 30_000;
+  const channels = channelService ?? {
+    get: async () => { throw new DurableStoreUnavailableError(); },
+    post: async () => { throw new DurableStoreUnavailableError(); },
+  } satisfies ChannelService;
   const organizations = organizationService ?? {
     listOrganization: async () => { throw new DurableStoreUnavailableError(); },
   } satisfies OrganizationService;
@@ -1181,6 +1197,25 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const heartbeatTimer = pollingScheduler.setInterval(writeHeartbeat, 15_000);
     writeHeartbeat();
     return reply;
+  });
+
+  app.get("/v1/goals/:goalId/channels/:kind/:channelId", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const params = request.params as { kind?: unknown; channelId?: unknown };
+    const selector = parse(ChannelSelectorSchema, { kind: params.kind, channelId: params.channelId });
+    const query = parse(ChannelQuerySchema, request.query);
+    const result = await channels.get({ goalId, projectId: query.projectId, selector, operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId });
+    return reply.status(200).send(ChannelReadSchema.parse(result));
+  });
+
+  app.post("/v1/goals/:goalId/channels/:kind/:channelId/messages", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const params = request.params as { kind?: unknown; channelId?: unknown };
+    const selector = parse(ChannelSelectorSchema, { kind: params.kind, channelId: params.channelId });
+    const input = parse(ChannelMessageInputSchema, request.body);
+    const messageId = parse(UuidSchema, request.headers["idempotency-key"]);
+    const result = await channels.post({ goalId, selector, ...input, messageId, operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId });
+    return reply.status(201).send(ChannelMessageSchema.parse(result));
   });
 
   app.get("/v1/goals", async (request, reply) => {

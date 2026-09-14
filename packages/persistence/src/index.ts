@@ -70,3 +70,4 @@ export * from "./persona-profile.js";
 export * from "./persona-goal-evidence.js";
 
 export * from "./worker-profile-derivation.js";
+export * from "./channel.js";

@@ -14,6 +14,12 @@ import {
   GoalListSchema,
   ProjectListSchema,
   OrganizationReadModelSchema,
+  ChannelSelectorSchema,
+  CHANNEL_SELECTORS,
+  ChannelQuerySchema,
+  ChannelMessageInputSchema,
+  ChannelMessageSchema,
+  ChannelReadSchema,
   ProjectionQuerySchema,
   ProjectionReadModelSchema,
   ConversationSchema,
@@ -101,6 +107,11 @@ import {
   type GoalList,
   type ProjectList,
   type OrganizationReadModel,
+  type ChannelSelector,
+  type ChannelQuery,
+  type ChannelMessageInput,
+  type ChannelMessage,
+  type ChannelRead,
   type ProjectionQuery,
   type ProjectionReadModel,
   type Conversation,
@@ -191,6 +202,8 @@ export interface ApiClient {
   listGoals(projectId: string): Promise<GoalList>;
   listProjects(): Promise<ProjectList>;
   getOrganization(): Promise<OrganizationReadModel>;
+  getChannel(goalId: string, selector: ChannelSelector, query: ChannelQuery): Promise<ChannelRead>;
+  postChannelMessage(goalId: string, selector: ChannelSelector, input: ChannelMessageInput, commandId?: string): Promise<ChannelMessage>;
   getProjection(query: ProjectionQuery): Promise<ProjectionReadModel>;
   listModels(): Promise<readonly ModelCatalogEntry[]>;
   loginProvider(input: ProviderCredentialLoginInput): Promise<ProviderCredentialBinding>;
@@ -433,6 +446,22 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
     },
     getOrganization() {
       return request("v1/organization", { headers }, OrganizationReadModelSchema);
+    },
+    getChannel(goalId, selector, query) {
+      const parsedGoalId = UuidSchema.parse(goalId);
+      const parsedSelector = ChannelSelectorSchema.parse(selector);
+      const parsedQuery = ChannelQuerySchema.parse(query);
+      return request(`v1/goals/${encodeURIComponent(parsedGoalId)}/channels/${encodeURIComponent(parsedSelector.kind)}/${encodeURIComponent(parsedSelector.channelId)}?${new URLSearchParams({ projectId: parsedQuery.projectId })}`, { headers }, ChannelReadSchema);
+    },
+    postChannelMessage(goalId, selector, input, commandId = cryptoRandomUuid()) {
+      const parsedGoalId = UuidSchema.parse(goalId);
+      const parsedSelector = ChannelSelectorSchema.parse(selector);
+      const parsedInput = ChannelMessageInputSchema.parse(input);
+      return request(`v1/goals/${encodeURIComponent(parsedGoalId)}/channels/${encodeURIComponent(parsedSelector.kind)}/${encodeURIComponent(parsedSelector.channelId)}/messages`, {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
+        body: JSON.stringify(parsedInput),
+      }, ChannelMessageSchema);
     },
     getProjection(query) {
       const parsed = ProjectionQuerySchema.parse(query);
@@ -790,4 +819,6 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
   };
 }
 
-export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, OrganizationReadModel, ProjectionQuery, ProjectionReadModel, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, EvidenceBundleRead, GoalGitIntegrationState, WorkerList, WorkerObservation, ImprovementDigestList };
+export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, OrganizationReadModel, ChannelSelector, ChannelQuery, ChannelMessageInput, ChannelMessage, ChannelRead, ProjectionQuery, ProjectionReadModel, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, EvidenceBundleRead, GoalGitIntegrationState, WorkerList, WorkerObservation, ImprovementDigestList };
+
+export { CHANNEL_SELECTORS };
