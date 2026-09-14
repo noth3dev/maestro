@@ -16,4 +16,16 @@ test.describe("Carnegie primary route accessibility", () => {
       expect(result.violations, JSON.stringify(result.violations, null, 2)).toEqual([]);
     });
   }
+
+  test("keyboard users can reach every linear operation and node", async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}${smokeRoute}`);
+    const controls = page.locator('[aria-label="Linear alternative"] button, [aria-label="Linear alternative"] input');
+    const count = await controls.count();
+    expect(count).toBeGreaterThan(8);
+    await controls.first().focus();
+    for (let index = 0; index < count; index += 1) {
+      await expect(controls.nth(index)).toBeFocused();
+      await page.keyboard.press("Tab");
+    }
+  });
 });
