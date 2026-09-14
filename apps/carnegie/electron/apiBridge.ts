@@ -12,7 +12,7 @@ export const exposedApiMethods = [
   "createGoalIntegrationBranch", "createDepartmentBranch", "createWorkerWorktree",
   "acceptWorker", "certifyWorker", "certifyConditionalWorker",
   "requestMetronomeCorrection", "requestMetronomeSafePause",
-  "listCertifications", "getEvidenceBundle", "listMetronomeChallenges", "listEncoreCouncilRounds", "getConcertmasterReport", "getGitIntegrationState", "listWorkersForGoal", "listImprovementDigestsForGoal",
+  "listCertifications", "getEvidenceBundle", "listMetronomeChallenges", "listEncoreCouncilRounds", "getConcertmasterReport", "getGitIntegrationState", "listWorkersForGoal", "listImprovementDigestsForGoal", "getArrangements",
 ] as const satisfies readonly (keyof ApiClient)[];
 export type ExposedApiMethod = (typeof exposedApiMethods)[number];
 

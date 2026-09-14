@@ -1,47 +1,82 @@
+import { useState } from "react";
 import { Icon } from "../icons.js";
 import { EmptyState } from "../components/EmptyState.js";
 import { useConnection } from "../connection.js";
-import { useGoalImprovementDigests } from "../useGoalImprovementDigests.js";
+import { useGoalArrangements } from "../useGoalArrangements.js";
+import type { ArrangementCandidate, ArrangementCouncil, ArrangementNegativeEvidence } from "@maestro/api-client";
+
+type ArrangementTab = "active" | "candidates" | "encoreCouncil" | "negativeEvidence";
+
+function CandidateItem({ candidate }: { candidate: ArrangementCandidate }) {
+  return (
+    <div key={`${candidate.candidateId}:${candidate.version}`} className="arr-item">
+      <div className="arr-icon" style={{ background: "var(--olive-bg)", color: "var(--olive-text)" }}><Icon name="lightbulb" /></div>
+      <div className="arr-body">
+        <div className="arr-title">{candidate.predictedEffect}</div>
+        <div className="arr-meta">{candidate.kind} · {candidate.state} · v{candidate.version}</div>
+        <div className="arr-meta">target: {candidate.target.roleId ?? candidate.target.routingTarget ?? "unscoped"}{candidate.target.taskClass === undefined ? "" : ` / ${candidate.target.taskClass}`}</div>
+        <div className="arr-meta">content hash: {candidate.contentHash}</div>
+        {candidate.evaluation?.metricDeltas.map((metric) => (
+          <div key={metric.name} className="arr-meta">{metric.name}: {metric.baseline} → {metric.candidate} ({metric.delta >= 0 ? "+" : ""}{metric.delta})</div>
+        ))}
+        {candidate.rollout !== null && <div className="arr-meta">rollout: {candidate.rollout.status} · active v{candidate.rollout.activeVersion}</div>}
+      </div>
+    </div>
+  );
+}
+
+function CouncilItem({ entry }: { entry: ArrangementCouncil }) {
+  return (
+    <div className="arr-item">
+      <div className="arr-icon" style={{ background: "var(--slate-bg)", color: "var(--slate-text)" }}><Icon name="message-square" /></div>
+      <div className="arr-body">
+        <div className="arr-title">{entry.finalVerdict} · round {entry.roundId}</div>
+        <div className="arr-meta">{entry.question} · {entry.reviewerCount} reviewers</div>
+        {entry.judgments.map((judgment, index) => (
+          <div key={`${judgment.modelProvider}/${judgment.modelId}:${index}`} className="arr-meta">{judgment.modelProvider}/{judgment.modelId} · {judgment.verdict} · {judgment.reasoning}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NegativeEvidenceItem({ entry }: { entry: ArrangementNegativeEvidence }) {
+  return (
+    <div className="arr-item">
+      <div className="arr-icon" style={{ background: "var(--rust-bg)", color: "var(--rust-text)" }}><Icon name="ban" /></div>
+      <div className="arr-body">
+        <div className="arr-title">rejected candidate · {entry.candidateId}</div>
+        <div className="arr-meta">reason: {entry.reason}{entry.roundId === null ? "" : ` · Council round ${entry.roundId}`}</div>
+        {entry.judgments.map((judgment, index) => <div key={`${judgment.modelProvider}/${judgment.modelId}:${index}`} className="arr-meta">{judgment.modelProvider}/{judgment.modelId} · {judgment.reasoning}</div>)}
+      </div>
+    </div>
+  );
+}
 
 export function Arrangements() {
   const { config } = useConnection();
-  const { digests, loading, error } = useGoalImprovementDigests();
+  const { arrangements, loading, error } = useGoalArrangements();
+  const [tab, setTab] = useState<ArrangementTab>("active");
 
   if (config === undefined) return <EmptyState />;
+  const items = arrangements === undefined ? [] : arrangements[tab];
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div className="dash-head" style={{ padding: "14px 20px 0" }}><div className="dash-title">arrangements</div></div>
-      <div className="dash-sub" style={{ padding: "0 20px" }}>improvement digests recorded for the selected Goal -- curated summaries only, no automatic changes</div>
-
+      <div className="dash-sub" style={{ padding: "0 20px" }}>Act 3 · verified improvement state from durable candidates, Encore Council judgments, and bounded rollouts</div>
+      <div className="page-tabs">
+        {(["active", "candidates", "encoreCouncil", "negativeEvidence"] as const).map((name) => (
+          <button type="button" key={name} className={`page-tab${tab === name ? " on" : ""}`} onClick={() => setTab(name)}>{name === "encoreCouncil" ? "encore council" : name === "negativeEvidence" ? "negative evidence" : name}</button>
+        ))}
+      </div>
       <div className="page-body">
         {loading && <p>loading…</p>}
         {error !== undefined && <div className="alert alert-warning">{error}</div>}
-        {!loading && error === undefined && digests !== undefined && digests.length === 0 && (
-          <p>No improvement digests recorded for this Goal yet.</p>
-        )}
-        {digests?.map((digest) => (
-          <div key={digest.digestId} className="arr-item">
-            <div className="arr-icon" style={{ background: "var(--olive-bg)", color: "var(--olive-text)" }}><Icon name="lightbulb" /></div>
-            <div className="arr-body">
-              <div className="arr-title">{digest.selectedDecision}</div>
-              <div className="arr-meta">{digest.trigger} · confidence {(digest.confidence * 100).toFixed(0)}%</div>
-              <div className="arr-meta">situation: {digest.situation}</div>
-              <div className="arr-meta">observed: {digest.observedResult}</div>
-              {digest.metrics.length > 0 && (
-                <div className="arr-deltas">
-                  {digest.metrics.map((metric) => <span key={metric.name}>{metric.name} {metric.value}{metric.unit}</span>)}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+        {!loading && error === undefined && arrangements !== undefined && items.length === 0 && <p>No durable {tab === "encoreCouncil" ? "Encore Council judgments" : tab === "negativeEvidence" ? "negative evidence" : `${tab} arrangements`} for this Goal yet.</p>}
+        {tab === "encoreCouncil" ? (items as ArrangementCouncil[]).map((entry) => <CouncilItem key={`${entry.candidateId}:${entry.roundId}`} entry={entry} />) : tab === "negativeEvidence" ? (items as ArrangementNegativeEvidence[]).map((entry) => <NegativeEvidenceItem key={entry.candidateId} entry={entry} />) : (items as ArrangementCandidate[]).map((candidate) => <CandidateItem key={`${candidate.candidateId}:${candidate.version}`} candidate={candidate} />)}
       </div>
-
-      <p style={{ padding: "0 20px 14px", fontSize: 12, opacity: 0.7 }}>
-        Candidate mutation, shadow-replay evaluation, live Encore Council deliberation, and rollout are
-        deliberately not implemented yet (Phase 6 Slice 1 scope): only append-only curated digests exist so far.
-      </p>
+      <p style={{ padding: "0 20px 14px", fontSize: 12, opacity: 0.7 }}>Act 3 state is read-only here; candidate mutation, Council decisions, and rollout controls remain authenticated backend actions.</p>
     </div>
   );
 }
