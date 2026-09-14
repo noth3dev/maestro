@@ -139,6 +139,7 @@ describeDatabase("durable authorized effects with PostgreSQL", () => {
     await expect(executor.execute(current, async () => undefined)).resolves.toMatchObject({ effect: "require_approval" });
     await expect(executor.deny(otherActor, "operator_rejected")).resolves.toMatchObject({ effect: "deny", reason: "operator_rejected" });
     await expect(hasPendingAuthorityApproval(pool, current)).resolves.toBe(true);
+    await expect(hasPendingAuthorityApproval(pool, otherActor)).resolves.toBe(false);
     await expect(listPendingAuthorityApprovals(pool, authorityProjectId)).resolves.toEqual([
       expect.objectContaining({ commandId: current.commandId, actorId: current.actorId, action: current.action, target: current.target }),
     ]);
