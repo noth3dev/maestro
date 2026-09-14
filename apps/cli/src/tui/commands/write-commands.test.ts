@@ -34,6 +34,7 @@ function api(): ApiClient {
     approveAndRunCriticalAction: vi.fn().mockResolvedValue({ effect: "allow", reason: "approved" }),
     certifyConditionalWorker: vi.fn().mockResolvedValue({ workerId: "worker-1", status: "certified" }),
     spawnWorker: vi.fn().mockResolvedValue({ workerId: "worker-1", status: "running" }),
+    observeWorker: vi.fn(),
     sendWorkerMessage: vi.fn(),
     advanceWorkerIntegration: vi.fn(),
     runEncoreReview: vi.fn().mockResolvedValue({ roundId: "round-1" }),
@@ -270,6 +271,15 @@ describe("TUI write commands", () => {
     expect(client.generateConcertmasterReport).toHaveBeenNthCalledWith(2, goalId, { projectId }, commandId);
     expect(first).toEqual(retry);
     expect(generated).toBe(2);
+  });
+
+  it("renders the full WorkerObservation returned by the observe route", async () => {
+    const client = api();
+    const observation = { workerId: "44444444-4444-4444-8444-444444444444", councilId: "55555555-5555-4555-8555-555555555555", departmentId: "engineering", planVersion: 1, itemId: "item-1", bundleContentHash: "a".repeat(64), attempt: 1, executionRef: "exec-1", invocationRef: "inv-1", status: "running" as const, answerText: null, usageTotalTokens: null, observability: { stopState: "open" as const, capabilityJournal: [], ipythonSessionJournal: [], toolEvents: { state: "empty" as const, events: [] } } };
+    vi.mocked(client.observeWorker).mockResolvedValue(observation as never);
+    const result = await executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "worker", action: "observe", options: { "worker-id": observation.workerId, "command-id": commandId } });
+    expect(result.lines.join("\n")).toContain("stop state: open");
+    expect(client.observeWorker).toHaveBeenCalledWith(observation.workerId, { projectId }, commandId);
   });
 
   it("sends a Worker message with the workspace project and renders the returned Worker", async () => {

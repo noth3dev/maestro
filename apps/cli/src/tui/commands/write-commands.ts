@@ -20,6 +20,7 @@ import {
 import type { ParsedCommand } from "./parser.js";
 import { createCommandRegistry } from "./registry.js";
 import { confirmCriticalAction, type ConfirmationPrompt } from "../confirmation.js";
+import { renderWorkerPanel } from "../panels/worker-panel.js";
 
 export interface WriteCommandContext {
   client: ApiClient;
@@ -394,6 +395,10 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
   if (key === "worker:observe" || key === "worker:cancel") {
     const workerId = required(command, "worker-id"); if (typeof workerId !== "string") return workerId;
     const observed = key.endsWith("observe") ? await context.client.observeWorker(workerId, { projectId: context.projectId }, id) : await context.client.cancelWorker(workerId, { projectId: context.projectId }, id);
+    if (key.endsWith("observe")) {
+      const rendered = renderWorkerPanel({ kind: "value", value: observed }, 120);
+      return { title: rendered[0]!, lines: rendered.slice(1) };
+    }
     return { title: "Worker", lines: [`${observed.workerId} · ${observed.status}`] };
   }
   if (key === "worker:message") {
