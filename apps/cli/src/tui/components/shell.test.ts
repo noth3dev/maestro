@@ -11,6 +11,10 @@ const state: TuiShellState = {
   budget: { kind: "empty" },
 };
 
+// ANSI escapes do not consume terminal columns; width assertions inspect visible text.
+// eslint-disable-next-line no-control-regex
+const stripAnsi = (value: string): string => value.replace(/\u001b\[[0-9;]*m/g, "");
+
 describe("Maestro TUI shell", () => {
   it("uses Maestro branding only on the first splash frame", () => {
     const output = renderShell(state, 120, 30, { showSplash: true }).join("\n");
@@ -54,7 +58,7 @@ describe("Maestro TUI shell", () => {
   it("renders a degraded splash at the narrow supported width", () => {
     const splash = renderTuiLayout(state, 40, 30, { showSplash: true }).splash;
     expect(splash.length).toBeGreaterThan(0);
-    expect(splash.every((line) => line.length <= 40)).toBe(true);
+    expect(splash.every((line) => stripAnsi(line).length <= 40)).toBe(true);
     expect(splash.join("\n")).toContain("ctrl+/");
   });
 
