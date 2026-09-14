@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -11,15 +12,10 @@ const legacyAppPackage = ["@maestro", "secretary"].join("/");
 const appDevServerEnv = ["MAESTRO", "CARNEGIE", "DEV_SERVER_URL"].join("_");
 const legacyAppDevServerEnv = ["MAESTRO", "SECRETARY", "DEV_SERVER_URL"].join("_");
 
-function textFiles(directory: string): string[] {
-  const result: string[] = [];
-  for (const entry of readdirSync(directory)) {
-    if (entry === ".git" || entry === "node_modules" || entry === "testbed" || entry === ".worktrees") continue;
-    const path = join(directory, entry);
-    if (statSync(path).isDirectory()) result.push(...textFiles(path));
-    else result.push(path);
-  }
-  return result;
+function trackedTextFiles(): string[] {
+  return execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8" })
+    .split("\0")
+    .filter((path) => path !== "");
 }
 
 function read(path: string): string {
@@ -30,10 +26,10 @@ describe("Maestro product and Carnegie app boundary", () => {
   it("keeps Maestro as the root product and workspace package scope", () => {
     expect(JSON.parse(read("package.json"))).toMatchObject({ name: "maestro" });
 
-    const packageFiles = textFiles(root).filter((path) => path.endsWith("package.json") || path.endsWith("package-lock.json"));
+    const packageFiles = trackedTextFiles().filter((path) => path.endsWith("package.json") || path.endsWith("package-lock.json"));
     for (const path of packageFiles) expect(readFileSync(path, "utf8"), relative(root, path)).not.toContain(carnegieScope);
 
-    const workspacePackages = textFiles(root).filter((path) => path.endsWith("package.json"));
+    const workspacePackages = trackedTextFiles().filter((path) => path.endsWith("package.json"));
     for (const path of workspacePackages) {
       const pkg = JSON.parse(readFileSync(path, "utf8")) as { name?: string };
       if (pkg.name?.startsWith("@")) expect(pkg.name, relative(root, path)).toMatch(/^@maestro\//);
@@ -72,7 +68,7 @@ describe("Maestro product and Carnegie app boundary", () => {
   });
 
   it("does not leave the old desktop path, package, or development environment behind", () => {
-    const textPaths = textFiles(root);
+    const textPaths = trackedTextFiles();
     const legacyPathPattern = new RegExp(`${legacyAppDirectory.replace("/", "\\/")}(?=[/\`"' )]|$)`);
     for (const path of textPaths) {
       const text = readFileSync(path, "utf8");
