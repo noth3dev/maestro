@@ -24,7 +24,7 @@ function buildAuthenticatedServer(goalService: GoalService, authenticator: Opera
 const event = { cursor: "9007199254740993", eventId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02", projectId: goal.projectId, goalId: goal.goalId, aggregateVersion: "1", eventType: "GoalCreated", schemaVersion: 1, payload: { state: "draft" }, occurredAt: "2025-01-01T00:00:00.000Z" };
 function fakeEvents(overrides: Partial<EventService> = {}): EventService { return { listEvents: async () => [event], ...overrides }; }
 
-const state: ReadStateService = { listGoals: async () => [goal], getBudgetSummary: async () => ({ goalId: goal.goalId, projectId: goal.projectId, budgetCents: 10, reservedCents: 4, costCents: 3 }), listMetronomeChallenges: async () => [{ challengeId: goal.goalId, goalId: goal.goalId, reason: "r", evidenceReferences: [], status: "open", correctionRequest: null, raisedBy: "metronome", resolvedBy: null, resolutionReason: null, targetRef: null }], listEncoreCouncilRounds: async () => [], listCertifications: async () => [], getConcertmasterReport: async () => undefined, getEvidenceBundle: async () => ({ bundleId: goal.goalId, goalId: goal.goalId, content: { goalId: goal.goalId }, hash: "a".repeat(64) }), getGitIntegrationState: async () => ({ goalId: goal.goalId, branch: null, latestRevision: null }), listWorkersForGoal: async () => [], listImprovementDigestsForGoal: async () => [] };
+const state: ReadStateService = { listGoals: async () => [goal], getBudgetSummary: async () => ({ goalId: goal.goalId, projectId: goal.projectId, budgetCents: 10, reservedCents: 4, costCents: 3 }), getBillingSummary: async () => ({ projectId: goal.projectId, periodDays: 14, dailySpend: Array.from({ length: 14 }, (_, index) => ({ date: `2026-09-${String(index + 1).padStart(2, "0")}`, costCents: 0 })), goals: [], totals: { budgetCents: 0, reservedCents: 0, costCents: 0 }, departmentBreakdown: { available: false, reason: "Actual costs are tracked at Goal scope only" } }), listMetronomeChallenges: async () => [{ challengeId: goal.goalId, goalId: goal.goalId, reason: "r", evidenceReferences: [], status: "open", correctionRequest: null, raisedBy: "metronome", resolvedBy: null, resolutionReason: null, targetRef: null }], listEncoreCouncilRounds: async () => [], listCertifications: async () => [], getConcertmasterReport: async () => undefined, getEvidenceBundle: async () => ({ bundleId: goal.goalId, goalId: goal.goalId, content: { goalId: goal.goalId }, hash: "a".repeat(64) }), getGitIntegrationState: async () => ({ goalId: goal.goalId, branch: null, latestRevision: null }), listWorkersForGoal: async () => [], listImprovementDigestsForGoal: async () => [] };
 
 function fakeService(overrides: Partial<GoalService> = {}): GoalService {
   return {
@@ -149,6 +149,30 @@ describe("project access provisioning route", () => {
     const app = buildServer({ goalService: fakeService(), authenticator: authenticated() });
     const response = await app.inject({ method: "POST", url: "/v1/admin/project-access", headers: { authorization: "Bearer test-secret" }, payload: { operatorId: goal.goalId, projectId: goal.projectId, roles: ["concertmaster"] } });
     expect(response.statusCode).toBe(503);
+    await app.close();
+  });
+});
+
+describe("billing read route", () => {
+  it("returns durable daily spend, explicit department availability, and reconciled cross-Goal totals", async () => {
+    const summary = {
+      projectId: goal.projectId,
+      periodDays: 14,
+      dailySpend: Array.from({ length: 14 }, (_, index) => ({ date: `2026-09-${String(index + 1).padStart(2, "0")}`, costCents: index === 13 ? 7 : 0 })),
+      goals: [
+        { goalId: goal.goalId, budgetCents: 100, reservedCents: 20, costCents: 7 },
+        { goalId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f07", budgetCents: 200, reservedCents: 30, costCents: 11 },
+      ],
+      totals: { budgetCents: 300, reservedCents: 50, costCents: 18 },
+      departmentBreakdown: { available: false, reason: "Actual costs are tracked at Goal scope only" },
+    };
+    const getBillingSummary = vi.fn(async () => summary);
+    const billingReadState = { ...state, getBillingSummary } as unknown as ReadStateService;
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readStateService: billingReadState });
+    const response = await app.inject({ method: "GET", url: `/v1/billing?projectId=${goal.projectId}`, headers: { authorization: "Bearer test-secret" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(summary);
+    expect(getBillingSummary).toHaveBeenCalledWith(goal.projectId);
     await app.close();
   });
 });

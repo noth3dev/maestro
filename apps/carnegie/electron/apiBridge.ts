@@ -3,7 +3,7 @@ import type { ConnectionConfig } from "./store.js";
 
 /** Only these ApiClient methods are reachable from the renderer. Every write here already exists as a real, tested control-plane route. */
 export const exposedApiMethods = [
-  "listGoals", "getGoal", "getBudgetSummary", "getChannel", "postChannelMessage", "getProjection", "listEvents",
+  "listGoals", "getGoal", "getBudgetSummary", "getBillingSummary", "getChannel", "postChannelMessage", "getProjection", "listEvents",
   "createTaskContract", "getTaskContract", "updateTaskContract", "selectOvertureRoles", "confirmTaskContract", "launchTaskContract",
   "pauseGoal", "resumeGoal", "stopGoal", "emergencyStopGoal",
   "requestCriticalAction", "approveAndRunCriticalAction",

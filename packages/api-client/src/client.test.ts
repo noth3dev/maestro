@@ -20,6 +20,23 @@ describe("channel client", () => {
   });
 });
 
+describe("billing client", () => {
+  it("reads the project billing summary from the control plane", async () => {
+    const summary = {
+      projectId,
+      periodDays: 14,
+      dailySpend: Array.from({ length: 14 }, (_, index) => ({ date: `2026-09-${String(index + 1).padStart(2, "0")}`, costCents: index === 13 ? 7 : 0 })),
+      goals: [{ goalId, budgetCents: 100, reservedCents: 20, costCents: 7 }],
+      totals: { budgetCents: 100, reservedCents: 20, costCents: 7 },
+      departmentBreakdown: { available: false, reason: "Actual costs are tracked at Goal scope only" },
+    };
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(summary), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+    await expect(client.getBillingSummary(projectId)).resolves.toEqual(summary);
+    expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/billing?projectId=${projectId}`, expect.objectContaining({ headers: { authorization: "Bearer top-secret" } }));
+  });
+});
+
 describe("createApiClient", () => {
   it("lists authenticated project memberships for first-run workspace discovery", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ projects: [projectId] }), { status: 200 }));

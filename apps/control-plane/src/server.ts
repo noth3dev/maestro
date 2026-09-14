@@ -33,6 +33,7 @@ import {
   ProjectionQuerySchema,
   ProjectionReadModelSchema,
   GoalBudgetSummarySchema,
+  BillingReadModelSchema,
   GoalResultSchema,
   MetronomeChallengeListSchema,
   EncoreCouncilRoundListSchema,
@@ -350,6 +351,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
   const readState = readStateService ?? {
     listGoals: async () => { throw new DurableStoreUnavailableError(); },
     getBudgetSummary: async () => { throw new DurableStoreUnavailableError(); },
+    getBillingSummary: async () => { throw new DurableStoreUnavailableError(); },
     listMetronomeChallenges: async () => { throw new DurableStoreUnavailableError(); },
     listEncoreCouncilRounds: async () => { throw new DurableStoreUnavailableError(); },
     listCertifications: async () => { throw new DurableStoreUnavailableError(); },
@@ -1221,6 +1223,11 @@ export function buildServer({ goalService, authenticator, eventService, critical
   app.get("/v1/goals", async (request, reply) => {
     const query = parse(GoalQuerySchema, request.query);
     return reply.send(GoalListSchema.parse({ goals: await readState.listGoals(query.projectId) }));
+  });
+
+  app.get("/v1/billing", async (request, reply) => {
+    const query = parse(GoalQuerySchema, request.query);
+    return reply.send(BillingReadModelSchema.parse(await readState.getBillingSummary(query.projectId)));
   });
 
   app.get("/v1/projection", async (request, reply) => {
