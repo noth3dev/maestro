@@ -119,4 +119,35 @@ describeDatabase("channel route durability", () => {
     } finally { await reloaded.close(); }
   });
 
+  it("rejects channel reads for project members without the channel role", async () => {
+    const projectId = randomUUID();
+    const goalId = randomUUID();
+    const operatorSecret = `channel-route-forbidden-${randomUUID()}`;
+    const { operatorId, credentialId } = await bootstrapLocalOperator(pool, { secret: operatorSecret });
+    await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
+    await grantProjectMembership(pool, operatorId, projectId);
+    const authenticator: OperatorAuthenticator = {
+      authenticateBearerSecret: async (secret) => secret === `${credentialId}.${operatorSecret}`
+        ? { outcome: "authenticated", operator: { operatorId, credentialId } }
+        : { outcome: "invalid" },
+    };
+    const app = buildServer({
+      goalService,
+      authenticator,
+      channelService: {
+        get: (input: Parameters<typeof getChannel>[1]) => getChannel(pool, input),
+        post: (input: Parameters<typeof postChannelMessage>[1]) => postChannelMessage(pool, input),
+      },
+      projectMembership: { assertProjectMembership: (id, project) => assertProjectMembership(pool, id, project) },
+    });
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: `/v1/goals/${goalId}/channels/department/engineering?projectId=${projectId}`,
+        headers: { authorization: `Bearer ${credentialId}.${operatorSecret}` },
+      });
+      expect(response.statusCode).toBe(403);
+    } finally { await app.close(); }
+  });
+
 });
