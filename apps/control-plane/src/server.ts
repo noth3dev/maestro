@@ -29,6 +29,7 @@ import {
   ProviderAccountLoginStartResultSchema,
   ProviderAccountLoginStatusSchema,
   ProjectListSchema,
+  OrganizationReadModelSchema,
   GoalBudgetSummarySchema,
   GoalResultSchema,
   MetronomeChallengeListSchema,
@@ -204,6 +205,11 @@ export interface ProjectDiscoveryService {
   listProjects(operatorId: string): Promise<readonly string[]>;
 }
 
+export interface OrganizationService {
+  /** Returns the standing taxonomy; authentication is enforced by the route hook. */
+  listOrganization(): Promise<import("@maestro/contracts").OrganizationReadModel>;
+}
+
 export interface ProviderCredentialService {
   bind(input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic"; authMode: "api-key"; secret: string }): Promise<import("@maestro/agent-runtime").GatewayCredentialBinding>;
   revoke(input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic" }): Promise<void>;
@@ -257,7 +263,7 @@ async function waitForAccountLoginStart(store: AccountLoginStore, operatorId: st
   throw new Error("account login start is still in progress");
 }
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, evidenceCaptureService, personaGoalEvidenceService, concertmasterReportService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, evidenceCaptureService, personaGoalEvidenceService, concertmasterReportService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, organizationService, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
@@ -293,6 +299,8 @@ export function buildServer({ goalService, authenticator, eventService, critical
   projectMembership?: ProjectMembershipChecker;
   /** Authenticated project discovery used for first-run workspace attachment. */
   projectDiscovery?: ProjectDiscoveryService;
+  /** Authenticated standing organization taxonomy used for first-run orientation. */
+  organizationService?: OrganizationService;
   /** Provider credential lifecycle delegated to the separately authenticated gateway. */
   providerCredentials?: ProviderCredentialService;
   /** Durable account-login idempotency and restart state. Production always supplies this. */
@@ -310,6 +318,9 @@ export function buildServer({ goalService, authenticator, eventService, critical
   const maxActiveStreams = 128;
   const loginOwnerId = accountLoginOwnerId ?? `control-plane-${randomUUID()}`;
   const loginOperationStaleAfterMs = 30_000;
+  const organizations = organizationService ?? {
+    listOrganization: async () => { throw new DurableStoreUnavailableError(); },
+  } satisfies OrganizationService;
   const events = eventService ?? { listEvents: async () => { throw new DurableStoreUnavailableError(); } };
   const readState = readStateService ?? {
     listGoals: async () => { throw new DurableStoreUnavailableError(); },
@@ -496,6 +507,10 @@ export function buildServer({ goalService, authenticator, eventService, critical
     if (!projectDiscovery) throw new DurableStoreUnavailableError();
     const projects = await projectDiscovery.listProjects(requestOperator(request as { operator?: OperatorContext }).operatorId);
     return reply.status(200).send(ProjectListSchema.parse({ projects }));
+  });
+
+  app.get("/v1/organization", async (_request, reply) => {
+    return reply.status(200).send(OrganizationReadModelSchema.parse(await organizations.listOrganization()));
   });
 
   app.post("/v1/provider-credentials", async (request, reply) => {

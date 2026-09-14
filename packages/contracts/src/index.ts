@@ -102,6 +102,25 @@ export * from "./provider-credentials.js";
 export const ProjectListSchema = z.object({ projects: z.array(UuidSchema) }).strict();
 export type ProjectList = z.infer<typeof ProjectListSchema>;
 
+const OrganizationGroupSchema = z.object({
+  groupId: z.string().min(1),
+  displayName: z.string().min(1),
+}).strict();
+const OrganizationDepartmentSchema = z.object({
+  departmentId: z.string().min(1),
+  groupId: z.string().min(1),
+  displayName: z.string().min(1),
+  status: z.literal("sleeping"),
+  activeSessionId: z.null(),
+  goalContext: z.null(),
+}).strict();
+/** Standing organization taxonomy exposed for the authenticated TUI orientation view. */
+export const OrganizationReadModelSchema = z.object({
+  groups: z.array(OrganizationGroupSchema),
+  departments: z.array(OrganizationDepartmentSchema),
+}).strict();
+export type OrganizationReadModel = z.infer<typeof OrganizationReadModelSchema>;
+
 const NonEmptyStringListSchema = z.array(z.string().min(1)).readonly();
 const TaskContractProjectSchema = z.object({
   projectId: UuidSchema,

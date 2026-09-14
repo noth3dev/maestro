@@ -14,6 +14,18 @@ describe("createApiClient", () => {
     expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/projects", expect.objectContaining({ headers: { authorization: "Bearer top-secret" } }));
   });
 
+  it("reads the authenticated permanent organization taxonomy", async () => {
+    const organization = {
+      groups: [{ groupId: "product", displayName: "Product Group" }],
+      departments: [{ departmentId: "product", groupId: "product", displayName: "Product Department", status: "sleeping", activeSessionId: null, goalContext: null }],
+    };
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(organization), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+
+    await expect(client.getOrganization()).resolves.toEqual(organization);
+    expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/organization", expect.objectContaining({ headers: { authorization: "Bearer top-secret" } }));
+  });
+
   it("logs in and revokes provider credentials without exposing the bearer token", async () => {
     const binding = { bindingId: "credential-1", providerId: "openai", authMode: "api-key", accountRef: "openai-operator", configuredAt: "2025-01-01T00:00:00.000Z" };
     const fetch = vi.fn()
