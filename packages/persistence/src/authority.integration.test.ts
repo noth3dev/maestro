@@ -107,7 +107,7 @@ describeDatabase("durable authorized effects with PostgreSQL", () => {
     expect(calls).toBe(1);
   });
 
-  it("aggregates pending critical approvals across Goals and removes an exact approved request", async () => {
+  it("aggregates pending critical approvals across Goals and resolves an exact same-timestamp denial", async () => {
     const secondGoalId = "33333333-3333-4333-8333-333333333333";
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'active', 1, transaction_timestamp(), transaction_timestamp())", [secondGoalId, authorityProjectId]);
     const executor = new AuthorizedEffectExecutor(repository, () => new Date("2029-01-01T00:00:00Z"));
@@ -124,6 +124,10 @@ describeDatabase("durable authorized effects with PostgreSQL", () => {
     expect(remaining).toHaveLength(1);
     expect(remaining[0]!.goalId).toBe(secondGoalId);
     await expect(executor.deny(second, "operator_rejected")).resolves.toMatchObject({ effect: "deny", reason: "operator_rejected" });
+    await expect(pool.query(
+      "SELECT DISTINCT decided_at FROM authority_decisions WHERE command_id = $1 ORDER BY decided_at",
+      [second.commandId],
+    )).resolves.toMatchObject({ rows: [{ decided_at: new Date("2029-01-01T00:00:00Z") }] });
     await expect(listPendingAuthorityApprovals(pool, authorityProjectId)).resolves.toEqual([]);
   });
 

@@ -85,7 +85,7 @@ export async function hasPendingAuthorityApproval(pool: Pool, input: Pick<Action
       WHERE d.command_id = $1 AND d.project_id = $2 AND d.goal_id = $3
         AND d.action = $4 AND d.target = $5 AND d.policy_version = $6 AND d.budget_effect_cents = $7::bigint
         AND d.outcome = 'require_approval' AND d.classification = 'critical'
-        AND NOT EXISTS (SELECT 1 FROM authority_decisions resolved WHERE resolved.command_id = d.command_id AND resolved.project_id = d.project_id AND resolved.goal_id = d.goal_id AND resolved.action = d.action AND resolved.target = d.target AND resolved.policy_version = d.policy_version AND resolved.budget_effect_cents = d.budget_effect_cents AND resolved.outcome IN ('allow', 'deny') AND resolved.decided_at > d.decided_at)
+        AND NOT EXISTS (SELECT 1 FROM authority_decisions resolved WHERE resolved.command_id = d.command_id AND resolved.project_id = d.project_id AND resolved.goal_id = d.goal_id AND resolved.action = d.action AND resolved.target = d.target AND resolved.policy_version = d.policy_version AND resolved.budget_effect_cents = d.budget_effect_cents AND resolved.outcome IN ('allow', 'deny') AND resolved.decided_at >= d.decided_at)
         AND NOT EXISTS (SELECT 1 FROM authority_records approval WHERE approval.kind = 'approval' AND approval.command_id = d.command_id AND approval.project_id = d.project_id AND approval.goal_id = d.goal_id AND approval.action = d.action AND approval.target = d.target AND approval.policy_version = d.policy_version AND approval.budget_effect_cents = d.budget_effect_cents AND approval.revoked_at IS NULL AND approval.expires_at > clock_timestamp())
       LIMIT 1`,
     [input.commandId, input.projectId, input.goalId, input.action, input.target, input.policyVersion, String(input.budgetEffectCents)],
@@ -116,7 +116,9 @@ export async function findOperatorRejectedAuthorityDecision(
            FROM authority_decisions
           WHERE command_id = $1 AND project_id = $2 AND goal_id = $3 AND actor_id = $4
             AND action = $5 AND target = $6 AND policy_version = $7 AND budget_effect_cents = $8::bigint
-          ORDER BY decided_at DESC, decision_id DESC
+          ORDER BY decided_at DESC,
+                   CASE WHEN outcome IN ('allow', 'deny') THEN 1 ELSE 0 END DESC,
+                   decision_id DESC
           LIMIT 1
        ) d
       WHERE d.outcome = 'deny' AND d.reason = 'operator_rejected' AND d.classification = 'critical'`,
@@ -159,7 +161,7 @@ export async function listPendingAuthorityApprovals(pool: Pool, projectId: strin
            WHERE resolved.project_id = d.project_id AND resolved.goal_id = d.goal_id
              AND resolved.command_id = d.command_id AND resolved.action = d.action AND resolved.target = d.target
              AND resolved.policy_version = d.policy_version AND resolved.budget_effect_cents = d.budget_effect_cents
-             AND resolved.outcome IN ('allow', 'deny') AND resolved.decided_at > d.decided_at
+             AND resolved.outcome IN ('allow', 'deny') AND resolved.decided_at >= d.decided_at
         )
         AND NOT EXISTS (
           SELECT 1 FROM authority_records approval
