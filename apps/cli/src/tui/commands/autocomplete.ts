@@ -5,6 +5,7 @@ const options: Record<string, readonly string[]> = {
   "admin project-access": ["--operator-id", "--project-id", "--roles-json"],
   "goal create": ["--project-id", "--contract-id", "--command-id"],
   "goal get": ["--goal-id", "--project-id"],
+  "projection read": ["--goal-id", "--department-id", "--group-id", "--head-id"],
   "goal select": ["--goal-id"],
   "goal transition": ["--goal-id", "--project-id", "--expected-version", "--to", "--command-id"],
   "goal pause": ["--goal-id", "--project-id", "--reason", "--command-id"],

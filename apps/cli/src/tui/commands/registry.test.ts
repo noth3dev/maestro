@@ -7,6 +7,7 @@ describe("TUI command registry", () => {
     for (const command of [
       "goal",
       "projects",
+      "projection",
       "task-contract",
       "head",
       "council",
@@ -35,6 +36,7 @@ describe("TUI command registry", () => {
   it("marks mutating and critical commands for confirmation policy", () => {
     const registry = createCommandRegistry();
     expect(registry.find("goal")?.actions.find((action) => action.name === "get")?.kind).toBe("read");
+    expect(registry.find("projection")?.actions.find((action) => action.name === "read")?.kind).toBe("read");
     expect(registry.find("goal")?.actions.find((action) => action.name === "pause")?.kind).toBe("write");
     expect(registry.find("goal")?.actions.find((action) => action.name === "select")?.kind).toBe("write");
     expect(registry.find("approval")?.actions.find((action) => action.name === "approve-and-run")?.kind).toBe("critical");

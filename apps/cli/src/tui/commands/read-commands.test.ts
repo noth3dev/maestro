@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "@maestro/api-client";
+import type { ProjectionReadModel } from "@maestro/contracts";
 import { discoverWorkspaceProject, discoverWorkspaceProjectFromControlPlane, executeReadCommand, readDashboard } from "./read-commands.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
@@ -107,6 +108,20 @@ describe("workspace read commands", () => {
     await expect(executeReadCommand({ client: api, projectId, goalId }, { name: "evidence", action: "list", options: {} })).resolves.toEqual({ title: "Evidence", lines: [`• ${evidenceId} · test-result · ${createdAt}`] });
     await expect(executeReadCommand({ client: api, projectId, goalId }, { name: "evidence", action: "bundle", options: {} })).resolves.toEqual({ title: "Evidence bundle", lines: [`• ${bundle.bundleId} · ${bundle.hash}`, `• evidenceRecords: ${JSON.stringify(bundle.content.evidenceRecords)}`, `• workers: ${JSON.stringify(bundle.content.workers)}`] });
     expect(api.getEvidenceBundle).toHaveBeenCalledWith(goalId, { projectId });
+  });
+
+  it("reads the standalone projection through the typed client and renders navigation", async () => {
+    const projection: ProjectionReadModel = { nodes: [], edges: [], eventCursor: "0" };
+    const api = client({
+      getProjection: vi.fn().mockResolvedValue(projection),
+      getOrganization: vi.fn().mockResolvedValue({ groups: [], departments: [] }),
+    });
+    await expect(executeReadCommand({ client: api, projectId }, { name: "projection", action: "read", options: {} })).resolves.toEqual({
+      title: "Organization projection",
+      lines: ["No Departments are present in the projection."],
+    });
+    expect(api.getProjection).toHaveBeenCalledWith({ projectId });
+    expect(api.getOrganization).toHaveBeenCalledOnce();
   });
 
   it("executes a read command and rejects writes at the read boundary", async () => {
