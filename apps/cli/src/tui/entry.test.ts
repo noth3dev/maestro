@@ -63,16 +63,20 @@ describe("automatic provider sign-in", () => {
   it("does not overwrite manual provider-key entry or a stale connection", async () => {
     let resolveModels: ((models: readonly []) => void) | undefined;
     let manualLoginActive = false;
+    let loginInteractionGeneration = 0;
+    const manualGeneration = loginInteractionGeneration;
     const manualOffer = vi.fn();
     const manualRequest = runAutomaticProviderSignInOffer({
       client: { listModels: () => new Promise<readonly []>((resolve) => { resolveModels = resolve; }) },
       getConfiguredModel: () => undefined,
       gate: createAutomaticProviderSignInGate(),
-      isCurrent: () => true,
+      isCurrent: () => loginInteractionGeneration === manualGeneration,
       isManualLoginActive: () => manualLoginActive,
       onOffer: manualOffer,
     });
     manualLoginActive = true;
+    loginInteractionGeneration += 1;
+    manualLoginActive = false;
     resolveModels!([]);
     await manualRequest;
     expect(manualOffer).not.toHaveBeenCalled();
