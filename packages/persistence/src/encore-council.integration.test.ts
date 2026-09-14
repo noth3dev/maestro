@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ExecutionAdmission, ExecutionKernelPort } from "@carnegie/domain";
+import type { ExecutionAdmission, ExecutionKernelPort } from "@maestro/domain";
 import { evaluateEncoreCouncilTrigger, EncoreCouncilError, runEncoreCouncilReview } from "./encore-council.js";
 import { requestSemanticReview } from "./semantic-review.js";
 import { acquireGoalLease } from "./commands.js";

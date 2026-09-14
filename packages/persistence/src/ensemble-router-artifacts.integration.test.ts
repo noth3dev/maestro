@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { type OperationalOverlay, type RoutingEvidence } from "@carnegie/domain";
+import { type OperationalOverlay, type RoutingEvidence } from "@maestro/domain";
 import { applyAllMigrations } from "./test-migrations.js";
 import {
   EnsembleRouterArtifactConflictError,

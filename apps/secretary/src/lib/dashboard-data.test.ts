@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GoalResult } from "@carnegie/api-client";
+import type { GoalResult } from "@maestro/api-client";
 import { summarizeDashboard, type DashboardGoalDetail } from "./dashboard-data.js";
 
 const goalId = "22222222-2222-4222-8222-222222222222";

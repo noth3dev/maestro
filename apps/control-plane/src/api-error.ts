@@ -1,4 +1,4 @@
-import { GitOperationError } from "@carnegie/domain";
+import { GitOperationError } from "@maestro/domain";
 import {
   CapabilityApprovalConflictError, EvidenceMetadataConflictError,
   HeadActivationCycleError, HeadActivationBindingConflictError, HeadActivationRuntimeConflictError,
@@ -10,11 +10,11 @@ import {
   WorkerError, WorkerNotFoundError, CapacityReservationError,
   ProjectAccessAdminRequiredError, ProjectAccessRoleNotFoundError, ProjectAccessTargetNotFoundError,
   ProjectMembershipRequiredError, ProjectRoleRequiredError,
-} from "@carnegie/persistence";
+} from "@maestro/persistence";
 import {
   StableApiErrorSchema,
   type StableApiError,
-} from "@carnegie/contracts";
+} from "@maestro/contracts";
 import {
   CommandIdReuseError, DurableStoreUnavailableError, GoalNotFoundError, InvalidTransitionError,
   LeaseUnavailableError, StaleLeaseError, VersionConflictError,
@@ -48,7 +48,7 @@ import { EvidenceCaptureError, EvidenceCaptureGoalBindingError } from "./evidenc
 import { CapabilityApprovalUnauthorizedError, CapabilityApprovalInvalidRequestError } from "./capability-approval-service.js";
 import { GitProjectMismatchError } from "./git-integration-service.js";
 import { ConcertmasterReportCommandReuseError, ConcertmasterReportGoalNotFoundError, ConcertmasterReportProjectMismatchError } from "./concertmaster-report-service.js";
-import { GitAuthorizationError } from "@carnegie/git-adapter";
+import { GitAuthorizationError } from "@maestro/git-adapter";
 import { AuthenticationRequiredError, AuthenticationUnavailableError, CredentialForbiddenError, CriticalActionDeniedError, CriticalActionRequiresApprovalError, RequestValidationError, isMalformedJsonError } from "./server-input.js";
 
 export function mapError(error: unknown): { status: number; body: StableApiError } {

@@ -1,7 +1,7 @@
 import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { PERMANENT_DEPARTMENTS, PERMANENT_GROUPS, PERMANENT_ROLES, CONCERTMASTER_PERSONA_BASELINE } from "@carnegie/domain";
+import { PERMANENT_DEPARTMENTS, PERMANENT_GROUPS, PERMANENT_ROLES, CONCERTMASTER_PERSONA_BASELINE } from "@maestro/domain";
 import { bootstrapPermanentOrganization, getPermanentRole, listPermanentOrganization, listPermanentRoles } from "./organization.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;

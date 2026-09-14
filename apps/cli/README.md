@@ -1,6 +1,6 @@
 # CLI
 
-Terminal client for the authenticated Carnegie Control Plane. It is a presentation and operator-command surface, not an execution runtime and not a credential store.
+Terminal client for the authenticated Maestro Control Plane. It is a presentation and operator-command surface, not an execution runtime and not a credential store.
 
 ## Run
 

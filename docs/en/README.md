@@ -2,13 +2,13 @@
   <a href="../../README.md">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="../assets/logo.svg">
-      <img alt="Carnegie" src="../assets/logo-light.svg" width="280" style="max-width: 100%;">
+      <img alt="Maestro" src="../assets/logo-light.svg" width="280" style="max-width: 100%;">
     </picture>
   </a>
 </p>
 
 <h3 align="center">
-Carnegie: Self-Improving &amp; Durable Agent Orchestration for Versatile Tasks
+Maestro: Self-Improving &amp; Durable Agent Orchestration for Versatile Tasks
 </h3>
 <p align="center">
   <a href="../ko/README.md"><b>한국어 (ko)</b></a> &bull;
@@ -30,12 +30,12 @@ Carnegie: Self-Improving &amp; Durable Agent Orchestration for Versatile Tasks
 
 > **Languages:** [**English (en)**](README.md) | [**한국어 (ko)**](../ko/README.md)
 
-Carnegie is an open-source enterprise AI orchestration framework designed for reliable, long-running, multi-agent goal execution. Its current conversation path is owned by the **Carnegie native agent runtime** and an authenticated provider gateway. All execution paths are owned by the native Carnegie runtime and authenticated model gateway. Carnegie models real human organization structures—incorporating separation of powers, permanent domain departments, monotonic fencing leases, and cryptographic auditability to ensure zero unapproved side effects.
+Maestro is an open-source enterprise AI orchestration framework designed for reliable, long-running, multi-agent goal execution. Its current conversation path is owned by the **Maestro native agent runtime** and an authenticated provider gateway. All execution paths are owned by the native Maestro runtime and authenticated model gateway. Maestro models real human organization structures—incorporating separation of powers, permanent domain departments, monotonic fencing leases, and cryptographic auditability to ensure zero unapproved side effects.
 
 ## Current Runtime Boundary
 
 - **Conversation path:** `MaestroAgentRuntime` in the Control Plane, using the authenticated `apps/model-gateway` process.
-- **Provider authentication:** API keys stay in the gateway credential store. OpenAI ChatGPT subscription login is delegated to the documented Codex app-server; Carnegie persists only login metadata and state.
+- **Provider authentication:** API keys stay in the gateway credential store. OpenAI ChatGPT subscription login is delegated to the documented Codex app-server; Maestro persists only login metadata and state.
 - **Worker path:** `ExecutionKernelPort` uses the authenticated Model Gateway transport; the pure Ensemble Router selector exists, but production selector/native-admission wiring is not implemented. Every admission carries host context, capability grant, model policy, account binding, and idempotency. Production host tools are not registered yet; unregistered tools fail closed and native Workers are text/evidence-only.
 - **Terminal UI:** `@earendil-works/pi-tui` is used for presentation only and has no execution authority.
 
@@ -55,7 +55,7 @@ The repository contains the routing **artifact contracts**, not a production sel
 
 ## Core Architecture & Pillars
 
-Carnegie is built around four core architectural guarantees:
+Maestro is built around four core architectural guarantees:
 
 - **Hierarchical Organization & Separation of Powers:**
   - **Concertmaster (Secretary Office)** orchestrates natural-language goals with the Conductor.
@@ -85,26 +85,26 @@ Carnegie is built around four core architectural guarantees:
 ```mermaid
 flowchart TD
     CONDUCTOR([Conductor / User]) -->|1. Natural Language Goal| CONCERTMASTER[Concertmaster]
-    
+
     subgraph IntakePhase [Intake & Framing]
         CONCERTMASTER -->|2. Activate Overture Roles| OC[Overture Crew]
         OC -->|3. Draft task.md| TC[Task Contract]
         TC -->|4. Submit for Approval| CONDUCTOR
     end
-    
+
     CONDUCTOR -->|5. Single Launch Confirmation| CONCERTMASTER
-    
+
     subgraph DeliberationPhase [Deliberation & Planning]
         CONCERTMASTER -->|6. Wake Required Heads| DH[Department Heads]
         DH -->|7. Sealed Brief Submissions| HC[Head Council Deliberation]
         HC -->|8. Formulate Decision Packet| DP[Department Plans]
     end
-    
+
     subgraph ExecutionPhase [Execution & Side-Effect Control]
         DP -->|9. Dispatch Mission Bundles| W[Scout & Execution Workers]
         W -->|10. Isolated Execution| GIT[(Git Worktree & AuthorizedEffectExecutor)]
     end
-    
+
     subgraph VerificationPhase [Certification & Self-Improvement]
         W -->|11. Submit Evidence Bundle| EB[SHA-256 Evidence]
         EB -->|12. Verify Integrity| METRONOME[Metronome / Quality Certification]
@@ -112,7 +112,7 @@ flowchart TD
         EB -.->|14. Milestone Evidence| OW[Encore Self-Improvement Lab]
         OW -.->|15. Replay / Shadow Feedback| DH
     end
-    
+
     CONCERTMASTER -->|16. Deliver Report| CONDUCTOR
 ```
 
@@ -160,7 +160,7 @@ npm run check
 
 ## CLI Usage
 
-The Carnegie CLI (`apps/cli`) is an authenticated command client for the implemented Control Plane REST API. Unsupported surfaces fail rather than being simulated:
+The Maestro CLI (`apps/cli`) is an authenticated command client for the implemented Control Plane REST API. Unsupported surfaces fail rather than being simulated:
 
 ```bash
 # Query details for a Goal
@@ -212,5 +212,5 @@ Please review our [Security Policy](../../SECURITY.md) for details on vulnerabil
 
 ## License
 
-Carnegie is fully open source and released under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+Maestro is fully open source and released under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
 See the [LICENSE](../../LICENSE) file for details.

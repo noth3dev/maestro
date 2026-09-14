@@ -1,4 +1,4 @@
-# Carnegie Phase 1–2 Execution Plan
+# Maestro Phase 1–2 Execution Plan
 
 ## Current canonical status — 2026-09-09
 
@@ -23,8 +23,8 @@ This is the active implementation plan for the approved Phase 2 host-tool bounda
 ### Architecture boundary confirmed by the benchmark
 
 - TypeScript/Node remains the owner of session identity, persistent-kernel lifecycle, serialized execution, host-request dispatch, budgets, interruption, audit correlation, and shutdown.
-- Python remains a model-facing session runtime. It can request host effects only through a narrow JSON-lines bridge; it never receives Carnegie authority or provider credentials.
-- Carnegie keeps its existing `ExecutionKernelPort`, `ToolRegistry`, `CapabilityGrant`, `AuthorizedEffectExecutor`, Goal lease/fencing, and provider-neutral Model Gateway boundaries.
+- Python remains a model-facing session runtime. It can request host effects only through a narrow JSON-lines bridge; it never receives Maestro authority or provider credentials.
+- Maestro keeps its existing `ExecutionKernelPort`, `ToolRegistry`, `CapabilityGrant`, `AuthorizedEffectExecutor`, Goal lease/fencing, and provider-neutral Model Gateway boundaries.
 - `ipython` is one registered model tool. It is not a second general-purpose execution kernel and it does not make direct filesystem, shell, Git, network, provider, or external-service calls.
 - The first executable slice is strict read-only. Write, process, network, dangerous-import, unregistered-tool, out-of-scope, and malformed host requests fail closed. Full local effects and the approval hierarchy land only in later slices.
 
@@ -35,14 +35,14 @@ The independent read-only comparison against Prime Agent commit `9c8230df67b378a
 - Copy the split between a TypeScript `ReplKernelManager` and a child Python runtime (`packages/coding-agent/docs/rlm-runtime.md:8-21,62-72`; `packages/coding-agent/src/core/kernel/repl-manager.ts:1-40`).
 - Define a versioned JSON-lines protocol with handshake, typed request/event IDs, stdout/stderr separation, ordered cells, out-of-band host replies, and EOF shutdown (`prime-agent-runtime/src/rlm/repl.md:1-41,87-123`; `repl-manager.ts:106-135,363-393,1215-1274`).
 - Treat cancellation, busy-kernel behavior, bounded shutdown, child death, output attribution, and byte limits as first-class lifecycle states (`repl-manager.ts:991-1035,1194-1212,1328-1437`; `repl.md:47-85`).
-- Keep process continuity separate from namespace continuity. If Carnegie later persists session state, it must use canonical, schema-validated, hash-bound JSON/records; it must not copy Prime's `dill`/pickle restore as a trust boundary (`state-snapshot.ts:1-8`; `repl.py:629-680,804-840`).
+- Keep process continuity separate from namespace continuity. If Maestro later persists session state, it must use canonical, schema-validated, hash-bound JSON/records; it must not copy Prime's `dill`/pickle restore as a trust boundary (`state-snapshot.ts:1-8`; `repl.py:629-680,804-840`).
 - Add real child-process tests for state persistence, host bridging, abort, teardown, and restart/lost-state reporting, modeled on Prime's `repl-kernel-execute.test.ts`, `repl-kernel-state-roundtrip.test.ts`, and `repl-kernel-abort.test.ts`.
 
-The following Prime behavior is explicitly not copied: arbitrary Python evaluation as authority, `bash()` as a permission model, child-process isolation as a security boundary, generic string host handlers, detached background-task effects, or best-effort executable snapshots. Carnegie's Control Plane derives immutable context, rechecks Goal lease/fencing/approval/idempotency, and invokes only registered authority-backed adapters.
+The following Prime behavior is explicitly not copied: arbitrary Python evaluation as authority, `bash()` as a permission model, child-process isolation as a security boundary, generic string host handlers, detached background-task effects, or best-effort executable snapshots. Maestro's Control Plane derives immutable context, rechecks Goal lease/fencing/approval/idempotency, and invokes only registered authority-backed adapters.
 
 The benchmark also identifies three plan obligations: define the explicit project-skill manifest/hash/save/revocation contract; add IPython-specific crash/restart cases distinct from provider recovery; and add Phase 3/8 release and security cases for prompt injection, protocol fuzzing, snapshot non-executability, mixed-risk atomicity, and full-access isolation.
 
-For project-skill persistence, Prime’s harness separates session-local from explicit global scope and validates Python references before saving (`prime-agent-runtime/src/rlm/harness.py:1-8,131-141,607-631`). Carnegie may copy scope separation, schema/version identity, content hashes, atomic temp-and-replace writes, and restrictive file modes (`harness.py:287-319`), but every save remains explicit user action plus Mission Bundle allowlisting; no automatic executable promotion is allowed.
+For project-skill persistence, Prime’s harness separates session-local from explicit global scope and validates Python references before saving (`prime-agent-runtime/src/rlm/harness.py:1-8,131-141,607-631`). Maestro may copy scope separation, schema/version identity, content hashes, atomic temp-and-replace writes, and restrictive file modes (`harness.py:287-319`), but every save remains explicit user action plus Mission Bundle allowlisting; no automatic executable promotion is allowed.
 
 It also identifies a process-ownership obligation: pass a parent identity to the Python child, detect parent/control-plane death, terminate the owned process group, journal/reap orphans, and prove no shell/test child survives a control-plane crash. This is a Phase 2 lifecycle requirement and a Phase 8 termination-injection gate.
 
@@ -67,7 +67,7 @@ It also identifies a process-ownership obligation: pass a parent identity to the
 
 ### 1B — JSON-lines host bridge and read-only host effects (`in_progress`)
 
-**Purpose:** reproduce Prime's useful persistent-kernel shape while preserving Carnegie authority.
+**Purpose:** reproduce Prime's useful persistent-kernel shape while preserving Maestro authority.
 
 **Source changes:**
 
@@ -171,7 +171,7 @@ The original Phase 1/2 execution assumptions below are retained as history. They
 - [complete] 5. Head Council sealed-submission slice (P2S5) accepted after independent review and real-PostgreSQL verification on `phase2/p2s5-integration` (7a627a2): 254 passed, 1 intentional skip, 0 failed. See "Phase 2 detailed status" below for accepted boundary. Department Plans (P2S6) and beyond not started; in_progress.
 - [complete_pending_independent_review] 6. Full Phase 2 work-sequence (steps 6-12) implemented and self-audited on `phase2/p2s5-integration` (fc79c6c): 331 passed, 0 failed. A cross-cutting Council departmentOwnership authorization gap (Department Plan/budget/Git-branch creation) was found and fixed in this final self-audit. P2S5/P2S6 independently reviewed; P2S7-P2S12 self-reviewed only (subagent independent review unavailable throughout this session's back half). Proceeding to Phase 3 per user direction.
 - [complete] 7. Phase 3 (roadmap/act-1-foundation/phase-03-certification-release.md) work-sequence steps 1-10 on `phase3/integration` (`699dee1`), real-PostgreSQL verified: 453 passed, 1 intentional provider live-gate skip, 0 failed.
-- [complete] 8. Phase 3 step 11 (complete live release scenario) fully closed: live Prime worker execution proven (`MAESTRO_LIVE_PRIME=1`), full unsupported-assertion Encore Council round proven, forced mid-flight restart/reconciliation proven, and Tests item 18 (CLI/app parity) proven with a real-PostgreSQL end-to-end fixture (`apps/control-plane/src/read-state-parity.integration.test.ts`) asserting the CLI and `@carnegie/api-client` return identical Metronome challenge, Encore Council round, certification, and Concertmaster report state for the same real Goal through a live HTTP server. Final real-PostgreSQL `npm run check`: 459 passed, 2 provider live-gate cases skipped by default, 0 failed. **Phase 3 exit gate: all 13 live-gate steps and all 18 Tests items evidenced.** Secretary UI has no dedicated panel for these four record kinds yet (Goal/event loaders only) -- a UI-layer follow-up, not a gap in the API/CLI parity claim itself.
+- [complete] 8. Phase 3 step 11 (complete live release scenario) fully closed: live Prime worker execution proven (`MAESTRO_LIVE_PRIME=1`), full unsupported-assertion Encore Council round proven, forced mid-flight restart/reconciliation proven, and Tests item 18 (CLI/app parity) proven with a real-PostgreSQL end-to-end fixture (`apps/control-plane/src/read-state-parity.integration.test.ts`) asserting the CLI and `@maestro/api-client` return identical Metronome challenge, Encore Council round, certification, and Concertmaster report state for the same real Goal through a live HTTP server. Final real-PostgreSQL `npm run check`: 459 passed, 2 provider live-gate cases skipped by default, 0 failed. **Phase 3 exit gate: all 13 live-gate steps and all 18 Tests items evidenced.** Secretary UI has no dedicated panel for these four record kinds yet (Goal/event loaders only) -- a UI-layer follow-up, not a gap in the API/CLI parity claim itself.
 - [pending] 7. Run Phase 1–2 acceptance scenarios, document gaps, and report.
 - [in_progress] 9. Phase 4 (roadmap/act-1-foundation/phase-04-environments-devices-incidents.md) preparation: baseline branch `phase4/integration` created from accepted Phase 3 exit gate (`1effc49`), worktree `.worktrees/p4` added, build verified clean. Recommended two-track work-sequence split recorded in roadmap/act-1-foundation/active/operations/progress.md (Track A: environments+devices, steps 1-5; Track B: Discord, steps 6-9; step 10 integrates both). Playwright dependency not yet added (needed for step 3). Implementation not yet started.
 
@@ -188,7 +188,7 @@ Phase 3 is fully exit-gate accepted (all 13 live-gate steps, all 18 Tests items)
 
 ## Current runtime decision — native execution only
 
-Carnegie uses one provider-neutral `ExecutionKernelPort` implementation: the native runtime routed through the authenticated Model Gateway. There is no legacy execution adapter or fallback.
+Maestro uses one provider-neutral `ExecutionKernelPort` implementation: the native runtime routed through the authenticated Model Gateway. There is no legacy execution adapter or fallback.
 
 Every native admission carries host-owned context, an exact provider-qualified model policy, provider account binding, capability grant, lease/fencing context, and idempotency key. Mission Bundles authorize Worker models before gateway admission. Missing gateway configuration fails closed.
 
@@ -362,7 +362,7 @@ feature-completeness audit before treating Phase 4 as usable.
    out of this Phase 1 item's scope.
 6. **[RESOLVED 2026-09-04, commit `384d1e3`]** Evidence-hash corruption (Phase 1 Tests #9) was
    proven only at `getEvidenceMetadata`, never at the actual "certification consumers" the spec
-   names. Fixed: narrowed `@carnegie/evidence`'s `verifyEvidenceRecord` to a minimal
+   names. Fixed: narrowed `@maestro/evidence`'s `verifyEvidenceRecord` to a minimal
    `VerifiableEvidenceRecord` ({sha256, byteLength}) and threaded an optional
    `EvidenceContentReader` through `certifyQuality`/`certifyConditional` (verifies each cited
    evidence's real bytes before the pre-INSERT allow-list check), `assembleEvidenceBundle`/
@@ -406,7 +406,7 @@ feature-completeness audit before treating Phase 4 as usable.
    work. A worker whose Goal lease is still live is deliberately left untouched
    (`lease_contended` already protects it). `GoalReconciliationResult` gains a
    `reconciledWorkerIds` field for durable evidence. Wired a real `ExecutionKernelPort` from
-   `@carnegie/prime-adapter` into `main.ts`'s `reconcileOnStartup` call. Verified with 3 new
+   `@maestro/prime-adapter` into `main.ts`'s `reconcileOnStartup` call. Verified with 3 new
    real-PostgreSQL regressions (genuinely orphaned worker forced to `unknown`; still-live-lease
    worker left untouched; no-kernel-supplied unchanged behavior). Full real-PostgreSQL
    `npm run check` on `main`: 97/98 files, 636 passed, 2 intentional live-Prime skips, 0 failed.
@@ -883,12 +883,12 @@ The independent review found a domain/DB contract mismatch: the domain permits 1
 
 ## 2026-09-06 — Phase 6 Step 1 grant-helper surface remediation plan
 
-The security review identified that `grantProjectMembership` and `grantProjectRole` are exported from the production persistence package without an admin argument. Source inspection shows they are used only by integration-test setup; no production route or service calls them. Before the next patch, remove these bootstrap helpers from the public `@carnegie/persistence` root export, expose them only through an explicitly named `@carnegie/persistence/testing` subpath, and update test imports. Keep the real `provisionProjectAccess` admin/active-operator path as the only production provisioning API. Add a source-level guard test or verification that production application files do not import the testing subpath.
+The security review identified that `grantProjectMembership` and `grantProjectRole` are exported from the production persistence package without an admin argument. Source inspection shows they are used only by integration-test setup; no production route or service calls them. Before the next patch, remove these bootstrap helpers from the public `@maestro/persistence` root export, expose them only through an explicitly named `@maestro/persistence/testing` subpath, and update test imports. Keep the real `provisionProjectAccess` admin/active-operator path as the only production provisioning API. Add a source-level guard test or verification that production application files do not import the testing subpath.
 
 
 ## 2026-09-06 — Phase 6 Step 1 provisioning surface result
 
-- Removed `grantProjectMembership` and `grantProjectRole` from the public `@carnegie/persistence` root export. They are now available only through the explicit `@carnegie/persistence/testing` subpath for integration setup.
+- Removed `grantProjectMembership` and `grantProjectRole` from the public `@maestro/persistence` root export. They are now available only through the explicit `@maestro/persistence/testing` subpath for integration setup.
 - Production code has no imports of the testing subpath; production provisioning remains `provisionProjectAccess`, which enforces the configured admin and active-operator boundary. Updated application integration-test imports accordingly.
 - `npm run build` passes after the surface split.
 
@@ -996,15 +996,15 @@ actual repo state, verified directly against `git log`/file contents on `hardeni
    `inbox`, `evlog`, `billing`, `settings`, `luthiery`, `arrangements`, `flashmob`,
    `flashmobSession`). This is a substantially larger UI surface than Track A7 describes, but:
    - **Real, tested plumbing exists** and is wired correctly: `connection.tsx` (config get/save/
-     clear through `window.carnegie.config`), `goals.tsx` (`GoalsProvider`, lists/selects a Goal via
-     `window.carnegie.api.listGoals`), `useGoalDetail.ts` (loads Goal/events/budget/certifications
+     clear through `window.maestro.config`), `goals.tsx` (`GoalsProvider`, lists/selects a Goal via
+     `window.maestro.api.listGoals`), `useGoalDetail.ts` (loads Goal/events/budget/certifications
      for the selected Goal), `lib/goal-data.ts` (pure read-model assembly, unit-tested), and
      `electron/apiBridge.ts` (an explicit allowlist of exposed `ApiClient` methods: `listGoals`,
      `getGoal`, `getBudgetSummary`, `listEvents`, the full Task Contract lifecycle, `pauseGoal`/
      `resumeGoal`/`stopGoal`/`emergencyStopGoal`, `listCertifications`, `listMetronomeChallenges`,
      `listEncoreCouncilRounds`, `getConcertmasterReport`).
    - **Every one of the 13 views is 100% static mock data with zero connection to the real
-     plumbing.** Direct `grep` for `useGoalDetail`/`useGoals()`/`window.carnegie` usage across
+     plumbing.** Direct `grep` for `useGoalDetail`/`useGoals()`/`window.maestro` usage across
      `apps/secretary/src/views/*.tsx` and the top-level `.tsx` files returns only `connection.tsx`,
      `goals.tsx`, and `theme.tsx` — the providers themselves, never a consumer view. `Dashboard.tsx`,
      `Billing.tsx`, `Channel.tsx`, `Git.tsx`, `EvidenceLog.tsx` (and by the same pattern, the
@@ -1037,9 +1037,9 @@ actual repo state, verified directly against `git log`/file contents on `hardeni
    any further work. Recreate/rebase a Phase 5 worktree from the current `hardening/lifecycle` tip
    before starting Secretary UI wiring work, not from an older Phase 5 slice branch.
 5. **Local-environment defect found and fixed (no source change):** the main worktree's
-   `node_modules/@carnegie/` was missing the `device-agent`/`device-agent-app` workspace symlinks
+   `node_modules/@maestro/` was missing the `device-agent`/`device-agent-app` workspace symlinks
    (present for every other package), causing `npm run build` to fail with `Cannot find module
-   '@carnegie/device-agent'` purely because of stale local `node_modules` state, not a repo defect.
+   '@maestro/device-agent'` purely because of stale local `node_modules` state, not a repo defect.
    `npm install` in the main worktree recreated the missing symlinks with zero `package-lock.json`
    change; `npm run build` is now clean on `hardening/lifecycle` HEAD.
 6. **Pre-existing test-infra gap found (not fixed, not caused by this session):** running
@@ -1143,12 +1143,12 @@ worker-device link and pause state against that concrete case rather than a hypo
 
 - [completed] Implement OpenAI ChatGPT Plus/Pro browser login via public Codex app-server managed-login JSON-RPC.
 - [completed] Add selector, browser opener, Control Plane/gateway/API client routes, metadata-only managed binding, logout, and exact model catalog filtering.
-- [completed_with_boundary] Keep Carnegie tool authority separate; Codex account turns are text-only/read-only until the tool bridge is independently specified and tested.
+- [completed_with_boundary] Keep Maestro tool authority separate; Codex account turns are text-only/read-only until the tool bridge is independently specified and tested.
 - [blocked] Claude Pro/Max account OAuth awaits an official public or written-approved Anthropic protocol. Private Prime OAuth and CLI credential bypasses remain prohibited.
 - [remaining] Durable login idempotency/restart ownership, PostgreSQL acceptance, real Codex app-server acceptance, and full streaming/tool parity.
 
 ## 2026-09-07 — Durable account-login gate
-- [completed] Persist operator/request reservations and durable Carnegie login IDs.
+- [completed] Persist operator/request reservations and durable Maestro login IDs.
 - [completed] Fence interrupted starts at Control Plane startup and map gateway loss to terminal `unknown`.
 - [completed] Protect login identity/delete semantics in PostgreSQL and serialize status/cancel with fenced operation tokens.
 - [remaining] Run acceptance against an installed Codex app-server; keep Claude subscription login blocked pending official Anthropic approval.
@@ -1185,7 +1185,7 @@ worker-device link and pause state against that concrete case rather than a hypo
 - Added durable native-admission binding evidence (`native_execution_bindings`, migration `0070`) across every native call site (Worker, Head, semantic review, Encore reviewers, team-lead helper) via a shared `recordNativeExecutionBindingIfSupported` bridge that fails closed (cancels + releases the provider session) if durable recording fails.
 - Added `.github/workflows/ci.yml` (static gate + real-PostgreSQL-service gate). The workflow file itself could not be pushed with the current token (`workflow` scope missing); it is preserved on local branch `ci-workflow-pending` and every other change from that commit is already on `main` via cherry-pick.
 - Root-caused and fixed a real bug that a resource-exhausted host (12 stale disposable `maestro-*-postgres` containers) was masking as flaky `Connection terminated unexpectedly` failures: `device.integration.test.ts` used a stale hand-picked migration subset missing `0046_device_grants.sql`, so `revokeDevice`'s grant-revocation cascade failed once the suite actually got to run. Fixed to `applyAllMigrations`, matching every sibling device suite. See `roadmap/act-1-foundation/active/operations/findings.md` same date for full detail.
-- Cleaned up all 12 stale Carnegie disposable containers; one fresh, single, cleanly named container now runs the final full-suite rerun (`maestro-phase1-final-clean`, port 55480).
+- Cleaned up all 12 stale Maestro disposable containers; one fresh, single, cleanly named container now runs the final full-suite rerun (`maestro-phase1-final-clean`, port 55480).
 - **Next:** confirm the final full clean single-worker PostgreSQL rerun passes end to end, then re-run build/lint/no-Prime-scan/HTTP-acceptance as the closing Phase 1 gate evidence and update the roadmap doc's Phase 1 status line accordingly.
 
 
@@ -1201,7 +1201,7 @@ worker-device link and pause state against that concrete case rather than a hypo
 
 - Added `apps/control-plane/src/native-worker-acceptance.integration.test.ts`, exercising the real production `createControlPlane` composition path (no injected kernel) against a real Model Gateway HTTP process and real PostgreSQL: Goal → real native Head activation → Council → Department Plan → Mission Bundle → real native Worker admission, with durable `native_execution_bindings` evidence for both admissions. This closes the previously-open "full Control Plane + PostgreSQL + Model Gateway Worker acceptance beyond the fake-provider HTTP test" item.
 - Building this test found and fixed a real production defect (see `roadmap/act-1-foundation/active/operations/findings.md`/`roadmap/act-1-foundation/active/operations/progress.md` same date): `limitsFor()` in `packages/agent-runtime/src/agent-runtime.ts` sent an unclamped `providerTimeoutMs`/`wallTimeMs` that failed the real Model Gateway wire schema for any Mission Bundle `timeCeiling` over 10 minutes -- i.e. effectively every realistic mission in this codebase's own fixtures. Fixed with a defensive clamp and a dedicated regression test; full clean single-worker real-PostgreSQL rerun after the fix: 155/155 files, 1051/1051 tests, 0 failed.
-- **Remaining open Phase 1 item:** production native host-tool registration/enforcement through the real gateway path. Current state (verified this session, not yet changed): `ToolRegistry` is fail-closed and correctly rejects any unregistered/out-of-grant tool call (`packages/agent-runtime/src/agent-runtime.ts`), but production composition (`apps/control-plane/src/main.ts`) always constructs an *empty* `ToolRegistry()` -- no Carnegie-callback tool (e.g. a `read_goal`/`read_events`-style host tool) is registered anywhere yet. The OpenAI Codex provider adapter (`packages/model-provider-openai/src/codex-app-server.ts`) already explicitly rejects any turn request that carries tools (`"Codex app-server tool bridge is not enabled"`) and starts every underlying Codex session with `sandboxPolicy: { type: "readOnly" }` and `approvalPolicy: "never"`, so a real native Worker today is read-only text generation only -- it cannot write files, run commands, or call back into Carnegie state during a turn. This is a safe, honestly-documented boundary, not a security gap, but it means "wire host tools" is a real, unscoped, product-level design task (which host tools, what data classes, what effects) rather than a small hardening fix, and should not be rushed without explicit product direction on the exact tool set.
+- **Remaining open Phase 1 item:** production native host-tool registration/enforcement through the real gateway path. Current state (verified this session, not yet changed): `ToolRegistry` is fail-closed and correctly rejects any unregistered/out-of-grant tool call (`packages/agent-runtime/src/agent-runtime.ts`), but production composition (`apps/control-plane/src/main.ts`) always constructs an *empty* `ToolRegistry()` -- no Maestro-callback tool (e.g. a `read_goal`/`read_events`-style host tool) is registered anywhere yet. The OpenAI Codex provider adapter (`packages/model-provider-openai/src/codex-app-server.ts`) already explicitly rejects any turn request that carries tools (`"Codex app-server tool bridge is not enabled"`) and starts every underlying Codex session with `sandboxPolicy: { type: "readOnly" }` and `approvalPolicy: "never"`, so a real native Worker today is read-only text generation only -- it cannot write files, run commands, or call back into Maestro state during a turn. This is a safe, honestly-documented boundary, not a security gap, but it means "wire host tools" is a real, unscoped, product-level design task (which host tools, what data classes, what effects) rather than a small hardening fix, and should not be rushed without explicit product direction on the exact tool set.
 
 
 ## 2026-09-08 — verification error and correction
@@ -1293,7 +1293,7 @@ Before production router code, create and review: the eight A-axis scoring rubri
 
 ## 2026-09-08 — First A-axis schema slice
 
-- Added `packages/domain/src/model-profile.ts` and exported it from `@carnegie/domain`. The validator fixes the initial eight A capability axes, accepts only integer scores in `0..200`, requires a one-line rationale and evidence reference for each axis, and represents unproven capability with `score: null`.
+- Added `packages/domain/src/model-profile.ts` and exported it from `@maestro/domain`. The validator fixes the initial eight A capability axes, accepts only integer scores in `0..200`, requires a one-line rationale and evidence reference for each axis, and represents unproven capability with `score: null`.
 - TDD evidence: the new focused test was observed RED because the module did not exist, then GREEN with 11/11 tests passing. `npx tsc -b packages/domain` passes.
 - Root `npm run build` remains blocked by the known pre-existing CLI `@earendil-works/pi-tui` import/type failures; this slice does not touch those files.
 - **Next:** document and test the human scoring rubric itself before adding task-kind recipes, pressure calculation, or a `model_map` file.
@@ -1308,7 +1308,7 @@ Before production router code, create and review: the eight A-axis scoring rubri
 
 ## 2026-09-08 — Static task-kind recipes and runtime TaskDemand boundary
 
-- Added `packages/domain/src/task-demand.ts` and exported it from `@carnegie/domain`. Static recipes now contain only `primary` / `supporting` / `unused` roles over the eight A axes; they do not contain fixed capability levels.
+- Added `packages/domain/src/task-demand.ts` and exported it from `@maestro/domain`. Static recipes now contain only `primary` / `supporting` / `unused` roles over the eight A axes; they do not contain fixed capability levels.
 - Added the runtime `TaskDemand` contract. A Head records one explicit `0..200` D level and one-line rationale per axis, with Task Contract and Head decision provenance. Provider/model selection, pressure, bands, B facts, and C operations are rejected fields at this boundary.
 - Combining multiple task kinds takes the strongest axis role only. It never synthesizes numeric demand levels.
 - TDD evidence: missing-module RED was observed, then the focused task-demand suite passed 8/8.
@@ -1339,7 +1339,7 @@ Before production router code, create and review: the eight A-axis scoring rubri
 
 ## 2026-09-08 — TaskDemand bound to Mission Bundle
 
-- Applied the settled architecture decision that demand rides the existing per-unit Mission Bundle rather than a parallel persistence record. `MissionBundleSubstance.taskDemand` is required, validated with the domain TaskDemand contract, included in the Mission Bundle content hash, and mirrored in `@carnegie/contracts` as a strict Zod schema.
+- Applied the settled architecture decision that demand rides the existing per-unit Mission Bundle rather than a parallel persistence record. `MissionBundleSubstance.taskDemand` is required, validated with the domain TaskDemand contract, included in the Mission Bundle content hash, and mirrored in `@maestro/contracts` as a strict Zod schema.
 - Updated domain/control-plane/persistence fixtures so each Mission Bundle carries explicit Head provenance and a complete eight-axis demand. No SQL migration is needed because the substance is JSONB; old rows without `taskDemand` fail closed and must be reissued or backfilled before routing consumes them.
 - **Next:** define the E work-character contract and continuous pressure calculation.
 
@@ -1361,7 +1361,7 @@ Before production router code, create and review: the eight A-axis scoring rubri
 
 ## 2026-09-08 — E validator and pressure function
 
-- Implemented `packages/domain/src/work-character.ts` and exported it from `@carnegie/domain`. The validator covers six `0..200` axes, provenance, routing-field rejection, plain/own/enumerable boundaries, and fail-closed malformed input.
+- Implemented `packages/domain/src/work-character.ts` and exported it from `@maestro/domain`. The validator covers six `0..200` axes, provenance, routing-field rejection, plain/own/enumerable boundaries, and fail-closed malformed input.
 - Implemented continuous pressure: `(risk + (200 - reversibility) + verificationAttachment) / 3`, with `max(floor, explicitHeadUplift)`. Constraint-only axes do not affect pressure.
 - TDD evidence: missing-module RED was observed, then the focused E suite passed 7/7; the full domain suite passed 31 files / 248 tests.
 - **Next:** independently review and integrate E, then define the separate pressure-band threshold artifact.

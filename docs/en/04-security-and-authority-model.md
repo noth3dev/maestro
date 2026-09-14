@@ -1,6 +1,6 @@
 # 04. Security & Authority Model
 
-Carnegie enforces **Default-Deny** and **Least Privilege** policies across all execution layers, ensuring autonomous agents cannot perform destructive side effects or bypass authorization limits.
+Maestro enforces **Default-Deny** and **Least Privilege** policies across all execution layers, ensuring autonomous agents cannot perform destructive side effects or bypass authorization limits.
 
 ---
 
@@ -62,7 +62,7 @@ The production Control Plane currently composes an empty native `ToolRegistry`; 
 Authority/effect/evidence boundaries are implemented, but they do not constitute production host-tool enablement. The native `ToolRegistry` remains empty; host-tool writes/effects and live acceptance are not implemented. Ensemble Router routing evidence is persisted separately, but selection is not enabled. Exact `modelPolicy` admission remains authoritative.
 ## 3. Sealed Submissions & Cryptographic Integrity
 
-To prevent collusion, retroactive goal edits, or hallucinations, Carnegie employs a **Sealed Submission Protocol**:
+To prevent collusion, retroactive goal edits, or hallucinations, Maestro employs a **Sealed Submission Protocol**:
 
 ```mermaid
 flowchart LR

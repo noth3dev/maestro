@@ -2,13 +2,13 @@
 
 Act 2 begins only after Act 1 is certified.
 
-**Flashmob** is Carnegie’s high-speed lane for light tasks: exploration, drafts, small patches, short investigations.
+**Flashmob** is Maestro’s high-speed lane for light tasks: exploration, drafts, small patches, short investigations.
 It is not a second product with different safety DNA. It is a **bounded execution profile** over the Act 1 substrate.
 
 ### Core Thesis
 
 > Flashmob optimizes for latency and cheap iteration.
-> Carnegie (full path) optimizes for durable, certified project completion.
+> Maestro (full path) optimizes for durable, certified project completion.
 > Risky or high-impact work must promote from Flashmob into the full hierarchical path.
 
 ### 1. When to use Flashmob
@@ -20,7 +20,7 @@ It is not a second product with different safety DNA. It is a **bounded executio
 - Small, scoped patches inside an explicit path allowlist
 - Single-session or short multi-step work with low blast radius
 
-**Forbidden (must use full Carnegie path)**
+**Forbidden (must use full Maestro path)**
 
 - Production deploy, broad deletes, credential or policy changes
 - Payments / Treasury spends above Flashmob ceiling (default: deny all spend unless explicitly granted a tiny ceiling)
@@ -30,7 +30,7 @@ It is not a second product with different safety DNA. It is a **bounded executio
 
 ### 2. Execution Profile
 
-| Concern          | Full Carnegie                              | Flashmob                                               |
+| Concern          | Full Maestro                              | Flashmob                                               |
 | ---------------- | ----------------------------------------- | ------------------------------------------------------ |
 | Intake           | Overture + Task Contract + confirmation   | Compact brief or direct task prompt                    |
 | Organization     | Heads, Council, Department Plans          | Solo or tiny temporary crew                            |
@@ -53,7 +53,7 @@ Flashmob may reduce _ceremony_, not _invariants_.
 
 ### 4. Promotion & Demotion
 
-**Promotion (Flashmob → Carnegie)**
+**Promotion (Flashmob → Maestro)**
 Triggers (examples):
 
 - Scope creep beyond grant
@@ -64,7 +64,7 @@ Triggers (examples):
 
 Promotion creates or attaches a real Goal / Task Contract and carries forward Flashmob artifacts as evidence inputs.
 
-**Demotion (Carnegie → Flashmob)**
+**Demotion (Maestro → Flashmob)**
 Allowed only for explicitly scoped sub-work (e.g., scout note, draft diff) under a parent Goal’s authority envelope.
 
 ### 5. Shared Substrate
@@ -80,7 +80,7 @@ Flashmob MUST reuse Act 1 cores:
 ### 6. Product Positioning
 
 > **Flashmob** — fast investigation, drafts, small patches
-> **Carnegie** — governed project execution through certification
+> **Maestro** — governed project execution through certification
 
 ---
 

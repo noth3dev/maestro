@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createPostgresConversationService } from "./conversation-service.js";
-import type { ModelGatewayPort } from "@carnegie/agent-runtime";
-import type { OperatorContext } from "@carnegie/persistence";
+import type { ModelGatewayPort } from "@maestro/agent-runtime";
+import type { OperatorContext } from "@maestro/persistence";
 
 const projectId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01";
 const goalId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02";

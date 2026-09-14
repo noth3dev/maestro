@@ -1,6 +1,6 @@
-import type { MetronomeCorrectionInput, MetronomeFindingList, MetronomeResolutionInput, MetronomeSafePauseInput, RaiseMetronomeChallengeInput } from "@carnegie/contracts";
-import { isMissionPersonaOverlayExpired, isTerminalWorkerStatus, METRONOME_ACTOR_ID, WORKER_PROFILE_MAX_AXIS_DELTA, parsePersonaProfile, PERSONA_AXES, type PersonaAxis, type WorkerStatus } from "@carnegie/domain";
-import { observeGoalForMetronome, raiseMetronomeChallenge, requestMetronomeCorrection, requestMetronomeSafePause, resolveMetronomeChallenge, type MetronomeActorContext } from "@carnegie/persistence";
+import type { MetronomeCorrectionInput, MetronomeFindingList, MetronomeResolutionInput, MetronomeSafePauseInput, RaiseMetronomeChallengeInput } from "@maestro/contracts";
+import { isMissionPersonaOverlayExpired, isTerminalWorkerStatus, METRONOME_ACTOR_ID, WORKER_PROFILE_MAX_AXIS_DELTA, parsePersonaProfile, PERSONA_AXES, type PersonaAxis, type WorkerStatus } from "@maestro/domain";
+import { observeGoalForMetronome, raiseMetronomeChallenge, requestMetronomeCorrection, requestMetronomeSafePause, resolveMetronomeChallenge, type MetronomeActorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
 
 export interface WorkerOverlayChallengeInput {
@@ -36,15 +36,15 @@ export function findUnsafeWorkerOverlay(input: WorkerOverlayChallengeInput): rea
 }
 export interface MetronomeService {
   scan(goalId: string, projectId: string, commandId: string): Promise<MetronomeFindingList>;
-  raise(goalId: string, input: RaiseMetronomeChallengeInput, commandId: string): Promise<import("@carnegie/persistence").MetronomeChallenge>;
-  requestCorrection(challengeId: string, input: MetronomeCorrectionInput, commandId: string): Promise<import("@carnegie/persistence").MetronomeChallenge>;
-  requestSafePause(goalId: string, challengeId: string, input: MetronomeSafePauseInput, commandId: string): Promise<import("@carnegie/persistence").MetronomeChallenge>;
-  resolve(challengeId: string, input: MetronomeResolutionInput, commandId: string, operatorId: string): Promise<import("@carnegie/persistence").MetronomeChallenge>;
-  challengeWorkerOverlay(goalId: string, input: WorkerOverlayChallengeInput, commandId: string): Promise<import("@carnegie/persistence").MetronomeChallenge>;
+  raise(goalId: string, input: RaiseMetronomeChallengeInput, commandId: string): Promise<import("@maestro/persistence").MetronomeChallenge>;
+  requestCorrection(challengeId: string, input: MetronomeCorrectionInput, commandId: string): Promise<import("@maestro/persistence").MetronomeChallenge>;
+  requestSafePause(goalId: string, challengeId: string, input: MetronomeSafePauseInput, commandId: string): Promise<import("@maestro/persistence").MetronomeChallenge>;
+  resolve(challengeId: string, input: MetronomeResolutionInput, commandId: string, operatorId: string): Promise<import("@maestro/persistence").MetronomeChallenge>;
+  challengeWorkerOverlay(goalId: string, input: WorkerOverlayChallengeInput, commandId: string): Promise<import("@maestro/persistence").MetronomeChallenge>;
 }
 export interface MetronomeServiceDependencies {
   pool: Pool;
-  withGoalLease: <T>(goalId: string, operation: (proof: import("@carnegie/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
+  withGoalLease: <T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
 }
 export class MetronomeProjectMismatchError extends Error { constructor() { super("Metronome project does not match the Goal project"); this.name = "MetronomeProjectMismatchError"; } }
 

@@ -1,5 +1,5 @@
 import { hierarchy } from "d3-hierarchy";
-import type { ProjectionEdge, ProjectionNode, ProjectionReadModel } from "@carnegie/contracts";
+import type { ProjectionEdge, ProjectionNode, ProjectionReadModel } from "@maestro/contracts";
 
 export interface RadialLayoutOptions {
   /** The focused Goal. When a project projection contains several Goals, others remain visible but compressed. */

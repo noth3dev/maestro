@@ -1,11 +1,11 @@
 {
-  "name": "@carnegie/discord",
+  "name": "@maestro/discord",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@carnegie/domain": "*",
-    "@carnegie/persistence": "*",
-    "@carnegie/git-adapter": "*"
+    "@maestro/domain": "*",
+    "@maestro/persistence": "*",
+    "@maestro/git-adapter": "*"
   },
   "scripts": {
     "start": "node ./dist/main.js"

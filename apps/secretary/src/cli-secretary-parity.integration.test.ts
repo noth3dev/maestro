@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { bootstrapLocalOperator } from "@carnegie/persistence";
-import { grantProjectMembership, grantProjectRole } from "@carnegie/persistence/testing";
-import { createApiClient } from "@carnegie/api-client";
+import { bootstrapLocalOperator } from "@maestro/persistence";
+import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
+import { createApiClient } from "@maestro/api-client";
 import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
 import { executeCli } from "../../cli/src/main.js";
 import { createControlPlane } from "../../control-plane/src/main.js";

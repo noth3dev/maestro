@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { GoalGitIntegrationState } from "@carnegie/api-client";
+import type { GoalGitIntegrationState } from "@maestro/api-client";
 import { useConnection } from "./connection.js";
 import { useGoals } from "./goals.js";
 
@@ -15,7 +15,7 @@ export function useGitIntegrationState(): { state: GoalGitIntegrationState | und
     let cancelled = false;
     setLoading(true);
     setError(undefined);
-    window.carnegie.api
+    window.maestro.api
       .getGitIntegrationState(selectedGoalId, { projectId: config.projectId })
       .then((result) => {
         if (!cancelled) setState(result);

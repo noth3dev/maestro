@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { MODEL_CAPABILITY_AXES, detectDeviceCommandUnknownOutcomeFindings, detectMissingEvidenceFindings, detectMissingPlanItemFindings, detectStaleWorkerFindings, normalizeMetronomeIdentity, type DepartmentPlanItem, type MetronomeFinding } from "@carnegie/domain";
+import { MODEL_CAPABILITY_AXES, detectDeviceCommandUnknownOutcomeFindings, detectMissingEvidenceFindings, detectMissingPlanItemFindings, detectStaleWorkerFindings, normalizeMetronomeIdentity, type DepartmentPlanItem, type MetronomeFinding } from "@maestro/domain";
 import type { Pool } from "pg";
 import { assertMetronomeMutationAuthorized, raiseMetronomeChallenge, requireMetronomeAuthorization, type MetronomeActorContext, type MetronomeChallenge } from "./metronome-challenge.js";
 import { listCapabilityJournal, listPendingCapabilityEffects, type CapabilityJournalEntry, type PendingCapabilityEffect } from "./capability-approval.js";

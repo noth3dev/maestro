@@ -4,7 +4,7 @@ import type {
   TaskContract,
   TaskContractConfirmationInput,
   UpdateTaskContractInput,
-} from "@carnegie/contracts";
+} from "@maestro/contracts";
 import {
   createDurableTaskContract,
   ExactConfirmationRequiredError,
@@ -20,7 +20,7 @@ import {
   updateDurableTaskContract,
   assertProjectRole,
   type OperatorContext,
-} from "@carnegie/persistence";
+} from "@maestro/persistence";
 import type { Pool } from "pg";
 
 export interface TaskContractService {

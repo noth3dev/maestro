@@ -1,5 +1,5 @@
 {
-  "name": "@carnegie/persistence",
+  "name": "@maestro/persistence",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -15,12 +15,12 @@
     }
   },
   "dependencies": {
-    "@carnegie/domain": "*",
+    "@maestro/domain": "*",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.23.0",
-    "@carnegie/authority": "*",
-    "@carnegie/contracts": "*",
-    "@carnegie/evidence": "*",
-    "@carnegie/git-adapter": "*"
+    "@maestro/authority": "*",
+    "@maestro/contracts": "*",
+    "@maestro/evidence": "*",
+    "@maestro/git-adapter": "*"
   }
 }

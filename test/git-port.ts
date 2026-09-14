@@ -1,5 +1,5 @@
-import { AuthorizedEffectExecutor, type AuthorityRepository } from "@carnegie/authority";
-import { createLocalGitPort } from "@carnegie/git-adapter";
+import { AuthorizedEffectExecutor, type AuthorityRepository } from "@maestro/authority";
+import { createLocalGitPort } from "@maestro/git-adapter";
 
 const repository: AuthorityRepository = {
   async load(request) {

@@ -1,6 +1,6 @@
 # 04. 보안 및 권한 모델 (Security & Authority Model)
 
-Carnegie는 **Default-Deny(기본 거부)**와 **최소 권한(Least Privilege)**을 원칙으로 하여, 에이전트의 오작동이나 환각으로 인한 파괴적 행위를 원천 방어합니다.
+Maestro는 **Default-Deny(기본 거부)**와 **최소 권한(Least Privilege)**을 원칙으로 하여, 에이전트의 오작동이나 환각으로 인한 파괴적 행위를 원천 방어합니다.
 
 ---
 

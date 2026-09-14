@@ -1,6 +1,6 @@
-import { CodexAppServerClient, createCodexAppServerPlugin, createOpenAiPlugin } from "@carnegie/model-provider-openai";
-import { createAnthropicPlugin } from "@carnegie/model-provider-anthropic";
-import { ProviderRegistry } from "@carnegie/agent-runtime";
+import { CodexAppServerClient, createCodexAppServerPlugin, createOpenAiPlugin } from "@maestro/model-provider-openai";
+import { createAnthropicPlugin } from "@maestro/model-provider-anthropic";
+import { ProviderRegistry } from "@maestro/agent-runtime";
 import { KeychainCredentialStore } from "./credential-store.js";
 import { createModelGateway } from "./gateway.js";
 import { buildModelGatewayServer } from "./rpc.js";

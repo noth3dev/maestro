@@ -1,5 +1,5 @@
-import type { GoalResult, GoalBudgetSummary } from "@carnegie/api-client";
-import type { Certification } from "@carnegie/contracts";
+import type { GoalResult, GoalBudgetSummary } from "@maestro/api-client";
+import type { Certification } from "@maestro/contracts";
 
 /**
  * The minimal shape this module needs from a loaded Goal detail. Deliberately independent of

@@ -5,7 +5,7 @@
 
 ## Outcome
 
-Create the clean-slate Carnegie foundation with a provider-neutral execution seam. The original baseline used Prime Agent for execution. That historical design was superseded by the native Model Gateway cutover; no Prime-backed worker bridge remains. At the end of this phase, one Goal can exist as durable state; the app shell and CLI can issue the same commands; authority is default-deny; pause, stop, resume, leases, events, evidence, and restart reconciliation work without any production agent hierarchy yet.
+Create the clean-slate Maestro foundation with a provider-neutral execution seam. The original baseline used Prime Agent for execution. That historical design was superseded by the native Model Gateway cutover; no Prime-backed worker bridge remains. At the end of this phase, one Goal can exist as durable state; the app shell and CLI can issue the same commands; authority is default-deny; pause, stop, resume, leases, events, evidence, and restart reconciliation work without any production agent hierarchy yet.
 
 This phase establishes the technical rules every later phase must use. Later phases may add behavior but may not create a second runtime, database, authority path, event truth, or UI-owned state.
 
@@ -63,7 +63,7 @@ The following boundary describes the original design only. It is retained for mi
 
 
 - Prime Agent owns model sessions, recursive subagents, parent/child messaging, observation, tool execution, skill loading, model availability, and continual refinement.
-- Carnegie owns Goal state, organization, assignment policy, authority, budgets, evidence, Department Plans, certification, and reporting.
+- Maestro owns Goal state, organization, assignment policy, authority, budgets, evidence, Department Plans, certification, and reporting.
 - Only the historical adapter imported Prime Agent SDK types; that adapter and SDK dependency are deleted.
 - Domain ports expose spawn, resume, prompt, message, observe, cancel, model identity, tool event, usage, and invocation-status behavior.
 - Never reimplement provider routing or a Python runner.
@@ -208,7 +208,7 @@ Phase 1 passes only when a real PostgreSQL-backed control plane can be killed an
 
 ### TUI scope and acceptance boundary
 
-The CLI TUI is a thin operator presentation surface. It uses `@earendil-works/pi-tui` for terminal rendering and `@carnegie/api-client` for authenticated Control Plane reads and commands.
+The CLI TUI is a thin operator presentation surface. It uses `@earendil-works/pi-tui` for terminal rendering and `@maestro/api-client` for authenticated Control Plane reads and commands.
 
 - The TUI may render Goal state, event streams, worker/review/certification summaries, loading states, validation errors, stale-data indicators, and reconnect status.
 - The TUI must obtain all authoritative state through the Control Plane. It must not connect to PostgreSQL, the Model Gateway, provider APIs, or device transports directly.
@@ -240,7 +240,7 @@ When an action is stopped, the CEO report must contain the proposed action, expe
 
 ### 16. Data-management model — direction under design
 
-Carnegie should not treat all data as one shared memory. Data is separated by purpose and authority:
+Maestro should not treat all data as one shared memory. Data is separated by purpose and authority:
 
 1. **Project source and artifacts** — repositories, files, local commits, reports, screenshots, generated assets, and deliverables. Git or the project's native artifact system remains the source of truth where applicable.
 2. **Operational state** — Goals, active Groups and Departments, Head Council membership, worker missions, leases, decisions, approvals, device grants, and current execution status.
@@ -275,11 +275,11 @@ A CEO request to delete a project's records must also trace cross-project lesson
 
 This section records the original Prime-based decision and is retained only to explain the migration. It must not be used to reintroduce Prime or a fallback.
 
-Carnegie is designed to run **on top of Prime Agent**, not to replace Prime Agent with a second independent agent runtime.
+Maestro is designed to run **on top of Prime Agent**, not to replace Prime Agent with a second independent agent runtime.
 
 Responsibility boundary:
 
-- **Carnegie owns:** CEO Goals, Secretary workflow, Groups and Departments, Head Council policy, selective activation, Department Context Packs, data and authority policy, budget and critical-action gates, organizational UI, outcome reporting, and Encore improvement objectives.
+- **Maestro owns:** CEO Goals, Secretary workflow, Groups and Departments, Head Council policy, selective activation, Department Context Packs, data and authority policy, budget and critical-action gates, organizational UI, outcome reporting, and Encore improvement objectives.
 - **Prime Agent owns:** model execution, recursive subagent spawning, parent/child messaging, observation, task environments, tool execution, skill and plugin availability, model selection surfaces, and the continual harness used by refinement.
 
 Runtime mapping:
@@ -288,7 +288,7 @@ Runtime mapping:
 - A Head spawns Scout or Execution Workers as its direct Prime Agent children. This preserves the intended reporting hierarchy in the runtime itself.
 - Sleeping a Department Head terminates active execution while preserving the Head's approved identity, Department Context Pack, traits, and durable organizational knowledge.
 - The Secretary is the root organizational coordinator. Head Council communication uses bounded agent messaging and produces a shared decision packet.
-- Metronome observes the Prime Agent family, event stream, costs, tool use, authority grants, and Carnegie Goal state without becoming a worker's execution parent.
+- Metronome observes the Prime Agent family, event stream, costs, tool use, authority grants, and Maestro Goal state without becoming a worker's execution parent.
 - The multi-model Encore Council uses separate Prime Agent subagents and, when available and approved, distinct model selectors to create genuinely independent judgments.
 
 ### 34. Automatic recovery within Goal bounds
@@ -324,7 +324,7 @@ Runtime mapping:
 
 ### 55. Continuous control plane with an optional app client
 
-- Carnegie's control plane operates continuously and is not tied to the app window or an interactive chat session.
+- Maestro's control plane operates continuously and is not tied to the app window or an interactive chat session.
 - Closing the app does not stop launched Goals, Concertmaster state, Encore observation, Discord monitoring, durable leases, or safe remote and virtual-environment work.
 - Department Heads and workers remain selectively activated and do not run merely because the control plane is online.
 - Work requiring a disconnected or powered-off enrolled device pauses at the affected boundary; independent work in available environments may continue.
@@ -333,7 +333,7 @@ Runtime mapping:
 
 ### 57. Historical direct-replacement proposal (superseded)
 
-The target architecture may replace the current standalone Carnegie execution model and existing Web UI rather than preserving backward compatibility with their internal design.
+The target architecture may replace the current standalone Maestro execution model and existing Web UI rather than preserving backward compatibility with their internal design.
 
 - Prime Agent becomes the native execution kernel from the beginning of the replacement.
 - The new Secretary Office, Group and Department hierarchy, recursive Head and worker spawning, skill and plugin assignment, continual-harness refinement, Encore organization, Discord integration, Git hierarchy, data model, and radial app are designed as one coherent system.
@@ -344,10 +344,10 @@ The target architecture may replace the current standalone Carnegie execution mo
 
 ### 58. Clean-slate replacement state
 
-- The replacement imports no legacy Carnegie operational state, active Goals, workers, leases, authority grants, UI state, routing state, telemetry, Council transcripts, or unverified memory.
+- The replacement imports no legacy Maestro operational state, active Goals, workers, leases, authority grants, UI state, routing state, telemetry, Council transcripts, or unverified memory.
 - The new system starts with an empty operational database and no implied active execution.
 - The approved hierarchical design, Concertmaster identity and trait seed, organizational taxonomy, safety boundaries, and app direction are new-system requirements, not migrated runtime records.
-- Existing project Git repositories remain independent source systems and may be enrolled into the new Carnegie as fresh projects. They are not deleted as part of clearing Carnegie state.
+- Existing project Git repositories remain independent source systems and may be enrolled into the new Maestro as fresh projects. They are not deleted as part of clearing Maestro state.
 - Historical legacy data is not required for new-system behavior or evaluation. Removal at cutover follows the agreed critical deletion and reversible Git or backup process, but no compatibility or import path is required.
 
 

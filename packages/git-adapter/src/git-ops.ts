@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { realpathSync } from "node:fs";
-import type { ActionRequest, AuthorityDecision } from "@carnegie/authority";
-import { GitOperationError, type GitPort } from "@carnegie/domain";
+import type { ActionRequest, AuthorityDecision } from "@maestro/authority";
+import { GitOperationError, type GitPort } from "@maestro/domain";
 import { assertGoalScopedWorkspacePath } from "./path-containment.js";
 
 /** The authority boundary required before any local Git process is started. */

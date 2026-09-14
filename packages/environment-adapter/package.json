@@ -1,5 +1,5 @@
 {
-  "name": "@carnegie/environment-adapter",
+  "name": "@maestro/environment-adapter",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -11,8 +11,8 @@
     }
   },
   "dependencies": {
-    "@carnegie/domain": "*",
-    "@carnegie/authority": "*",
+    "@maestro/domain": "*",
+    "@maestro/authority": "*",
     "playwright": "^1.48.0"
   }
 }

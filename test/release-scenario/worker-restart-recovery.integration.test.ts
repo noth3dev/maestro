@@ -4,7 +4,7 @@ import net from "node:net";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { taskContractContentHash } from "@carnegie/domain";
+import { taskContractContentHash } from "@maestro/domain";
 import {
   acquireGoalLease,
   applyAllMigrations,
@@ -18,8 +18,8 @@ import {
   releaseGoalLease,
   revealCouncilBriefs,
   submitIndependentBrief,
-} from "@carnegie/persistence";
-import { grantProjectMembership, grantProjectRole } from "@carnegie/persistence/testing";
+} from "@maestro/persistence";
+import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 
 /**
  * Release-scenario runbook Step 11 ("Forced restart") claims a mid-execution
@@ -227,7 +227,7 @@ describeDatabase("release-scenario Step 11: real production mid-execution restar
       }, provider.port);
 
       // Real HTTP worker spawn: the release-scenario worker/provider path,
-      // driven exactly as `$CARNEGIE worker` CLI commands drive it in the
+      // driven exactly as `$MAESTRO worker` CLI commands drive it in the
       // live runbook.
       const response = await fetch(`http://127.0.0.1:${controlPlaneA.port}/v1/councils/${graph.councilId}/departments/product/workers`, {
         method: "POST", headers: { ...auth, "idempotency-key": randomUUID() }, body: JSON.stringify({ projectId, planVersion: graph.planVersion, itemId: "scout-1" }),

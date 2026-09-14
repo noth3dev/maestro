@@ -3,8 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { AuthorizedEffectExecutor, type AuthorityRecord, type AuthorityRepository } from "@carnegie/authority";
-import { GitOperationError } from "@carnegie/domain";
+import { AuthorizedEffectExecutor, type AuthorityRecord, type AuthorityRepository } from "@maestro/authority";
+import { GitOperationError } from "@maestro/domain";
 import { createLocalGitPort, GitOutcomeUnknownError } from "./git-ops.js";
 import { localGitPort } from "../../../test/git-port.js";
 

@@ -1,4 +1,4 @@
-import type { ConversationEvent, GoalEvent } from "@carnegie/contracts";
+import type { ConversationEvent, GoalEvent } from "@maestro/contracts";
 import { renderActivityTimeline, toActivityTimelineEvent } from "./components/activity-timeline.js";
 import { fitPlain, type TranscriptKind } from "./theme.js";
 
@@ -97,7 +97,7 @@ export function applyConversationEvent(
 }
 
 function messageHeading(role: ConversationTranscriptMessage["role"]): string {
-  return role === "user" ? "**You**" : role === "system" ? "**System**" : "**Carnegie**";
+  return role === "user" ? "**You**" : role === "system" ? "**System**" : "**Maestro**";
 }
 
 export type ConversationTranscriptBlock = {
@@ -116,7 +116,7 @@ export function renderConversationBlocks(state: ConversationTranscriptState): Co
     const suffix = state.status === "streaming" ? " _(streaming…)" : state.status === "idle" ? "" : ` _(${state.status})_`;
     const content = state.assistantText || state.statusMessage || (state.status === "streaming" ? "_Waiting for response…_" : "");
     const kind: TranscriptKind = state.status === "failed" ? "error" : state.status === "succeeded" ? "success" : state.status === "idle" || state.status === "streaming" ? "text" : "warning";
-    blocks.push({ heading: `**Carnegie**${suffix}`, content, kind });
+    blocks.push({ heading: `**Maestro**${suffix}`, content, kind });
   }
   return blocks;
 }
@@ -139,11 +139,11 @@ function conversationEventBlock(event: ConversationEvent, aggregate?: string): C
   const content = payloadText(event, "content") ?? aggregate;
   const message = payloadText(event, "message");
   if (event.eventType === "turn_started") return { heading: "**You**", content: text ?? "", kind: "text" };
-  if (event.eventType === "turn_delta") return { heading: "**Carnegie**", content: aggregate ?? text ?? "", kind: "text" };
-  if (event.eventType === "turn_completed") return { heading: "**Carnegie**", content: content ?? "", kind: "success" };
-  if (event.eventType === "turn_failed") return { heading: "**Carnegie**", content: message ?? "turn failed", kind: "error" };
-  if (event.eventType === "turn_cancelled") return { heading: "**Carnegie**", content: message ?? "cancelled", kind: "warning" };
-  if (event.eventType === "turn_unknown") return { heading: "**Carnegie**", content: message ?? "unknown outcome", kind: "warning" };
+  if (event.eventType === "turn_delta") return { heading: "**Maestro**", content: aggregate ?? text ?? "", kind: "text" };
+  if (event.eventType === "turn_completed") return { heading: "**Maestro**", content: content ?? "", kind: "success" };
+  if (event.eventType === "turn_failed") return { heading: "**Maestro**", content: message ?? "turn failed", kind: "error" };
+  if (event.eventType === "turn_cancelled") return { heading: "**Maestro**", content: message ?? "cancelled", kind: "warning" };
+  if (event.eventType === "turn_unknown") return { heading: "**Maestro**", content: message ?? "unknown outcome", kind: "warning" };
   return undefined;
 }
 
@@ -181,7 +181,7 @@ export function renderUnifiedStreamEntries(state: ConversationTranscriptState, a
         occurredAt: item.occurredAt,
         stable: `manual:${item.sequence}`,
         content: {
-          heading: item.message.role === "user" ? "**You**" : item.message.role === "system" ? "**System**" : "**Carnegie**",
+          heading: item.message.role === "user" ? "**You**" : item.message.role === "system" ? "**System**" : "**Maestro**",
           content: item.message.content,
           kind: item.message.kind,
         },

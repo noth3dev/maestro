@@ -8,7 +8,7 @@ import {
   type ModelCapabilityVector,
   type PortfolioCouncilInput,
   type PortfolioGoalInput,
-} from "@carnegie/domain";
+} from "@maestro/domain";
 import {
   acquireGoalLease,
   applyAllMigrations,
@@ -17,7 +17,7 @@ import {
   releaseCapacityReservation,
   reserveCapacity,
   upsertCapacityInventory,
-} from "@carnegie/persistence";
+} from "@maestro/persistence";
 
 /**
  * Plan-5 S5 `phase5-scenario-harness`.

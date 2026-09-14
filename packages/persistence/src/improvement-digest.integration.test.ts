@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { improvementDigestContentHash, type ImprovementDigestInput } from "@carnegie/domain";
+import { improvementDigestContentHash, type ImprovementDigestInput } from "@maestro/domain";
 import { applyAllMigrations } from "./test-migrations.js";
 import { acquireGoalLease } from "./commands.js";
 import { listImprovementDigests, readImprovementDigest, recordImprovementDigest, type ImprovementDigestAuthor } from "./improvement-digest.js";

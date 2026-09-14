@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { ExecutionKernelUnavailableError, type CapabilityGrant, type ExecutionKernelPort, type ExecutionRef, type InvocationAnswer, type InvocationContext, type InvocationObservation, type InvocationRef, type InvocationStatus, type InvocationUsage, type ModelIdentity, type SpawnRequest, type SpawnedInvocation, type ToolEvent, type ToolEvents } from "@carnegie/domain";
+import { ExecutionKernelUnavailableError, type CapabilityGrant, type ExecutionKernelPort, type ExecutionRef, type InvocationAnswer, type InvocationContext, type InvocationObservation, type InvocationRef, type InvocationStatus, type InvocationUsage, type ModelIdentity, type SpawnRequest, type SpawnedInvocation, type ToolEvent, type ToolEvents } from "@maestro/domain";
 import { formatModelRef, type GatewayBinding, type ModelGatewayPort, type ModelMessage, type ModelStreamEvent, type ModelToolCall, type ModelToolDefinition, type ToolResultStatus, type TurnLimits } from "./model-provider.js";
-import type { WorkerProfileAssignment } from "@carnegie/domain";
+import type { WorkerProfileAssignment } from "@maestro/domain";
 
 export interface ToolContext extends InvocationContext {
   readonly commandId: string;

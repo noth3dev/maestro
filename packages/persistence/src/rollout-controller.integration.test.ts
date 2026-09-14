@@ -8,7 +8,7 @@ import {
   SYNTHETIC_SCENARIO_SPECS,
   type RoutingCandidateEvaluationEvidence,
   type RoutingCapabilityCouncilJudgment,
-} from "@carnegie/domain";
+} from "@maestro/domain";
 import { applyAllMigrations } from "./test-migrations.js";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";

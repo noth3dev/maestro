@@ -1,6 +1,6 @@
 # Discord Adapter
 
-Receives authenticated Discord watchdog signals and translates them into durable Carnegie incident records. It does not execute provider work or bypass Control Plane authority.
+Receives authenticated Discord watchdog signals and translates them into durable Maestro incident records. It does not execute provider work or bypass Control Plane authority.
 
 ## Run
 

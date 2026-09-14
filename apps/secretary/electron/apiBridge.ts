@@ -1,4 +1,4 @@
-import { createApiClient, type ApiClient } from "@carnegie/api-client";
+import { createApiClient, type ApiClient } from "@maestro/api-client";
 import type { ConnectionConfig } from "./store.js";
 
 /** Only these ApiClient methods are reachable from the renderer. Every write here already exists as a real, tested control-plane route. */

@@ -1,8 +1,8 @@
-import type { WorkerIntegrationInput } from "@carnegie/contracts";
-import type { ActionRequest } from "@carnegie/authority";
-import { assertWorkspacePath } from "@carnegie/git-adapter";
-import type { DepartmentBranch, GitPort, GoalIntegrationBranch, GoalIntegrationRevision, IntegrationCommit, WorkerWorktree } from "@carnegie/domain";
-import { advanceWorkerIntegration, assertProjectRole, recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordWorkerWorktree, readHeadCouncil, readWorker } from "@carnegie/persistence";
+import type { WorkerIntegrationInput } from "@maestro/contracts";
+import type { ActionRequest } from "@maestro/authority";
+import { assertWorkspacePath } from "@maestro/git-adapter";
+import type { DepartmentBranch, GitPort, GoalIntegrationBranch, GoalIntegrationRevision, IntegrationCommit, WorkerWorktree } from "@maestro/domain";
+import { advanceWorkerIntegration, assertProjectRole, recordDepartmentBranch, recordGoalIntegrationBranch, recordGoalIntegrationRevision, recordWorkerWorktree, readHeadCouncil, readWorker } from "@maestro/persistence";
 import type { Pool } from "pg";
 
 export type GitPortFactory = (context: Omit<ActionRequest, "action" | "target">) => GitPort;
@@ -16,7 +16,7 @@ export interface GitIntegrationService {
 export interface GitIntegrationServiceDependencies {
   pool: Pool;
   workspaceRoot?: string;
-  withGoalLease: <T>(goalId: string, operation: (proof: import("@carnegie/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
+  withGoalLease: <T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
   createGitPort: GitPortFactory;
   getControlEpoch: (projectId: string, goalId: string) => Promise<string>;
 }

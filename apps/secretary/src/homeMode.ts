@@ -1,1 +1,1 @@
-export type HomeMode = "carnegie" | "flashmob";
+export type HomeMode = "maestro" | "flashmob";

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { InvalidGoalTransitionError, isTerminalGoalState, assertValidTaskContractSubstance, taskContractContentHash, transitionGoal, type GoalState, type TaskContractSubstance } from "@carnegie/domain";
+import { InvalidGoalTransitionError, isTerminalGoalState, assertValidTaskContractSubstance, taskContractContentHash, transitionGoal, type GoalState, type TaskContractSubstance } from "@maestro/domain";
 import type { Pool } from "pg";
 import { assertProjectRole } from "./project-membership.js";
 

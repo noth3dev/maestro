@@ -1,4 +1,4 @@
-# Carnegie Native Agent Backend Design
+# Maestro Native Agent Backend Design
 
 **Date:** 2026-09-07  
 **Status:** Draft for written review; implementation direction approved in chat  
@@ -6,18 +6,18 @@
 
 ## Decision
 
-Remove `prime-agent` and `@carnegie/prime-adapter` from the production dependency graph. Carnegie will own the agent runtime and will connect to providers only through a provider-neutral model port and explicit provider registry. The core runtime must not import an OpenAI, Anthropic, local-model, or other provider SDK.
+Remove `prime-agent` and `@maestro/prime-adapter` from the production dependency graph. Maestro will own the agent runtime and will connect to providers only through a provider-neutral model port and explicit provider registry. The core runtime must not import an OpenAI, Anthropic, local-model, or other provider SDK.
 
-The user-facing product remains one Carnegie conversational control surface. The model provider is swappable. The runtime, tools, child-agent orchestration, cancellation, observation, and Control Plane boundaries are owned by Carnegie.
+The user-facing product remains one Maestro conversational control surface. The model provider is swappable. The runtime, tools, child-agent orchestration, cancellation, observation, and Control Plane boundaries are owned by Maestro.
 
 ## Goal
 
-Support natural-language control and Worker execution with OpenAI/ChatGPT and Anthropic/Claude models while preserving the existing Carnegie execution contract and safety invariants.
+Support natural-language control and Worker execution with OpenAI/ChatGPT and Anthropic/Claude models while preserving the existing Maestro execution contract and safety invariants.
 
 Representative user flows must work regardless of the selected provider:
 
 - inspect workspace/project/Goal state;
-- ask Carnegie to create or change a non-critical object through the existing API;
+- ask Maestro to create or change a non-critical object through the existing API;
 - request a critical action and receive the durable-approval state rather than bypassing it;
 - create and observe a child Worker within its explicit grant;
 - cancel an in-flight invocation;
@@ -49,7 +49,7 @@ MaestroAgentRuntime
    |               |             +--> ToolRegistry / ToolExecutor
    |             +--> ChildInvocationManager
    |             +--> session/cancel/observation state
-   |             +--> authenticated Carnegie API and authority gateways
+   |             +--> authenticated Maestro API and authority gateways
    v
 ModelGatewayPort (authenticated narrow RPC)
    +--> model-gateway process
@@ -60,7 +60,7 @@ ModelGatewayPort (authenticated narrow RPC)
                    +--> future provider adapters
 ```
 
-The Control Plane remains the only durable authority. The runtime may call only registered host tools. It never imports persistence internals or executes arbitrary model-provided shell/filesystem/MCP operations. The model-gateway is not an authority gateway: it can perform model I/O only, and its RPC cannot invoke Carnegie tools.
+The Control Plane remains the only durable authority. The runtime may call only registered host tools. It never imports persistence internals or executes arbitrary model-provided shell/filesystem/MCP operations. The model-gateway is not an authority gateway: it can perform model I/O only, and its RPC cannot invoke Maestro tools.
 
 `ExecutionKernelPort` remains the provider-neutral boundary consumed by Worker, Encore, and lifecycle services. `MaestroAgentRuntime` is its only production implementation after Prime removal.
 
@@ -144,7 +144,7 @@ Critical tools are split into request and human approval operations. The model m
 
 Every root conversation uses a named controller profile with a persisted allowed-model list and policy hash. Process configuration may select a default but cannot grant authorization. Every child/Worker/reviewer/helper spawn carries an explicit provider-qualified model policy; Head activation, semantic review, Encore, and helper paths use the same check. The selected adapter must attest to the same identity returned by `getModelIdentity`; mismatch fails closed.
 
-Child invocations are host-created and durably bound to their parent conversation/Goal. The child grant is the intersection of parent, Mission Bundle, tool/path/data/network/model/budget/depth/worker limits. Cancellation cascades parent-to-child, and child messages use a bounded host channel. Provider-native IDs never become Carnegie authority or model-visible identity.
+Child invocations are host-created and durably bound to their parent conversation/Goal. The child grant is the intersection of parent, Mission Bundle, tool/path/data/network/model/budget/depth/worker limits. Cancellation cascades parent-to-child, and child messages use a bounded host channel. Provider-native IDs never become Maestro authority or model-visible identity.
 
 ## ModelProviderPort
 
@@ -176,7 +176,7 @@ interface ModelGatewayPort {
 
 The request includes a bounded message list, normalized tool definitions, an opaque request ID, and output/turn limits. The result includes text, normalized tool calls, a continuation/terminal reason, provider usage when available, and the actual provider/model identity.
 
-The OpenAI and Anthropic adapters translate their native tool-call, streaming, error, usage, and cancellation formats. Provider-specific types must not leak into `@carnegie/domain` or `MaestroAgentRuntime`. A new adapter implements the same port, declares its capabilities, supplies its credential resolver, and passes the shared provider contract suite.
+The OpenAI and Anthropic adapters translate their native tool-call, streaming, error, usage, and cancellation formats. Provider-specific types must not leak into `@maestro/domain` or `MaestroAgentRuntime`. A new adapter implements the same port, declares its capabilities, supplies its credential resolver, and passes the shared provider contract suite.
 
 `ModelGatewayPort` is the Control Plane client contract for the separate model-gateway process. It supports provider/model discovery, session admission, bounded streaming turns, cancellation, and close/recovery status. The gateway returns `accountRef`, `authMode`, `planType`, `expiresAt`, and provider/model identity, but never raw credentials. It rejects requests whose operator/account binding, model policy, data policy, or capability set is absent or mismatched.
 
@@ -238,7 +238,7 @@ Child admission atomically decrements the parent's `childCalls` and creates a pe
 
 The runtime owns:
 
-- root and child sessions with opaque Carnegie references;
+- root and child sessions with opaque Maestro references;
 - the model turn/tool-call loop;
 - tool allowlists from the controller profile or Mission Bundle;
 - skill/instruction context as host-owned prompt input;
@@ -249,7 +249,7 @@ The runtime owns:
 - bounded retries and truthful `unknown` state after an ambiguous provider timeout;
 - explicit `resume`/`reconnect` behavior based on durable binding evidence.
 
-A child is a new Carnegie invocation using the selected provider. It is not a provider-native RLM object. A child cannot widen project, Goal, tool, path, budget, or approval authority.
+A child is a new Maestro invocation using the selected provider. It is not a provider-native RLM object. A child cannot widen project, Goal, tool, path, budget, or approval authority.
 
 ## Natural-language control
 
@@ -291,7 +291,7 @@ MAESTRO_MODEL_AUTH=<api-key | oauth | provider-default>
 
 API keys use provider-specific environment variables or an OS-backed gateway secret store. Subscription login uses the gateway's provider-owned auth plugin. OAuth access/refresh tokens are never sent to the TUI conversation, model, Control Plane database, event stream, or ordinary Control Plane logs.
 
-The credential belongs to an explicit Carnegie operator/provider account binding. A single process-wide subscription token must not silently authorize multiple operators. A remote Control Plane requires authenticated gateway pairing; raw token forwarding through TUI or Control Plane requests is forbidden.
+The credential belongs to an explicit Maestro operator/provider account binding. A single process-wide subscription token must not silently authorize multiple operators. A remote Control Plane requires authenticated gateway pairing; raw token forwarding through TUI or Control Plane requests is forbidden.
 OAuth login state is single-use, expires quickly, and is bound to authenticated operator, provider ID, initiating TUI session, expected loopback host/port, PKCE verifier, and nonce. Callback replay, wrong provider, cross-operator callback, wrong host/port, refresh-token reuse, and account-identity mismatch are rejected. OAuth state is not process-global.
 
 TUI session persistence is versioned and strict. It may contain workspace/project/Goal, conversation ID/version/cursor, provider-qualified model, auth mode, and opaque account reference only. It never contains access/refresh tokens, API keys, prompts, raw tool results, callback codes, or provider request IDs. Changing model creates a new conversation (or an explicitly authorized new turn); it cannot mutate an existing in-flight binding.
@@ -303,7 +303,7 @@ The TUI may display and request a model change, but the selected model and crede
 
 ## Tool and authority boundary
 
-`ToolRegistry` contains only explicitly registered Carnegie tools. Each tool has:
+`ToolRegistry` contains only explicitly registered Maestro tools. Each tool has:
 
 - stable name and version;
 - strict input/output schema;
@@ -327,14 +327,14 @@ The runtime validates every model tool call before execution. Unknown tools, mal
 
 ## Removal and migration
 
-- Remove `@carnegie/prime-adapter` from the workspace references and `prime-agent` from dependencies/lockfile.
+- Remove `@maestro/prime-adapter` from the workspace references and `prime-agent` from dependencies/lockfile.
 - Add a provider-neutral core package plus separately registered provider adapter modules; the core package must not import concrete provider SDKs.
 - Remove `primeAgentVersion` from Control Plane configuration and tests.
 - Replace production default composition in `apps/control-plane/src/main.ts` with `MaestroAgentRuntime`.
 - Preserve test-only `ExecutionKernelPort` injection.
 - Migrate Prime-specific live tests to provider/runtime contract tests; tests requiring real external credentials remain explicitly environment-gated.
 - Add additive durable tables/migration for controller profiles, conversations, turns, invocations, tool calls, stream cursors, provider bindings, idempotency claims, quotas, and actual model identity.
-- Keep opaque domain references stable; provider request/session IDs remain gateway-local and are never used as Carnegie authority IDs.
+- Keep opaque domain references stable; provider request/session IDs remain gateway-local and are never used as Maestro authority IDs.
 - Do not retain an unused Prime toggle or silently substitute a different engine.
 
 ## Design risks and explicit gates
@@ -343,21 +343,21 @@ The following are implementation gates, not assumptions:
 
 1. **Subscription protocol stability:** OAuth login and subscription inference transports must be verified against provider-supported documentation or an explicitly accepted experimental boundary. Private/undocumented endpoints cannot be presented as a stable production guarantee. OpenAI ChatGPT subscription uses the documented Codex app-server managed-login boundary; it is not sent to the public Responses API.
 2. **Credential locality:** the separate model-gateway process owns OAuth refresh tokens. Remote Control Plane operation requires authenticated gateway pairing; raw token forwarding is forbidden. Package boundaries are insufficient.
-3. **Account attribution:** every invocation must bind to a Carnegie operator and provider account reference without storing the secret. Cross-operator credential reuse is rejected.
+3. **Account attribution:** every invocation must bind to a Maestro operator and provider account reference without storing the secret. Cross-operator credential reuse is rejected.
 4. **Anthropic subscription policy:** Claude Pro/Max OAuth is not enabled without written Anthropic approval. Do not copy Prime Agent's private Claude Code headers, identity prompt, or broad scopes.
 4. **Provider capability drift:** tool calling, streaming, cancellation, context limits, usage, and model availability are provider capabilities. Unsupported behavior is unavailable, not guessed.
 6. **Prompt/tool injection:** model text and tool results are untrusted. Only host-side schema/policy checks can authorize a call; prompt instructions cannot widen grants.
 7. **Budget and quota truth:** subscription plans may enforce rate/usage limits or extra billing. The runtime reports provider usage/limit diagnostics and stops on provider refusal; it does not infer remaining plan quota.
 8. **History privacy:** conversation and tool-result persistence needs an explicit retention/redaction policy. Provider credentials, auth callbacks, and sensitive tool output must not appear in logs or durable events.
 9. **Provider plugin supply chain:** future adapters are statically allowlisted and version-pinned. Model output cannot install or load a provider.
-10. **Recovery boundary:** provider request IDs and session IDs remain adapter-local. Carnegie may claim resume/reconnect only after a durable binding contract exists; otherwise it records `unknown` and fences retry.
+10. **Recovery boundary:** provider request IDs and session IDs remain adapter-local. Maestro may claim resume/reconnect only after a durable binding contract exists; otherwise it records `unknown` and fences retry.
 10. **Controller policy:** every root conversation resolves a named controller profile and allowlist; `MAESTRO_MODEL_ID` is only a default, never authorization.
 11. **Runtime placement:** model tools execute through the authenticated Control Plane service boundary, never a second unauthenticated HTTP path or direct persistence import.
 12. **Effect uncertainty:** cancellation has explicit phases (`queued`, `provider_turn`, `tool_executing`, `terminal`); a completed/ambiguous external effect is `unknown`, not `cancelled`.
 13. **Abuse control:** per-operator/project/conversation quotas and one active turn per conversation are enforced durably; retries cannot evade limits.
 A quota reservation has an idempotency key, durable counter/lease, stable `conversation_rate_limited` error, and `Retry-After` where retry is safe. Concurrent admission, process restart, and duplicate retries are covered by integration tests.
 14. **Outbound boundary:** provider-specific retention, training, and data-region capabilities are checked against typed Goal data policy before sensitive context leaves the process.
-15. **Reference opacity:** provider request/session IDs never become model-visible or authority-bearing IDs; Carnegie exposes only its own opaque invocation references.
+15. **Reference opacity:** provider request/session IDs never become model-visible or authority-bearing IDs; Maestro exposes only its own opaque invocation references.
 16. **Error taxonomy:** provider auth, model selection, quota, capability, and recovery failures use distinct stable API errors and are not collapsed into database-unavailable.
 
 ## Acceptance criteria
@@ -373,7 +373,7 @@ A quota reservation has an idempotency key, durable counter/lease, stable `conve
 - Natural-language reads, ordinary mutations, and critical-action requests all reach the existing Control Plane path.
 - `approvedModels` is enforced before provider admission and actual provider/model identity is durably observable.
 - Project/Goal binding, leases, fencing, idempotency, durable approval, and external-effect authorization are unchanged.
-- Provider credentials are never persisted in durable Carnegie state or exposed to the model.
+- Provider credentials are never persisted in durable Maestro state or exposed to the model.
 - A malformed or compromised provider adapter/gateway response cannot invoke tools, read persistence, widen grants, or override actor/project/Goal context.
 - PostgreSQL and real-process recovery evidence is required before operational acceptance; unavailable infrastructure remains explicitly reported.
 

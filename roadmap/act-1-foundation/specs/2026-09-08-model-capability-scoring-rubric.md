@@ -13,7 +13,7 @@ This rubric helps a human assign a capability score. It is not a benchmark leade
 - Every scored axis has a one-line rationale and at least one evidence reference.
 - `unproven` is represented by `score: null`; it is not a low score.
 - The ranges below are loose calibration anchors, not gates. A reviewer may choose any integer in a range, or a neighboring value, when the evidence supports it.
-- A benchmark may support a judgment, but a benchmark result does not automatically become a Carnegie score.
+- A benchmark may support a judgment, but a benchmark result does not automatically become a Maestro score.
 - Operational observations such as latency, cost, timeout rate, provider errors, and account availability do not change an A score. They belong in the private C overlay.
 - Changing an A score changes eligibility across all task recipes. Score changes therefore require a human-owned `model_map` change with new evidence.
 
@@ -37,7 +37,7 @@ These anchors are deliberately permissive. A score of `119` and a score of `121`
 
 Evidence should make the judgment inspectable by another reviewer. Prefer a mixture of:
 
-1. representative Carnegie task results;
+1. representative Maestro task results;
 2. adversarial or edge-case results where the axis matters;
 3. independent review, replay, or reproducible benchmark evidence;
 4. failure evidence and known limitations, when present.
@@ -64,7 +64,7 @@ Look for:
 
 Lower the score for confident conclusions that omit constraints, change reasoning midstream without noticing, or optimize one objective while violating another. A polished explanation without a correct decision is not strong reasoning evidence.
 
-**Relevant Carnegie surface:** Department Head council and other decisions that inherit the model's analysis.
+**Relevant Maestro surface:** Department Head council and other decisions that inherit the model's analysis.
 
 ### 3.2 `coding`
 
@@ -80,7 +80,7 @@ Look for:
 
 Lower the score for code that merely looks idiomatic, passes a narrow happy path, ignores existing conventions, or requires a human to discover basic defects repeatedly. A code-generation benchmark alone is insufficient for repository work.
 
-**Relevant Carnegie surface:** Execution Workers and implementation tasks.
+**Relevant Maestro surface:** Execution Workers and implementation tasks.
 
 ### 3.3 `verification`
 
@@ -96,7 +96,7 @@ Look for:
 
 Lower the score for rubber-stamping, noisy speculative findings, missed boundary failures, or treating its own earlier work as proof. Agreement with another reviewer is not evidence unless both analyses are independently grounded.
 
-**Relevant Carnegie surface:** Metronome, Encore review, and certification support.
+**Relevant Maestro surface:** Metronome, Encore review, and certification support.
 
 ### 3.4 `instruction-fidelity`
 
@@ -112,7 +112,7 @@ Look for:
 
 Lower the score for plausible but out-of-scope work, omitted constraints, format drift, or treating a broad goal as permission to expand authority. A model that refuses every ambiguous task is not showing high fidelity; it may be showing poor calibration instead.
 
-**Relevant Carnegie surface:** Task Contracts, Mission Bundles, Grants, and durable deliverables.
+**Relevant Maestro surface:** Task Contracts, Mission Bundles, Grants, and durable deliverables.
 
 ### 3.5 `tool-use`
 
@@ -128,7 +128,7 @@ Look for:
 
 Lower the score for malformed calls, repeated blind retries, mixing risk levels in one block, ignoring host errors, or treating tool access as shell access. A successful call with the wrong target is a tool-use failure.
 
-**Relevant Carnegie surface:** Native IPython host tools and other bounded execution adapters.
+**Relevant Maestro surface:** Native IPython host tools and other bounded execution adapters.
 
 ### 3.6 `long-context`
 
@@ -144,7 +144,7 @@ Look for:
 
 Lower the score for recency bias, fabricated continuity, dropped constraints, or confident summaries that cannot be traced to the supplied material. A provider's advertised context capacity is a B fact, not long-context capability evidence.
 
-**Relevant Carnegie surface:** long-running Workers, multi-document research, and durable Goal execution.
+**Relevant Maestro surface:** long-running Workers, multi-document research, and durable Goal execution.
 
 ### 3.7 `knowledge`
 
@@ -160,7 +160,7 @@ Look for:
 
 Lower the score for hallucinated citations, confident outdated claims, invented API behavior, or failure to distinguish a guess from a fact. Provider documentation may establish a supported feature, but not the model's demonstrated factual reliability.
 
-**Relevant Carnegie surface:** Scout, research, and evidence gathering.
+**Relevant Maestro surface:** Scout, research, and evidence gathering.
 
 ### 3.8 `refusal-calibration`
 
@@ -176,7 +176,7 @@ Look for:
 
 Lower the score for unsafe compliance, refusal of ordinary authorized work, invented policy claims, or failure to explain a safe boundary. A refusal is not automatically good evidence; the question is whether it was correctly calibrated to the authority and risk context.
 
-**Relevant Carnegie surface:** shell/file work, host tools, authority boundaries, and security-sensitive tasks.
+**Relevant Maestro surface:** shell/file work, host tools, authority boundaries, and security-sensitive tasks.
 
 ## 4. Scoring procedure
 

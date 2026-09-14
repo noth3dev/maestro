@@ -7,7 +7,7 @@ import type {
   InvocationStatus,
   SpawnRequest,
   SpawnedInvocation,
-} from "@carnegie/domain";
+} from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
 import { runEncoreCouncilReview } from "./encore-council.js";
 

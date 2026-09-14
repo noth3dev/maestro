@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { EnvironmentRecord } from "@carnegie/domain";
+import type { EnvironmentRecord } from "@maestro/domain";
 import { resolveWorkerIpPythonComposition } from "./main.js";
 
 const environment: EnvironmentRecord = {

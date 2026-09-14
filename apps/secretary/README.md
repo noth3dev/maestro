@@ -1,15 +1,15 @@
 # Carnegie
 
-A desktop app (Electron + React) that talks to a Carnegie control plane you already have running. It is a client only — it never starts, owns, or manages the control-plane server or PostgreSQL.
+A desktop app (Electron + React) that talks to a Maestro control plane you already have running. It is a client only — it never starts, owns, or manages the control-plane server or PostgreSQL.
 
 ## Branding boundary
 
-The desktop UI is branded **Carnegie**. This is a user-facing app name only. The `apps/secretary` path, `@carnegie/secretary` workspace package, `MAESTRO_SECRETARY_*` environment variables, internal Secretary domain terminology, database migrations, and architecture documentation remain unchanged.
+The desktop UI is branded **Carnegie**. This is a user-facing app name only. The `apps/secretary` path, `@maestro/secretary` workspace package, `MAESTRO_SECRETARY_*` environment variables, internal Secretary domain terminology, database migrations, and architecture documentation remain unchanged.
 
 ## Running it
 
 ```sh
-npm run --workspace @carnegie/secretary dev
+npm run --workspace @maestro/secretary dev
 ```
 
 This builds the Electron main/preload code, starts the Vite dev server for the renderer, and opens the app window.
@@ -18,7 +18,7 @@ On first launch it asks for the control-plane URL, an operator bearer token, and
 
 ## Security boundary
 
-The bearer token lives only in the Electron **main** process. The renderer (the React UI) never receives it: it calls `window.carnegie.api.*`, which is a `contextBridge`-exposed proxy that forwards to the main process over IPC, where the real `@carnegie/api-client` call happens. The control-plane URL must be loopback (`127.0.0.1` / `localhost`), same as before — this is a local operator tool, not a remote multi-user app.
+The bearer token lives only in the Electron **main** process. The renderer (the React UI) never receives it: it calls `window.maestro.api.*`, which is a `contextBridge`-exposed proxy that forwards to the main process over IPC, where the real `@maestro/api-client` call happens. The control-plane URL must be loopback (`127.0.0.1` / `localhost`), same as before — this is a local operator tool, not a remote multi-user app.
 
 ## What's real vs. not connected yet
 

@@ -1,4 +1,4 @@
-import type { AuthorizedEffectExecutor } from "@carnegie/authority";
+import type { AuthorizedEffectExecutor } from "@maestro/authority";
 import type { ExecutionKernelPort } from "./execution-kernel.js";
 import {
   assertValidImprovementCandidateInput,

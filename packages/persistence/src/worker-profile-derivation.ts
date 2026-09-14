@@ -1,4 +1,4 @@
-import { deriveWorkerProfile, isTerminalWorkerStatus, PERSONA_AXES, type PersonaAxis, type WorkerProfileDerivation, type WorkerStatus } from "@carnegie/domain";
+import { deriveWorkerProfile, isTerminalWorkerStatus, PERSONA_AXES, type PersonaAxis, type WorkerProfileDerivation, type WorkerStatus } from "@maestro/domain";
 import type { Pool } from "pg";
 import { readActivePersonaProfile } from "./persona-profile.js";
 import { MissionPersonaOverlayExpiredError, MissionPersonaOverlayNotFoundError, readMissionBundle, readMissionPersonaOverlay } from "./mission-bundle.js";

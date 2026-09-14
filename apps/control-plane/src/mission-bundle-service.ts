@@ -1,6 +1,6 @@
-import type { CreateMissionBundleInput, IssueMissionPersonaOverlayInput, MissionBundle } from "@carnegie/contracts";
-import { assertProjectRole, createMissionBundle, issueMissionPersonaOverlay, readMissionBundle, readDepartmentPlan, readHeadCouncil, type OperatorContext } from "@carnegie/persistence";
-import type { MissionPersonaOverlay } from "@carnegie/domain";
+import type { CreateMissionBundleInput, IssueMissionPersonaOverlayInput, MissionBundle } from "@maestro/contracts";
+import { assertProjectRole, createMissionBundle, issueMissionPersonaOverlay, readMissionBundle, readDepartmentPlan, readHeadCouncil, type OperatorContext } from "@maestro/persistence";
+import type { MissionPersonaOverlay } from "@maestro/domain";
 import type { Pool } from "pg";
 
 export interface MissionBundleService {
@@ -10,7 +10,7 @@ export interface MissionBundleService {
 }
 export interface MissionBundleServiceDependencies {
   pool: Pool;
-  withGoalLease: <T>(goalId: string, operation: (proof: import("@carnegie/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
+  withGoalLease: <T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
 }
 export class MissionBundleProjectMismatchError extends Error {
   constructor() { super("Mission Bundle project does not match the Council project"); this.name = "MissionBundleProjectMismatchError"; }

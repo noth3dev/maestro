@@ -3,8 +3,8 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-import type { ActionRequest, AuthorityDecision } from "@carnegie/authority";
-import type { EnvironmentRecord } from "@carnegie/domain";
+import type { ActionRequest, AuthorityDecision } from "@maestro/authority";
+import type { EnvironmentRecord } from "@maestro/domain";
 import { createIpPythonProductionKernel } from "./ipython-composition.js";
 
 const binding = {

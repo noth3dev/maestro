@@ -1,9 +1,9 @@
-import type { EvidenceRecord } from "@carnegie/evidence";
-import { FileEvidenceStore } from "@carnegie/evidence";
-import { appendEvidenceMetadata } from "@carnegie/persistence";
-import type { OperatorContext } from "@carnegie/persistence";
+import type { EvidenceRecord } from "@maestro/evidence";
+import { FileEvidenceStore } from "@maestro/evidence";
+import { appendEvidenceMetadata } from "@maestro/persistence";
+import type { OperatorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
-import type { EvidenceCaptureInput } from "@carnegie/contracts";
+import type { EvidenceCaptureInput } from "@maestro/contracts";
 
 export interface EvidenceCaptureService {
   capture(input: EvidenceCaptureInput & { readonly goalId: string }, actor: OperatorContext): Promise<EvidenceRecord>;

@@ -20,7 +20,7 @@ describe("release scenario runbook", () => {
     expect(runbook).toContain('department-id quality --brief-json');
     expect(runbook).toContain('concertmaster-report generate');
     expect(runbook).not.toContain("certification.out || true");
-    expect(runbook).toContain('export MAESTRO_API_URL="http://127.0.0.1:$CARNEGIE_PORT"');
+    expect(runbook).toContain('export MAESTRO_API_URL="http://127.0.0.1:$MAESTRO_PORT"');
     expect(runbook).not.toContain("attempt-remote-push.mjs");
     expect(runbook).toContain("git goal-branch");
     expect(runbook).toContain("git department-branch");
@@ -45,7 +45,7 @@ describe("release scenario runbook", () => {
     expect(runbook).toContain('--repository "$TARGET"');
     expect(runbook).toContain('--worktree "$WORKER_WORKTREE"');
     expect(runbook).not.toContain('git worker-worktree --worker-id "$WORKER_ID"');
-    expect(runbook).toContain('$CARNEGIE worker message --worker-id "$WORKER_ID"');
+    expect(runbook).toContain('$MAESTRO worker message --worker-id "$WORKER_ID"');
     expect(runbook).toContain('test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" status)" = "running"');
     expect(runbook).toContain('test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" executionRef)" = "$ORIGINAL_EXECUTION_REF"');
     expect(runbook).toContain('test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" invocationRef)" = "$ORIGINAL_INVOCATION_REF"');
@@ -53,15 +53,15 @@ describe("release scenario runbook", () => {
     expect(runbook).toContain('boundary:"mid-execution"');
     expect(runbook).toContain('resumed:true');
     expect(runbook).toContain('department-id quality --plan-json');
-    expect(runbook).toContain('set +e; $CARNEGIE critical-action request');
-    expect(runbook).toContain('$CARNEGIE git worker-advance --worker-id "$WORKER_ID"');
+    expect(runbook).toContain('set +e; $MAESTRO critical-action request');
+    expect(runbook).toContain('$MAESTRO git worker-advance --worker-id "$WORKER_ID"');
     expect(runbook).not.toContain('SCENARIO_EVIDENCE_ID="${SCENARIO_EVIDENCE_ID:?');
-    expect(runbook).toContain('$CARNEGIE evidence capture');
+    expect(runbook).toContain('$MAESTRO evidence capture');
     expect(runbook).toContain('target-test-failure');
     expect(runbook).toContain('target-test-passed');
     expect(runbook).toContain('TEST_FAILURE_EVIDENCE_ID');
     expect(runbook).toContain('TEST_PASS_EVIDENCE_ID');
-    expect(runbook).toContain('$CARNEGIE capability select-full-access-mode');
+    expect(runbook).toContain('$MAESTRO capability select-full-access-mode');
     expect(runbook).toContain("provider boundary consumes each selected Goal-scoped capability session");
     expect(runbook).toContain('retain-mode-remote.out');
     expect(runbook).toContain('skip-mode-remote.out');

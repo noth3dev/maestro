@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { TaskContractSubstance } from "@carnegie/domain";
+import type { TaskContractSubstance } from "@maestro/domain";
 import { ExactConfirmationRequiredError, TaskContractConflictError, TaskContractIntegrityError, TaskContractProjectBoundaryError, createDurableTaskContract, launchConfirmedTaskContract, readTaskContract, recordExactTaskContractConfirmation, selectAndRecordOvertureRoles, updateDurableTaskContract } from "./task-contract.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;

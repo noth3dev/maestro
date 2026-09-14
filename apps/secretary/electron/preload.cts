@@ -18,18 +18,18 @@ const exposedApiMethods = [
 ] as const;
 
 const api = Object.fromEntries(
-  exposedApiMethods.map((method) => [method, (...args: unknown[]) => ipcRenderer.invoke("carnegie:api", method, args)]),
+  exposedApiMethods.map((method) => [method, (...args: unknown[]) => ipcRenderer.invoke("maestro:api", method, args)]),
 );
 
-contextBridge.exposeInMainWorld("carnegie", {
+contextBridge.exposeInMainWorld("maestro", {
   api,
   config: {
-    get: () => ipcRenderer.invoke("carnegie:config:get"),
-    save: (config: { apiUrl: string; token: string; projectId: string }) => ipcRenderer.invoke("carnegie:config:save", config),
-    clear: () => ipcRenderer.invoke("carnegie:config:clear"),
+    get: () => ipcRenderer.invoke("maestro:config:get"),
+    save: (config: { apiUrl: string; token: string; projectId: string }) => ipcRenderer.invoke("maestro:config:save", config),
+    clear: () => ipcRenderer.invoke("maestro:config:clear"),
   },
   preferences: {
-    get: () => ipcRenderer.invoke("carnegie:preferences:get"),
-    save: (preferences: { theme: string; locale: string }) => ipcRenderer.invoke("carnegie:preferences:save", preferences),
+    get: () => ipcRenderer.invoke("maestro:preferences:get"),
+    save: (preferences: { theme: string; locale: string }) => ipcRenderer.invoke("maestro:preferences:save", preferences),
   },
 });

@@ -8,7 +8,7 @@ import {
   type OperationalOverlay,
   type OperationalOverlaySnapshot,
   type RoutingEvidence,
-} from "@carnegie/domain";
+} from "@maestro/domain";
 import type { Pool, PoolClient, QueryResultRow } from "pg";
 
 type Queryable = Pick<Pool | PoolClient, "query">;

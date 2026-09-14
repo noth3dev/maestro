@@ -25,7 +25,7 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
     <div className={`sidebar${collapsed ? " collapsed" : ""}`}>
       <div className="sb-logo">
         <div className="sb-logo-mark" />
-        <div className="sb-logo-text">carnegie</div>
+        <div className="sb-logo-text">maestro</div>
         <button type="button" className="sb-collapse-btn" onClick={() => setCollapsed((current) => !current)}>
           <Icon name={collapsed ? "panel-left-open" : "panel-left-close"} />
         </button>

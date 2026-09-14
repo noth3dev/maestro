@@ -13,7 +13,7 @@ import {
   type EncoreSynthesis,
   type EncoreTriggerReason,
   type EncoreVerdict,
-} from "@carnegie/domain";
+} from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
 import { withGoalAuthority } from "./goal-authority.js";

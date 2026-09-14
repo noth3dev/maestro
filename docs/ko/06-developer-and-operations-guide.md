@@ -6,13 +6,13 @@
 
 ## 1. 모노레포 패키지 구조 (Monorepo Package Layout)
 
-Carnegie는 **npm workspaces** 기반의 모노레포 구조로 관리됩니다:
+Maestro는 **npm workspaces** 기반의 모노레포 구조로 관리됩니다:
 
 ```text
 ├── apps/
 │   ├── control-plane/     # Fastify 5 REST & SSE 제어 평면 백엔드 서버
 │   ├── model-gateway/     # Provider SDK 및 credential 전용 프로세스
-│   ├── cli/               # Carnegie 명령줄 인터페이스 (CLI)
+│   ├── cli/               # Maestro 명령줄 인터페이스 (CLI)
 │   ├── secretary/         # Electron + React Concertmaster Office 데스크톱 클라이언트
 │   └── discord/           # 아웃오브밴드 Discord 인시던트 감지 데몬
 ├── packages/
@@ -21,7 +21,7 @@ Carnegie는 **npm workspaces** 기반의 모노레포 구조로 관리됩니다:
 │   ├── persistence/       # PostgreSQL 17 / pg 쿼리, 서비스 및 마이그레이션
 │   ├── authority/         # 보안 매트릭스 및 AuthorizedEffectExecutor
 │   ├── evidence/          # SHA-256 증거 번들 생성 및 무결성 검증
-│   ├── agent-runtime/     # Carnegie 소유 provider-neutral runtime 및 Tool loop
+│   ├── agent-runtime/     # Maestro 소유 provider-neutral runtime 및 Tool loop
 │   ├── model-provider-openai/ # OpenAI API key 및 Codex app-server adapter
 │   ├── model-provider-anthropic/ # Anthropic API key adapter
 │   ├── environment-adapter/      # Environment 및 browser 경계
@@ -89,7 +89,7 @@ CLI TUI는 `@earendil-works/pi-tui` `0.85.1`을 터미널 렌더링, 입력, ove
 A/D/E, B provider facts, C operational overlay와 순수 Goal snapshot, 4개 pressure band의 domain/wire artifact contract가 있습니다. Pure [`routing-selector.ts`](../../packages/domain/src/routing-selector.ts)가 A↔D weakest-link 검사와 B/C hard filter를 적용합니다. Migration [`0072_ensemble_router_artifacts.sql`](../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql)과 [`ensemble-router-artifacts.ts`](../../packages/persistence/src/ensemble-router-artifacts.ts)가 durable overlay/Goal snapshot 및 append-only routing evidence storage를 제공하며 실제 PostgreSQL gate는 [`ensemble-router-artifacts.integration.test.ts`](../../packages/persistence/src/ensemble-router-artifacts.integration.test.ts)입니다. Domain `model_map` validator와 빈 human-owned `config/model_map.json` baseline도 있습니다. Production selector/native-admission wiring, fixed-model evidence migration, host-tool write/effect 및 live acceptance는 남아 있습니다. Migration 전에는 `MAESTRO_NATIVE_MODEL`과 singleton `modelPolicy`를 automatic routing으로 설명하지 마세요. 이는 명시적 fixed-model/admission 경계입니다.
 ## 4. CLI 도구 사용법 (CLI Usage)
 
-Carnegie CLI (`apps/cli`)는 제어 평면 HTTP REST API와 완전한 기능적 패리티를 제공합니다.
+Maestro CLI (`apps/cli`)는 제어 평면 HTTP REST API와 완전한 기능적 패리티를 제공합니다.
 
 ```bash
 # Goal 상세 조회

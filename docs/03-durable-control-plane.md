@@ -1,6 +1,6 @@
 # 03. Durable Control Plane & Durability
 
-Carnegie guarantees strict state integrity, crash resilience, and concurrency protection even during process crashes, network partitions, or agent restarts.
+Maestro guarantees strict state integrity, crash resilience, and concurrency protection even during process crashes, network partitions, or agent restarts.
 
 ---
 
@@ -37,7 +37,7 @@ Carnegie guarantees strict state integrity, crash resilience, and concurrency pr
 
 ## 2. Monotonic Fencing Token Leases
 
-To eliminate phantom writes caused by delayed network responses, garbage collection pauses, or zombie processes, Carnegie enforces **Monotonic Fencing Token Leases** (`goal_leases`).
+To eliminate phantom writes caused by delayed network responses, garbage collection pauses, or zombie processes, Maestro enforces **Monotonic Fencing Token Leases** (`goal_leases`).
 
 ```mermaid
 sequenceDiagram

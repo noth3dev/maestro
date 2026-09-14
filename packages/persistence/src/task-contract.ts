@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { TASK_CONTRACT_SCHEMA_VERSION, amendTaskContract, assertValidTaskContractSubstance, canonicalJson, createTaskContract, selectOvertureRoles, taskContractContentHash, type OvertureRoleId, type OvertureSelectionInput, type TaskContract, type TaskContractDecision, type TaskContractSubstance } from "@carnegie/domain";
+import { TASK_CONTRACT_SCHEMA_VERSION, amendTaskContract, assertValidTaskContractSubstance, canonicalJson, createTaskContract, selectOvertureRoles, taskContractContentHash, type OvertureRoleId, type OvertureSelectionInput, type TaskContract, type TaskContractDecision, type TaskContractSubstance } from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
 
 export class TaskContractNotFoundError extends Error {}

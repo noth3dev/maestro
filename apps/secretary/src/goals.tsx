@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import type { GoalResult } from "@carnegie/api-client";
+import type { GoalResult } from "@maestro/api-client";
 import { useConnection } from "./connection.js";
 
 interface GoalsContextValue {
@@ -18,7 +18,7 @@ export function GoalsProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (config === undefined) return;
-    const page = await window.carnegie.api.listGoals(config.projectId);
+    const page = await window.maestro.api.listGoals(config.projectId);
     setGoals(page.goals);
     setSelectedGoalId((current) => current ?? page.goals[0]?.goalId);
   }, [config]);

@@ -20,7 +20,7 @@ export interface TuiShellState {
   workspace: Workspace;
   model?: string;
   setupSteps?: readonly SetupStep[];
-  mode?: "carnegie" | "flashmob";
+  mode?: "maestro" | "flashmob";
   working?: boolean;
   connection:
     { kind: "connected" } | { kind: "connecting" } | { kind: "setup-required"; message: string } | { kind: "error"; message: string };
@@ -94,9 +94,9 @@ export function renderStatusRow(state: TuiShellState, width: number): string {
   const count = pendingCount(state);
   const pending = count > 0 ? ` · ⏸ ${count} need you` : "";
   let base: string;
-  if (width >= 100) base = `${state.mode === "flashmob" ? "flashmob" : "carnegie"} · ${goalText(state)} · ${workerText(state)} · ${budgetText(state)}`;
-  else if (width >= 80) base = `${state.mode === "flashmob" ? "flashmob" : "carnegie"} · ${goalText(state)} · ${workerText(state)}`;
-  else if (width >= 60) base = `${state.mode === "flashmob" ? "flashmob" : "carnegie"} · ${goalStateText(state)}`;
+  if (width >= 100) base = `${state.mode === "flashmob" ? "flashmob" : "maestro"} · ${goalText(state)} · ${workerText(state)} · ${budgetText(state)}`;
+  else if (width >= 80) base = `${state.mode === "flashmob" ? "flashmob" : "maestro"} · ${goalText(state)} · ${workerText(state)}`;
+  else if (width >= 60) base = `${state.mode === "flashmob" ? "flashmob" : "maestro"} · ${goalStateText(state)}`;
   else base = goalStateText(state);
   if (pending === "") return tuiTheme.text(fitPlain(base, width));
   const baseWidth = Math.max(0, width - pending.length);
@@ -176,7 +176,7 @@ export function renderSplash(state: TuiShellState, width: number): string[] {
     ? `${organization.value.departments.length} Department Head${organization.value.departments.length === 1 ? "" : "s"}`
     : "Department Heads unavailable";
   return [
-    tuiTheme.primary(fitPlain("✦ CARNEGIE", width)),
+    tuiTheme.primary(fitPlain("✦ MAESTRO", width)),
     tuiTheme.secondary(fitPlain(`Concertmaster ready · ${departmentHeads}`, width)),
     tuiTheme.dim(fitPlain(`ctrl+/ show home · Next: ${nextActionText()}`, width)),
   ];

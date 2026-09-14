@@ -19,7 +19,7 @@ describe("ConversationViewport", () => {
     viewport.setOrderedStreamRenderer(() => [{
       occurredAt: "2026-01-01T00:00:00.000Z",
       stable: "conversation:event-1:1",
-      content: { heading: "**Carnegie**", content: "Use **bold** safely", kind: "success" },
+      content: { heading: "**Maestro**", content: "Use **bold** safely", kind: "success" },
     }]);
 
     const output = stripAnsi(viewport.render(80).join("\n"));

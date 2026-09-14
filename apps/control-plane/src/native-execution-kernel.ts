@@ -10,7 +10,7 @@ import {
   type InvocationStatus,
   type InvocationUsage,
   type ToolEvents,
-} from "@carnegie/domain";
+} from "@maestro/domain";
 import {
   createMaestroAgentRuntime,
   parseModelRef,
@@ -18,7 +18,7 @@ import {
   type MaestroAgentRuntime,
   type ModelGatewayPort,
   ToolRegistry,
-} from "@carnegie/agent-runtime";
+} from "@maestro/agent-runtime";
 
 type RuntimeRecord = {
   readonly runtime: MaestroAgentRuntime;

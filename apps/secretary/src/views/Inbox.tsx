@@ -18,7 +18,7 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
         <div style={{ padding: "0 20px 14px" }}>
           <EmptyState
             title="Pending critical-action approvals aren't listable here yet"
-            hint="Carnegie's authority model doesn't durably record a 'pending approval request' -- a require_approval decision is evaluated fresh each call, not stored, so there is nothing to list yet without a new durable record type. Approve-and-run already works today once you have the exact action/target to approve."
+            hint="Maestro's authority model doesn't durably record a 'pending approval request' -- a require_approval decision is evaluated fresh each call, not stored, so there is nothing to list yet without a new durable record type. Approve-and-run already works today once you have the exact action/target to approve."
           />
         </div>
 

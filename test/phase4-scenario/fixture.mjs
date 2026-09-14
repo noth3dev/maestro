@@ -57,7 +57,7 @@ async function createCertificates(root) {
   const dir = join(root, "device");
   await mkdir(dir, { recursive: true });
   await run("openssl", ["genpkey", "-algorithm", "Ed25519", "-out", "issuer-ca-key.pem"] , dir);
-  await run("openssl", ["req", "-x509", "-new", "-key", "issuer-ca-key.pem", "-out", "issuer-ca.pem", "-days", "1", "-subj", "/CN=Carnegie Phase 4 Ephemeral CA"], dir);
+  await run("openssl", ["req", "-x509", "-new", "-key", "issuer-ca-key.pem", "-out", "issuer-ca.pem", "-days", "1", "-subj", "/CN=Maestro Phase 4 Ephemeral CA"], dir);
   await run("openssl", ["genpkey", "-algorithm", "Ed25519", "-out", "device-key.pem"], dir);
   await run("openssl", ["req", "-new", "-key", "device-key.pem", "-out", "device.csr.pem", "-subj", "/CN=maestro-phase4-test-device"], dir);
   await run("openssl", ["x509", "-req", "-in", "device.csr.pem", "-CA", "issuer-ca.pem", "-CAkey", "issuer-ca-key.pem", "-CAcreateserial", "-out", "device-cert.pem", "-days", "1"], dir);

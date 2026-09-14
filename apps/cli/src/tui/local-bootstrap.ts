@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Entry } from "@napi-rs/keyring";
-import { ApiError, createApiClient } from "@carnegie/api-client";
+import { ApiError, createApiClient } from "@maestro/api-client";
 import type { ConnectionEnvironment, ConnectionState } from "./connection.js";
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 
@@ -96,7 +96,7 @@ function reportSetupStep(
 }
 
 const defaultSecretStore = (): LocalSecretStore => {
-  const entry = new Entry("carnegie", "local-control-plane");
+  const entry = new Entry("maestro", "local-control-plane");
   return {
     read: () => {
       try {
@@ -268,7 +268,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
     bootstrapSecret = bootstrapSecret ?? extractLocalSecret(storedToken) ?? randomBytes(32).toString("base64url");
     const modelGatewayToken = options.env.MAESTRO_MODEL_GATEWAY_TOKEN?.trim() || deriveModelGatewayToken(bootstrapSecret);
     const modelGatewayOperatorId = options.env.MAESTRO_MODEL_GATEWAY_OPERATOR_ID?.trim() || localOperatorId;
-    const dataDir = options.env.MAESTRO_LOCAL_DATA_DIR?.trim() || join(homedir(), ".local", "share", "carnegie");
+    const dataDir = options.env.MAESTRO_LOCAL_DATA_DIR?.trim() || join(homedir(), ".local", "share", "maestro");
     try {
       await makeLocalDataDirectories(dataDir);
       reportSetupStep(options.onStep, "control-plane-up", "started");

@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   improvementCandidateScenarioSuiteHash,
   type ImprovementCandidateInput,
-} from "@carnegie/domain";
+} from "@maestro/domain";
 import { applyAllMigrations } from "./test-migrations.js";
 import { acquireGoalLease } from "./commands.js";
 import { grantProjectMembership, grantProjectRole } from "./project-membership.js";

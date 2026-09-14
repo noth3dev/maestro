@@ -5,7 +5,7 @@
 
 ## Outcome
 
-Prove the complete clean-slate Carnegie under sustained operation, adversarial failure, security review, data lifecycle checks, recovery, and all representative live scenarios. Release is blocked by any failed required scenario or open critical finding.
+Prove the complete clean-slate Maestro under sustained operation, adversarial failure, security review, data lifecycle checks, recovery, and all representative live scenarios. Release is blocked by any failed required scenario or open critical finding.
 
 ## Purpose
 
@@ -133,7 +133,7 @@ Release recommendation requires:
 - complete documentation and evidence bundle;
 - CEO-visible Council confidence and dissent.
 
-There is no legacy cutover. Release means enabling the new clean-slate Carnegie for its approved operating scope.
+There is no legacy cutover. Release means enabling the new clean-slate Maestro for its approved operating scope.
 
 ## Rollback and failed release
 
@@ -179,7 +179,7 @@ The native runtime replacement is ready for release certification only when all 
 2. **Hierarchical execution:** only relevant Heads wake; independent briefs, Head Council, Scout evidence, worker spawning, the registered IPython host-tool path, hierarchical Git integration, independent Quality validation, and Concertmaster reporting all complete.
 3. **Head-to-Head activation:** a Head directly calls another existing Head during a Goal; context, Council membership and budget update without duplicate activation.
 4. **Environment and enrolled device:** a worker safely uses a virtual environment, project CLI and browser or device access inside scope while a critical out-of-scope effect is blocked.
-5. **Restart recovery:** Carnegie or the Model Gateway restarts mid-Goal and reconciles durable state without duplicate workers, stale authority, lost accepted work, or false success.
+5. **Restart recovery:** Maestro or the Model Gateway restarts mid-Goal and reconciles durable state without duplicate workers, stale authority, lost accepted work, or false success.
 6. **Discord incident:** external detection wakes the correct Heads in triage mode, produces an Incident Task Contract, drives bounded remediation, and reaches independent certification.
 7. **Encore improvement:** milestone evidence becomes a curated Digest, an improvement candidate is shadow-evaluated, the multi-model Council judges it, and an allowed `refine` change applies or rolls back from measured evidence.
 8. **Portfolio Council:** competing Goals are prioritized by Encore and affected Heads, with safe pause, resource reallocation, and resume.

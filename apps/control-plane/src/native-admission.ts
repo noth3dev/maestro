@@ -1,5 +1,5 @@
-import type { CapabilityGrant, ExecutionAdmission, InvocationContext, RouterCandidate } from "@carnegie/domain";
-import { parseModelRef } from "@carnegie/agent-runtime";
+import type { CapabilityGrant, ExecutionAdmission, InvocationContext, RouterCandidate } from "@maestro/domain";
+import { parseModelRef } from "@maestro/agent-runtime";
 import type { MaestroConfig } from "./config.js";
 
 export type NativeAdmissionInput =

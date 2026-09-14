@@ -7,7 +7,7 @@ export function Floor({ onBack, eventCursor = "0" }: { onBack: () => void; event
   const { config } = useConnection();
   const { goals, selectedGoalId, selectGoal } = useGoals();
   const goalId = selectedGoalId ?? goals?.[0]?.goalId;
-  const projectionState = useGoalProjection(config === undefined ? undefined : window.carnegie.api, config?.projectId, undefined, eventCursor);
+  const projectionState = useGoalProjection(config === undefined ? undefined : window.maestro.api, config?.projectId, undefined, eventCursor);
 
   if (config === undefined) return <div className="floor-wrap"><div className="floor-empty" role="status">Connect to load the organization floor.</div></div>;
   if (goalId === undefined) return <div className="floor-wrap"><div className="floor-empty" role="status">Select a Goal to open its organization floor.</div></div>;

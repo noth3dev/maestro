@@ -8,9 +8,9 @@ import https from "node:https";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { type DeviceGrantScope } from "@carnegie/domain";
-import { signDeviceGrantEnvelope, type UnsignedDeviceGrantEnvelope } from "@carnegie/device-agent";
-import { applyAllMigrations, acquireGoalLease, bootstrapPermanentOrganization, createCapabilityApproval, createDeviceGrant, enrollDevice, revokeDevice, setLocalDevicePolicy } from "@carnegie/persistence";
+import { type DeviceGrantScope } from "@maestro/domain";
+import { signDeviceGrantEnvelope, type UnsignedDeviceGrantEnvelope } from "@maestro/device-agent";
+import { applyAllMigrations, acquireGoalLease, bootstrapPermanentOrganization, createCapabilityApproval, createDeviceGrant, enrollDevice, revokeDevice, setLocalDevicePolicy } from "@maestro/persistence";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;

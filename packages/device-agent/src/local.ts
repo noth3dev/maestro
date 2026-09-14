@@ -1,7 +1,7 @@
 import {
   assertValidDeviceGrantEnvelope, evaluateLocalDevicePolicy, type DeviceEnrollment, type DeviceGrantEnvelope,
   type DeviceGrantScope, type LocalDevicePolicy,
-} from "@carnegie/domain";
+} from "@maestro/domain";
 import { verifyDeviceGrantEnvelope } from "./envelope.js";
 
 export interface LocalDeviceGrantContext {

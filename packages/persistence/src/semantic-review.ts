@@ -10,7 +10,7 @@ import {
   type InvocationStatus,
   type SemanticReviewCriterion,
   type SemanticReviewVerdict,
-} from "@carnegie/domain";
+} from "@maestro/domain";
 import type { Pool } from "pg";
 import { recordNativeExecutionBindingIfSupported } from "./native-execution-binding.js";
 

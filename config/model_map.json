@@ -9,7 +9,7 @@
           "reasoning": {
             "status": "scored",
             "score": 140,
-            "rationale": "Frontier-tier third-party reasoning results place it alongside the strongest current models, but no Carnegie deliberation evidence exists yet to justify the top band.",
+            "rationale": "Frontier-tier third-party reasoning results place it alongside the strongest current models, but no Maestro deliberation evidence exists yet to justify the top band.",
             "evidence": [
               "LM Council cross-model benchmark board, retrieved 2026-09-09: https://lmcouncil.ai/benchmarks",
               "BenchLM head-to-head Claude Opus 5 vs GPT-5.6 Sol, retrieved 2026-09-09: https://benchlm.ai/compare/claude-opus-5-vs-gpt-5-6-sol"
@@ -26,7 +26,7 @@
           "verification": {
             "status": "unproven",
             "score": null,
-            "rationale": "No surveyed public benchmark measures finding defects in another agent's output, which is what this axis means in Carnegie.",
+            "rationale": "No surveyed public benchmark measures finding defects in another agent's output, which is what this axis means in Maestro.",
             "evidence": [
               "Rubric section 3.3 defines verification as review of existing work, distinct from production: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"
             ]
@@ -66,9 +66,9 @@
           "refusal-calibration": {
             "status": "unproven",
             "score": null,
-            "rationale": "No public benchmark measures over-refusal of ordinary in-scope shell, file, and Git work, which is the Carnegie-specific failure this axis targets.",
+            "rationale": "No public benchmark measures over-refusal of ordinary in-scope shell, file, and Git work, which is the Maestro-specific failure this axis targets.",
             "evidence": [
-              "Axis defined by Carnegie host-tool stalling risk, not by a public suite: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"
+              "Axis defined by Maestro host-tool stalling risk, not by a public suite: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"
             ]
           }
         }
@@ -122,12 +122,12 @@
               "SWE-bench figures published per model, not per family, retrieved 2026-09-09: https://www.morphllm.com/best-ai-model-for-coding"
             ]
           },
-          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark matches the Carnegie definition of reviewing another agent's output.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark matches the Maestro definition of reviewing another agent's output.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "instruction-fidelity": { "status": "unproven", "score": null, "rationale": "No reproducible measurement of exact contract adherence was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "tool-use": { "status": "unproven", "score": null, "rationale": "No current-generation agentic tool benchmark for this tier was surveyed.", "evidence": ["Prior-generation figures only, retrieved 2026-09-09: https://www.datacamp.com/blog/claude-opus-4-8-vs-gpt-5-5"] },
           "long-context": { "status": "unproven", "score": null, "rationale": "Window size is a provider fact; no quality-of-use measurement was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "knowledge": { "status": "unproven", "score": null, "rationale": "No factual-breadth measurement for this tier was surveyed.", "evidence": ["Tier comparison without per-axis figures, retrieved 2026-09-09: https://www.vellum.ai/blog/gpt-5-6-benchmarks-explained"] },
-          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary local host work.", "evidence": ["Axis is Carnegie-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
+          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary local host work.", "evidence": ["Axis is Maestro-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
         }
       },
       "providerFacts": {
@@ -161,12 +161,12 @@
         "axes": {
           "reasoning": { "status": "unproven", "score": null, "rationale": "Described as the cost-efficient tier; no per-axis third-party result was surveyed.", "evidence": ["Tier comparison, retrieved 2026-09-09: https://www.vellum.ai/blog/gpt-5-6-benchmarks-explained"] },
           "coding": { "status": "unproven", "score": null, "rationale": "No separate SWE-bench result for this tier; family figures must not be inherited.", "evidence": ["Per-model publication only, retrieved 2026-09-09: https://www.morphllm.com/best-ai-model-for-coding"] },
-          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark matches the Carnegie definition of this axis.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark matches the Maestro definition of this axis.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "instruction-fidelity": { "status": "unproven", "score": null, "rationale": "No reproducible measurement of exact contract adherence was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "tool-use": { "status": "unproven", "score": null, "rationale": "No current-generation agentic tool benchmark for this tier was surveyed.", "evidence": ["Prior-generation figures only, retrieved 2026-09-09: https://www.datacamp.com/blog/claude-opus-4-8-vs-gpt-5-5"] },
           "long-context": { "status": "unproven", "score": null, "rationale": "Window size is a provider fact; no quality-of-use measurement was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "knowledge": { "status": "unproven", "score": null, "rationale": "No factual-breadth measurement for this tier was surveyed.", "evidence": ["Tier comparison, retrieved 2026-09-09: https://www.vellum.ai/blog/gpt-5-6-benchmarks-explained"] },
-          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary local host work.", "evidence": ["Axis is Carnegie-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
+          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary local host work.", "evidence": ["Axis is Maestro-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
         }
       },
       "providerFacts": {
@@ -201,7 +201,7 @@
           "reasoning": {
             "status": "scored",
             "score": 145,
-            "rationale": "GPQA Diamond at 94.2 percent is reproducible third-party evidence of graduate-level reasoning, and it leads the surveyed public agentic lane, but no Carnegie deliberation evidence exists yet.",
+            "rationale": "GPQA Diamond at 94.2 percent is reproducible third-party evidence of graduate-level reasoning, and it leads the surveyed public agentic lane, but no Maestro deliberation evidence exists yet.",
             "evidence": [
               "GPQA Diamond 94.2 percent and public agentic lane 77.4 vs 70.1, retrieved 2026-09-09: https://benchlm.ai/compare/claude-opus-5-vs-gpt-5-6-sol"
             ]
@@ -215,7 +215,7 @@
               "Terminal-Bench 2.1 at 89.1 percent, no published SWE-bench, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"
             ]
           },
-          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark measures finding defects in another agent's output, which is what this axis means in Carnegie.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark measures finding defects in another agent's output, which is what this axis means in Maestro.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "instruction-fidelity": { "status": "unproven", "score": null, "rationale": "No reproducible measurement of exact Task Contract and Grant adherence was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "tool-use": {
             "status": "unproven",
@@ -227,7 +227,7 @@
           },
           "long-context": { "status": "unproven", "score": null, "rationale": "A 1M window at standard pricing is a provider fact; no retrieval-degradation measurement across that window was found.", "evidence": ["Rubric section 1 excludes window size: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "knowledge": { "status": "unproven", "score": null, "rationale": "The GPQA figure was used to support reasoning; no separate factual-breadth evidence was surveyed.", "evidence": ["GPQA used for reasoning, retrieved 2026-09-09: https://benchlm.ai/compare/claude-opus-5-vs-gpt-5-6-sol"] },
-          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary in-scope shell, file, and Git work.", "evidence": ["Axis is Carnegie-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
+          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary in-scope shell, file, and Git work.", "evidence": ["Axis is Maestro-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
         }
       },
       "providerFacts": {
@@ -265,12 +265,12 @@
         "axes": {
           "reasoning": { "status": "unproven", "score": null, "rationale": "No per-axis third-party result for Sonnet 5 was surveyed; Opus 5 figures must not be inherited across the family.", "evidence": ["Claude benchmark board lists results per model, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"] },
           "coding": { "status": "unproven", "score": null, "rationale": "No separate SWE-bench Verified figure for Sonnet 5 was surveyed.", "evidence": ["Per-model publication, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"] },
-          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark matches the Carnegie definition of this axis.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark matches the Maestro definition of this axis.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "instruction-fidelity": { "status": "unproven", "score": null, "rationale": "No reproducible measurement of exact contract adherence was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "tool-use": { "status": "unproven", "score": null, "rationale": "No current-generation agentic tool benchmark for this model was surveyed.", "evidence": ["Prior-generation figures only, retrieved 2026-09-09: https://www.datacamp.com/blog/claude-opus-4-8-vs-gpt-5-5"] },
           "long-context": { "status": "unproven", "score": null, "rationale": "A 1M window is a provider fact; no quality-of-use measurement was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "knowledge": { "status": "unproven", "score": null, "rationale": "No factual-breadth measurement for this model was surveyed.", "evidence": ["Per-model publication, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"] },
-          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary local host work.", "evidence": ["Axis is Carnegie-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
+          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary local host work.", "evidence": ["Axis is Maestro-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
         }
       },
       "providerFacts": {
@@ -304,12 +304,12 @@
         "axes": {
           "reasoning": { "status": "unproven", "score": null, "rationale": "No per-axis third-party result for this model was surveyed.", "evidence": ["Per-model publication, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"] },
           "coding": { "status": "unproven", "score": null, "rationale": "No separate SWE-bench Verified figure for this model was surveyed.", "evidence": ["Per-model publication, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"] },
-          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark matches the Carnegie definition of this axis.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark matches the Maestro definition of this axis.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "instruction-fidelity": { "status": "unproven", "score": null, "rationale": "No reproducible measurement of exact contract adherence was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "tool-use": { "status": "unproven", "score": null, "rationale": "No agentic tool benchmark for this model was surveyed.", "evidence": ["Prior-generation figures only, retrieved 2026-09-09: https://www.datacamp.com/blog/claude-opus-4-8-vs-gpt-5-5"] },
           "long-context": { "status": "unproven", "score": null, "rationale": "Declared window is a provider fact; no quality-of-use measurement was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "knowledge": { "status": "unproven", "score": null, "rationale": "No factual-breadth measurement for this model was surveyed.", "evidence": ["Per-model publication, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"] },
-          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary local host work.", "evidence": ["Axis is Carnegie-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
+          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary local host work.", "evidence": ["Axis is Maestro-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
         }
       },
       "providerFacts": {
@@ -350,12 +350,12 @@
               "Fable 5 SWE-bench Verified 95.0 percent and SWE-bench Pro 80.0 percent, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"
             ]
           },
-          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark matches the Carnegie definition of this axis.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
+          "verification": { "status": "unproven", "score": null, "rationale": "No public benchmark matches the Maestro definition of this axis.", "evidence": ["Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "instruction-fidelity": { "status": "unproven", "score": null, "rationale": "No reproducible measurement of exact contract adherence was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "tool-use": { "status": "unproven", "score": null, "rationale": "No current-generation agentic tool benchmark for this model was surveyed.", "evidence": ["Prior-generation figures only, retrieved 2026-09-09: https://www.datacamp.com/blog/claude-opus-4-8-vs-gpt-5-5"] },
           "long-context": { "status": "unproven", "score": null, "rationale": "A 1M window is a provider fact; no quality-of-use measurement was found.", "evidence": ["Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] },
           "knowledge": { "status": "unproven", "score": null, "rationale": "No factual-breadth measurement for this model was surveyed.", "evidence": ["Per-model publication, retrieved 2026-09-09: https://www.morphllm.com/claude-benchmarks"] },
-          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary local host work.", "evidence": ["Axis is Carnegie-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
+          "refusal-calibration": { "status": "unproven", "score": null, "rationale": "No public benchmark measures over-refusal of ordinary local host work.", "evidence": ["Axis is Maestro-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md"] }
         }
       },
       "providerFacts": {

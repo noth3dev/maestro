@@ -7,7 +7,7 @@ import {
   type DiscordSeverity,
   type DiscordSilenceAssessment,
   type DiscordSilencePolicy,
-} from "@carnegie/domain";
+} from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { requestPauseGoalInTransaction } from "./authority.js";

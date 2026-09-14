@@ -3,8 +3,8 @@ import type {
   HeadCouncilDecisionInput,
   HeadCouncil,
   SubmitCouncilBriefInput,
-} from "@carnegie/contracts";
-import { assertProjectRole, readHeadCouncil, createHeadCouncil, submitIndependentBrief, revealCouncilBriefs, recordCouncilDecisionPacket, type OperatorContext } from "@carnegie/persistence";
+} from "@maestro/contracts";
+import { assertProjectRole, readHeadCouncil, createHeadCouncil, submitIndependentBrief, revealCouncilBriefs, recordCouncilDecisionPacket, type OperatorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
 
 export interface CouncilService {
@@ -17,7 +17,7 @@ export interface CouncilService {
 
 export interface CouncilServiceDependencies {
   pool: Pool;
-  withGoalLease: <T>(goalId: string, operation: (proof: import("@carnegie/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
+  withGoalLease: <T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
 }
 
 export class CouncilGoalNotFoundError extends Error {

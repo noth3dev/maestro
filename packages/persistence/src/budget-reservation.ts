@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { allocatableCentsAfterQualityReserve, assertValidBudgetReservationSubstance } from "@carnegie/domain";
+import { allocatableCentsAfterQualityReserve, assertValidBudgetReservationSubstance } from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";

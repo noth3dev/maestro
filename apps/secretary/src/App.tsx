@@ -24,7 +24,7 @@ import { useDurableEvents, type DurableEventState } from "./useDurableEvents.js"
 
 function Shell({ eventState }: { eventState: DurableEventState }) {
   const [view, setView] = useState<ViewName>("home");
-  const [homeMode, setHomeMode] = useState<HomeMode>("carnegie");
+  const [homeMode, setHomeMode] = useState<HomeMode>("maestro");
 
   const body = (() => {
     switch (view) {
@@ -62,7 +62,7 @@ function Shell({ eventState }: { eventState: DurableEventState }) {
 }
 
 function ConnectedWorkspace({ projectId }: { projectId: string }) {
-  const eventState = useDurableEvents(window.carnegie.api, projectId);
+  const eventState = useDurableEvents(window.maestro.api, projectId);
   return (
     <GoalsProvider>
       <Shell eventState={eventState} />

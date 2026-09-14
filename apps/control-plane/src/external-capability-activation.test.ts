@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CapabilityApproval, CapabilityApprovalInput, CapabilityConsumptionInput, CapabilitySession, CapabilitySessionInput } from "@carnegie/persistence";
+import type { CapabilityApproval, CapabilityApprovalInput, CapabilityConsumptionInput, CapabilitySession, CapabilitySessionInput } from "@maestro/persistence";
 import { createCapabilityApprovalService } from "./capability-approval-service.js";
 
 function harness(now = new Date("2026-01-01T00:00:00Z")) {
