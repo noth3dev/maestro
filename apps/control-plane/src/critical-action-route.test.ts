@@ -166,3 +166,17 @@ describe("critical-action route wired to the real durable authority gateway", ()
     await app.close();
   });
 });
+
+
+describe("critical-action denial route", () => {
+  it("records a durable operator rejection without invoking the effect", async () => {
+    const appendDecision = vi.fn(async () => {});
+    const criticalActionService = createCriticalActionService({ repository: fakeRepository({ appendDecision }), effect: vi.fn(async () => {}), getControlEpoch: async () => "1" });
+    const app = buildServer({ goalService: fakeGoalService(), authenticator: authenticated(), criticalActionService });
+    const response = await app.inject({ method: "POST", url: `/v1/goals/${goal.goalId}/critical-actions/deny`, headers: { authorization: "Bearer test-secret", "idempotency-key": randomUUID() }, payload: requestBody() });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ goalId: goal.goalId, effect: "deny", reason: "operator_rejected", classification: "critical" });
+    expect(appendDecision).toHaveBeenCalledOnce();
+    await app.close();
+  });
+});

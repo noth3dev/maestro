@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { once } from "node:events";
 import { request as httpRequest, type IncomingMessage } from "node:http";
-import { buildServer, type EventService, type GoalService, type OperatorAuthenticator, type HeadParticipationService, type CouncilService, type EncoreService, type ProjectDiscoveryService, type OrganizationService, type ConcertmasterReportService } from "./server.js";
+import { buildServer, type EventService, type InboxService, type GoalService, type OperatorAuthenticator, type HeadParticipationService, type CouncilService, type EncoreService, type ProjectDiscoveryService, type OrganizationService, type ConcertmasterReportService } from "./server.js";
 import { ReadStateGoalNotFoundError, type ReadStateService } from "./read-state-service.js";
 import type { WorkerService } from "./worker-service.js";
 import type { Worker } from "@maestro/contracts";
@@ -727,6 +727,26 @@ describe("evidence capture route", () => {
     const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), evidenceCaptureService: { capture: vi.fn(async () => { throw new EvidenceCaptureError("invalid content"); }) } } as never);
     const response = await app.inject({ method: "POST", url: `/v1/goals/${goal.goalId}/evidence-records`, headers: { authorization: "Bearer test-secret", "content-type": "application/json" }, payload: { projectId: goal.projectId, correlationId: goal.goalId, commandId: goal.goalId, kind: "test-result", mediaType: "text/plain", contentBase64: Buffer.from("test").toString("base64") } });
     expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+});
+
+
+describe("cross-Goal inbox route", () => {
+  it("aggregates pending approvals across the operator's visible Goals", async () => {
+    const secondGoalId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f08";
+    const inbox: InboxService = {
+      listPendingApprovals: vi.fn(async (projectId) => ({ projectId, items: [
+        { decisionId: goal.goalId, commandId: goal.goalId, projectId, goalId: goal.goalId, actorId: operator.operatorId, action: "deployment.release", target: "production", policyVersion: 1, budgetEffectCents: 0, classification: "critical" as const, reason: "critical_action", decidedAt: "2025-01-01T00:00:00.000Z" },
+        { decisionId: secondGoalId, commandId: secondGoalId, projectId, goalId: secondGoalId, actorId: operator.operatorId, action: "git.remote.push", target: "origin/main", policyVersion: 1, budgetEffectCents: 0, classification: "critical" as const, reason: "critical_action", decidedAt: "2025-01-01T00:00:01.000Z" },
+      ] })),
+    };
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), inboxService: inbox });
+    const response = await app.inject({ method: "GET", url: `/v1/inbox?projectId=${goal.projectId}`, headers: { authorization: "Bearer test-secret" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().items).toHaveLength(2);
+    expect(response.json().items.map((item: { goalId: string }) => item.goalId)).toEqual([goal.goalId, secondGoalId]);
+    expect(inbox.listPendingApprovals).toHaveBeenCalledWith(goal.projectId, operator);
     await app.close();
   });
 });
