@@ -23,6 +23,7 @@ describe("read-depth panels", () => {
   it("renders Task Contract substance, hash, and version history already carried by the route", () => {
     const lines = renderTaskContractPanel({ kind: "value", value: contract }, 240);
     expect(lines.join("\n")).toContain("ship the read surface");
+    expect(lines.join("\n")).toContain("schema version: 1");
     expect(lines.join("\n")).toContain(`content hash: ${hash(1)}`);
     expect(lines.join("\n")).toContain(`created · ${id(3)}`);
   });
@@ -30,7 +31,11 @@ describe("read-depth panels", () => {
   it("renders Council participants and decision packet while stating that briefs are not in the route record", () => {
     const council = { councilId: id(4), goalId: id(5), contractId: id(1), briefDeadline: "2030-01-01T00:00:00.000Z", state: "resolved" as const, noNewEvidenceStreak: 0, decisionPacket: { outcome: "decided", selectedDirection: "ship", dissent: ["risk"], evidenceReferences: ["evidence-1"] }, snapshotHash: hash(4), snapshot: { participants: [{ participantId: "head:engineering", headRoleId: "head:engineering", departmentId: "engineering", sessionRef: "session-1" }] } };
     const lines = renderCouncilPanel({ kind: "value", value: council }, 240).join("\n");
-    expect(lines).toContain("engineering");
+    expect(lines).toContain(`goal: ${id(5)}`);
+    expect(lines).toContain(`contract: ${id(1)}`);
+    expect(lines).toContain("brief deadline: 2030-01-01T00:00:00.000Z");
+    expect(lines).toContain("no-new-evidence streak: 0");
+    expect(lines).toContain("head:engineering");
     expect(lines).toContain("selectedDirection");
     expect(lines).toContain("Briefs unavailable from Head Council route response.");
   });
@@ -39,6 +44,21 @@ describe("read-depth panels", () => {
     const plan = { projectId: id(2), goalId: id(5), councilId: id(4), councilSnapshotHash: hash(4), decisionPacketHash: hash(5), contractId: id(1), contractVersion: 3, contractContentHash: hash(1), departmentId: "engineering", headRoleId: "head:engineering", version: 2, contentHash: hash(6), substance: { contribution: "implement the feature", nonGoals: ["new persistence"], items: [{ itemId: "item-1", kind: "execution" as const, objective: "write code", dependsOn: [], scoutQuestion: "", workerAssignment: "worker", evidenceReferences: ["evidence-1"] }], requiredHandoffs: ["review"], budgetCeiling: "100 cents", expectedTime: "1h", maxRetries: 1, maxWorkers: 1, gitRepository: "repo", gitBranch: "branch", integrationPath: "main", risks: ["risk"], safePausePoints: ["after test"], escalationTriggers: ["failure"], evidenceReferences: ["evidence-1"], validationCriteria: ["tests"] } };
     const lines = renderDepartmentPlanPanel({ kind: "value", value: plan }, 240).join("\n");
     expect(lines).toContain("implement the feature");
+    expect(lines).toContain("non-goals: new persistence");
+    expect(lines).toContain("depends on: none");
+    expect(lines).toContain("scout question: none");
+    expect(lines).toContain("worker assignment: worker");
+    expect(lines).toContain("item evidence: evidence-1");
+    expect(lines).toContain("budget ceiling: 100 cents");
+    expect(lines).toContain("expected time: 1h");
+    expect(lines).toContain("max retries: 1");
+    expect(lines).toContain("max workers: 1");
+    expect(lines).toContain("git: repo · branch · integration main");
+    expect(lines).toContain("risks: risk");
+    expect(lines).toContain("safe pause points: after test");
+    expect(lines).toContain("escalation triggers: failure");
+    expect(lines).toContain("plan evidence: evidence-1");
+    expect(lines).toContain("validation: tests");
     expect(lines).toContain("write code");
     expect(lines).toContain("Revision history unavailable from Department Plan route response.");
   });
@@ -49,6 +69,25 @@ describe("read-depth panels", () => {
     expect(lines).toContain("exec-1");
     expect(lines).toContain("Mission unavailable from Worker route response.");
     expect(lines).toContain("Evidence references unavailable from Worker route response.");
+  });
+
+  it("renders WorkerObservation observability payload and keeps absent mission/evidence explicit", () => {
+    const observation = {
+      workerId: id(7), councilId: id(4), departmentId: "engineering", planVersion: 2, itemId: "item-1", bundleContentHash: hash(7), attempt: 1, executionRef: "exec-1", invocationRef: "invoke-1", status: "running" as const, answerText: null, usageTotalTokens: null,
+      observability: {
+        stopState: "open" as const,
+        capabilityJournal: [{ journalId: id(13), capabilityKind: "project.file.read", projectId: id(2), goalId: id(5), event: "approval" as const, details: { target: "src/a.ts" }, recordedAt: "2030-01-01T00:00:00.000Z" }],
+        ipythonSessionJournal: [{ journalId: id(14), journalPosition: "1", sessionId: "session-1", processRef: "process-1", projectId: id(2), goalId: id(5), event: "started" as const, reason: null, processPid: 123, parentPid: 1, details: { source: "test" }, occurredAt: "2030-01-01T00:00:00.000Z" }],
+        toolEvents: { state: "available" as const, events: [{ ref: "tool-1", kind: "activity" as const, state: "executing" as const, toolName: "read" }] },
+      },
+    };
+    const lines = renderWorkerPanel({ kind: "value", value: observation }, 240).join("\n");
+    expect(lines).toContain("stop state: open");
+    expect(lines).toContain("project.file.read");
+    expect(lines).toContain("session-1");
+    expect(lines).toContain("tool-1");
+    expect(lines).toContain("Mission unavailable from WorkerObservation route response.");
+    expect(lines).toContain("Evidence references unavailable from WorkerObservation route response.");
   });
 
   it("renders Metronome reason, evidence, and repair details and marks findings absent", () => {

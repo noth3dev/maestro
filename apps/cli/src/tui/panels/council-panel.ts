@@ -11,7 +11,19 @@ export function renderCouncilPanel(state: PanelState<HeadCouncil>, width: number
   const council = state.value;
   const snapshot = object(council.snapshot);
   const participants = snapshot?.participants;
-  const lines = [`• ${council.councilId} · ${council.state}`, `snapshot hash: ${council.snapshotHash}`];
+  const lines = [
+    `• ${council.councilId} · ${council.state}`,
+    `goal: ${council.goalId}`,
+    `contract: ${council.contractId}`,
+    `brief deadline: ${council.briefDeadline}`,
+    `no-new-evidence streak: ${council.noNewEvidenceStreak}`,
+    `snapshot hash: ${council.snapshotHash}`,
+  ];
+  if (snapshot === undefined) lines.push("snapshot payload: unavailable");
+  else {
+    lines.push("snapshot payload:");
+    for (const [key, value] of Object.entries(snapshot)) lines.push(`  ${key}: ${json(value)}`);
+  }
   if (Array.isArray(participants) && participants.length > 0) {
     lines.push("participants:");
     for (const participant of participants) lines.push(`  ${json(participant)}`);

@@ -12,6 +12,7 @@ export function renderTaskContractPanel(state: PanelState<TaskContract>, width: 
   const contract = state.value;
   const lines = [
     `• ${contract.contractId} · ${contract.launchState} · v${contract.version}`,
+    `schema version: ${contract.schemaVersion}`,
     `content hash: ${contract.contentHash}`,
     "substance:",
   ];
