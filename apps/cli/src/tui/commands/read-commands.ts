@@ -2,6 +2,8 @@ import { CHANNEL_SELECTORS, type ApiClient, type ChannelRead, type ChannelSelect
 import { ChannelSelectorSchema } from "@maestro/contracts";
 import { renderChannelList, renderChannelPanel } from "../panels/channel-panel.js";
 import type { WorkspaceSession } from "../session.js";
+import { renderBillingPanel } from "../panels/billing-panel.js";
+import { renderLuthieryPanel } from "../panels/luthiery-panel.js";
 import { renderProjectionPanel, type ProjectionPanelValue } from "../panels/projection-panel.js";
 import { renderTaskContractPanel } from "../panels/task-contract-panel.js";
 import { renderCouncilPanel } from "../panels/council-panel.js";
@@ -79,7 +81,7 @@ export interface ReadCommandResult {
 }
 
 export const TUI_READ_COMMAND_KEYS = new Set([
-  "projects:list", "projection:read", "task-contract:get", "goals:list", "goal:get", "budget:get",
+  "projects:list", "projection:read", "task-contract:get", "goals:list", "goal:get", "budget:get", "billing:get", "luthiery:list",
   "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "worker:list", "workers:get", "workers:list",
   "git:status", "metronome-challenges:list", "encore-council:list", "certification:list", "certifications:list",
   "concertmaster-report:get", "evidence:list", "evidence:bundle", "events:list", "events:stream", "improvement-digests:list", "conversation:get",
@@ -183,6 +185,17 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     const read = await context.client.getChannel(goalId, selector, { projectId: context.projectId });
     const rendered = renderChannelPanel(read, 120);
     return { title: rendered[0] ?? "Channel", lines: rendered.slice(1) };
+  }
+  if (key === "billing:get") {
+    const billing = await context.client.getBillingSummary(context.projectId);
+    const rendered = renderBillingPanel({ kind: "value", value: billing }, 120);
+    return { title: rendered[0] ?? "Billing", lines: rendered.slice(1) };
+  }
+  if (key === "luthiery:list") {
+    const registry = option(command, "registry") ?? "skills";
+    if (registry !== "skills" && registry !== "tools") return unavailable("--registry must be either skills or tools");
+    const rendered = renderLuthieryPanel({ kind: "unavailable", registry }, 120);
+    return { title: rendered[0] ?? "Luthiery", lines: rendered.slice(1) };
   }
   if (key === "goals:list") {
     const goals = (await context.client.listGoals(context.projectId)).goals;

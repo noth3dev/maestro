@@ -7,6 +7,8 @@ describe("TUI command registry", () => {
   it("contains the complete supported command families", () => {
     const registry = createCommandRegistry();
     for (const command of [
+      "billing",
+      "luthiery",
       "goal",
       "projects",
       "projection",
@@ -57,6 +59,8 @@ describe("TUI command registry", () => {
     expect(registry.find("capability")?.actions.find((action) => action.name === "select-full-access-mode")?.kind).toBe("critical");
     expect(registry.find("evidence")?.actions.find((action) => action.name === "capture")?.kind).toBe("write");
     expect(registry.find("channel")?.actions.map((action) => `${action.name}:${action.kind}`)).toEqual(["list:read", "read:read", "post:write"]);
+    expect(registry.find("billing")?.actions.find((action) => action.name === "get")?.kind).toBe("read");
+    expect(registry.find("luthiery")?.actions.find((action) => action.name === "list")?.kind).toBe("read");
   });
 
   it("autocomplete filters command names", () => {

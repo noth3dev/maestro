@@ -23,6 +23,11 @@ describe("TUI command parser", () => {
     expect(parseSlashCommand("/goals list")).toEqual({ kind: "command", name: "goals", action: "list", options: {} });
   });
 
+  it("defaults billing and luthiery shortcuts to their read actions", () => {
+    expect(parseSlashCommand("/billing")).toEqual({ kind: "command", name: "billing", action: "get", options: {} });
+    expect(parseSlashCommand("/luthiery")).toEqual({ kind: "command", name: "luthiery", action: "list", options: {} });
+  });
+
   it("defaults read-only collection shortcuts to list", () => {
     expect(parseSlashCommand("/goals")).toEqual({ kind: "command", name: "goals", action: "list", options: {} });
     expect(parseSlashCommand("/model")).toEqual({ kind: "command", name: "model", action: "list", options: {} });

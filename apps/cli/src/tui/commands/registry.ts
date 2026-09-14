@@ -63,6 +63,16 @@ const definitions: CommandDefinition[] = (
       ],
     ],
     [
+      "billing",
+      "durable project billing history and totals",
+      [["get", "read", { requiresArguments: false, requiresGoal: false }]],
+    ],
+    [
+      "luthiery",
+      "durable skill and tool registry",
+      [["list", "read", { requiresArguments: false, requiresGoal: false }]],
+    ],
+    [
       "budget",
       "budget and cost state",
       [["get", "read"]],

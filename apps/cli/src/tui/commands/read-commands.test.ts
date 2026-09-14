@@ -183,6 +183,33 @@ describe("workspace read commands", () => {
     await expect(executeReadCommand({ client: api, projectId, goalId }, { name: "goal", action: "pause", options: {} })).resolves.toEqual({ title: "Unavailable", lines: ["goal pause is a mutation; use the write command path"] });
   });
 
+  it("reads billing through the shared typed client and renders the real rollup", async () => {
+    const billing = {
+      projectId, periodDays: 14,
+      dailySpend: Array.from({ length: 14 }, (_, index) => ({ date: `2026-09-${String(index + 1).padStart(2, "0")}`, costCents: index === 13 ? 125 : 0 })),
+      goals: [{ goalId, budgetCents: 3000, reservedCents: 500, costCents: 125 }],
+      totals: { budgetCents: 3000, reservedCents: 500, costCents: 125 },
+      departmentBreakdown: { available: false as const, reason: "Actual costs are tracked at Goal scope only" },
+    };
+    const getBillingSummary = vi.fn().mockResolvedValue(billing);
+    await expect(executeReadCommand({ client: client({ getBillingSummary }), projectId }, { name: "billing", action: "get", options: {} })).resolves.toEqual({
+      title: "Billing",
+      lines: expect.arrayContaining(["Daily spend · last 14 days · $1.25", "Cross-Goal totals · 1 Goal", "Per-department cost · unavailable", "• Actual costs are tracked at Goal scope only"]),
+    });
+    expect(getBillingSummary).toHaveBeenCalledWith(projectId);
+  });
+
+  it("keeps luthiery honest when the dependency has no durable registry", async () => {
+    await expect(executeReadCommand({ client: client(), projectId }, { name: "luthiery", action: "list", options: {} })).resolves.toEqual({
+      title: "Luthiery",
+      lines: ["skills registry unavailable", "The control plane does not durably track skills definitions, tags, certification state, or usage counts yet."],
+    });
+    await expect(executeReadCommand({ client: client(), projectId }, { name: "luthiery", action: "list", options: { registry: "tools" } })).resolves.toEqual({
+      title: "Luthiery",
+      lines: ["tools registry unavailable", "The control plane does not durably track tools definitions, tags, certification state, or usage counts yet."],
+    });
+  });
+
   it("returns an empty dashboard without inventing a selected goal", async () => {
     const result = await readDashboard({ client: client({ listGoals: vi.fn().mockResolvedValue({ goals: [] }) }), projectId });
     expect(result).toEqual({ projectId, goals: [], selectedGoal: undefined, budget: undefined, workerCount: undefined });
