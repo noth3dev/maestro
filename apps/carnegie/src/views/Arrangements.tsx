@@ -16,6 +16,7 @@ function CandidateItem({ candidate }: { candidate: ArrangementCandidate }) {
         <div className="arr-meta">{candidate.kind} · {candidate.state} · v{candidate.version}</div>
         <div className="arr-meta">target: {candidate.target.roleId ?? candidate.target.routingTarget ?? "unscoped"}{candidate.target.taskClass === undefined ? "" : ` / ${candidate.target.taskClass}`}</div>
         <div className="arr-meta">content hash: {candidate.contentHash}</div>
+        {candidate.evaluation !== null && <div className="arr-meta">evaluation: replay {candidate.evaluation.stages.replay} · shadow {candidate.evaluation.stages.shadow} · synthetic {candidate.evaluation.stages.synthetic}</div>}
         {candidate.evaluation?.metricDeltas.map((metric) => (
           <div key={metric.name} className="arr-meta">{metric.name}: {metric.baseline} → {metric.candidate} ({metric.delta >= 0 ? "+" : ""}{metric.delta})</div>
         ))}

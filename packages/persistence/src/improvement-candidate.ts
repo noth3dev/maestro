@@ -871,6 +871,7 @@ export async function readImprovementCandidateDecisionHistory(pool: Pool, candid
 export interface ImprovementCandidateArrangementEvaluation {
   readonly evaluationId: string;
   readonly evaluationHash: string;
+  readonly stages: Readonly<{ replay: string; shadow: string; synthetic: string }>;
   readonly metricDeltas: readonly { readonly name: string; readonly baseline: number; readonly candidate: number; readonly delta: number }[];
 }
 export interface ImprovementCandidateArrangementJudgment {
@@ -938,6 +939,16 @@ function metricDeltas(payload: unknown): readonly { readonly name: string; reado
     return { name, baseline, candidate, delta: candidate - baseline };
   }).sort((left, right) => left.name.localeCompare(right.name));
 }
+function evaluationStages(payload: unknown): Readonly<{ replay: string; shadow: string; synthetic: string }> {
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return { replay: "unknown", shadow: "unknown", synthetic: "unknown" };
+  const value = payload as Record<string, unknown>;
+  const stage = (key: string): string => {
+    const item = value[key];
+    return item !== null && typeof item === "object" && !Array.isArray(item) && typeof (item as Record<string, unknown>).status === "string"
+      ? (item as Record<string, unknown>).status as string : "unknown";
+  };
+  return { replay: stage("replay"), shadow: stage("shadow"), synthetic: stage("synthetic") };
+}
 function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []; }
 function arrangementJudgment(row: ArrangementJudgmentRow): ImprovementCandidateArrangementJudgment | null {
   if ((row.verdict !== "proceed" && row.verdict !== "do_not_proceed" && row.verdict !== "escalate") || (row.confidence !== "low" && row.confidence !== "medium" && row.confidence !== "high") || row.reasoning.trim() === "") return null;
@@ -971,7 +982,10 @@ export async function listImprovementCandidateArrangements(
           const result = await client.query<ArrangementEvaluationRow>(`SELECT evaluation_id, evaluation_hash, replay_payload, NULL::jsonb AS evaluation_payload FROM routing_candidate_evaluations WHERE candidate_id = $1 AND candidate_version = $2 AND candidate_content_hash = $3`, [evaluatedRow.candidate_id, evaluatedRow.version, evaluatedRow.content_hash]);
           evaluationRow = result.rows[0];
         }
-        if (evaluationRow !== undefined) evaluation = { evaluationId: evaluationRow.evaluation_id, evaluationHash: evaluationRow.evaluation_hash, metricDeltas: metricDeltas(evaluationRow.evaluation_payload ?? evaluationRow.replay_payload) };
+        if (evaluationRow !== undefined) {
+          const payload = evaluationRow.evaluation_payload ?? evaluationRow.replay_payload;
+          evaluation = { evaluationId: evaluationRow.evaluation_id, evaluationHash: evaluationRow.evaluation_hash, stages: evaluationStages(payload), metricDeltas: metricDeltas(payload) };
+        }
       }
       const lineageIds = (await client.query<{ candidate_id: string }>("SELECT candidate_id FROM improvement_candidates WHERE lineage_id = $1", [row.lineage_id])).rows.map((item) => item.candidate_id);
       const approvals = await client.query<{ council_round_id: string }>(`SELECT council_round_id FROM improvement_candidate_council_approvals WHERE candidate_id = ANY($1::uuid[]) UNION ALL SELECT council_round_id FROM routing_candidate_approvals WHERE candidate_id = ANY($1::uuid[])`, [lineageIds]);

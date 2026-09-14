@@ -96,7 +96,7 @@ export function createReadStateService(pool: Pool): ReadStateService {
       const active = records.filter((record) => record.candidate.state === "applied").map(arrangementCandidate);
       const candidates = records.filter((record) => ["candidate", "evaluated", "judged"].includes(record.candidate.state)).map(arrangementCandidate);
       const encoreCouncil = records.filter((record) => record.council !== null).map((record) => arrangementCouncil(record.candidate.candidateId, record.council!));
-      const negativeEvidence = records.filter((record) => record.candidate.state === "rejected" && record.council !== null).map((record) => arrangementNegativeEvidence(record.candidate.candidateId, record.council!));
+      const negativeEvidence = records.filter((record) => record.candidate.state === "rejected" && record.council !== null && record.council.finalVerdict !== "proceed").map((record) => arrangementNegativeEvidence(record.candidate.candidateId, record.council!));
       return { active, candidates, encoreCouncil, negativeEvidence };
     },
   };

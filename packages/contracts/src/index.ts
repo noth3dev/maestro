@@ -860,7 +860,9 @@ const ArrangementCandidateTargetSchema = z.object({
 const ArrangementCandidateChangeSchema = z.object({ axis: z.string().min(1), currentValue: z.number().finite(), proposedValue: z.number().finite() }).strict();
 const ArrangementMetricDeltaSchema = z.object({ name: z.string().min(1), baseline: z.number().finite(), candidate: z.number().finite(), delta: z.number().finite() }).strict();
 const ArrangementEvaluationSchema = z.object({
-  evaluationId: UuidSchema, evaluationHash: z.string().regex(/^[a-f0-9]{64}$/), metricDeltas: z.array(ArrangementMetricDeltaSchema),
+  evaluationId: UuidSchema, evaluationHash: z.string().regex(/^[a-f0-9]{64}$/),
+  stages: z.object({ replay: z.string().min(1), shadow: z.string().min(1), synthetic: z.string().min(1) }).strict(),
+  metricDeltas: z.array(ArrangementMetricDeltaSchema),
 }).strict();
 const ArrangementRolloutSchema = z.object({
   rolloutId: UuidSchema, status: z.enum(["active", "interrupted", "certified", "rolled_back"]), activeCandidateId: UuidSchema,
