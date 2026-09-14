@@ -1,5 +1,6 @@
 import type { ApiClient, GoalResult } from "@maestro/api-client";
 import type { WorkspaceSession } from "../session.js";
+import { renderProjectionPanel, type ProjectionPanelValue } from "../panels/projection-panel.js";
 import { createCommandRegistry } from "./registry.js";
 import type { ParsedCommand } from "./parser.js";
 
@@ -88,7 +89,7 @@ function valueLines<T>(title: string, items: readonly T[], format: (item: T) => 
 
 export async function executeReadCommand(context: ReadCommandContext, command: ParsedCommand): Promise<ReadCommandResult> {
   const key = `${command.name}:${command.action ?? ""}`;
-  if (!["projects:list", "task-contract:get", "goals:list", "goal:get", "budget:get", "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "worker:list", "workers:get", "workers:list", "git:status", "metronome-challenges:list", "encore-council:list", "certification:list", "certifications:list", "concertmaster-report:get", "events:list", "events:stream", "improvement-digests:list"].includes(key)) {
+  if (!["projects:list", "projection:read", "task-contract:get", "goals:list", "goal:get", "budget:get", "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "worker:list", "workers:get", "workers:list", "git:status", "metronome-challenges:list", "encore-council:list", "certification:list", "certifications:list", "concertmaster-report:get", "events:list", "events:stream", "improvement-digests:list"].includes(key)) {
     const definition = createCommandRegistry().find(command.name);
     const action = definition?.actions.find((item) => item.name === command.action);
     if (action?.kind !== "read") return unavailable(`${command.name} ${command.action ?? ""} is a mutation; use the write command path`.trim());
@@ -98,6 +99,20 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
   if (key === "projects:list") {
     const projects = (await context.client.listProjects()).projects;
     return valueLines("Projects", projects, (projectId) => `• ${projectId}`);
+  }
+  if (key === "projection:read") {
+    const goalId = option(command, "goal-id");
+    const projection = await context.client.getProjection(goalId === undefined ? { projectId: context.projectId } : { projectId: context.projectId, goalId });
+    const organization = await context.client.getOrganization();
+    const value = { projection, organization } as ProjectionPanelValue;
+    const departmentId = option(command, "department-id");
+    const groupId = option(command, "group-id");
+    const headId = option(command, "head-id");
+    if (departmentId !== undefined) value.departmentId = departmentId;
+    if (groupId !== undefined) value.groupId = groupId;
+    if (headId !== undefined) value.headId = headId;
+    const rendered = renderProjectionPanel({ kind: "value", value }, 120);
+    return { title: rendered[0] ?? "Organization projection", lines: rendered.slice(1) };
   }
   if (key === "goals:list") {
     const goals = (await context.client.listGoals(context.projectId)).goals;

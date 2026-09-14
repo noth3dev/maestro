@@ -42,6 +42,7 @@ export function parseInput(input: string): ParsedInput {
   const defaultActions: Record<string, string> = {
     goals: "list",
     projects: "list",
+    projection: "read",
     models: "list",
     model: "list",
     events: "list",
