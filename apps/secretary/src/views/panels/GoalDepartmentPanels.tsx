@@ -1,14 +1,14 @@
 import React from "react";
-import type { Certification, EvidenceBundleRead, GoalBudgetSummary, GoalEvent } from "@maestro/api-client";
-import type { ProjectionNode, ProjectionReadModel } from "@maestro/contracts";
+import type { EvidenceBundleRead, GoalBudgetSummary, GoalEvent } from "@maestro/api-client";
+import type { Certification, ProjectionNode, ProjectionReadModel } from "@maestro/contracts";
 
 export interface GoalDepartmentPanelsProps {
   projection: ProjectionReadModel;
   events: readonly GoalEvent[];
-  budget?: GoalBudgetSummary;
+  budget?: GoalBudgetSummary | undefined;
   certifications: readonly Certification[];
-  evidenceBundle?: EvidenceBundleRead;
-  goalId?: string;
+  evidenceBundle?: EvidenceBundleRead | undefined;
+  goalId?: string | undefined;
 }
 
 function formatCents(cents: number): string {

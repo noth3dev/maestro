@@ -1,8 +1,8 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { GoalEvent, GoalBudgetSummary, Certification, EvidenceBundleRead } from "@maestro/api-client";
-import type { ProjectionReadModel } from "@maestro/contracts";
+import type { GoalEvent, GoalBudgetSummary, EvidenceBundleRead } from "@maestro/api-client";
+import type { Certification, ProjectionReadModel } from "@maestro/contracts";
 import { GoalDepartmentPanels } from "./GoalDepartmentPanels.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";

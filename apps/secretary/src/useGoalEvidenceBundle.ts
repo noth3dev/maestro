@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ApiError, type EvidenceBundleRead } from "@maestro/api-client";
+import type { EvidenceBundleRead } from "@maestro/api-client";
 import { useConnection } from "./connection.js";
 import { useGoals } from "./goals.js";
 
@@ -17,7 +17,7 @@ export function useGoalEvidenceBundle(): { evidenceBundle: EvidenceBundleRead | 
       .then((bundle) => { if (!cancelled) setEvidenceBundle(bundle); })
       .catch((cause: unknown) => {
         if (cancelled) return;
-        if (cause instanceof ApiError && cause.status === 404) { setEvidenceBundle(undefined); return; }
+        if (typeof cause === "object" && cause !== null && "status" in cause && (cause as { status?: unknown }).status === 404) { setEvidenceBundle(undefined); return; }
         setError(cause instanceof Error ? cause.message : "Could not load the evidence bundle");
       });
     return () => { cancelled = true; };
