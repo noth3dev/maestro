@@ -29,6 +29,18 @@ async function currentLeaseRow(pool: Pool): Promise<{ owner_id: string; fencing_
   return result.rows[0];
 }
 
+async function waitForReconcilerLeaseExpiry(pool: Pool): Promise<void> {
+  const deadline = Date.now() + 1_000;
+  while (Date.now() < deadline) {
+    const result = await pool.query<{ expired: boolean }>(
+      "SELECT expires_at <= transaction_timestamp() AS expired FROM reconciler_leader_lease WHERE lease_key = 'singleton'",
+    );
+    if (result.rows[0]?.expired) return;
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+  throw new Error("Reconciler leader lease did not expire within the test timeout");
+}
+
 describeDatabase("reconciler leader lease fencing property tests with PostgreSQL", () => {
   const pool = new Pool({ connectionString: databaseUrl });
 
@@ -96,7 +108,7 @@ describeDatabase("reconciler leader lease fencing property tests with PostgreSQL
 
         // A lease that already expired lets a successor acquire (steal) it.
         const expired = await acquireReconcilerLeaderLease(pool, firstOwner, 1);
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        await waitForReconcilerLeaseExpiry(pool);
         const successor = await acquireReconcilerLeaderLease(pool, secondOwner, 60_000);
         expect(successor.fencingToken).not.toBe(expired.fencingToken);
         expect(successor.ownerId).toBe(secondOwner);
