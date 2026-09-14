@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
-import type { BillingReadModel, GoalBudgetSummary, GoalResult } from "@maestro/contracts";
-import { listMetronomeChallenges, listEncoreCouncilRounds, listQualityCertifications, listConditionalCertifications, readConcertmasterFinalReport, readEvidenceBundle, getGoalGitIntegrationState, listWorkersForGoal, listImprovementDigests, type MetronomeChallenge, type EncoreCouncilRound, type QualityCertification, type ConditionalCertification, type ConcertmasterFinalReport } from "@maestro/persistence";
+import type { BillingReadModel, GoalBudgetSummary, GoalResult, ArrangementsRead, ArrangementCandidate, ArrangementCouncil, ArrangementNegativeEvidence } from "@maestro/contracts";
+import { listMetronomeChallenges, listEncoreCouncilRounds, listQualityCertifications, listConditionalCertifications, readConcertmasterFinalReport, readEvidenceBundle, getGoalGitIntegrationState, listWorkersForGoal, listImprovementDigests, listImprovementCandidateArrangements, type MetronomeChallenge, type EncoreCouncilRound, type QualityCertification, type ConditionalCertification, type ConcertmasterFinalReport } from "@maestro/persistence";
 import type { EvidenceBundleRead, GoalGitIntegrationState } from "@maestro/contracts";
 import type { ImprovementDigest, Worker } from "@maestro/domain";
 
@@ -17,6 +17,40 @@ export interface ReadStateService {
   getGitIntegrationState(goalId: string, projectId: string): Promise<GoalGitIntegrationState>;
   listWorkersForGoal(goalId: string, projectId: string): Promise<readonly Worker[]>;
   listImprovementDigestsForGoal(goalId: string, projectId: string, operatorId: string): Promise<readonly ImprovementDigest[]>;
+  listArrangementsForGoal(goalId: string, projectId: string, operatorId: string): Promise<ArrangementsRead>;
+}
+
+function arrangementCandidate(record: Awaited<ReturnType<typeof listImprovementCandidateArrangements>>[number]): ArrangementCandidate {
+  const rejectionReason = record.candidate.state === "rejected" && record.council !== null
+    ? record.council.judgments.find((judgment) => judgment.verdict !== "proceed")?.reasoning ?? `Encore Council verdict: ${record.council.finalVerdict}`
+    : null;
+  return {
+    candidateId: record.candidate.candidateId, version: record.candidate.version, parentCandidateId: record.candidate.parentCandidateId,
+    projectId: record.candidate.projectId, goalId: record.candidate.goalId, kind: record.candidate.kind, state: record.candidate.state,
+    target: record.candidate.target, changes: [...record.candidate.changes], sourceEvidenceIds: [...record.candidate.sourceEvidenceIds],
+    predictedEffect: record.candidate.predictedEffect, contentHash: record.candidate.contentHash,
+    evaluation: record.evaluation === null ? null : {
+      evaluationId: record.evaluation.evaluationId, evaluationHash: record.evaluation.evaluationHash, stages: record.evaluation.stages,
+      metricDeltas: record.evaluation.metricDeltas.map((delta) => ({ ...delta })),
+    },
+    rollout: record.rollout, rejectionReason,
+  };
+}
+function arrangementCouncil(candidateId: string, council: NonNullable<Awaited<ReturnType<typeof listImprovementCandidateArrangements>>[number]["council"]>): ArrangementCouncil {
+  return { candidateId, ...council, dissentNotes: [...council.dissentNotes], judgments: council.judgments.map((judgment) => ({ ...judgment, conditions: [...judgment.conditions], citedEvidenceIds: [...judgment.citedEvidenceIds] })) };
+}
+function arrangementNegativeEvidence(candidateId: string, council: Awaited<ReturnType<typeof listImprovementCandidateArrangements>>[number]["council"]): ArrangementNegativeEvidence {
+  const reason = council === null ? null : council.judgments.find((judgment) => judgment.verdict !== "proceed")?.reasoning ?? `Encore Council verdict: ${council.finalVerdict}`;
+  return { candidateId, state: "rejected", reason, roundId: council?.roundId ?? null, judgments: (council?.judgments ?? []).map((judgment) => ({ ...judgment, conditions: [...judgment.conditions], citedEvidenceIds: [...judgment.citedEvidenceIds] })) };
+}
+
+export function isArrangementActive(record: {
+  readonly candidate: { readonly candidateId: string; readonly version: number };
+  readonly rollout: { readonly status: string; readonly activeCandidateId: string; readonly activeVersion: number } | null;
+}): boolean {
+  return (record.rollout?.status === "active" || record.rollout?.status === "certified")
+    && record.rollout.activeCandidateId === record.candidate.candidateId
+    && record.rollout.activeVersion === record.candidate.version;
 }
 
 export function createReadStateService(pool: Pool): ReadStateService {
@@ -112,6 +146,16 @@ export function createReadStateService(pool: Pool): ReadStateService {
     async listImprovementDigestsForGoal(goalId, projectId, operatorId) {
       await assertGoalProject(goalId, projectId);
       return listImprovementDigests(pool, { operatorId, projectId }, goalId);
+    },
+    async listArrangementsForGoal(goalId, projectId, operatorId) {
+      await assertGoalProject(goalId, projectId);
+      const records = await listImprovementCandidateArrangements(pool, { operatorId, projectId }, goalId);
+      const active = records.filter(isArrangementActive).map(arrangementCandidate);
+      const candidates = records.filter((record) => ["candidate", "evaluated", "judged"].includes(record.candidate.state)
+        && !isArrangementActive(record)).map(arrangementCandidate);
+      const encoreCouncil = records.filter((record) => record.council !== null).map((record) => arrangementCouncil(record.candidate.candidateId, record.council!));
+      const negativeEvidence = records.filter((record) => record.candidate.state === "rejected").map((record) => arrangementNegativeEvidence(record.candidate.candidateId, record.council));
+      return { active, candidates, encoreCouncil, negativeEvidence };
     },
   };
 }

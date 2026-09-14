@@ -49,6 +49,7 @@ import {
   ChannelMessageSchema,
   ChannelReadSchema,
   ImprovementDigestListSchema,
+  ArrangementsReadSchema,
   AuthenticatedDiscordSignalSchema,
   StoredDiscordSignalSchema,
   EventQuerySchema,
@@ -376,6 +377,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
     getGitIntegrationState: async () => { throw new DurableStoreUnavailableError(); },
     listWorkersForGoal: async () => { throw new DurableStoreUnavailableError(); },
     listImprovementDigestsForGoal: async () => { throw new DurableStoreUnavailableError(); },
+    listArrangementsForGoal: async () => { throw new DurableStoreUnavailableError(); },
   };
   const criticalActions = criticalActionService ?? {
     performCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
@@ -1362,6 +1364,12 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const query = parse(GoalQuerySchema, request.query);
     const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
     return reply.send(ImprovementDigestListSchema.parse({ digests: await readState.listImprovementDigestsForGoal(goalId, query.projectId, operatorId) }));
+  });
+  app.get("/v1/goals/:goalId/arrangements", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const query = parse(GoalQuerySchema, request.query);
+    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
+    return reply.send(ArrangementsReadSchema.parse(await readState.listArrangementsForGoal(goalId, query.projectId, operatorId)));
   });
   // Ingests one authenticated Discord watchdog signal. Bearer authentication (above) proves the
   // caller holds a real operator credential; the signal's own HMAC signature (verified inside

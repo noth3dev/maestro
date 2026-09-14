@@ -53,6 +53,15 @@ describe("inbox client", () => {
   });
 });
 
+describe("arrangements client", () => {
+  it("reads the authenticated Goal arrangement stages without static fallback data", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ active: [], candidates: [], encoreCouncil: [], negativeEvidence: [] }), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+    await expect(client.getArrangements(goalId, { projectId })).resolves.toEqual({ active: [], candidates: [], encoreCouncil: [], negativeEvidence: [] });
+    expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/arrangements?projectId=${projectId}`, expect.objectContaining({ headers: { authorization: "Bearer top-secret" } }));
+  });
+});
+
 describe("createApiClient", () => {
   it("lists authenticated project memberships for first-run workspace discovery", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ projects: [projectId] }), { status: 200 }));

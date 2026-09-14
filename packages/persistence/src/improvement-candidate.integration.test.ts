@@ -12,6 +12,7 @@ import { recordImprovementDigest } from "./improvement-digest.js";
 import {
   appendImprovementCandidateVersion,
   listImprovementCandidateVersions,
+  listImprovementCandidateArrangements,
   readImprovementCandidate,
   recordImprovementCandidate,
   recordImprovementCandidateEvaluation,
@@ -145,6 +146,43 @@ describeDatabase("Improvement Candidate persistence", () => {
     const candidate = await recordImprovementCandidate(pool, inputFor(), proof, author, "evaluation-payload");
     const evaluated = await transitionImprovementCandidate(pool, candidate.candidateId, "evaluated", proof, author, "evaluation-payload-evaluated");
     await expect(recordImprovementCandidateEvaluation(pool, evaluated.candidateId, proof, { evidenceIds: [digestId], payload: {} }, "evaluation-payload-empty")).rejects.toThrow(/replay|synthetic|shadow|payload/i);
+  });
+
+  it("joins rejected candidates to their exact durable negative Council transcript", async () => {
+    const initial = await recordImprovementCandidate(pool, inputFor(), proof, author, "arrangements-negative-council");
+    const evaluated = await transitionImprovementCandidate(pool, initial.candidateId, "evaluated", proof, author, "arrangements-negative-council-evaluated");
+    const evaluation = await recordImprovementCandidateEvaluation(pool, evaluated.candidateId, proof, {
+      evidenceIds: [digestId],
+      payload: {
+        replay: { status: "compared", scenarioSuiteHash: evaluated.scenarioSuiteHash, results: [{ goalId, baseline: { correctness: 0.9 }, candidate: { correctness: 0.95 } }] },
+        synthetic: { status: "completed", results: [{ scenarioId: "implementation-risk-review-v1", metrics: { correctness: 0.95 } }] },
+        shadow: { status: "completed", records: [{ matchesActive: false }], liveEffects: [] },
+      },
+    }, "arrangements-negative-council-evaluation");
+    const roundId = randomUUID();
+    const question = `Review this evaluated improvement candidate independently.\nCandidate: ${evaluated.candidateId} version ${evaluated.version} schemaVersion ${evaluated.schemaVersion} contentHash ${evaluated.contentHash} (${evaluated.kind})`;
+    await pool.query("INSERT INTO encore_council_rounds (round_id, goal_id, question, criteria, evidence_ids, trigger_reasons, reviewer_count) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, '[]'::jsonb, 2)", [roundId, goalId, question, JSON.stringify([]), JSON.stringify([digestId, evaluation.evaluationId])]);
+    for (const [reviewerIndex, model] of [[0, "provider-a/model-a"], [1, "provider-b/model-b"]] as const) {
+      const [modelProvider, modelId] = model.split("/");
+      await pool.query("INSERT INTO encore_council_judgments (judgment_id, round_id, reviewer_index, model_provider, model_id, verdict, confidence, reasoning, conditions, dissent_note, cited_evidence_ids, execution_ref, invocation_ref) VALUES ($1, $2, $3, $4, $5, 'do_not_proceed', 'high', 'protected metric regression', '[]'::jsonb, NULL, $6::jsonb, $7, $8)", [randomUUID(), roundId, reviewerIndex, modelProvider, modelId, JSON.stringify([digestId, evaluation.evaluationId]), `negative-execution-${reviewerIndex}`, `negative-invocation-${reviewerIndex}`]);
+    }
+    await pool.query("INSERT INTO encore_council_syntheses (round_id, final_verdict, same_model_only, escalated, dissent_notes) VALUES ($1, 'do_not_proceed', false, false, '[]'::jsonb)", [roundId]);
+    const rejected = await transitionImprovementCandidate(pool, evaluated.candidateId, "rejected", proof, author, "arrangements-negative-council-rejected");
+
+    const records = await listImprovementCandidateArrangements(pool, { operatorId, projectId }, goalId);
+    const record = records.find((item) => item.candidate.candidateId === rejected.candidateId);
+    expect(record?.council).toMatchObject({ roundId, finalVerdict: "do_not_proceed" });
+    expect(record?.council?.judgments[0]?.reasoning).toBe("protected metric regression");
+  });
+
+  it("retains every rejected version in arrangements evidence after a later retained revision", async () => {
+    const rejected = await transitionImprovementCandidate(pool, (await recordImprovementCandidate(pool, inputFor(), proof, author, "arrangements-rejected" )).candidateId, "rejected", proof, author, "arrangements-rejected-transition");
+    const retained = await appendImprovementCandidateVersion(pool, rejected.candidateId, inputFor({ predictedEffect: "Retain the rejected version for historical evidence." }), proof, author, "arrangements-retained-revision");
+    const records = await listImprovementCandidateArrangements(pool, { operatorId, projectId }, goalId);
+    expect(records.map((record) => record.candidate.candidateId)).toContain(rejected.candidateId);
+    expect(records.find((record) => record.candidate.candidateId === rejected.candidateId)?.candidate.state).toBe("rejected");
+    expect(records.find((record) => record.candidate.candidateId === retained.candidateId)?.candidate.state).toBe("retained");
+    expect(records.find((record) => record.candidate.candidateId === rejected.candidateId)?.council).toBeNull();
   });
 
   it("does not replay a transition operation under another Goal lease", async () => {
