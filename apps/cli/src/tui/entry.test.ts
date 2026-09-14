@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { parseInput } from "./commands/parser.js";
-import { createAutomaticProviderSignInGate, runAutomaticProviderSignInOffer, shouldOfferAutomaticProviderSignIn } from "./entry.js";
+import { createAutomaticProviderSignInGate, isProviderLoginActive, runAutomaticProviderSignInOffer, shouldOfferAutomaticProviderSignIn } from "./entry.js";
 
 const model = (provider: string, id: string) => ({
   identity: { provider, id },
@@ -51,6 +51,13 @@ describe("automatic provider sign-in", () => {
     await runAutomaticProviderSignInOffer(options);
     await runAutomaticProviderSignInOffer(options);
     expect(onOffer).toHaveBeenCalledOnce();
+  });
+
+  it("keeps automatic offers blocked while a provider-key request is in flight", () => {
+    expect(isProviderLoginActive(undefined, true, undefined)).toBe(true);
+    expect(isProviderLoginActive("openai", false, undefined)).toBe(true);
+    expect(isProviderLoginActive(undefined, false, 0)).toBe(true);
+    expect(isProviderLoginActive(undefined, false, undefined)).toBe(false);
   });
 
   it("does not overwrite manual provider-key entry or a stale connection", async () => {
