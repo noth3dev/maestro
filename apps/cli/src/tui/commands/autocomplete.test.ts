@@ -14,6 +14,11 @@ describe("command argument autocomplete", () => {
     expect(createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "model")).toBeDefined();
   });
 
+  it("suggests luthiery registry selection", () => {
+    const luthiery = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "luthiery");
+    expect(luthiery?.getArgumentCompletions?.("list --reg")).toEqual([expect.objectContaining({ value: "--registry " })]);
+  });
+
   it("suggests report generation options", () => {
     const report = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "concertmaster-report");
     expect(report?.getArgumentCompletions?.("generate --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);

@@ -46,6 +46,8 @@ export function parseInput(input: string): ParsedInput {
     models: "list",
     model: "list",
     events: "list",
+    billing: "get",
+    luthiery: "list",
     workers: "list",
     "metronome-challenges": "list",
     "encore-council": "list",

@@ -1,5 +1,7 @@
 import type { ApiClient, GoalResult } from "@maestro/api-client";
 import type { WorkspaceSession } from "../session.js";
+import { renderBillingPanel } from "../panels/billing-panel.js";
+import { renderLuthieryPanel } from "../panels/luthiery-panel.js";
 import { renderProjectionPanel, type ProjectionPanelValue } from "../panels/projection-panel.js";
 import { createCommandRegistry } from "./registry.js";
 import type { ParsedCommand } from "./parser.js";
@@ -110,7 +112,7 @@ function formatEvidenceRecord(record: Record<string, unknown>): string {
 
 export async function executeReadCommand(context: ReadCommandContext, command: ParsedCommand): Promise<ReadCommandResult> {
   const key = `${command.name}:${command.action ?? ""}`;
-  if (!["projects:list", "projection:read", "task-contract:get", "goals:list", "goal:get", "budget:get", "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "worker:list", "workers:get", "workers:list", "git:status", "metronome-challenges:list", "encore-council:list", "certification:list", "certifications:list", "concertmaster-report:get", "evidence:list", "evidence:bundle", "events:list", "events:stream", "improvement-digests:list", "conversation:get"].includes(key)) {
+  if (!["projects:list", "projection:read", "task-contract:get", "goals:list", "goal:get", "budget:get", "billing:get", "luthiery:list", "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "worker:list", "workers:get", "workers:list", "git:status", "metronome-challenges:list", "encore-council:list", "certification:list", "certifications:list", "concertmaster-report:get", "evidence:list", "evidence:bundle", "events:list", "events:stream", "improvement-digests:list", "conversation:get"].includes(key)) {
     const definition = createCommandRegistry().find(command.name);
     const action = definition?.actions.find((item) => item.name === command.action);
     if (action?.kind !== "read") return unavailable(`${command.name} ${command.action ?? ""} is a mutation; use the write command path`.trim());
@@ -134,6 +136,17 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
     if (headId !== undefined) value.headId = headId;
     const rendered = renderProjectionPanel({ kind: "value", value }, 120);
     return { title: rendered[0] ?? "Organization projection", lines: rendered.slice(1) };
+  }
+  if (key === "billing:get") {
+    const billing = await context.client.getBillingSummary(context.projectId);
+    const rendered = renderBillingPanel({ kind: "value", value: billing }, 120);
+    return { title: rendered[0] ?? "Billing", lines: rendered.slice(1) };
+  }
+  if (key === "luthiery:list") {
+    const registry = option(command, "registry") ?? "skills";
+    if (registry !== "skills" && registry !== "tools") return unavailable("--registry must be either skills or tools");
+    const rendered = renderLuthieryPanel({ kind: "unavailable", registry }, 120);
+    return { title: rendered[0] ?? "Luthiery", lines: rendered.slice(1) };
   }
   if (key === "goals:list") {
     const goals = (await context.client.listGoals(context.projectId)).goals;
