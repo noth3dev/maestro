@@ -1,4 +1,6 @@
-import type { ApiClient, GoalResult } from "@maestro/api-client";
+import { CHANNEL_SELECTORS, type ApiClient, type ChannelRead, type ChannelSelector, type GoalResult } from "@maestro/api-client";
+import { ChannelSelectorSchema } from "@maestro/contracts";
+import { renderChannelList, renderChannelPanel } from "../panels/channel-panel.js";
 import type { WorkspaceSession } from "../session.js";
 import { createCommandRegistry } from "./registry.js";
 import type { ParsedCommand } from "./parser.js";
@@ -82,13 +84,30 @@ function selectedGoal(command: ParsedCommand, context: ReadCommandContext): stri
   return option(command, "goal-id") ?? context.goalId ?? unavailable("No Goal is selected; use --goal-id or /goal select");
 }
 
+function channelSelector(command: ParsedCommand): ChannelSelector | ReadCommandResult {
+  const kind = required(command, "channel-kind");
+  const channelId = required(command, "channel-id");
+  if (typeof kind !== "string") return kind;
+  if (typeof channelId !== "string") return channelId;
+  const parsed = ChannelSelectorSchema.safeParse({ kind, channelId });
+  return parsed.success ? parsed.data : unavailable("--channel-kind and --channel-id do not identify a valid channel");
+}
+
+async function listChannels(context: ReadCommandContext, goalId: string): Promise<ChannelRead[]> {
+  const results = await Promise.allSettled(CHANNEL_SELECTORS.map((selector) => context.client.getChannel(goalId, selector, { projectId: context.projectId })));
+  return results
+    .filter((result): result is PromiseFulfilledResult<ChannelRead> => result.status === "fulfilled")
+    .map((result) => result.value)
+    .filter((read) => read.members.length > 0);
+}
+
 function valueLines<T>(title: string, items: readonly T[], format: (item: T) => string): ReadCommandResult {
   return { title, lines: items.length === 0 ? ["No records found."] : items.map(format) };
 }
 
 export async function executeReadCommand(context: ReadCommandContext, command: ParsedCommand): Promise<ReadCommandResult> {
   const key = `${command.name}:${command.action ?? ""}`;
-  if (!["projects:list", "task-contract:get", "goals:list", "goal:get", "budget:get", "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "worker:list", "workers:get", "workers:list", "git:status", "metronome-challenges:list", "encore-council:list", "certification:list", "certifications:list", "concertmaster-report:get", "events:list", "events:stream", "improvement-digests:list"].includes(key)) {
+  if (!["projects:list", "task-contract:get", "goals:list", "goal:get", "budget:get", "council:get", "department-plan:get", "mission-bundle:get", "worker:get", "worker:list", "workers:get", "workers:list", "git:status", "metronome-challenges:list", "encore-council:list", "certification:list", "certifications:list", "concertmaster-report:get", "events:list", "events:stream", "improvement-digests:list", "channel:list", "channel:read"].includes(key)) {
     const definition = createCommandRegistry().find(command.name);
     const action = definition?.actions.find((item) => item.name === command.action);
     if (action?.kind !== "read") return unavailable(`${command.name} ${command.action ?? ""} is a mutation; use the write command path`.trim());
@@ -98,6 +117,20 @@ export async function executeReadCommand(context: ReadCommandContext, command: P
   if (key === "projects:list") {
     const projects = (await context.client.listProjects()).projects;
     return valueLines("Projects", projects, (projectId) => `• ${projectId}`);
+  }
+  if (key === "channel:list") {
+    const goalId = selectedGoal(command, context);
+    if (typeof goalId !== "string") return goalId;
+    return { title: "Channels", lines: renderChannelList(await listChannels(context, goalId), 120).slice(1) };
+  }
+  if (key === "channel:read") {
+    const goalId = selectedGoal(command, context);
+    const selector = channelSelector(command);
+    if (typeof goalId !== "string") return goalId;
+    if ("title" in selector) return selector;
+    const read = await context.client.getChannel(goalId, selector, { projectId: context.projectId });
+    const rendered = renderChannelPanel(read, 120);
+    return { title: rendered[0] ?? "Channel", lines: rendered.slice(1) };
   }
   if (key === "goals:list") {
     const goals = (await context.client.listGoals(context.projectId)).goals;

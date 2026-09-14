@@ -17,6 +17,9 @@ const options: Record<string, readonly string[]> = {
   "conversation get": ["--conversation-id", "--project-id"],
   "conversation turn": ["--conversation-id", "--project-id", "--text"],
   "conversation cancel": ["--conversation-id", "--project-id"],
+  "channel list": ["--goal-id"],
+  "channel read": ["--goal-id", "--channel-kind", "--channel-id"],
+  "channel post": ["--goal-id", "--channel-kind", "--channel-id", "--content", "--command-id"],
   "session attach": ["--project-id"],
 };
 

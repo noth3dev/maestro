@@ -42,6 +42,7 @@ const definitions: CommandDefinition[] = (
     ],
     ["goals", "Goal discovery", [["list", "read"]]],
     ["projects", "Authenticated project discovery", [["list", "read"]]],
+    ["channel", "Department and team channels", [["list", "read"], ["read", "read"], ["post", "write"]]],
     // Emergency stop is the server-authorized fail-safe lifecycle command. It
     // still requires explicit local confirmation; the Control Plane enforces the
     // concertmaster role and records the durable Goal command.
