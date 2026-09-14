@@ -46,6 +46,7 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
         </div>
         <div className="sb-fixed-menu-group" />
         <div className="sb-menu">
+          {navItem("persona", "user-round", "persona")}
           {navItem("luthiery", "hammer", t.nav.luthiery)}
           {navItem("arrangements", "git-merge", t.nav.arrangements)}
         </div>

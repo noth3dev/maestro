@@ -82,6 +82,7 @@ import {
   GoalGitIntegrationStateSchema, type GoalGitIntegrationState,
   WorkerListSchema, type WorkerList,
   ImprovementDigestListSchema, type ImprovementDigestList,
+  PersonaInspectionSchema, PersonaReadQuerySchema, PersonaProposalInputSchema, ImprovementCandidateResponseSchema, type PersonaInspection, type PersonaReadQuery, type PersonaProposalInput, type ImprovementCandidate,
   StableApiErrorSchema,
   ProjectAccessProvisionInputSchema,
   ProjectAccessProvisionResultSchema,
@@ -271,6 +272,9 @@ export interface ApiClient {
   getGitIntegrationState(goalId: string, query: GoalQuery): Promise<GoalGitIntegrationState>;
   listWorkersForGoal(goalId: string, query: GoalQuery): Promise<WorkerList>;
   listImprovementDigestsForGoal(goalId: string, query: GoalQuery): Promise<ImprovementDigestList>;
+  getPersona(query: PersonaReadQuery): Promise<PersonaInspection>;
+  proposePersona(input: PersonaProposalInput, commandId: string): Promise<ImprovementCandidate>;
+  editPersonaCandidate(candidateId: string, input: PersonaProposalInput, commandId: string): Promise<ImprovementCandidate>;
 }
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -808,6 +812,18 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
     listImprovementDigestsForGoal(goalId, query) {
       const parsed = GoalQuerySchema.parse(query);
       return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/improvement-digests?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, ImprovementDigestListSchema);
+    },
+    getPersona(query) {
+      const parsed = PersonaReadQuerySchema.parse(query);
+      return request(`v1/persona?${new URLSearchParams({ projectId: parsed.projectId, roleId: parsed.roleId, taskClass: parsed.taskClass })}`, { headers }, PersonaInspectionSchema);
+    },
+    proposePersona(input, commandId) {
+      const parsed = PersonaProposalInputSchema.parse(input);
+      return request("v1/persona/proposals", { method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) }, body: JSON.stringify(parsed) }, ImprovementCandidateResponseSchema);
+    },
+    editPersonaCandidate(candidateId, input, commandId) {
+      const parsed = PersonaProposalInputSchema.parse(input);
+      return request(`v1/persona/candidates/${encodeURIComponent(UuidSchema.parse(candidateId))}/edits`, { method: "POST", headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) }, body: JSON.stringify(parsed) }, ImprovementCandidateResponseSchema);
     },
     listEvents(query) {
       const parsed = EventQuerySchema.parse(query);

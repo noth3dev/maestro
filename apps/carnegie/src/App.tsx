@@ -14,6 +14,7 @@ import { Inbox } from "./views/Inbox.js";
 import { EvidenceLog } from "./views/EvidenceLog.js";
 import { Billing } from "./views/Billing.js";
 import { Settings } from "./views/Settings.js";
+import { Persona } from "./views/Persona.js";
 import { Luthiery } from "./views/Luthiery.js";
 import { Arrangements } from "./views/Arrangements.js";
 import { Flashmob } from "./views/Flashmob.js";
@@ -37,6 +38,7 @@ function Shell({ eventState }: { eventState: DurableEventState }) {
       case "evlog": return <EvidenceLog onNavigate={setView} />;
       case "billing": return <Billing />;
       case "settings": return <Settings />;
+      case "persona": return <Persona />;
       case "luthiery": return <Luthiery />;
       case "arrangements": return <Arrangements />;
       case "flashmob": return <Flashmob onOpenSession={() => setView("flashmobSession")} />;

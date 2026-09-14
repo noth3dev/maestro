@@ -14,6 +14,7 @@ import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalA
 import { createCapabilityApprovalService } from "./capability-approval-service.js";
 import { createEvidenceCaptureService, EvidenceCaptureGoalBindingError } from "./evidence-capture-service.js";
 import { createPersonaGoalEvidenceService } from "./persona-goal-evidence-service.js";
+import { createPersonaInspectionService } from "./persona-inspection-service.js";
 import { createDurableGoalService } from "./goal-service.js";
 import { createReadStateService } from "./read-state-service.js";
 import { createProjectionService } from "./projection-service.js";
@@ -699,6 +700,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     },
   });
   const personaGoalEvidenceService = createPersonaGoalEvidenceService({ pool });
+  const personaInspectionService = createPersonaInspectionService({ pool, withGoalLease: goalService.withGoalLease! });
   const headParticipationService = createHeadParticipationService({
     pool,
     kernel: executionKernel,
@@ -790,6 +792,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     capabilityApprovalService,
     evidenceCaptureService,
     personaGoalEvidenceService,
+    personaInspectionService,
     readStateService: createReadStateService(pool),
     projectionService: createProjectionService(pool),
     taskContractService: createDurableTaskContractService(pool),

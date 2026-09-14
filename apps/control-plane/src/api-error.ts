@@ -50,6 +50,7 @@ import { CapabilityApprovalUnauthorizedError, CapabilityApprovalInvalidRequestEr
 import { GitProjectMismatchError } from "./git-integration-service.js";
 import { ConcertmasterReportCommandReuseError, ConcertmasterReportGoalNotFoundError, ConcertmasterReportProjectMismatchError } from "./concertmaster-report-service.js";
 import { GitAuthorizationError } from "@maestro/git-adapter";
+import { PersonaInspectionError } from "./persona-inspection-service.js";
 import { AuthenticationRequiredError, AuthenticationUnavailableError, CredentialForbiddenError, CriticalActionDeniedError, CriticalActionRequiresApprovalError, RequestValidationError, isMalformedJsonError } from "./server-input.js";
 
 export function mapError(error: unknown): { status: number; body: StableApiError } {
@@ -57,6 +58,7 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   if (error instanceof AuthenticationRequiredError) return apiError(401, "authentication_required", "Authentication is required");
   if (error instanceof CredentialForbiddenError) return apiError(403, "credential_forbidden", "Credential is not active");
   if (error instanceof CapabilityApprovalUnauthorizedError) return apiError(403, "capability_unauthorized", error.message);
+  if (error instanceof PersonaInspectionError) return apiError(409, "encore_conflict", error.message);
   if (error instanceof CapabilityApprovalInvalidRequestError || error instanceof EvidenceCaptureError || error instanceof EvidenceCaptureGoalBindingError) return apiError(400, "validation_error", error.message);
   if (error instanceof CapabilityApprovalConflictError || error instanceof EvidenceMetadataConflictError) return apiError(409, "replay_conflict", error.message);
   if (error instanceof AuthenticationUnavailableError) return apiError(429, "authentication_unavailable", "Authentication is temporarily unavailable");
