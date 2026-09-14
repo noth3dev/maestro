@@ -18,6 +18,8 @@ const options: Record<string, readonly string[]> = {
   "conversation turn": ["--conversation-id", "--project-id", "--text"],
   "conversation cancel": ["--conversation-id", "--project-id"],
   "session attach": ["--project-id"],
+  "worker message": ["--worker-id", "--project-id", "--message", "--command-id"],
+  "git worker-advance": ["--worker-id", "--project-id", "--message", "--evidence-references", "--command-id"],
 };
 
 export function createCommandAutocompleteItems(registry: CommandRegistry): SlashCommand[] {
