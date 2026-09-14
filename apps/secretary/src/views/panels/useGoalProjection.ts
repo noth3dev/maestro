@@ -11,10 +11,10 @@ export function useGoalProjection(api: Pick<ApiClient, "getProjection"> | undefi
   const [state, setState] = useState<ProjectionState>({ projection: undefined, loading: false, error: undefined });
 
   useEffect(() => {
-    if (api === undefined || projectId === undefined || goalId === undefined) return;
+    if (api === undefined || projectId === undefined) return;
     let cancelled = false;
     setState((current) => ({ projection: current.projection, loading: true, error: undefined }));
-    api.getProjection({ projectId, goalId })
+    api.getProjection(goalId === undefined ? { projectId } : { projectId, goalId })
       .then((projection) => { if (!cancelled) setState({ projection, loading: false, error: undefined }); })
       .catch((cause: unknown) => { if (!cancelled) setState((current) => ({ projection: current.projection, loading: false, error: cause instanceof Error ? cause.message : "Could not load the Goal projection" })); });
     return () => { cancelled = true; };
