@@ -91,7 +91,7 @@ import {
   CapabilitySessionSchema,
   EvidenceCaptureInputSchema,
   EvidenceRecordSchema,
-  SettingsReadSchema, SettingsPreferencesUpdateSchema, SettingsModelPoolUpdateSchema, SettingsAuthorityDefaultsUpdateSchema,
+  SettingsReadSchema, SettingsProviderSchema, SettingsPreferencesUpdateSchema, SettingsModelPoolUpdateSchema, SettingsAuthorityDefaultsUpdateSchema,
   UuidSchema,
   type CreateGoalInput,
   type CreateTaskContractInput,
@@ -487,7 +487,7 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
     updateSettingsPreferences(patch) { const parsed = SettingsPreferencesUpdateSchema.parse(patch); return request("v1/settings/preferences", { method: "PATCH", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(parsed) }, SettingsReadSchema); },
     updateSettingsModelPool(patch) { const parsed = SettingsModelPoolUpdateSchema.parse(patch); return request("v1/settings/model-pool", { method: "PATCH", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(parsed) }, SettingsReadSchema); },
     updateSettingsAuthorityDefaults(patch) { const parsed = SettingsAuthorityDefaultsUpdateSchema.parse(patch); return request("v1/settings/authority-defaults", { method: "PATCH", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(parsed) }, SettingsReadSchema); },
-    listProviderConnections() { return request("v1/provider-credentials", { headers }, { parse(body: unknown) { if (!Array.isArray(body)) throw new Error("Control plane returned malformed provider connections"); return body as readonly { providerId: string; connected: boolean; authModes: readonly ("api-key" | "managed-subscription")[] }[]; } }); },
+    listProviderConnections() { return request("v1/provider-credentials", { headers }, { parse(body: unknown) { if (!Array.isArray(body)) throw new Error("Control plane returned malformed provider connections"); return body.map((item) => SettingsProviderSchema.parse(item)); } }); },
     loginProvider(input) {
       const parsed = ProviderCredentialLoginInputSchema.parse(input);
       return request("v1/provider-credentials", {

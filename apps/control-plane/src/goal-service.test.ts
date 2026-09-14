@@ -31,28 +31,45 @@ describe("durable goal service leases", () => {
     persistence.executeGoalCommand
       .mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "draft", version: 1 })
       .mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "ready_for_confirmation", version: 2 });
-    const service = createDurableGoalService({ pool: {} as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+    const service = createDurableGoalService({ pool: { query: vi.fn(async () => ({ rowCount: 0, rows: [] })) } as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
 
     const created = await service.createGoal({ projectId }, commandId, operator);
     await service.transitionGoal(created.goalId, { projectId, expectedVersion: 1, to: "ready_for_confirmation" }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f04", operator);
 
     expect(persistence.acquireGoalLease).toHaveBeenCalledTimes(1);
-    expect(persistence.renewGoalLease).toHaveBeenCalledWith({}, proof, 30_000);
-    expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(1, {}, expect.objectContaining({ commandId, actorId: operator.operatorId }), proof);
-    expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(2, {}, expect.objectContaining({ commandId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f04" }), proof);
+    expect(persistence.renewGoalLease).toHaveBeenCalledWith(expect.anything(), proof, 30_000);
+    expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(1, expect.anything(), expect.objectContaining({ commandId, actorId: operator.operatorId }), proof);
+    expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(2, expect.anything(), expect.objectContaining({ commandId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f04" }), proof);
+  });
+
+  it("does not hide durable settings read failures when creating a Goal", async () => {
+    const error = Object.assign(new Error("database unavailable"), { code: "57P01" });
+    const pool = { query: vi.fn(async () => { throw error; }) };
+    const service = createDurableGoalService({ pool: pool as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+    await expect(service.createGoal({ projectId }, commandId, operator)).rejects.toBe(error);
+    expect(persistence.acquireGoalLease).not.toHaveBeenCalled();
+  });
+
+  it("snapshots the operator authority defaults into a new Goal command", async () => {
+    persistence.acquireGoalLease.mockResolvedValue(proof);
+    persistence.executeGoalCommand.mockResolvedValue({ outcome: "succeeded", goalId: commandId, state: "draft", version: 1 });
+    const pool = { query: vi.fn(async () => ({ rowCount: 1, rows: [{ spend_ceiling_cents: "9000", critical_actions_require_approval: false, allow_flashmob: false }] })) };
+    const service = createDurableGoalService({ pool: pool as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+    await service.createGoal({ projectId }, commandId, operator);
+    expect(persistence.executeGoalCommand).toHaveBeenCalledWith(pool, expect.objectContaining({ authorityDefaults: { spendCeilingCents: 9000, criticalActionsRequireApproval: false, allowFlashmob: false } }), proof);
   });
 
   it("uses the create command ID as a stable goal ID for durable retries", async () => {
     persistence.acquireGoalLease.mockResolvedValue(proof);
     persistence.renewGoalLease.mockResolvedValue(proof);
     persistence.executeGoalCommand.mockResolvedValue({ outcome: "succeeded", goalId: commandId, state: "draft", version: 1 });
-    const service = createDurableGoalService({ pool: {} as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+    const service = createDurableGoalService({ pool: { query: vi.fn(async () => ({ rowCount: 0, rows: [] })) } as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
 
     await service.createGoal({ projectId }, commandId, operator);
     await service.createGoal({ projectId }, commandId, operator);
 
-    expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(1, {}, expect.objectContaining({ commandId, goalId: commandId }), expect.anything());
-    expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(2, {}, expect.objectContaining({ commandId, goalId: commandId }), expect.anything());
+    expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(1, expect.anything(), expect.objectContaining({ commandId, goalId: commandId }), expect.anything());
+    expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(2, expect.anything(), expect.objectContaining({ commandId, goalId: commandId }), expect.anything());
   });
 });
 
@@ -65,7 +82,7 @@ describe("durable goal service lease-proof retention", () => {
   it("retains the lease proof after a terminal Goal state so retries can replay receipts", async () => {
     persistence.acquireGoalLease.mockResolvedValue(proof);
     persistence.executeGoalCommand.mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "succeeded", version: 1 });
-    const service = createDurableGoalService({ pool: {} as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+    const service = createDurableGoalService({ pool: { query: vi.fn(async () => ({ rowCount: 0, rows: [] })) } as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
 
     await service.createGoal({ projectId }, commandId, operator);
     expect(persistence.acquireGoalLease).toHaveBeenCalledTimes(1);
@@ -82,7 +99,7 @@ describe("durable goal service lease-proof retention", () => {
     persistence.acquireGoalLease.mockResolvedValue(proof);
     persistence.renewGoalLease.mockResolvedValue(proof);
     persistence.executeGoalCommand.mockResolvedValue({ outcome: "succeeded", goalId: proof.goalId, state: "draft", version: 1 });
-    const service = createDurableGoalService({ pool: {} as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+    const service = createDurableGoalService({ pool: { query: vi.fn(async () => ({ rowCount: 0, rows: [] })) } as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
 
     await service.createGoal({ projectId }, commandId, operator);
     await service.transitionGoal(commandId, { projectId, expectedVersion: 1, to: "ready_for_confirmation" }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f06", operator);
@@ -97,7 +114,7 @@ describe("durable goal service lease-proof retention", () => {
     persistence.executeGoalCommand
       .mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "draft", version: 1 })
       .mockResolvedValueOnce({ outcome: "version_conflict" });
-    const service = createDurableGoalService({ pool: {} as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+    const service = createDurableGoalService({ pool: { query: vi.fn(async () => ({ rowCount: 0, rows: [] })) } as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
 
     await service.createGoal({ projectId }, commandId, operator);
     await expect(
@@ -121,7 +138,7 @@ describe("durable goal service command receipt errors", () => {
   it("preserves a reused command ID as a typed service error", async () => {
     persistence.acquireGoalLease.mockResolvedValue(proof);
     persistence.executeGoalCommand.mockRejectedValue(new CommandIdReuseError(commandId));
-    const service = createDurableGoalService({ pool: {} as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+    const service = createDurableGoalService({ pool: { query: vi.fn(async () => ({ rowCount: 0, rows: [] })) } as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
 
     await expect(service.createGoal({ projectId }, commandId, operator)).rejects.toMatchObject({ name: "CommandIdReuseError" });
   });
@@ -140,17 +157,17 @@ describe("durable goal service control operations", () => {
       .mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "stopping", version: 3 })
       .mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "resuming", version: 4 })
       .mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "stopped", version: 5 });
-    const service = createDurableGoalService({ pool: {} as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+    const service = createDurableGoalService({ pool: { query: vi.fn(async () => ({ rowCount: 0, rows: [] })) } as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
 
     await service.pauseGoal(proof.goalId, { projectId, expectedVersion: 1 }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f04", operator);
     await service.stopGoal(proof.goalId, { projectId, expectedVersion: 2 }, "018f3c9b-7e71-7b44-ae23-3b5d4e8f9f04", operator);
     await service.resumeGoal(proof.goalId, { projectId, expectedVersion: 3 }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05", operator);
     await service.emergencyStopGoal(proof.goalId, { projectId, expectedVersion: 4 }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f06", operator);
 
-    expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(1, {}, expect.objectContaining({ type: "TransitionGoal", to: "pausing", requiredRole: "concertmaster", actorId: operator.operatorId }), proof);
-    expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(2, {}, expect.objectContaining({ type: "TransitionGoal", to: "stopping", requiredRole: "concertmaster" }), proof);
-    expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(3, {}, expect.objectContaining({ type: "TransitionGoal", to: "resuming", requiredRole: "concertmaster" }), proof);
-    expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(4, {}, expect.objectContaining({ type: "EmergencyStopGoal", requiredRole: "concertmaster" }), proof);
+    expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(1, expect.anything(), expect.objectContaining({ type: "TransitionGoal", to: "pausing", requiredRole: "concertmaster", actorId: operator.operatorId }), proof);
+    expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(2, expect.anything(), expect.objectContaining({ type: "TransitionGoal", to: "stopping", requiredRole: "concertmaster" }), proof);
+    expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(3, expect.anything(), expect.objectContaining({ type: "TransitionGoal", to: "resuming", requiredRole: "concertmaster" }), proof);
+    expect(persistence.executeGoalCommand).toHaveBeenNthCalledWith(4, expect.anything(), expect.objectContaining({ type: "EmergencyStopGoal", requiredRole: "concertmaster" }), proof);
   });
 
 
@@ -160,7 +177,7 @@ describe("durable goal service control operations", () => {
     persistence.executeGoalCommand
       .mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "stopped", version: 2 })
       .mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "stopped", version: 2 });
-    const service = createDurableGoalService({ pool: {} as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+    const service = createDurableGoalService({ pool: { query: vi.fn(async () => ({ rowCount: 0, rows: [] })) } as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
 
     await service.emergencyStopGoal(proof.goalId, { projectId, expectedVersion: 1 }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f04", operator);
     await expect(service.emergencyStopGoal(proof.goalId, { projectId, expectedVersion: 1 }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f04", operator)).resolves.toMatchObject({ state: "stopped", version: 2 });

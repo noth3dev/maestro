@@ -5,7 +5,7 @@ import { contextBridge, ipcRenderer } from "electron";
 // "An object could not be cloned"), and importing an ESM sibling into this CommonJS preload isn't
 // reliable across Electron's bundled Node version. Keep this list in sync with apiBridge.ts.
 const exposedApiMethods = [
-  "listGoals", "getGoal", "getBudgetSummary", "getChannel", "postChannelMessage", "getProjection", "listEvents",
+  "listGoals", "getGoal", "getSettings", "updateSettingsPreferences", "updateSettingsModelPool", "updateSettingsAuthorityDefaults", "listProviderConnections", "loginProvider", "logoutProvider", "getBudgetSummary", "getChannel", "postChannelMessage", "getProjection", "listEvents",
   "createTaskContract", "getTaskContract", "updateTaskContract", "selectOvertureRoles", "confirmTaskContract", "launchTaskContract",
   "pauseGoal", "resumeGoal", "stopGoal", "emergencyStopGoal",
   "requestCriticalAction", "approveAndRunCriticalAction",

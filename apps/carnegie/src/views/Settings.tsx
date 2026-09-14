@@ -58,18 +58,18 @@ export function Settings() {
       {panel === "profile" && (
         <div className="settings-panel">
           <div className="settings-section-title">profile</div>
-          <div className="settings-section-sub">how the concertmaster addresses you</div>
+          <div className="settings-section-sub">profile editing is unavailable until a durable profile route exists</div>
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
-            <div className="avatar avatar-lg av-slate">ND</div>
-            <button className="btn btn-sm">change avatar</button>
+            <div className="avatar avatar-lg av-slate" aria-label="Profile identity unavailable">--</div>
+            <button className="btn btn-sm" disabled title="Profile editing is not connected to a durable route">change avatar</button>
           </div>
           <div className="form-field" style={{ marginBottom: 14 }}>
             <label className="form-label">display name</label>
-            <input className="input" type="text" defaultValue="ntdv" />
+            <input className="input" type="text" value="Unavailable" readOnly disabled />
           </div>
           <div className="form-field">
             <label className="form-label">email</label>
-            <input className="input" type="text" defaultValue="ntdv@notth3.dev" />
+            <input className="input" type="text" value="Unavailable" readOnly disabled />
             <span className="form-hint">used for critical-action email alerts</span>
           </div>
         </div>
