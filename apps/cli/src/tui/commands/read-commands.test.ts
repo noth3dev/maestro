@@ -105,6 +105,34 @@ describe("workspace read commands", () => {
     expect(getMissionBundle).not.toHaveBeenCalled();
   });
 
+  it("keeps Concertmaster report get on the existing typed read path", async () => {
+    const report = {
+      reportId: "77777777-7777-4777-8777-777777777777",
+      goalId,
+      success: true,
+      blockers: [],
+      ceoRequest: "none",
+      whatChanged: "Shipped the fix",
+      userVisibleBehaviorPassed: true,
+      participatingDepartments: ["product"],
+      keyDecisions: ["Use the existing report path"],
+      dissent: [],
+      independentValidation: ["quality: passed"],
+      costCents: 2,
+      budgetCents: 3,
+      incidents: [],
+      knownLimitations: [],
+      criticalActionAwaitingApproval: false,
+      evidenceBundleId: "88888888-8888-4888-8888-888888888888",
+    };
+    const api = client({ getConcertmasterReport: vi.fn().mockResolvedValue(report) });
+    await expect(executeReadCommand({ client: api, projectId, goalId }, { name: "concertmaster-report", action: "get", options: {} })).resolves.toEqual({
+      title: "Concertmaster report",
+      lines: [JSON.stringify(report)],
+    });
+    expect(api.getConcertmasterReport).toHaveBeenCalledWith(goalId, { projectId });
+  });
+
   it("reads real evidence records and bundle contents through the typed client", async () => {
     const evidenceId = "55555555-5555-4555-8555-555555555555";
     const createdAt = "2025-01-01T00:00:00.000Z";
