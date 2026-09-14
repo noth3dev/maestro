@@ -1,5 +1,7 @@
 import type { Workspace } from "../workspace.js";
 import { LOCAL_BOOTSTRAP_STEP_ORDER, type LocalBootstrapStepEvent, type LocalBootstrapStepName } from "../local-bootstrap.js";
+import type { OrganizationReadModel, PressureBand } from "../panels/organization-panel.js";
+import { createCommandRegistry } from "../commands/registry.js";
 import { fitPlain, tuiTheme } from "../theme.js";
 
 export type AsyncState<T> = { kind: "loading" } | { kind: "empty" } | { kind: "error"; message: string } | { kind: "value"; value: T };
@@ -22,10 +24,11 @@ export interface TuiShellState {
   working?: boolean;
   connection:
     { kind: "connected" } | { kind: "connecting" } | { kind: "setup-required"; message: string } | { kind: "error"; message: string };
-  goal: AsyncState<{ name: string; state: string }>;
+  goal: AsyncState<{ name: string; state: string; pressureBand?: PressureBand }>;
   workers: AsyncState<number>;
   approvals: AsyncState<number>;
   budget: AsyncState<{ spentCents: number; ceilingCents: number }>;
+  organization?: AsyncState<OrganizationReadModel>;
   pendingDecisions?: readonly PendingDecision[];
 }
 
@@ -51,8 +54,12 @@ function stateText<T>(state: AsyncState<T>, format: (value: T) => string): strin
   return format(state.value);
 }
 
+function pressureText(pressureBand: PressureBand | undefined): string {
+  return pressureBand === undefined ? "" : ` · pressure ${pressureBand}`;
+}
+
 function goalText(state: TuiShellState): string {
-  return stateText(state.goal, (value) => `${value.name} · ${value.state}`);
+  return stateText(state.goal, (value) => `${value.name} · ${value.state}${pressureText(value.pressureBand)}`);
 }
 
 function goalStateText(state: TuiShellState): string {
@@ -129,11 +136,44 @@ export function renderPendingDecisionDetails(state: TuiShellState, width: number
     .map((decision) => fitPlain(`⏸ ${decision.tier} · ${decision.action} · requested by ${decision.actor}`, width));
 }
 
-function renderSplash(width: number): string[] {
+function recommendedAction(command: string, action: string): string | undefined {
+  const definition = createCommandRegistry().find(command);
+  return definition?.actions.some((item) => item.name === action) === true ? `/${command} ${action}` : undefined;
+}
+
+function nextActionText(): string {
+  const actions = ([
+    ["task-contract", "create"],
+    ["goal", "create"],
+    ["session", "attach"],
+  ] as const)
+    .map(([command, action]) => recommendedAction(command, action))
+    .filter((action): action is string => action !== undefined);
+  return actions.join(" · ");
+}
+
+function hasPendingDecisionRows(state: TuiShellState): boolean {
+  return (state.pendingDecisions ?? []).some((decision) => typeof decision.identity === "string" && decision.identity.trim() !== "");
+}
+
+export function renderSplash(state: TuiShellState, width: number): string[] {
+  if (hasPendingDecisionRows(state)) return [];
+  if (state.goal.kind === "value") {
+    return [
+      tuiTheme.primary(fitPlain(`✦ ${state.goal.value.name}`, width)),
+      tuiTheme.secondary(fitPlain(`Performing · ${state.goal.value.state} · ${workerText(state)}${pressureText(state.goal.value.pressureBand)}`, width)),
+      tuiTheme.dim(fitPlain("ctrl+/ show home · Ctrl+A review decisions", width)),
+    ];
+  }
+  const organization = state.organization;
+  const departmentHeads = organization?.kind === "value"
+    ? `${organization.value.departments.length} Department Head${organization.value.departments.length === 1 ? "" : "s"}`
+    : "Department Heads unavailable";
+  const pressure = organization?.kind === "value" ? pressureText(organization.value.pressureBand) : "";
   return [
     tuiTheme.primary(fitPlain("✦ MAESTRO", width)),
-    tuiTheme.secondary(fitPlain("Your durable workspace for governed work", width)),
-    tuiTheme.dim(fitPlain("Type / for commands · Ctrl+G goals · Ctrl+A decisions", width)),
+    tuiTheme.secondary(fitPlain(`Concertmaster ready · ${departmentHeads}${pressure}`, width)),
+    tuiTheme.dim(fitPlain(`Next: ${nextActionText()} · ctrl+/ show home`, width)),
   ];
 }
 
@@ -166,11 +206,22 @@ export function renderSetupSteps(state: TuiShellState, width: number): string[] 
 export interface SplashController {
   visible(): boolean;
   dismiss(): void;
+  restore(): void;
+  consume(): void;
 }
 
 export function createSplashController(): SplashController {
   let isVisible = true;
-  return { visible: () => isVisible, dismiss: () => { isVisible = false; } };
+  let restored = false;
+  return {
+    visible: () => isVisible,
+    dismiss: () => { isVisible = false; restored = false; },
+    restore: () => { isVisible = true; restored = true; },
+    consume: () => {
+      if (restored) restored = false;
+      else isVisible = false;
+    },
+  };
 }
 
 function hintText(state: TuiShellState): string {
@@ -187,7 +238,7 @@ export function renderHints(state: TuiShellState, width: number): string {
 }
 
 export function renderTuiLayout(state: TuiShellState, width: number, height: number, options: TuiLayoutOptions = {}): TuiLayoutFrame {
-  const splash = options.showSplash === true && width >= 100 && height >= 28 ? renderSplash(width) : [];
+  const splash = options.showSplash === true && width >= 40 && height >= 16 ? renderSplash(state, width) : [];
   const status = [renderStatusRow(state, width)];
   const decisions = renderDecisionRegion(state, width, height);
   const input = [fitPlain(options.input?.[0] ?? "message to Concertmaster · Enter to send", width)];

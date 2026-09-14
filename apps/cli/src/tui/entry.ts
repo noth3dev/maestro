@@ -118,6 +118,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     workers: { kind: "empty" },
     approvals: { kind: "empty" },
     budget: { kind: "empty" },
+    organization: { kind: "empty" },
   };
   const splash = createSplashController();
   const updateSetupStep = (event: LocalBootstrapStepEvent): void => {
@@ -924,6 +925,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     };
 
     tui.addInputListener((data) => {
+      if (matchesKey(data, "ctrl+/")) {
+        splash.restore();
+        tui.requestRender(true);
+        return { consume: true };
+      }
       if (matchesKey(data, "ctrl+k")) {
         append(
           `Commands: ${createCommandPalette()
