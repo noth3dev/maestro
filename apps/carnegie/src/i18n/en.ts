@@ -48,6 +48,7 @@ export const en = {
     linearAlternative: "Linear alternative",
     linearHint: "Every graph node and operation is available without using the canvas.",
     searchLabel: "Search graph nodes",
+    linearSearchLabel: "Search nodes in linear alternative",
     searchPlaceholder: "Search nodes",
     find: "Find",
     zoomIn: "Zoom in",

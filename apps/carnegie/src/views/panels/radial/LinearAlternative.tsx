@@ -100,7 +100,7 @@ export function LinearAlternative({ nodes, selectedNodeId, onSelect, operations 
       <div className="radial-linear-controls" role="toolbar" aria-label={t.radial.controls}>
         <label className="radial-search">
           <span>{t.radial.searchLabel}</span>
-          <input aria-label={t.radial.searchLabel} placeholder={t.radial.searchPlaceholder} value={operations.query} onChange={(event) => operations.onQueryChange(event.target.value)} onKeyDown={onSearchKeyDown} />
+          <input aria-label={t.radial.linearSearchLabel} placeholder={t.radial.searchPlaceholder} value={operations.query} onChange={(event) => operations.onQueryChange(event.target.value)} onKeyDown={onSearchKeyDown} />
         </label>
         <button type="button" className="btn btn-sm" data-linear-operation="search" onClick={operations.onSearch}>{t.radial.find}</button>
         <button type="button" className="btn btn-sm" data-linear-operation="zoom-in" onClick={operations.onZoomIn}>{t.radial.zoomIn}</button>

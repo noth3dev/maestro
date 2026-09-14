@@ -50,6 +50,7 @@ export const ko: Translations = {
     linearAlternative: "선형 대안",
     linearHint: "캔버스를 사용하지 않아도 모든 그래프 노드와 작업을 이용할 수 있습니다.",
     searchLabel: "그래프 노드 검색",
+    linearSearchLabel: "선형 대안에서 노드 검색",
     searchPlaceholder: "노드 검색",
     find: "찾기",
     zoomIn: "확대",
