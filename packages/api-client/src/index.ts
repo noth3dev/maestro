@@ -82,6 +82,7 @@ import {
   GoalGitIntegrationStateSchema, type GoalGitIntegrationState,
   WorkerListSchema, type WorkerList,
   ImprovementDigestListSchema, type ImprovementDigestList,
+  ArrangementsReadSchema, type ArrangementsRead,
   StableApiErrorSchema,
   ProjectAccessProvisionInputSchema,
   ProjectAccessProvisionResultSchema,
@@ -271,6 +272,7 @@ export interface ApiClient {
   getGitIntegrationState(goalId: string, query: GoalQuery): Promise<GoalGitIntegrationState>;
   listWorkersForGoal(goalId: string, query: GoalQuery): Promise<WorkerList>;
   listImprovementDigestsForGoal(goalId: string, query: GoalQuery): Promise<ImprovementDigestList>;
+  getArrangements(goalId: string, query: GoalQuery): Promise<ArrangementsRead>;
 }
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -809,6 +811,10 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
       const parsed = GoalQuerySchema.parse(query);
       return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/improvement-digests?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, ImprovementDigestListSchema);
     },
+    getArrangements(goalId, query) {
+      const parsed = GoalQuerySchema.parse(query);
+      return request(`v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/arrangements?${new URLSearchParams({ projectId: parsed.projectId })}`, { headers }, ArrangementsReadSchema);
+    },
     listEvents(query) {
       const parsed = EventQuerySchema.parse(query);
       return request(`v1/events?${new URLSearchParams({ projectId: parsed.projectId, after: parsed.after })}`, { headers }, GoalEventPageSchema);
@@ -819,6 +825,6 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
   };
 }
 
-export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, OrganizationReadModel, ChannelSelector, ChannelQuery, ChannelMessageInput, ChannelMessage, ChannelRead, ProjectionQuery, ProjectionReadModel, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, EvidenceBundleRead, GoalGitIntegrationState, WorkerList, WorkerObservation, ImprovementDigestList };
+export type { CreateGoalInput, CreateTaskContractInput, ProviderAccountLoginStartResult, ProviderAccountLoginStatus, TaskContract, TaskContractConfirmationInput, TaskContractQuery, UpdateTaskContractInput, OvertureSelectionInput, OvertureRoleSelectionResult, EventQuery, GoalEvent, GoalEventPage, GoalQuery, GoalList, ProjectList, OrganizationReadModel, ChannelSelector, ChannelQuery, ChannelMessageInput, ChannelMessage, ChannelRead, ProjectionQuery, ProjectionReadModel, GoalBudgetSummary, GoalResult, TransitionGoalInput, ProjectAccessProvisionInput, ProjectAccessProvisionResult, MetronomeChallengeList, EncoreCouncilRoundList, CertificationList, ConcertmasterFinalReport, EvidenceBundleRead, GoalGitIntegrationState, WorkerList, WorkerObservation, ImprovementDigestList, ArrangementsRead };
 
 export { CHANNEL_SELECTORS };
