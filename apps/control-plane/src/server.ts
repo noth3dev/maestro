@@ -30,6 +30,8 @@ import {
   ProviderAccountLoginStatusSchema,
   ProjectListSchema,
   OrganizationReadModelSchema,
+  ProjectionQuerySchema,
+  ProjectionReadModelSchema,
   GoalBudgetSummarySchema,
   GoalResultSchema,
   MetronomeChallengeListSchema,
@@ -116,6 +118,7 @@ import {
 import {
   type ReadStateService,
 } from "./read-state-service.js";
+import type { ProjectionService } from "./projection-service.js";
 import {
   type TaskContractService,
 } from "./task-contract-service.js";
@@ -263,7 +266,7 @@ async function waitForAccountLoginStart(store: AccountLoginStore, operatorId: st
   throw new Error("account login start is still in progress");
 }
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, evidenceCaptureService, personaGoalEvidenceService, concertmasterReportService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, organizationService, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, evidenceCaptureService, personaGoalEvidenceService, concertmasterReportService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, organizationService, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService, projectionService }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
@@ -312,6 +315,8 @@ export function buildServer({ goalService, authenticator, eventService, critical
   /** Dependency probe used by /readyz. Liveness never calls this check. */
   readinessCheck?: () => Promise<void>;
   conversationService?: ConversationService;
+  /** Durable projection composition over existing source tables for Secretary panels. */
+  projectionService?: ProjectionService;
 }): FastifyInstance {
   const app: FastifyInstance = https === undefined ? Fastify() : Fastify({ https });
   const activeStreams = new Set<() => void>();
@@ -322,6 +327,10 @@ export function buildServer({ goalService, authenticator, eventService, critical
     listOrganization: async () => { throw new DurableStoreUnavailableError(); },
   } satisfies OrganizationService;
   const events = eventService ?? { listEvents: async () => { throw new DurableStoreUnavailableError(); } };
+  const projections = projectionService ?? {
+    read: async () => { throw new DurableStoreUnavailableError(); },
+    compose: async () => { throw new DurableStoreUnavailableError(); },
+  } satisfies ProjectionService;
   const readState = readStateService ?? {
     listGoals: async () => { throw new DurableStoreUnavailableError(); },
     getBudgetSummary: async () => { throw new DurableStoreUnavailableError(); },
@@ -1177,6 +1186,12 @@ export function buildServer({ goalService, authenticator, eventService, critical
   app.get("/v1/goals", async (request, reply) => {
     const query = parse(GoalQuerySchema, request.query);
     return reply.send(GoalListSchema.parse({ goals: await readState.listGoals(query.projectId) }));
+  });
+
+  app.get("/v1/projection", async (request, reply) => {
+    const query = parse(ProjectionQuerySchema, request.query);
+    if (query.projectId === undefined) throw new RequestValidationError();
+    return reply.send(ProjectionReadModelSchema.parse(await projections.read(query)));
   });
 
   app.get("/v1/goals/:goalId/budget", async (request, reply) => {

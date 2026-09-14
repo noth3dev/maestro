@@ -16,6 +16,7 @@ import { createEvidenceCaptureService, EvidenceCaptureGoalBindingError } from ".
 import { createPersonaGoalEvidenceService } from "./persona-goal-evidence-service.js";
 import { createDurableGoalService } from "./goal-service.js";
 import { createReadStateService } from "./read-state-service.js";
+import { createProjectionService } from "./projection-service.js";
 import { createDurableTaskContractService } from "./task-contract-service.js";
 import { createHeadParticipationService } from "./head-participation-service.js";
 import { createCouncilService } from "./council-service.js";
@@ -790,6 +791,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     evidenceCaptureService,
     personaGoalEvidenceService,
     readStateService: createReadStateService(pool),
+    projectionService: createProjectionService(pool),
     taskContractService: createDurableTaskContractService(pool),
     ...(config.discordSignalCredential === undefined ? {} : {
       discordSignalService: { record: (envelope) => recordDiscordSignal(pool, envelope, config.discordSignalCredential!) },

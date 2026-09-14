@@ -9,6 +9,10 @@ import { useGoalWorkers } from "../useGoalWorkers.js";
 import { summarizeDashboard } from "../lib/dashboard-data.js";
 import { runGoalControlAction, type GoalControlAction } from "../lib/goal-control.js";
 import type { ViewName } from "../views.js";
+import type { DurableEventState } from "../useDurableEvents.js";
+import { useGoalEvidenceBundle } from "../useGoalEvidenceBundle.js";
+import { useGoalProjection } from "./panels/useGoalProjection.js";
+import { GoalDepartmentPanels } from "./panels/GoalDepartmentPanels.js";
 
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -21,12 +25,14 @@ const CONTROL_ACTIONS: { action: GoalControlAction; label: string }[] = [
   { action: "emergency-stop", label: "Emergency stop" },
 ];
 
-export function Dashboard({ onNavigate: _onNavigate }: { onNavigate: (view: ViewName) => void }) {
+export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate: (view: ViewName) => void; eventState: DurableEventState }) {
   const t = useT();
   const { config } = useConnection();
   const { goals, selectedGoalId, selectGoal } = useGoals();
   const { detail, loading, error, refresh } = useGoalDetail();
   const { workers, loading: workersLoading, error: workersError } = useGoalWorkers();
+  const { evidenceBundle, error: evidenceError } = useGoalEvidenceBundle();
+  const projectionState = useGoalProjection(config === undefined ? undefined : window.maestro.api, config?.projectId, selectedGoalId, eventState.cursor);
   const summary = summarizeDashboard(goals, detail);
   const [controlError, setControlError] = useState<string | undefined>(undefined);
   const [pendingAction, setPendingAction] = useState<GoalControlAction | undefined>(undefined);
@@ -136,9 +142,20 @@ export function Dashboard({ onNavigate: _onNavigate }: { onNavigate: (view: View
           })}
         </div>
       )}
-      <p style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-        Council/Department Plan/Mission Bundle detail beyond worker status isn't wired here yet -- only the durable worker list above is live.
-      </p>
+      <div className="dash-section-title" style={{ marginTop: 24 }}>Goal office detail</div>
+      {projectionState.loading && <p>loading projection…</p>}
+      {projectionState.error !== undefined && <div className="alert alert-warning">{projectionState.error}</div>}
+      {evidenceError !== undefined && <div className="alert alert-warning">{evidenceError}</div>}
+      {projectionState.projection !== undefined && (
+        <GoalDepartmentPanels
+          projection={projectionState.projection}
+          events={eventState.events}
+          budget={detail?.budget}
+          certifications={detail?.certifications ?? []}
+          evidenceBundle={evidenceBundle}
+          goalId={selectedGoalId}
+        />
+      )}
     </div>
   );
 }
