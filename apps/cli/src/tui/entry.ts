@@ -56,6 +56,11 @@ export { type InteractiveTuiOptions } from "./startup.js";
 import { initializeTui, shouldAutoBootstrapLocal, type InteractiveTuiOptions } from "./startup.js";
 
 /** A selected model is only resolvable when the gateway exposes that exact model. */
+/** Ctrl+/ is sent as US (0x1f) by common terminals; Kitty/modifyOtherKeys uses matchesKey. */
+export function isSplashRestoreShortcut(data: string): boolean {
+  return data === "\x1f" || matchesKey(data, "ctrl+/");
+}
+
 export function shouldOfferAutomaticProviderSignIn(
   models: readonly Pick<ModelCatalogEntry, "identity">[],
   configuredModel: string | undefined,
@@ -925,7 +930,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     };
 
     tui.addInputListener((data) => {
-      if (matchesKey(data, "ctrl+/")) {
+      if (isSplashRestoreShortcut(data)) {
         splash.restore();
         tui.requestRender(true);
         return { consume: true };

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { parseInput } from "./commands/parser.js";
-import { createAutomaticProviderSignInGate, isProviderLoginActive, runAutomaticProviderSignInOffer, shouldOfferAutomaticProviderSignIn } from "./entry.js";
+import { createAutomaticProviderSignInGate, isProviderLoginActive, isSplashRestoreShortcut, runAutomaticProviderSignInOffer, shouldOfferAutomaticProviderSignIn } from "./entry.js";
 
 const model = (provider: string, id: string) => ({
   identity: { provider, id },
@@ -119,5 +119,9 @@ describe("automatic provider sign-in", () => {
 
   it("leaves the explicit /login command available", () => {
     expect(parseInput("/login")).toEqual({ kind: "command", name: "login", options: {} });
+  });
+
+  it("recognizes the legacy raw Ctrl+/ byte used by ordinary terminals", () => {
+    expect(isSplashRestoreShortcut("\x1f")).toBe(true);
   });
 });

@@ -142,14 +142,13 @@ function recommendedAction(command: string, action: string): string | undefined 
 }
 
 function nextActionText(): string {
-  const actions = ([
-    ["task-contract", "create"],
-    ["goal", "create"],
-    ["session", "attach"],
-  ] as const)
-    .map(([command, action]) => recommendedAction(command, action))
-    .filter((action): action is string => action !== undefined);
-  return actions.join(" · ");
+  const registry = createCommandRegistry();
+  const createActions = registry
+    .all()
+    .flatMap((definition) => definition.actions
+      .filter((action) => action.kind === "write" && action.name === "create")
+      .map((action) => `/${definition.name} ${action.name}`));
+  return createActions.slice(0, 3).join(" · ");
 }
 
 function hasPendingDecisionRows(state: TuiShellState): boolean {
@@ -162,7 +161,7 @@ export function renderSplash(state: TuiShellState, width: number): string[] {
     return [
       tuiTheme.primary(fitPlain(`✦ ${state.goal.value.name}`, width)),
       tuiTheme.secondary(fitPlain(`Performing · ${state.goal.value.state} · ${workerText(state)}${pressureText(state.goal.value.pressureBand)}`, width)),
-      tuiTheme.dim(fitPlain("ctrl+/ show home · Ctrl+A review decisions", width)),
+      tuiTheme.dim(fitPlain(`ctrl+/ show home · Next: ${nextActionText()}`, width)),
     ];
   }
   const organization = state.organization;
@@ -173,7 +172,7 @@ export function renderSplash(state: TuiShellState, width: number): string[] {
   return [
     tuiTheme.primary(fitPlain("✦ MAESTRO", width)),
     tuiTheme.secondary(fitPlain(`Concertmaster ready · ${departmentHeads}${pressure}`, width)),
-    tuiTheme.dim(fitPlain(`Next: ${nextActionText()} · ctrl+/ show home`, width)),
+    tuiTheme.dim(fitPlain(`ctrl+/ show home · Next: ${nextActionText()}`, width)),
   ];
 }
 

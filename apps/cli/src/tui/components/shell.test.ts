@@ -54,6 +54,7 @@ describe("Maestro TUI shell", () => {
     const splash = renderTuiLayout(state, 40, 30, { showSplash: true }).splash;
     expect(splash.length).toBeGreaterThan(0);
     expect(splash.every((line) => line.length <= 40)).toBe(true);
+    expect(splash.join("\n")).toContain("ctrl+/");
   });
 
   it("orients a no-Goal operator around the live standing organization", () => {
