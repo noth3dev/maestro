@@ -78,6 +78,14 @@ export function createAutomaticProviderSignInGate(): { claim: () => boolean } {
   };
 }
 
+export function isProviderLoginActive(
+  pendingProviderLogin: "openai" | "anthropic" | undefined,
+  providerLoginInFlight: boolean,
+  accountLoginSelection: AccountLoginProviderSelection | undefined,
+): boolean {
+  return pendingProviderLogin !== undefined || providerLoginInFlight || accountLoginSelection !== undefined;
+}
+
 export async function runAutomaticProviderSignInOffer(options: {
   client: Pick<ApiClient, "listModels">;
   getConfiguredModel: () => string | undefined;
@@ -184,6 +192,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let activityController: AbortController | undefined;
     let conversationTurnController: AbortController | undefined;
     let pendingProviderLogin: "openai" | "anthropic" | undefined;
+    let providerLoginInFlight = false;
     let accountLoginSelection: AccountLoginProviderSelection | undefined;
     let accountLoginState: "selecting" | "opening" | "waiting" | undefined;
     let accountLoginController: AbortController | undefined;
@@ -531,7 +540,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         getConfiguredModel: () => options.env.MAESTRO_MODEL?.trim() || session?.model,
         gate: automaticProviderSignInGate,
         isCurrent: () => !stopped && client === candidateClient && connectionGeneration === candidateGeneration && state.connection.kind === "connected",
-        isManualLoginActive: () => pendingProviderLogin !== undefined || accountLoginSelection !== undefined,
+        isManualLoginActive: () => isProviderLoginActive(pendingProviderLogin, providerLoginInFlight, accountLoginSelection),
         onOffer: () => {
           accountLoginSelection = 0;
           accountLoginState = "selecting";
@@ -547,17 +556,20 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       if (pendingProviderLogin !== undefined) {
         const providerId = pendingProviderLogin;
         pendingProviderLogin = undefined;
+        providerLoginInFlight = true;
         editor.hidden = false;
         editor.setText("");
-        if (client === undefined) {
-          appendWarning("Provider login is unavailable until the Control Plane is connected.");
-          return;
-        }
         try {
-          await client.loginProvider({ providerId, authMode: "api-key", secret: text });
-          appendSuccess(`Provider login complete: ${providerId} API key stored by the model gateway.`);
+          if (client === undefined) {
+            appendWarning("Provider login is unavailable until the Control Plane is connected.");
+          } else {
+            await client.loginProvider({ providerId, authMode: "api-key", secret: text });
+            appendSuccess(`Provider login complete: ${providerId} API key stored by the model gateway.`);
+          }
         } catch (error) {
           appendError(`Provider login failed: ${error instanceof Error ? error.message : "request failed"}`);
+        } finally {
+          providerLoginInFlight = false;
         }
         return;
       }
