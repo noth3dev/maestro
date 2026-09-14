@@ -938,3 +938,5 @@ export const ChannelSchema = z.object({ channelId: UuidSchema, projectId: UuidSc
 export type Channel = z.infer<typeof ChannelSchema>;
 export const ChannelReadSchema = z.object({ channel: ChannelSchema, messages: z.array(ChannelMessageSchema), members: z.array(ChannelMemberSchema) }).strict();
 export type ChannelRead = z.infer<typeof ChannelReadSchema>;
+
+export * from "./settings.js";
