@@ -28,6 +28,7 @@ describe("RadialGraph", () => {
     expect(html).toContain("Search graph nodes");
     expect(html).toContain("Zoom in");
     expect(html).toContain("Pan left");
+    expect((html.match(/aria-label="Pan left"/g) ?? [])).toHaveLength(1);
     expect(html).not.toContain("illustrative");
   });
 

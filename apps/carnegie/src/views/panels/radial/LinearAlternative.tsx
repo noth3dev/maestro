@@ -109,7 +109,7 @@ export function LinearAlternative({ nodes, selectedNodeId, onSelect, operations 
         <span className="radial-pan-controls" aria-label={t.radial.pan}>
           {(["up", "down", "left", "right"] as const).map((direction) => {
             const label = { up: t.radial.panUp, down: t.radial.panDown, left: t.radial.panLeft, right: t.radial.panRight }[direction];
-            return <button key={direction} type="button" className="btn btn-sm" data-linear-operation={`pan-${direction}`} aria-label={label} onClick={() => operations.onPan(direction)}>{direction === "up" ? "↑" : direction === "down" ? "↓" : direction === "left" ? "←" : "→"}</button>;
+            return <button key={direction} type="button" className="btn btn-sm" data-linear-operation={`pan-${direction}`} aria-label={`${label} (${t.radial.linearAlternative})`} onClick={() => operations.onPan(direction)}>{direction === "up" ? "↑" : direction === "down" ? "↓" : direction === "left" ? "←" : "→"}</button>;
           })}
         </span>
       </div>
