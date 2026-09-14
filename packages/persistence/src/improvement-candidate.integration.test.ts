@@ -178,7 +178,7 @@ describeDatabase("Improvement Candidate persistence", () => {
 
   it("retains every rejected version in arrangements evidence after a later retained revision", async () => {
     const rejected = await transitionImprovementCandidate(pool, (await recordImprovementCandidate(pool, inputFor(), proof, author, "arrangements-rejected" )).candidateId, "rejected", proof, author, "arrangements-rejected-transition");
-    const retained = await appendImprovementCandidateVersion(pool, rejected.candidateId, inputFor({ predictedEffect: "Retain the rejected version for historical evidence." }), proof, author, "arrangements-retained-revision");
+    const retained = await transitionImprovementCandidate(pool, rejected.candidateId, "retained", proof, author, "arrangements-retained-revision");
     const records = await listImprovementCandidateArrangements(pool, { operatorId, projectId }, goalId);
     expect(records.map((record) => record.candidate.candidateId)).toContain(rejected.candidateId);
     expect(records.find((record) => record.candidate.candidateId === rejected.candidateId)?.candidate.state).toBe("rejected");

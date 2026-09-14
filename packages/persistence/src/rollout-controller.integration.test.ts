@@ -20,7 +20,6 @@ import {
   recordImprovementCandidate,
   recordImprovementCandidateEvaluation,
   recordImprovementCandidateCouncilApproval,
-  appendImprovementCandidateVersion,
   listImprovementCandidateArrangements,
   transitionImprovementCandidateAfterCouncil,
   transitionImprovementCandidate,
@@ -142,7 +141,7 @@ function routingCouncilJudgment(candidate: ImprovementCandidate, roundId: string
     const rollout = await startBoundedRollout(pool, candidate.candidateId, { ...scope, maxGoalCount: 1 }, proof, actor, `arrangements-start-${randomUUID()}`);
     const certified = await observeBoundedRollout(pool, rollout.rolloutId, { goalId, observedAt: "2026-09-14T01:00:00.000Z", metrics: [{ name: "correctness", value: 0.95 }] }, proof, actor, `arrangements-observe-${randomUUID()}`);
     expect(certified.status).toBe("certified");
-    const retained = await appendImprovementCandidateVersion(pool, candidate.candidateId, candidate, proof, candidateAuthor, `arrangements-retained-${randomUUID()}`);
+    const retained = await transitionImprovementCandidate(pool, candidate.candidateId, "retained", proof, candidateAuthor, `arrangements-retained-${randomUUID()}`);
 
     const records = await listImprovementCandidateArrangements(pool, { operatorId, projectId }, goalId);
     expect(records.find((record) => record.candidate.candidateId === candidate.candidateId)).toMatchObject({
