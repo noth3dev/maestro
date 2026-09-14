@@ -10,24 +10,20 @@ const describeDatabase = databaseUrl === undefined ? describe.skip : describe;
 
 describeDatabase("durable billing read model", () => {
   const pool = new Pool({ connectionString: databaseUrl });
-  const projectIds: string[] = [];
-
   beforeAll(async () => {
     await applyAllMigrations(pool);
     await bootstrapPermanentOrganization(pool);
   });
   afterEach(async () => {
-    for (const projectId of projectIds.splice(0)) {
-      await pool.query("DELETE FROM goal_actual_costs WHERE goal_id IN (SELECT goal_id FROM goals WHERE project_id = $1)", [projectId]);
-      await pool.query("DELETE FROM budget_reservations WHERE goal_id IN (SELECT goal_id FROM goals WHERE project_id = $1)", [projectId]);
-      await pool.query("DELETE FROM goals WHERE project_id = $1", [projectId]);
-    }
+    // Reservations and actual-cost records are immutable (DELETE is rejected by
+    // their database triggers), so the disposable test database is reset with
+    // TRUNCATE rather than attempting row cleanup.
+    await pool.query("TRUNCATE goal_actual_costs, budget_reservations, goals RESTART IDENTITY CASCADE");
   });
   afterAll(async () => { await pool.end(); });
 
   it("uses durable incurred costs for 14-day history and reconciles totals across Goals", async () => {
     const projectId = randomUUID();
-    projectIds.push(projectId);
     const goalIds = [randomUUID(), randomUUID()];
     const today = new Date();
     const utcDate = (offset: number) => new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + offset)).toISOString().slice(0, 10);
