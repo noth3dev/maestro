@@ -13,11 +13,24 @@ import {
   OperationalOverlaySnapshotSchema,
   PressureBandProjectionSchema,
   RoutingEvidenceSchema,
+  OrganizationReadModelSchema,
 } from "./index.js";
 
 const projectId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01";
 const capabilityAxes = ["reasoning", "coding", "verification", "instruction-fidelity", "tool-use", "long-context", "knowledge", "refusal-calibration"] as const;
 
+const organization = {
+  groups: [{ groupId: "product", displayName: "Product Group" }],
+  departments: [{ departmentId: "product", groupId: "product", displayName: "Product Department", status: "sleeping", activeSessionId: null, goalContext: null }],
+};
+
+describe("organization HTTP contracts", () => {
+  it("round-trips the permanent organization read model without widening its wire shape", () => {
+    expect(OrganizationReadModelSchema.parse(organization)).toEqual(organization);
+    expect(OrganizationReadModelSchema.safeParse({ ...organization, departments: [{ ...organization.departments[0], activeSessionId: "worker-1" }] }).success).toBe(false);
+    expect(OrganizationReadModelSchema.safeParse({ ...organization, departments: [{ ...organization.departments[0], unexpected: true }] }).success).toBe(false);
+  });
+});
 
 describe("goal HTTP contracts", () => {
   it("accepts public create and transition inputs", () => {

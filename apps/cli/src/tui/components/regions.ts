@@ -17,14 +17,18 @@ export function createStatusRegion(options: {
   readonly splash: SplashController;
 }): Component {
   return createDynamicRegion((width) => {
-    const canShowSplash = width >= 100 && options.height() >= 28;
+    const canShowSplash = width >= 40 && options.height() >= 16;
     const setupVisible = options.state.connection.kind !== "connected";
     const setupInProgress = options.state.connection.kind === "connecting";
     const showSplash = canShowSplash && !setupVisible && options.state.connection.kind === "connected" && options.splash.visible();
     const lines = renderStatusRegion(options.state, width, options.height(), { showSplash });
-    // Do not consume the first-frame splash while initialization is still
-    // connecting; setup callbacks can arrive after this first render.
-    if (options.splash.visible() && !setupInProgress && !setupVisible) options.splash.dismiss();
+    const dashboardStatePending = [options.state.goal, options.state.workers, options.state.budget, options.state.organization]
+      .some((value) => value?.kind === "loading" || value?.kind === "error");
+    // Do not consume the first-frame splash while initialization or dashboard
+    // hydration is still unresolved; a loading/error state is not evidence that
+    // this workspace has no Goal. A restored splash remains visible for the
+    // frame that follows ctrl+/.
+    if (options.splash.visible() && !setupInProgress && !setupVisible && !dashboardStatePending) options.splash.consume();
     return lines;
   });
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { once } from "node:events";
 import { request as httpRequest, type IncomingMessage } from "node:http";
-import { buildServer, type EventService, type GoalService, type OperatorAuthenticator, type HeadParticipationService, type CouncilService, type EncoreService, type ProjectDiscoveryService, type ConcertmasterReportService } from "./server.js";
+import { buildServer, type EventService, type GoalService, type OperatorAuthenticator, type HeadParticipationService, type CouncilService, type EncoreService, type ProjectDiscoveryService, type OrganizationService, type ConcertmasterReportService } from "./server.js";
 import { ReadStateGoalNotFoundError, type ReadStateService } from "./read-state-service.js";
 import type { WorkerService } from "./worker-service.js";
 import type { Worker } from "@maestro/contracts";
@@ -86,6 +86,23 @@ describe("project discovery route", () => {
     const app = buildServer({ goalService: fakeService(), authenticator: authenticated() });
     const response = await app.inject({ method: "GET", url: "/v1/projects", headers: { authorization: "Bearer test-secret" } });
     expect(response.statusCode).toBe(503);
+    await app.close();
+  });
+});
+
+describe("organization read route", () => {
+  it("returns the permanent organization taxonomy from the composed read service", async () => {
+    const organization = {
+      groups: [{ groupId: "product", displayName: "Product Group" }],
+      departments: [{ departmentId: "product", groupId: "product", displayName: "Product Department", status: "sleeping" as const, activeSessionId: null, goalContext: null }],
+    };
+    const listOrganization = vi.fn(async () => organization);
+    const organizationService: OrganizationService = { listOrganization };
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), organizationService });
+    const response = await app.inject({ method: "GET", url: "/v1/organization", headers: { authorization: "Bearer test-secret" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(organization);
+    expect(listOrganization).toHaveBeenCalledOnce();
     await app.close();
   });
 });

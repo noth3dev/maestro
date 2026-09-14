@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { renderSetupSteps, renderShell, renderStatusHeader, renderTuiFooter, renderTuiLayout, type SetupStep, type TuiShellState } from "./shell.js";
+import { createSplashController, renderSetupSteps, renderShell, renderSplash, renderStatusHeader, renderTuiFooter, renderTuiLayout, type SetupStep, type TuiShellState } from "./shell.js";
+import { getZeroArgumentNoGoalActions } from "../commands/registry.js";
 
 const state: TuiShellState = {
   workspace: { cwd: "/work/acme", gitRoot: "/work/acme" },
@@ -50,6 +51,55 @@ describe("Maestro TUI shell", () => {
     expect(splash).toHaveLength(3);
   });
 
+  it("renders a degraded splash at the narrow supported width", () => {
+    const splash = renderTuiLayout(state, 40, 30, { showSplash: true }).splash;
+    expect(splash.length).toBeGreaterThan(0);
+    expect(splash.every((line) => line.length <= 40)).toBe(true);
+    expect(splash.join("\n")).toContain("ctrl+/");
+  });
+
+  it("orients a no-Goal operator around the live standing organization", () => {
+    const oriented = {
+      ...state,
+      organization: { kind: "value", value: { departments: ["Product Department", "Quality Department"] } },
+    } as TuiShellState;
+    const splash = renderSplash(oriented, 120).join("\n");
+    const nextActions = getZeroArgumentNoGoalActions().map((action) => `/${action.command} ${action.action}`).join(" · ");
+    expect(splash).toContain("Concertmaster ready");
+    expect(splash).toContain("2 Department Heads");
+    expect(splash).toContain(`Next: ${nextActions}`);
+    expect(splash).not.toContain("/task-contract create");
+    expect(splash).not.toContain("/council create");
+  });
+
+  it("orients an attached Goal from the same state values as the status row without pressure", () => {
+    const oriented = {
+      ...state,
+      goal: { kind: "value", value: { name: "auth-refactor", state: "running", pressureBand: "high" } },
+      workers: { kind: "value", value: 3 },
+    } as unknown as TuiShellState;
+    const splash = renderSplash(oriented, 120).join("\n");
+    expect(splash).toContain("auth-refactor");
+    expect(splash).toContain("running");
+    expect(splash).toContain("3 workers");
+    expect(splash).not.toContain("pressure");
+    expect(splash).not.toContain("high");
+  });
+
+  it("yields the splash entirely to pending authority decisions", () => {
+    const oriented = { ...state, pendingDecisions: [{ identity: "decision-1", tier: "You", action: "approve", actor: "operator" }] };
+    expect(renderSplash(oriented, 120)).toEqual([]);
+    expect(renderTuiLayout(oriented, 120, 30, { showSplash: true }).decisions.join("\n")).toContain("approve");
+  });
+
+  it("can recover a dismissed splash with the documented restore action", () => {
+    const splash = createSplashController();
+    splash.dismiss();
+    expect(splash.visible()).toBe(false);
+    splash.restore();
+    expect(splash.visible()).toBe(true);
+  });
+
   it("renders truthful setup progress with distinct status glyphs", () => {
     const steps: SetupStep[] = [
       { step: "docker-check", status: "completed" },
@@ -94,9 +144,9 @@ describe("Maestro TUI shell", () => {
     expect(renderSetupSteps({ ...state, setupSteps: [{ step: "docker-check", status: "completed" }] }, 80)).toEqual([]);
   });
 
-  it("keeps splash copy separate from the status row", () => {
+  it("keeps splash orientation copy separate from the status row", () => {
     const frame = renderTuiLayout(state, 120, 30, { showSplash: true });
     expect(frame.status).toHaveLength(1);
-    expect(frame.splash.findIndex((line) => line.includes("Your durable workspace"))).toBe(1);
+    expect(frame.splash.findIndex((line) => line.includes("Concertmaster ready"))).toBe(1);
   });
 });

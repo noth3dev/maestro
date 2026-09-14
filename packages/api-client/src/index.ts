@@ -13,6 +13,7 @@ import {
   GoalQuerySchema,
   GoalListSchema,
   ProjectListSchema,
+  OrganizationReadModelSchema,
   ConversationSchema,
   CreateConversationInputSchema,
   ConversationTurnInputSchema,
@@ -97,6 +98,7 @@ import {
   type GoalQuery,
   type GoalList,
   type ProjectList,
+  type OrganizationReadModel,
   type Conversation,
   type CreateConversationInput,
   type ConversationTurnInput,
@@ -184,6 +186,7 @@ export interface ApiClient {
   launchTaskContract(contractId: string, projectId: string, commandId?: string): Promise<TaskContract>;
   listGoals(projectId: string): Promise<GoalList>;
   listProjects(): Promise<ProjectList>;
+  getOrganization(): Promise<OrganizationReadModel>;
   listModels(): Promise<readonly ModelCatalogEntry[]>;
   loginProvider(input: ProviderCredentialLoginInput): Promise<ProviderCredentialBinding>;
   logoutProvider(providerId: "openai" | "anthropic"): Promise<void>;
@@ -422,6 +425,9 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
     },
     listProjects() {
       return request("v1/projects", { headers }, ProjectListSchema);
+    },
+    getOrganization() {
+      return request("v1/organization", { headers }, OrganizationReadModelSchema);
     },
     listModels() {
       return request("v1/models", { headers }, { parse(body: unknown) {

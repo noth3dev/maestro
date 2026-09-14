@@ -8,7 +8,7 @@ import { createLocalGitPort } from "@maestro/git-adapter";
 import { FileEvidenceStore } from "@maestro/evidence";
 import { classifyHostEffects, type EnvironmentRecord, type ExecutionAdmission, type ExecutionKernelPort, type GitPort } from "@maestro/domain";
 import { createIpPythonSessionManager, createIpPythonTool, createUnavailableIpPythonKernel, reapIpPythonProcessGroup, ToolRegistry, type IpPythonBlockApproval, type IpPythonHostRequest, type IpPythonKernel, type IpPythonSessionBinding, type IpPythonSessionManager, type IpPythonStageBoundary } from "@maestro/agent-runtime";
-import { appendCapabilityJournal, appendIpPythonSessionJournal, assertProjectMembership, consumeCapabilityApprovals, authenticateLocalOperator, bootstrapAuthorityRecord, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, readEnvironment, reconcileIpPythonOrphans, reconcileOnStartup, recordDiscordSignal, recordIpPythonSessionStarted, runMigrations, ensureCapacityInventory, reserveCapacity, releaseCapacityReservation, requeueCapacityReservation, readWorkerBySpawnCommand, type IpPythonSessionJournalEntry } from "@maestro/persistence";
+import { appendCapabilityJournal, appendIpPythonSessionJournal, assertProjectMembership, consumeCapabilityApprovals, authenticateLocalOperator, bootstrapAuthorityRecord, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, listPermanentOrganization, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, readEnvironment, reconcileIpPythonOrphans, reconcileOnStartup, recordDiscordSignal, recordIpPythonSessionStarted, runMigrations, ensureCapacityInventory, reserveCapacity, releaseCapacityReservation, requeueCapacityReservation, readWorkerBySpawnCommand, type IpPythonSessionJournalEntry } from "@maestro/persistence";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
 import { createCapabilityApprovalService } from "./capability-approval-service.js";
@@ -796,6 +796,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     }),
     projectMembership: { assertProjectMembership: (operatorId, projectId) => assertProjectMembership(pool, operatorId, projectId) },
     projectDiscovery: { listProjects: (operatorId) => listProjectMemberships(pool, operatorId) },
+    organizationService: { listOrganization: () => listPermanentOrganization(pool) },
     ...(config.operatorProvisioningAdminId === undefined ? {} : {
       projectAccess: {
         provisionProjectAccess: (requesterOperatorId, input) => provisionProjectAccess(

@@ -19,6 +19,15 @@ export function shouldAutoBootstrapLocal(env: Record<string, string | undefined>
   return (env.MAESTRO_API_URL?.trim() ?? "") === "" && (env.MAESTRO_API_TOKEN?.trim() ?? "") === "" && env.MAESTRO_DISABLE_LOCAL_AUTOSTART !== "true";
 }
 
+export async function hydrateOrganizationState(client: Pick<ApiClient, "getOrganization">): Promise<NonNullable<TuiShellState["organization"]>> {
+  try {
+    const organization = await client.getOrganization();
+    return { kind: "value", value: { departments: organization.departments.map((department) => department.displayName) } };
+  } catch (error) {
+    return { kind: "error", message: error instanceof Error ? error.message : "Organization read failed" };
+  }
+}
+
 export async function initializeTui(options: InteractiveTuiOptions): Promise<{
   workspace: Workspace;
   startupError?: string;
@@ -86,6 +95,9 @@ export async function initializeTui(options: InteractiveTuiOptions): Promise<{
       client = undefined;
     }
   }
+  const organizationState: NonNullable<TuiShellState["organization"]> = client === undefined
+    ? { kind: "empty" }
+    : await hydrateOrganizationState(client);
   const initialModel = options.env.MAESTRO_MODEL?.trim() || session?.model;
   const state: TuiShellState = {
     workspace,
@@ -106,6 +118,7 @@ export async function initializeTui(options: InteractiveTuiOptions): Promise<{
     workers: { kind: "empty" },
     approvals: { kind: "error", message: "Approval read surface is not available" },
     budget: { kind: "empty" },
+    organization: organizationState,
   };
 
   return { workspace, ...(startupError === undefined ? {} : { startupError }), connection, session, project, ...(projectDiscoveryNotice === undefined ? {} : { projectDiscoveryNotice }), ...(client === undefined ? {} : { client }), state };
