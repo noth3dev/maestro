@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createSplashController, renderSetupSteps, renderShell, renderSplash, renderStatusHeader, renderTuiFooter, renderTuiLayout, type SetupStep, type TuiShellState } from "./shell.js";
+import { getZeroArgumentNoGoalActions } from "../commands/registry.js";
 
 const state: TuiShellState = {
   workspace: { cwd: "/work/acme", gitRoot: "/work/acme" },
@@ -60,26 +61,29 @@ describe("Maestro TUI shell", () => {
   it("orients a no-Goal operator around the live standing organization", () => {
     const oriented = {
       ...state,
-      organization: { kind: "value", value: { departments: ["Product Department", "Quality Department"], pressureBand: "medium" } },
+      organization: { kind: "value", value: { departments: ["Product Department", "Quality Department"] } },
     } as TuiShellState;
     const splash = renderSplash(oriented, 120).join("\n");
+    const nextActions = getZeroArgumentNoGoalActions().map((action) => `/${action.command} ${action.action}`).join(" · ");
     expect(splash).toContain("Concertmaster ready");
     expect(splash).toContain("2 Department Heads");
-    expect(splash).toContain("medium");
-    expect(splash).toContain("/task-contract create");
+    expect(splash).toContain(`Next: ${nextActions}`);
+    expect(splash).not.toContain("/task-contract create");
+    expect(splash).not.toContain("/council create");
   });
 
-  it("orients an attached Goal from the same state values as the status row", () => {
-    const oriented: TuiShellState = {
+  it("orients an attached Goal from the same state values as the status row without pressure", () => {
+    const oriented = {
       ...state,
       goal: { kind: "value", value: { name: "auth-refactor", state: "running", pressureBand: "high" } },
       workers: { kind: "value", value: 3 },
-    };
+    } as unknown as TuiShellState;
     const splash = renderSplash(oriented, 120).join("\n");
     expect(splash).toContain("auth-refactor");
     expect(splash).toContain("running");
     expect(splash).toContain("3 workers");
-    expect(splash).toContain("high");
+    expect(splash).not.toContain("pressure");
+    expect(splash).not.toContain("high");
   });
 
   it("yields the splash entirely to pending authority decisions", () => {

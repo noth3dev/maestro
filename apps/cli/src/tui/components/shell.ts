@@ -1,6 +1,6 @@
 import type { Workspace } from "../workspace.js";
 import { LOCAL_BOOTSTRAP_STEP_ORDER, type LocalBootstrapStepEvent, type LocalBootstrapStepName } from "../local-bootstrap.js";
-import type { OrganizationReadModel, PressureBand } from "../panels/organization-panel.js";
+import type { OrganizationReadModel } from "../panels/organization-panel.js";
 import { createCommandRegistry } from "../commands/registry.js";
 import { fitPlain, tuiTheme } from "../theme.js";
 
@@ -24,7 +24,7 @@ export interface TuiShellState {
   working?: boolean;
   connection:
     { kind: "connected" } | { kind: "connecting" } | { kind: "setup-required"; message: string } | { kind: "error"; message: string };
-  goal: AsyncState<{ name: string; state: string; pressureBand?: PressureBand }>;
+  goal: AsyncState<{ name: string; state: string }>;
   workers: AsyncState<number>;
   approvals: AsyncState<number>;
   budget: AsyncState<{ spentCents: number; ceilingCents: number }>;
@@ -54,12 +54,8 @@ function stateText<T>(state: AsyncState<T>, format: (value: T) => string): strin
   return format(state.value);
 }
 
-function pressureText(pressureBand: PressureBand | undefined): string {
-  return pressureBand === undefined ? "" : ` · pressure ${pressureBand}`;
-}
-
 function goalText(state: TuiShellState): string {
-  return stateText(state.goal, (value) => `${value.name} · ${value.state}${pressureText(value.pressureBand)}`);
+  return stateText(state.goal, (value) => `${value.name} · ${value.state}`);
 }
 
 function goalStateText(state: TuiShellState): string {
@@ -155,7 +151,7 @@ export function renderSplash(state: TuiShellState, width: number): string[] {
   if (state.goal.kind === "value") {
     return [
       tuiTheme.primary(fitPlain(`✦ ${state.goal.value.name}`, width)),
-      tuiTheme.secondary(fitPlain(`Performing · ${state.goal.value.state} · ${workerText(state)}${pressureText(state.goal.value.pressureBand)}`, width)),
+      tuiTheme.secondary(fitPlain(`Performing · ${state.goal.value.state} · ${workerText(state)}`, width)),
       tuiTheme.dim(fitPlain(`ctrl+/ show home · Next: ${nextActionText()}`, width)),
     ];
   }
@@ -163,10 +159,9 @@ export function renderSplash(state: TuiShellState, width: number): string[] {
   const departmentHeads = organization?.kind === "value"
     ? `${organization.value.departments.length} Department Head${organization.value.departments.length === 1 ? "" : "s"}`
     : "Department Heads unavailable";
-  const pressure = organization?.kind === "value" ? pressureText(organization.value.pressureBand) : "";
   return [
     tuiTheme.primary(fitPlain("✦ MAESTRO", width)),
-    tuiTheme.secondary(fitPlain(`Concertmaster ready · ${departmentHeads}${pressure}`, width)),
+    tuiTheme.secondary(fitPlain(`Concertmaster ready · ${departmentHeads}`, width)),
     tuiTheme.dim(fitPlain(`ctrl+/ show home · Next: ${nextActionText()}`, width)),
   ];
 }
