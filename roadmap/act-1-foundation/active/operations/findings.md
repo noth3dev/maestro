@@ -2118,3 +2118,8 @@ The first two items require choosing or adding an architecture outside the curre
 - 2026-09-14 Plan 7-a §S3 scope correction resolved the previously recorded architecture blocker. The user-authorized thin organization route and API-client read path were added without persistence or model changes; Goal pressure remains explicitly excluded; registry next actions are state-valid. The corrected exact-HEAD review passed, and post-merge verification passed 244/244 files and 1686/1686 tests.
 
 - 2026-09-14 Plan 7-a §S3 CI failure `34798344096` was a test-observation defect, not a production width defect: color-enabled CI made raw string length include ANSI SGR bytes. The minimal test-only visible-width correction was independently reviewed and passed post-merge verification in `daa1923` (244/244 files, 1686/1686 tests).
+
+
+## 2026-09-14 Plan 7 §S6 architecture gap — persona candidate API absent
+
+S6 requires exposing persona-candidate actions, but this worktree has no typed client method or Control Plane route for candidate proposal/edit/approval/rollback. `packages/api-client/src/index.ts:230` exposes only `selectFullAccessMode` for capability sessions, and its only improvement read method is `listImprovementDigestsForGoal` at `packages/api-client/src/index.ts:810`. `apps/control-plane/src/server.ts:496` exposes `persona-evidence`, while `apps/control-plane/src/server.ts:1290` exposes improvement-digest reads; no candidate mutation route exists. The existing persistence/council services are not an authenticated desktop API contract. This slice must not invent a second authority model or fabricate a persona command; parent decision/API slice is required before persona-candidate bridge exposure.

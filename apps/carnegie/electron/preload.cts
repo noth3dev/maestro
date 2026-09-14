@@ -8,7 +8,7 @@ const exposedApiMethods = [
   "listGoals", "getGoal", "getBudgetSummary", "getChannel", "postChannelMessage", "getProjection", "listEvents",
   "createTaskContract", "getTaskContract", "updateTaskContract", "selectOvertureRoles", "confirmTaskContract", "launchTaskContract",
   "pauseGoal", "resumeGoal", "stopGoal", "emergencyStopGoal",
-  "requestCriticalAction", "approveAndRunCriticalAction",
+  "requestCriticalAction", "approveAndRunCriticalAction", "selectFullAccessMode",
   "createCouncil", "submitCouncilBrief", "revealCouncil", "decideCouncil",
   "createDepartmentPlan", "createMissionBundle", "spawnWorker", "cancelWorker",
   "createGoalIntegrationBranch", "createDepartmentBranch", "createWorkerWorktree",
