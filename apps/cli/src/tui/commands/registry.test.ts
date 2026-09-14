@@ -27,6 +27,7 @@ describe("TUI command registry", () => {
       "session",
       "models",
       "conversation",
+      "channel",
     ]) {
       expect(registry.find(command)).toBeDefined();
     }
@@ -48,6 +49,7 @@ describe("TUI command registry", () => {
     expect(registry.find("mode")?.actions.find((action) => action.name === "maestro")?.kind).toBe("write");
     expect(registry.find("flashmob")?.actions.find((action) => action.name === "toggle")?.kind).toBe("write");
     expect(registry.find("models")?.actions.find((action) => action.name === "use")?.kind).toBe("write");
+    expect(registry.find("channel")?.actions.map((action) => `${action.name}:${action.kind}`)).toEqual(["list:read", "read:read", "post:write"]);
   });
 
   it("autocomplete filters command names", () => {
