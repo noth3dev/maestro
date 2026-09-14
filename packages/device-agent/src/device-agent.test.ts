@@ -3,7 +3,7 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { deviceIdentityFingerprint, type DeviceEnrollment, type DeviceGrantEnvelope, type DeviceGrantScope, type LocalDevicePolicy } from "@maestro/domain";
+import { deviceIdentityFingerprint, type DeviceEnrollment, type DeviceGrantEnvelope, type DeviceGrantScope, type LocalDevicePolicy } from "@carnegie/domain";
 import { DeviceFenceState } from "./fence-state.js";
 import { createBoundedProjectFileReader } from "./file-executor.js";
 import { signDeviceGrantEnvelope, verifyDeviceGrantEnvelope, type UnsignedDeviceGrantEnvelope } from "./envelope.js";

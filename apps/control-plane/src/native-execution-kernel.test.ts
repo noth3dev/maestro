@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ExecutionKernelPort, InvocationStatus, SpawnRequest } from "@maestro/domain";
-import { createIpPythonSessionManager, createIpPythonTool, ToolRegistry, type GatewayBinding, type ModelGatewayPort, type ModelTurnResult } from "@maestro/agent-runtime";
+import type { ExecutionKernelPort, InvocationStatus, SpawnRequest } from "@carnegie/domain";
+import { createIpPythonSessionManager, createIpPythonTool, ToolRegistry, type GatewayBinding, type ModelGatewayPort, type ModelTurnResult } from "@carnegie/agent-runtime";
 import { createNativeExecutionKernel } from "./native-execution-kernel.js";
 
 const binding: GatewayBinding = {

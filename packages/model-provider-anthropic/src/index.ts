@@ -1,5 +1,5 @@
-import type { InvocationUsage } from "@maestro/domain";
-import { normalizeToolArguments, type ModelContentPart, type ModelMessage, type ModelProviderPort, type ModelTurnRequest, type ProviderDataPolicy, type ProviderPlugin, type ProviderModelRequest, type ModelCatalogEntry, type ProviderCancellationOutcome } from "@maestro/agent-runtime";
+import type { InvocationUsage } from "@carnegie/domain";
+import { normalizeToolArguments, type ModelContentPart, type ModelMessage, type ModelProviderPort, type ModelTurnRequest, type ProviderDataPolicy, type ProviderPlugin, type ProviderModelRequest, type ModelCatalogEntry, type ProviderCancellationOutcome } from "@carnegie/agent-runtime";
 
 export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 

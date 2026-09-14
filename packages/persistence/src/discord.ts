@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { verifyDiscordSignal, type AuthenticatedDiscordSignal, type DiscordReplayState, type DiscordSignal } from "@maestro/domain";
+import { verifyDiscordSignal, type AuthenticatedDiscordSignal, type DiscordReplayState, type DiscordSignal } from "@carnegie/domain";
 import type { Pool } from "pg";
 import { attachSignalToIncidentInTransaction } from "./discord-incident.js";
 export class DiscordPersistenceError extends Error {}

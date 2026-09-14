@@ -14,7 +14,7 @@ import {
   routingCandidateEvaluationHash,
   type RoutingCandidateEvaluationEvidence,
   type RoutingCapabilityCouncilJudgment,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
 import { withGoalAuthority } from "./goal-authority.js";

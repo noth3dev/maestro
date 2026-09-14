@@ -21,7 +21,7 @@ export const en = {
     back: "back",
     loading: "loading…",
     notConnectedTitle: "Not connected yet",
-    notConnectedHint: "This part of Maestro doesn't have a real backend to talk to yet — the screen is here so the shape is right, and it will light up as the control plane grows into it.",
+    notConnectedHint: "This part of Carnegie doesn't have a real backend to talk to yet — the screen is here so the shape is right, and it will light up as the control plane grows into it.",
   },
   setup: {
     title: "Connect to your control plane",

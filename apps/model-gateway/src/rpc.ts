@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
-import type { GatewayAccountLoginStartRequest, GatewayAccountLoginStatusRequest, GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialRevokeRequest, GatewayTurnRequest, ModelGatewayPort, ModelMessage, ModelStreamEvent, ModelToolDefinition, TurnLimits } from "@maestro/agent-runtime";
+import type { GatewayAccountLoginStartRequest, GatewayAccountLoginStatusRequest, GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialRevokeRequest, GatewayTurnRequest, ModelGatewayPort, ModelMessage, ModelStreamEvent, ModelToolDefinition, TurnLimits } from "@carnegie/agent-runtime";
 
 const IdentitySchema = z.object({ provider: z.string().min(1).max(64), id: z.string().min(1).max(256) }).strict();
 const BindingSchema = z.object({

@@ -46,7 +46,7 @@ export function Channel({ onNavigate: _onNavigate }: { onNavigate: (view: ViewNa
           <div className="chan-composer">
             <textarea
               className="chan-composer-input"
-              placeholder="Posting a message here isn't wired to anything real yet — Maestro has no chat/message-send capability in its domain model."
+              placeholder="Posting a message here isn't wired to anything real yet — Carnegie has no chat/message-send capability in its domain model."
               rows={1}
               disabled
             />

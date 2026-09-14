@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { AsyncEntry } from "@napi-rs/keyring";
-import type { ProviderAccountBinding, ProviderAuthMode } from "@maestro/agent-runtime";
+import type { ProviderAccountBinding, ProviderAuthMode } from "@carnegie/agent-runtime";
 
 export interface CredentialBinding extends ProviderAccountBinding {
   readonly bindingId: string;
@@ -8,7 +8,7 @@ export interface CredentialBinding extends ProviderAccountBinding {
 }
 
 interface StoredCredential extends CredentialBinding {
-  /** API-key material exists only for api-key bindings. Managed accounts have no Maestro secret. */
+  /** API-key material exists only for api-key bindings. Managed accounts have no Carnegie secret. */
   readonly secret?: string;
 }
 

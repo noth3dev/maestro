@@ -31,7 +31,7 @@ Default home:
 
 - Electron + Vite + React 19 is the intentional desktop application shell in `apps/secretary`; strict TypeScript remains required.
 - The renderer uses the existing Vite React build and CSS/theme primitives. Tailwind CSS, shadcn/ui, and Next.js are not current runtime dependencies and must not be described as implemented until separately adopted.
-- `@maestro/api-client` remains the typed server-state boundary. Add TanStack Query only when a concrete query/cache need is introduced.
+- `@carnegie/api-client` remains the typed server-state boundary. Add TanStack Query only when a concrete query/cache need is introduced.
 - Server-Sent Events use durable cursor reconnection through the Control Plane API.
 - The radial product direction remains. When the radial slice is implemented, use `@xyflow/react` and `d3-hierarchy` only after adding and validating those dependencies in the Electron renderer.
 - Playwright and axe-core remain the behavior and accessibility verification tools.

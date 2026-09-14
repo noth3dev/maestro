@@ -9,29 +9,29 @@ Set `PROJECT_ID` to the existing project that has Control Plane access. Set `MAE
 ```bash
 cd /home/ubuntu/projects/ms
 export MAESTRO_WORKTREE_ROOT="${MAESTRO_WORKTREE_ROOT:?Set an existing disposable parent directory}"
-test -d "$MAESTRO_WORKTREE_ROOT"
+test -d "$CARNEGIE_WORKTREE_ROOT"
 export MAESTRO_API_TOKEN="${MAESTRO_API_TOKEN:?Set an API token}"
 export PROJECT_ID="${PROJECT_ID:?Set the project UUID}"
 export MAESTRO_MODEL="${MAESTRO_MODEL:?Set an allowed model reference}"
 export MAESTRO_NATIVE_MODEL="${MAESTRO_NATIVE_MODEL:?Set the configured native model reference}"
 export MAESTRO_PORT="${MAESTRO_PORT:-4310}"
-export MAESTRO_API_URL="http://127.0.0.1:$MAESTRO_PORT"
-export MAESTRO="node apps/cli/dist/main.js"
+export MAESTRO_API_URL="http://127.0.0.1:$CARNEGIE_PORT"
+export CARNEGIE="node apps/cli/dist/main.js"
 export TOOLS="$PWD/test/release-scenario"
-export SCENARIO_DIR="$MAESTRO_WORKTREE_ROOT/release-run-$(date +%s)"
+export SCENARIO_DIR="$CARNEGIE_WORKTREE_ROOT/release-run-$(date +%s)"
 mkdir -p "$SCENARIO_DIR"
 export TARGET="$(node "$TOOLS/create-fixture.mjs")"
-export FAKE_TARGET="$MAESTRO_WORKTREE_ROOT/fake-target-$(date +%s)"
-MAESTRO_WORKTREE_ROOT="$MAESTRO_WORKTREE_ROOT" FAKE_TARGET="$FAKE_TARGET" node -e 'import("./test/release-scenario/fixture.mjs").then(({createReleaseScenarioFixture}) => createReleaseScenarioFixture({ root: process.env.FAKE_TARGET, worktreeRoot: process.env.MAESTRO_WORKTREE_ROOT }))' >/dev/null
+export FAKE_TARGET="$CARNEGIE_WORKTREE_ROOT/fake-target-$(date +%s)"
+MAESTRO_WORKTREE_ROOT="$CARNEGIE_WORKTREE_ROOT" FAKE_TARGET="$FAKE_TARGET" node -e 'import("./test/release-scenario/fixture.mjs").then(({createReleaseScenarioFixture}) => createReleaseScenarioFixture({ root: process.env.FAKE_TARGET, worktreeRoot: process.env.MAESTRO_WORKTREE_ROOT }))' >/dev/null
 export json_field='node -e'
 json_value() { node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8"))[process.argv[2]])' "$1" "$2"; }
 uuid() { node -e 'console.log(crypto.randomUUID())'; }
 export BASE_REVISION="$(git -C "$TARGET" rev-parse HEAD)"
 npm run build
 # For a local live run, start and readiness-check the real Control Plane before Step 1.
-( cd apps/control-plane && MAESTRO_PORT="$MAESTRO_PORT" node dist/main.js ) > "$SCENARIO_DIR/control-plane.log" 2>&1 &
+( cd apps/control-plane && MAESTRO_PORT="$CARNEGIE_PORT" node dist/main.js ) > "$SCENARIO_DIR/control-plane.log" 2>&1 &
 export CONTROL_PLANE_PID=$!
-export CONTROL_PLANE_URL="$MAESTRO_API_URL"
+export CONTROL_PLANE_URL="$CARNEGIE_API_URL"
 until curl -fsS "$CONTROL_PLANE_URL/readyz" >/dev/null; do kill -0 "$CONTROL_PLANE_PID" 2>/dev/null || { cat "$SCENARIO_DIR/control-plane.log"; exit 1; }; done
 export FAKE_STATE="$SCENARIO_DIR/fake-state.json"
 ```
@@ -51,7 +51,7 @@ Create the Task Contract first so the Goal is durably bound to the launched scen
 ```bash
 node "$TOOLS/write-input.mjs" --kind contract --project "$PROJECT_ID" --repository "$TARGET" --base "$BASE_REVISION" --out "$SCENARIO_DIR/contract-substance.json"
 export CONTRACT_ID="$(uuid)"
-$MAESTRO task-contract create --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --substance-json "$(cat "$SCENARIO_DIR/contract-substance.json")" --json > "$SCENARIO_DIR/contract.json"
+$CARNEGIE task-contract create --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --substance-json "$(cat "$SCENARIO_DIR/contract-substance.json")" --json > "$SCENARIO_DIR/contract.json"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -67,7 +67,7 @@ Observable: the draft contract records the disposable target and immutable base 
 Read back the exact contract created in Step 1:
 
 ```bash
-$MAESTRO task-contract get --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --json > "$SCENARIO_DIR/contract-read.json"
+$CARNEGIE task-contract get --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --json > "$SCENARIO_DIR/contract-read.json"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -85,19 +85,19 @@ Command:
 ```bash
 export CONTRACT_VERSION="$(json_value "$SCENARIO_DIR/contract.json" version)"
 export CONTRACT_HASH="$(json_value "$SCENARIO_DIR/contract.json" contentHash)"
-$MAESTRO task-contract confirm --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --version "$CONTRACT_VERSION" --content-hash "$CONTRACT_HASH" --command-id "$(uuid)" --json > "$SCENARIO_DIR/confirmation.json"
-$MAESTRO task-contract launch --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/launch.json"
+$CARNEGIE task-contract confirm --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --version "$CONTRACT_VERSION" --content-hash "$CONTRACT_HASH" --command-id "$(uuid)" --json > "$SCENARIO_DIR/confirmation.json"
+$CARNEGIE task-contract launch --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/launch.json"
 export COMMAND_ID="$(uuid)"
-$MAESTRO goal create --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --command-id "$COMMAND_ID" --json > "$SCENARIO_DIR/goal.json"
+$CARNEGIE goal create --project-id "$PROJECT_ID" --contract-id "$CONTRACT_ID" --command-id "$COMMAND_ID" --json > "$SCENARIO_DIR/goal.json"
 export GOAL_ID="$(json_value "$SCENARIO_DIR/goal.json" goalId)"
-$MAESTRO goal transition --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --expected-version 1 --to ready_for_confirmation --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-ready-for-confirmation.json"
-$MAESTRO goal transition --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --expected-version 2 --to launched --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-launched.json"
-$MAESTRO goal transition --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --expected-version 3 --to active --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-active.json"
-$MAESTRO conversation create --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --model "$MAESTRO_MODEL" --json > "$SCENARIO_DIR/conversation.json"
+$CARNEGIE goal transition --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --expected-version 1 --to ready_for_confirmation --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-ready-for-confirmation.json"
+$CARNEGIE goal transition --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --expected-version 2 --to launched --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-launched.json"
+$CARNEGIE goal transition --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --expected-version 3 --to active --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-active.json"
+$CARNEGIE conversation create --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --model "$CARNEGIE_MODEL" --json > "$SCENARIO_DIR/conversation.json"
 export CONVERSATION_ID="$(json_value "$SCENARIO_DIR/conversation.json" conversationId)"
-$MAESTRO conversation turn --conversation-id "$CONVERSATION_ID" --project-id "$PROJECT_ID" --text "Repair the discount calculation in $TARGET; do not push remotely." --json > "$SCENARIO_DIR/ceo-request.json"
+$CARNEGIE conversation turn --conversation-id "$CONVERSATION_ID" --project-id "$PROJECT_ID" --text "Repair the discount calculation in $TARGET; do not push remotely." --json > "$SCENARIO_DIR/ceo-request.json"
 printf 'Goal=%s\nTarget=%s\nBase=%s\n' "$GOAL_ID" "$TARGET" "$BASE_REVISION" > "$SCENARIO_DIR/scenario-evidence-anchor.txt"
-$MAESTRO evidence capture --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --correlation-id "$(uuid)" --command-id "$(uuid)" --kind release-scenario-anchor --media-type text/plain --content-file "$SCENARIO_DIR/scenario-evidence-anchor.txt" --json > "$SCENARIO_DIR/scenario-evidence.json"
+$CARNEGIE evidence capture --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --correlation-id "$(uuid)" --command-id "$(uuid)" --kind release-scenario-anchor --media-type text/plain --content-file "$SCENARIO_DIR/scenario-evidence-anchor.txt" --json > "$SCENARIO_DIR/scenario-evidence.json"
 export SCENARIO_EVIDENCE_ID="$(json_value "$SCENARIO_DIR/scenario-evidence.json" evidenceId)"
 ```
 
@@ -115,9 +115,9 @@ Command:
 
 ```bash
 node "$TOOLS/write-input.mjs" --kind head --project "$PROJECT_ID" --contract "$CONTRACT_ID" --department engineering --out "$SCENARIO_DIR/engineering-head.json"
-$MAESTRO head activate --goal-id "$GOAL_ID" --activation-json "$(cat "$SCENARIO_DIR/engineering-head.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/engineering-head.json.out"
+$CARNEGIE head activate --goal-id "$GOAL_ID" --activation-json "$(cat "$SCENARIO_DIR/engineering-head.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/engineering-head.json.out"
 node "$TOOLS/write-input.mjs" --kind head --project "$PROJECT_ID" --contract "$CONTRACT_ID" --department quality --out "$SCENARIO_DIR/quality-head.json"
-$MAESTRO head activate --goal-id "$GOAL_ID" --activation-json "$(cat "$SCENARIO_DIR/quality-head.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/quality-head.json.out"
+$CARNEGIE head activate --goal-id "$GOAL_ID" --activation-json "$(cat "$SCENARIO_DIR/quality-head.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/quality-head.json.out"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -140,20 +140,20 @@ node "$TOOLS/write-input.mjs" --kind packet --project "$PROJECT_ID" --evidence-i
 node "$TOOLS/write-input.mjs" --kind plan --project "$PROJECT_ID" --department engineering --evidence-id "$SCENARIO_EVIDENCE_ID" --target "$TARGET" --item discount-repair --out "$SCENARIO_DIR/engineering-department-plan.json"
 node "$TOOLS/write-input.mjs" --kind plan --project "$PROJECT_ID" --department quality --evidence-id "$SCENARIO_EVIDENCE_ID" --target "$TARGET" --item discount-validation --out "$SCENARIO_DIR/quality-department-plan.json"
 node "$TOOLS/write-input.mjs" --kind mission --project "$PROJECT_ID" --evidence-id "$SCENARIO_EVIDENCE_ID" --contract "$CONTRACT_ID" --target "$TARGET" --out "$SCENARIO_DIR/mission-bundle.json"
-$MAESTRO git goal-branch --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --repository-path "$TARGET" --branch-name goal/integration --base-revision "$BASE_REVISION" --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-branch.json"
-$MAESTRO council create --goal-id "$GOAL_ID" --council-json "$(cat "$SCENARIO_DIR/council.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/council-created.json"
+$CARNEGIE git goal-branch --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --repository-path "$TARGET" --branch-name goal/integration --base-revision "$BASE_REVISION" --command-id "$(uuid)" --json > "$SCENARIO_DIR/goal-branch.json"
+$CARNEGIE council create --goal-id "$GOAL_ID" --council-json "$(cat "$SCENARIO_DIR/council.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/council-created.json"
 export COUNCIL_ID="$(json_value "$SCENARIO_DIR/council-created.json" councilId)"
-$MAESTRO council submit-brief --council-id "$COUNCIL_ID" --department-id engineering --brief-json "$(cat "$SCENARIO_DIR/engineering-brief.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/engineering-brief-submitted.json"
-$MAESTRO council submit-brief --council-id "$COUNCIL_ID" --department-id quality --brief-json "$(cat "$SCENARIO_DIR/quality-brief.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/quality-brief-submitted.json"
-$MAESTRO council reveal --council-id "$COUNCIL_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/council-revealed.json"
-$MAESTRO council decide --council-id "$COUNCIL_ID" --packet-json "$(cat "$SCENARIO_DIR/decision-packet.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/council-decision.json"
-$MAESTRO git department-branch --council-id "$COUNCIL_ID" --department-id engineering --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/engineering-department-branch.json"
-$MAESTRO git department-branch --council-id "$COUNCIL_ID" --department-id quality --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/quality-department-branch.json"
-$MAESTRO department-plan create --council-id "$COUNCIL_ID" --department-id engineering --plan-json "$(cat "$SCENARIO_DIR/engineering-department-plan.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/engineering-department-plan.json.out"
-$MAESTRO department-plan create --council-id "$COUNCIL_ID" --department-id quality --plan-json "$(cat "$SCENARIO_DIR/quality-department-plan.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/quality-department-plan.json.out"
+$CARNEGIE council submit-brief --council-id "$COUNCIL_ID" --department-id engineering --brief-json "$(cat "$SCENARIO_DIR/engineering-brief.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/engineering-brief-submitted.json"
+$CARNEGIE council submit-brief --council-id "$COUNCIL_ID" --department-id quality --brief-json "$(cat "$SCENARIO_DIR/quality-brief.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/quality-brief-submitted.json"
+$CARNEGIE council reveal --council-id "$COUNCIL_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/council-revealed.json"
+$CARNEGIE council decide --council-id "$COUNCIL_ID" --packet-json "$(cat "$SCENARIO_DIR/decision-packet.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/council-decision.json"
+$CARNEGIE git department-branch --council-id "$COUNCIL_ID" --department-id engineering --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/engineering-department-branch.json"
+$CARNEGIE git department-branch --council-id "$COUNCIL_ID" --department-id quality --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/quality-department-branch.json"
+$CARNEGIE department-plan create --council-id "$COUNCIL_ID" --department-id engineering --plan-json "$(cat "$SCENARIO_DIR/engineering-department-plan.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/engineering-department-plan.json.out"
+$CARNEGIE department-plan create --council-id "$COUNCIL_ID" --department-id quality --plan-json "$(cat "$SCENARIO_DIR/quality-department-plan.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/quality-department-plan.json.out"
 export ITEM_ID="discount-repair"
-$MAESTRO mission-bundle create --council-id "$COUNCIL_ID" --department-id engineering --item-id "$ITEM_ID" --bundle-json "$(cat "$SCENARIO_DIR/mission-bundle.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/mission-bundle.json.out"
-$MAESTRO mission-bundle get --council-id "$COUNCIL_ID" --department-id engineering --plan-version 1 --item-id "$ITEM_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/mission-bundle-read.json"
+$CARNEGIE mission-bundle create --council-id "$COUNCIL_ID" --department-id engineering --item-id "$ITEM_ID" --bundle-json "$(cat "$SCENARIO_DIR/mission-bundle.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/mission-bundle.json.out"
+$CARNEGIE mission-bundle get --council-id "$COUNCIL_ID" --department-id engineering --plan-version 1 --item-id "$ITEM_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/mission-bundle-read.json"
 node -e 'const fs=require("node:fs"); const x=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); const hold=x.substance?.repairHold; if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(hold?.approvalId ?? "") || hold?.repetitionScope?.kind !== "bounded_count" || hold?.repetitionScope?.count !== 1) throw new Error("Mission Bundle repair hold is not valid or durable");' "$SCENARIO_DIR/mission-bundle-read.json"
 ```
 
@@ -170,14 +170,14 @@ Observable: both active Heads have a durably recorded Department Plan. The Counc
 Command:
 
 ```bash
-export WORKER_WORKTREE="$MAESTRO_WORKTREE_ROOT/worker-$(uuid)"
+export WORKER_WORKTREE="$CARNEGIE_WORKTREE_ROOT/worker-$(uuid)"
 node "$TOOLS/write-input.mjs" --kind worker --project "$PROJECT_ID" --item "$ITEM_ID" --repository "$TARGET" --worktree "$WORKER_WORKTREE" --out "$SCENARIO_DIR/worker.json"
-$MAESTRO worker spawn --council-id "$COUNCIL_ID" --department-id engineering --worker-json "$(cat "$SCENARIO_DIR/worker.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker.json.out"
+$CARNEGIE worker spawn --council-id "$COUNCIL_ID" --department-id engineering --worker-json "$(cat "$SCENARIO_DIR/worker.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker.json.out"
 export WORKER_ID="$(json_value "$SCENARIO_DIR/worker.json.out" workerId)"
-$MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-observation.json"
+$CARNEGIE worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-observation.json"
 export ORIGINAL_EXECUTION_REF="$(json_value "$SCENARIO_DIR/worker-observation.json" executionRef)"
 export ORIGINAL_INVOCATION_REF="$(json_value "$SCENARIO_DIR/worker-observation.json" invocationRef)"
-$MAESTRO workers list --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/workers-after-execution.json"
+$CARNEGIE workers list --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/workers-after-execution.json"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -193,9 +193,9 @@ Observable: the worker reads/writes only `$WORKER_WORKTREE`, which was prepared 
 Commands:
 
 ```bash
-$MAESTRO metronome scan --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/metronome-scan.json"
-$MAESTRO metronome-challenges list --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --json > "$SCENARIO_DIR/metronome-challenges.json"
-$MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-observation-after-metronome.json"
+$CARNEGIE metronome scan --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/metronome-scan.json"
+$CARNEGIE metronome-challenges list --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --json > "$SCENARIO_DIR/metronome-challenges.json"
+$CARNEGIE worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-observation-after-metronome.json"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -215,7 +215,7 @@ node "$WORKER_WORKTREE/scripts/inject-unsupported-assertion.mjs"
 set +e; npm test --prefix "$WORKER_WORKTREE" > "$SCENARIO_DIR/unsupported-test.log" 2>&1; export UNSUPPORTED_EXIT=$?; set -e
 node "$WORKER_WORKTREE/scripts/clear-unsupported-assertion.mjs"
 node "$TOOLS/write-input.mjs" --kind review --project "$PROJECT_ID" --evidence-id "$SCENARIO_EVIDENCE_ID" --out "$SCENARIO_DIR/unsupported-review.json"
-$MAESTRO encore review --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --review-json "$(cat "$SCENARIO_DIR/unsupported-review.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/unsupported-review.out"
+$CARNEGIE encore review --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --review-json "$(cat "$SCENARIO_DIR/unsupported-review.json")" --command-id "$(uuid)" --json > "$SCENARIO_DIR/unsupported-review.out"
 test "$UNSUPPORTED_EXIT" -ne 0
 ```
 
@@ -232,14 +232,14 @@ Observable: the injected declared fixture fails, the Encore/Council record says 
 Commands:
 
 ```bash
-$MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-before-quality.json"
+$CARNEGIE worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-before-quality.json"
 case "$(json_value "$SCENARIO_DIR/worker-before-quality.json" status)" in spawned|running|awaiting_repair) ;; *) echo "worker is not messageable" >&2; exit 1;; esac
 set +e; npm test --prefix "$WORKER_WORKTREE" > "$SCENARIO_DIR/seeded-defect.log" 2>&1; export DEFECT_EXIT=$?; set -e
 authority=$(uuid)
-$MAESTRO evidence capture --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --correlation-id "$authority" --command-id "$(uuid)" --kind target-test-failure --media-type text/plain --content-file "$SCENARIO_DIR/seeded-defect.log" --json > "$SCENARIO_DIR/target-test-failure.json"
+$CARNEGIE evidence capture --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --correlation-id "$authority" --command-id "$(uuid)" --kind target-test-failure --media-type text/plain --content-file "$SCENARIO_DIR/seeded-defect.log" --json > "$SCENARIO_DIR/target-test-failure.json"
 export TEST_FAILURE_EVIDENCE_ID="$(json_value "$SCENARIO_DIR/target-test-failure.json" evidenceId)"
 node "$TOOLS/write-input.mjs" --kind certification --project "$PROJECT_ID" --evidence-id "$TEST_FAILURE_EVIDENCE_ID" --verdict failed --out "$SCENARIO_DIR/failed-quality-certification.json"
-set +e; $MAESTRO worker certify --worker-id "$WORKER_ID" --certification-json "$(cat "$SCENARIO_DIR/failed-quality-certification.json")" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/failed-certification.out" 2>&1; export CERTIFICATION_EXIT=$?; set -e
+set +e; $CARNEGIE worker certify --worker-id "$WORKER_ID" --certification-json "$(cat "$SCENARIO_DIR/failed-quality-certification.json")" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/failed-certification.out" 2>&1; export CERTIFICATION_EXIT=$?; set -e
 test "$CERTIFICATION_EXIT" -ne 0
 test "$DEFECT_EXIT" -ne 0
 ```
@@ -257,24 +257,24 @@ Observable: the seeded defect test fails and the pre-repair certification reques
 Commands:
 
 ```bash
-$MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-before-repair.json"
+$CARNEGIE worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-before-repair.json"
 case "$(json_value "$SCENARIO_DIR/worker-before-repair.json" status)" in spawned|running|awaiting_repair) ;; *) echo "worker is not messageable" >&2; exit 1;; esac
-$MAESTRO worker message --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --message "Quality found the seeded defect. Repair the bound target, run its test, and do not push remotely." --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-repair-message.json"
+$CARNEGIE worker message --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --message "Quality found the seeded defect. Repair the bound target, run its test, and do not push remotely." --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-repair-message.json"
 test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" status)" = "running"
 test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" executionRef)" = "$ORIGINAL_EXECUTION_REF"
 test "$(json_value "$SCENARIO_DIR/worker-repair-message.json" invocationRef)" = "$ORIGINAL_INVOCATION_REF"
-$MAESTRO conversation turn --conversation-id "$CONVERSATION_ID" --project-id "$PROJECT_ID" --text "Quality found the seeded defect. Repair only $WORKER_WORKTREE now, run its test, and do not push remotely." --json > "$SCENARIO_DIR/repair-request.json"
-$MAESTRO worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-after-repair.json"
+$CARNEGIE conversation turn --conversation-id "$CONVERSATION_ID" --project-id "$PROJECT_ID" --text "Quality found the seeded defect. Repair only $WORKER_WORKTREE now, run its test, and do not push remotely." --json > "$SCENARIO_DIR/repair-request.json"
+$CARNEGIE worker observe --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-after-repair.json"
 npm test --prefix "$WORKER_WORKTREE" > "$SCENARIO_DIR/passing-test.log" 2>&1
-$MAESTRO evidence capture --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --correlation-id "$(uuid)" --command-id "$(uuid)" --kind target-test-passed --media-type text/plain --content-file "$SCENARIO_DIR/passing-test.log" --json > "$SCENARIO_DIR/target-test-passed.json"
+$CARNEGIE evidence capture --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --correlation-id "$(uuid)" --command-id "$(uuid)" --kind target-test-passed --media-type text/plain --content-file "$SCENARIO_DIR/passing-test.log" --json > "$SCENARIO_DIR/target-test-passed.json"
 export TEST_PASS_EVIDENCE_ID="$(json_value "$SCENARIO_DIR/target-test-passed.json" evidenceId)"
-$MAESTRO git worker-advance --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --message "Integrate the certified disposable-target repair" --evidence-references "[\"$SCENARIO_EVIDENCE_ID\",\"$TEST_PASS_EVIDENCE_ID\"]" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-integration.json"
-$MAESTRO worker accept --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --reason "Native repair and test evidence observed" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-accepted.json"
-$MAESTRO git goal-revision --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/integration-revision.json"
-$MAESTRO git status --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/git-status.json"
+$CARNEGIE git worker-advance --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --message "Integrate the certified disposable-target repair" --evidence-references "[\"$SCENARIO_EVIDENCE_ID\",\"$TEST_PASS_EVIDENCE_ID\"]" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-integration.json"
+$CARNEGIE worker accept --worker-id "$WORKER_ID" --project-id "$PROJECT_ID" --reason "Native repair and test evidence observed" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-accepted.json"
+$CARNEGIE git goal-revision --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/integration-revision.json"
+$CARNEGIE git status --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/git-status.json"
 export INTEGRATED_REVISION="$(json_value "$SCENARIO_DIR/integration-revision.json" commitSha)"
 node "$TOOLS/write-input.mjs" --kind certification --project "$PROJECT_ID" --verdict passed --evidence-id "$TEST_PASS_EVIDENCE_ID" --out "$SCENARIO_DIR/passing-quality-certification.json"
-$MAESTRO worker certify --worker-id "$WORKER_ID" --certification-json "$(cat "$SCENARIO_DIR/passing-quality-certification.json")" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/passing-certification.json"
+$CARNEGIE worker certify --worker-id "$WORKER_ID" --certification-json "$(cat "$SCENARIO_DIR/passing-quality-certification.json")" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/passing-certification.json"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -298,8 +298,8 @@ if kill -0 "$CONTROL_PLANE_PID" 2>/dev/null; then echo "old Control Plane did no
 export CONTROL_PLANE_PID=$!
 until curl -fsS "$CONTROL_PLANE_URL/readyz" >/dev/null; do kill -0 "$CONTROL_PLANE_PID" 2>/dev/null || { cat "$SCENARIO_DIR/control-plane-restart.log"; exit 1; }; done
 ps -p "$CONTROL_PLANE_PID" -o pid= | grep -q "$CONTROL_PLANE_PID"
-$MAESTRO goal get --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/goal-after-restart.json"
-$MAESTRO worker observe --worker-id "$ORIGINAL_WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-after-restart.json"
+$CARNEGIE goal get --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --json > "$SCENARIO_DIR/goal-after-restart.json"
+$CARNEGIE worker observe --worker-id "$ORIGINAL_WORKER_ID" --project-id "$PROJECT_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/worker-after-restart.json"
 ```
 
 CI fake-provider command (the CI path uses its own disposable target):
@@ -337,9 +337,9 @@ Commands:
 
 ```bash
 cat "$WORKER_WORKTREE/fixtures/ambiguous-action.json"
-set +e; $MAESTRO critical-action request --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --command-id "$(uuid)" --json > "$SCENARIO_DIR/ambiguous-action.json.out" 2>&1; export REQUEST_EXIT=$?; set -e
+set +e; $CARNEGIE critical-action request --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --command-id "$(uuid)" --json > "$SCENARIO_DIR/ambiguous-action.json.out" 2>&1; export REQUEST_EXIT=$?; set -e
 test "$REQUEST_EXIT" -ne 0
-set +e; $MAESTRO critical-action approve-and-run --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --expires-at "$(date -u -d '+5 minutes' +%Y-%m-%dT%H:%M:%SZ)" --command-id "$(uuid)" --json > "$SCENARIO_DIR/remote-approval.out"; export REMOTE_APPROVAL_EXIT=$?; set -e
+set +e; $CARNEGIE critical-action approve-and-run --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --expires-at "$(date -u -d '+5 minutes' +%Y-%m-%dT%H:%M:%SZ)" --command-id "$(uuid)" --json > "$SCENARIO_DIR/remote-approval.out"; export REMOTE_APPROVAL_EXIT=$?; set -e
 test "$REMOTE_APPROVAL_EXIT" -ne 0
 test "$(json_value "$SCENARIO_DIR/ambiguous-action.json.out" status)" != "allowed"
 ```
@@ -358,13 +358,13 @@ Select each production capability mode through the authenticated Goal-scoped CLI
 
 ```bash
 export RETAIN_SESSION_ID="$(uuid)"
-$MAESTRO capability select-full-access-mode --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --capability-kind ipython --session-id "$RETAIN_SESSION_ID" --full-access-mode retain_intermediate_approvals --json > "$SCENARIO_DIR/full-access-retain.json"
+$CARNEGIE capability select-full-access-mode --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --capability-kind ipython --session-id "$RETAIN_SESSION_ID" --full-access-mode retain_intermediate_approvals --json > "$SCENARIO_DIR/full-access-retain.json"
 export SKIP_SESSION_ID="$(uuid)"
-$MAESTRO capability select-full-access-mode --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --capability-kind ipython --session-id "$SKIP_SESSION_ID" --full-access-mode skip_intermediate_approvals --json > "$SCENARIO_DIR/full-access-skip.json"
+$CARNEGIE capability select-full-access-mode --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --capability-kind ipython --session-id "$SKIP_SESSION_ID" --full-access-mode skip_intermediate_approvals --json > "$SCENARIO_DIR/full-access-skip.json"
 node -e 'const fs=require("node:fs"); for (const file of process.argv.slice(1)) { const x=JSON.parse(fs.readFileSync(file,"utf8")); if (!["retain_intermediate_approvals","skip_intermediate_approvals"].includes(x.fullAccessMode)) throw new Error("unexpected capability mode"); }' "$SCENARIO_DIR/full-access-retain.json" "$SCENARIO_DIR/full-access-skip.json"
-set +e; $MAESTRO critical-action approve-and-run --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --expires-at "$(date -u -d '+5 minutes' +%Y-%m-%dT%H:%M:%SZ)" --command-id "$(uuid)" --json > "$SCENARIO_DIR/retain-mode-remote.out" 2>&1; export RETAIN_REMOTE_EXIT=$?; set -e
+set +e; $CARNEGIE critical-action approve-and-run --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --expires-at "$(date -u -d '+5 minutes' +%Y-%m-%dT%H:%M:%SZ)" --command-id "$(uuid)" --json > "$SCENARIO_DIR/retain-mode-remote.out" 2>&1; export RETAIN_REMOTE_EXIT=$?; set -e
 test "$RETAIN_REMOTE_EXIT" -ne 0
-set +e; $MAESTRO critical-action approve-and-run --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --expires-at "$(date -u -d '+5 minutes' +%Y-%m-%dT%H:%M:%SZ)" --command-id "$(uuid)" --json > "$SCENARIO_DIR/skip-mode-remote.out" 2>&1; export SKIP_REMOTE_EXIT=$?; set -e
+set +e; $CARNEGIE critical-action approve-and-run --goal-id "$GOAL_ID" --project-id "$PROJECT_ID" --action git.remote.push --target origin/main --version 1 --budget-effect-cents 0 --expires-at "$(date -u -d '+5 minutes' +%Y-%m-%dT%H:%M:%SZ)" --command-id "$(uuid)" --json > "$SCENARIO_DIR/skip-mode-remote.out" 2>&1; export SKIP_REMOTE_EXIT=$?; set -e
 test "$SKIP_REMOTE_EXIT" -ne 0
 ```
 
@@ -383,8 +383,8 @@ This is proven end-to-end, per mode, by `test/release-scenario/critical-action-f
 Command:
 
 ```bash
-$MAESTRO concertmaster-report generate --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/concertmaster-report-generated.json"
-$MAESTRO evidence dump --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --json > "$SCENARIO_DIR/p3-evidence.json"
+$CARNEGIE concertmaster-report generate --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --command-id "$(uuid)" --json > "$SCENARIO_DIR/concertmaster-report-generated.json"
+$CARNEGIE evidence dump --project-id "$PROJECT_ID" --goal-id "$GOAL_ID" --json > "$SCENARIO_DIR/p3-evidence.json"
 node -e 'const fs=require("node:fs"); const x=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (x.bundle.bundleId !== x.report.evidenceBundleId) throw new Error("bundle/report mismatch"); console.log(JSON.stringify({ bundleId:x.bundle.bundleId, certificationCount:x.certifications.certifications.length, success:x.report.success }, null, 2));' "$SCENARIO_DIR/p3-evidence.json"
 ```
 

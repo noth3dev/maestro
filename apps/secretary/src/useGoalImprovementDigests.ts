@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ImprovementDigestList } from "@maestro/api-client";
+import type { ImprovementDigestList } from "@carnegie/api-client";
 import { useConnection } from "./connection.js";
 import { useGoals } from "./goals.js";
 
@@ -15,7 +15,7 @@ export function useGoalImprovementDigests(): { digests: ImprovementDigestList["d
     let cancelled = false;
     setLoading(true);
     setError(undefined);
-    window.maestro.api
+    window.carnegie.api
       .listImprovementDigestsForGoal(selectedGoalId, { projectId: config.projectId })
       .then((result) => {
         if (!cancelled) setDigests(result.digests);

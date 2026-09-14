@@ -3,12 +3,12 @@ import { readFileSync, realpathSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { Pool } from "pg";
-import { AuthorizedEffectExecutor, classifyAction, type ActionRequest } from "@maestro/authority";
-import { createLocalGitPort } from "@maestro/git-adapter";
-import { FileEvidenceStore } from "@maestro/evidence";
-import { classifyHostEffects, type EnvironmentRecord, type ExecutionAdmission, type ExecutionKernelPort, type GitPort } from "@maestro/domain";
-import { createIpPythonSessionManager, createIpPythonTool, createUnavailableIpPythonKernel, reapIpPythonProcessGroup, ToolRegistry, type IpPythonBlockApproval, type IpPythonHostRequest, type IpPythonKernel, type IpPythonSessionBinding, type IpPythonSessionManager, type IpPythonStageBoundary } from "@maestro/agent-runtime";
-import { appendCapabilityJournal, appendIpPythonSessionJournal, assertProjectMembership, consumeCapabilityApprovals, authenticateLocalOperator, bootstrapAuthorityRecord, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, listPermanentOrganization, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, readEnvironment, reconcileIpPythonOrphans, reconcileOnStartup, recordDiscordSignal, recordIpPythonSessionStarted, runMigrations, ensureCapacityInventory, reserveCapacity, releaseCapacityReservation, requeueCapacityReservation, readWorkerBySpawnCommand, type IpPythonSessionJournalEntry } from "@maestro/persistence";
+import { AuthorizedEffectExecutor, classifyAction, type ActionRequest } from "@carnegie/authority";
+import { createLocalGitPort } from "@carnegie/git-adapter";
+import { FileEvidenceStore } from "@carnegie/evidence";
+import { classifyHostEffects, type EnvironmentRecord, type ExecutionAdmission, type ExecutionKernelPort, type GitPort } from "@carnegie/domain";
+import { createIpPythonSessionManager, createIpPythonTool, createUnavailableIpPythonKernel, reapIpPythonProcessGroup, ToolRegistry, type IpPythonBlockApproval, type IpPythonHostRequest, type IpPythonKernel, type IpPythonSessionBinding, type IpPythonSessionManager, type IpPythonStageBoundary } from "@carnegie/agent-runtime";
+import { appendCapabilityJournal, appendIpPythonSessionJournal, assertProjectMembership, consumeCapabilityApprovals, authenticateLocalOperator, bootstrapAuthorityRecord, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, listPermanentOrganization, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, readEnvironment, reconcileIpPythonOrphans, reconcileOnStartup, recordDiscordSignal, recordIpPythonSessionStarted, runMigrations, ensureCapacityInventory, reserveCapacity, releaseCapacityReservation, requeueCapacityReservation, readWorkerBySpawnCommand, type IpPythonSessionJournalEntry } from "@carnegie/persistence";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
 import { createCapabilityApprovalService } from "./capability-approval-service.js";
@@ -80,7 +80,7 @@ function createWorkerIpPythonAuthority(
   pool: Pool,
   binding: { readonly operatorId: string; readonly projectId: string; readonly goalId: string; readonly commandId: string; readonly authorityPolicyVersion: number; readonly budgetEffectCents: number; readonly controlEpoch: string },
   composition: WorkerIpPythonComposition,
-): { execute(request: ActionRequest, effect: () => Promise<unknown>): Promise<import("@maestro/authority").AuthorityDecision> } {
+): { execute(request: ActionRequest, effect: () => Promise<unknown>): Promise<import("@carnegie/authority").AuthorityDecision> } {
   return {
     async execute(request, effect) {
       const environmentActor = composition.workerId !== undefined && request.actorId === composition.workerId
@@ -112,7 +112,7 @@ function createWorkerWorktreeProvisioningAuthority(
   pool: Pool,
   binding: { readonly workspaceRoot: string; readonly operatorId: string; readonly projectId: string; readonly goalId: string; readonly commandId: string; readonly authorityPolicyVersion: number; readonly budgetEffectCents: number; readonly controlEpoch: string },
   composition: Pick<WorkerIpPythonComposition, "workerId" | "ownerId" | "fencingToken" | "repositoryPath">,
-): { execute(request: ActionRequest, effect: () => Promise<unknown>): Promise<import("@maestro/authority").AuthorityDecision> } {
+): { execute(request: ActionRequest, effect: () => Promise<unknown>): Promise<import("@carnegie/authority").AuthorityDecision> } {
   const provisioningActions = new Set(["git.local.branch.create", "git.local.branch.remove", "git.local.worktree.create", "git.local.worktree.remove", "git.local.revision.read", "filesystem.directory.create"]);
   return {
     async execute(request, effect) {
@@ -720,7 +720,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     || config.capacitySpendCentsFloor !== undefined
     || config.capacityWorkerSlotsFloor !== undefined;
   const capacity = capacityEnabled ? {
-    reserve: async (demand: import("@maestro/domain").CapacityDemand) => {
+    reserve: async (demand: import("@carnegie/domain").CapacityDemand) => {
       await ensureCapacityInventory(pool, { projectId: demand.projectId, providerRate: config.capacityProviderRate ?? 2_147_483_647, spendCents: config.capacitySpendCents ?? 2_147_483_647, workerSlots: config.maxConcurrentWorkersPerProject ?? 2_147_483_647, ...(config.capacityProviderRateFloor === undefined ? {} : { providerRateFloor: config.capacityProviderRateFloor }), ...(config.capacitySpendCentsFloor === undefined ? {} : { spendCentsFloor: config.capacitySpendCentsFloor }), ...(config.capacityWorkerSlotsFloor === undefined ? {} : { workerSlotsFloor: config.capacityWorkerSlotsFloor }) });
       const admission = await reserveCapacity(pool, demand);
       if (admission.kind === "reserved") return { kind: "reserved" as const, reservationId: admission.reservation.reservationId };
@@ -764,8 +764,8 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     // gatewayOperatorId rather than the calling end-user's own operator ID
     // (apps/control-plane/src/native-execution-kernel.ts). Provider
     // credentials and managed logins are shared per Control-Plane process,
-    // not per individual Maestro operator; the real end-user's identity and
-    // authorization remain enforced entirely by Maestro's own persistence
+    // not per individual Carnegie operator; the real end-user's identity and
+    // authorization remain enforced entirely by Carnegie's own persistence
     // layer (accountLoginStore, project membership, roles), which still
     // receives and scopes by the real operatorId untouched. Forwarding the
     // real end-user operatorId to the gateway's own operatorId-equality

@@ -1,10 +1,10 @@
-import type { EncoreCouncilResult, EncoreReviewInput } from "@maestro/contracts";
-import type { ExecutionAdmission, ExecutionKernelPort } from "@maestro/domain";
-import { EncoreCouncilError, runEncoreCouncilReview } from "@maestro/persistence";
+import type { EncoreCouncilResult, EncoreReviewInput } from "@carnegie/contracts";
+import type { ExecutionAdmission, ExecutionKernelPort } from "@carnegie/domain";
+import { EncoreCouncilError, runEncoreCouncilReview } from "@carnegie/persistence";
 import type { Pool } from "pg";
 
 export interface EncoreService { review(goalId: string, input: EncoreReviewInput, commandId: string): Promise<EncoreCouncilResult>; }
-export interface EncoreServiceDependencies { pool: Pool; kernel: ExecutionKernelPort; withGoalLease: <T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>; createAdmission?: (input: { goalId: string; projectId: string; commandId: string; reviewerIndex: number; fencingToken: string }) => ExecutionAdmission; }
+export interface EncoreServiceDependencies { pool: Pool; kernel: ExecutionKernelPort; withGoalLease: <T>(goalId: string, operation: (proof: import("@carnegie/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>; createAdmission?: (input: { goalId: string; projectId: string; commandId: string; reviewerIndex: number; fencingToken: string }) => ExecutionAdmission; }
 export class EncoreProjectMismatchError extends Error { constructor() { super("Encore review project does not match the Goal project"); this.name = "EncoreProjectMismatchError"; } }
 export function createEncoreService(deps: EncoreServiceDependencies): EncoreService {
   return { async review(goalId, input, commandId) {

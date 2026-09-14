@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ApiClient, ProjectionReadModel } from "@maestro/api-client";
+import type { ApiClient, ProjectionReadModel } from "@carnegie/api-client";
 
 interface ProjectionState {
   projection: ProjectionReadModel | undefined;

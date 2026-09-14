@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { ProviderRegistry, type ModelProviderPort, type ProviderPlugin } from "@maestro/agent-runtime";
+import { ProviderRegistry, type ModelProviderPort, type ProviderPlugin } from "@carnegie/agent-runtime";
 import { InMemoryCredentialStore } from "./credential-store.js";
 import { createModelGateway } from "./gateway.js";
-import { CodexAppServerError } from "@maestro/model-provider-openai";
+import { CodexAppServerError } from "@carnegie/model-provider-openai";
 import { buildModelGatewayServer } from "./rpc.js";
 
 function fakePlugin(): ProviderPlugin {

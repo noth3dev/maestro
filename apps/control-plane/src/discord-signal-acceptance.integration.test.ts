@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { deriveDiscordIncidentFingerprint, signDiscordSignal, type DiscordSignal } from "@maestro/domain";
-import { applyAllMigrations, bootstrapLocalOperator } from "@maestro/persistence";
+import { deriveDiscordIncidentFingerprint, signDiscordSignal, type DiscordSignal } from "@carnegie/domain";
+import { applyAllMigrations, bootstrapLocalOperator } from "@carnegie/persistence";
 import { createControlPlane } from "./main.js";
 import type { MaestroConfig } from "./config.js";
 

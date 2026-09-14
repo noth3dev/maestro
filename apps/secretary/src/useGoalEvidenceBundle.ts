@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { EvidenceBundleRead } from "@maestro/api-client";
+import type { EvidenceBundleRead } from "@carnegie/api-client";
 import { useConnection } from "./connection.js";
 import { useGoals } from "./goals.js";
 
@@ -13,7 +13,7 @@ export function useGoalEvidenceBundle(): { evidenceBundle: EvidenceBundleRead | 
     if (config === undefined || selectedGoalId === undefined) return;
     let cancelled = false;
     setError(undefined);
-    window.maestro.api.getEvidenceBundle(selectedGoalId, { projectId: config.projectId })
+    window.carnegie.api.getEvidenceBundle(selectedGoalId, { projectId: config.projectId })
       .then((bundle) => { if (!cancelled) setEvidenceBundle(bundle); })
       .catch((cause: unknown) => {
         if (cancelled) return;

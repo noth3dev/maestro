@@ -34,7 +34,7 @@ describe("parseConfig", () => {
 
   it("requires an explicit provider-qualified native model", () => {
     expect(parseConfig(required).nativeModelRef).toBeUndefined();
-    expect(() => parseConfig({ ...required, MAESTRO_NATIVE_MODEL: "gpt-5" })).toThrow("Invalid Maestro configuration");
+    expect(() => parseConfig({ ...required, MAESTRO_NATIVE_MODEL: "gpt-5" })).toThrow("Invalid Carnegie configuration");
   });
 
   it("derives pin mode only from an explicit native model and rejects contradictory mode", () => {
@@ -64,11 +64,11 @@ describe("parseConfig", () => {
   });
 
   it("rejects a non-positive reconciler leader-lease duration", () => {
-    expect(() => parseConfig({ ...required, MAESTRO_RECONCILER_LEASE_MS: "0" })).toThrow("Invalid Maestro configuration");
+    expect(() => parseConfig({ ...required, MAESTRO_RECONCILER_LEASE_MS: "0" })).toThrow("Invalid Carnegie configuration");
   });
 
   it("fails before startup when required configuration is missing", () => {
-    expect(() => parseConfig({})).toThrow("Invalid Maestro configuration");
+    expect(() => parseConfig({})).toThrow("Invalid Carnegie configuration");
   });
 
   it("rejects a non-loopback host by default", () => {

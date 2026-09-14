@@ -1,4 +1,4 @@
-import type { ApiClient, GoalEvent, GoalResult } from "@maestro/api-client";
+import type { ApiClient, GoalEvent, GoalResult } from "@carnegie/api-client";
 
 export interface GoalPageData {
   goal: GoalResult;

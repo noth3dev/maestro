@@ -1,5 +1,5 @@
 import { createPublicKey, sign, verify, type KeyLike } from "node:crypto";
-import { assertValidDeviceGrantEnvelope, type DeviceGrantEnvelope } from "@maestro/domain";
+import { assertValidDeviceGrantEnvelope, type DeviceGrantEnvelope } from "@carnegie/domain";
 
 export type UnsignedDeviceGrantEnvelope = Omit<DeviceGrantEnvelope, "signature">;
 

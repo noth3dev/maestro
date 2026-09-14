@@ -91,7 +91,7 @@ const schema = z.object({
 export function parseConfig(env: Record<string, string | undefined>): MaestroConfig {
   const parsed = schema.safeParse(env);
   if (!parsed.success) {
-    throw new Error("Invalid Maestro configuration", { cause: parsed.error });
+    throw new Error("Invalid Carnegie configuration", { cause: parsed.error });
   }
 
   const {

@@ -5,7 +5,7 @@ import type {
   ExecutionKernelPort,
   InvocationRef,
   ModelIdentity,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import type { Pool } from "pg";
 
 export type NativeExecutionAdmissionKind = "conversation" | "worker" | "head" | "semantic_review" | "encore_reviewer" | "team_lead_helper";

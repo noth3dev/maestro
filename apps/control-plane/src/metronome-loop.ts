@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { isTerminalGoalState, METRONOME_ACTOR_ID, type ExecutionKernelPort, type GoalState } from "@maestro/domain";
+import { isTerminalGoalState, METRONOME_ACTOR_ID, type ExecutionKernelPort, type GoalState } from "@carnegie/domain";
 import {
   observeGoalForMetronome,
   scanGoalForMetronomeFindings,
@@ -9,7 +9,7 @@ import {
   type MetronomeApprovalObservation,
   type MetronomeFindingRecord,
   type MetronomeGoalObservation,
-} from "@maestro/persistence";
+} from "@carnegie/persistence";
 
 export interface MetronomeLoopScheduler {
   setInterval(callback: () => void, milliseconds: number): unknown;

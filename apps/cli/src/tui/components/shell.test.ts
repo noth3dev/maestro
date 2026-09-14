@@ -15,11 +15,11 @@ const state: TuiShellState = {
 // eslint-disable-next-line no-control-regex
 const stripAnsi = (value: string): string => value.replace(/\u001b\[[0-9;]*m/g, "");
 
-describe("Maestro TUI shell", () => {
-  it("uses Maestro branding only on the first splash frame", () => {
+describe("Carnegie TUI shell", () => {
+  it("uses Carnegie branding only on the first splash frame", () => {
     const output = renderShell(state, 120, 30, { showSplash: true }).join("\n");
-    expect(output).toContain("MAESTRO");
-    expect(renderShell(state, 120, 30).join("\n")).not.toContain("MAESTRO");
+    expect(output).toContain("CARNEGIE");
+    expect(renderShell(state, 120, 30).join("\n")).not.toContain("CARNEGIE");
     expect(output).not.toContain("Secretary");
   });
 
@@ -109,7 +109,7 @@ describe("Maestro TUI shell", () => {
 
   it("renders the first-frame splash as a bounded region", () => {
     const splash = renderTuiLayout(state, 120, 30, { showSplash: true }).splash;
-    expect(splash[0]).toContain("MAESTRO");
+    expect(splash[0]).toContain("CARNEGIE");
     expect(splash).toHaveLength(3);
   });
 

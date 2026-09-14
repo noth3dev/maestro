@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { improvementCandidateScenarioSuiteHash, type ImprovementCandidateInput } from "@maestro/domain";
-import { applyAllMigrations, bootstrapLocalOperator, bootstrapPermanentOrganization, recordImprovementDigest, recordImprovementCandidate, transitionImprovementCandidate, acquireGoalLease, type GoalLeaseProof } from "@maestro/persistence";
+import { improvementCandidateScenarioSuiteHash, type ImprovementCandidateInput } from "@carnegie/domain";
+import { applyAllMigrations, bootstrapLocalOperator, bootstrapPermanentOrganization, recordImprovementDigest, recordImprovementCandidate, transitionImprovementCandidate, acquireGoalLease, type GoalLeaseProof } from "@carnegie/persistence";
 import { grantProjectMembership, grantProjectRole } from "../../../packages/persistence/src/project-membership.js";
 import { createImprovementCouncilService, ImprovementCouncilError } from "./improvement-council-service.js";
-import type { ExecutionAdmission, ExecutionKernelPort } from "@maestro/domain";
+import type { ExecutionAdmission, ExecutionKernelPort } from "@carnegie/domain";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL ?? "postgresql://127.0.0.1/maestro_test";
 const hasDatabase = Boolean(process.env.MAESTRO_TEST_DATABASE_URL);

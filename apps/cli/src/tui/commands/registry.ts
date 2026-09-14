@@ -257,18 +257,18 @@ const definitions: CommandDefinition[] = (
     ],
     [
       "mode",
-      "Maestro or Flashmob execution profile",
+      "Carnegie or Flashmob execution profile",
       [
         ["list", "read"],
         ["flashmob", "write"],
-        ["maestro", "write"],
+        ["carnegie", "write"],
         ["standard", "write"],
       ],
     ],
     ["flashmob", "toggle the blue Flashmob accent", [["toggle", "write"]]],
     [
       "conversation",
-      "native Maestro conversation",
+      "native Carnegie conversation",
       [
         ["create", "write"],
         ["turn", "write"],

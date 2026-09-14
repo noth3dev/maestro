@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ProviderRegistry } from "@maestro/agent-runtime";
-import type { ModelProviderPort, ProviderPlugin } from "@maestro/agent-runtime";
+import { ProviderRegistry } from "@carnegie/agent-runtime";
+import type { ModelProviderPort, ProviderPlugin } from "@carnegie/agent-runtime";
 import { InMemoryCredentialStore } from "./credential-store.js";
 import { createModelGateway } from "./gateway.js";
 

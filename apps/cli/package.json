@@ -1,1 +1,1 @@
-{"name":"@maestro/cli","private":true,"type":"module","bin":{"maestro":"./dist/main.js"},"dependencies":{"@earendil-works/pi-tui":"0.85.1","@maestro/api-client":"*","@maestro/contracts":"*","@napi-rs/keyring":"^2.0.0"},"scripts":{"start":"node ./dist/main.js"}}
+{"name":"@carnegie/cli","private":true,"type":"module","bin":{"carnegie":"./dist/main.js"},"dependencies":{"@earendil-works/pi-tui":"0.85.1","@carnegie/api-client":"*","@carnegie/contracts":"*","@napi-rs/keyring":"^2.0.0"},"scripts":{"start":"node ./dist/main.js"}}

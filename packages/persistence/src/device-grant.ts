@@ -8,7 +8,7 @@ import {
   type DeviceGrant,
   type DeviceGrantScope,
   type DeviceGrantState,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, type CouncilActorContext } from "./council.js";

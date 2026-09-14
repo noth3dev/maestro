@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { ProviderRegistry, type ProviderReference } from "@maestro/agent-runtime";
-import type { GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialBinding, GatewayCredentialRevokeRequest, GatewayModelListRequest, GatewayTurnRequest, ModelCatalogEntry, ModelGatewayPort, ModelProviderPort, ProviderCancellationOutcome, ProviderPlugin } from "@maestro/agent-runtime";
+import { ProviderRegistry, type ProviderReference } from "@carnegie/agent-runtime";
+import type { GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialBinding, GatewayCredentialRevokeRequest, GatewayModelListRequest, GatewayTurnRequest, ModelCatalogEntry, ModelGatewayPort, ModelProviderPort, ProviderCancellationOutcome, ProviderPlugin } from "@carnegie/agent-runtime";
 import type { CredentialStore } from "./credential-store.js";
-import type { CodexAppServerClient } from "@maestro/model-provider-openai";
+import type { CodexAppServerClient } from "@carnegie/model-provider-openai";
 
 export interface GatewayOptions {
   readonly registry: ProviderRegistry;
@@ -25,8 +25,8 @@ interface InternalBinding {
 export class ModelGateway implements ModelGatewayPort {
   private readonly bindings = new Map<string, InternalBinding>();
   private readonly loginOperators = new Map<string, string>();
-  private readonly loginRequests = new Map<string, import("@maestro/agent-runtime").GatewayAccountLoginStartResult>();
-  private readonly loginRequestFlights = new Map<string, Promise<import("@maestro/agent-runtime").GatewayAccountLoginStartResult>>();
+  private readonly loginRequests = new Map<string, import("@carnegie/agent-runtime").GatewayAccountLoginStartResult>();
+  private readonly loginRequestFlights = new Map<string, Promise<import("@carnegie/agent-runtime").GatewayAccountLoginStartResult>>();
   private closed = false;
 
   constructor(private readonly options: GatewayOptions) {}
@@ -40,7 +40,7 @@ export class ModelGateway implements ModelGatewayPort {
     return (await this.options.registry.listModels()).filter((model) => providers.has(model.identity.provider));
   }
 
-  async startAccountLogin(request: import("@maestro/agent-runtime").GatewayAccountLoginStartRequest): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStartResult> {
+  async startAccountLogin(request: import("@carnegie/agent-runtime").GatewayAccountLoginStartRequest): Promise<import("@carnegie/agent-runtime").GatewayAccountLoginStartResult> {
     if (this.closed) throw new Error("model gateway is closed");
     await this.options.ready;
     if (request.operatorId !== this.options.operatorId) throw new Error("credential operator context mismatch");
@@ -63,7 +63,7 @@ export class ModelGateway implements ModelGatewayPort {
     }
   }
 
-  async accountLoginStatus(request: import("@maestro/agent-runtime").GatewayAccountLoginStatusRequest): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStatusResult> {
+  async accountLoginStatus(request: import("@carnegie/agent-runtime").GatewayAccountLoginStatusRequest): Promise<import("@carnegie/agent-runtime").GatewayAccountLoginStatusResult> {
     if (this.closed) throw new Error("model gateway is closed");
     await this.options.ready;
     this.assertLoginOperator(request);
@@ -80,7 +80,7 @@ export class ModelGateway implements ModelGatewayPort {
     return { providerId: "openai-codex", loginId: request.loginId, state: status.state, ...(status.state === "failed" ? { message: status.message } : {}) };
   }
 
-  async cancelAccountLogin(request: import("@maestro/agent-runtime").GatewayAccountLoginStatusRequest): Promise<void> {
+  async cancelAccountLogin(request: import("@carnegie/agent-runtime").GatewayAccountLoginStatusRequest): Promise<void> {
     if (this.closed) throw new Error("model gateway is closed");
     await this.options.ready;
     this.assertLoginOperator(request);
@@ -93,7 +93,7 @@ export class ModelGateway implements ModelGatewayPort {
     if (this.loginOperators.get(request.loginId) !== request.operatorId) throw new Error("account login session is unknown");
   }
 
-  async logoutAccount(request: import("@maestro/agent-runtime").GatewayAccountLogoutRequest): Promise<void> {
+  async logoutAccount(request: import("@carnegie/agent-runtime").GatewayAccountLogoutRequest): Promise<void> {
     if (this.closed) throw new Error("model gateway is closed");
     await this.options.ready;
     if (request.operatorId !== this.options.operatorId) throw new Error("credential operator context mismatch");

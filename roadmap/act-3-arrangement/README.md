@@ -2,14 +2,14 @@
 
 Act 3 begins only after Act 2 is certified (Flashmob path proven under the same invariants).
 
-Its purpose is to let Maestro continuously adapt to a specific Conductor and improve its own bounded surface — but only through a certified evolutionary unit called an **Arrangement**.
+Its purpose is to let Carnegie continuously adapt to a specific Conductor and improve its own bounded surface — but only through a certified evolutionary unit called an **Arrangement**.
 
 Self-modification is never an ad-hoc edit.
 Every accepted change is a content-addressed, causally tracked, independently certified **Arrangement**.
 
 ### Core Thesis
 
-> Maestro mutates only by creating, certifying, applying, crossing, or retiring **Arrangements**.
+> Carnegie mutates only by creating, certifying, applying, crossing, or retiring **Arrangements**.
 > An Arrangement is the sole legal unit of system change and of user-specific adaptation.
 
 Improvement is reified as a cryptographically fixed, lineage-aware, dual-axis object under Separation of Powers.
@@ -153,7 +153,7 @@ The child is a new content-addressed object and requires full certification; lin
 
 **Meta-Arrangement**
 An Arrangement whose `capabilityDelta` improves the Arrangement lifecycle itself
-(e.g., faster provider integration, lower UI-edit regression rate, better veto precision, better Flashmob↔Maestro promotion accuracy).
+(e.g., faster provider integration, lower UI-edit regression rate, better veto precision, better Flashmob↔Carnegie promotion accuracy).
 Meta-Arrangements follow the identical certification path and cannot relax Act 1 invariants.
 
 ---

@@ -28,7 +28,7 @@ lines.on("line", (line) => {
   if (method === "turn/start") {
     send({ id, result: { turn: { id: "turn-1", status: "inProgress" } } });
     // Reflect whatever this real child process actually received in its own
-    // environment. If Maestro's env redaction genuinely worked, this probe
+    // environment. If Carnegie's env redaction genuinely worked, this probe
     // variable never reaches this process and the fixture reports REDACTED.
     const probe = process.env.OPENAI_API_KEY ?? "REDACTED";
     setTimeout(() => {

@@ -1,22 +1,22 @@
-# Maestro Native Agent Backend Implementation Plan
+# Carnegie Native Agent Backend Implementation Plan
 
 > **Status (2026-09-08): COMPLETED MIGRATION RECORD.** The native backend and Prime removal tasks described here have landed. The checkboxes and pre-cutover task wording below are retained as design provenance; they do not override `roadmap/act-1-foundation/active/operations/task_plan.md` or current source evidence. Use this document for contracts and rationale, not for selecting the next task.
 >
 > **Historical implementation workflow:** Execute this plan task by task and keep the checkboxes updated. Use the repository's current agent workflow.
 >
-> **Current status (2026-09-08):** The native runtime cutover is implemented. Prime Agent, `@maestro/prime-adapter`, and their configuration/dependency surfaces are removed. Conversation and Worker paths use the authenticated Model Gateway, with durable account-login hardening and real PostgreSQL/process acceptance. This document remains the migration design record; the remaining product gate is the exact production host-tool contract, not a Prime compatibility task.
+> **Current status (2026-09-08):** The native runtime cutover is implemented. Prime Agent, `@carnegie/prime-adapter`, and their configuration/dependency surfaces are removed. Conversation and Worker paths use the authenticated Model Gateway, with durable account-login hardening and real PostgreSQL/process acceptance. This document remains the migration design record; the remaining product gate is the exact production host-tool contract, not a Prime compatibility task.
 
-**Goal:** Remove Prime Agent from Maestro and replace it with a native provider-pluggable agent backend that supports natural-language control, common Tool/child-agent execution, OpenAI/Anthropic API-key authentication, and OpenAI subscription access only through the documented Codex app-server boundary. Claude Pro/Max subscription OAuth is blocked without written Anthropic approval.
+**Goal:** Remove Prime Agent from Carnegie and replace it with a native provider-pluggable agent backend that supports natural-language control, common Tool/child-agent execution, OpenAI/Anthropic API-key authentication, and OpenAI subscription access only through the documented Codex app-server boundary. Claude Pro/Max subscription OAuth is blocked without written Anthropic approval.
 
 **Architecture:** `MaestroAgentRuntime` owns the agent loop, sessions, child invocations, Tool dispatch, cancellation, observations, and Control Plane boundaries. It uses an authenticated narrow `ModelGatewayPort` RPC. A separate `apps/model-gateway` process owns `ModelProviderPort`, the allowlisted `ProviderRegistry`, provider SDKs, API keys, OAuth refresh, and Codex app-server pairing. `ExecutionKernelPort` remains the Control Plane boundary, and Prime Agent is removed rather than retained as a fallback.
 
-**Tech Stack:** TypeScript, Node.js, Fastify 5, Zod 4, PostgreSQL/`pg`, native `fetch`/`AbortController`, OpenAI Responses API, Anthropic Messages API, Vitest, existing `@maestro/api-client` and `@maestro/contracts` packages.
+**Tech Stack:** TypeScript, Node.js, Fastify 5, Zod 4, PostgreSQL/`pg`, native `fetch`/`AbortController`, OpenAI Responses API, Anthropic Messages API, Vitest, existing `@carnegie/api-client` and `@carnegie/contracts` packages.
 
 **Spec:** `roadmap/act-1-foundation/specs/2026-09-07-maestro-native-agent-backend-design.md`
 
 ## Global Constraints
 
-- No production import, package dependency, lockfile entry, or config field may require `prime-agent` or `@maestro/prime-adapter` after the removal task.
+- No production import, package dependency, lockfile entry, or config field may require `prime-agent` or `@carnegie/prime-adapter` after the removal task.
 - Natural-language control remains available through the native runtime; it is not proposal-only and does not disable when a model provider changes.
 - Model providers receive only normalized messages/tool schemas; they never receive PostgreSQL, persistence, shell, filesystem, MCP, or child-agent authority.
 - Every model tool call is validated host-side against a strict schema, project/Goal binding, Mission Bundle capability, lease/fencing state, idempotency, and durable approval requirements before execution.
@@ -48,9 +48,9 @@ The following contract details are binding and override any earlier abbreviated 
 10. Provider adapters are external data sinks. Enforce typed outbound data class/retention/training/region policy, redact secrets, bound context/tool output, and reject incompatible providers. Subscription quota/extra-usage warnings are explicit; provider refusal stops execution.
 11. Durable quotas cap requests, concurrent turns, provider turns, tool calls, child calls, tokens/bytes, wall time, and known cost. Retries reuse the same admission identity. Stable API errors distinguish provider unavailable/auth, model not allowed, capability unavailable, rate limited, turn conflict, invocation unknown, and external effect unknown; none map to database outage.
 12. Skills, paths, environment, authority, and data fields cannot be silently ignored. The native runtime either enforces them through host registries or rejects the request as unsupported.
-13. The provider SDK/credential boundary is a separate `apps/model-gateway` process. Control Plane owns `ModelGatewayPort` client/RPC only; the gateway owns `ModelProviderPort`, provider SDKs, API keys, OAuth refresh, and app-server pairing. The RPC is authenticated, narrow, and cannot invoke Maestro tools or persistence.
+13. The provider SDK/credential boundary is a separate `apps/model-gateway` process. Control Plane owns `ModelGatewayPort` client/RPC only; the gateway owns `ModelProviderPort`, provider SDKs, API keys, OAuth refresh, and app-server pairing. The RPC is authenticated, narrow, and cannot invoke Carnegie tools or persistence.
 14. `SpawnRequest` carries immutable host-created `InvocationContext`, `CapabilityGrant`, canonical `modelPolicy`, and `idempotencyKey`; a closure/default config is not a substitute. `CapabilityGrant` contains parent ID, allowed tools/skills/models/path/data classes, and decrementing model/tool/child/token/time/retry counters. Child admission atomically decrements the parent counter and persists the child grant.
-15. Every normalized tool call has an idempotency key derived from Maestro invocation + provider turn + tool-call ID. Persist the claim and canonical argument hash before effect. A replay with identical arguments returns the recorded result; a reused ID with different arguments is rejected.
+15. Every normalized tool call has an idempotency key derived from Carnegie invocation + provider turn + tool-call ID. Persist the claim and canonical argument hash before effect. A replay with identical arguments returns the recorded result; a reused ID with different arguments is rejected.
 16. Prime removal includes workspace references, transitive lockfile packages, `primeAgentVersion`, README/.env/security/setup docs, and Prime-specific live tests. The final gate is a no-Prime dependency/source scan plus fresh build/check evidence.
 
 ## File Map
@@ -118,7 +118,7 @@ The following contract details are binding and override any earlier abbreviated 
 - Test: `packages/agent-runtime/src/model-provider.test.ts`
 
 **Interfaces:**
-- Consumes: `@maestro/domain` model identity and execution references.
+- Consumes: `@carnegie/domain` model identity and execution references.
 - Produces: `ModelProviderPort`, `ModelProviderPlugin`, `ProviderCapability`, `ProviderDataPolicy`, `ModelCatalogEntry`, `ModelTurnRequest`, `ModelTurnResult`, `ProviderCancellationOutcome`, normalized role/tool-result messages, and typed `ModelToolCall` arguments for Tasks 2–7. Credential values are gateway-only and are not a Task 1 runtime contract.
 
 - [ ] **Step 1: Write failing contract tests**
@@ -387,7 +387,7 @@ it.each([
 });
 ```
 
-Also cover API-key resolution, normalized multi-call/malformed tool arguments, Codex app-server managed-login pairing/event/error contract, single-use nonce/operator/provider/session/host/port binding exposed by the gateway, account binding, quota/extra-usage diagnostics, and redaction of provider response bodies. Explicitly test that `anthropic-oauth` is unavailable without written provider approval and that no Maestro code requests or handles broad Prime OAuth scopes.
+Also cover API-key resolution, normalized multi-call/malformed tool arguments, Codex app-server managed-login pairing/event/error contract, single-use nonce/operator/provider/session/host/port binding exposed by the gateway, account binding, quota/extra-usage diagnostics, and redaction of provider response bodies. Explicitly test that `anthropic-oauth` is unavailable without written provider approval and that no Carnegie code requests or handles broad Prime OAuth scopes.
 The shared vectors also require ordered text deltas, multi-call correlation, proposed/validated/executing/completed/rejected events, usage, typed auth/quota/transport errors, exactly one terminal event, rejection of duplicate/missing terminal events, malformed deltas, call-ID reuse, cancellation races, secret-bearing error bodies, and provider/account identity mismatch.
 
 - [ ] **Step 2: Run provider tests and verify red**
@@ -411,9 +411,9 @@ Do not retry a non-idempotent Tool call after provider admission unless the same
 
 - [ ] **Step 4: Implement gated subscription integrations**
 
-Implement `openai-codex` only as an adapter around the documented Codex app-server managed-login boundary. The app-server owns OAuth refresh and subscription transport; Maestro receives normalized text/tool/events and an opaque account reference over an authenticated least-privilege local channel. Disable or reject app-server built-in shell/file/MCP/approval tools so only Maestro ToolRegistry tools are exposed.
+Implement `openai-codex` only as an adapter around the documented Codex app-server managed-login boundary. The app-server owns OAuth refresh and subscription transport; Carnegie receives normalized text/tool/events and an opaque account reference over an authenticated least-privilege local channel. Disable or reject app-server built-in shell/file/MCP/approval tools so only Carnegie ToolRegistry tools are exposed.
 
-Do not implement `anthropic-oauth` by copying Prime Agent. Register it as unavailable with a stable provider-policy error until written Anthropic approval and a supported third-party protocol are recorded. Never request `org:create_api_key`, MCP-server, or file-upload scopes for Maestro.
+Do not implement `anthropic-oauth` by copying Prime Agent. Register it as unavailable with a stable provider-policy error until written Anthropic approval and a supported third-party protocol are recorded. Never request `org:create_api_key`, MCP-server, or file-upload scopes for Carnegie.
 
 For every auth mode, redact tokens and callback URLs, enforce account/operator binding, and keep refresh state in the provider gateway/keyring.
 
@@ -502,7 +502,7 @@ Each tool has a stable name/version, strict Zod input/output schemas, read/mutat
 
 - [ ] **Step 5: Implement root/child turn loop**
 
-The runtime creates opaque Maestro execution/invocation refs, sends normalized turns to the selected provider, and enforces `TurnLimits` before every provider turn, tool call, and child admission. Each tool call derives an idempotency key from invocation/turn/call ID, persists an argument hash and claim before effect, returns the recorded result on identical replay, and rejects a different replay. It creates child sessions with narrowed decrementing grants, normalizes status/answer/usage/tool activity, and records unknown on ambiguous provider failure. Child IDs never cross the authority boundary.
+The runtime creates opaque Carnegie execution/invocation refs, sends normalized turns to the selected provider, and enforces `TurnLimits` before every provider turn, tool call, and child admission. Each tool call derives an idempotency key from invocation/turn/call ID, persists an argument hash and claim before effect, returns the recorded result on identical replay, and rejects a different replay. It creates child sessions with narrowed decrementing grants, normalizes status/answer/usage/tool activity, and records unknown on ambiguous provider failure. Child IDs never cross the authority boundary.
 
 - [ ] **Step 6: Implement cancellation, release, and close**
 
@@ -582,7 +582,7 @@ Replace `createPrimeExecutionKernel()` in `apps/control-plane/src/main.ts` with 
 
 - [ ] **Step 5: Remove Prime package/dependency and migrate tests**
 
-Delete the Prime adapter package and all Prime live tests. Convert useful adapter tests into native runtime/provider contract tests. Regenerate lockfile with `npm install`/`npm ci` according to repository practice, then grep source/package/lockfile for `prime-agent`, `@maestro/prime-adapter`, and `primeAgentVersion`.
+Delete the Prime adapter package and all Prime live tests. Convert useful adapter tests into native runtime/provider contract tests. Regenerate lockfile with `npm install`/`npm ci` according to repository practice, then grep source/package/lockfile for `prime-agent`, `@carnegie/prime-adapter`, and `primeAgentVersion`.
 
 - [ ] **Step 6: Run focused tests, build, and dependency audit**
 
@@ -591,7 +591,7 @@ Run:
 ```bash
 npm test -- apps/control-plane/src/config.test.ts apps/control-plane/src/main.integration.test.ts packages/persistence/src/worker.integration.test.ts
 npm run build
-grep -RIn "prime-agent\|@maestro/prime-adapter\|primeAgentVersion\|built on Prime Agent" apps packages README.md .env.example SECURITY.md package.json tsconfig.json package-lock.json --exclude-dir=dist --exclude-dir=node_modules
+grep -RIn "prime-agent\|@carnegie/prime-adapter\|primeAgentVersion\|built on Prime Agent" apps packages README.md .env.example SECURITY.md package.json tsconfig.json package-lock.json --exclude-dir=dist --exclude-dir=node_modules
 ```
 
 Expected: focused tests and build pass; grep returns no production/reference occurrence except historical documentation explicitly marked as history.

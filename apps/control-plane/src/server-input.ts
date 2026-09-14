@@ -1,4 +1,4 @@
-import type { OperatorContext } from "@maestro/persistence";
+import type { OperatorContext } from "@carnegie/persistence";
 
 export class RequestValidationError extends Error {}
 export class AuthenticationRequiredError extends Error {}

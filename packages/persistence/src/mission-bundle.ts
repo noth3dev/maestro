@@ -13,7 +13,7 @@ import {
   type MissionPersonaOverlayInputs,
   type WorkerStatus,
   WORKER_PROFILE_MAX_AXIS_DELTA,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import type { Pool, PoolClient } from "pg";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";

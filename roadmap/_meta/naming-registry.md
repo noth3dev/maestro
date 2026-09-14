@@ -1,6 +1,6 @@
-# Maestro Naming Registry & Implementation Provenance
+# Carnegie Naming Registry & Implementation Provenance
 
-This is the canonical naming registry. It records the verified names used by the current repository and points to the source that establishes each name. **Head** is the canonical role name; **Principal** is not a Maestro name.
+This is the canonical naming registry. It records the verified names used by the current repository and points to the source that establishes each name. **Head** is the canonical role name; **Principal** is not a Carnegie name.
 
 | Name | Verified source | Status on the current main line |
 | --- | --- | --- |
@@ -23,7 +23,7 @@ This is the canonical naming registry. It records the verified names used by the
 | **reconciler** | [`apps/control-plane/src/main.ts`](../../apps/control-plane/src/main.ts) | Implemented for durable Goal/lease recovery scaffolding; durable native-session reconciliation remains limited. |
 | **Control Plane** | [`apps/control-plane/src/server.ts`](../../apps/control-plane/src/server.ts) | Implemented as the authenticated REST/SSE and PostgreSQL authority boundary. |
 | **Model Gateway** | [`apps/control-plane/src/model-gateway-client.ts`](../../apps/control-plane/src/model-gateway-client.ts) | Implemented as the authenticated provider boundary; it owns provider credentials/account login and exact model identity. |
-| **native runtime** | [`packages/agent-runtime/src/agent-runtime.ts`](../../packages/agent-runtime/src/agent-runtime.ts) | Implemented as the Maestro-owned provider-neutral runtime. Pure selection exists, but production selector/native-admission wiring is not enabled. |
+| **native runtime** | [`packages/agent-runtime/src/agent-runtime.ts`](../../packages/agent-runtime/src/agent-runtime.ts) | Implemented as the Carnegie-owned provider-neutral runtime. Pure selection exists, but production selector/native-admission wiring is not enabled. |
 | **IPython host tools** | [`packages/agent-runtime/src/ipython-tool.ts`](../../packages/agent-runtime/src/ipython-tool.ts) | Read-only/authority-backed composition exists, but host-tool writes/effects and live acceptance are missing; production registry remains empty. |
 | **authority / effect / evidence** | [`packages/authority/src/authority.ts`](../../packages/authority/src/authority.ts), [`packages/evidence/src/index.ts`](../../packages/evidence/src/index.ts) | Implemented as separate authorization, effect-gating, and evidence boundaries. These do not imply that a production host tool is registered. |
 | **provider/account identity** | [`packages/contracts/src/index.ts`](../../packages/contracts/src/index.ts), [`apps/model-gateway/README.md`](../../apps/model-gateway/README.md) | Implemented in provider-qualified model, credential binding, and account-login contracts. |

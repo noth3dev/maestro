@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-08
 - **Status:** Design agreed in interview. Phase 1 artifact implementation is reopened. No production router is enabled until the artifact and admission gates below are independently verified.
-- **Scope:** Every model-consuming site in Maestro — Conversation, Overture, Head, Head Council, Department Plan, Worker, Scout, Helper, Semantic review, Encore reviewer, Metronome.
+- **Scope:** Every model-consuming site in Carnegie — Conversation, Overture, Head, Head Council, Department Plan, Worker, Scout, Helper, Semantic review, Encore reviewer, Metronome.
 - **Premise:** Existing code may be rewritten freely. This design is not constrained by the current `MAESTRO_NATIVE_MODEL` / single-`modelPolicy` composition.
 
 ---
@@ -31,7 +31,7 @@ The user never picks a model per task. Work declares what it needs; models decla
 
 **Posture: quality first, aggressive savings on light work.**
 
-The reasoning that sets this posture: in Maestro, a model failure does not merely waste a model call. It wastes the deliberation, the mission bundle, the worker run, the Metronome challenge, the Encore adjudication, and the rework that follows. **Failing cheaply is usually more expensive than succeeding expensively.** Therefore the default bias is toward capability, and cost savings are taken deliberately on work that has been declared low-stakes.
+The reasoning that sets this posture: in Carnegie, a model failure does not merely waste a model call. It wastes the deliberation, the mission bundle, the worker run, the Metronome challenge, the Encore adjudication, and the rework that follows. **Failing cheaply is usually more expensive than succeeding expensively.** Therefore the default bias is toward capability, and cost savings are taken deliberately on work that has been declared low-stakes.
 
 ---
 
@@ -83,9 +83,9 @@ The tag recipes combine only the eight A capability axes. `creativity` and `long
 
 ### 4.1 A. Capability — human-scored `model_map` vector
 
-Every model has the following eight capability axes. Each score is an integer from `0` through `200`, and every score carries a one-line reason plus supporting evidence. A benchmark can be cited, but the final number is a Maestro judgment. A score without a reason is invalid.
+Every model has the following eight capability axes. Each score is an integer from `0` through `200`, and every score carries a one-line reason plus supporting evidence. A benchmark can be cited, but the final number is a Carnegie judgment. A score without a reason is invalid.
 
-| Axis | Definition | Maestro split |
+| Axis | Definition | Carnegie split |
 | --- | --- | --- |
 | `reasoning` | Multi-step reasoning and trade-off judgment | Department Head council |
 | `coding` | Accurate code production | Worker |
@@ -219,7 +219,7 @@ Pressure bands do not participate in matching or ranking. They are organizationa
 
 ## 7. Pressure bands and no-candidate decisions
 
-There are four bands because Maestro has four approval layers. The band is a label over pressure, not a matching tier:
+There are four bands because Carnegie has four approval layers. The band is a label over pressure, not a matching tier:
 
 | Pressure band | Decision authority when the requirement is not met |
 | --- | --- |
@@ -276,7 +276,7 @@ During migration, the router candidate set is intersected with the Mission Bundl
 
 ## 11. Conversation
 
-One conversation keeps one model for its lifetime. Conversation turns are not a place for silent model upgrades. If a request exceeds what the conversation should carry, Maestro proposes promotion to a Goal, where D/E requirements, pressure, routing, and admission are durable.
+One conversation keeps one model for its lifetime. Conversation turns are not a place for silent model upgrades. If a request exceeds what the conversation should carry, Carnegie proposes promotion to a Goal, where D/E requirements, pressure, routing, and admission are durable.
 
 This preserves prompt-cache continuity and spends high capability where decisions are made — Overture and the Head council — rather than silently upgrading a chat thread.
 
@@ -344,7 +344,7 @@ No implementation should treat a pressure band as a matching tier, silently down
 
 | Decision | Driving reason |
 | --- | --- |
-| Eight fixed A axes | Keep the expensive model-scoring surface small and tied to real Maestro failure points |
+| Eight fixed A axes | Keep the expensive model-scoring surface small and tied to real Carnegie failure points |
 | B facts are hard filters | Context, price, auth, data policy, modality, and tool support are constraints, not quality scores |
 | C is local operational correction | Runtime behavior varies by account/provider/project and must not rewrite the public baseline |
 | A↔D weakest-link matching | A model's strength on one required ability cannot hide a shortfall on another |

@@ -1,5 +1,5 @@
-import { parsePersonaGoalEvidence, type PersonaGoalEvidence, type PersonaGoalEvidenceInput } from "@maestro/domain";
-import { assertProjectRole, capturePersonaGoalEvidence, type OperatorContext } from "@maestro/persistence";
+import { parsePersonaGoalEvidence, type PersonaGoalEvidence, type PersonaGoalEvidenceInput } from "@carnegie/domain";
+import { assertProjectRole, capturePersonaGoalEvidence, type OperatorContext } from "@carnegie/persistence";
 import type { Pool } from "pg";
 
 export interface PersonaGoalEvidenceService {

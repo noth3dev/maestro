@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ProjectionReadModel } from "@maestro/contracts";
+import type { ProjectionReadModel } from "@carnegie/contracts";
 import { buildServer, type OperatorAuthenticator } from "./server.js";
 import type { ProjectionService } from "./projection-service.js";
 

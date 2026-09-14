@@ -6,7 +6,7 @@ This guide covers developer onboarding, repository structure, local environment 
 
 ## 1. Monorepo Package Layout
 
-Maestro uses **npm workspaces** to manage packages and applications:
+Carnegie uses **npm workspaces** to manage packages and applications:
 
 ```text
 ├── apps/
@@ -22,7 +22,7 @@ Maestro uses **npm workspaces** to manage packages and applications:
 │   ├── persistence/       # PostgreSQL 17 / pg queries, services & migrations
 │   ├── authority/         # Action classification & AuthorizedEffectExecutor
 │   ├── evidence/          # SHA-256 evidence bundle generation & verification
-│   ├── agent-runtime/     # Maestro-owned provider-neutral runtime and tool loop
+│   ├── agent-runtime/     # Carnegie-owned provider-neutral runtime and tool loop
 │   ├── model-provider-openai/     # OpenAI and Codex app-server adapters
 │   ├── model-provider-anthropic/ # Anthropic API-key adapter
 │   ├── environment-adapter/      # Environment and browser boundaries
@@ -104,7 +104,7 @@ Do not document a tool, permission, filesystem scope, or network scope until it 
 The domain and wire artifact contracts are present for A/D/E, B provider facts, C operational overlay plus pure Goal snapshot, and four pressure bands. Pure [`routing-selector.ts`](../packages/domain/src/routing-selector.ts) selection enforces A↔D weakest-link checks and B/C hard filters. Migration [`0072_ensemble_router_artifacts.sql`](../packages/persistence/migrations/0072_ensemble_router_artifacts.sql) and [`ensemble-router-artifacts.ts`](../packages/persistence/src/ensemble-router-artifacts.ts) provide durable overlay/Goal snapshot and append-only routing-evidence storage; the real PostgreSQL gate is [`ensemble-router-artifacts.integration.test.ts`](../packages/persistence/src/ensemble-router-artifacts.integration.test.ts). The domain `model_map` validator and empty human-owned `config/model_map.json` baseline are also present. Production selector/native-admission wiring, fixed-model evidence migration, host-tool writes/effects, and live acceptance remain open. Do not describe `MAESTRO_NATIVE_MODEL` or the singleton `modelPolicy` as automatic routing; they are explicit fixed-model/admission boundaries until migration is complete.
 ## 5. Command-Line Interface (CLI) Usage
 
-The Maestro CLI (`apps/cli`) is an authenticated command client for the control plane HTTP REST API. It exposes the currently implemented lifecycle, review, Git, budget, and reporting commands; the TUI and Secretary remain client layers rather than independent runtimes.
+The Carnegie CLI (`apps/cli`) is an authenticated command client for the control plane HTTP REST API. It exposes the currently implemented lifecycle, review, Git, budget, and reporting commands; the TUI and Secretary remain client layers rather than independent runtimes.
 
 ```bash
 # Get details for a specific Goal
@@ -132,7 +132,7 @@ Run the model gateway as a separate process. Provider SDKs and API keys belong o
 ```bash
 MAESTRO_MODEL_GATEWAY_TOKEN=<random-secret> \
 OPENAI_API_KEY=<key> \
-npm --workspace @maestro/model-gateway start
+npm --workspace @carnegie/model-gateway start
 ```
 
 Configure the Control Plane with the same gateway token. Set `MAESTRO_NATIVE_MODEL` only as an explicit fixed-model pin/routing-off setting when host-created Head/Encore sessions cannot derive a Mission Bundle model; there is no implicit default. Conversation turns select an exact model through the CLI/API:
@@ -142,16 +142,16 @@ export MAESTRO_MODEL_GATEWAY_TOKEN=<random-secret>
 export MAESTRO_NATIVE_MODEL=openai/gpt-5
 # Optional CLI/TUI default; the TUI also accepts an exact --model value per conversation.
 export MAESTRO_MODEL=openai/gpt-5
-maestro models list
-maestro conversation create --project-id <project-uuid> --goal-id <goal-uuid> --model openai/gpt-5
-maestro conversation turn --conversation-id <conversation-uuid> --project-id <project-uuid> --text "status?"
+carnegie models list
+carnegie conversation create --project-id <project-uuid> --goal-id <goal-uuid> --model openai/gpt-5
+carnegie conversation turn --conversation-id <conversation-uuid> --project-id <project-uuid> --text "status?"
 ```
 
 The TUI uses the selected project and Goal and sends free text to the same authenticated conversation API. It does not persist bearer tokens, provider keys, or gateway credentials in its workspace session.
 
 ### ChatGPT account login (OAuth handled by the public Codex app-server)
 
-Maestro does not copy private ChatGPT or Anthropic OAuth endpoints. ChatGPT Plus/Pro account login is delegated to the public OpenAI Codex app-server protocol. The app-server owns its browser OAuth callback and refresh tokens; Maestro receives only a login URL and status metadata.
+Carnegie does not copy private ChatGPT or Anthropic OAuth endpoints. ChatGPT Plus/Pro account login is delegated to the public OpenAI Codex app-server protocol. The app-server owns its browser OAuth callback and refresh tokens; Carnegie receives only a login URL and status metadata.
 
 Configure the gateway with a separately installed and trusted `codex` executable:
 
@@ -159,14 +159,14 @@ Configure the gateway with a separately installed and trusted `codex` executable
 MAESTRO_MODEL_GATEWAY_TOKEN=<random-secret> \
 MAESTRO_CODEX_APP_SERVER_COMMAND=codex \
 MAESTRO_CODEX_MODELS=gpt-5.3-codex \
-npm --workspace @maestro/model-gateway start
+npm --workspace @carnegie/model-gateway start
 ```
 
 Then sign in from the TUI with `/login`, choose `ChatGPT Plus / Pro`, and complete the browser flow. The non-interactive equivalent is:
 
 ```bash
-maestro login openai-codex
-maestro models list
+carnegie login openai-codex
+carnegie models list
 ```
 
 Use an exact model identity such as `openai-codex/gpt-5.3-codex`. Anthropic Pro/Max subscription login is intentionally unavailable until Anthropic publishes or approves a supported integration. API-key login remains a separate legacy path for providers that support it.
@@ -202,7 +202,7 @@ The admin route is intentionally not covered by the ordinary project-membership 
 
 ## 8. Operating Protocol Summary
 
-When working on the Maestro codebase, strictly adhere to the project operating protocol (`docs/OPERATING_PROTOCOL.md`):
+When working on the Carnegie codebase, strictly adhere to the project operating protocol (`docs/OPERATING_PROTOCOL.md`):
 
 1. **Single-Branch Hygiene**: `main` is the primary persistent branch. Worktrees (`.worktrees/`) and feature branches are strictly temporary and must be pruned immediately upon merging.
 2. **Symlinked Node Modules**: Worktrees should symlink `node_modules` from root (`ln -s ../../node_modules .worktrees/<slug>/node_modules`) to conserve disk space and speed up setup.

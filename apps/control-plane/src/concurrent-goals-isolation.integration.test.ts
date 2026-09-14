@@ -18,9 +18,9 @@ import {
   readGoalOperationalOverlaySnapshot,
   snapshotOperationalOverlayForGoalDurably,
   listDeviceGrantsForGoal,
-} from "@maestro/persistence";
-import type { OperationalOverlay } from "@maestro/domain";
-import { grantProjectMembership } from "@maestro/persistence/testing";
+} from "@carnegie/persistence";
+import type { OperationalOverlay } from "@carnegie/domain";
+import { grantProjectMembership } from "@carnegie/persistence/testing";
 import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
 import { createReadStateService } from "./read-state-service.js";
 

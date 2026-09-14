@@ -4,8 +4,8 @@ import {
   bootstrapLocalOperator,
   bootstrapPermanentOrganization,
   runMigrations,
-} from "@maestro/persistence";
-import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
+} from "@carnegie/persistence";
+import { grantProjectMembership, grantProjectRole } from "@carnegie/persistence/testing";
 
 /** Metadata needed by the CLI to construct the one-time bearer envelope. */
 export interface LocalBootstrapResult {
@@ -54,7 +54,7 @@ export async function main(): Promise<void> {
 if (import.meta.url === new URL(process.argv[1]!, "file:").href) {
   void main().catch(() => {
     // Never print environment values or database URLs from this credential setup process.
-    process.stderr.write("Local Maestro bootstrap failed\n");
+    process.stderr.write("Local Carnegie bootstrap failed\n");
     process.exitCode = 1;
   });
 }

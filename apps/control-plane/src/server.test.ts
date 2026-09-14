@@ -4,8 +4,8 @@ import { request as httpRequest, type IncomingMessage } from "node:http";
 import { buildServer, type EventService, type GoalService, type OperatorAuthenticator, type HeadParticipationService, type CouncilService, type EncoreService, type ProjectDiscoveryService, type OrganizationService, type ConcertmasterReportService } from "./server.js";
 import { ReadStateGoalNotFoundError, type ReadStateService } from "./read-state-service.js";
 import type { WorkerService } from "./worker-service.js";
-import type { Worker } from "@maestro/contracts";
-import { ProjectMembershipRequiredError, ProjectAccessAdminRequiredError, StaleGoalLeaseError, HeadActivationRequesterInactiveError, CapabilityApprovalConflictError } from "@maestro/persistence";
+import type { Worker } from "@carnegie/contracts";
+import { ProjectMembershipRequiredError, ProjectAccessAdminRequiredError, StaleGoalLeaseError, HeadActivationRequesterInactiveError, CapabilityApprovalConflictError } from "@carnegie/persistence";
 import { CapabilityApprovalUnauthorizedError, CapabilityApprovalInvalidRequestError } from "./capability-approval-service.js";
 import { EvidenceCaptureError } from "./evidence-capture-service.js";
 

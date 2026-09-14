@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { MODEL_CAPABILITY_AXES, taskDemandContentHash, type ModelCapabilityVector, type ModelMapEntry, type RoutingEvidence, type TaskDemand, type WorkCharacter } from "@maestro/domain";
+import { MODEL_CAPABILITY_AXES, taskDemandContentHash, type ModelCapabilityVector, type ModelMapEntry, type RoutingEvidence, type TaskDemand, type WorkCharacter } from "@carnegie/domain";
 import type { Pool } from "pg";
 import { recordRoutingEvidence } from "./ensemble-router-artifacts.js";
 

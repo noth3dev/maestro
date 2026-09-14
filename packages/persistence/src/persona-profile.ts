@@ -12,7 +12,7 @@ import {
   type PersonaAxis,
   type PersonaProfile,
   type ResolvedPersonaProfile,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import type { Pool, PoolClient } from "pg";
 import { getPermanentRole } from "./organization.js";
 

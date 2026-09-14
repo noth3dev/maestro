@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { assertValidEnvironmentRecord, assertValidEnvironmentRecipe, environmentContentIdentity, type EnvironmentRecord, type EnvironmentRecipe, type EnvironmentState, type EnvironmentHealth, type EnvironmentCleanup } from "@maestro/domain";
+import { assertValidEnvironmentRecord, assertValidEnvironmentRecipe, environmentContentIdentity, type EnvironmentRecord, type EnvironmentRecipe, type EnvironmentState, type EnvironmentHealth, type EnvironmentCleanup } from "@carnegie/domain";
 import type { Pool, PoolClient } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
 

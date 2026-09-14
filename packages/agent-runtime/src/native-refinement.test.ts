@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { improvementCandidateScenarioSuiteHash, type ImprovementCandidateInput } from "@maestro/domain";
+import { improvementCandidateScenarioSuiteHash, type ImprovementCandidateInput } from "@carnegie/domain";
 import { createNativeRefinementAdapter, type NativeRefinementRequest } from "./native-refinement.js";
 
 const candidate = (overrides: Partial<ImprovementCandidateInput> = {}): ImprovementCandidateInput => ({

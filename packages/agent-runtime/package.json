@@ -1,5 +1,5 @@
 {
-  "name": "@maestro/agent-runtime",
+  "name": "@carnegie/agent-runtime",
   "private": true,
   "type": "module",
   "exports": {
@@ -15,7 +15,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@maestro/domain": "*",
+    "@carnegie/domain": "*",
     "zod": "^4.0.0"
   }
 }

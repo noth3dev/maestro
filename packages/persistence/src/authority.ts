@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
-import { AuthorityClaimConflictError } from "@maestro/authority";
-import type { ActionRequest, AuthorityDecisionAudit, AuthorityRecord, AuthorityRepository, ControlRecheck } from "@maestro/authority";
+import { AuthorityClaimConflictError } from "@carnegie/authority";
+import type { ActionRequest, AuthorityDecisionAudit, AuthorityRecord, AuthorityRepository, ControlRecheck } from "@carnegie/authority";
 
 export interface BootstrapAuthorityRecordInput extends Omit<ActionRequest, "controlEpoch" | "commandId"> {
   /** Optional for controlled setup callers; API command identity uses it as the durable record key. */

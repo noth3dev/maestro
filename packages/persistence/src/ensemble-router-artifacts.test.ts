@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { canonicalJson, snapshotOperationalOverlayForGoal, type OperationalOverlay, type RoutingEvidence } from "@maestro/domain";
+import { canonicalJson, snapshotOperationalOverlayForGoal, type OperationalOverlay, type RoutingEvidence } from "@carnegie/domain";
 import type { Pool } from "pg";
 import {
   EnsembleRouterArtifactIntegrityError,

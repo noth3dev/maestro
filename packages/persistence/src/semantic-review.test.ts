@@ -7,7 +7,7 @@ import type {
   InvocationStatus,
   SpawnRequest,
   SpawnedInvocation,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import type { Pool } from "pg";
 import { requestSemanticReview } from "./semantic-review.js";
 

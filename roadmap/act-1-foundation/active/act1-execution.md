@@ -5,7 +5,7 @@
 
 ## Goal
 
-Raise Maestro from a code-complete phase baseline to an operationally usable Act 1 system by closing Phase 1 through Phase 8 gates in order, one independently verifiable vertical slice at a time.
+Raise Carnegie from a code-complete phase baseline to an operationally usable Act 1 system by closing Phase 1 through Phase 8 gates in order, one independently verifiable vertical slice at a time.
 
 ## Sources of truth
 

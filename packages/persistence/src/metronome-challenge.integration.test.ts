@@ -10,7 +10,7 @@ import { spawnWorker } from "./worker.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
 import { acquireGoalLease, StaleGoalLeaseError } from "./commands.js";
 import { bootstrapPermanentOrganization } from "./organization.js";
-import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type TaskContractSubstance } from "@maestro/domain";
+import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionKernelPort, type IndependentBrief, type TaskContractSubstance } from "@carnegie/domain";
 import { raiseMetronomeChallenge, readMetronomeChallenge, requestMetronomeCorrection, requestMetronomeSafePause, resolveMetronomeChallenge, MetronomeAuthorizationError, MetronomeChallengeError, MetronomeChallengeNotFoundError } from "./metronome-challenge.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;

@@ -1,4 +1,4 @@
-# Maestro — Operating Protocol
+# Carnegie — Operating Protocol
 
 Read this file at the start of every session, before doing anything else, whenever
 `roadmap/act-1-foundation/active/operations/task_plan.md`'s pointer sends you here. It exists so any session or subagent picking up this

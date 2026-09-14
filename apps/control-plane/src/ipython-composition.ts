@@ -1,7 +1,7 @@
-import type { ActionRequest } from "@maestro/authority";
-import { createAuthorizedFileEditPort, createAuthorizedReadOnlyFilePort, createContainerSandboxAdapter, createLocalRuntimeAdapter, type ReadOnlyFileAuthorityGateway } from "@maestro/environment-adapter";
-import { createLocalGitPort } from "@maestro/git-adapter";
-import type { EnvironmentExecutionPort, EnvironmentRecord } from "@maestro/domain";
+import type { ActionRequest } from "@carnegie/authority";
+import { createAuthorizedFileEditPort, createAuthorizedReadOnlyFilePort, createContainerSandboxAdapter, createLocalRuntimeAdapter, type ReadOnlyFileAuthorityGateway } from "@carnegie/environment-adapter";
+import { createLocalGitPort } from "@carnegie/git-adapter";
+import type { EnvironmentExecutionPort, EnvironmentRecord } from "@carnegie/domain";
 import {
   createIpPythonGitRevisionAdapter,
   createIpPythonOwnedProcessChannel,
@@ -20,7 +20,7 @@ import {
   type IpPythonTwoStageExecutionOptions,
   type IpPythonProcessOrphanedEvent,
   type IpPythonProcessStartedEvent,
-} from "@maestro/agent-runtime";
+} from "@carnegie/agent-runtime";
 
 export interface IpPythonProductionCompositionOptions {
   readonly authority: ReadOnlyFileAuthorityGateway;

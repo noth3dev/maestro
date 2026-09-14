@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { ConcertmasterFinalReportSchema, type ConcertmasterFinalReport } from "@maestro/contracts";
-import { assertProjectRole, generateConcertmasterFinalReport, type GoalLeaseProof, type OperatorContext } from "@maestro/persistence";
-import { canonicalJson } from "@maestro/domain";
+import { ConcertmasterFinalReportSchema, type ConcertmasterFinalReport } from "@carnegie/contracts";
+import { assertProjectRole, generateConcertmasterFinalReport, type GoalLeaseProof, type OperatorContext } from "@carnegie/persistence";
+import { canonicalJson } from "@carnegie/domain";
 import type { Pool } from "pg";
 
 export class ConcertmasterReportProjectMismatchError extends Error {

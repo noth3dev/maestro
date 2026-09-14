@@ -6,7 +6,7 @@ import { createStatusRegion } from "./regions.js";
 const state: TuiShellState = {
   workspace: { cwd: "/work/acme", gitRoot: "/work/acme" },
   model: "test/model",
-  mode: "maestro",
+  mode: "carnegie",
   connection: { kind: "connected" },
   goal: { kind: "value", value: { name: "auth-refactor", state: "running" } },
   workers: { kind: "value", value: 3 },
@@ -27,7 +27,7 @@ const pendingState: TuiShellState = {
 // eslint-disable-next-line no-control-regex
 function plain(value: string): string { return value.replace(/\u001b\[[0-9;]*m/g, ""); }
 
-describe("Maestro TUI layout and hierarchy", () => {
+describe("Carnegie TUI layout and hierarchy", () => {
   it("gives the stream at least 70 percent of an 80x24 frame at rest", () => {
     const frame = renderTuiLayout(state, 80, 24, { stream: ["conversation"] });
     expect(frame.stream.length).toBeGreaterThanOrEqual(Math.ceil(24 * 0.7));
@@ -75,10 +75,10 @@ describe("Maestro TUI layout and hierarchy", () => {
     expect(plain(renderStatusRow(state, 80))).not.toContain("$1.24/$5.00");
     expect(plain(renderStatusRow(state, 80))).toContain("3 workers");
     expect(plain(renderStatusRow(state, 70))).not.toContain("3 workers");
-    expect(plain(renderStatusRow(state, 70))).toContain("maestro ·");
+    expect(plain(renderStatusRow(state, 70))).toContain("carnegie ·");
     expect(plain(renderStatusRow(state, 70))).toContain("running");
     expect(plain(renderStatusRow(state, 70))).not.toContain("auth-refactor");
-    expect(plain(renderStatusRow(state, 50))).not.toContain("maestro ·");
+    expect(plain(renderStatusRow(state, 50))).not.toContain("carnegie ·");
     expect(plain(renderStatusRow(state, 50))).toContain("running");
     expect(plain(renderStatusRow(state, 50))).not.toContain("auth-refactor");
   });

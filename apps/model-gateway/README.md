@@ -1,6 +1,6 @@
 # Model Gateway
 
-The credential-owning provider boundary for Maestro. It normalizes model discovery, exact provider/model/account admission, turns, streaming, cancellation, and managed account-login operations.
+The credential-owning provider boundary for Carnegie. It normalizes model discovery, exact provider/model/account admission, turns, streaming, cancellation, and managed account-login operations.
 
 ## Run
 

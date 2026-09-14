@@ -5,7 +5,7 @@ import {
   improvementCandidateContentHash,
   type ImprovementCandidateInput,
   type ImprovementCandidateKind,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 
 export const NATIVE_REFINEMENT_COMPONENTS = Object.freeze([
   "prompt_guidance",

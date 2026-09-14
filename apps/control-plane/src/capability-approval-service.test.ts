@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { CapabilityApprovalExpiredError, CapabilityApprovalRevokedError } from "@maestro/persistence";
+import { CapabilityApprovalExpiredError, CapabilityApprovalRevokedError } from "@carnegie/persistence";
 import type {
   CapabilityApproval,
   CapabilityApprovalInput,
@@ -7,7 +7,7 @@ import type {
   CapabilitySession,
   CapabilitySessionInput,
   RepetitionScope,
-} from "@maestro/persistence";
+} from "@carnegie/persistence";
 import {
   CapabilityApprovalEscalationError,
   CapabilityApprovalUnauthorizedError,

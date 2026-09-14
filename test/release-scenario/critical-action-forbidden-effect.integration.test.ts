@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { FileEvidenceStore } from "@maestro/evidence";
-import { bootstrapLocalOperator, createCapabilityApproval } from "@maestro/persistence";
-import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
+import { FileEvidenceStore } from "@carnegie/evidence";
+import { bootstrapLocalOperator, createCapabilityApproval } from "@carnegie/persistence";
+import { grantProjectMembership, grantProjectRole } from "@carnegie/persistence/testing";
 import { applyAllMigrations } from "../../packages/persistence/src/test-migrations.js";
 import { createControlPlane } from "../../apps/control-plane/src/main.js";
-import type { ActionRequest } from "@maestro/authority";
+import type { ActionRequest } from "@carnegie/authority";
 
 /**
  * P0 fix: the release-scenario runbook Steps 12/13 only asserted a nonzero

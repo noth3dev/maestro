@@ -1,6 +1,6 @@
-# Contributing to Maestro
+# Contributing to Carnegie
 
-Thank you for your interest in contributing to **Maestro**! Maestro is an open-source enterprise AI orchestration framework built on the **Maestro native agent runtime** and authenticated model gateway, designed for reliable, long-running, multi-agent goal execution.
+Thank you for your interest in contributing to **Carnegie**! Carnegie is an open-source enterprise AI orchestration framework built on the **Carnegie native agent runtime** and authenticated model gateway, designed for reliable, long-running, multi-agent goal execution.
 
 We welcome contributions of all forms—bug reports, feature proposals, documentation improvements, and pull requests.
 
@@ -8,7 +8,7 @@ We welcome contributions of all forms—bug reports, feature proposals, document
 
 ## 1. Core Architectural Guarantees
 
-Before submitting code, please ensure your changes adhere to Maestro's foundational architectural guarantees:
+Before submitting code, please ensure your changes adhere to Carnegie's foundational architectural guarantees:
 
 1. **Durable Control Plane First**: PostgreSQL 17 is the single source of truth for all domain aggregates, events, and transactional outboxes. In-memory states are non-canonical projections.
 2. **Separation of Powers**: Executing agents (Workers/Heads) are strictly prohibited from certifying their own work. Verification is handled independently by Quality and Encore (Metronome & Encore Council).
@@ -88,4 +88,4 @@ If you discover a security vulnerability or authority leakage issue, please do *
 
 ## 5. License
 
-By contributing to Maestro, you agree that your contributions will be licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. See the [LICENSE](LICENSE) file for details.
+By contributing to Carnegie, you agree that your contributions will be licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. See the [LICENSE](LICENSE) file for details.

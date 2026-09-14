@@ -166,7 +166,7 @@ import {
   type CapabilitySession,
   type EvidenceCaptureInput,
   type EvidenceRecord,
-} from "@maestro/contracts";
+} from "@carnegie/contracts";
 
 export class ApiError extends Error {
   readonly name = "ApiError";

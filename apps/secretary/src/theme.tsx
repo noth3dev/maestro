@@ -17,7 +17,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemePreference>("system");
 
   useEffect(() => {
-    void window.maestro.preferences.get().then((preferences) => {
+    void window.carnegie.preferences.get().then((preferences) => {
       setThemeState(preferences.theme);
       applyThemeAttribute(preferences.theme);
     });
@@ -26,7 +26,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setTheme = useCallback((next: ThemePreference) => {
     setThemeState(next);
     applyThemeAttribute(next);
-    void window.maestro.preferences.get().then((preferences) => window.maestro.preferences.save({ ...preferences, theme: next }));
+    void window.carnegie.preferences.get().then((preferences) => window.carnegie.preferences.save({ ...preferences, theme: next }));
   }, []);
 
   return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;

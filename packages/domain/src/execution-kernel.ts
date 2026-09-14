@@ -2,7 +2,7 @@ declare const executionRefBrand: unique symbol;
 declare const invocationRefBrand: unique symbol;
 declare const toolEventRefBrand: unique symbol;
 
-/** Opaque Maestro references. Canonical provider/model identity is carried separately as validated evidence. */
+/** Opaque Carnegie references. Canonical provider/model identity is carried separately as validated evidence. */
 export type ExecutionRef = string & { readonly [executionRefBrand]: "ExecutionRef" };
 export type InvocationRef = string & { readonly [invocationRefBrand]: "InvocationRef" };
 export type ToolEventRef = string & { readonly [toolEventRefBrand]: "ToolEventRef" };

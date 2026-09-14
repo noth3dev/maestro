@@ -1,8 +1,8 @@
 import type { Pool } from "pg";
-import type { GoalBudgetSummary, GoalResult } from "@maestro/contracts";
-import { listMetronomeChallenges, listEncoreCouncilRounds, listQualityCertifications, listConditionalCertifications, readConcertmasterFinalReport, readEvidenceBundle, getGoalGitIntegrationState, listWorkersForGoal, listImprovementDigests, type MetronomeChallenge, type EncoreCouncilRound, type QualityCertification, type ConditionalCertification, type ConcertmasterFinalReport } from "@maestro/persistence";
-import type { EvidenceBundleRead, GoalGitIntegrationState } from "@maestro/contracts";
-import type { ImprovementDigest, Worker } from "@maestro/domain";
+import type { GoalBudgetSummary, GoalResult } from "@carnegie/contracts";
+import { listMetronomeChallenges, listEncoreCouncilRounds, listQualityCertifications, listConditionalCertifications, readConcertmasterFinalReport, readEvidenceBundle, getGoalGitIntegrationState, listWorkersForGoal, listImprovementDigests, type MetronomeChallenge, type EncoreCouncilRound, type QualityCertification, type ConditionalCertification, type ConcertmasterFinalReport } from "@carnegie/persistence";
+import type { EvidenceBundleRead, GoalGitIntegrationState } from "@carnegie/contracts";
+import type { ImprovementDigest, Worker } from "@carnegie/domain";
 
 export class ReadStateGoalNotFoundError extends Error {}
 export interface ReadStateService {

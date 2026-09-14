@@ -1,5 +1,5 @@
 {
-  "name": "@maestro/secretary",
+  "name": "@carnegie/secretary",
   "private": true,
   "type": "module",
   "main": "dist/electron/main.js",
@@ -10,8 +10,8 @@
     "test:radial-electron": "node scripts/electron-radial-renderer-smoke.mjs"
   },
   "dependencies": {
-    "@maestro/api-client": "*",
-    "@maestro/contracts": "*",
+    "@carnegie/api-client": "*",
+    "@carnegie/contracts": "*",
     "@xyflow/react": "^12.11.6",
     "d3-hierarchy": "^3.1.2",
     "lucide-react": "^0.545.0",

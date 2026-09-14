@@ -107,7 +107,7 @@ describe("resolveLocalConnection", () => {
       throw new Error(`unexpected command: ${file} ${args.join(" ")}`);
     });
     const startModelGateway = vi.fn(async () => undefined);
-    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro" }, fetch, secretStore: store, runCommand, startModelGateway, retryDelayMs: 0 })).resolves.toEqual({ kind: "configured", apiUrl: "http://127.0.0.1:4310", token: "55555555-5555-4555-8555-555555555555.stable-secret" });
+    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/carnegie" }, fetch, secretStore: store, runCommand, startModelGateway, retryDelayMs: 0 })).resolves.toEqual({ kind: "configured", apiUrl: "http://127.0.0.1:4310", token: "55555555-5555-4555-8555-555555555555.stable-secret" });
     expect(startModelGateway).not.toHaveBeenCalled();
     expect(store.read()).toBe("55555555-5555-4555-8555-555555555555.stable-secret");
   });
@@ -257,7 +257,7 @@ describe("resolveLocalConnection", () => {
     const runCommand = vi.fn(async () => ({ code: 1, stdout: "", stderr: "bootstrap failed" }));
     const setupEvents: LocalBootstrapStepEvent[] = [];
     const result = await resolveLocalConnection({
-      env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/carnegie", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
       fetch,
       secretStore: secretStore(),
       runCommand,
@@ -283,7 +283,7 @@ describe("resolveLocalConnection", () => {
     const startControlPlane = vi.fn(async () => controlPlaneHandle);
     const setupEvents: LocalBootstrapStepEvent[] = [];
     const result = await resolveLocalConnection({
-      env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/carnegie", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
       fetch,
       secretStore: secretStore(),
       runCommand: vi.fn(async () => ({ code: 0, stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }), stderr: "" })),
@@ -323,7 +323,7 @@ describe("resolveLocalConnection", () => {
       return response({});
     });
     const result = await resolveLocalConnection({
-      env: { MAESTRO_API_URL: "http://127.0.0.1:46202", MAESTRO_MODEL_GATEWAY_URL: gatewayUrl, MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro" },
+      env: { MAESTRO_API_URL: "http://127.0.0.1:46202", MAESTRO_MODEL_GATEWAY_URL: gatewayUrl, MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/carnegie" },
       fetch,
       secretStore: secretStore(),
       runCommand: vi.fn(async () => ({ code: 0, stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }), stderr: "" })),
@@ -338,7 +338,7 @@ describe("resolveLocalConnection", () => {
   });
 
   it("propagates gateway settings into the real detached child environment", async () => {
-    const directory = await mkdtemp(`${tmpdir()}/maestro-gateway-test-`);
+    const directory = await mkdtemp(`${tmpdir()}/carnegie-gateway-test-`);
     const outputPath = `${directory}/environment.json`;
     const port = 46000 + Math.floor(Math.random() * 1000);
     const gatewayUrl = `http://127.0.0.1:${port}`;
@@ -365,7 +365,7 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     });
     try {
       const result = await resolveLocalConnection({
-        env: { MAESTRO_API_URL: "http://127.0.0.1:46199", MAESTRO_MODEL_GATEWAY_URL: gatewayUrl, MAESTRO_MODEL_GATEWAY_ENTRY: entry, MAESTRO_CONTROL_PLANE_ENTRY: `${directory}/control.js`, MAESTRO_CODEX_APP_SERVER_COMMAND: "/tmp/codex", MAESTRO_CODEX_MODELS: "gpt-5.3-codex", MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro" },
+        env: { MAESTRO_API_URL: "http://127.0.0.1:46199", MAESTRO_MODEL_GATEWAY_URL: gatewayUrl, MAESTRO_MODEL_GATEWAY_ENTRY: entry, MAESTRO_CONTROL_PLANE_ENTRY: `${directory}/control.js`, MAESTRO_CODEX_APP_SERVER_COMMAND: "/tmp/codex", MAESTRO_CODEX_MODELS: "gpt-5.3-codex", MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/carnegie" },
         fetch,
         secretStore: secretStore(),
         runCommand: vi.fn(async () => ({ code: 0, stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }), stderr: "" })),
@@ -388,7 +388,7 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     const gateway = buildLocalModelGatewayEnvironment({ entry: "/tmp/gateway.js", apiUrl: "http://127.0.0.1:4321", token: "service-token", operatorId: "local-operator", codexCommand: "/tmp/codex", codexModels: "gpt-5.3-codex" });
     expect(gateway).toMatchObject({ MAESTRO_MODEL_GATEWAY_TOKEN: "service-token", MAESTRO_MODEL_GATEWAY_HOST: "127.0.0.1", MAESTRO_MODEL_GATEWAY_PORT: "4321", MAESTRO_OPERATOR_ID: "local-operator", MAESTRO_CODEX_APP_SERVER_COMMAND: "/tmp/codex", MAESTRO_CODEX_MODELS: "gpt-5.3-codex" });
     expect(gateway).not.toHaveProperty("OPENAI_API_KEY");
-    const controlPlane = buildLocalControlPlaneEnvironment({ entry: "/tmp/control-plane.js", databaseUrl: "postgresql://localhost/maestro", dataDir: "/tmp/maestro", apiUrl: "http://127.0.0.1:4399", modelGatewayUrl: "http://127.0.0.1:4321", modelGatewayToken: "service-token", modelGatewayOperatorId: "local-operator" });
+    const controlPlane = buildLocalControlPlaneEnvironment({ entry: "/tmp/control-plane.js", databaseUrl: "postgresql://localhost/carnegie", dataDir: "/tmp/carnegie", apiUrl: "http://127.0.0.1:4399", modelGatewayUrl: "http://127.0.0.1:4321", modelGatewayToken: "service-token", modelGatewayOperatorId: "local-operator" });
     expect(controlPlane).toMatchObject({ MAESTRO_HOST: "127.0.0.1", MAESTRO_PORT: "4399", MAESTRO_MODEL_GATEWAY_URL: "http://127.0.0.1:4321", MAESTRO_MODEL_GATEWAY_TOKEN: "service-token", MAESTRO_MODEL_GATEWAY_OPERATOR_ID: "local-operator" });
   });
 
@@ -418,7 +418,7 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     };
 
     const result = await resolveLocalConnection({
-      env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/carnegie", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
       fetch,
       secretStore: store,
       runCommand,
@@ -446,7 +446,7 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     }));
 
     const result = await resolveLocalConnection({
-      env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/carnegie", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
       fetch,
       secretStore: secretStore(),
       runCommand,

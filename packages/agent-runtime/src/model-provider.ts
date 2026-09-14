@@ -1,5 +1,5 @@
-import type { InvocationUsage, ModelIdentity } from "@maestro/domain";
-export type { InvocationUsage, ModelIdentity } from "@maestro/domain";
+import type { InvocationUsage, ModelIdentity } from "@carnegie/domain";
+export type { InvocationUsage, ModelIdentity } from "@carnegie/domain";
 
 export type ProviderCapability =
   | "text"

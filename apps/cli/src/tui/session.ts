@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import type { GoalEvent } from "@maestro/api-client";
+import type { GoalEvent } from "@carnegie/api-client";
 import { join } from "node:path";
 
 export interface WorkspaceSession {
@@ -42,7 +42,7 @@ function parseSession(value: unknown): WorkspaceSession | undefined {
   };
 }
 
-export function sessionFileFor(workspacePath: string, baseDir = join(homedir(), ".maestro", "sessions")): string {
+export function sessionFileFor(workspacePath: string, baseDir = join(homedir(), ".carnegie", "sessions")): string {
   return join(baseDir, `${sessionId(workspacePath)}.json`);
 }
 

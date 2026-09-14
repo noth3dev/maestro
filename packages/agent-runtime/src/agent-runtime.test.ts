@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { InvocationObservation, ModelIdentity } from "@maestro/domain";
+import type { InvocationObservation, ModelIdentity } from "@carnegie/domain";
 import type { GatewayBinding, ModelGatewayPort, ModelTurnResult, TurnLimits } from "./model-provider.js";
 import { createMaestroAgentRuntime, ToolRegistry } from "./agent-runtime.js";
 import { createIpPythonTool, deriveIpPythonToolCallCommandId } from "./ipython-tool.js";
@@ -27,7 +27,7 @@ function gateway(): ModelGatewayPort & { calls: number } {
   };
 }
 
-describe("native Maestro agent runtime", () => {
+describe("native Carnegie agent runtime", () => {
   it("derives IPython effect command identity from the admission, turn, and tool call", async () => {
     const requests: unknown[] = [];
     let calls = 0;

@@ -6,9 +6,9 @@ import type {
   GoalIntegrationRevision,
   IntegrationCommit,
   WorkerWorktree,
-} from "@maestro/domain";
+} from "@carnegie/domain";
 import type { Pool, PoolClient } from "pg";
-import { assertWorkspacePath } from "@maestro/git-adapter";
+import { assertWorkspacePath } from "@carnegie/git-adapter";
 import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from "./commands.js";
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
 import { WorkerNotFoundError } from "./worker.js";

@@ -1,24 +1,24 @@
-# Maestro Terminal TUI Implementation Plan
+# Carnegie Terminal TUI Implementation Plan
 
 > **Implementation workflow:** Execute this plan task by task and keep the checkboxes updated. Use the repository's current agent workflow; this document is the source of truth for scope and order.
 
-**Goal:** Build an interactive conversation-first terminal TUI invoked by `maestro` that exposes the complete Maestro operational surface through the existing Control Plane, typed API client, durable events, and approval boundaries.
+**Goal:** Build an interactive conversation-first terminal TUI invoked by `carnegie` that exposes the complete Carnegie operational surface through the existing Control Plane, typed API client, durable events, and approval boundaries.
 
-**Architecture:** Add a TUI client layer above `@maestro/api-client`; keep Control Plane, PostgreSQL, leases, fencing, approvals, and the provider-neutral `MaestroAgentRuntime` authoritative. Preserve existing non-interactive CLI and `--json` modes. The TUI never owns provider credentials or worker authority. Start with a truthful shell/connection/session foundation, then add streaming conversation and progressive-disclosure views without inventing a second runtime.
+**Architecture:** Add a TUI client layer above `@carnegie/api-client`; keep Control Plane, PostgreSQL, leases, fencing, approvals, and the provider-neutral `MaestroAgentRuntime` authoritative. Preserve existing non-interactive CLI and `--json` modes. The TUI never owns provider credentials or worker authority. Start with a truthful shell/connection/session foundation, then add streaming conversation and progressive-disclosure views without inventing a second runtime.
 
-**Tech Stack:** TypeScript, Node.js 24, npm workspaces, existing `@maestro/api-client`, Fastify Control Plane HTTP/SSE, `@earendil-works/pi-tui` `0.85.1`, Vitest, real PostgreSQL integration fixtures, and real-process tests where lifecycle behavior is involved.
+**Tech Stack:** TypeScript, Node.js 24, npm workspaces, existing `@carnegie/api-client`, Fastify Control Plane HTTP/SSE, `@earendil-works/pi-tui` `0.85.1`, Vitest, real PostgreSQL integration fixtures, and real-process tests where lifecycle behavior is involved.
 
 **Spec:** `roadmap/act-1-foundation/specs/2026-09-06-maestro-tui-design.md`
 
 ## Global Constraints
 
-- The current working directory is the Maestro workspace; detect its Git root without requiring Project/Goal IDs in the normal local flow.
-- `maestro` opens interactive TUI; `maestro <command>` remains non-interactive; `maestro --json ...` remains machine-readable.
+- The current working directory is the Carnegie workspace; detect its Git root without requiring Project/Goal IDs in the normal local flow.
+- `carnegie` opens interactive TUI; `carnegie <command>` remains non-interactive; `carnegie --json ...` remains machine-readable.
 - The TUI never imports persistence internals, writes PostgreSQL, spawns a provider/runtime directly, or creates a second scheduler/recovery protocol.
 - All mutations use the existing typed API, authenticated actor/project/Goal context, command identity, lease/fencing proof where required, and durable acceptance.
 - Critical actions, external sends, remote Git effects, deployment, payment, deletion, permission/credential changes, and other configured high-impact actions require explicit confirmation.
 - No fabricated success, mock operational state, plaintext bearer-secret fallback, or silent unavailable behavior.
-- User-facing product name is Maestro; Concertmaster is the conversational identity; Secretary is not displayed as the app name.
+- User-facing product name is Carnegie; Concertmaster is the conversational identity; Secretary is not displayed as the app name.
 - Every slice uses TDD, focused tests, `npm run build`, relevant integration tests, `git diff --check`, and a Conventional Commit. PostgreSQL/real-process acceptance is required before claiming operational completion.
 
 ---
@@ -42,9 +42,9 @@
 - [ ] Run `npm test -- apps/cli/src/main.test.ts apps/cli/src/tui/runtime.test.ts` and confirm the new no-subcommand assertions fail for the missing runtime.
 - [ ] Implement the smallest runtime boundary using the installed `@earendil-works/pi-tui` primitives.
 - [ ] Run the focused tests and `npm run build`; confirm existing command tests remain green.
-- [ ] Commit with `feat(cli): add interactive maestro tui entrypoint`.
+- [ ] Commit with `feat(cli): add interactive carnegie tui entrypoint`.
 
-### Task 2: Build the Maestro visual shell and truthful workspace header
+### Task 2: Build the Carnegie visual shell and truthful workspace header
 
 **Files:**
 - Create: `apps/cli/src/tui/theme.ts`
@@ -58,11 +58,11 @@
 - `resolveWorkspace(cwd: string): Promise<{ cwd: string; gitRoot?: string }>` returns only detected local workspace facts.
 - `TuiShellState` contains connection state, selected Goal summary, approval count, worker count, and budget summary as explicit loading/empty/error/value states.
 
-- [ ] Write tests for Git-root detection, non-Git folders, loading/empty/error states, and Maestro/Concertmaster labels.
+- [ ] Write tests for Git-root detection, non-Git folders, loading/empty/error states, and Carnegie/Concertmaster labels.
 - [ ] Run the focused tests in RED state.
 - [ ] Implement the dark control-room shell, header, timeline placeholder, and input region. Do not add mock operational arrays.
 - [ ] Run focused tests, build, and `git diff --check`.
-- [ ] Commit with `feat(cli): add maestro tui shell`.
+- [ ] Commit with `feat(cli): add carnegie tui shell`.
 
 ### Task 3: Add local connection bootstrap and secure session configuration
 
@@ -81,7 +81,7 @@
 - [ ] Run focused tests in RED state.
 - [ ] Implement connection/bootstrap using existing config and lifecycle contracts; do not invent a database or bypass authentication.
 - [ ] Run focused tests and build. Exercise only a disposable local control-plane process in integration verification.
-- [ ] Commit with `feat(cli): bootstrap local maestro connection`.
+- [ ] Commit with `feat(cli): bootstrap local carnegie connection`.
 
 ### Task 4: Add durable session restore and reconnectable event activity
 
@@ -102,7 +102,7 @@
 - [ ] Run unit tests in RED state.
 - [ ] Implement session metadata and SSE activity rendering through the typed client/control-plane event contract.
 - [ ] Run focused tests, build, and the disposable PostgreSQL integration fixture.
-- [ ] Commit with `feat(cli): restore maestro sessions and live activity`.
+- [ ] Commit with `feat(cli): restore carnegie sessions and live activity`.
 
 ### Task 5: Implement chat editor, slash commands, autocomplete, and command palette
 
@@ -124,7 +124,7 @@
 - [ ] Run focused tests in RED state.
 - [ ] Implement the editor and registry with native pi-tui input patterns, keeping output in the conversation timeline.
 - [ ] Run focused tests and build.
-- [ ] Commit with `feat(cli): add maestro conversational input`.
+- [ ] Commit with `feat(cli): add carnegie conversational input`.
 
 ### Task 6: Wire full read surfaces and progressive-disclosure panels
 
@@ -147,7 +147,7 @@
 - [ ] Run focused tests in RED state.
 - [ ] Implement read commands and panels without hardcoded operational records.
 - [ ] Run focused tests, build, and API integration tests against disposable PostgreSQL.
-- [ ] Commit with `feat(cli): expose maestro operational read panels`.
+- [ ] Commit with `feat(cli): expose carnegie operational read panels`.
 
 ### Task 7: Wire full mutation flows and approval confirmations
 
@@ -168,7 +168,7 @@
 - [ ] Run focused tests in RED state.
 - [ ] Implement handlers and approval dialog. Use one registry metadata source to avoid command drift.
 - [ ] Run focused tests, build, and real-PostgreSQL parity integration tests.
-- [ ] Commit with `feat(cli): wire maestro operations and approvals`.
+- [ ] Commit with `feat(cli): wire carnegie operations and approvals`.
 
 ### Task 8: Add natural-language orchestration and truthful unavailable states
 
@@ -206,9 +206,9 @@
 - [ ] Run unit tests in RED state.
 - [ ] Implement recovery banner and attach/resume behavior using durable server state.
 - [ ] Run real-process recovery tests with disposable PostgreSQL; record any known provider crash-window boundary honestly.
-- [ ] Commit with `feat(cli): add maestro attach and recovery ux`.
+- [ ] Commit with `feat(cli): add carnegie attach and recovery ux`.
 
-### Task 10: Rename user-facing Secretary labels to Maestro and verify client parity
+### Task 10: Rename user-facing Secretary labels to Carnegie and verify client parity
 
 **Files:**
 - Modify: `apps/secretary/electron/main.ts`
@@ -218,13 +218,13 @@
 - Test: `apps/cli/src/main.test.ts`
 
 **Interfaces:**
-- `getProductBrand(): { product: "Maestro"; conversationalIdentity: "Concertmaster" }` is the single display-copy source where practical.
+- `getProductBrand(): { product: "Carnegie"; conversationalIdentity: "Concertmaster" }` is the single display-copy source where practical.
 
-- [ ] Write tests proving the desktop window title, TUI title, help text, and onboarding labels use Maestro and Concertmaster, not Secretary.
+- [ ] Write tests proving the desktop window title, TUI title, help text, and onboarding labels use Carnegie and Concertmaster, not Secretary.
 - [ ] Run tests in RED state.
 - [ ] Replace only user-facing product labels; preserve internal package/path compatibility until a separate migration is approved.
 - [ ] Run tests, build, and inspect the Electron bundle metadata.
-- [ ] Commit with `refactor: align maestro product branding`.
+- [ ] Commit with `refactor: align carnegie product branding`.
 
 ### Task 11: Full parity, accessibility, and live acceptance gate
 
@@ -242,9 +242,9 @@
 - [ ] Write the representative end-to-end acceptance scenarios from the spec and phase plans before implementation of the gate.
 - [ ] Run the new acceptance suite in RED state until all prior slices are present.
 - [ ] Run `npm run build`, focused tests, full `npm run check`, disposable PostgreSQL tests, and real-process Control Plane/provider tests where required.
-- [ ] Perform a manual terminal live run for `maestro`, a natural-language status request, a slash command, a safe mutation, and an approval-gated action; stop before any external irreversible effect.
+- [ ] Perform a manual terminal live run for `carnegie`, a natural-language status request, a slash command, a safe mutation, and an approval-gated action; stop before any external irreversible effect.
 - [ ] Record exact evidence, known limitations, and any environment-gated cases in the project docs.
-- [ ] Commit with `test(cli): certify maestro tui parity and live flow`.
+- [ ] Commit with `test(cli): certify carnegie tui parity and live flow`.
 
 ## Execution order and gates
 
@@ -259,7 +259,7 @@ Task 3 is constrained by the existing Control Plane boundary: it requires `DATAB
 
 ## Approved follow-up: provider-agnostic local first-run bootstrap
 
-**Decision (2026-09-07):** A first-time local user must be able to launch `maestro` without manually assembling the local stack when the required local runtime is already available. Docker is optional, not a product requirement. PostgreSQL remains required by the current durable Control Plane architecture.
+**Decision (2026-09-07):** A first-time local user must be able to launch `carnegie` without manually assembling the local stack when the required local runtime is already available. Docker is optional, not a product requirement. PostgreSQL remains required by the current durable Control Plane architecture.
 
 ### Local startup policy
 
@@ -286,7 +286,7 @@ This local convenience flow must not be presented as a production deployment mec
 
 ### Acceptance criteria for the future bootstrap slice
 
-- `maestro` with no endpoint configuration reuses or starts a usable local Control Plane when Docker or native PostgreSQL prerequisites are already present.
+- `carnegie` with no endpoint configuration reuses or starts a usable local Control Plane when Docker or native PostgreSQL prerequisites are already present.
 - A machine with neither supported PostgreSQL runtime receives a concrete, copyable setup instruction instead of `setup required` alone.
 - An explicitly configured endpoint is never overridden by local auto-start.
 - Startup, migration, credential creation, readiness, failure, and cleanup are bounded and observable without exposing secrets.

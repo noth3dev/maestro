@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { signDiscordSignal, deriveDiscordIncidentFingerprint, type DiscordSignal } from "@maestro/domain";
-import { DiscordPersistenceError } from "@maestro/persistence";
+import { signDiscordSignal, deriveDiscordIncidentFingerprint, type DiscordSignal } from "@carnegie/domain";
+import { DiscordPersistenceError } from "@carnegie/persistence";
 import { buildServer, type DiscordSignalService, type GoalService, type OperatorAuthenticator } from "./server.js";
 
 const operator = { operatorId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05", credentialId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f06" };

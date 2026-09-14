@@ -1,20 +1,20 @@
-# Maestro Native Backend and Prime Removal Implementation Plan
+# Carnegie Native Backend and Prime Removal Implementation Plan
 
 > **Status (2026-09-08): COMPLETED.** This document is the historical execution checklist for the native cutover. Its unchecked task lists and baseline findings describe the pre-cutover tree; they are not current work instructions. The current pointer is `roadmap/act-1-foundation/active/operations/task_plan.md`, and the current tree has no Prime package, import, lockfile entry, or fallback.
 >
 > **For historical execution only:** the original workers used the repository's test-first and independent-review workflow. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Remove Prime Agent from every production and test dependency path, run Worker/Head/reviewer execution through the native Maestro runtime and Model Gateway, and then resume the Phase 1 hardening queue with real PostgreSQL and real-process evidence.
+**Goal:** Remove Prime Agent from every production and test dependency path, run Worker/Head/reviewer execution through the native Carnegie runtime and Model Gateway, and then resume the Phase 1 hardening queue with real PostgreSQL and real-process evidence.
 
 **Architecture:** The Control Plane owns only a provider-neutral `ExecutionKernelPort` and host-side Tool registry. A native kernel router admits an exact provider-qualified model through the authenticated Model Gateway, creates `MaestroAgentRuntime` sessions with immutable host grants, and routes execution references to the correct runtime. The gateway remains the only owner of provider SDKs and credentials. PostgreSQL remains authoritative for Goal/lease/worker/reviewer state; in-memory runtime state is disposable and ambiguous provider outcomes become durable `unknown` state.
 
-**Tech Stack:** TypeScript, Node.js 24, Fastify 5, Zod 4, PostgreSQL/`pg`, native `fetch`/`AbortController`, Vitest, existing `@maestro/agent-runtime`, `@maestro/model-provider-openai`, `@maestro/model-provider-anthropic`, `@maestro/api-client`, and `@maestro/contracts`.
+**Tech Stack:** TypeScript, Node.js 24, Fastify 5, Zod 4, PostgreSQL/`pg`, native `fetch`/`AbortController`, Vitest, existing `@carnegie/agent-runtime`, `@carnegie/model-provider-openai`, `@carnegie/model-provider-anthropic`, `@carnegie/api-client`, and `@carnegie/contracts`.
 
 **Spec:** `roadmap/act-1-foundation/active/2026-09-07-maestro-native-agent-backend.md`, `roadmap/act-1-foundation/specs/2026-09-07-maestro-native-agent-backend-design.md`, `roadmap/act-1-foundation/phase-01-durable-control-plane.md` through `roadmap/act-1-foundation/phase-08-hardening-release-certification.md`.
 
 ## Global Constraints
 
-- No production import, package dependency, lockfile entry, config field, test fixture, README claim, or security/setup instruction may require `prime-agent`, `@maestro/prime-adapter`, `createPrimeExecutionKernel`, or `primeAgentVersion` after the removal task.
+- No production import, package dependency, lockfile entry, config field, test fixture, README claim, or security/setup instruction may require `prime-agent`, `@carnegie/prime-adapter`, `createPrimeExecutionKernel`, or `primeAgentVersion` after the removal task.
 - Prime is removed, not retained as a fallback. Test-only `ExecutionKernelPort` injection remains supported.
 - Every native admission carries an immutable host-created `InvocationContext`, `CapabilityGrant`, exact provider-qualified model policy, Goal lease/fencing identity where a Goal effect is involved, and an idempotency key.
 - Model output cannot select a route, actor, Goal, account, credential, generic endpoint, filesystem path, or approval authority.
@@ -308,7 +308,7 @@ Commit: `test(acceptance): verify native gateway and control plane paths`.
 6. Run the no-Prime scan:
 
 ```bash
-grep -RInE 'prime-agent|@maestro/prime-adapter|createPrimeExecutionKernel|primeAgentVersion|built on Prime Agent' \
+grep -RInE 'prime-agent|@carnegie/prime-adapter|createPrimeExecutionKernel|primeAgentVersion|built on Prime Agent' \
   apps packages README.md SECURITY.md .env.example package.json package-lock.json tsconfig.json \
   --exclude-dir=dist --exclude-dir=node_modules
 ```

@@ -1,6 +1,6 @@
 import React, { useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { ReactFlow, ReactFlowProvider, useReactFlow, type Edge, type Node, type NodeMouseHandler, type Viewport } from "@xyflow/react";
-import type { ProjectionReadModel } from "@maestro/contracts";
+import type { ProjectionReadModel } from "@carnegie/contracts";
 import { buildRadialLayout, type RadialGraphNode } from "./radial-layout.js";
 import "@xyflow/react/dist/style.css";
 

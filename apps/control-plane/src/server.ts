@@ -5,7 +5,7 @@ import {
   mapError,
 } from "./api-error.js";
 import Fastify, { type FastifyInstance } from "fastify";
-import type { AccountLoginRecord, AccountLoginStore, OperatorAuthentication, OperatorContext } from "@maestro/persistence";
+import type { AccountLoginRecord, AccountLoginStore, OperatorAuthentication, OperatorContext } from "@carnegie/persistence";
 
 
 
@@ -105,7 +105,7 @@ import {
   DepartmentAcceptanceSchema,
   CertifyWorkerInputSchema,
   CertificationSchema,
-} from "@maestro/contracts";
+} from "@carnegie/contracts";
 import {
   DurableStoreUnavailableError,
   GoalNotFoundError,
@@ -172,9 +172,9 @@ import {
 } from "./encore-service.js";
 import {
   type StoredDiscordSignal,
-} from "@maestro/persistence";
+} from "@carnegie/persistence";
 
-import type { AuthenticatedDiscordSignal } from "@maestro/domain";
+import type { AuthenticatedDiscordSignal } from "@carnegie/domain";
 import {
   AuthenticationRequiredError,
   AuthenticationUnavailableError,
@@ -200,7 +200,7 @@ export interface DiscordSignalService {
 export type ReadStateUnavailableService = ReadStateService;
 
 export interface EventService {
-  listEvents(projectId: string, after: EventCursor): Promise<import("@maestro/contracts").GoalEvent[]>;
+  listEvents(projectId: string, after: EventCursor): Promise<import("@carnegie/contracts").GoalEvent[]>;
 }
 
 export interface ProjectDiscoveryService {
@@ -210,14 +210,14 @@ export interface ProjectDiscoveryService {
 
 export interface OrganizationService {
   /** Returns the standing taxonomy; authentication is enforced by the route hook. */
-  listOrganization(): Promise<import("@maestro/contracts").OrganizationReadModel>;
+  listOrganization(): Promise<import("@carnegie/contracts").OrganizationReadModel>;
 }
 
 export interface ProviderCredentialService {
-  bind(input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic"; authMode: "api-key"; secret: string }): Promise<import("@maestro/agent-runtime").GatewayCredentialBinding>;
+  bind(input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic"; authMode: "api-key"; secret: string }): Promise<import("@carnegie/agent-runtime").GatewayCredentialBinding>;
   revoke(input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic" }): Promise<void>;
-  startAccountLogin?(input: { operatorId: string; requestId: string; providerId: "openai-codex" }): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStartResult>;
-  accountLoginStatus?(input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStatusResult>;
+  startAccountLogin?(input: { operatorId: string; requestId: string; providerId: "openai-codex" }): Promise<import("@carnegie/agent-runtime").GatewayAccountLoginStartResult>;
+  accountLoginStatus?(input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }): Promise<import("@carnegie/agent-runtime").GatewayAccountLoginStatusResult>;
   cancelAccountLogin?(input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }): Promise<void>;
   logoutAccount?(input: { operatorId: string; requestId: string; providerId: "openai-codex" }): Promise<void>;
 }
@@ -235,7 +235,7 @@ export interface ProjectMembershipChecker {
 
 export interface ProjectAccessProvisioner {
   /** Grants a target operator exact standing project roles under an explicit admin policy. */
-  provisionProjectAccess(requesterOperatorId: string, input: import("@maestro/contracts").ProjectAccessProvisionInput): Promise<import("@maestro/contracts").ProjectAccessProvisionResult>;
+  provisionProjectAccess(requesterOperatorId: string, input: import("@carnegie/contracts").ProjectAccessProvisionInput): Promise<import("@carnegie/contracts").ProjectAccessProvisionResult>;
 }
 
 export interface PollingScheduler {
@@ -248,7 +248,7 @@ const systemPollingScheduler: PollingScheduler = {
   clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
 };
 
-function toAccountLoginStartResult(record: AccountLoginRecord): import("@maestro/agent-runtime").GatewayAccountLoginStartResult {
+function toAccountLoginStartResult(record: AccountLoginRecord): import("@carnegie/agent-runtime").GatewayAccountLoginStartResult {
   if (record.providerLoginId === null || record.authUrl === null) throw new Error(record.message ?? "Provider account login is not ready");
   return { providerId: record.providerId, loginId: record.loginId, authUrl: record.authUrl };
 }
@@ -587,7 +587,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
       return reply.status(409).send({ error: { code: "account_login_operation_in_progress", message: "provider account login operation is already in progress" } });
     }
     try {
-      let result: import("@maestro/agent-runtime").GatewayAccountLoginStatusResult;
+      let result: import("@carnegie/agent-runtime").GatewayAccountLoginStatusResult;
       try {
         result = await providerCredentials.accountLoginStatus({ operatorId, requestId, providerId: input.providerId, loginId: record.providerLoginId });
       } catch (error) {
@@ -1133,7 +1133,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const terminate = () => { if (closed) return; if (!reply.raw.writableEnded) reply.raw.end(); cleanup(); };
     if (activeStreams.size >= maxActiveStreams) throw new Error("SSE stream capacity reached");
     request.raw.once("aborted", cleanup); reply.raw.once("close", cleanup); activeStreams.add(terminate);
-    const write = (listed: import("@maestro/contracts").ConversationEvent[]) => {
+    const write = (listed: import("@carnegie/contracts").ConversationEvent[]) => {
       for (const event of listed) {
         if (closed || backpressured) return;
         const payload = `id: ${event.cursor}\nevent: conversation-event\ndata: ${JSON.stringify(ConversationEventSchema.parse(event))}\n\n`;
@@ -1148,7 +1148,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
         }
       }
     };
-    let initial: readonly import("@maestro/contracts").ConversationEvent[];
+    let initial: readonly import("@carnegie/contracts").ConversationEvent[];
     try { initial = await conversations.listEvents(conversationId, query.projectId, cursor, operator); }
     catch { cleanup(); throw new DurableStoreUnavailableError(); }
     if (closed) return reply;
@@ -1334,7 +1334,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
       if (!reply.raw.write(payload)) markBackpressure();
       return true;
     };
-    const writeEvents = (listed: import("@maestro/contracts").GoalEvent[]) => {
+    const writeEvents = (listed: import("@carnegie/contracts").GoalEvent[]) => {
       for (const event of listed) {
         if (closed || backpressured) return;
         cursor = event.cursor;
@@ -1359,7 +1359,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
     };
 
     // Prove durable storage is available before committing the streaming response.
-    let initial: import("@maestro/contracts").GoalEvent[];
+    let initial: import("@carnegie/contracts").GoalEvent[];
     try { initial = await events.listEvents(projectId, cursor); }
     catch { cleanup(); throw new DurableStoreUnavailableError(); }
     // A client may disconnect while the initial durable read is in flight.

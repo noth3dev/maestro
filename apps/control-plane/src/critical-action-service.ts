@@ -1,12 +1,12 @@
-import type { CriticalActionApprovalInput, CriticalActionInput } from "@maestro/contracts";
-import { AuthorityApprovalConflictError, issueAuthorityApproval, type OperatorContext } from "@maestro/persistence";
+import type { CriticalActionApprovalInput, CriticalActionInput } from "@carnegie/contracts";
+import { AuthorityApprovalConflictError, issueAuthorityApproval, type OperatorContext } from "@carnegie/persistence";
 import type { Pool } from "pg";
 import {
   AuthorizedEffectExecutor,
   type ActionRequest,
   type AuthorityDecision,
   type AuthorityRepository,
-} from "@maestro/authority";
+} from "@carnegie/authority";
 
 export interface CriticalActionService {
   performCriticalAction(

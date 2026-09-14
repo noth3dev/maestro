@@ -1,6 +1,6 @@
 # 02. Hierarchical Orchestration
 
-Maestro models human organizational structures by dividing responsibilities across specialized personas, permanent departments, intake crews, and independent oversight councils.
+Carnegie models human organizational structures by dividing responsibilities across specialized personas, permanent departments, intake crews, and independent oversight councils.
 
 ---
 
