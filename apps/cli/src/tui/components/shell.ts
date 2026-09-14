@@ -147,7 +147,7 @@ function hasPendingDecisionRows(state: TuiShellState): boolean {
   return pendingDecisionRows(state).length > 0;
 }
 
-function inputPlaceholder(state: TuiShellState, width: number): string {
+export function renderInputPlaceholder(state: TuiShellState, width: number): string {
   const decisions = pendingDecisionRows(state);
   if (decisions.length > 0) {
     const tier = decisions[0]?.tier ?? "authority";
@@ -246,7 +246,7 @@ export function renderTuiLayout(state: TuiShellState, width: number, height: num
   const splash = options.showSplash === true && width >= 40 && height >= 16 ? renderSplash(state, width) : [];
   const status = [renderStatusRow(state, width)];
   const decisions = renderDecisionRegion(state, width, height);
-  const input = [fitPlain(options.input?.[0] ?? inputPlaceholder(state, width), width)];
+  const input = [fitPlain(options.input?.[0] ?? renderInputPlaceholder(state, width), width)];
   const hints = [renderHints(state, width)];
   if (height < 16) return { splash, status, stream: [], decisions: [], input, hints: [] };
   const streamHeight = Math.max(0, height - status.length - decisions.length - input.length - hints.length - splash.length);
