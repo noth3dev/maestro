@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { EvidenceIntegrityError, FileEvidenceStore } from "@carnegie/evidence";
+import { EvidenceIntegrityError, FileEvidenceStore } from "@maestro/evidence";
 import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";

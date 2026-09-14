@@ -1,12 +1,12 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type { ExecutionKernelPort } from "@carnegie/domain";
+import type { ExecutionKernelPort } from "@maestro/domain";
 import type { Pool } from "pg";
 import { createWorkerService } from "./worker-service.js";
-import { LeaseUnavailableError } from "@carnegie/persistence";
-import { assertProjectRole, claimQueuedCapacity, listCapacityInventoryProjects, readDepartmentPlan, readHeadCouncil, spawnWorker } from "@carnegie/persistence";
+import { LeaseUnavailableError } from "@maestro/persistence";
+import { assertProjectRole, claimQueuedCapacity, listCapacityInventoryProjects, readDepartmentPlan, readHeadCouncil, spawnWorker } from "@maestro/persistence";
 
-vi.mock("@carnegie/persistence", async (load) => {
-  const actual = await load<typeof import("@carnegie/persistence")>();
+vi.mock("@maestro/persistence", async (load) => {
+  const actual = await load<typeof import("@maestro/persistence")>();
   return { ...actual, assertProjectRole: vi.fn(), claimQueuedCapacity: vi.fn(), listCapacityInventoryProjects: vi.fn(), readDepartmentPlan: vi.fn(), readHeadCouncil: vi.fn(), spawnWorker: vi.fn() };
 });
 

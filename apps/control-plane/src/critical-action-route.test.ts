@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import type { AuthorityRecord, AuthorityRepository, ControlRecheck } from "@carnegie/authority";
+import type { AuthorityRecord, AuthorityRepository, ControlRecheck } from "@maestro/authority";
 import { createCriticalActionService } from "./critical-action-service.js";
 import { buildServer, type GoalService, type OperatorAuthenticator } from "./server.js";
 

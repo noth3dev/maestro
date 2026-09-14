@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { deriveDiscordIncidentFingerprint, signDiscordSignal, type DiscordSignal } from "@carnegie/domain";
+import { deriveDiscordIncidentFingerprint, signDiscordSignal, type DiscordSignal } from "@maestro/domain";
 import { listDiscordSignals, recordDiscordSignal } from "./discord.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;

@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Define Carnegie as a selective, hierarchical organization rather than a flat roster of peer agents.
+Define Maestro as a selective, hierarchical organization rather than a flat roster of peer agents.
 Department Heads act like functional directors: they discuss cross-domain work, spawn bounded workers, review their departments' results, and return to standby when the goal is complete. Encore remains outside the command chain and improves the orchestration system by observing it end to end.
 
 ## Agreed Decisions
@@ -144,7 +144,7 @@ All departments remain asleep unless selected for a Goal. The number of permanen
 ### 11. Enrolled-device automation level
 
 - The CEO enrolls a computer or CLI endpoint once.
-- For each Goal, Carnegie grants only the access required for the stated outcome and expires that authority when the Goal closes.
+- For each Goal, Maestro grants only the access required for the stated outcome and expires that authority when the Goal closes.
 - Within an enrolled project scope, workers may automatically read and edit project files, run project CLIs and tests, start local applications, operate a browser, and capture evidence without asking for each action.
 - These ordinary actions follow execute-then-report and remain fully audited.
 - Access to unrelated personal folders, system-wide changes, external sending, permanent deletion, payment, login or authority changes, or any other critical action stops for CEO approval.
@@ -201,7 +201,7 @@ Encore should include a selectively activated improvement organization that impr
 
 ### 16. Data-management model — direction under design
 
-Carnegie should not treat all data as one shared memory. Data is separated by purpose and authority:
+Maestro should not treat all data as one shared memory. Data is separated by purpose and authority:
 
 1. **Project source and artifacts** — repositories, files, local commits, reports, screenshots, generated assets, and deliverables. Git or the project's native artifact system remains the source of truth where applicable.
 2. **Operational state** — Goals, active Groups and Departments, Head Council membership, worker missions, leases, decisions, approvals, device grants, and current execution status.
@@ -368,11 +368,11 @@ The approved Secretary seed remains:
 
 ### 27. Prime Agent is the execution kernel
 
-Carnegie is designed to run **on top of Prime Agent**, not to replace Prime Agent with a second independent agent runtime.
+Maestro is designed to run **on top of Prime Agent**, not to replace Prime Agent with a second independent agent runtime.
 
 Responsibility boundary:
 
-- **Carnegie owns:** CEO Goals, Secretary workflow, Groups and Departments, Head Council policy, selective activation, Department Context Packs, data and authority policy, budget and critical-action gates, organizational UI, outcome reporting, and Encore improvement objectives.
+- **Maestro owns:** CEO Goals, Secretary workflow, Groups and Departments, Head Council policy, selective activation, Department Context Packs, data and authority policy, budget and critical-action gates, organizational UI, outcome reporting, and Encore improvement objectives.
 - **Prime Agent owns:** model execution, recursive subagent spawning, parent/child messaging, observation, task environments, tool execution, skill and plugin availability, model selection surfaces, and the continual harness used by refinement.
 
 Runtime mapping:
@@ -381,7 +381,7 @@ Runtime mapping:
 - A Head spawns Scout or Execution Workers as its direct Prime Agent children. This preserves the intended reporting hierarchy in the runtime itself.
 - Sleeping a Department Head terminates active execution while preserving the Head's approved identity, Department Context Pack, traits, and durable organizational knowledge.
 - The Secretary is the root organizational coordinator. Head Council communication uses bounded agent messaging and produces a shared decision packet.
-- Metronome observes the Prime Agent family, event stream, costs, tool use, authority grants, and Carnegie Goal state without becoming a worker's execution parent.
+- Metronome observes the Prime Agent family, event stream, costs, tool use, authority grants, and Maestro Goal state without becoming a worker's execution parent.
 - The multi-model Encore Council uses separate Prime Agent subagents and, when available and approved, distinct model selectors to create genuinely independent judgments.
 
 ### 28. Skill, plugin, model, and capability assignment at spawn
@@ -410,7 +410,7 @@ Assignment follows least privilege. A skill being installed globally does not me
 
 ### Current implementation gap
 
-This workspace contains the approved design artifacts but no Carnegie application implementation. There is no legacy runtime, operational state, compatibility contract, or migration target to preserve. Implementation starts cleanly on Prime Agent's public programmatic SDK and native recursive-subagent surfaces. Existing project repositories may later be enrolled as independent source systems, but they are not Carnegie legacy state.
+This workspace contains the approved design artifacts but no Maestro application implementation. There is no legacy runtime, operational state, compatibility contract, or migration target to preserve. Implementation starts cleanly on Prime Agent's public programmatic SDK and native recursive-subagent surfaces. Existing project repositories may later be enrolled as independent source systems, but they are not Maestro legacy state.
 
 ### 30. Encore authority for project and bounded global refinement — proposed boundary
 
@@ -576,12 +576,12 @@ The Encore Council adjudicates conflicting certifications or material unresolved
 
 ### 41. Discord external watchdog — direction under design
 
-**Discord** is an independent external watchdog that runs outside the main Carnegie orchestration failure domain.
+**Discord** is an independent external watchdog that runs outside the main Maestro orchestration failure domain.
 
 Purpose:
 
-- Detect when Carnegie, Prime Agent integration, an enrolled runtime, or an observed project experiences a crash, persistent health failure, functional regression, bug signal, security vulnerability, dependency exposure, or other actionable anomaly.
-- Continue observing and reporting even when Carnegie's primary control plane or Encore is unhealthy.
+- Detect when Maestro, Prime Agent integration, an enrolled runtime, or an observed project experiences a crash, persistent health failure, functional regression, bug signal, security vulnerability, dependency exposure, or other actionable anomaly.
+- Continue observing and reporting even when Maestro's primary control plane or Encore is unhealthy.
 - Convert a detected anomaly into a bounded, evidence-backed incident signal and wake the relevant organizational expertise.
 
 Discord principles:
@@ -589,7 +589,7 @@ Discord principles:
 - It uses least-privilege, primarily read-only monitoring: health endpoints, bounded logs and crash summaries, approved synthetic probes, dependency or vulnerability feeds, and explicit monitored resources.
 - It does not directly patch code, change production, expand authority, or spawn execution workers.
 - It fingerprints and deduplicates signals, records first and last observation, confidence, severity, affected component and version, reproduction evidence when safe, and source freshness.
-- Signals are signed or otherwise authenticated, freshness-checked, replay-resistant, and auditable before Carnegie trusts them.
+- Signals are signed or otherwise authenticated, freshness-checked, replay-resistant, and auditable before Maestro trusts them.
 - Crash or reliability evidence maps initially to Operations and Engineering; vulnerability evidence maps to Security and Engineering; user-visible regression evidence may map to Quality, Product, Design, or Engineering as appropriate.
 - Discord creates an Incident Brief or a draft Incident Task Contract rather than injecting unbounded raw logs into Department context.
 - Concertmaster, Metronome, and the awakened Heads receive the same incident identity so duplicate Goals and duplicate remediation are avoided.
@@ -651,7 +651,7 @@ Concertmaster must not turn a summary into a new decision. Product scope, archit
 
 Initial Discord monitoring is limited to explicitly registered surfaces:
 
-- Carnegie control-plane and app health.
+- Maestro control-plane and app health.
 - Prime Agent runtime availability and heartbeat.
 - Active Goal workers, leases, and abnormal silence or crash signals.
 - Explicitly registered local project health endpoints.
@@ -663,7 +663,7 @@ Initial Discord monitoring is limited to explicitly registered surfaces:
 Notification paths:
 
 - During normal operation, Discord reports to the app's Incidents channel, Concertmaster, Metronome, and the relevant Department Heads.
-- If Carnegie or Prime Agent is unavailable, Discord may use one pre-approved out-of-band emergency channel, such as a dedicated Discord emergency channel or enrolled-device desktop notification.
+- If Maestro or Prime Agent is unavailable, Discord may use one pre-approved out-of-band emergency channel, such as a dedicated Discord emergency channel or enrolled-device desktop notification.
 - The emergency message contains only the incident identity, affected system, severity and confidence, first observation, concise evidence, and safe next action.
 - This pre-approval permits bounded emergency notification only. It does not grant Discord remediation, shell execution, broader external messaging, or new-service authority.
 
@@ -767,7 +767,7 @@ Goal priority, resource contention, and preemption are decided by a selective **
 
 ### 55. Continuous control plane with an optional app client
 
-- Carnegie's control plane operates continuously and is not tied to the app window or an interactive chat session.
+- Maestro's control plane operates continuously and is not tied to the app window or an interactive chat session.
 - Closing the app does not stop launched Goals, Concertmaster state, Encore observation, Discord monitoring, durable leases, or safe remote and virtual-environment work.
 - Department Heads and workers remain selectively activated and do not run merely because the control plane is online.
 - Work requiring a disconnected or powered-off enrolled device pauses at the affected boundary; independent work in available environments may continue.
@@ -789,9 +789,9 @@ When no CEO Goal needs the capacity, Encore may autonomously:
 
 Encore does not invent or implement new product objectives, contact external parties, deploy, push, expand authority or budgets, add providers, or alter project intent merely because capacity is idle. Idle work has its own small budget and time bounds, yields at safe points to CEO Goals, and remains visible and auditable.
 
-### 57. Direct replacement with a Prime Agent-native Carnegie
+### 57. Direct replacement with a Prime Agent-native Maestro
 
-The target architecture may replace the current standalone Carnegie execution model and existing Web UI rather than preserving backward compatibility with their internal design.
+The target architecture may replace the current standalone Maestro execution model and existing Web UI rather than preserving backward compatibility with their internal design.
 
 - Prime Agent becomes the native execution kernel from the beginning of the replacement.
 - The new Secretary Office, Group and Department hierarchy, recursive Head and worker spawning, skill and plugin assignment, continual-harness refinement, Encore organization, Discord integration, Git hierarchy, data model, and radial app are designed as one coherent system.
@@ -802,10 +802,10 @@ The target architecture may replace the current standalone Carnegie execution mo
 
 ### 58. Clean-slate replacement state
 
-- The replacement imports no legacy Carnegie operational state, active Goals, workers, leases, authority grants, UI state, routing state, telemetry, Council transcripts, or unverified memory.
+- The replacement imports no legacy Maestro operational state, active Goals, workers, leases, authority grants, UI state, routing state, telemetry, Council transcripts, or unverified memory.
 - The new system starts with an empty operational database and no implied active execution.
 - The approved hierarchical design, Concertmaster identity and trait seed, organizational taxonomy, safety boundaries, and app direction are new-system requirements, not migrated runtime records.
-- Existing project Git repositories remain independent source systems and may be enrolled into the new Carnegie as fresh projects. They are not deleted as part of clearing Carnegie state.
+- Existing project Git repositories remain independent source systems and may be enrolled into the new Maestro as fresh projects. They are not deleted as part of clearing Maestro state.
 - Historical legacy data is not required for new-system behavior or evaluation. Removal at cutover follows the agreed critical deletion and reversible Git or backup process, but no compatibility or import path is required.
 
 ### 59. Replacement acceptance scenarios
@@ -816,7 +816,7 @@ The Prime Agent-native replacement is ready for cutover only when all ten repres
 2. **Hierarchical execution:** only relevant Heads wake; independent briefs, Head Council, Scout evidence, worker spawning, hierarchical Git integration, independent Quality validation, and Concertmaster reporting all complete.
 3. **Head-to-Head activation:** a Head directly calls another existing Head during a Goal; context, Council membership and budget update without duplicate activation.
 4. **Environment and enrolled device:** a worker safely uses a virtual environment, project CLI and browser or device access inside scope while a critical out-of-scope effect is blocked.
-5. **Restart recovery:** Carnegie or Prime Agent restarts mid-Goal and reconciles durable state without duplicate workers, stale authority, lost accepted work, or false success.
+5. **Restart recovery:** Maestro or Prime Agent restarts mid-Goal and reconciles durable state without duplicate workers, stale authority, lost accepted work, or false success.
 6. **Discord incident:** external detection wakes the correct Heads in triage mode, produces an Incident Task Contract, drives bounded remediation, and reaches independent certification.
 7. **Encore improvement:** milestone evidence becomes a curated Digest, an improvement candidate is shadow-evaluated, the multi-model Council judges it, and an allowed `refine` change applies or rolls back from measured evidence.
 8. **Portfolio Council:** competing Goals are prioritized by Encore and affected Heads, with safe pause, resource reallocation, and resume.
@@ -843,7 +843,7 @@ Passing requires exercising real behavior, not only parsing, unit tests, static 
   - **Core identity:** mission, organizational role, authority limits, truthfulness, safety boundaries, and prohibited behavior. This layer is stable and cannot be autonomously weakened or rewritten.
   - **Adaptive traits:** communication habits, delegation style, challenge intensity, review emphasis, collaboration patterns, and other bounded working preferences. This layer may improve over time.
 - Persona evolution is based on Goal outcomes, Quality findings, Metronome observations, Council dissent, user corrections, cost, delay, rework, and measured collaboration results rather than an agent's self-description alone.
-- During Phase 1, Carnegie records persona observations and proposes versioned changes, but does not autonomously apply them.
+- During Phase 1, Maestro records persona observations and proposes versioned changes, but does not autonomously apply them.
 - Phase 4 may apply low-risk adaptive-trait changes only after replay, synthetic, and shadow evaluation shows improvement against a fixed baseline and the Encore Council accepts the evidence within an enabled improvement class.
 - Every applied persona change records its source evidence, expected benefit, affected roles, measured result, version, and rollback trigger. A later regression automatically disables or rolls back the adaptive change within the approved improvement boundary.
 - Changes to core identity, authority, safety boundaries, organization purpose, or CEO-facing policy always require explicit CEO approval. Such changes cannot be disguised as tone, efficiency, or persona optimization.

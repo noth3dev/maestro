@@ -1,5 +1,5 @@
 {
-  "name": "@carnegie/model-gateway",
+  "name": "@maestro/model-gateway",
   "private": true,
   "type": "module",
   "exports": {
@@ -11,11 +11,11 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@carnegie/agent-runtime": "*",
+    "@maestro/agent-runtime": "*",
     "fastify": "^5.0.0",
     "zod": "^4.0.0",
-    "@carnegie/model-provider-openai": "*",
-    "@carnegie/model-provider-anthropic": "*",
+    "@maestro/model-provider-openai": "*",
+    "@maestro/model-provider-anthropic": "*",
     "@napi-rs/keyring": "^2.0.0"
   },
   "scripts": {

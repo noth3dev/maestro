@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { verifyEvidenceRecord, type EvidenceContentReader, type EvidenceRecord } from "@carnegie/evidence";
+import { verifyEvidenceRecord, type EvidenceContentReader, type EvidenceRecord } from "@maestro/evidence";
 import type { Pool } from "pg";
 import type { GoalLeaseProof } from "./commands.js";
 import { withGoalAuthority } from "./goal-authority.js";

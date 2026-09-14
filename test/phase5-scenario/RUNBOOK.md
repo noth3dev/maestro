@@ -4,7 +4,7 @@
 exist to support the plan-5 §5 HANDOFF live acceptance walkthrough. They do
 **not** constitute a live/production acceptance run. `test/phase5-scenario/contention.integration.test.ts`
 proves the harness's own mechanics against real PostgreSQL and the real
-`@carnegie/domain` / `@carnegie/persistence` §S2–§S4 APIs. It does not drive a
+`@maestro/domain` / `@maestro/persistence` §S2–§S4 APIs. It does not drive a
 live model provider, a live Discord webhook, or a live Control Plane HTTP
 deployment end to end. Do not read a green run of that test as a substitute
 for the live gate below — see `execution/PENDING_LIVE_CHECKS.md` for how live

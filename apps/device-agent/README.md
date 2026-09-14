@@ -1,6 +1,6 @@
 # Device Agent App
 
-Process entry point for the device-agent protocol. It exposes the narrow device session and capability channel used by Carnegie; it does not own Goal authority or provider credentials.
+Process entry point for the device-agent protocol. It exposes the narrow device session and capability channel used by Maestro; it does not own Goal authority or provider credentials.
 
 ## Run
 

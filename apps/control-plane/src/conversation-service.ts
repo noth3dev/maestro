@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import type { OperatorContext } from "@carnegie/persistence";
-import { UuidSchema, type Conversation, type ConversationEvent, type ConversationTurnInput, type ConversationTurnResult, type CreateConversationInput, type ModelCatalogEntry } from "@carnegie/contracts";
-import { createMaestroAgentRuntime, ToolRegistry, parseModelRef, formatModelRef, type ModelGatewayPort, type GatewayBinding, type ModelMessage } from "@carnegie/agent-runtime";
+import type { OperatorContext } from "@maestro/persistence";
+import { UuidSchema, type Conversation, type ConversationEvent, type ConversationTurnInput, type ConversationTurnResult, type CreateConversationInput, type ModelCatalogEntry } from "@maestro/contracts";
+import { createMaestroAgentRuntime, ToolRegistry, parseModelRef, formatModelRef, type ModelGatewayPort, type GatewayBinding, type ModelMessage } from "@maestro/agent-runtime";
 
 export class ConversationNotFoundError extends Error {}
 export class ConversationConflictError extends Error {}
@@ -22,7 +22,7 @@ export interface ConversationService {
 }
 
 type RuntimeStreamState = { turnId: string | undefined; requestId: string | undefined; pending: Promise<void>; error: unknown | undefined };
-type RuntimeHandle = { execution: import("@carnegie/domain").ExecutionRef; invocation: import("@carnegie/domain").InvocationRef; runtime: ReturnType<typeof createMaestroAgentRuntime>; binding: GatewayBinding; stream: RuntimeStreamState };
+type RuntimeHandle = { execution: import("@maestro/domain").ExecutionRef; invocation: import("@maestro/domain").InvocationRef; runtime: ReturnType<typeof createMaestroAgentRuntime>; binding: GatewayBinding; stream: RuntimeStreamState };
 type ConversationRow = { conversation_id: string; operator_id: string; project_id: string; goal_id: string; model_provider: string; model_id: string; status: Conversation["status"]; version: number; binding: GatewayBinding; active_turn_id: string | null; active_request_id: string | null; create_request_id: string | null };
 
 const MAX_TEXT = 64_000;
@@ -93,7 +93,7 @@ export function createPostgresConversationService(options: {
     return { grantId: `grant-${row.conversation_id}`, allowedTools: [], allowedSkills: [], modelPolicy: [formatModelRef({ provider: row.model_provider, id: row.model_id })], pathScope: [], outboundDataClasses: ["public", "workspace"], remaining: { modelTurns: 8, toolCalls: 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } };
   }
   function createStreamState(): RuntimeStreamState { return { turnId: undefined, requestId: undefined, pending: Promise.resolve(), error: undefined }; }
-  function queueTextDelta(state: RuntimeStreamState, conversationId: string, projectId: string, event: import("@carnegie/agent-runtime").ModelStreamEvent): void {
+  function queueTextDelta(state: RuntimeStreamState, conversationId: string, projectId: string, event: import("@maestro/agent-runtime").ModelStreamEvent): void {
     if (event.kind !== "text-delta" || event.text === "" || state.turnId === undefined) return;
     const turnId = state.turnId;
     const chunks: string[] = [];

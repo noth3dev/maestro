@@ -1,7 +1,7 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { parseConfig, type DiscordConfig } from "./config.js";
-import { verifyDiscordSignal, type AuthenticatedDiscordSignal } from "@carnegie/domain";
+import { verifyDiscordSignal, type AuthenticatedDiscordSignal } from "@maestro/domain";
 export interface DiscordDelivery { deliver(signal: AuthenticatedDiscordSignal): Promise<void>; }
 export interface Discord { readonly config: DiscordConfig; readonly pendingCount: () => number; emit(signal: AuthenticatedDiscordSignal): Promise<void>; flush(): Promise<void>; listen(): Promise<void>; close(): Promise<void>; }
 type RecordLine = { readonly kind:"signal"; readonly signal: AuthenticatedDiscordSignal } | { readonly kind:"delivered"; readonly nonce:string };
@@ -55,7 +55,7 @@ export function createDiscord(config: DiscordConfig, delivery: DiscordDelivery):
             delivered.add(nonce);
             pending.delete(nonce);
           } catch {
-            // Retain the signal until Carnegie is reachable.
+            // Retain the signal until Maestro is reachable.
           }
         }
       } while (flushRequested && pending.size > 0);

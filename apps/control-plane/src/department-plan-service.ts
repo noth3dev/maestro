@@ -1,5 +1,5 @@
-import type { CreateDepartmentPlanInput, DepartmentPlan, ReviseDepartmentPlanInput } from "@carnegie/contracts";
-import { assertProjectRole, createDepartmentPlan, readDepartmentPlan, reviseDepartmentPlan, readHeadCouncil, type OperatorContext } from "@carnegie/persistence";
+import type { CreateDepartmentPlanInput, DepartmentPlan, ReviseDepartmentPlanInput } from "@maestro/contracts";
+import { assertProjectRole, createDepartmentPlan, readDepartmentPlan, reviseDepartmentPlan, readHeadCouncil, type OperatorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
 
 export interface DepartmentPlanService {
@@ -9,7 +9,7 @@ export interface DepartmentPlanService {
 }
 export interface DepartmentPlanServiceDependencies {
   pool: Pool;
-  withGoalLease: <T>(goalId: string, operation: (proof: import("@carnegie/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
+  withGoalLease: <T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
 }
 export class DepartmentPlanProjectMismatchError extends Error {
   constructor() { super("Department Plan project does not match the Council project"); this.name = "DepartmentPlanProjectMismatchError"; }

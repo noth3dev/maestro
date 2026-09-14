@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MODEL_CAPABILITY_AXES, type RoutingEvidence } from "@carnegie/domain";
+import { MODEL_CAPABILITY_AXES, type RoutingEvidence } from "@maestro/domain";
 import { evaluateRoutingEvidenceLineage, renderRoutingApprovalDecision, renderRoutingReportSections, type RoutingCapabilityApproval, type RoutingEvidenceCertificationRow } from "./concertmaster-report.js";
 
 const route = (overrides: Partial<RoutingEvidence> = {}): RoutingEvidence => ({

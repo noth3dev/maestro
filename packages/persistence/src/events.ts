@@ -1,4 +1,4 @@
-import type { GoalEvent } from "@carnegie/contracts";
+import type { GoalEvent } from "@maestro/contracts";
 import type { Pool } from "pg";
 
 export const EVENT_PAGE_LIMIT = 100;

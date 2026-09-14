@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import type { ProjectionReadModel } from "@carnegie/contracts";
+import type { ProjectionReadModel } from "@maestro/contracts";
 import { RadialGraph } from "./RadialGraph.js";
 
 const goalId = "22222222-2222-4222-8222-222222222222";

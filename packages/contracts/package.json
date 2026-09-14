@@ -1,5 +1,5 @@
 {
-  "name": "@carnegie/contracts",
+  "name": "@maestro/contracts",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",

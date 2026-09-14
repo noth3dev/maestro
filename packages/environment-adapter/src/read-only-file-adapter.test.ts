@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { ActionRequest, AuthorityDecision } from "@carnegie/authority";
+import type { ActionRequest, AuthorityDecision } from "@maestro/authority";
 import { createAuthorizedReadOnlyFilePort, type ReadOnlyFileAuthorityGateway } from "./read-only-file-adapter.js";
 
 function gateway(decision: "allow" | "deny" = "allow"): ReadOnlyFileAuthorityGateway & { requests: ActionRequest[] } {

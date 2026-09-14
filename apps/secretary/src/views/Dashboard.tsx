@@ -32,7 +32,7 @@ export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate:
   const { detail, loading, error, refresh } = useGoalDetail();
   const { workers, loading: workersLoading, error: workersError } = useGoalWorkers();
   const { evidenceBundle, error: evidenceError } = useGoalEvidenceBundle();
-  const projectionState = useGoalProjection(config === undefined ? undefined : window.carnegie.api, config?.projectId, selectedGoalId, eventState.cursor);
+  const projectionState = useGoalProjection(config === undefined ? undefined : window.maestro.api, config?.projectId, selectedGoalId, eventState.cursor);
   const summary = summarizeDashboard(goals, detail);
   const [controlError, setControlError] = useState<string | undefined>(undefined);
   const [pendingAction, setPendingAction] = useState<GoalControlAction | undefined>(undefined);
@@ -44,7 +44,7 @@ export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate:
     setControlError(undefined);
     setPendingAction(action);
     try {
-      await runGoalControlAction(window.carnegie.api, {
+      await runGoalControlAction(window.maestro.api, {
         goalId: summary.selectedGoal.goalId,
         projectId: config.projectId,
         action,

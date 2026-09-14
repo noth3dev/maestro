@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { GitPort } from "@carnegie/domain";
+import type { GitPort } from "@maestro/domain";
 import type { Pool } from "pg";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { recordGoalIntegrationBranch, recordWorkerWorktree } from "./git-integration.js";

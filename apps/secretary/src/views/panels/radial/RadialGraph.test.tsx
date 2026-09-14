@@ -1,7 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { ProjectionReadModel } from "@carnegie/contracts";
+import type { ProjectionReadModel } from "@maestro/contracts";
 import { goalSelectionId, panViewport, RadialGraph } from "./RadialGraph.js";
 import { buildRadialLayout } from "./radial-layout.js";
 

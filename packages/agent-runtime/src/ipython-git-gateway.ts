@@ -1,6 +1,6 @@
 import { realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
-import type { GitPort } from "@carnegie/domain";
+import type { GitPort } from "@maestro/domain";
 import type { IpPythonHostBinding } from "./ipython-host.js";
 
 export interface IpPythonGitRevisionAdapterOptions {

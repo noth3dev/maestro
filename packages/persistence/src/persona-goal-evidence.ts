@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { canonicalJson, isGoalState, isTerminalGoalState, parsePersonaGoalEvidence, type PersonaGoalEvidence, type PersonaGoalEvidenceInput } from "@carnegie/domain";
+import { canonicalJson, isGoalState, isTerminalGoalState, parsePersonaGoalEvidence, type PersonaGoalEvidence, type PersonaGoalEvidenceInput } from "@maestro/domain";
 import type { Pool } from "pg";
 
 export class PersonaGoalEvidenceError extends Error {}

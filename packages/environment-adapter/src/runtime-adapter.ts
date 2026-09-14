@@ -2,7 +2,7 @@ import { spawn as nodeSpawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { basename, relative, resolve } from "node:path";
-import type { ActionRequest, AuthorityDecision } from "@carnegie/authority";
+import type { ActionRequest, AuthorityDecision } from "@maestro/authority";
 import {
   assertValidEnvironmentRecord,
   canonicalJson,
@@ -11,7 +11,7 @@ import {
   type EnvironmentProcessHandle,
   type EnvironmentProcessResult,
   type EnvironmentRecord,
-} from "@carnegie/domain";
+} from "@maestro/domain";
 
 /** The deliberately small process surface used by both runtime adapters. */
 export interface SpawnedProcess {

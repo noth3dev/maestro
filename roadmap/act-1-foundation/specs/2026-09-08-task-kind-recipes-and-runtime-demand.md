@@ -58,7 +58,7 @@ When multiple kinds are selected, their roles combine by the strongest role per 
 
 ## 3. Initial recipe set
 
-The initial set is deliberately small and maps to existing Carnegie work surfaces. It can grow through a normal PR without rescoring any model.
+The initial set is deliberately small and maps to existing Maestro work surfaces. It can grow through a normal PR without rescoring any model.
 
 | Kind | Primary axes | Supporting axes |
 | --- | --- | --- |

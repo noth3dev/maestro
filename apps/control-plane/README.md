@@ -1,6 +1,6 @@
 # Control Plane
 
-The authoritative Carnegie HTTP service. It owns authenticated operator routes, PostgreSQL state transitions, leases/fencing, orchestration, and the `ExecutionKernelPort` composition.
+The authoritative Maestro HTTP service. It owns authenticated operator routes, PostgreSQL state transitions, leases/fencing, orchestration, and the `ExecutionKernelPort` composition.
 
 ## Run
 

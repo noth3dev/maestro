@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { LocalDevicePolicyAgent } from "@carnegie/domain";
+import { LocalDevicePolicyAgent } from "@maestro/domain";
 import { applyAllMigrations } from "./test-migrations.js";
 import { acquireGoalLease } from "./commands.js";
 import { enrollDevice, setLocalDevicePolicy } from "./device.js";

@@ -1,14 +1,14 @@
 import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { type DeviceGrantScope } from "@carnegie/domain";
+import { type DeviceGrantScope } from "@maestro/domain";
 import { applyAllMigrations } from "./test-migrations.js";
 import { acquireGoalLease } from "./commands.js";
 import { createDeviceGrant } from "./device-grant.js";
 import { enrollDevice, setLocalDevicePolicy } from "./device.js";
 import { closeDeviceAgentSession, openDeviceAgentSession } from "./device-session.js";
 import { claimDeviceAgentCommand, completeDeviceAgentCommand, loadDeviceAgentAuthorization, markUnresolvedDeviceAgentCommandsUnknown, type DeviceAgentCommandInput } from "./device-agent-runtime.js";
-import { signDeviceGrantEnvelope, type UnsignedDeviceGrantEnvelope } from "@carnegie/device-agent";
+import { signDeviceGrantEnvelope, type UnsignedDeviceGrantEnvelope } from "@maestro/device-agent";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;

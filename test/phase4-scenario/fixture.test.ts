@@ -2,7 +2,7 @@ import { mkdtemp, readFile, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { deriveDiscordIncidentFingerprint, signDiscordSignal, verifyDiscordSignal } from "@carnegie/domain";
+import { deriveDiscordIncidentFingerprint, signDiscordSignal, verifyDiscordSignal } from "@maestro/domain";
 import { createPhase4ScenarioFixture, assertPhase4ScenarioFixture } from "./fixture.mjs";
 
 describe("Phase 4 scenario fixture", () => {

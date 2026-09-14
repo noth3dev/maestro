@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ExecutionKernelPort } from "@carnegie/domain";
-import { SpawnWorkerInputSchema } from "@carnegie/contracts";
+import type { ExecutionKernelPort } from "@maestro/domain";
+import { SpawnWorkerInputSchema } from "@maestro/contracts";
 import type { Pool } from "pg";
 import {
   EnsembleRoutingUnavailableError,

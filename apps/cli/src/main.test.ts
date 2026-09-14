@@ -4,7 +4,7 @@ import { executeCli, shouldRunAsMain } from "./main.js";
 const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
 const commandId = "33333333-3333-4333-8333-333333333333";
-const env = { MAESTRO_API_URL: "https://carnegie.test", MAESTRO_API_TOKEN: "top-secret" };
+const env = { MAESTRO_API_URL: "https://maestro.test", MAESTRO_API_TOKEN: "top-secret" };
 
 function output() {
   const lines: string[] = [];
@@ -25,7 +25,7 @@ describe("executeCli", () => {
     expect(stderr.lines).toEqual([]);
     stdout.lines.length = 0;
     expect(await executeCli(["--version"], {}, { stdout: stdout.write, stderr: stderr.write })).toBe(0);
-    expect(stdout.lines[0]).toMatch(/^carnegie /);
+    expect(stdout.lines[0]).toMatch(/^maestro /);
   });
 
   it("reads provider login secrets through the hidden-input boundary, not argv", async () => {
@@ -35,7 +35,7 @@ describe("executeCli", () => {
     const readSecret = vi.fn(async () => "sk-test");
     await expect(executeCli(["login", "openai", "--json"], env, { fetch, readSecret, stdout: stdout.write, stderr: stderr.write })).resolves.toBe(0);
     expect(readSecret).toHaveBeenCalledOnce();
-    expect(fetch).toHaveBeenCalledWith("https://carnegie.test/v1/provider-credentials", expect.objectContaining({ body: JSON.stringify({ providerId: "openai", authMode: "api-key", secret: "sk-test" }) }));
+    expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/provider-credentials", expect.objectContaining({ body: JSON.stringify({ providerId: "openai", authMode: "api-key", secret: "sk-test" }) }));
     expect(stdout.lines[0]).not.toContain("sk-test");
     expect(stderr.lines).toEqual([]);
   });
@@ -63,7 +63,7 @@ describe("executeCli", () => {
     expect(stdout.lines).toEqual([`${JSON.stringify({ goalId, projectId, state: "draft", version: 0 })}
 `]);
     expect(stderr.lines).toEqual([]);
-    expect(fetch).toHaveBeenCalledWith("https://carnegie.test/v1/goals", expect.objectContaining({ headers: expect.objectContaining({ authorization: "Bearer top-secret", "idempotency-key": commandId }) }));
+    expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/goals", expect.objectContaining({ headers: expect.objectContaining({ authorization: "Bearer top-secret", "idempotency-key": commandId }) }));
   });
 
   it("can create a Goal bound to a launched Task Contract", async () => {
@@ -71,7 +71,7 @@ describe("executeCli", () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ goalId, projectId, contractId, state: "draft", version: 1 }), { status: 201 }));
     const stdout = output();
     await expect(executeCli(["goal", "create", "--project-id", projectId, "--contract-id", contractId, "--command-id", commandId, "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).resolves.toBe(0);
-    expect(fetch).toHaveBeenCalledWith("https://carnegie.test/v1/goals", expect.objectContaining({ body: JSON.stringify({ projectId, contractId }) }));
+    expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/goals", expect.objectContaining({ body: JSON.stringify({ projectId, contractId }) }));
   });
 
   it("gets and transitions a goal using parsed command arguments", async () => {
@@ -83,8 +83,8 @@ describe("executeCli", () => {
     await expect(executeCli(["goal", "get", "--goal-id", goalId, "--project-id", projectId], env, { fetch, stdout: stdout.write, stderr: output().write })).resolves.toBe(0);
     await expect(executeCli(["goal", "transition", "--goal-id", goalId, "--project-id", projectId, "--expected-version", "0", "--to", "ready_for_confirmation", "--command-id", commandId], env, { fetch, stdout: stdout.write, stderr: output().write })).resolves.toBe(0);
 
-    expect(fetch).toHaveBeenNthCalledWith(1, `https://carnegie.test/v1/goals/${goalId}?projectId=${projectId}`, expect.anything());
-    expect(fetch).toHaveBeenNthCalledWith(2, `https://carnegie.test/v1/goals/${goalId}/transitions`, expect.objectContaining({ method: "POST", body: JSON.stringify({ projectId, expectedVersion: 0, to: "ready_for_confirmation" }) }));
+    expect(fetch).toHaveBeenNthCalledWith(1, `https://maestro.test/v1/goals/${goalId}?projectId=${projectId}`, expect.anything());
+    expect(fetch).toHaveBeenNthCalledWith(2, `https://maestro.test/v1/goals/${goalId}/transitions`, expect.objectContaining({ method: "POST", body: JSON.stringify({ projectId, expectedVersion: 0, to: "ready_for_confirmation" }) }));
     expect(stdout.lines).toEqual([`Goal ${goalId}: draft (version 0)\n`, `Goal ${goalId}: ready_for_confirmation (version 1)\n`]);
   });
 
@@ -100,8 +100,8 @@ describe("executeCli", () => {
       await expect(executeCli(["goal", action, "--goal-id", goalId, "--project-id", projectId, "--expected-version", "0", "--command-id", actionCommandId, "--json"], env, { fetch, stdout: stdout.write, stderr: stderr.write })).resolves.toBe(0);
       expect(JSON.parse(stdout.lines.at(-1)!)).toMatchObject({ state: expectedState });
     }
-    expect(fetch).toHaveBeenNthCalledWith(1, `https://carnegie.test/v1/goals/${goalId}/pause`, expect.objectContaining({ method: "POST", body: JSON.stringify({ projectId, expectedVersion: 0 }) }));
-    expect(fetch).toHaveBeenNthCalledWith(4, `https://carnegie.test/v1/goals/${goalId}/emergency-stop`, expect.objectContaining({ method: "POST" }));
+    expect(fetch).toHaveBeenNthCalledWith(1, `https://maestro.test/v1/goals/${goalId}/pause`, expect.objectContaining({ method: "POST", body: JSON.stringify({ projectId, expectedVersion: 0 }) }));
+    expect(fetch).toHaveBeenNthCalledWith(4, `https://maestro.test/v1/goals/${goalId}/emergency-stop`, expect.objectContaining({ method: "POST" }));
     expect(stderr.lines).toEqual([]);
   });
 
@@ -169,7 +169,7 @@ it("drives the Task Contract intake lifecycle through CLI commands", async () =>
   expect(await executeCli(["task-contract", "confirm", "--contract-id", contractId, "--project-id", projectId, "--version", "1", "--content-hash", contract.contentHash], env, { fetch, stdout: stdout.write, stderr: output().write })).toBe(0);
   expect(await executeCli(["task-contract", "launch", "--contract-id", contractId, "--project-id", projectId, "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).toBe(0);
   expect(JSON.parse(stdout.lines[0]!)).toEqual(contract);
-  expect(fetch).toHaveBeenNthCalledWith(1, "https://carnegie.test/v1/task-contracts", expect.anything());
+  expect(fetch).toHaveBeenNthCalledWith(1, "https://maestro.test/v1/task-contracts", expect.anything());
 });
 
 
@@ -183,7 +183,7 @@ it("requests a critical action through the CLI", async () => {
   ], env, { fetch, stdout: stdout.write, stderr: output().write });
   expect(exitCode).toBe(0);
   expect(JSON.parse(stdout.lines[0]!)).toMatchObject({ effect: "allow", recordId: commandId });
-  expect(fetch).toHaveBeenCalledWith(`https://carnegie.test/v1/goals/${goalId}/critical-actions`, expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "idempotency-key": commandId }) }));
+  expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/critical-actions`, expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "idempotency-key": commandId }) }));
 });
 
 it("approves and runs a critical action through the CLI", async () => {
@@ -197,7 +197,7 @@ it("approves and runs a critical action through the CLI", async () => {
   ], env, { fetch, stdout: stdout.write, stderr: output().write });
   expect(exitCode).toBe(0);
   expect(JSON.parse(stdout.lines[0]!)).toMatchObject({ effect: "allow", recordId: commandId });
-  expect(fetch).toHaveBeenCalledWith(`https://carnegie.test/v1/goals/${goalId}/critical-actions/approve-and-run`, expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "idempotency-key": commandId }) }));
+  expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/critical-actions/approve-and-run`, expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "idempotency-key": commandId }) }));
 });
 
 
@@ -209,7 +209,7 @@ it("activates a Head through the CLI", async () => {
   const commandId = "33333333-3333-4333-8333-333333333333";
   expect(await executeCli(["head", "activate", "--goal-id", goalId, "--activation-json", JSON.stringify(input), "--command-id", commandId, "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).toBe(0);
   expect(JSON.parse(stdout.lines[0]!)).toEqual(result);
-  expect(fetch).toHaveBeenCalledWith(`https://carnegie.test/v1/goals/${goalId}/head-participations`, expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "idempotency-key": commandId }) }));
+  expect(fetch).toHaveBeenCalledWith(`https://maestro.test/v1/goals/${goalId}/head-participations`, expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "idempotency-key": commandId }) }));
 });
 
 
@@ -230,7 +230,7 @@ it("provisions exact project roles through the authenticated admin command", asy
   const stdout = output();
   expect(await executeCli(["admin", "project-access", "--operator-id", operatorId, "--project-id", projectId, "--roles-json", JSON.stringify(["concertmaster", "head-product"]), "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).toBe(0);
   expect(JSON.parse(stdout.lines[0]!)).toEqual({ operatorId, projectId, roles: ["concertmaster", "head-product"] });
-  expect(fetch).toHaveBeenCalledWith("https://carnegie.test/v1/admin/project-access", expect.objectContaining({ method: "POST" }));
+  expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/admin/project-access", expect.objectContaining({ method: "POST" }));
 });
 
 
@@ -246,9 +246,9 @@ it("dumps the evidence bundle, certifications, and report as one artifact", asyn
   await expect(executeCli(["evidence", "dump", "--goal-id", goalId, "--project-id", projectId, "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).resolves.toBe(0);
   expect(JSON.parse(stdout.lines[0]!)).toEqual({ bundle, certifications, report });
   expect(fetch).toHaveBeenCalledTimes(3);
-  expect(fetch).toHaveBeenNthCalledWith(1, `https://carnegie.test/v1/goals/${goalId}/evidence-bundle?projectId=${projectId}`, expect.objectContaining({ headers: expect.anything() }));
-  expect(fetch).toHaveBeenNthCalledWith(2, `https://carnegie.test/v1/goals/${goalId}/certifications?projectId=${projectId}`, expect.objectContaining({ headers: expect.anything() }));
-  expect(fetch).toHaveBeenNthCalledWith(3, `https://carnegie.test/v1/goals/${goalId}/concertmaster-report?projectId=${projectId}`, expect.objectContaining({ headers: expect.anything() }));
+  expect(fetch).toHaveBeenNthCalledWith(1, `https://maestro.test/v1/goals/${goalId}/evidence-bundle?projectId=${projectId}`, expect.objectContaining({ headers: expect.anything() }));
+  expect(fetch).toHaveBeenNthCalledWith(2, `https://maestro.test/v1/goals/${goalId}/certifications?projectId=${projectId}`, expect.objectContaining({ headers: expect.anything() }));
+  expect(fetch).toHaveBeenNthCalledWith(3, `https://maestro.test/v1/goals/${goalId}/concertmaster-report?projectId=${projectId}`, expect.objectContaining({ headers: expect.anything() }));
   for (const [, options] of fetch.mock.calls) expect(options?.method).toBeUndefined();
 });
 
@@ -265,7 +265,7 @@ it("fails closed when the report points to a different evidence bundle", async (
 describe("CLI entrypoint detection", () => {
   it("recognizes a symlinked executable by its resolved path", () => {
     const modulePath = "/work/apps/cli/dist/main.js";
-    expect(shouldRunAsMain(`file://${modulePath}`, "/work/node_modules/.bin/carnegie", () => modulePath)).toBe(true);
+    expect(shouldRunAsMain(`file://${modulePath}`, "/work/node_modules/.bin/maestro", () => modulePath)).toBe(true);
   });
 });
 
@@ -277,7 +277,7 @@ describe("native conversation commands", () => {
     const stdout = output();
     await expect(executeCli(["model", "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).resolves.toBe(0);
     expect(JSON.parse(stdout.lines[0]!)).toEqual(models);
-    expect(fetch).toHaveBeenCalledWith("https://carnegie.test/v1/models", expect.anything());
+    expect(fetch).toHaveBeenCalledWith("https://maestro.test/v1/models", expect.anything());
   });
 
   it("lists models and runs a conversation turn through the API", async () => {

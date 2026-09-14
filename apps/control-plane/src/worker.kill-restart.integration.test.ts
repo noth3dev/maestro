@@ -4,7 +4,7 @@ import net from "node:net";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { taskContractContentHash } from "@carnegie/domain";
+import { taskContractContentHash } from "@maestro/domain";
 import {
   acquireGoalLease,
   applyAllMigrations,
@@ -18,8 +18,8 @@ import {
   releaseGoalLease,
   revealCouncilBriefs,
   submitIndependentBrief,
-} from "@carnegie/persistence";
-import { grantProjectMembership, grantProjectRole } from "@carnegie/persistence/testing";
+} from "@maestro/persistence";
+import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { PERSONA_AXES, CONCERTMASTER_PERSONA_BASELINE, PERMANENT_ROLES, taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type IndependentBrief, type MissionBundleSubstance, type MissionPersonaOverlayInputs, type TaskContractSubstance } from "@carnegie/domain";
+import { PERSONA_AXES, CONCERTMASTER_PERSONA_BASELINE, PERMANENT_ROLES, taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type IndependentBrief, type MissionBundleSubstance, type MissionPersonaOverlayInputs, type TaskContractSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease, StaleGoalLeaseError, type GoalLeaseProof } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";

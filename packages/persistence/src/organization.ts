@@ -13,7 +13,7 @@ import {
   type PermanentRoleKind,
   type PersonaAxis,
   type PersonaProfile,
-} from "@carnegie/domain";
+} from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
 
 export interface PermanentOrganizationTaxonomy {

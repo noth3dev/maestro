@@ -9,7 +9,7 @@ import {
   type ProjectionNode,
   type ProjectionReadModel,
   type ProjectionQuery,
-} from "@carnegie/contracts";
+} from "@maestro/contracts";
 import type { Pool, QueryResultRow } from "pg";
 
 type ProjectionQueryable = Pick<Pool, "query">;

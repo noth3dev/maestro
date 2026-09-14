@@ -5,7 +5,7 @@
 
 ## Outcome
 
-Extend the certified single-Goal system beyond its local disposable project. Workers gain reproducible task environments and narrowly enrolled device access. Discord operates outside Carnegie's primary failure domain and converts verified anomalies into bounded incident workflows.
+Extend the certified single-Goal system beyond its local disposable project. Workers gain reproducible task environments and narrowly enrolled device access. Discord operates outside Maestro's primary failure domain and converts verified anomalies into bounded incident workflows.
 
 No tool installation, device enrollment, or Discord signal grants action authority by itself.
 
@@ -57,7 +57,7 @@ Ordinary in-scope reads, edits, project commands, tests, local app starts, brows
 
 ## Discord architecture
 
-Discord is a separate Node process with its own minimal configuration, health, credential, and append-only local buffer. It must continue detecting and reporting when Carnegie's main control plane is unhealthy.
+Discord is a separate Node process with its own minimal configuration, health, credential, and append-only local buffer. It must continue detecting and reporting when Maestro's main control plane is unhealthy.
 
 Inputs are allowlisted:
 
@@ -101,7 +101,7 @@ High-confidence immediate risk may trigger an automatic safe pause before delibe
 - Device transport uses TLS and short-lived opaque capability tokens whose hashes and scope live in PostgreSQL. Do not create bearer tokens with unbounded local authority.
 - Node's standard cryptography provides keys, randomness, hashing, and signatures; no custom cryptographic protocol.
 - Discord delivery uses an authenticated incident endpoint plus durable local retry buffer.
-- Carnegie accepts no raw Discord command request; only evidence signals.
+- Maestro accepts no raw Discord command request; only evidence signals.
 
 ## Work sequence
 
@@ -138,7 +138,7 @@ High-confidence immediate risk may trigger an automatic safe pause before delibe
 4. Device validates Goal, target, expiry, and fencing token independently.
 5. Revocation blocks the next command immediately.
 6. Disconnection pauses only dependent work.
-7. Discord continues buffering while Carnegie is stopped and delivers once healthy.
+7. Discord continues buffering while Maestro is stopped and delivers once healthy.
 8. Replayed or stale incident signal is rejected.
 9. Duplicate signal updates one incident identity.
 10. Seeded crash wakes Operations and Engineering only.
@@ -168,7 +168,7 @@ A worker completes one representative browser or enrolled-device task inside a n
 ### 11. Enrolled-device automation level
 
 - The CEO enrolls a computer or CLI endpoint once.
-- For each Goal, Carnegie grants only the access required for the stated outcome and expires that authority when the Goal closes.
+- For each Goal, Maestro grants only the access required for the stated outcome and expires that authority when the Goal closes.
 - Within an enrolled project scope, workers may automatically read and edit project files, run project CLIs and tests, start local applications, operate a browser, and capture evidence without asking for each action.
 - These ordinary actions follow execute-then-report and remain fully audited.
 - Access to unrelated personal folders, system-wide changes, external sending, permanent deletion, payment, login or authority changes, or any other critical action stops for CEO approval.
@@ -177,12 +177,12 @@ A worker completes one representative browser or enrolled-device task inside a n
 
 ### 41. Discord external watchdog — direction under design
 
-**Discord** is an independent external watchdog that runs outside the main Carnegie orchestration failure domain.
+**Discord** is an independent external watchdog that runs outside the main Maestro orchestration failure domain.
 
 Purpose:
 
-- Detect when Carnegie runtime, an enrolled device/runtime, or an observed project experiences a crash, persistent health failure, functional regression, bug signal, security vulnerability, dependency exposure, or other actionable anomaly.
-- Continue observing and reporting even when Carnegie's primary control plane or Encore is unhealthy.
+- Detect when Maestro runtime, an enrolled device/runtime, or an observed project experiences a crash, persistent health failure, functional regression, bug signal, security vulnerability, dependency exposure, or other actionable anomaly.
+- Continue observing and reporting even when Maestro's primary control plane or Encore is unhealthy.
 - Convert a detected anomaly into a bounded, evidence-backed incident signal and wake the relevant organizational expertise.
 
 Discord principles:
@@ -190,7 +190,7 @@ Discord principles:
 - It uses least-privilege, primarily read-only monitoring: health endpoints, bounded logs and crash summaries, approved synthetic probes, dependency or vulnerability feeds, and explicit monitored resources.
 - It does not directly patch code, change production, expand authority, or spawn execution workers.
 - It fingerprints and deduplicates signals, records first and last observation, confidence, severity, affected component and version, reproduction evidence when safe, and source freshness.
-- Signals are signed or otherwise authenticated, freshness-checked, replay-resistant, and auditable before Carnegie trusts them.
+- Signals are signed or otherwise authenticated, freshness-checked, replay-resistant, and auditable before Maestro trusts them.
 - Crash or reliability evidence maps initially to Operations and Engineering; vulnerability evidence maps to Security and Engineering; user-visible regression evidence may map to Quality, Product, Design, or Engineering as appropriate.
 - Discord creates an Incident Brief or a draft Incident Task Contract rather than injecting unbounded raw logs into Department context.
 - Concertmaster, Metronome, and the awakened Heads receive the same incident identity so duplicate Goals and duplicate remediation are avoided.
@@ -217,7 +217,7 @@ Department Heads may directly call other existing Department Heads:
 
 Initial Discord monitoring is limited to explicitly registered surfaces:
 
-- Carnegie control-plane and app health.
+- Maestro control-plane and app health.
 - Native runtime/Model Gateway availability and heartbeat.
 - Active Goal workers, leases, and abnormal silence or crash signals.
 - Explicitly registered local project health endpoints.
@@ -229,7 +229,7 @@ Initial Discord monitoring is limited to explicitly registered surfaces:
 Notification paths:
 
 - During normal operation, Discord reports to the app's Incidents channel, Concertmaster, Metronome, and the relevant Department Heads.
-- If Carnegie runtime or the Control Plane is unavailable, Discord may use one pre-approved out-of-band emergency channel, such as a dedicated Discord emergency channel or enrolled-device desktop notification.
+- If Maestro runtime or the Control Plane is unavailable, Discord may use one pre-approved out-of-band emergency channel, such as a dedicated Discord emergency channel or enrolled-device desktop notification.
 - The emergency message contains only the incident identity, affected system, severity and confidence, first observation, concise evidence, and safe next action.
 - This pre-approval permits bounded emergency notification only. It does not grant Discord remediation, shell execution, broader external messaging, or new-service authority.
 

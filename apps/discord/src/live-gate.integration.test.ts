@@ -11,7 +11,7 @@ import {
   signDiscordSignal,
   type AuthenticatedDiscordSignal,
   type DiscordSignal,
-} from "@carnegie/domain";
+} from "@maestro/domain";
 import {
   applyAllMigrations,
   acquireGoalLease,
@@ -20,7 +20,7 @@ import {
   closeDiscordIncident,
   listDiscordIncidents,
   listDiscordSignals,
-} from "@carnegie/persistence";
+} from "@maestro/persistence";
 import { localGitPort } from "../../../test/git-port.js";
 import { createDiscord } from "./main.js";
 

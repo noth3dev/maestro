@@ -1,17 +1,17 @@
 {
-  "name": "@carnegie/control-plane",
+  "name": "@maestro/control-plane",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@carnegie/authority": "*",
-    "@carnegie/contracts": "*",
-    "@carnegie/domain": "*",
-    "@carnegie/git-adapter": "*",
-    "@carnegie/persistence": "*",
+    "@maestro/authority": "*",
+    "@maestro/contracts": "*",
+    "@maestro/domain": "*",
+    "@maestro/git-adapter": "*",
+    "@maestro/persistence": "*",
     "fastify": "^5.0.0",
     "zod": "^4.0.0",
     "pg": "^8.23.0",
-    "@carnegie/agent-runtime": "*"
+    "@maestro/agent-runtime": "*"
   },
   "scripts": {
     "start": "node ./dist/main.js"

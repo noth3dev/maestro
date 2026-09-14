@@ -26,12 +26,12 @@ class FakeTransport implements CodexAppServerTransport {
 describe("Codex app-server managed login", () => {
   it("initializes the official app-server and starts a ChatGPT browser login without receiving tokens", async () => {
     const transport = new FakeTransport();
-    const client = new CodexAppServerClient({ transport, clientInfo: { name: "carnegie", title: "Carnegie", version: "test" } });
+    const client = new CodexAppServerClient({ transport, clientInfo: { name: "maestro", title: "Maestro", version: "test" } });
     const login = await client.startChatGptLogin();
 
     expect(login).toEqual({ providerId: "openai-codex", loginId: "login-1", authUrl: "https://chatgpt.com/oauth?state=opaque" });
     expect(transport.messages).toEqual(expect.arrayContaining([
-      expect.objectContaining({ method: "initialize", params: expect.objectContaining({ clientInfo: { name: "carnegie", title: "Carnegie", version: "test" } }) }),
+      expect.objectContaining({ method: "initialize", params: expect.objectContaining({ clientInfo: { name: "maestro", title: "Maestro", version: "test" } }) }),
       { method: "initialized" },
       { method: "account/login/start", id: expect.any(Number), params: { type: "chatgpt" } },
     ]));

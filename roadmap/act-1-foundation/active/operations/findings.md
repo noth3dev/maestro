@@ -452,12 +452,12 @@ The independent review found a domain/DB contract mismatch: the domain permits 1
 
 ## 2026-09-06 — Phase 6 Step 1 grant-helper surface remediation plan
 
-The security review identified that `grantProjectMembership` and `grantProjectRole` are exported from the production persistence package without an admin argument. Source inspection shows they are used only by integration-test setup; no production route or service calls them. Before the next patch, remove these bootstrap helpers from the public `@carnegie/persistence` root export, expose them only through an explicitly named `@carnegie/persistence/testing` subpath, and update test imports. Keep the real `provisionProjectAccess` admin/active-operator path as the only production provisioning API. Add a source-level guard test or verification that production application files do not import the testing subpath.
+The security review identified that `grantProjectMembership` and `grantProjectRole` are exported from the production persistence package without an admin argument. Source inspection shows they are used only by integration-test setup; no production route or service calls them. Before the next patch, remove these bootstrap helpers from the public `@maestro/persistence` root export, expose them only through an explicitly named `@maestro/persistence/testing` subpath, and update test imports. Keep the real `provisionProjectAccess` admin/active-operator path as the only production provisioning API. Add a source-level guard test or verification that production application files do not import the testing subpath.
 
 
 ## 2026-09-06 — Phase 6 Step 1 provisioning surface result
 
-- Removed `grantProjectMembership` and `grantProjectRole` from the public `@carnegie/persistence` root export. They are now available only through the explicit `@carnegie/persistence/testing` subpath for integration setup.
+- Removed `grantProjectMembership` and `grantProjectRole` from the public `@maestro/persistence` root export. They are now available only through the explicit `@maestro/persistence/testing` subpath for integration setup.
 - Production code has no imports of the testing subpath; production provisioning remains `provisionProjectAccess`, which enforces the configured admin and active-operator boundary. Updated application integration-test imports accordingly.
 - `npm run build` passes after the surface split.
 
@@ -536,13 +536,13 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   not the single-Goal Next.js page `plan/operations/task_plan.md`'s Phase 5 Track A7 section still describes.
 - Real, unit-tested data plumbing exists end to end: `connection.tsx` (IPC-backed connection
   config get/save/clear), `goals.tsx` (`GoalsProvider`, lists/selects a Goal via
-  `window.carnegie.api.listGoals`), `useGoalDetail.ts` (loads Goal + events + budget +
+  `window.maestro.api.listGoals`), `useGoalDetail.ts` (loads Goal + events + budget +
   certifications for the selected Goal), `lib/goal-data.ts` (pure, tested read-model assembly),
   and `electron/apiBridge.ts` (an explicit allowlist exposing `listGoals`, `getGoal`,
   `getBudgetSummary`, `listEvents`, the full Task Contract lifecycle, `pauseGoal`/`resumeGoal`/
   `stopGoal`/`emergencyStopGoal`, `listCertifications`, `listMetronomeChallenges`,
   `listEncoreCouncilRounds`, `getConcertmasterReport` from the renderer).
-- Despite that, `grep -rl 'useGoalDetail|useGoals()|window.carnegie' apps/secretary/src/views
+- Despite that, `grep -rl 'useGoalDetail|useGoals()|window.maestro' apps/secretary/src/views
   apps/secretary/src/*.tsx` matches only the provider files themselves (`connection.tsx`,
   `goals.tsx`, `theme.tsx`) — never a single one of the 13 views (`home`, `dashboard`, `channel`,
   `git`, `floor`, `inbox`, `evlog`, `billing`, `settings`, `luthiery`, `arrangements`, `flashmob`,
@@ -567,11 +567,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 ## 2026-09-06 — node_modules workspace-symlink defect (local environment, not a repo defect)
 
-- Main worktree's `node_modules/@carnegie/` was missing `device-agent` and `device-agent-app`
+- Main worktree's `node_modules/@maestro/` was missing `device-agent` and `device-agent-app`
   symlinks that every other workspace package already had (`api-client`, `authority`, `cli`,
   `contracts`, `control-plane`, `discord`, `domain`, `environment-adapter`, `evidence`,
   `git-adapter`, `persistence`, `prime-adapter`, `secretary`). This caused `npm run build` to fail
-  with `Cannot find module '@carnegie/device-agent'` purely from local disk state, unrelated to any
+  with `Cannot find module '@maestro/device-agent'` purely from local disk state, unrelated to any
   code change. `npm install` recreated exactly those two symlinks with zero `package-lock.json`
   diff (confirmed via `git status`/`git diff --stat` before and after: no changes). `npm run build`
   is clean afterward on `hardening/lifecycle` HEAD (`ce94c3d`).
@@ -615,7 +615,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - No source defect was found in this check. The remaining evidence limitation is environmental: PostgreSQL integration suites cannot run here.
 
 
-## 2026-09-06 — Carnegie TUI review and hardening
+## 2026-09-06 — Maestro TUI review and hardening
 - Independent review identified a durable-approval bypass risk for project-access provisioning, setup state collapse, missing attach flow, unbounded SSE retry, misleading approval count, project-binding spread order, and command alias drift.
 - The TUI now blocks local-only approval for critical operations without a server-side durable approval binding; only `approval:approve-and-run` reaches the durable endpoint. Setup-required is rendered distinctly, `/session attach --project-id=...` provides an explicit fallback for a workspace with no saved identity, `/new` preserves project/cursor metadata while clearing the active conversation Goal, and `/retry` rechecks startup health.
 - SSE reconnects are bounded to five retries by default and report retry/exhaustion state. Active Worker counts exclude terminal statuses. Session metadata is sanitized on load and permissions are re-applied on every write.
@@ -650,8 +650,8 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 ## 2026-09-07 — Account OAuth boundary review
 
-- **Accepted:** OpenAI account login is delegated to the documented public Codex app-server managed-login protocol. Carnegie does not implement OAuth endpoints, exchange codes, handle refresh tokens, or persist provider tokens.
-- **Accepted:** Codex app-server starts as a shell-free child with provider credential-like environment variables removed. Carnegie sends only validated provider/model/message data and uses a read-only sandbox; Carnegie tool calls are rejected until a separate authority bridge exists.
+- **Accepted:** OpenAI account login is delegated to the documented public Codex app-server managed-login protocol. Maestro does not implement OAuth endpoints, exchange codes, handle refresh tokens, or persist provider tokens.
+- **Accepted:** Codex app-server starts as a shell-free child with provider credential-like environment variables removed. Maestro sends only validated provider/model/message data and uses a read-only sandbox; Maestro tool calls are rejected until a separate authority bridge exists.
 - **Blocked:** Claude Pro/Max subscription OAuth requires an official public or explicitly approved Anthropic protocol. Reusing Prime's private flow, undocumented endpoints/scopes, or the Claude CLI as a credential bridge would violate the project boundary.
 - **Open:** Login request idempotency and restart-safe login session ownership still need durable records before production release.
 
@@ -663,7 +663,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 ## 2026-09-07 — Durable account-login final review and remediation
 
-- Independent source review found three blocking defects: released/no-token operation updates could bypass per-operation fencing; migration `0065` allowed arbitrary NULL→provider identity injection; and one route test passed a provider login ID instead of the durable Carnegie login ID.
+- Independent source review found three blocking defects: released/no-token operation updates could bypass per-operation fencing; migration `0065` allowed arbitrary NULL→provider identity injection; and one route test passed a provider login ID instead of the durable Maestro login ID.
 - A fourth boundary issue was found: Codex provider-side unknown errors used a different message and could map to generic HTTP 400. Typed `account_login_session_unknown` mapping now preserves the stable 409 contract.
 - Fixes are present but not yet committed: `updateState` now requires an exact live `(operation_owner, operation_token)` pair when fenced, or an explicitly unleased no-token update; migration `0066_harden_provider_account_login_identity.sql` provides the only provider-identity completion function and rejects direct identity transitions; tests cover stale-after-release, no-token-active, direct identity injection, durable route IDs, and typed Codex unknown errors.
 - Verification: targeted gateway/control-plane tests passed 15/15; durable PostgreSQL account-login integration passed 8/8 on `postgresql://maestro@127.0.0.1:55465/maestro_test`; `npm run build` passed. `npm install --ignore-scripts` repaired stale root workspace symlinks and reported the pre-existing 3 high-severity npm audit findings.
@@ -672,7 +672,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 ## 2026-09-07 — Codex authorize URL and TUI copy finding
 
-- A real Codex app-server 0.153.4 probe showed Carnegie's previous default URL carried `originator=maestro`. The provider login endpoint returned `Invalid authorize request`; the official Codex client identity is `codex_cli_rs`. The default app-server client identity now uses that originator while keeping Carnegie as the display title.
+- A real Codex app-server 0.153.4 probe showed Maestro's previous default URL carried `originator=maestro`. The provider login endpoint returned `Invalid authorize request`; the official Codex client identity is `codex_cli_rs`. The default app-server client identity now uses that originator while keeping Maestro as the display title.
 - The TUI previously opened the browser but did not retain or render the URL, leaving no reliable manual recovery path. The waiting dialog now shows the URL and advertises `Alt+C`; the action copies through a shell-free stdin boundary and reports a safe fallback when no clipboard utility exists.
 - This does not claim successful account completion: the local app-server process and browser callback still require a running supported Codex installation and a real browser session.
 
@@ -710,10 +710,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 ## 2026-09-08 — Native Prime-removal cutover plan
 
-- The user explicitly reprioritized the work: remove Prime Agent completely and move every production execution path to the native Carnegie backend before resuming the remaining Phase 1 patches.
+- The user explicitly reprioritized the work: remove Prime Agent completely and move every production execution path to the native Maestro backend before resuming the remaining Phase 1 patches.
 - Current native conversation execution already uses `createMaestroAgentRuntime` and the authenticated Model Gateway. The missing production seam is the Control Plane execution-kernel composition: Worker, Head activation, semantic review, Encore reviewers, and team-lead helpers still issue Prime-era or bare `ExecutionKernelPort` requests.
 - Created `plan/2026-09-08-native-prime-removal-cutover.md`. It sequences native kernel routing, explicit model/grant propagation, durable execution-binding evidence, fixed host tools, real HTTP acceptance, complete Prime deletion, then the Phase 1 PostgreSQL patch queue.
-- The plan requires zero production/test dependency references to `prime-agent`, `@carnegie/prime-adapter`, `createPrimeExecutionKernel`, or `primeAgentVersion`; Prime is not allowed as fallback.
+- The plan requires zero production/test dependency references to `prime-agent`, `@maestro/prime-adapter`, `createPrimeExecutionKernel`, or `primeAgentVersion`; Prime is not allowed as fallback.
 
 
 ## 2026-09-08 — Native execution-kernel router Task B green
@@ -737,7 +737,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Added the shared `ExecutionAdmission` contract. Head activation, semantic review, Encore fan-out, and team-lead helper seams now preserve host-owned context, grant, exact model policy, and idempotency fields when supplied. Encore derives unique per-reviewer idempotency keys.
 - Control Plane composition now creates `createNativeExecutionKernel()` over the authenticated Model Gateway. When no gateway credential is configured it uses an explicit fail-closed unavailable kernel; it never creates or imports Prime. Host-created Head/Encore admissions require explicit `MAESTRO_NATIVE_MODEL`, provider account binding, lease fencing, and bounded read-only grants.
-- Removed `primeAgentVersion` from Carnegie configuration and all source fixtures.
+- Removed `primeAgentVersion` from Maestro configuration and all source fixtures.
 - Evidence: Head HTTP PostgreSQL suite **2/2**, team-lead PostgreSQL suite **11/11** on disposable port `55475`, semantic review **3/3**, Encore **8/8**, config/native router **19/19**, forced TypeScript build passed.
 - Remaining: delete the Prime package/dependency and lockfile references; wire durable semantic/Encore admission callers where production surfaces exist; add real Model Gateway HTTP process evidence.
 
@@ -745,7 +745,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 ## 2026-09-08 — Prime package deletion verification
 
 - Removed `packages/prime-adapter`, its Control Plane dependency, root and app TypeScript references, and all Prime tarball entries from `package-lock.json`; `npm prune --ignore-scripts` removed the stale installed packages.
-- Source/dependency scan: `git grep -in prime -- '*.ts' '*.tsx' '*.js' '*.json' '*.toml' '*.yaml' '*.yml'` is clean; `prime` is absent from `package-lock.json`; `node_modules/@carnegie/prime-adapter` and `node_modules/prime-agent` are absent. Historical findings retain their original audit evidence.
+- Source/dependency scan: `git grep -in prime -- '*.ts' '*.tsx' '*.js' '*.json' '*.toml' '*.yaml' '*.yml'` is clean; `prime` is absent from `package-lock.json`; `node_modules/@maestro/prime-adapter` and `node_modules/prime-agent` are absent. Historical findings retain their original audit evidence.
 - Native focused verification after deletion: 5 files / 50 tests passed; forced TypeScript build passed.
 - Full real Model Gateway process acceptance is still open; no credential or provider secret was added to tests or persistence.
 
@@ -809,7 +809,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 ## 2026-09-08 — Real subprocess test for Codex's StdioTransport found two more real defects
 
-- Continued the "make it truly work, not a shell" audit into a different class of untested boundary: `packages/model-provider-openai/src/codex-app-server.ts`'s `StdioTransport` (real `child_process.spawn` + JSONL stdin/stdout framing). Every existing test for `CodexAppServerClient` used `options.transport` (a pure in-memory object fake); `StdioTransport` itself -- process spawn, environment redaction, JSONL parsing, exit/error handling -- had zero test coverage exercising it as a genuine OS process boundary. The real `codex` binary is not installable in this sandbox (`Missing optional dependency @openai/codex-linux-x64`), so a new fixture-based real-process test was added instead: `packages/model-provider-openai/test/fake-codex-app-server.mjs`, a tiny real Node.js child process speaking the exact same JSON-RPC-over-JSONL wire protocol, driven by a new `packages/model-provider-openai/src/codex-stdio-transport.test.ts` spawning it as a genuine subprocess (not the real Codex model, but a real OS process boundary for Carnegie's own transport code).
+- Continued the "make it truly work, not a shell" audit into a different class of untested boundary: `packages/model-provider-openai/src/codex-app-server.ts`'s `StdioTransport` (real `child_process.spawn` + JSONL stdin/stdout framing). Every existing test for `CodexAppServerClient` used `options.transport` (a pure in-memory object fake); `StdioTransport` itself -- process spawn, environment redaction, JSONL parsing, exit/error handling -- had zero test coverage exercising it as a genuine OS process boundary. The real `codex` binary is not installable in this sandbox (`Missing optional dependency @openai/codex-linux-x64`), so a new fixture-based real-process test was added instead: `packages/model-provider-openai/test/fake-codex-app-server.mjs`, a tiny real Node.js child process speaking the exact same JSON-RPC-over-JSONL wire protocol, driven by a new `packages/model-provider-openai/src/codex-stdio-transport.test.ts` spawning it as a genuine subprocess (not the real Codex model, but a real OS process boundary for Maestro's own transport code).
 - **Real defect #1 (confirmed a fix, not just a passing test):** `redactChildEnvironment()`'s pattern is correct, but the first test attempt used a probe variable name (`MAESTRO_TEST_SECRET_PROBE`) that does not match its `(?:API_KEY|...)$` suffix pattern -- a test-authoring mistake, not a product bug. Corrected to the realistic `OPENAI_API_KEY` (which the pattern is explicitly designed to catch) and reverified the real child process genuinely never receives it (the fixture echoes back `"REDACTED"` rather than the real value it would report if the redaction failed).
 - **Real defect #2 (genuine product bug):** a real process crash (`child.once("exit", ...)`) surfaced two different error messages depending on request timing: already-pending requests were rejected with the raw `"Codex app-server exited (1)"`, while `this.transportError` (used for later requests) was a differently-worded plain `Error("Codex app-server is unavailable")`. Neither wording matched `apps/model-gateway/src/rpc.ts`'s `errorCode()` message-substring checks (`"closed"`/`"transport"`), which were written for the HTTP-based OpenAI/Anthropic providers' own wording (`"...transport failed"`). A genuine Codex app-server crash therefore fell through to the generic `400 invalid_gateway_request` ("model gateway request is invalid") instead of the correct `503 provider_unavailable` -- misclassifying a provider outage as a malformed client request.
 - **Fix:** normalized both the pending-request rejection and `this.transportError` to the same typed `CodexAppServerError("provider_unavailable", "Codex app-server is unavailable")`, matching the exact same `.code` convention `OpenAiProviderError`/`AnthropicProviderError` already use. Added a `code === "provider_unavailable"` branch to `errorCode()` ahead of the fragile message-substring checks, so any provider's structured `provider_unavailable` code maps to 503 reliably regardless of wording -- this also makes the fix general across all three provider plugins, not Codex-specific.
@@ -830,7 +830,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Continued the audit into the account-login/credential-bind flow (`/v1/provider-account-logins/*`, `/v1/provider-credentials`), a real end-to-end user-facing feature with no prior real-stack coverage: `apps/control-plane/src/provider-credential-route.test.ts` injects a fake `providerCredentials` object directly, bypassing the real `ModelGateway`'s own authorization logic entirely -- exactly the same systemic blind spot every prior finding this session traced back to.
 - Added `apps/control-plane/src/account-login-acceptance.integration.test.ts`: a real Control Plane HTTP server (`createControlPlane`, no injected overrides) wired to a real Model Gateway HTTP process (with a real `CodexAppServerClient` over an in-memory transport, matching `codex-app-server.test.ts`'s established fixture pattern) and real PostgreSQL, driving `/v1/provider-account-logins/start` -> `/status` (pending) -> a simulated real OAuth completion notification -> `/status` (succeeded), plus `/v1/provider-credentials` (API key bind).
 - **Root cause of the failure this test immediately hit:** `ModelGateway.bindCredential`/`revokeCredential`/`startAccountLogin`/`accountLoginStatus`/`cancelAccountLogin`/`logoutAccount` each strictly check `request.operatorId !== this.options.operatorId` and throw `"credential operator context mismatch"` on any inequality -- by design, since the gateway process authenticates one fixed gateway-level operator identity (`config.modelGatewayOperatorId`, defaulting to `"local-operator"`), exactly matching how native admission already calls `gateway.admit()` with that same fixed constant (`apps/control-plane/src/native-execution-kernel.ts`), never the calling end-user's own operator UUID. `apps/control-plane/src/main.ts`'s composition for the six credential/account-login gateway calls instead forwarded the *real authenticated end-user's* `operatorId` straight through unmodified (taken from `requestOperator(request).operatorId` inside `server.ts`'s route handlers), which can never equal the fixed gateway-operator constant in any real multi-operator deployment. **Every real credential bind and every real ChatGPT account login through the authenticated Control Plane API was completely broken** -- not an edge case, but the ordinary first-time-setup path any real operator must use before any provider can be used at all. It was invisible because every existing test for this surface mocked `providerCredentials` directly rather than exercising the real `ModelGateway`'s operatorId check.
-- **Fix:** in `main.ts`'s composition, all six gateway-facing calls now override `operatorId` with `config.modelGatewayOperatorId` before calling the gateway, while every durable-store call (`accountLoginStore.reserveStart/get/claimOperation/...`) continues to use the real end-user's operatorId untouched -- this preserves Carnegie's own per-operator durable isolation/audit trail (which is the correct place for that boundary) while fixing the gateway-facing identity to match what the gateway process itself was actually configured with.
+- **Fix:** in `main.ts`'s composition, all six gateway-facing calls now override `operatorId` with `config.modelGatewayOperatorId` before calling the gateway, while every durable-store call (`accountLoginStore.reserveStart/get/claimOperation/...`) continues to use the real end-user's operatorId untouched -- this preserves Maestro's own per-operator durable isolation/audit trail (which is the correct place for that boundary) while fixing the gateway-facing identity to match what the gateway process itself was actually configured with.
 - **Verified genuine reproduction:** reverted the fix, reran the acceptance test, confirmed the exact pre-fix `503 credential operator context mismatch` failure; reapplied the fix and confirmed success end to end, including a durable PostgreSQL row with the correct `pending` -> `succeeded` state transition, and the real HTTP responses/durable table columns containing no token, secret, or credential material.
 - **Evidence:** new acceptance test 1/1; broader regression sweep (account-login acceptance, provider-credential-route unit tests, native-worker-acceptance, head-participation-api, conversation-service, native-execution-kernel, native-gateway-http, config, server, Model Gateway app, agent-runtime) 15 files / 115 tests, 0 failed; full clean single-worker real-PostgreSQL rerun in progress to confirm no regression across the whole suite.
 - **Pattern confirmation:** this is the fifth real, previously-hidden defect this session traced to the identical root pattern -- every fake-injected test bypasses a real authority/schema/process boundary that the actual production composition never gets to exercise until a genuine end-to-end test forces the real path.
@@ -866,7 +866,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Replaced production `as never`, `as unknown as`, and `as Parameters<...>` assertions in the execution-kernel, Goal, sealed-submission, persistence, environment-adapter, Control Plane HTTPS, and TUI write-command paths.
 - Added `toExecutionRef`/`toInvocationRef` opaque-reference constructors and `isGoalState`; these keep boundary data typed without pretending arbitrary persisted strings or JSON are already domain values.
-- TUI JSON inputs now use the existing `@carnegie/contracts` schemas for conditional certification, worker spawn, Encore review, and Task Contract intake. Invalid payloads are rejected before any client method is called. Added a regression test for malformed worker JSON.
+- TUI JSON inputs now use the existing `@maestro/contracts` schemas for conditional certification, worker spawn, Encore review, and Task Contract intake. Invalid payloads are rejected before any client method is called. Added a regression test for malformed worker JSON.
 - Preserved sealed-submission compatibility for generic contract content by adding a typed `taskContractContentHash` overload instead of incorrectly applying the full Task Contract validator to partial sealed content.
 - **Evidence:** TypeScript AST/lint audit reports zero explicit `any`; production source has zero `as unknown as`, zero `as Parameters<...>`, and no executable `as never`. `npm run build` and `npm run lint` passed. Focused domain/adapter/Control Plane/CLI sweep passed 6 files / 99 tests. Fresh PostgreSQL worker/council rerun passed 2 files / 56 tests; the earlier attempt was started before `pg_isready` and was correctly treated as environmental setup failure, not product evidence.
 
@@ -919,7 +919,7 @@ No source behavior was changed in this documentation slice. The audit did not au
 
 ## 2026-09-08 — CI package-entry failure root cause
 
-- The GitHub Actions failure was environmental, not a new package-export defect. The workflow built only in the independent `static` job, then created a fresh runner for `test`. Because packages such as `@carnegie/domain`, `@carnegie/persistence`, and `@carnegie/agent-runtime` export `dist` entrypoints, `npm test` on the fresh test runner produced Vite `Failed to resolve entry for package` errors.
+- The GitHub Actions failure was environmental, not a new package-export defect. The workflow built only in the independent `static` job, then created a fresh runner for `test`. Because packages such as `@maestro/domain`, `@maestro/persistence`, and `@maestro/agent-runtime` export `dist` entrypoints, `npm test` on the fresh test runner produced Vite `Failed to resolve entry for package` errors.
 - The four `apps/cli/src/tui/local-bootstrap.test.ts` failures confirmed the same boundary: without the test-job build, `resolveControlPlaneEntry` and `resolveModelGatewayEntry` could not find generated executables and returned `setup-required`.
 - The smallest root-cause fix is to build in the test job after dependency installation. No package export, source implementation, or test behavior was changed.
 - Post-fix evidence: build-backed bootstrap and representative PostgreSQL tests passed; full no-database Vitest passed with the expected database skips; lint and diff checks passed. A complete local PostgreSQL run exceeded the bounded five-minute verification command and is therefore not reported as green.
@@ -938,16 +938,16 @@ No source implementation has been changed by this planning checkpoint. The only 
 
 A read-only comparison against Prime Agent `9c8230df67b378aaedc032f90e1ae8ba687cfe4` confirmed the useful structural pattern: TypeScript owns the persistent `ReplKernelManager`, serialized cell queue, JSON-lines protocol, typed host-request dispatch, cancellation, bounded shutdown, output attribution, and lifecycle accounting; the child Python runtime owns only session-local code execution (`packages/coding-agent/docs/rlm-runtime.md:8-21,62-72`; `packages/coding-agent/src/core/kernel/repl-manager.ts:1-40`).
 
-Prime's protocol documents handshake, frame separation, ordered requests, host replies, interruption, and shutdown (`prime-agent-runtime/src/rlm/repl.md:1-41,47-123`). Its tests provide the required shape for real child-process coverage: execution/host bridge, namespace state roundtrip, abort, teardown, and parent watchdog. Carnegie will copy these test categories, not Prime's authority model.
+Prime's protocol documents handshake, frame separation, ordered requests, host replies, interruption, and shutdown (`prime-agent-runtime/src/rlm/repl.md:1-41,47-123`). Its tests provide the required shape for real child-process coverage: execution/host bridge, namespace state roundtrip, abort, teardown, and parent watchdog. Maestro will copy these test categories, not Prime's authority model.
 
-Explicitly excluded from the Carnegie design: arbitrary Python evaluation as authorization, `bash()` as a permission model, child-process isolation as a security boundary, generic string host handlers, detached effectful background tasks, and dill/pickle namespace restore. Carnegie host effects remain Control Plane-owned, typed, Goal-scoped, lease/fence/approval/idempotency checked, and routed through existing adapters.
+Explicitly excluded from the Maestro design: arbitrary Python evaluation as authorization, `bash()` as a permission model, child-process isolation as a security boundary, generic string host handlers, detached effectful background tasks, and dill/pickle namespace restore. Maestro host effects remain Control Plane-owned, typed, Goal-scoped, lease/fence/approval/idempotency checked, and routed through existing adapters.
 
 The plan now explicitly includes out-of-band host replies, busy-kernel/cancellation behavior, bounded teardown, output attribution, project-skill manifest/hash/save/revocation, IPython-specific crash/restart recovery, and Phase 3/8 protocol/snapshot/prompt-injection/full-access security cases.
 
 
 ## 2026-09-08 — Prime parent-death cleanup addendum
 
-The benchmark review found one additional lifecycle requirement: Prime passes a parent identity to the child, the Python watchdog exits when the owner dies, and the manager journals/reaps owned process groups (`packages/coding-agent/src/core/kernel/repl-manager.ts:315-328,1282-1317`; `prime-agent-runtime/src/rlm/repl.py:1061-1125`). Carnegie must add the equivalent parent-death/orphan-reaping contract and prove that no shell/test child survives a Control Plane crash. This belongs in the Phase 2 lifecycle tests and the Phase 8 termination-injection gate.
+The benchmark review found one additional lifecycle requirement: Prime passes a parent identity to the child, the Python watchdog exits when the owner dies, and the manager journals/reaps owned process groups (`packages/coding-agent/src/core/kernel/repl-manager.ts:315-328,1282-1317`; `prime-agent-runtime/src/rlm/repl.py:1061-1125`). Maestro must add the equivalent parent-death/orphan-reaping contract and prove that no shell/test child survives a Control Plane crash. This belongs in the Phase 2 lifecycle tests and the Phase 8 termination-injection gate.
 
 
 ## 2026-09-08 — 1A static review corrections
@@ -959,7 +959,7 @@ The review also confirmed what remains intentionally open: real child-process pr
 
 ## 2026-09-08 — Prime harness scope/persistence reference
 
-Prime's harness separates session-local and explicit global state and validates skill references before saving (`prime-agent-runtime/src/rlm/harness.py:1-8,131-141,607-631`). It writes schema-tagged state atomically with restrictive file modes (`harness.py:287-319`). These are useful persistence patterns for a future Carnegie project-skill contract only; Carnegie retains explicit user save, content hash/version, Mission Bundle allowlisting, revocation, and no automatic executable promotion.
+Prime's harness separates session-local and explicit global state and validates skill references before saving (`prime-agent-runtime/src/rlm/harness.py:1-8,131-141,607-631`). It writes schema-tagged state atomically with restrictive file modes (`harness.py:287-319`). These are useful persistence patterns for a future Maestro project-skill contract only; Maestro retains explicit user save, content hash/version, Mission Bundle allowlisting, revocation, and no automatic executable promotion.
 
 
 ## 2026-09-08 — 1B protocol slice and remaining composition boundary
@@ -993,7 +993,7 @@ A test-first symlink case exposed an ordering issue where a sensitive filename b
 
 ## 2026-09-08 — constrained Python bootstrap
 
-Added a versioned Python bootstrap as a source artifact, tested in a real `python3 -I -S` child. The bootstrap keeps namespace state across cells, emits stdout/stderr as protocol events, performs read-only access through out-of-band `host_request`/`host_response`, caps input/output, and exposes a deliberately small builtin set without `import`, `open`, `exec`, `eval`, `compile`, or subprocess/network helpers to session code. This is a defense-in-depth restriction, not a substitute for Carnegie authority; the child still receives no credentials and production composition remains fail-closed.
+Added a versioned Python bootstrap as a source artifact, tested in a real `python3 -I -S` child. The bootstrap keeps namespace state across cells, emits stdout/stderr as protocol events, performs read-only access through out-of-band `host_request`/`host_response`, caps input/output, and exposes a deliberately small builtin set without `import`, `open`, `exec`, `eval`, `compile`, or subprocess/network helpers to session code. This is a defense-in-depth restriction, not a substitute for Maestro authority; the child still receives no credentials and production composition remains fail-closed.
 
 
 ## 2026-09-08 — bootstrap AST guard and bounded interrupt
@@ -1340,7 +1340,7 @@ All downstream routing documentation must use this contract and must not restore
 
 ## 2026-09-09 — Plan 2 S1 findings
 
-- The authority action registry was not exported from `@carnegie/authority`; exporting the existing module was required so the classifier consumes one vocabulary rather than duplicating action names.
+- The authority action registry was not exported from `@maestro/authority`; exporting the existing module was required so the classifier consumes one vocabulary rather than duplicating action names.
 - Unknown action names remain `ambiguous` through `classifyAction` and map to the user tier; forbidden actions throw before tier assignment.
 - CI run `34300045169` was still in progress during implementation; merge/push remains gated on its conclusion.
 
@@ -1354,7 +1354,7 @@ All downstream routing documentation must use this contract and must not restore
 
 ## 2026-09-09 — Plan 2 S1 CI finding
 
-- CI failure was a clean-runner build-order/configuration defect, not a classifier test failure: TypeScript emitted `TS2307` for `@carnegie/authority` across consumers because the domain project did not declare its new authority reference.
+- CI failure was a clean-runner build-order/configuration defect, not a classifier test failure: TypeScript emitted `TS2307` for `@maestro/authority` across consumers because the domain project did not declare its new authority reference.
 - A proper clean workspace reproduction failed before the fix and passed after adding `references: [{ "path": "../authority" }]` to `packages/domain/tsconfig.json`.
 
 ## 2026-09-09 — Plan 2 S1 CI remediation review finding
@@ -1746,7 +1746,7 @@ All downstream routing documentation must use this contract and must not restore
 
 - 2026-09-10 Plan 3 S4 remediation verification finding: the full no-DB suite remains green after adding fixture containment, fake fourteen-step execution, runbook input generation, and evidence bundle/report identity checks. PostgreSQL/live-provider acceptance remains intentionally unrun.
 
-- 2026-09-10 Plan 3 S4 second independent review returned `REVIEW: FAIL`: the fake runner still hard-coded events, did not restart a process, did not exercise mode-specific provider calls or evidence reads, and the fixture allowed missing-root/canonical-path escapes. Step 10 also repaired directly in the target instead of through Carnegie, and the live restart PID was uninitialized. Remediation now adds separate fake provider and fake Control Plane HTTP child processes, provider-backed fourteen-step execution/evidence, actual child-process restart, mode-specific blocked effects, strict canonical containment, and live runbook process startup/worker integration commands.
+- 2026-09-10 Plan 3 S4 second independent review returned `REVIEW: FAIL`: the fake runner still hard-coded events, did not restart a process, did not exercise mode-specific provider calls or evidence reads, and the fixture allowed missing-root/canonical-path escapes. Step 10 also repaired directly in the target instead of through Maestro, and the live restart PID was uninitialized. Remediation now adds separate fake provider and fake Control Plane HTTP child processes, provider-backed fourteen-step execution/evidence, actual child-process restart, mode-specific blocked effects, strict canonical containment, and live runbook process startup/worker integration commands.
 
 - 2026-09-10 Plan 3 S4 process-backed verification finding: no build, lint, focused, or full no-DB failure remains after adding child-process HTTP boundaries and strict path checks. Real PostgreSQL and live provider acceptance remain user-owned and unrun.
 
@@ -1756,9 +1756,9 @@ All downstream routing documentation must use this contract and must not restore
 
 - 2026-09-10 Plan 3 S4 third-remediation verification finding: full no-DB remains green after closing root creation, duplicate restart effect, mode enforcement, evidence integrity, and worker repair lineage gaps. PostgreSQL/live-provider acceptance is still intentionally unrun.
 
-- 2026-09-10 Plan 3 S4 fourth-remediation finding: the remaining review concern is the production worker's lack of a public repair/reprompt command; the runbook now records the Carnegie conversation repair request and integrates only after the subsequent worker observation. No new production worker API was added because that would exceed S4's declared support scope.
+- 2026-09-10 Plan 3 S4 fourth-remediation finding: the remaining review concern is the production worker's lack of a public repair/reprompt command; the runbook now records the Maestro conversation repair request and integrates only after the subsequent worker observation. No new production worker API was added because that would exceed S4's declared support scope.
 
-- 2026-09-10 Plan 3 S4 fourth-remediation verification finding: no no-DB regression remains. The live native worker reprompt API is not part of the existing WorkerService surface; the runbook records the existing Carnegie conversation request and keeps live acceptance user-owned rather than adding an unplanned production API.
+- 2026-09-10 Plan 3 S4 fourth-remediation verification finding: no no-DB regression remains. The live native worker reprompt API is not part of the existing WorkerService surface; the runbook records the existing Maestro conversation request and keeps live acceptance user-owned rather than adding an unplanned production API.
 
 - 2026-09-10 Plan 3 S4 runbook correction finding: the existing public WorkerService still cannot establish a worker cwd/worktree before its initial provider call, has no public worker reprompt operation for Step 10, and `worker accept` requires a recorded integration commit. These are Plan 2 S6/runtime prerequisites, not solvable by a runbook-only edit; S4 remains open and must not be handed off as runnable until that boundary is resolved.
 
@@ -2062,7 +2062,7 @@ All downstream routing documentation must use this contract and must not restore
 - Final rerun passed 230/230 files and 1588/1588 tests.
 
 
-- 2026-09-13 Plan 6 §S2 post-merge verification: main initially had a stale local `node_modules/@carnegie/domain` symlink targeting the deleted S1 worktree, so the first build failed with missing `@carnegie/domain` types. Repointing the ignored local symlink to `../../packages/domain` restored the intended workspace dependency; build/lint/diff-check then passed. This was environment cleanup, not a tracked code change.
+- 2026-09-13 Plan 6 §S2 post-merge verification: main initially had a stale local `node_modules/@maestro/domain` symlink targeting the deleted S1 worktree, so the first build failed with missing `@maestro/domain` types. Repointing the ignored local symlink to `../../packages/domain` restored the intended workspace dependency; build/lint/diff-check then passed. This was environment cleanup, not a tracked code change.
 - 2026-09-13 Plan 6 §S2 post-merge full verification passed 230/230 files and 1588/1588 tests.
 
 

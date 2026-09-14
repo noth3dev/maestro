@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionAdmission, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance, type TeamLeadGrantSubstance } from "@carnegie/domain";
+import { taskContractContentHash, type DecisionPacket, type DepartmentPlanSubstance, type ExecutionAdmission, type ExecutionKernelPort, type IndependentBrief, type MissionBundleSubstance, type TaskContractSubstance, type TeamLeadGrantSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease, StaleGoalLeaseError } from "./commands.js";
 import { createHeadCouncil, recordCouncilDecisionPacket, revealCouncilBriefs, submitIndependentBrief } from "./council.js";

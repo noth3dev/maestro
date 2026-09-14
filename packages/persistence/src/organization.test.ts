@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { PERMANENT_ROLES, PERSONA_AXES } from "@carnegie/domain";
+import { PERMANENT_ROLES, PERSONA_AXES } from "@maestro/domain";
 import { bootstrapPermanentOrganization, getPermanentRole, listPermanentRoles } from "./organization.js";
 
 describe("permanent role persistence", () => {

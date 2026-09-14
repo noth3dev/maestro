@@ -1,7 +1,7 @@
-import type { QueuedWorkerAdmission, SpawnWorkerInput, Worker, WorkerMessageInput, WorkerObservation } from "@carnegie/contracts";
-import { toInvocationRef, type CapacityDemand, type ToolEvents, type ExecutionKernelPort } from "@carnegie/domain";
-import { assertWorkspacePath } from "@carnegie/git-adapter";
-import { assertProjectRole, cancelWorker, countActiveWorkersForProject, getGoalControl, listCapabilityJournal, listIpPythonSessionJournalForGoal, observeWorker, readDepartmentPlan, readHeadCouncil, readWorker, sendWorkerMessageUnderOwnerClaim, spawnWorker, WorkerError, WorkerProviderOutcomeUnknownError, LeaseUnavailableError, StaleGoalLeaseError, claimQueuedCapacity, listCapacityInventoryProjects, type CouncilActorContext, type OperatorContext } from "@carnegie/persistence";
+import type { QueuedWorkerAdmission, SpawnWorkerInput, Worker, WorkerMessageInput, WorkerObservation } from "@maestro/contracts";
+import { toInvocationRef, type CapacityDemand, type ToolEvents, type ExecutionKernelPort } from "@maestro/domain";
+import { assertWorkspacePath } from "@maestro/git-adapter";
+import { assertProjectRole, cancelWorker, countActiveWorkersForProject, getGoalControl, listCapabilityJournal, listIpPythonSessionJournalForGoal, observeWorker, readDepartmentPlan, readHeadCouncil, readWorker, sendWorkerMessageUnderOwnerClaim, spawnWorker, WorkerError, WorkerProviderOutcomeUnknownError, LeaseUnavailableError, StaleGoalLeaseError, claimQueuedCapacity, listCapacityInventoryProjects, type CouncilActorContext, type OperatorContext } from "@maestro/persistence";
 import type { Pool } from "pg";
 
 export interface WorkerService {
@@ -20,7 +20,7 @@ export interface WorkerServiceDependencies {
   nativeModelRef?: string;
   kernel: ExecutionKernelPort;
   workspaceRoot?: string;
-  withGoalLease: <T>(goalId: string, operation: (proof: import("@carnegie/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
+  withGoalLease: <T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
   prepareWorkerWorktree?: (workerId: string, input: { projectId: string; repositoryPath: string; worktreePath: string }, operatorId: string, commandId: string) => Promise<{ worktreePath: string }>;
   /**
    * Phase 5 capacity-model first slice: a project-wide worker-slot ceiling. Absent by default
@@ -30,7 +30,7 @@ export interface WorkerServiceDependencies {
   maxConcurrentWorkersPerProject?: number;
   /** Durable reserve-or-queue boundary. The provider is never called for queued admissions. */
   capacity?: {
-    reserve: (demand: CapacityDemand, proof: import("@carnegie/persistence").GoalLeaseProof) => Promise<{ kind: "reserved"; reservationId: string } | { kind: "queued"; queueId: string; reason: "provider_rate" | "spend_cents" | "worker_slots" }>;
+    reserve: (demand: CapacityDemand, proof: import("@maestro/persistence").GoalLeaseProof) => Promise<{ kind: "reserved"; reservationId: string } | { kind: "queued"; queueId: string; reason: "provider_rate" | "spend_cents" | "worker_slots" }>;
     release: (reservationId: string) => Promise<void>;
     requeue: (reservationId: string) => Promise<void>;
   };

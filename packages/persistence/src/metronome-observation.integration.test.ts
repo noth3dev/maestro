@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { MODEL_CAPABILITY_AXES, calculatePressure, classifyPressureBand, taskDemandContentHash, type RoutingEvidence } from "@carnegie/domain";
+import { MODEL_CAPABILITY_AXES, calculatePressure, classifyPressureBand, taskDemandContentHash, type RoutingEvidence } from "@maestro/domain";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { applyAllMigrations } from "./test-migrations.js";
 import { bootstrapPermanentOrganization } from "./organization.js";

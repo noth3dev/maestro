@@ -1,4 +1,4 @@
-import type { GoalEvent } from "@carnegie/contracts";
+import type { GoalEvent } from "@maestro/contracts";
 import type { CursorEvent } from "../activity-stream.js";
 import type { PendingDecision } from "./shell.js";
 import { fitPlain, transcriptPaint, tuiTheme, type TranscriptKind } from "../theme.js";

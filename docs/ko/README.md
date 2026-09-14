@@ -2,13 +2,13 @@
   <a href="../../README.md">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="../assets/logo.svg">
-      <img alt="Carnegie" src="../assets/logo-light.svg" width="280" style="max-width: 100%;">
+      <img alt="Maestro" src="../assets/logo-light.svg" width="280" style="max-width: 100%;">
     </picture>
   </a>
 </p>
 
 <h3 align="center">
-Carnegie: 범용 작업을 위한 내구성 있는 자가개선 에이전트 오케스트레이션
+Maestro: 범용 작업을 위한 내구성 있는 자가개선 에이전트 오케스트레이션
 </h3>
 <p align="center">
   <a href="README.md"><b>한국어 (ko)</b></a> &bull;
@@ -30,12 +30,12 @@ Carnegie: 범용 작업을 위한 내구성 있는 자가개선 에이전트 오
 
 > **언어 선택:** [**한국어 (ko)**](README.md) | [**English (en)**](../en/README.md)
 
-Carnegie는 신뢰할 수 있고 장시간 실행되는 다중 에이전트 목표 실행을 위해 설계된 오픈 소스 엔터프라이즈 AI 오케스트레이션 프레임워크입니다. 현재 대화 경로는 **Carnegie 네이티브 에이전트 런타임**과 인증된 provider gateway가 담당합니다. 모든 실행 경로는 네이티브 Carnegie 런타임과 인증된 model gateway가 담당합니다. Carnegie는 실제 인간 조직 구조를 모델링하며, 권력 분립, 영구 도메인 부서, 단조 펜싱 리스, 암호화적 감사 가능성을 결합하여 승인되지 않은 부작용(Side Effect)이 발생하지 않도록 보장합니다.
+Maestro는 신뢰할 수 있고 장시간 실행되는 다중 에이전트 목표 실행을 위해 설계된 오픈 소스 엔터프라이즈 AI 오케스트레이션 프레임워크입니다. 현재 대화 경로는 **Maestro 네이티브 에이전트 런타임**과 인증된 provider gateway가 담당합니다. 모든 실행 경로는 네이티브 Maestro 런타임과 인증된 model gateway가 담당합니다. Maestro는 실제 인간 조직 구조를 모델링하며, 권력 분립, 영구 도메인 부서, 단조 펜싱 리스, 암호화적 감사 가능성을 결합하여 승인되지 않은 부작용(Side Effect)이 발생하지 않도록 보장합니다.
 
 ## 현재 Runtime 경계
 
 - **대화 경로:** Control Plane의 `MaestroAgentRuntime`이 인증된 `apps/model-gateway` 프로세스를 사용합니다.
-- **Provider 인증:** API key는 gateway credential store에만 남습니다. OpenAI ChatGPT 구독 로그인은 공식 Codex app-server에 위임하며 Carnegie는 로그인 metadata와 state만 저장합니다.
+- **Provider 인증:** API key는 gateway credential store에만 남습니다. OpenAI ChatGPT 구독 로그인은 공식 Codex app-server에 위임하며 Maestro는 로그인 metadata와 state만 저장합니다.
 - **워커 경로:** `ExecutionKernelPort`는 인증된 Model Gateway transport를 사용합니다. Pure Ensemble Router selector는 있으나 production selector/native-admission wiring은 아직 구현되지 않았습니다. 모든 admission은 host context, capability grant, model policy, account binding 및 idempotency를 포함합니다. Production host tool은 아직 등록되지 않았으며 미등록 tool은 fail-closed이고 native Worker는 text/evidence만 생성합니다.
 - **터미널 UI:** `@earendil-works/pi-tui`는 표현 계층에만 사용하며 실행 권한이 없습니다.
 
@@ -55,7 +55,7 @@ Carnegie는 신뢰할 수 있고 장시간 실행되는 다중 에이전트 목�
 
 ## 핵심 아키텍처 및 4대 기둥 (Core Architecture & Pillars)
 
-Carnegie는 네 가지 핵심 아키텍처 보증을 중심으로 구축되었습니다:
+Maestro는 네 가지 핵심 아키텍처 보증을 중심으로 구축되었습니다:
 
 - **계층적 조직 구조 및 권력 분립 (Hierarchical Organization & Separation of Powers):**
   - **Concertmaster (비서실)**: Conductor와 함께 자연어 목표를 오케스트레이션합니다.
@@ -85,26 +85,26 @@ Carnegie는 네 가지 핵심 아키텍처 보증을 중심으로 구축되었�
 ```mermaid
 flowchart TD
     CONDUCTOR([Conductor / 사용자]) -->|1. 자연어 목표 전달| CONCERTMASTER[Concertmaster 비서실]
-    
+
     subgraph IntakePhase [요청 분석 및 계약 작성]
         CONCERTMASTER -->|2. Overture 역할 활성화| OC[Overture Crew]
         OC -->|3. task.md 작성| TC[Task Contract]
         TC -->|4. 승인 요청| CONDUCTOR
     end
-    
+
     CONDUCTOR -->|5. 단일 단행 승인| CONCERTMASTER
-    
+
     subgraph DeliberationPhase [부서 심의 및 계획 수립]
         CONCERTMASTER -->|6. 필요 부서장 깨움| DH[부서장 Department Heads]
         DH -->|7. 봉인된 의견서 제출| HC[Head Council 심의]
         HC -->|8. 최종 계획 패킷 수립| DP[부서별 실행 계획 Department Plans]
     end
-    
+
     subgraph ExecutionPhase [실행 및 부작용 제어]
         DP -->|9. Mission Bundle 하사| W[Scout & Execution 워커]
         W -->|10. 격리 실행| GIT[(Git Worktree & AuthorizedEffectExecutor)]
     end
-    
+
     subgraph VerificationPhase [검증 인증 및 자가 개선]
         W -->|11. 증거 번들 제출| EB[SHA-256 증거 스냅샷]
         EB -->|12. 무결성 검증| METRONOME[Metronome / Quality 인증]
@@ -112,7 +112,7 @@ flowchart TD
         EB -.->|14. 마일스톤 실행 증거| OW[Encore 자가 개선 연구소]
         OW -.->|15. Replay / Shadow 피드백| DH
     end
-    
+
     CONCERTMASTER -->|16. 최종 리포트 전달| CONDUCTOR
 ```
 
@@ -160,7 +160,7 @@ npm run check
 
 ## CLI 사용법 (CLI Usage)
 
-Carnegie CLI (`apps/cli`)는 구현된 Control Plane REST API의 인증된 명령 클라이언트입니다. 지원되지 않는 surface는 시뮬레이션하지 않고 실패합니다:
+Maestro CLI (`apps/cli`)는 구현된 Control Plane REST API의 인증된 명령 클라이언트입니다. 지원되지 않는 surface는 시뮬레이션하지 않고 실패합니다:
 
 ```bash
 # Goal 상세 정보 조회
@@ -214,5 +214,5 @@ node apps/cli/dist/main.js report get <goalId>
 
 ## 라이선스 (License)
 
-Carnegie는 완전한 오픈 소스이며 **GNU Affero General Public License v3.0 (AGPL-3.0)**에 따라 배포됩니다.
+Maestro는 완전한 오픈 소스이며 **GNU Affero General Public License v3.0 (AGPL-3.0)**에 따라 배포됩니다.
 자세한 내용은 [LICENSE](../../LICENSE) 파일을 참조하세요.

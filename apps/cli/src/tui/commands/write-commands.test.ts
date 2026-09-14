@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ApiClient } from "@carnegie/api-client";
+import type { ApiClient } from "@maestro/api-client";
 import { executeWriteCommand } from "./write-commands.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";

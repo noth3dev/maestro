@@ -1,5 +1,5 @@
-import type { ApiClient } from "@carnegie/api-client";
-import type { TaskContract, TaskContractSubstance } from "@carnegie/contracts";
+import type { ApiClient } from "@maestro/api-client";
+import type { TaskContract, TaskContractSubstance } from "@maestro/contracts";
 
 export type TaskContractAuthoringApi = Pick<
   ApiClient,
@@ -41,7 +41,7 @@ export function buildTaskContractDraft(projectId: string, brief: string): TaskCo
     expectedDepartments: [],
     criticalActionExpectations: ["Show the exact effect before any critical action"],
     forbiddenEffects: ["Unapproved external effects"],
-    environmentAssumptions: ["Configured Carnegie project"],
+    environmentAssumptions: ["Configured Maestro project"],
     externalServiceAssumptions: [],
     budget: {
       ceiling: "Server-defined",

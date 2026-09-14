@@ -89,7 +89,7 @@ Phase 2 IPython execution is a capability surface, while Phase 6 is an evidence-
 
 ## Objective
 
-Carnegie must adapt each role's ten personality axes to the work it actually performs. Adaptation is not cosmetic prompt rewriting. It is a measured, versioned feedback system that learns which bounded trait profile improves quality, safety, collaboration, cost, and speed for a role and task class.
+Maestro must adapt each role's ten personality axes to the work it actually performs. Adaptation is not cosmetic prompt rewriting. It is a measured, versioned feedback system that learns which bounded trait profile improves quality, safety, collaboration, cost, and speed for a role and task class.
 
 The ten canonical axes are:
 
@@ -477,7 +477,7 @@ A CEO edit changes the desired candidate but does not erase the need to explain 
 6. Implement shadow execution with zero live write authority.
 7. Implement Council review and same-model disclosure.
 8. Implement bounded rollout controller and automatic regression rollback.
-9. Implement a native Carnegie refinement adapter with project/global scope enforcement.
+9. Implement a native Maestro refinement adapter with project/global scope enforcement.
 10. Implement the persona schemas, initial rationale, mission overlays, measurements, candidate search, and UI-ready history projections described above.
 11. Run one routing improvement and one persona-axis improvement through the full chain.
 12. Run adversarial attempts to disguise authority weakening as optimization.
@@ -575,7 +575,7 @@ Raw logs remain evidence and are not rewritten into conclusions. A digest may be
 ### 29. Encore improvement through the native refinement boundary
 
 - Improvement Digests feed the Encore Improvement Lab.
-- The Lab may propose focused changes to native Carnegie runtime guidance and continual-harness components: prompt guidance, scoped memories, reusable skills, Department Head specifications, worker templates, and narrow behavioral policies.
+- The Lab may propose focused changes to native Maestro runtime guidance and continual-harness components: prompt guidance, scoped memories, reusable skills, Department Head specifications, worker templates, and narrow behavioral policies.
 - `refine` is the controlled persistence mechanism for these evidence-backed changes. Refinement is not a license to rewrite the whole harness or system prompt.
 - Every proposal names the observed problem, smallest relevant harness component, expected benefit, project/global scope, evaluation evidence, and rollback target.
 - Initial refinement candidates remain shadow-only under the agreed staged-application policy.
@@ -584,7 +584,7 @@ Raw logs remain evidence and are not rewritten into conclusions. A digest may be
 
 ### Current implementation gap
 
-This section is an older design baseline. The current workspace contains the Phase 6 Step 1 application implementation; later adaptive runtime work remains deferred. There is no legacy runtime or compatibility target to preserve. Future implementation starts at the native Agent's public programmatic SDK and native recursive-subagent surfaces. Existing project repositories may later be enrolled as independent source systems, but they are not Carnegie legacy state.
+This section is an older design baseline. The current workspace contains the Phase 6 Step 1 application implementation; later adaptive runtime work remains deferred. There is no legacy runtime or compatibility target to preserve. Future implementation starts at the native Agent's public programmatic SDK and native recursive-subagent surfaces. Existing project repositories may later be enrolled as independent source systems, but they are not Maestro legacy state.
 
 ### 30. Encore authority for project and bounded global refinement — proposed boundary
 
@@ -656,7 +656,7 @@ Encore does not invent or implement new product objectives, contact external par
   - **Core identity:** mission, organizational role, authority limits, truthfulness, safety boundaries, and prohibited behavior. This layer is stable and cannot be autonomously weakened or rewritten.
   - **Adaptive traits:** communication habits, delegation style, challenge intensity, review emphasis, collaboration patterns, and other bounded working preferences. This layer may improve over time.
 - Persona evolution is based on Goal outcomes, Quality findings, Metronome observations, Council dissent, user corrections, cost, delay, rework, and measured collaboration results rather than an agent's self-description alone.
-- During Phase 1, Carnegie records persona observations and proposes versioned changes, but does not autonomously apply them.
+- During Phase 1, Maestro records persona observations and proposes versioned changes, but does not autonomously apply them.
 - Phase 4 may apply low-risk adaptive-trait changes only after replay, synthetic, and shadow evaluation shows improvement against a fixed baseline and the Encore Council accepts the evidence within an enabled improvement class.
 - Every applied persona change records its source evidence, expected benefit, affected roles, measured result, version, and rollback trigger. A later regression automatically disables or rolls back the adaptive change within the approved improvement boundary.
 - Changes to core identity, authority, safety boundaries, organization purpose, or CEO-facing policy always require explicit CEO approval. Such changes cannot be disguised as tone, efficiency, or persona optimization.

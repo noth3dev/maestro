@@ -1,6 +1,6 @@
-import type { EncoreCouncilResult, GoalLeaseProof } from "@carnegie/persistence";
-import { EncoreCouncilError, readImprovementCandidate, recordImprovementCandidateCouncilApproval, runEncoreCouncilReview } from "@carnegie/persistence";
-import type { ExecutionAdmission, ExecutionKernelPort, ImprovementCandidate } from "@carnegie/domain";
+import type { EncoreCouncilResult, GoalLeaseProof } from "@maestro/persistence";
+import { EncoreCouncilError, readImprovementCandidate, recordImprovementCandidateCouncilApproval, runEncoreCouncilReview } from "@maestro/persistence";
+import type { ExecutionAdmission, ExecutionKernelPort, ImprovementCandidate } from "@maestro/domain";
 import type { Pool } from "pg";
 
 export interface ImprovementCouncilQuantitativeResult {

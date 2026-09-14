@@ -1,6 +1,6 @@
 import React from "react";
-import type { EvidenceBundleRead, GoalBudgetSummary, GoalEvent } from "@carnegie/api-client";
-import type { Certification, ProjectionNode, ProjectionReadModel } from "@carnegie/contracts";
+import type { EvidenceBundleRead, GoalBudgetSummary, GoalEvent } from "@maestro/api-client";
+import type { Certification, ProjectionNode, ProjectionReadModel } from "@maestro/contracts";
 
 export interface GoalDepartmentPanelsProps {
   projection: ProjectionReadModel;

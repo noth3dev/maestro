@@ -1,6 +1,6 @@
 # 05. Roadmap & Phase Status
 
-Carnegie follows a strict phased milestone roadmap. Code completion alone does not constitute phase acceptance—each phase requires empirical proof passing real PostgreSQL integration suites and operational usability exit gates.
+Maestro follows a strict phased milestone roadmap. Code completion alone does not constitute phase acceptance—each phase requires empirical proof passing real PostgreSQL integration suites and operational usability exit gates.
 
 ---
 
@@ -19,7 +19,7 @@ Carnegie follows a strict phased milestone roadmap. Code completion alone does n
 
 ### Native agent backend migration — current boundary
 
-The Carnegie native runtime and authenticated model gateway own conversation and worker execution. Durable ChatGPT account-login recovery is integrated, including fenced status/cancel operations and metadata-only persistence. Native execution admissions carry host context, immutable grants, exact provider-qualified model policy, account binding, and idempotency; every native call site (Worker, Head, semantic review, Encore reviewers, and team-lead helpers) records selected/actual model and gateway-binding identity in the append-only `native_execution_bindings` table. A clean single-worker real-PostgreSQL rerun passed **162/162 files, 1066/1066 tests, 0 failed** (2026-09-09), including kill/restart recovery, fencing, authority denial, and loopback Model Gateway HTTP acceptance. The real Control Plane + PostgreSQL + Model Gateway Worker scenario also passes (`apps/control-plane/src/native-worker-acceptance.integration.test.ts`). The remaining Phase 1 product gate is production host-tool registration/enforcement: `ToolRegistry` is fail-closed but production composition intentionally registers no Carnegie callback tools, and the Codex adapter remains read-only text generation until the tool contract is approved.
+The Maestro native runtime and authenticated model gateway own conversation and worker execution. Durable ChatGPT account-login recovery is integrated, including fenced status/cancel operations and metadata-only persistence. Native execution admissions carry host context, immutable grants, exact provider-qualified model policy, account binding, and idempotency; every native call site (Worker, Head, semantic review, Encore reviewers, and team-lead helpers) records selected/actual model and gateway-binding identity in the append-only `native_execution_bindings` table. A clean single-worker real-PostgreSQL rerun passed **162/162 files, 1066/1066 tests, 0 failed** (2026-09-09), including kill/restart recovery, fencing, authority denial, and loopback Model Gateway HTTP acceptance. The real Control Plane + PostgreSQL + Model Gateway Worker scenario also passes (`apps/control-plane/src/native-worker-acceptance.integration.test.ts`). The remaining Phase 1 product gate is production host-tool registration/enforcement: `ToolRegistry` is fail-closed but production composition intentionally registers no Maestro callback tools, and the Codex adapter remains read-only text generation until the tool contract is approved.
 
 The CLI TUI uses `@earendil-works/pi-tui` terminal primitives. This is a presentation dependency with no provider or execution authority.
 
@@ -30,7 +30,7 @@ The A/D/E domain contracts, B provider facts, C operational overlay and pure Goa
 
 ### TUI Phase Boundary
 
-The TUI is an operator view and command client, not a second control plane. It reads authoritative state and sends commands only through `@carnegie/api-client` and authenticated Control Plane routes. It must not connect to PostgreSQL, the Model Gateway, provider APIs, or device transports directly. Phase acceptance requires API/TUI parity for the same real Goal, SSE cursor-safe reconnect, explicit loading/error/stale states, and no credential, prompt, raw gateway-binding, or secret-bearing output in terminal state or logs. Terminal input never bypasses leases, fencing, capability grants, approvals, or idempotency.
+The TUI is an operator view and command client, not a second control plane. It reads authoritative state and sends commands only through `@maestro/api-client` and authenticated Control Plane routes. It must not connect to PostgreSQL, the Model Gateway, provider APIs, or device transports directly. Phase acceptance requires API/TUI parity for the same real Goal, SSE cursor-safe reconnect, explicit loading/error/stale states, and no credential, prompt, raw gateway-binding, or secret-bearing output in terminal state or logs. Terminal input never bypasses leases, fencing, capability grants, approvals, or idempotency.
 
 ### Production IPython host-tool boundary — 2026-09-09
 
@@ -100,7 +100,7 @@ flowchart LR
 
 ### 2) Autonomous Treasury & Real Capital Wallet
 
-**Autonomous Treasury** (Phase 9/10 candidate) embeds a durable, system-managed wallet into Carnegie, granting the orchestration system real financial capability to autonomously pay for APIs, cloud computing resources, and Web3 smart contract interactions using pre-funded capital ([`roadmap/act-1-foundation/phase-10-autonomous-treasury.md`](../../roadmap/act-1-foundation/phase-10-autonomous-treasury.md)).
+**Autonomous Treasury** (Phase 9/10 candidate) embeds a durable, system-managed wallet into Maestro, granting the orchestration system real financial capability to autonomously pay for APIs, cloud computing resources, and Web3 smart contract interactions using pre-funded capital ([`roadmap/act-1-foundation/phase-10-autonomous-treasury.md`](../../roadmap/act-1-foundation/phase-10-autonomous-treasury.md)).
 
 #### Core Treasury Principles
 1. **Pre-funded Capital Model**: Orchestration operates on user-funded/pre-charged capital (Web3 crypto assets & traditional fiat payment rails like Stripe/Plaid).

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ApiClient, GoalEvent } from "@carnegie/api-client";
+import type { ApiClient, GoalEvent } from "@maestro/api-client";
 
 export type DurableEvent = GoalEvent;
 export type DurableEventsApi = Pick<ApiClient, "listEvents"> & Partial<Pick<ApiClient, "streamEvents">>;

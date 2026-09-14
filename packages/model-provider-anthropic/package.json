@@ -1,9 +1,9 @@
 {
-  "name": "@carnegie/model-provider-anthropic",
+  "name": "@maestro/model-provider-anthropic",
   "private": true,
   "type": "module",
   "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "dependencies": { "@carnegie/agent-runtime": "*", "@carnegie/domain": "*" }
+  "dependencies": { "@maestro/agent-runtime": "*", "@maestro/domain": "*" }
 }

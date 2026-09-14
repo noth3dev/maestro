@@ -1,4 +1,4 @@
-import { classifyAction, type ActionClassification } from "@carnegie/authority";
+import { classifyAction, type ActionClassification } from "@maestro/authority";
 import { classifyPressureBand, type PressureBandProjection, type PressureDecisionLayer } from "./pressure-band.js";
 
 export type HostEffectTier = PressureDecisionLayer;

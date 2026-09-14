@@ -3,7 +3,7 @@ import { tuiTheme } from "../theme.js";
 export type AccountLoginProviderSelection = 0 | 1;
 
 export function renderProviderLoginDialog(width: number, selected: AccountLoginProviderSelection, state: "selecting" | "opening" | "waiting", authUrl?: string): string[] {
-  const title = tuiTheme.primary("  Sign in to Carnegie");
+  const title = tuiTheme.primary("  Sign in to Maestro");
   const openai = selected === 0 ? tuiTheme.primary("› ") : "  ";
   const anthropic = selected === 1 ? tuiTheme.primary("› ") : "  ";
   const lines = [

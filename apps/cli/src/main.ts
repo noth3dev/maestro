@@ -3,11 +3,11 @@ import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 import { readFileSync, realpathSync } from "node:fs";
 import { openExternalUrl } from "./external-url.js";
-import { ApiError, createApiClient, type GoalEvent, type GoalResult } from "@carnegie/api-client";
+import { ApiError, createApiClient, type GoalEvent, type GoalResult } from "@maestro/api-client";
 import { startInteractiveTui } from "./tui/entry.js";
 import { resolveConnection } from "./tui/connection.js";
 import { resolveLocalConnection } from "./tui/local-bootstrap.js";
-import type { CertifyWorkerInput } from "@carnegie/contracts";
+import type { CertifyWorkerInput } from "@maestro/contracts";
 
 export interface CliIo {
   fetch?: typeof globalThis.fetch;
@@ -30,7 +30,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     return 0;
   }
   if (args[0] === "--version" || args[0] === "-V") {
-    io.stdout("carnegie development\n");
+    io.stdout("maestro development\n");
     return 0;
   }
   if (args.length === 0) {
@@ -471,7 +471,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       else printEvents(io.stdout, page.events, page.nextCursor);
       return 0;
     }
-    throw new Error("Usage: carnegie login openai|anthropic|logout openai|anthropic|models list|goal create|get|transition|pause|stop|resume|emergency-stop|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|message|observe|cancel|accept|certify|certify-conditional|git goal-branch|department-branch|worker-worktree|worker-advance|goal-revision|metronome scan|challenge|concertmaster-report generate|get|encore review|critical-action request|approve-and-run|capability select-full-access-mode|evidence capture|dump|budget ... | carnegie events list ...");
+    throw new Error("Usage: maestro login openai|anthropic|logout openai|anthropic|models list|goal create|get|transition|pause|stop|resume|emergency-stop|head activate|council create|get|submit-brief|reveal|decide|department-plan create|get|revise|mission-bundle create|get|worker spawn|get|message|observe|cancel|accept|certify|certify-conditional|git goal-branch|department-branch|worker-worktree|worker-advance|goal-revision|metronome scan|challenge|concertmaster-report generate|get|encore review|critical-action request|approve-and-run|capability select-full-access-mode|evidence capture|dump|budget ... | maestro events list ...");
   } catch (error) {
     const message = error instanceof ApiError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : "Command failed";
     io.stderr(`${message}\n`);
@@ -480,7 +480,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
 }
 
 function helpText(): string {
-  return `Carnegie CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  login openai|anthropic   (reads API key without echoing it)\n  logout openai|anthropic\n  admin project-access --operator-id --project-id --roles-json\n  goal create|get|transition|pause|stop|resume|emergency-stop\n  models list (also: model list)\n  conversation create|get|turn|cancel\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  workers list\n  git goal-branch|department-branch|worker-worktree|goal-revision|status\n  metronome scan|challenge\n  metronome-challenges list\n  encore review\n  encore-council list\n  certifications list\n  concertmaster-report generate|get\n  evidence dump\n  improvement-digests list\n  critical-action request|approve-and-run\n  capability select-full-access-mode\n  evidence capture|dump\n  events list\n\nUse --json for machine-readable output.\n`;
+  return `Maestro CLI\n\nConnection (required except help): MAESTRO_API_URL, MAESTRO_API_TOKEN\n\nCommands:\n  login openai|anthropic   (reads API key without echoing it)\n  logout openai|anthropic\n  admin project-access --operator-id --project-id --roles-json\n  goal create|get|transition|pause|stop|resume|emergency-stop\n  models list (also: model list)\n  conversation create|get|turn|cancel\n  goals list\n  budget get\n  task-contract create|get|amend|select-roles|confirm|launch\n  head activate\n  council create|get|submit-brief|reveal|decide\n  department-plan create|get|revise\n  mission-bundle create|get\n  worker spawn|get|observe|cancel|accept|certify|certify-conditional\n  workers list\n  git goal-branch|department-branch|worker-worktree|goal-revision|status\n  metronome scan|challenge\n  metronome-challenges list\n  encore review\n  encore-council list\n  certifications list\n  concertmaster-report generate|get\n  evidence dump\n  improvement-digests list\n  critical-action request|approve-and-run\n  capability select-full-access-mode\n  evidence capture|dump\n  events list\n\nUse --json for machine-readable output.\n`;
 }
 
 function nonNegativeInteger(value: string, option: string): number {
@@ -539,7 +539,7 @@ async function readSecretFromStdin(io: CliIo, prompt: string): Promise<string> {
 
 async function resolveCliConnection(env: Env, fetch: typeof globalThis.fetch | undefined): Promise<{ apiUrl: string; token: string }> {
   // Keep non-interactive commands explicit when a bearer token is supplied by
-  // hand. Bare interactive `carnegie` is the path that owns local auto-setup.
+  // hand. Bare interactive `maestro` is the path that owns local auto-setup.
   if ((env.MAESTRO_API_URL?.trim() ?? "") === "" && (env.MAESTRO_API_TOKEN?.trim() ?? "") !== "") {
     throw new Error("MAESTRO_API_URL is required");
   }

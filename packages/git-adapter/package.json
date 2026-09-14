@@ -1,5 +1,5 @@
 {
-  "name": "@carnegie/git-adapter",
+  "name": "@maestro/git-adapter",
   "private": true,
   "type": "module",
   "exports": {
@@ -9,8 +9,8 @@
     }
   },
   "dependencies": {
-    "@carnegie/authority": "file:../authority",
-    "@carnegie/domain": "file:../domain"
+    "@maestro/authority": "file:../authority",
+    "@maestro/domain": "file:../domain"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts"

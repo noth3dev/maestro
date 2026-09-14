@@ -7,12 +7,12 @@ const persistence = vi.hoisted(() => ({
   assertProjectRole: vi.fn(),
 }));
 
-vi.mock("@carnegie/persistence", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@carnegie/persistence")>()),
+vi.mock("@maestro/persistence", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@maestro/persistence")>()),
   ...persistence,
 }));
 
-import { CommandIdReuseError } from "@carnegie/persistence";
+import { CommandIdReuseError } from "@maestro/persistence";
 import { createDurableGoalService } from "./goal-service.js";
 
 const projectId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01";

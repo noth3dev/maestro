@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { ProviderRegistry, type ModelProviderPort, type ProviderPlugin } from "@carnegie/agent-runtime";
-import { applyAllMigrations, bootstrapLocalOperator } from "@carnegie/persistence";
-import { grantProjectMembership, grantProjectRole } from "@carnegie/persistence/testing";
+import { ProviderRegistry, type ModelProviderPort, type ProviderPlugin } from "@maestro/agent-runtime";
+import { applyAllMigrations, bootstrapLocalOperator } from "@maestro/persistence";
+import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 import { InMemoryCredentialStore } from "../../model-gateway/src/credential-store.js";
 import { createModelGateway } from "../../model-gateway/src/gateway.js";
 import { buildModelGatewayServer } from "../../model-gateway/src/rpc.js";

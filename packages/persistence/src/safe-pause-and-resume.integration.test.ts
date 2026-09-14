@@ -19,7 +19,7 @@ import { PostgresAuthorityRepository, bootstrapAuthorityRecord, getGoalControl }
 import { setCapabilitySession } from "./capability-approval.js";
 import { listIpPythonSessionJournal, recordIpPythonSessionStarted } from "./ipython-session-journal.js";
 import { recordOperationalOverlay, readGoalOperationalOverlaySnapshot, snapshotOperationalOverlayForGoalDurably } from "./ensemble-router-artifacts.js";
-import type { OperationalOverlay } from "@carnegie/domain";
+import type { OperationalOverlay } from "@maestro/domain";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -52,7 +52,7 @@ describeDatabase("safe pause and resume (Plan 5 S3)", () => {
     const projectId = randomUUID();
     const goalId = randomUUID();
     const proof = await acquireGoalLease(pool, { goalId, ownerId: "control-plane", leaseDurationMs: 60_000 });
-    const command = async (to: import("@carnegie/domain").GoalState, expectedVersion: number) =>
+    const command = async (to: import("@maestro/domain").GoalState, expectedVersion: number) =>
       executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "operator", type: "TransitionGoal", expectedVersion, to }, proof);
     await executeGoalCommand(pool, { commandId: randomUUID(), projectId, goalId, actorId: "operator", type: "CreateGoal", expectedVersion: 0 }, proof);
     await command("ready_for_confirmation", 1);

@@ -8,7 +8,7 @@
 
 - **Codename**: **Autonomous Treasury (자율 재무부 및 자금 지갑)**
 - **Position**: Phase 10
-- **Purpose**: Embed a durable System Treasury Wallet so Carnegie can autonomously pay for external APIs, cloud compute, third-party services, and Web3 interactions using pre-funded capital.
+- **Purpose**: Embed a durable System Treasury Wallet so Maestro can autonomously pay for external APIs, cloud compute, third-party services, and Web3 interactions using pre-funded capital.
 
 #### Core Specifications
 

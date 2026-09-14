@@ -1,21 +1,21 @@
-# Carnegie Terminal TUI Design
+# Maestro Terminal TUI Design
 
 **Date:** 2026-09-06
 **Status:** Approved for implementation; conversation streaming slice pending implementation
-**Product name:** Carnegie
+**Product name:** Maestro
 **Conversational identity:** Concertmaster
 
 ## Goal
 
-`carnegie` is the terminal-native operational surface for the complete Carnegie system. Running it inside a project folder opens an interactive conversation-first TUI with a Concertmaster conversation, durable Goal state, live execution activity, approvals, and access to every supported Carnegie workflow. It is separate from the Electron desktop app but uses the same Control Plane and typed API contracts. The TUI uses `@earendil-works/pi-tui` for presentation and does not use Prime Agent as its runtime.
+`maestro` is the terminal-native operational surface for the complete Maestro system. Running it inside a project folder opens an interactive conversation-first TUI with a Concertmaster conversation, durable Goal state, live execution activity, approvals, and access to every supported Maestro workflow. It is separate from the Electron desktop app but uses the same Control Plane and typed API contracts. The TUI uses `@earendil-works/pi-tui` for presentation and does not use Prime Agent as its runtime.
 
 ## Product boundary
 
-- `carnegie` with no subcommand opens the interactive TUI.
-- `carnegie <command>` remains the precise non-interactive command-line interface.
-- `carnegie --json ...` remains the machine-readable automation surface.
-- The Electron desktop application remains a separate client. Its user-facing name is Carnegie; Secretary is not a product label.
-- Concertmaster remains the CEO-facing conversational identity inside Carnegie. Secretary Office remains an architectural/product concept where the plans use it, not the displayed application name.
+- `maestro` with no subcommand opens the interactive TUI.
+- `maestro <command>` remains the precise non-interactive command-line interface.
+- `maestro --json ...` remains the machine-readable automation surface.
+- The Electron desktop application remains a separate client. Its user-facing name is Maestro; Secretary is not a product label.
+- Concertmaster remains the CEO-facing conversational identity inside Maestro. Secretary Office remains an architectural/product concept where the plans use it, not the displayed application name.
 
 ## Startup and workspace behavior
 
@@ -49,7 +49,7 @@ Every running operation appears in a timeline with state, actor/role, Goal, star
 
 ## Full capability surface
 
-The TUI must expose the complete supported Carnegie surface, not only Goal and Worker basics:
+The TUI must expose the complete supported Maestro surface, not only Goal and Worker basics:
 
 - Overture intake and Task Contract create/read/amend/select-roles/confirm/launch.
 - Goal create, list, inspect, transition, pause, resume, stop, emergency stop.
@@ -73,19 +73,19 @@ A command or panel is not considered exposed merely because a domain function ex
 
 ## Visual direction
 
-- Dark control-room foundation with restrained Carnegie blue accents.
+- Dark control-room foundation with restrained Maestro blue accents.
 - Amber for approval/warning, red for failure/emergency, muted green for accepted success.
 - High information density without decorative ASCII noise.
 - Concertmaster conversation is primary; detail appears in panels/overlays.
 - Resize uses the terminal's normal re-rendering and scrolling. No separate compact product mode is required.
 - All radial/visual relationships have a linear keyboard-accessible representation. TUI operation never depends on a pointer.
-- Display name is Carnegie throughout the TUI and desktop app. Concertmaster is the visible assistant identity.
+- Display name is Maestro throughout the TUI and desktop app. Concertmaster is the visible assistant identity.
 
 ## Architecture
 
 ```text
-carnegie TUI
-  -> Carnegie typed API client
+maestro TUI
+  -> Maestro typed API client
   -> authenticated Control Plane HTTP/SSE
   -> durable PostgreSQL state and command/event records
   -> MaestroAgentRuntime for conversations; legacy Prime adapter for workers until native cutover
@@ -101,7 +101,7 @@ The first implementation must establish a working interactive shell and truthful
 
 ## Acceptance criteria
 
-- Running `carnegie` from a project folder opens the TUI without requiring manual URL/Project/Goal arguments in the normal local path.
+- Running `maestro` from a project folder opens the TUI without requiring manual URL/Project/Goal arguments in the normal local path.
 - The TUI can display the selected workspace, Goals, approvals, budget, events, and active execution from the typed API.
 - Natural language, slash commands, and keyboard shortcuts reach the same server authority path.
 - Every existing supported Control Plane capability is reachable through a command, panel, or conversation action, with unsupported/unavailable states explicit.
@@ -109,7 +109,7 @@ The first implementation must establish a working interactive shell and truthful
 - Live activity reconnects from a durable cursor without loss or duplication.
 - Closing and reopening the TUI restores the workspace session and current durable Goal state while server work continues independently.
 - TUI, CLI, and Electron clients show the same durable state for representative Goal, hierarchy, budget, Git, evidence, incident, and certification workflows.
-- `Secretary` is absent from user-facing product title/copy; `Carnegie` is the application name and `Concertmaster` is the conversational identity.
+- `Secretary` is absent from user-facing product title/copy; `Maestro` is the application name and `Concertmaster` is the conversational identity.
 - Focused unit, API/integration, and real-process E2E tests pass; PostgreSQL and provider-process verification is required before acceptance.
 
 ## Explicit non-goals

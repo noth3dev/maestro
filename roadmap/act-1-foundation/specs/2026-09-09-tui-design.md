@@ -1,4 +1,4 @@
-# Carnegie TUI Design
+# Maestro TUI Design
 
 - **Date:** 2026-09-09
 - **Status:** Design specification. Not implemented.
@@ -41,7 +41,7 @@ Measured against `apps/cli/src/tui/components/shell.ts` and `theme.ts` as of `20
 
 > **Split the screen by who must act: what needs *you*, and what is proceeding without you.**
 
-Everything else follows from this. It is also what makes the design Carnegie's rather than a generic agent TUI — Prime Agent has nothing to approve, and Codex has a single yes/no prompt. Carnegie runs a four-tier ladder with items pending at different tiers, and operating that ladder *is* the job.
+Everything else follows from this. It is also what makes the design Maestro's rather than a generic agent TUI — Prime Agent has nothing to approve, and Codex has a single yes/no prompt. Maestro runs a four-tier ladder with items pending at different tiers, and operating that ladder *is* the job.
 
 Three consequences:
 
@@ -116,7 +116,7 @@ One chronological column, not split panes. Conversation turns and effect events 
   ⏸ worker-3  git push origin main               critical · Encore
 ```
 
-Effect lines carry their classification and how they were permitted (specified by plan-2 § S4). This is the screen Prime Agent cannot draw: it states plainly that it runs model-generated code "with your user permissions… not a security sandbox." Carnegie's entire architecture exists to be the opposite of that sentence, and this is where the difference becomes visible rather than merely true.
+Effect lines carry their classification and how they were permitted (specified by plan-2 § S4). This is the screen Prime Agent cannot draw: it states plainly that it runs model-generated code "with your user permissions… not a security sandbox." Maestro's entire architecture exists to be the opposite of that sentence, and this is where the difference becomes visible rather than merely true.
 
 ### 4.5 Hints row
 
@@ -160,7 +160,7 @@ The splash never renders below 100×28, and never renders twice in a session.
 
 The mark is worth keeping — once. On first render of a session it is shown with the getting-started copy, then replaced by the status row on the first input or the first event, whichever comes first. It does not return.
 
-Rationale: the logo's job is to say "this is Carnegie" and orient a new user. Both are done in one showing. Repeating it every frame converts identity into obstruction, which is the current state (P1).
+Rationale: the logo's job is to say "this is Maestro" and orient a new user. Both are done in one showing. Repeating it every frame converts identity into obstruction, which is the current state (P1).
 
 ---
 
@@ -197,14 +197,14 @@ What "beautiful" means here, concretely:
 
 ---
 
-## 9. Exposing all of Carnegie
+## 9. Exposing all of Maestro
 
 The system has 18 command groups, five panels, an organization of Heads and Councils, evidence, certification, and budget. Almost none of it is discoverable from the screen.
 
 - **The organization becomes visible in the stream.** When a Head wakes, a Council convenes, or a certification is issued, it appears as an event — not only as a panel someone has to know to open. This is the product's central claim and it is currently invisible.
 - **Panels are overlays, invoked and dismissed** (`ctrl+g` goals, `ctrl+e` events, `ctrl+a` decisions, `/panel <name>`). They never occupy resident space.
 - **Command discovery stays in the palette**, but the hints row surfaces the two commands relevant to the current state rather than a fixed list.
-- **Goal attach.** Prime Agent has `agents` and `attach <id>` for reconnecting to running sessions. Carnegie's continuity is stronger — durable in PostgreSQL rather than tied to a daemon, with SSE cursor reconnect already delivered by plan-1 § S3 — but it has no surface. `/goals` should distinguish live Goals and allow attaching to one. This becomes mandatory in Phase 5, where three Goals run concurrently.
+- **Goal attach.** Prime Agent has `agents` and `attach <id>` for reconnecting to running sessions. Maestro's continuity is stronger — durable in PostgreSQL rather than tied to a daemon, with SSE cursor reconnect already delivered by plan-1 § S3 — but it has no surface. `/goals` should distinguish live Goals and allow attaching to one. This becomes mandatory in Phase 5, where three Goals run concurrently.
 
 ---
 

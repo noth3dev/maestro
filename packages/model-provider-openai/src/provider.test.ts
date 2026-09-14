@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createOpenAiPlugin } from "./index.js";
-import type { ModelTurnRequest } from "@carnegie/agent-runtime";
+import type { ModelTurnRequest } from "@maestro/agent-runtime";
 
 const request: ModelTurnRequest = {
   requestId: "request-1", sessionId: "session-1", turnId: "turn-1",

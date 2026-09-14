@@ -15,7 +15,7 @@ import {
   type LocalDevicePolicy,
   type LocalDevicePolicyInput,
   type LocalDevicePolicyDecision,
-} from "@carnegie/domain";
+} from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
 
 export type DeviceActorRole = "ceo" | "device_agent";

@@ -15,19 +15,19 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    void window.carnegie.config.get().then((loaded) => {
+    void window.maestro.config.get().then((loaded) => {
       setConfig(loaded);
       setLoading(false);
     });
   }, []);
 
   const connect: ConnectionContextValue["connect"] = async (input) => {
-    const saved = await window.carnegie.config.save(input);
+    const saved = await window.maestro.config.save(input);
     setConfig(saved);
   };
 
   const disconnect: ConnectionContextValue["disconnect"] = async () => {
-    await window.carnegie.config.clear();
+    await window.maestro.config.clear();
     setConfig(undefined);
   };
 

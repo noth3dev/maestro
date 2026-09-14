@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AuthorityDecision, AuthorityRepository } from "@carnegie/authority";
-import { AuthorizedEffectExecutor } from "@carnegie/authority";
-import type { EnvironmentRecord } from "@carnegie/domain";
+import type { AuthorityDecision, AuthorityRepository } from "@maestro/authority";
+import { AuthorizedEffectExecutor } from "@maestro/authority";
+import type { EnvironmentRecord } from "@maestro/domain";
 import {
   createBrowserEnvironmentAdapter,
   type BrowserAdapterOptions,

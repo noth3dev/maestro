@@ -167,7 +167,7 @@
 
 
 ## 2026-09-01 (continued) — P2S10 (Git branch/worktree/commit integration) implemented and accepted
-- Branched `phase2/p2s10-git-integration` from `phase2/p2s5-integration` (ec4b5f0). New package `packages/git-adapter` (`@carnegie/git-adapter`): real local Git operations via `child_process.spawn` with explicit argument arrays, no shell interpolation, no remote/push/merge/rewrite/release/deploy operation exists in the port by construction. Tested against real ephemeral temp Git repos.
+- Branched `phase2/p2s10-git-integration` from `phase2/p2s5-integration` (ec4b5f0). New package `packages/git-adapter` (`@maestro/git-adapter`): real local Git operations via `child_process.spawn` with explicit argument arrays, no shell interpolation, no remote/push/merge/rewrite/release/deploy operation exists in the port by construction. Tested against real ephemeral temp Git repos.
 - `packages/domain/src/git-execution.ts`: provider-neutral `GitPort` (mirrors `ExecutionKernelPort`'s injection pattern) + durable record shapes. `packages/persistence/src/git-integration.ts` + migration `0026_git_integration.sql`: recordGoalIntegrationBranch (idempotent), recordDepartmentBranch (requires Goal branch first, Head-authorized), recordWorkerWorktree (requires Department branch first, Head-authorized, uniquely owned worktree), recordIntegrationCommit (real 40-hex commit sha validated, idempotent, append-only).
 - Verified: full `npm run check` against the disposable PostgreSQL 17 container: **317 passed, 1 intentional live-Prime skip, 0 failed**, including a real-git + real-Postgres integration test exercising the full Goal-branch -> Department-branch -> worker-worktree -> commit sequence.
 - Merged (fast-forward) into `phase2/p2s5-integration`, now HEAD `a40b546`. Removed the superseded worktree/branch.
@@ -292,8 +292,8 @@
 
 
 ## 2026-09-03 — P3S11 CLI/app parity investigation (Tests item 18)
-- Investigated `apps/cli/src/main.ts`, `apps/control-plane/src/server.ts`, `apps/control-plane/src/main.ts`, and Secretary (`apps/secretary/src/goal-page.tsx`, `goal-page.tsx` tests). The only app/API read surfaces are `GET /v1/goals/:goalId` and `GET /v1/events` (plus the SSE replay stream); the CLI exposes these through `goal get` and `events list`, and Secretary renders the same Goal/event data through `@carnegie/api-client`.
-- The domain and persistence layers do contain durable Metronome challenge, Encore Council, Quality/conditional certification, evidence-bundle, and Concertmaster report modules, but neither `apps/control-plane` nor `@carnegie/api-client` exports a route/client method for reading any of those records. The CLI has no challenge, Council, certification, or report command. Secretary has no corresponding data loader or UI.
+- Investigated `apps/cli/src/main.ts`, `apps/control-plane/src/server.ts`, `apps/control-plane/src/main.ts`, and Secretary (`apps/secretary/src/goal-page.tsx`, `goal-page.tsx` tests). The only app/API read surfaces are `GET /v1/goals/:goalId` and `GET /v1/events` (plus the SSE replay stream); the CLI exposes these through `goal get` and `events list`, and Secretary renders the same Goal/event data through `@maestro/api-client`.
+- The domain and persistence layers do contain durable Metronome challenge, Encore Council, Quality/conditional certification, evidence-bundle, and Concertmaster report modules, but neither `apps/control-plane` nor `@maestro/api-client` exports a route/client method for reading any of those records. The CLI has no challenge, Council, certification, or report command. Secretary has no corresponding data loader or UI.
 - Therefore Tests item 18 cannot be honestly proven by a live parity scenario on this branch: there is no app/CLI read contract to query for those four states. No new endpoint was added because inventing a broad aggregate surface would exceed this isolated parity gap and lacks an existing app/API pattern. Existing Goal/event parity remains covered by `apps/secretary/src/cli-secretary-parity.integration.test.ts`.
 - This is a precise missing-surface finding, not a claim that the underlying durable state is absent. A follow-up should first define the minimal read contract and then add matching API client, CLI, and Secretary coverage.
 
@@ -307,7 +307,7 @@
   - Steps 11 / Tests item 15 (forced restart mid-execution, no duplicate/stale-authority reuse): **proven** by the new worker-integration restart scenario (`lease_contended` correctly protects an in-flight execution; a stale pre-restart proof is rejected after lease expiry).
   - Tests item 16 (unauthorized remote push blocked below the tool layer): already proven structurally (the Git port has no push/merge/remote capability by construction).
   - Tests item 17 (evidence bundle replay): covered by the existing accepted evidence-bundle assembly/verification work (P3S8) and exercised again inside the capstone composition test.
-  - Tests item 18 (App and CLI show the same challenge/Council/certification/report state): **not met, precisely scoped as a gap** — `apps/control-plane` and `@carnegie/api-client` only expose Goal/event read routes; there is no route, CLI command, or Secretary loader yet for Metronome challenges, Encore Council, certification, or Concertmaster report state, though the underlying durable modules exist. No broad surface was invented to force a false pass.
+  - Tests item 18 (App and CLI show the same challenge/Council/certification/report state): **not met, precisely scoped as a gap** — `apps/control-plane` and `@maestro/api-client` only expose Goal/event read routes; there is no route, CLI command, or Secretary loader yet for Metronome challenges, Encore Council, certification, or Concertmaster report state, though the underlying durable modules exist. No broad surface was invented to force a false pass.
   - Steps 1-5, 7, 9-10, 12-13 and the remaining Tests items were already covered by prior accepted P3S1-P3S10 work and the original capstone composition test.
 - **Phase 3 exit gate is NOT fully met**: 12 of 13 live-gate prose steps have real, evidenced coverage; step/Tests-item 18 (CLI/app parity) is an honest, precisely-scoped open gap requiring a minimal new read contract (route + client method + CLI command + Secretary loader) for challenge/Council/certification/report state before it can be closed. This is recorded as a known limitation, not silently treated as done.
 
@@ -320,7 +320,7 @@
 
 
 ## 2026-09-03 (continued) — P3S11 Tests item 18 fully proven: real end-to-end App/API/CLI parity
-- Added `apps/control-plane/src/read-state-parity.integration.test.ts`: a real-PostgreSQL scenario building one full Goal through Task Contract, Head Council, Department Plan, Mission Bundle, worker, and real Git integration commit, then adding a real Metronome challenge, a real Encore Council round (with judgments and synthesis), a real Quality certification, and a real Concertmaster final report -- the same four state kinds Tests item 18 names. It starts a real `createControlPlane` HTTP listener, calls all four new routes through `executeCli(...)` (the actual CLI entrypoint) and independently through `@carnegie/api-client`'s `createApiClient(...)` against the same live server, and asserts the CLI and the api-client return byte-for-byte identical challenge status, round/synthesis verdict, certification verdict, and report outcome for the same goal.
+- Added `apps/control-plane/src/read-state-parity.integration.test.ts`: a real-PostgreSQL scenario building one full Goal through Task Contract, Head Council, Department Plan, Mission Bundle, worker, and real Git integration commit, then adding a real Metronome challenge, a real Encore Council round (with judgments and synthesis), a real Quality certification, and a real Concertmaster final report -- the same four state kinds Tests item 18 names. It starts a real `createControlPlane` HTTP listener, calls all four new routes through `executeCli(...)` (the actual CLI entrypoint) and independently through `@maestro/api-client`'s `createApiClient(...)` against the same live server, and asserts the CLI and the api-client return byte-for-byte identical challenge status, round/synthesis verdict, certification verdict, and report outcome for the same goal.
 - This closes the prior honest gap ("no new real PostgreSQL end-to-end API+CLI fixture was added") from the immediately preceding entry. Tests item 18 is now proven the same way every other live-gate item in this project was proven: a real composition test against real durable state, not a wiring-level unit test with fakes.
 - Verified: full `MAESTRO_TEST_DATABASE_URL=...55440... npm run check`: **459 passed, 2 skipped, 0 failed** (75 test files passed, 1 skipped; skips are the intentional live-Prime cases).
 - **Phase 3 exit gate (plan/phase3.md "First usable release live gate"): all 13 prose steps and all 18 "## Tests" items now have real, evidenced coverage.** Secretary UI still has no dedicated panel for these four record kinds (only Goal/event loaders exist there); this is a UI-layer follow-up, not a gap in the "App and CLI show the same state" claim itself, since the control-plane HTTP API is the app's backing surface and is proven consistent with the CLI above.
@@ -341,7 +341,7 @@
 - Verification in this worktree: `npm run check` passed **267 tests, 194 skipped, 0 failed** (45 files passed, 33 skipped); build passed. PostgreSQL-gated environment integration tests are included but skipped because this runtime has no configured `MAESTRO_TEST_DATABASE_URL`; real-PostgreSQL execution remains required before acceptance.
 ## 2026-09-03 — P4S6 Discord foundation (self-verified, pending review)
 - Added pure Discord signal schema/authentication/replay primitives (`packages/domain/src/discord.ts`) using HMAC-SHA256, freshness windows, nonces, and monotonic sequence checks. Added additive migration `0039_discord_signals.sql` and PostgreSQL receiver (`recordDiscordSignal`) that authenticates and checks replay state inside a transaction before durable insert.
-- Added independent `apps/discord` with deliberately minimal config and append-only JSONL signal buffer. Delivery failures retain pending signals; successful delivery appends an acknowledgement, so Discord does not depend on Carnegie's Postgres for liveness.
+- Added independent `apps/discord` with deliberately minimal config and append-only JSONL signal buffer. Delivery failures retain pending signals; successful delivery appends an acknowledgement, so Discord does not depend on Maestro's Postgres for liveness.
 - Focused verification: **2 passed, 0 failed** (`apps/discord/src/discord.test.ts`); `npm run build` passed. Real-Postgres Discord integration was not run in this environment; pending disposable PostgreSQL verification and independent review.
 
 ## 2026-09-03 — P4S6 Discord receiver hardening and real-PostgreSQL review
@@ -398,7 +398,7 @@
 ## 2026-09-03 (continued) — Phase 4 step 10 (live gates) implemented; Phase 4 exit gate met
 - **P4S10 device/local-policy live gate:** `packages/persistence/src/phase4-device-live-gate.integration.test.ts` proves one real-PostgreSQL scenario against plan/phase4.md's exit gate first half: a CEO enrolls a device and sets its local policy; the device's own `LocalDevicePolicyAgent` (the real client-side check a device runtime would run) allows the in-scope read and rejects a critical action *before it ever reaches the network*; the matching Goal-scoped grant then records the in-scope command result, and the same critical action is independently rejected server-side by `recordDeviceCommandResult` in case a client ever bypassed its own local check.
 - **P4S10 Discord live gate:** `apps/discord/src/live-gate.integration.test.ts` proves the exit gate's second half in one real-PostgreSQL scenario: Discord's independent buffer accepts and holds a seeded incident signal while `deliver` fails (control plane unavailable); once `deliver` succeeds (recovery), `flush()` delivers it and the control plane durably records it through the real `recordDiscordSignal`; a second observation of the same real anomaly updates the *same* incident identity (`signalCount` 1 -> 2), never creating a duplicate; `buildDiscordIncidentBrief`/`routeDiscordIncidentDepartments("crash")` activate only the minimal correct triage set (Operations + Engineering, not Security); the incident links to a real Goal, `localGitPort` is asserted to structurally lack `push`/`merge` (an unapproved critical effect is impossible, not merely policy-denied), and the incident closes `resolved` with its retained-risk evidence.
-- Exposed `applyAllMigrations` from `@carnegie/persistence`'s public barrel (previously an internal test helper) so a sibling package's own live-gate test (`apps/discord`) can apply the same durable schema without duplicating a migration list; added `pg` (devDependency) and `@carnegie/git-adapter` (dependency) to `apps/discord`'s package/tsconfig for this cross-package composition test.
+- Exposed `applyAllMigrations` from `@maestro/persistence`'s public barrel (previously an internal test helper) so a sibling package's own live-gate test (`apps/discord`) can apply the same durable schema without duplicating a migration list; added `pg` (devDependency) and `@maestro/git-adapter` (dependency) to `apps/discord`'s package/tsconfig for this cross-package composition test.
 - Full real-PostgreSQL `npm run check` on `phase4/integration` after merge (fresh `node_modules`): **582 passed, 2 intentional live-Prime skips, 0 failed**, stable across repeated runs.
 - **Phase 4 work-sequence (plan/phase4.md, all 10 steps) is integrated and real-PostgreSQL verified together on `phase4/integration`.** The Phase 4 exit gate ("A worker completes one representative browser or enrolled-device task inside a narrow Goal grant while an out-of-scope action is blocked locally. Separately, Discord detects a seeded incident while the main control plane is unavailable, delivers one authenticated deduplicated signal after recovery, activates the correct minimal triage organization, and drives isolated remediation through independent certification without an unapproved critical effect.") is evidenced by the two tests above. As with prior phases in this project, this is self-reviewed evidence, not yet independently (no-edit) reviewed; that review remains a recommended next step before treating Phase 4 as formally accepted, matching this project's own acceptance policy.
 
@@ -588,7 +588,7 @@ HEAD
   `tsc -b` and, this time, the real spawned-subprocess control-plane tests too (`runMigrations is
   not a function` / `does not provide an export named 'runMigrations'`) -- confirmed by direct
   inspection this is the same known limitation (a genuinely new runtime export from
-  `@carnegie/persistence`, not just a type change), not a real defect. Independent review performed
+  `@maestro/persistence`, not just a type change), not a real defect. Independent review performed
   by the parent session directly (no independent-review subagent spawned, per explicit user
   direction to continue without further subagents this session), then merged to `main` (`1828350`).
   Authoritative post-merge re-verification on `main`: fresh `npm run build` clean, full
@@ -696,7 +696,7 @@ HEAD
   already-tracked P0), so no live caller exists yet to require a reader from -- this makes the
   seam available for that surface once it lands, closing the actual code-level gap the finding
   named without inventing a false "mandatory" claim this session cannot back with a real caller.
-- Narrowed `@carnegie/evidence`'s `verifyEvidenceRecord(record: EvidenceRecord, ...)` to
+- Narrowed `@maestro/evidence`'s `verifyEvidenceRecord(record: EvidenceRecord, ...)` to
   `verifyEvidenceRecord(record: VerifiableEvidenceRecord, ...)` where
   `VerifiableEvidenceRecord = Pick<EvidenceRecord, "sha256" | "byteLength">`, since that is all it
   ever reads -- lets the three consumers pass a minimal shape built directly from their own
@@ -727,7 +727,7 @@ HEAD
   real-PostgreSQL `npm test` (vitest) in the worktree: 96/97 files, 622 passed, 2 intentional
   live-Prime skips, 0 failed. The node_modules-symlink cross-package staleness limitation from
   items 1-4 blocked `tsc -b` here again (a genuine cross-package type/value export from
-  `@carnegie/evidence`); confirmed the same known limitation, not a real defect.
+  `@maestro/evidence`); confirmed the same known limitation, not a real defect.
 - Independent review performed by the parent session directly (no independent-review subagent
   spawned, per explicit user direction to continue without further subagents this session), then
   merged to `main` (`384d1e3`). Authoritative post-merge re-verification on `main`: fresh
@@ -818,7 +818,7 @@ HEAD
   accidentally resume real work, since a truly-still-running session's execution ref simply
   wouldn't exist in a brand-new kernel's maps at all if the owning process actually died. Added
   `reconciledWorkerIds` to `GoalReconciliationResult` for durable evidence of what this pass
-  touched. Wired the real kernel into `main.ts` (added `@carnegie/prime-adapter` as a genuine
+  touched. Wired the real kernel into `main.ts` (added `@maestro/prime-adapter` as a genuine
   control-plane dependency + tsconfig project reference, since it wasn't one before).
 - Added 3 new real-PostgreSQL regressions in `worker.integration.test.ts` (alongside the existing
   "genuinely mid-flight, lease still contended" test from Phase 2/3 work): a genuinely orphaned
@@ -832,7 +832,7 @@ HEAD
   `npm test`: 97/98 files, 636 passed, 2 intentional live-Prime skips, 0 failed -- clean this time
   (the field addition to `ReconcileOnStartupOptions` is additive/optional and `reconcileOnStartup`'s
   own exported name/signature shape was already resolvable via the stale symlinked
-  `@carnegie/persistence` dist, so no cross-package *test* failures this pass, unlike items 1, 4, 6,
+  `@maestro/persistence` dist, so no cross-package *test* failures this pass, unlike items 1, 4, 6,
   and 8-part-1). `tsc -b` itself still hit the established node_modules-symlink staleness
   limitation for the new `kernel` field's *type* specifically (confirmed by the exact TS2353
   error), resolved by the standard post-merge rebuild.
@@ -1451,12 +1451,12 @@ The independent review found a domain/DB contract mismatch: the domain permits 1
 
 ## 2026-09-06 — Phase 6 Step 1 grant-helper surface remediation plan
 
-The security review identified that `grantProjectMembership` and `grantProjectRole` are exported from the production persistence package without an admin argument. Source inspection shows they are used only by integration-test setup; no production route or service calls them. Before the next patch, remove these bootstrap helpers from the public `@carnegie/persistence` root export, expose them only through an explicitly named `@carnegie/persistence/testing` subpath, and update test imports. Keep the real `provisionProjectAccess` admin/active-operator path as the only production provisioning API. Add a source-level guard test or verification that production application files do not import the testing subpath.
+The security review identified that `grantProjectMembership` and `grantProjectRole` are exported from the production persistence package without an admin argument. Source inspection shows they are used only by integration-test setup; no production route or service calls them. Before the next patch, remove these bootstrap helpers from the public `@maestro/persistence` root export, expose them only through an explicitly named `@maestro/persistence/testing` subpath, and update test imports. Keep the real `provisionProjectAccess` admin/active-operator path as the only production provisioning API. Add a source-level guard test or verification that production application files do not import the testing subpath.
 
 
 ## 2026-09-06 — Phase 6 Step 1 provisioning surface result
 
-- Removed `grantProjectMembership` and `grantProjectRole` from the public `@carnegie/persistence` root export. They are now available only through the explicit `@carnegie/persistence/testing` subpath for integration setup.
+- Removed `grantProjectMembership` and `grantProjectRole` from the public `@maestro/persistence` root export. They are now available only through the explicit `@maestro/persistence/testing` subpath for integration setup.
 - Production code has no imports of the testing subpath; production provisioning remains `provisionProjectAccess`, which enforces the configured admin and active-operator boundary. Updated application integration-test imports accordingly.
 - `npm run build` passes after the surface split.
 
@@ -1533,7 +1533,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Resumed per `maestro-resume`: read `docs/OPERATING_PROTOCOL.md`, `plan/operations/task_plan.md`, tail of
   `plan/operations/progress.md`/`plan/operations/findings.md`, confirmed `git log`/`git status` (clean, `hardening/lifecycle` at
-  `ce94c3d`, working tree clean, no stray Carnegie Docker containers).
+  `ce94c3d`, working tree clean, no stray Maestro Docker containers).
 - Dispatched a Luna-high subagent (`phase5-secretary-console`) into the existing
   `.worktrees/phase5-secretary-console` worktree to implement Phase 5 Slice 3 (Secretary safety
   console). It completed with an empty final message; raw session JSONL showed every turn returned
@@ -1548,9 +1548,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   from this attempt was committed; the worktree was reset to `hardening/lifecycle` HEAD (`git reset
   --hard` + `git clean -fd` for stray build artifacts) before any further work.
 - While diagnosing, found and fixed a real local-environment defect (no source change): the main
-  worktree's `node_modules/@carnegie/` was missing `device-agent`/`device-agent-app` workspace
+  worktree's `node_modules/@maestro/` was missing `device-agent`/`device-agent-app` workspace
   symlinks (every other package had one), so `npm run build` failed with `Cannot find module
-  '@carnegie/device-agent'`. `npm install` in the main worktree recreated them with zero
+  '@maestro/device-agent'`. `npm install` in the main worktree recreated them with zero
   `package-lock.json` diff. `npm run build` is now clean on `hardening/lifecycle` HEAD. A follow-up
   `npm test` (no DB/Docker in this runtime) passed **441 tests, 342 skipped, 3 failed** — the 3
   failures are a pre-existing, unrelated test-infra gap (see `plan/operations/findings.md`), not caused by this
@@ -1672,7 +1672,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   a fake approval prompt, a fake "certified" line). It now renders `useGoalDetail()`'s real durable
   event stream for the selected Goal (event type, cursor, aggregate version, timestamp, raw
   payload) -- the same real data `goal-data.ts` already loads, just presented as a feed.
-- The message composer is now honestly disabled with an explanatory placeholder: Carnegie's domain
+- The message composer is now honestly disabled with an explanatory placeholder: Maestro's domain
   model has no chat/message-send capability at all, so a "send" button here would have been a UI
   affordance with nothing behind it.
 - The worker/Head "roster" sidebar is replaced with `EmptyState`: no durable "list active
@@ -1894,7 +1894,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Not yet done: an actual running Discord watchdog source that produces real `DiscordSignal`
   observations (the current codebase only has the buffering/delivery/receiving plumbing and test
   fixtures -- no real health-probe/anomaly-detection producer exists anywhere), and the separate
-  "Carnegie -> Discord/desktop" *outbound* emergency-notification channel plan/phase4.md #46
+  "Maestro -> Discord/desktop" *outbound* emergency-notification channel plan/phase4.md #46
   describes is still not implemented (this slice closed the inbound signal-ingestion direction
   only).
 
@@ -2137,15 +2137,15 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - PostgreSQL-backed acceptance evidence is still pending because this environment has no Docker/local PostgreSQL.
 
 
-## 2026-09-06 — Carnegie TUI bounded shell hardening
-- Built the independent `maestro` terminal TUI above the typed API client, with workspace/Git-root detection, Carnegie/Concertmaster branding, truthful Control Plane health, session metadata, dashboard reads, activity timeline, slash parsing/autocomplete, command palette shortcuts, write routing, and approval dialog.
+## 2026-09-06 — Maestro TUI bounded shell hardening
+- Built the independent `maestro` terminal TUI above the typed API client, with workspace/Git-root detection, Maestro/Concertmaster branding, truthful Control Plane health, session metadata, dashboard reads, activity timeline, slash parsing/autocomplete, command palette shortcuts, write routing, and approval dialog.
 - Added durable event cursor persistence, event identity deduplication, bounded reconnect attempts with visible retry/exhaustion messages, and session attach/new/retry commands. Session files are validated and forced to mode `0600` in mode `0700` directories.
 - Added CLI spelling aliases (`critical-action`, `workers`, `metronome-challenges`, `encore-council`, `certifications`, and `concertmaster-report`) and project-binding regression coverage for JSON payloads.
 - Critical permission changes fail closed in the TUI until they are bound to the Control Plane durable approval endpoint. Fail-safe emergency stop remains a direct server-authorized control path; local Git branch/worktree operations follow the server's ordinary classification.
 - Verification after hardening: `npm run check` passed with 539 tests and 360 environment-gated skips; `npm run build` and `git diff --check` passed. PostgreSQL/real-process/Prime acceptance remains unrun in this environment.
 
 
-## 2026-09-06 — Carnegie TUI fail-safe confirmation hardening
+## 2026-09-06 — Maestro TUI fail-safe confirmation hardening
 
 - Classified `goal emergency-stop` and `metronome safe-pause` as critical safety actions in the
   command registry. Both now require explicit local confirmation before dispatch.
@@ -2157,7 +2157,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   51 skipped; 540 tests passed, 360 skipped), `npm run build`, and `git diff --check` pass.
 
 
-## 2026-09-06 — Carnegie TUI first-run project discovery
+## 2026-09-06 — Maestro TUI first-run project discovery
 
 - Added an authenticated `GET /v1/projects` Control Plane route backed by active
   `operator_project_memberships`; the route fails closed when discovery is not composed.
@@ -2172,7 +2172,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   passes.
 
 
-## 2026-09-06 — Carnegie TUI typed read parity
+## 2026-09-06 — Maestro TUI typed read parity
 
 - Wired the existing typed Control Plane reads for Task Contract, Council, Department Plan,
   and Mission Bundle into the TUI read-command path. Each validates required identifiers and
@@ -2183,7 +2183,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   360 skipped), `npm run build`, and `git diff --check` pass.
 
 
-## 2026-09-06 — Carnegie TUI Goal selection and project read command
+## 2026-09-06 — Maestro TUI Goal selection and project read command
 
 - Added local `/goal select --goal-id=...` context selection. The TUI validates the selected
   Goal through the authenticated, project-bound `getGoal` API before persisting only the
@@ -2195,7 +2195,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   passes.
 
 
-## 2026-09-06 — Carnegie TUI Metronome scan classification fix
+## 2026-09-06 — Maestro TUI Metronome scan classification fix
 
 - Corrected `metronome scan` from read to write in the TUI registry. The existing typed
   `scanMetronome` route is an idempotent POST and was otherwise unreachable because the read
@@ -2205,7 +2205,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   `git diff --check` passes.
 
 
-## 2026-09-06 — Carnegie TUI critical-action request parity
+## 2026-09-06 — Maestro TUI critical-action request parity
 
 - Exposed the existing Control Plane critical-action request route through a typed
   `ApiClient.requestCriticalAction()` method.
@@ -2218,7 +2218,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   passes.
 
 
-## 2026-09-06 — Carnegie TUI selected-Goal defaults
+## 2026-09-06 — Maestro TUI selected-Goal defaults
 
 - Goal-scoped TUI reads and writes now use the persisted selected session Goal when
   `--goal-id` is omitted. Explicit IDs still override the session context.
@@ -2229,7 +2229,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   passes.
 
 
-## 2026-09-06 — Carnegie CLI critical-action request parity
+## 2026-09-06 — Maestro CLI critical-action request parity
 
 - Added the existing Control Plane critical-action request route to the non-interactive CLI
   as `critical-action request`, preserving the existing approve-and-run path.
@@ -2239,7 +2239,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
   `git diff --check` passes.
 
 
-## 2026-09-06 — Carnegie TUI batch verification
+## 2026-09-06 — Maestro TUI batch verification
 
 - Final branch verification after project discovery, Goal selection, typed read parity,
   critical-action request parity, and Metronome classification hardening: `npm run check`
@@ -2263,7 +2263,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 ## 2026-09-07 — Native backend independent adversarial review
 
 - A read-only reviewer found the native design directionally safe but not implementation-ready. The highest-risk gaps are missing conversation endpoint/session/idempotency contracts, executable tool-call/turn/event contracts, host-side delegated authority, child-agent grant semantics, complete model-policy propagation, and durable invocation/recovery bindings.
-- The reviewer also confirmed that `ExecutionKernelPort` currently has no tool dispatch method and that Prime-specific child behavior cannot be copied as the provider-neutral contract. Native Carnegie must own this behavior explicitly.
+- The reviewer also confirmed that `ExecutionKernelPort` currently has no tool dispatch method and that Prime-specific child behavior cannot be copied as the provider-neutral contract. Native Maestro must own this behavior explicitly.
 - Subscription-specific review remains in progress. No production code was changed; implementation is gated on closing these design items in the plan.
 
 
@@ -2272,7 +2272,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Added provider-neutral conversation/model contracts and stable API error codes.
 - Added durable PostgreSQL tables for conversations, turns, and replayable conversation event cursors in migration `0064_native_agent_runtime.sql`.
 - Composed the authenticated Control Plane model catalog, conversation create/get/turn/cancel routes, and conversation SSE replay route.
-- Composed `createPostgresConversationService` with exact model admission, gateway binding, Carnegie-native runtime execution, bounded text handling, per-turn optimistic claim, durable result recording, and truthful unknown outcomes.
+- Composed `createPostgresConversationService` with exact model admission, gateway binding, Maestro-native runtime execution, bounded text handling, per-turn optimistic claim, durable result recording, and truthful unknown outcomes.
 - Added API-client methods and CLI commands: `models list`, `conversation create|get|turn|cancel`.
 - TUI free text now uses the selected project and Goal, an exact `MAESTRO_MODEL`, and the authenticated conversation API. Session files persist only non-secret conversation/model metadata.
 - Added gateway configuration documentation and redaction coverage. The gateway remains a separately started process; provider keys stay there.
@@ -2289,7 +2289,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 ## 2026-09-07 — TUI command ergonomics, fixed dock, and API-key credential lifecycle
 
 - Corrected the fullscreen TUI composition: the transcript now lives in a primary `ScrollView`, while the composer and footer are a fixed `VStack` dock. Transcript growth no longer pushes the input off screen.
-- Moved the wide Carnegie mark down one row and centered its ten artwork rows against the thirteen-row getting-started column. The logo height remains fixed across terminal heights.
+- Moved the wide Maestro mark down one row and centered its ten artwork rows against the thirteen-row getting-started column. The logo height remains fixed across terminal heights.
 - Normalized bare read shortcuts (`/model`, `/models`, `/goals`, `/projects`, `/events`, and related collections) to their default read action. Added `/help` and clearer unknown/action-required messages.
 - Added strict API-key login/revoke contracts for `openai` and `anthropic`. TUI login uses a hidden editor path; non-interactive CLI login reads from hidden TTY input or stdin and never accepts a key in argv.
 - Added authenticated Control Plane credential routes, narrow gateway RPC bind/revoke routes, operator-context checks, replacement invalidation, and gateway-owned OS-keychain persistence via `@napi-rs/keyring`. Raw provider keys are excluded from response metadata, session files, and error messages.
@@ -2323,7 +2323,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 ## 2026-09-07 — Account login implementation and provider boundary
 
-- Added OpenAI ChatGPT Plus/Pro browser login through the public Codex app-server JSON-RPC boundary (`account/login/start`, completion notifications, status, cancel, logout). Carnegie receives only the browser URL and status metadata; the app-server owns OAuth tokens and refresh.
+- Added OpenAI ChatGPT Plus/Pro browser login through the public Codex app-server JSON-RPC boundary (`account/login/start`, completion notifications, status, cancel, logout). Maestro receives only the browser URL and status metadata; the app-server owns OAuth tokens and refresh.
 - Added gateway-owned managed-subscription metadata binding, operator checks, keychain persistence without a secret field, model catalog admission, and text-only Codex turns with read-only sandbox policy. Tool bridging remains disabled until the app-server authority mapping is separately reviewed.
 - Added Control Plane/API client/RPC routes, CLI commands, TUI provider selector, browser opener, cancellation, and exact-model discovery.
 - Claude Pro/Max account OAuth is intentionally not implemented: no public/approved Anthropic protocol is available in this repository, and Prime/private endpoints or a provider CLI bypass are prohibited. Claude API-key login remains available.
@@ -2429,7 +2429,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - `main.ts` no longer composes `createPrimeExecutionKernel`; it composes the native gateway router or a fail-closed unavailable kernel. `primeAgentVersion` is gone from active config and fixtures.
 - Root Head/Encore service paths and semantic/team-lead persistence paths carry the new `ExecutionAdmission` seam. Team-lead child admission validates parent grant inheritance before spawn.
 - Verified with real PostgreSQL: Head API 2/2 and team-lead 11/11 on isolated disposable databases.
-- Next: remove `@carnegie/prime-adapter` and `prime-agent`, then run no-Prime dependency/source scans before native HTTP acceptance.
+- Next: remove `@maestro/prime-adapter` and `prime-agent`, then run no-Prime dependency/source scans before native HTTP acceptance.
 
 
 ## 2026-09-08 — Prime dependency removed
@@ -2460,11 +2460,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 ## 2026-09-08 — README pass, TUI phase boundary, native binding evidence, host hygiene
 
 - Added or refreshed README.md for every app (`control-plane`, `model-gateway`, `cli`, `device-agent`, `discord`, `secretary`) and every package (`domain`, `agent-runtime`, `contracts`, `persistence`, `authority`, `api-client`, `git-adapter`, `environment-adapter`, `device-agent`, `evidence`, `model-provider-openai`, `model-provider-anthropic`).
-- Fixed the TUI drifting outside its documented boundary: `plan/phase1.md` now scopes the CLI TUI's authority/data boundary explicitly (read-only through `@carnegie/api-client`, no direct PostgreSQL/gateway/provider/device access, no credential/prompt/secret leakage into terminal state); `plan/phase3.md` adds the TUI to the Phase 3 CLI/App-parity acceptance criteria (cursor-safe reconnect, explicit loading/stale/error states, one API action vs. its TUI equivalent compared against the same durable PostgreSQL state). `docs/en(ko)/05-roadmap-and-phase-status.md` and the developer guide cross-reference this.
+- Fixed the TUI drifting outside its documented boundary: `plan/phase1.md` now scopes the CLI TUI's authority/data boundary explicitly (read-only through `@maestro/api-client`, no direct PostgreSQL/gateway/provider/device access, no credential/prompt/secret leakage into terminal state); `plan/phase3.md` adds the TUI to the Phase 3 CLI/App-parity acceptance criteria (cursor-safe reconnect, explicit loading/stale/error states, one API action vs. its TUI equivalent compared against the same durable PostgreSQL state). `docs/en(ko)/05-roadmap-and-phase-status.md` and the developer guide cross-reference this.
 - Split oversized files for maintainability: `apps/cli/src/tui/entry.ts` (`MaestroEditor`/`SecretEditor`/masking → `components/editors.ts`; `ConversationViewport`/`FramedComposer` → `components/conversation-viewport.ts`); `apps/control-plane/src/server.ts` (request parsing/auth/error-mapping helper functions → `server-input.ts`).
 - Added durable native-admission identity evidence: new `native_execution_bindings` table (migration `0070`, append-only, immutable, Goal/worker-scoped by trigger) plus `recordNativeExecutionBinding`/`recordNativeExecutionBindingIfSupported` in `packages/persistence/src/native-execution-binding.ts`. Wired through Worker spawn, Head activation, semantic review, Encore reviewers, and team-lead helper spawn — every native call site that has a kernel `getExecutionBinding` now durably records selected vs. actual model identity, account ref, and gateway binding/instance ids, with no credential or prompt content. Verified with real-PostgreSQL evidence (Worker 35/35 including a binding-row assertion; Head HTTP integration test asserting the `native_execution_bindings` row for a real activated Head; semantic-review/Encore/team-lead suites green after the change).
 - Added `.github/workflows/ci.yml` (build+lint+no-DB-test job; separate PostgreSQL-service job running the full suite with `--pool forks --maxWorkers 1`; a retired-runtime-reference grep gate that never spells the retired name literally). Could not push the workflow file itself with the current OAuth token (`refusing to allow an OAuth App to create or update workflow ... without workflow scope`); the workflow commit is cherry-picked onto `main` history is preserved but the actual `.github/workflows/ci.yml` push requires a token with `workflow` scope — kept the pending commit on local branch `ci-workflow-pending` for whoever has that scope to push, and confirmed every other change on that commit landed on `main` via cherry-pick (`bb4501c`).
-- **Host hygiene root-caused a flaky failure:** a full single-worker PostgreSQL rerun failed 2 suites (`device.integration.test.ts`, `device-agent-runtime.integration.test.ts`) with `Connection terminated unexpectedly`. Diagnosis found 12 stale `maestro-*-postgres` disposable containers left running from earlier sessions this project already has a documented history of doing (`docs/OPERATING_PROTOCOL.md` section C), plus an unrelated `supabase_*` stack, pushing the host to <1 GiB free RAM and active swapping. Removed all 12 stale Carnegie containers (left the unrelated `supabase_*`/`redis`/`shakecode-bundle_*` containers alone — not this project's). This was infra noise, not a code defect.
+- **Host hygiene root-caused a flaky failure:** a full single-worker PostgreSQL rerun failed 2 suites (`device.integration.test.ts`, `device-agent-runtime.integration.test.ts`) with `Connection terminated unexpectedly`. Diagnosis found 12 stale `maestro-*-postgres` disposable containers left running from earlier sessions this project already has a documented history of doing (`docs/OPERATING_PROTOCOL.md` section C), plus an unrelated `supabase_*` stack, pushing the host to <1 GiB free RAM and active swapping. Removed all 12 stale Maestro containers (left the unrelated `supabase_*`/`redis`/`shakecode-bundle_*` containers alone — not this project's). This was infra noise, not a code defect.
 - **Real defect found and fixed underneath the noise:** `device.integration.test.ts` hand-picked a stale 3-file migration subset (`0001`, `0040`, `0041`) instead of `applyAllMigrations`, so it never created `device_grants` — `revokeDevice`'s cascade `UPDATE device_grants ...` (added later for Phase 5 Track B4) then threw `relation "device_grants" does not exist` once resource contention was removed and the suite actually ran to completion. Fixed by switching its `beforeAll` to `applyAllMigrations(pool)`, matching every sibling device suite (`device-grant.integration.test.ts`, `phase4-device-live-gate.integration.test.ts`) so this class of drift cannot recur. Reran the 4 device suites together: **29/29 passed**.
 
 
@@ -2517,7 +2517,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 ## 2026-09-08 — Critical fix: real credential-bind and account-login acceptance were completely broken
 
 - Added `apps/control-plane/src/account-login-acceptance.integration.test.ts`, the first real Control Plane + real Model Gateway HTTP process + real PostgreSQL end-to-end test for `/v1/provider-account-logins/*` and `/v1/provider-credentials`. It immediately hit a genuine, severe production bug: `main.ts` forwarded the *real authenticated end-user's* operatorId to six gateway-facing calls (bind/revoke credential, start/status/cancel account login, logout), but `ModelGateway` strictly checks that operatorId against its own fixed `config.modelGatewayOperatorId` -- meaning credential binding and account login were completely broken for every real operator, in every real deployment. This is the most severe defect found this session: not an edge case, but the ordinary first-time provider setup path.
-- Fixed by overriding `operatorId` to `config.modelGatewayOperatorId` for all six gateway-facing calls, matching how native admission already does this correctly, while leaving Carnegie's own durable per-operator store calls untouched.
+- Fixed by overriding `operatorId` to `config.modelGatewayOperatorId` for all six gateway-facing calls, matching how native admission already does this correctly, while leaving Maestro's own durable per-operator store calls untouched.
 - Verified genuine reproduction (fails without the fix with the exact real error, passes with it) before committing. Full detail in `plan/operations/findings.md` same date.
 - Evidence: new test 1/1; regression sweep 15 files / 115 tests, 0 failed. Full clean single-worker real-PostgreSQL rerun in progress.
 
@@ -2602,7 +2602,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 ## 2026-09-08 — CI test-job build correction
 
-- Root cause: GitHub Actions `static` and `test` jobs run on separate runners. The `test` job installed dependencies and invoked Vitest without first running `npm run build`, while workspace package exports point at `dist/*.js`/`dist/*.d.ts`. Vitest therefore failed to resolve `@carnegie/*` package entries across 87 suites; the four CLI bootstrap failures were the same missing-build condition, because the local Control Plane/model-gateway entrypoints were absent on the fresh runner.
+- Root cause: GitHub Actions `static` and `test` jobs run on separate runners. The `test` job installed dependencies and invoked Vitest without first running `npm run build`, while workspace package exports point at `dist/*.js`/`dist/*.d.ts`. Vitest therefore failed to resolve `@maestro/*` package entries across 87 suites; the four CLI bootstrap failures were the same missing-build condition, because the local Control Plane/model-gateway entrypoints were absent on the fresh runner.
 - Fix prepared in `.github/workflows/ci.yml`: the PostgreSQL-backed `test` job now runs `npm run build` after `npm ci` and before Vitest.
 - Verification: `npm run build` passed; the previously failing `apps/cli/src/tui/local-bootstrap.test.ts` passed 13/13; a representative build-backed PostgreSQL run passed 9 files / 96 tests; the full no-database run passed 105/162 files / 677 tests and correctly skipped 57 database-gated files / 381 tests; `npm run lint` and `git diff --check` passed.
 - A local full PostgreSQL run was not counted as a pass because the five-minute shell cap expired before completion; no assertion failure was emitted before the cap. The existing CI timeout remains 30 minutes.
@@ -2867,7 +2867,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 ## 2026-09-08 — production-owned child channel
 
-- Added `createIpPythonOwnedProcessChannel` and exported it from `@carnegie/agent-runtime`.
+- Added `createIpPythonOwnedProcessChannel` and exported it from `@maestro/agent-runtime`.
 - Added tests for detached spawn/minimal environment, stdout-vs-stderr separation, process-group SIGTERM/SIGKILL teardown, and a real `/usr/bin/python3 -I -S` execution.
 - Passed `MAESTRO_PARENT_PID` and `MAESTRO_PARENT_IDENTITY` to the child without inheriting caller credentials.
 - Added an internal Python parent watchdog that exits on parent disappearance or identity mismatch; user code still cannot access raw `os`, imports, or file I/O through the restricted namespace.
@@ -2997,7 +2997,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Reopened Phase 1 as the bottom-up implementation boundary after the Ensemble Router design update. No production router code was added in this documentation pass.
 - Reconciled the canonical Ensemble Router design, Phase 1, Phase 2, Phase 5, and Phase 8 wording around baseline ownership, overlay scope, qualifying switches, `approvedModels`, and fixed-model migration.
-- Prime remains a structural benchmark only: persistent session/protocol/lifecycle shapes may inform the design, but Carnegie authority, native admission, and evidence remain independent.
+- Prime remains a structural benchmark only: persistent session/protocol/lifecycle shapes may inform the design, but Maestro authority, native admission, and evidence remain independent.
 - **Next:** add the first failing tests for the closed eight-axis A capability vector, A/profile schema, unproven status, and human-owned baseline validation.
 
 
@@ -3055,7 +3055,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 ## 2026-09-08 — TaskDemand bound to Mission Bundle
 
-- Applied the settled architecture decision that demand rides the existing per-unit Mission Bundle rather than a parallel persistence record. `MissionBundleSubstance.taskDemand` is required, validated with the domain TaskDemand contract, included in the Mission Bundle content hash, and mirrored in `@carnegie/contracts` as a strict Zod schema.
+- Applied the settled architecture decision that demand rides the existing per-unit Mission Bundle rather than a parallel persistence record. `MissionBundleSubstance.taskDemand` is required, validated with the domain TaskDemand contract, included in the Mission Bundle content hash, and mirrored in `@maestro/contracts` as a strict Zod schema.
 - Updated domain/control-plane/persistence fixtures so each Mission Bundle carries explicit Head provenance and a complete eight-axis demand. No SQL migration is needed because the substance is JSONB; old rows without `taskDemand` fail closed and must be reissued or backfilled before routing consumes them.
 - **Next:** define the E work-character contract and continuous pressure calculation.
 
@@ -3077,7 +3077,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 ## 2026-09-08 — E validator and pressure function
 
-- Implemented `packages/domain/src/work-character.ts` and exported it from `@carnegie/domain`. The validator covers six `0..200` axes, provenance, routing-field rejection, plain/own/enumerable boundaries, and fail-closed malformed input.
+- Implemented `packages/domain/src/work-character.ts` and exported it from `@maestro/domain`. The validator covers six `0..200` axes, provenance, routing-field rejection, plain/own/enumerable boundaries, and fail-closed malformed input.
 - Implemented continuous pressure: `(risk + (200 - reversibility) + verificationAttachment) / 3`, with `max(floor, explicitHeadUplift)`. Constraint-only axes do not affect pressure.
 - TDD evidence: missing-module RED was observed, then the focused E suite passed 7/7; the full domain suite passed 31 files / 248 tests.
 - **Next:** independently review and integrate E, then define the separate pressure-band threshold artifact.
@@ -3342,7 +3342,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 ## 2026-09-09 — Plan 2 S1 CI red remediation
 
-- Push CI `34301031718` completed `failure` during clean-runner `npm run build`; the new `@carnegie/authority` import was not resolvable because `packages/domain/tsconfig.json` lacked the authority project reference.
+- Push CI `34301031718` completed `failure` during clean-runner `npm run build`; the new `@maestro/authority` import was not resolvable because `packages/domain/tsconfig.json` lacked the authority project reference.
 - Root cause was reproduced with a clean local `npm ci` and removed build outputs. Added the missing project reference; the same clean build now passes.
 - S2 remains unopened while the remediation is reviewed and revalidated.
 
@@ -3828,7 +3828,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - 2026-09-10 Plan 3 S4 process-backed verification: build/lint passed; full no-DB verification passed 145/208 files and 1016/1433 tests, with 63 PostgreSQL integration files and 417 tests skipped because PostgreSQL is unavailable. The fake provider/Control Plane child-process gate now exercises all fourteen steps, persists evidence, restarts the Control Plane process, and proves mode-specific blocked remote effects. A fresh no-edit review is required.
 
-- 2026-09-10 Plan 3 S4 third-review remediation: removed automatic creation of `MAESTRO_WORKTREE_ROOT`; added nonexistent-root and symlink regressions; made provider modes stateful and remote effects provider-evaluated; rejected duplicate persisted effects during restart reconciliation; verified child PIDs, provider call/effect history, evidence hash, and persisted bundle/report identity; changed the live runbook to inspect before Quality, request repair through Carnegie conversation, and freeze integration revision only after repair. Focused build/lint and 4 fake-provider/fixture/runbook tests passed. Fresh independent review is required.
+- 2026-09-10 Plan 3 S4 third-review remediation: removed automatic creation of `MAESTRO_WORKTREE_ROOT`; added nonexistent-root and symlink regressions; made provider modes stateful and remote effects provider-evaluated; rejected duplicate persisted effects during restart reconciliation; verified child PIDs, provider call/effect history, evidence hash, and persisted bundle/report identity; changed the live runbook to inspect before Quality, request repair through Maestro conversation, and freeze integration revision only after repair. Focused build/lint and 4 fake-provider/fixture/runbook tests passed. Fresh independent review is required.
 
 - 2026-09-10 Plan 3 S4 third-remediation verification: build/lint passed; full no-DB verification passed 145/208 files and 1017/1434 tests, with 63 PostgreSQL integration files and 417 tests skipped because PostgreSQL is unavailable. Duplicate-effect rejection, stateful provider modes, evidence hash/provider history, and repair lineage tests are green. Fresh independent review remains required.
 
@@ -4131,7 +4131,7 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - 2026-09-13 Plan 6 §S2 full verification remediation: the first serialized PostgreSQL run reached 229/230 files and 1587/1588 tests; one pre-existing `device.integration.test.ts` schema assertion counted same-named tables from isolated schemas. The assertion was scoped to `current_schema()` only (`d700f78`), and its focused suite passed 11/11.
 - 2026-09-13 Plan 6 §S2 full serialized PostgreSQL verification after the fixture-only correction passed **230/230 files and 1588/1588 tests**, exit code 0, duration 328.06s. Build, lint, and diff-check also passed. S2 is ready to merge; next: merge into `main`, rerun post-merge verification, delete the S2 worktree, and push normally.
 
-- 2026-09-13 Plan 6 §S2 merged into `main` as `b9b0876` after exact-HEAD independent `REVIEW: PASS` at `8fae11e`. Main build, lint, and diff-check passed. The first post-merge build required repairing only the stale local `node_modules/@carnegie/domain` symlink left from the deleted S1 worktree; no tracked source change was needed.
+- 2026-09-13 Plan 6 §S2 merged into `main` as `b9b0876` after exact-HEAD independent `REVIEW: PASS` at `8fae11e`. Main build, lint, and diff-check passed. The first post-merge build required repairing only the stale local `node_modules/@maestro/domain` symlink left from the deleted S1 worktree; no tracked source change was needed.
 - 2026-09-13 Plan 6 §S2 post-merge serialized real-PostgreSQL verification passed **230/230 files and 1588/1588 tests**, exit code 0, duration 327.25s. S2 worktree is ready for deletion; next: normal push, then start Plan 6 §S3 `replay-and-synthetic-evaluators` in a fresh worktree with RED tests first.
 
 - 2026-09-13 Plan 6 §S3 `replay-and-synthetic-evaluators`: created worktree `.worktrees/replay-and-synthetic-evaluators` from `main` after S2 post-merge verification. Added RED coverage for deterministic guards, frozen replay scenario hashes, all eight reviewed synthetic adversarial identities, and non-compensable correctness/safety/authority floors. RED baseline failed as expected because `candidate-evaluation.ts` was absent (`f0e1e3c`).
@@ -4251,4 +4251,4 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - 2026-09-14 Plan 7 §S5 completed as the projection-preserving radial organization graph: durable Goal/Department/Worker identities and source keys remain visible, multi-Goal sectors compress without dropping nodes, Task Contract is a namespaced synthetic halo, sleeping/critical states are truthful, cross-edges stay hidden until selection, and keyboard zoom/pan/search plus Electron smoke are covered. Independent no-edit review returned `REVIEW: PASS`; commit `869555a` merged normally as `eb3a758`. Post-merge build, lint, and diff-check passed. The first authenticated serialized PostgreSQL run failed only at test collection because main's pre-merge `node_modules` lacked the newly locked `d3-hierarchy` and `@xyflow/react` packages; after `npm install --ignore-scripts`, the required rerun passed **252/252 files and 1719/1719 tests** in 539.70s (`/tmp/plan7-s5-postmerge-pg-retry.log`). Minor non-blocking hardening notes remain: ReactFlow DOM does not expose retained source keys, and sleeping non-worker descendants are not collapsed. Next: remove the S5 worktree, push normally, then begin Plan 7 §S6 node actions and approval controls.
 
-- 2026-09-14 Carnegie rename completed: product/package/user-facing surfaces now use Carnegie while all `MAESTRO_*` compatibility identifiers, database/schema/table/migration identifiers, internal runtime symbols, `testbed/`, and repository URL remain preserved. Independent no-edit review passed; merge `492906c` passed build, lint, diff-check, and authenticated serialized PostgreSQL verification (**252/252 files, 1719/1719 tests** in `/tmp/carnegie-rename-postmerge-pg.log`).
+- 2026-09-14 branding correction: **Maestro remains the product name**. The overly broad product-wide Carnegie rename was reversed. Carnegie is retained only as the existing Secretary desktop app's user-facing brand; Maestro package scopes, CLI/API/runtime names, compatibility identifiers, and repository documentation remain unchanged.

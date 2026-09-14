@@ -1,11 +1,11 @@
-import type { ActionRequest, AuthorityDecision } from "@carnegie/authority";
+import type { ActionRequest, AuthorityDecision } from "@maestro/authority";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { createControlPlane } from "./main.js";
 import { parseConfig } from "./config.js";
 import { createIpPythonProductionKernel } from "./ipython-composition.js";
-import { appendIpPythonSessionJournal, recordIpPythonSessionStarted } from "@carnegie/persistence";
-import type { IpPythonSessionBinding, IpPythonSessionManager } from "@carnegie/agent-runtime";
+import { appendIpPythonSessionJournal, recordIpPythonSessionStarted } from "@maestro/persistence";
+import type { IpPythonSessionBinding, IpPythonSessionManager } from "@maestro/agent-runtime";
 
 const mode = process.env.IPYTHON_HARNESS_MODE;
 const sessionId = process.env.IPYTHON_HARNESS_SESSION_ID;

@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
-import type { ApiClient } from "@carnegie/api-client";
+import type { ApiClient } from "@maestro/api-client";
 import { loadConnectionConfig, saveConnectionConfig, clearConnectionConfig, type ConnectionConfig } from "./store.js";
 import { loadPreferences, savePreferences } from "./preferences.js";
 import { createBridgedApi, isExposedMethod } from "./apiBridge.js";
@@ -22,28 +22,28 @@ function connect(config: ConnectionConfig | undefined): void {
 }
 
 function registerIpcHandlers(): void {
-  ipcMain.handle("carnegie:config:get", () => {
+  ipcMain.handle("maestro:config:get", () => {
     const config = loadConnectionConfig();
     return config === undefined ? undefined : { apiUrl: config.apiUrl, projectId: config.projectId };
   });
 
-  ipcMain.handle("carnegie:config:save", (_event, config: ConnectionConfig) => {
+  ipcMain.handle("maestro:config:save", (_event, config: ConnectionConfig) => {
     const publicConfig = saveConnectionConfig(config);
     connect(config);
     return publicConfig;
   });
 
-  ipcMain.handle("carnegie:config:clear", () => {
+  ipcMain.handle("maestro:config:clear", () => {
     clearConnectionConfig();
     connect(undefined);
   });
 
-  ipcMain.handle("carnegie:preferences:get", () => loadPreferences());
-  ipcMain.handle("carnegie:preferences:save", (_event, preferences: ReturnType<typeof loadPreferences>) => {
+  ipcMain.handle("maestro:preferences:get", () => loadPreferences());
+  ipcMain.handle("maestro:preferences:save", (_event, preferences: ReturnType<typeof loadPreferences>) => {
     savePreferences(preferences);
   });
 
-  ipcMain.handle("carnegie:api", async (_event, method: string, args: unknown[]) => {
+  ipcMain.handle("maestro:api", async (_event, method: string, args: unknown[]) => {
     if (!isExposedMethod(method)) throw new Error(`Method not exposed to the renderer: ${method}`);
     if (api === undefined) throw new Error("Not connected to a control plane yet");
     const call = api[method] as (...callArgs: unknown[]) => unknown;

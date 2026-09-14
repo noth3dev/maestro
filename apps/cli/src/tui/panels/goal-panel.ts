@@ -1,4 +1,4 @@
-import type { GoalResult } from "@carnegie/api-client";
+import type { GoalResult } from "@maestro/api-client";
 import { panelLine, type PanelState } from "./common.js";
 
 export function renderGoalPanel(state: PanelState<readonly Pick<GoalResult, "goalId" | "projectId" | "state" | "version">[]>, width: number): string[] {
