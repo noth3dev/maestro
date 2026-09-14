@@ -8,7 +8,7 @@ import { createLocalGitPort } from "@maestro/git-adapter";
 import { FileEvidenceStore } from "@maestro/evidence";
 import { classifyHostEffects, type EnvironmentRecord, type ExecutionAdmission, type ExecutionKernelPort, type GitPort } from "@maestro/domain";
 import { createIpPythonSessionManager, createIpPythonTool, createUnavailableIpPythonKernel, reapIpPythonProcessGroup, ToolRegistry, type IpPythonBlockApproval, type IpPythonHostRequest, type IpPythonKernel, type IpPythonSessionBinding, type IpPythonSessionManager, type IpPythonStageBoundary } from "@maestro/agent-runtime";
-import { appendCapabilityJournal, appendIpPythonSessionJournal, assertProjectMembership, consumeCapabilityApprovals, authenticateLocalOperator, bootstrapAuthorityRecord, bootstrapPermanentOrganization, createPostgresAccountLoginStore, listProjectMemberships, listPermanentOrganization, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, readEnvironment, reconcileIpPythonOrphans, reconcileOnStartup, recordDiscordSignal, recordIpPythonSessionStarted, runMigrations, ensureCapacityInventory, reserveCapacity, releaseCapacityReservation, requeueCapacityReservation, readWorkerBySpawnCommand, getChannel, postChannelMessage, type IpPythonSessionJournalEntry } from "@maestro/persistence";
+import { appendCapabilityJournal, appendIpPythonSessionJournal, assertProjectMembership, consumeCapabilityApprovals, authenticateLocalOperator, bootstrapAuthorityRecord, bootstrapPermanentOrganization, createPostgresAccountLoginStore, createPostgresSettingsService, listProjectMemberships, listPermanentOrganization, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, readEnvironment, reconcileIpPythonOrphans, reconcileOnStartup, recordDiscordSignal, recordIpPythonSessionStarted, runMigrations, ensureCapacityInventory, reserveCapacity, releaseCapacityReservation, requeueCapacityReservation, readWorkerBySpawnCommand, getChannel, postChannelMessage, type IpPythonSessionJournalEntry } from "@maestro/persistence";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
 import { createCapabilityApprovalService } from "./capability-approval-service.js";
@@ -757,6 +757,26 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     authenticator,
     eventService: { listEvents: (projectId, after) => listGoalEvents(pool, { projectId, after }) },
     ...(conversationService === undefined ? {} : { conversationService }),
+    settingsService: createPostgresSettingsService({
+      pool,
+      models: { list: async () => {
+        const mapPath = resolve(process.cwd(), "config/model_map.json");
+        try {
+          const parsed = JSON.parse(readFileSync(mapPath, "utf8")) as { entries?: Array<{ modelRef?: unknown; capability?: { axes?: Record<string, { score?: unknown; status?: unknown }> } }> };
+          return (parsed.entries ?? []).filter((entry): entry is { modelRef: string; capability?: { axes?: Record<string, { score?: unknown; status?: unknown }> } } => typeof entry.modelRef === "string").map((entry) => {
+            const values = Object.values(entry.capability?.axes ?? {}).flatMap((axis) => axis.status === "scored" && typeof axis.score === "number" ? [axis.score] : []);
+            return { modelRef: entry.modelRef, score: values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length };
+          });
+        } catch { return []; }
+      } },
+      providers: { list: async () => {
+        if (modelGateway?.listModels === undefined) return [];
+        const models = await modelGateway.listModels({ operatorId: config.modelGatewayOperatorId });
+        const providers = new Map<string, Set<"api-key" | "managed-subscription">>();
+        for (const model of models) { const modes = providers.get(model.identity.provider) ?? new Set<"api-key" | "managed-subscription">(); for (const mode of model.authModes) modes.add(mode); providers.set(model.identity.provider, modes); }
+        return [...providers.entries()].map(([providerId, modes]) => ({ providerId, connected: true, authModes: [...modes] }));
+      } },
+    }),
     ...(accountLoginStore === undefined ? {} : { accountLoginStore, accountLoginOwnerId }),
     // The Model Gateway process authenticates one fixed gateway-level
     // operator identity (config.modelGatewayOperatorId), matching exactly
@@ -778,6 +798,16 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       providerCredentials: {
         bind: (input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic"; authMode: "api-key"; secret: string }) => modelGateway.bindCredential!({ ...input, operatorId: config.modelGatewayOperatorId }),
         revoke: (input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic" }) => modelGateway.revokeCredential!({ ...input, operatorId: config.modelGatewayOperatorId }),
+        list: async () => {
+          const models = await modelGateway.listModels({ operatorId: config.modelGatewayOperatorId });
+          const providers = new Map<string, Set<"api-key" | "managed-subscription">>();
+          for (const model of models) {
+            const modes = providers.get(model.identity.provider) ?? new Set<"api-key" | "managed-subscription">();
+            for (const mode of model.authModes) modes.add(mode);
+            providers.set(model.identity.provider, modes);
+          }
+          return [...providers.entries()].map(([providerId, modes]) => ({ providerId, connected: true, authModes: [...modes] }));
+        },
         ...(modelGateway.startAccountLogin === undefined || modelGateway.accountLoginStatus === undefined || modelGateway.cancelAccountLogin === undefined ? {} : {
           startAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex" }) => modelGateway.startAccountLogin!({ ...input, operatorId: config.modelGatewayOperatorId }),
           accountLoginStatus: (input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }) => modelGateway.accountLoginStatus!({ ...input, operatorId: config.modelGatewayOperatorId }),

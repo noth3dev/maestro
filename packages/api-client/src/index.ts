@@ -91,6 +91,7 @@ import {
   CapabilitySessionSchema,
   EvidenceCaptureInputSchema,
   EvidenceRecordSchema,
+  SettingsReadSchema, SettingsPreferencesUpdateSchema, SettingsModelPoolUpdateSchema, SettingsAuthorityDefaultsUpdateSchema,
   UuidSchema,
   type CreateGoalInput,
   type CreateTaskContractInput,
@@ -177,6 +178,7 @@ import {
   type CapabilitySession,
   type EvidenceCaptureInput,
   type EvidenceRecord,
+  type SettingsRead, type SettingsPreferencesUpdate, type SettingsModelPoolUpdate, type SettingsAuthorityDefaultsUpdate,
 } from "@maestro/contracts";
 
 export class ApiError extends Error {
@@ -206,6 +208,11 @@ export interface ApiClient {
   postChannelMessage(goalId: string, selector: ChannelSelector, input: ChannelMessageInput, commandId?: string): Promise<ChannelMessage>;
   getProjection(query: ProjectionQuery): Promise<ProjectionReadModel>;
   listModels(): Promise<readonly ModelCatalogEntry[]>;
+  getSettings(): Promise<SettingsRead>;
+  updateSettingsPreferences(patch: SettingsPreferencesUpdate): Promise<SettingsRead>;
+  updateSettingsModelPool(patch: SettingsModelPoolUpdate): Promise<SettingsRead>;
+  updateSettingsAuthorityDefaults(patch: SettingsAuthorityDefaultsUpdate): Promise<SettingsRead>;
+  listProviderConnections(): Promise<readonly { providerId: string; connected: boolean; authModes: readonly ("api-key" | "managed-subscription")[] }[]>;
   loginProvider(input: ProviderCredentialLoginInput): Promise<ProviderCredentialBinding>;
   logoutProvider(providerId: "openai" | "anthropic"): Promise<void>;
   startAccountLogin(): Promise<ProviderAccountLoginStartResult>;
@@ -476,6 +483,11 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
         return body.map((item) => ModelCatalogEntrySchema.parse(item));
       } });
     },
+    getSettings() { return request("v1/settings", { headers }, SettingsReadSchema); },
+    updateSettingsPreferences(patch) { const parsed = SettingsPreferencesUpdateSchema.parse(patch); return request("v1/settings/preferences", { method: "PATCH", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(parsed) }, SettingsReadSchema); },
+    updateSettingsModelPool(patch) { const parsed = SettingsModelPoolUpdateSchema.parse(patch); return request("v1/settings/model-pool", { method: "PATCH", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(parsed) }, SettingsReadSchema); },
+    updateSettingsAuthorityDefaults(patch) { const parsed = SettingsAuthorityDefaultsUpdateSchema.parse(patch); return request("v1/settings/authority-defaults", { method: "PATCH", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(parsed) }, SettingsReadSchema); },
+    listProviderConnections() { return request("v1/provider-credentials", { headers }, { parse(body: unknown) { if (!Array.isArray(body)) throw new Error("Control plane returned malformed provider connections"); return body as readonly { providerId: string; connected: boolean; authModes: readonly ("api-key" | "managed-subscription")[] }[]; } }); },
     loginProvider(input) {
       const parsed = ProviderCredentialLoginInputSchema.parse(input);
       return request("v1/provider-credentials", {

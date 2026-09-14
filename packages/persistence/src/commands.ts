@@ -32,8 +32,10 @@ export class StaleGoalLeaseError extends Error {
   }
 }
 
+export type GoalAuthorityDefaults = { spendCeilingCents: number; criticalActionsRequireApproval: boolean; allowFlashmob: boolean };
+
 export type GoalCommand =
-  | { commandId: string; projectId: string; goalId: string; actorId: string; type: "CreateGoal"; expectedVersion: 0; contractId?: string; requiredRole?: string }
+  | { commandId: string; projectId: string; goalId: string; actorId: string; type: "CreateGoal"; expectedVersion: 0; contractId?: string; requiredRole?: string; authorityDefaults?: GoalAuthorityDefaults }
   | { commandId: string; projectId: string; goalId: string; actorId: string; type: "TransitionGoal"; expectedVersion: number; to: GoalState; requiredRole?: string }
   /** Emergency stop is a narrow terminal command, not an arbitrary transition. */
   | { commandId: string; projectId: string; goalId: string; actorId: string; type: "EmergencyStopGoal"; expectedVersion: number; requiredRole?: string };
@@ -297,8 +299,9 @@ export async function executeGoalCommand(
         [command.goalId, command.projectId, nextState, nextVersion, command.contractId ?? null],
       );
       await client.query(
-        `INSERT INTO goal_controls (project_id, goal_id) VALUES ($1, $2)`,
-        [command.projectId, command.goalId],
+        `INSERT INTO goal_controls (project_id, goal_id, default_spend_ceiling_cents, default_critical_actions_require_approval, default_allow_flashmob)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [command.projectId, command.goalId, command.authorityDefaults?.spendCeilingCents ?? 5000, command.authorityDefaults?.criticalActionsRequireApproval ?? true, command.authorityDefaults?.allowFlashmob ?? true],
       );
     } else {
       const updated = await client.query(

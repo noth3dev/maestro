@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "../icons.js";
 import { useTheme } from "../theme.js";
 import { useConnection } from "../connection.js";
@@ -6,38 +6,29 @@ import { ToggleSwitch } from "../components/ToggleSwitch.js";
 
 type Panel = "profile" | "appearance" | "connection" | "notifications" | "providers" | "models" | "authority" | "danger";
 
-const inUseModels = [
-  { name: "claude-opus-5", score: 9.5, role: "department heads, encore council" },
-  { name: "claude-sonnet-5", score: 6.5, role: "default worker" },
-  { name: "claude-haiku-4.5", score: 3.0, role: "flashmob, scouts" },
-  { name: "gpt-5-codex", score: 8.0, role: "engineering workers" },
-];
-
-const availableModels = [
-  { name: "claude fable 5.1", score: 9.0 },
-  { name: "grok-code", score: 7.0 },
-  { name: "kimi-code", score: 5.5 },
-  { name: "qwen3-coder", score: 4.5 },
-  { name: "local (ollama llama)", score: 1.5 },
-];
-
 export function Settings() {
   const { theme, setTheme } = useTheme();
   const { config, disconnect } = useConnection();
   const [disconnecting, setDisconnecting] = useState(false);
   const [panel, setPanel] = useState<Panel>("profile");
-  const [compactSidebar, setCompactSidebar] = useState(false);
-  const [desktopPush, setDesktopPush] = useState(true);
-  const [emailDigest, setEmailDigest] = useState(false);
-  const [slackWebhook, setSlackWebhook] = useState(false);
-  const [criticalApproval, setCriticalApproval] = useState(true);
-  const [allowFlashmob, setAllowFlashmob] = useState(true);
-  const [autoSelectModels, setAutoSelectModels] = useState(true);
+  const [settings, setSettings] = useState<Awaited<ReturnType<typeof window.maestro.api.getSettings>> | undefined>();
   const [modelTab, setModelTab] = useState<"inuse" | "available">("inuse");
   const [modelSearch, setModelSearch] = useState("");
-
+  const [providerSecret, setProviderSecret] = useState("");
+  const [providerBusy, setProviderBusy] = useState<string | undefined>();
   const isDark = theme === "dark";
-  const filteredAvailable = availableModels.filter((model) => model.name.toLowerCase().includes(modelSearch.toLowerCase()));
+
+  useEffect(() => { void window.maestro.api.getSettings().then(setSettings).catch(() => undefined); }, []);
+  const updatePreferences = (patch: Parameters<typeof window.maestro.api.updateSettingsPreferences>[0]) => { void window.maestro.api.updateSettingsPreferences(patch).then(setSettings); };
+  const updateDefaults = (patch: Parameters<typeof window.maestro.api.updateSettingsAuthorityDefaults>[0]) => { void window.maestro.api.updateSettingsAuthorityDefaults(patch).then(setSettings); };
+  const models = settings?.models ?? [];
+  const filteredAvailable = models.filter((model) => !model.inUse && model.modelRef.toLowerCase().includes(modelSearch.toLowerCase()));
+  const inUseModels = models.filter((model) => model.inUse);
+  const providers = settings?.providers ?? [];
+  const providerAction = async (providerId: "openai" | "anthropic") => {
+    setProviderBusy(providerId);
+    try { if (providers.some((provider) => provider.providerId === providerId && provider.connected)) await window.maestro.api.logoutProvider(providerId); else if (providerSecret.trim() !== "") await window.maestro.api.loginProvider({ providerId, authMode: "api-key", secret: providerSecret }); else return; setProviderSecret(""); setSettings(await window.maestro.api.getSettings()); } finally { setProviderBusy(undefined); }
+  };
 
   const navItem = (id: Panel, icon: string, label: string) => (
     <div key={id} className={`settings-nav-item${panel === id ? " on" : ""}`} onClick={() => setPanel(id)}>
@@ -55,7 +46,7 @@ export function Settings() {
 
         {navItem("connection", "server", "connection")}
 
-        <div className="settings-nav-group-label">workspace (preview -- not wired to a real backend yet)</div>
+        <div className="settings-nav-group-label">workspace</div>
         {navItem("providers", "plug", "providers")}
         {navItem("models", "cpu", "Ensemble Router")}
         {navItem("authority", "shield", "approvals & authority")}
@@ -94,7 +85,7 @@ export function Settings() {
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">compact sidebar</div><div className="settings-row-hint">start collapsed on launch</div></div>
-            <ToggleSwitch on={compactSidebar} onToggle={() => setCompactSidebar((current) => !current)} />
+            <ToggleSwitch on={settings?.preferences.compactSidebar ?? false} onToggle={() => updatePreferences({ compactSidebar: !(settings?.preferences.compactSidebar ?? false) })} />
           </div>
         </div>
       )}
@@ -137,15 +128,15 @@ export function Settings() {
           <div className="settings-section-sub">how you hear about approvals and certifications</div>
           <div className="settings-row">
             <div><div className="settings-row-label">desktop push</div><div className="settings-row-hint">approval needed, certification complete</div></div>
-            <ToggleSwitch on={desktopPush} onToggle={() => setDesktopPush((current) => !current)} />
+            <ToggleSwitch on={settings?.preferences.desktopPush ?? true} onToggle={() => updatePreferences({ desktopPush: !(settings?.preferences.desktopPush ?? true) })} />
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">email digest</div><div className="settings-row-hint">daily summary of goal activity</div></div>
-            <ToggleSwitch on={emailDigest} onToggle={() => setEmailDigest((current) => !current)} />
+            <ToggleSwitch on={settings?.preferences.emailDigest ?? false} onToggle={() => updatePreferences({ emailDigest: !(settings?.preferences.emailDigest ?? false) })} />
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">slack webhook</div><div className="settings-row-hint">mirror #general into a workspace channel</div></div>
-            <ToggleSwitch on={slackWebhook} onToggle={() => setSlackWebhook((current) => !current)} />
+            <ToggleSwitch on={settings?.preferences.slackWebhook ?? false} onToggle={() => updatePreferences({ slackWebhook: !(settings?.preferences.slackWebhook ?? false) })} />
           </div>
         </div>
       )}
@@ -153,29 +144,26 @@ export function Settings() {
       {panel === "providers" && (
         <div className="settings-panel">
           <div className="settings-section-title">providers</div>
-          <div className="settings-section-sub">preview only -- provider connection management isn't wired to a real backend yet; nothing here reflects or changes actual state</div>
-          <div className="provider-row"><Icon name="terminal" /><span className="provider-row-name">claude code</span><span className="badge">not wired</span></div>
-          <div className="provider-row"><Icon name="terminal" /><span className="provider-row-name">codex</span><span className="badge">not wired</span></div>
-          <div className="provider-row"><Icon name="terminal" /><span className="provider-row-name">gemini cli</span><button className="btn btn-sm" disabled title="Not wired to a real backend yet">connect</button></div>
-          <div className="provider-row"><Icon name="server" /><span className="provider-row-name">local model (ollama)</span><button className="btn btn-sm" disabled title="Not wired to a real backend yet">connect</button></div>
+          <div className="settings-section-sub">provider credentials are stored by the authenticated Model Gateway</div>
+          <div className="form-field" style={{ marginBottom: 14 }}><label className="form-label">API key</label><input className="input" type="password" value={providerSecret} onChange={(event) => setProviderSecret(event.target.value)} placeholder="enter only when connecting" /></div>
+          {(["openai", "anthropic"] as const).map((providerId) => { const connected = providers.some((provider) => provider.providerId === providerId && provider.connected); return <div key={providerId} className="provider-row"><Icon name="server" /><span className="provider-row-name">{providerId}</span><span className="badge">{connected ? "connected" : "not connected"}</span><button className="btn btn-sm" disabled={providerBusy === providerId || (!connected && providerSecret.trim() === "")} onClick={() => void providerAction(providerId)}>{providerBusy === providerId ? "working…" : connected ? "disconnect" : "connect"}</button></div>; })}
         </div>
       )}
-
       {panel === "authority" && (
         <div className="settings-panel">
           <div className="settings-section-title">approvals &amp; authority</div>
-          <div className="settings-section-sub">preview only -- these defaults aren't wired to a real backend yet; per-Goal critical-action approval already works today through the Dashboard's lifecycle controls</div>
+          <div className="settings-section-sub">durable defaults applied when new Goals are created</div>
           <div className="form-field" style={{ marginBottom: 14 }}>
             <label className="form-label">default spend ceiling per goal</label>
-            <input className="input" type="text" defaultValue="$50" />
+            <input className="input" type="number" min="0" value={(settings?.authorityDefaults.spendCeilingCents ?? 5000) / 100} onChange={(event) => updateDefaults({ spendCeilingCents: Math.max(0, Math.round(Number(event.target.value || 0) * 100)) })} />
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">critical actions always require approval</div><div className="settings-row-hint">deletes, deploys, credential changes</div></div>
-            <ToggleSwitch on={criticalApproval} onToggle={() => setCriticalApproval((current) => !current)} />
+            <ToggleSwitch on={settings?.authorityDefaults.criticalActionsRequireApproval ?? true} onToggle={() => updateDefaults({ criticalActionsRequireApproval: !(settings?.authorityDefaults.criticalActionsRequireApproval ?? true) })} />
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">allow flashmob by default</div><div className="settings-row-hint">light tasks skip full council deliberation</div></div>
-            <ToggleSwitch on={allowFlashmob} onToggle={() => setAllowFlashmob((current) => !current)} />
+            <ToggleSwitch on={settings?.authorityDefaults.allowFlashmob ?? true} onToggle={() => updateDefaults({ allowFlashmob: !(settings?.authorityDefaults.allowFlashmob ?? true) })} />
           </div>
         </div>
       )}
@@ -183,11 +171,11 @@ export function Settings() {
       {panel === "models" && (
         <div className="settings-panel">
           <div className="settings-section-title">Ensemble Router</div>
-          <div className="settings-section-sub">preview only -- Ensemble Router isn't wired to a real backend yet; scores and roles below are illustrative, not live</div>
+          <div className="settings-section-sub">human-owned model_map entries and operator pool</div>
 
           <div className="settings-row" style={{ marginBottom: 6 }}>
             <div><div className="settings-row-label">auto-select models</div><div className="settings-row-hint">orchestrator swaps models on the fly to fit each task. off · strictly uses the assignments below</div></div>
-            <ToggleSwitch on={autoSelectModels} onToggle={() => setAutoSelectModels((current) => !current)} />
+            <span className="badge">human-managed pool</span>
           </div>
 
           <div className="page-tabs" style={{ padding: 0, margin: "14px 0 0" }}>
@@ -198,11 +186,11 @@ export function Settings() {
           {modelTab === "inuse" && (
             <div style={{ padding: "14px 0 0" }}>
               {inUseModels.map((model) => (
-                <div key={model.name} className="model-row">
-                  <span className="model-name">{model.name}</span>
-                  <div className="model-score-track"><div className="model-score-fill" style={{ width: `${model.score * 10}%` }} /></div>
-                  <span className="model-score-label">{model.score.toFixed(1)}</span>
-                  <span className="model-role-tag" style={{ marginLeft: "auto" }}>{model.role}</span>
+                <div key={model.modelRef} className="model-row">
+                  <span className="model-name">{model.modelRef}</span>
+                  <div className="model-score-track"><div className="model-score-fill" style={{ width: `${(model.score ?? 0) / 2}%` }} /></div>
+                  <span className="model-score-label">{model.score === null ? "—" : model.score.toFixed(1)}</span>
+                  <span className="model-role-tag" style={{ marginLeft: "auto" }}>{model.score === null ? "unproven" : `score ${model.score.toFixed(1)}`}</span><button className="btn btn-sm" onClick={() => void window.maestro.api.updateSettingsModelPool({ modelRef: model.modelRef, inUse: false }).then(setSettings)}>remove</button>
                 </div>
               ))}
             </div>
@@ -214,11 +202,11 @@ export function Settings() {
                 <input className="input" type="text" placeholder="search models" value={modelSearch} onChange={(event) => setModelSearch(event.target.value)} />
               </div>
               {filteredAvailable.map((model) => (
-                <div key={model.name} className="model-row">
-                  <span className="model-name">{model.name}</span>
-                  <div className="model-score-track"><div className="model-score-fill" style={{ width: `${model.score * 10}%` }} /></div>
-                  <span className="model-score-label">{model.score.toFixed(1)}</span>
-                  <button className="btn btn-sm" style={{ marginLeft: "auto" }} disabled title="Not wired to a real backend yet">add to pool</button>
+                <div key={model.modelRef} className="model-row">
+                  <span className="model-name">{model.modelRef}</span>
+                  <div className="model-score-track"><div className="model-score-fill" style={{ width: `${(model.score ?? 0) / 2}%` }} /></div>
+                  <span className="model-score-label">{model.score === null ? "—" : model.score.toFixed(1)}</span>
+                  <button className="btn btn-sm" style={{ marginLeft: "auto" }} onClick={() => void window.maestro.api.updateSettingsModelPool({ modelRef: model.modelRef, inUse: true }).then(setSettings)}>add to pool</button>
                 </div>
               ))}
             </div>

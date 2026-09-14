@@ -119,7 +119,12 @@ export function createDurableGoalService(options: DurableGoalServiceOptions): Go
 
   return {
     async createGoal(input, commandId, operator) {
-      return execute(commandId, { commandId, projectId: input.projectId, goalId: commandId, actorId: operator.operatorId, type: "CreateGoal", expectedVersion: 0, requiredRole: "concertmaster", ...(input.contractId === undefined ? {} : { contractId: input.contractId }) });
+      let authorityDefaults = { spendCeilingCents: 5000, criticalActionsRequireApproval: true, allowFlashmob: true };
+      try {
+        const result = await options.pool.query<{ spend_ceiling_cents: string; critical_actions_require_approval: boolean; allow_flashmob: boolean }>("SELECT spend_ceiling_cents, critical_actions_require_approval, allow_flashmob FROM operator_settings WHERE operator_id = $1", [operator.operatorId]);
+        if (result.rowCount === 1) authorityDefaults = { spendCeilingCents: Number(result.rows[0]!.spend_ceiling_cents), criticalActionsRequireApproval: result.rows[0]!.critical_actions_require_approval, allowFlashmob: result.rows[0]!.allow_flashmob };
+      } catch { /* pre-settings migrations keep the safe defaults */ }
+      return execute(commandId, { commandId, projectId: input.projectId, goalId: commandId, actorId: operator.operatorId, type: "CreateGoal", expectedVersion: 0, requiredRole: "concertmaster", authorityDefaults, ...(input.contractId === undefined ? {} : { contractId: input.contractId }) });
     },
     async transitionGoal(goalId, input, commandId, operator) {
       return execute(goalId, { commandId, projectId: input.projectId, goalId, actorId: operator.operatorId, type: "TransitionGoal", expectedVersion: input.expectedVersion, requiredRole: "concertmaster", to: input.to });

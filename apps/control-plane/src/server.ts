@@ -110,6 +110,7 @@ import {
   DepartmentAcceptanceSchema,
   CertifyWorkerInputSchema,
   CertificationSchema,
+  SettingsReadSchema, SettingsPreferencesUpdateSchema, SettingsModelPoolUpdateSchema, SettingsAuthorityDefaultsUpdateSchema,
 } from "@maestro/contracts";
 import {
   DurableStoreUnavailableError,
@@ -226,10 +227,18 @@ export interface OrganizationService {
 export interface ProviderCredentialService {
   bind(input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic"; authMode: "api-key"; secret: string }): Promise<import("@maestro/agent-runtime").GatewayCredentialBinding>;
   revoke(input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic" }): Promise<void>;
+  list?(): Promise<readonly import("@maestro/contracts").SettingsProvider[]>;
   startAccountLogin?(input: { operatorId: string; requestId: string; providerId: "openai-codex" }): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStartResult>;
   accountLoginStatus?(input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStatusResult>;
   cancelAccountLogin?(input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }): Promise<void>;
   logoutAccount?(input: { operatorId: string; requestId: string; providerId: "openai-codex" }): Promise<void>;
+}
+
+export interface SettingsService {
+  get(operatorId: string): Promise<import("@maestro/contracts").SettingsRead>;
+  updatePreferences(operatorId: string, patch: import("@maestro/contracts").SettingsPreferencesUpdate): Promise<import("@maestro/contracts").SettingsRead>;
+  updateModelPool(operatorId: string, patch: import("@maestro/contracts").SettingsModelPoolUpdate): Promise<import("@maestro/contracts").SettingsRead>;
+  updateAuthorityDefaults(operatorId: string, patch: import("@maestro/contracts").SettingsAuthorityDefaultsUpdate): Promise<import("@maestro/contracts").SettingsRead>;
 }
 
 export interface OperatorAuthenticator {
@@ -276,7 +285,7 @@ async function waitForAccountLoginStart(store: AccountLoginStore, operatorId: st
   throw new Error("account login start is still in progress");
 }
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, evidenceCaptureService, personaGoalEvidenceService, concertmasterReportService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, organizationService, channelService, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService, projectionService }: {
+export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, evidenceCaptureService, personaGoalEvidenceService, concertmasterReportService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, organizationService, channelService, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService, projectionService, settingsService }: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
@@ -329,6 +338,7 @@ export function buildServer({ goalService, authenticator, eventService, critical
   conversationService?: ConversationService;
   /** Durable projection composition over existing source tables for Carnegie panels. */
   projectionService?: ProjectionService;
+  settingsService?: SettingsService;
 }): FastifyInstance {
   const app: FastifyInstance = https === undefined ? Fastify() : Fastify({ https });
   const activeStreams = new Set<() => void>();
@@ -536,6 +546,35 @@ export function buildServer({ goalService, authenticator, eventService, critical
 
   app.get("/v1/organization", async (_request, reply) => {
     return reply.status(200).send(OrganizationReadModelSchema.parse(await organizations.listOrganization()));
+  });
+
+  app.get("/v1/settings", async (request, reply) => {
+    if (settingsService === undefined) throw new DurableStoreUnavailableError();
+    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
+    return reply.status(200).send(SettingsReadSchema.parse(await settingsService.get(operatorId)));
+  });
+  app.patch("/v1/settings/preferences", async (request, reply) => {
+    if (settingsService === undefined) throw new DurableStoreUnavailableError();
+    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
+    const patch = parse(SettingsPreferencesUpdateSchema, request.body);
+    return reply.status(200).send(SettingsReadSchema.parse(await settingsService.updatePreferences(operatorId, patch)));
+  });
+  app.patch("/v1/settings/model-pool", async (request, reply) => {
+    if (settingsService === undefined) throw new DurableStoreUnavailableError();
+    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
+    const patch = parse(SettingsModelPoolUpdateSchema, request.body);
+    return reply.status(200).send(SettingsReadSchema.parse(await settingsService.updateModelPool(operatorId, patch)));
+  });
+  app.patch("/v1/settings/authority-defaults", async (request, reply) => {
+    if (settingsService === undefined) throw new DurableStoreUnavailableError();
+    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
+    const patch = parse(SettingsAuthorityDefaultsUpdateSchema, request.body);
+    return reply.status(200).send(SettingsReadSchema.parse(await settingsService.updateAuthorityDefaults(operatorId, patch)));
+  });
+
+  app.get("/v1/provider-credentials", async (_request, reply) => {
+    if (providerCredentials?.list === undefined) throw new DurableStoreUnavailableError();
+    return reply.status(200).send(await providerCredentials.list());
   });
 
   app.post("/v1/provider-credentials", async (request, reply) => {
