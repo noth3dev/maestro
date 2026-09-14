@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ApiClient } from "@maestro/api-client";
+import { CHANNEL_SELECTORS, type ApiClient } from "@maestro/api-client";
 import { discoverWorkspaceProject, discoverWorkspaceProjectFromControlPlane, executeReadCommand, readDashboard } from "./read-commands.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
@@ -122,6 +122,7 @@ describe("workspace read commands", () => {
     expect(result.title).toBe("Channels");
     expect(result.lines.join("\n")).toContain("#engineering");
     expect(result.lines.join("\n")).not.toContain("#general");
+    expect(getChannel).toHaveBeenCalledTimes(CHANNEL_SELECTORS.length);
   });
 
   it("reads a selected channel through the shared API and preserves message order", async () => {
