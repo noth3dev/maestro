@@ -20,8 +20,9 @@ import { Flashmob } from "./views/Flashmob.js";
 import { FlashmobSession } from "./views/FlashmobSession.js";
 import type { ViewName } from "./views.js";
 import type { HomeMode } from "./homeMode.js";
+import { useDurableEvents, type DurableEventState } from "./useDurableEvents.js";
 
-function Shell() {
+function Shell({ eventState }: { eventState: DurableEventState }) {
   const [view, setView] = useState<ViewName>("home");
   const [homeMode, setHomeMode] = useState<HomeMode>("maestro");
 
@@ -48,8 +49,24 @@ function Shell() {
   return (
     <div className={`app${homeMode === "flashmob" ? " flashmob-theme" : ""}`}>
       {!noSidebar && <Sidebar view={view} onNavigate={setView} />}
-      {body}
+      <div className="app-content">
+        {eventState.stale && (
+          <div className="event-stale-banner" role="status">
+            Showing the last durable state while live updates reconnect.{eventState.error === undefined ? "" : ` ${eventState.error}`}
+          </div>
+        )}
+        {body}
+      </div>
     </div>
+  );
+}
+
+function ConnectedWorkspace({ projectId }: { projectId: string }) {
+  const eventState = useDurableEvents(window.maestro.api, projectId);
+  return (
+    <GoalsProvider>
+      <Shell eventState={eventState} />
+    </GoalsProvider>
   );
 }
 
@@ -57,11 +74,7 @@ function Connected() {
   const { config, loading } = useConnection();
   if (loading) return <div className="app" aria-busy="true" />;
   if (config === undefined) return <Setup />;
-  return (
-    <GoalsProvider>
-      <Shell />
-    </GoalsProvider>
-  );
+  return <ConnectedWorkspace projectId={config.projectId} />;
 }
 
 export function App() {
