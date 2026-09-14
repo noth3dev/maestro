@@ -168,7 +168,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
   return await new Promise<number>((resolve) => {
     const editor = new SecretEditor(tui, editorTheme, { paddingX: 2, autocompleteMaxVisible: 6 });
     const inputPanel = new Box(1, 0, tuiTheme.inputSurface);
-    const inputLabel = new Text("", 0, 0);
+    const inputLabel = createDynamicRegion((width) => [tuiTheme.muted(renderInputPlaceholder(state, width))]);
     inputPanel.addChild(inputLabel);
     inputPanel.addChild(editor);
     const composer = new FramedComposer(inputPanel);
@@ -229,7 +229,6 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     header.setOrderedStreamRenderer(() => renderUnifiedStreamEntries(conversation, activity, terminal.columns));
     const render = () => {
       syncPendingDecisionState();
-      inputLabel.setText(tuiTheme.muted(renderInputPlaceholder(state, Math.max(1, terminal.columns - 4))));
       footer.setText(terminal.rows < 16 ? "" : renderTuiFooter(terminal.columns, state));
       tui.requestRender(true);
     };
