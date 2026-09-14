@@ -153,6 +153,10 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
     return unavailable("Critical action requires the durable Control Plane approval path; no mutation was sent.");
   }
 
+  if (key === "capability:select-full-access-mode") {
+    const fullAccessMode = option(command, "full-access-mode");
+    if (fullAccessMode !== "retain_intermediate_approvals" && fullAccessMode !== "skip_intermediate_approvals") return unavailable("--full-access-mode must be retain_intermediate_approvals or skip_intermediate_approvals");
+  }
   const target = option(command, "target") ?? option(command, "goal-id") ?? context.goalId ?? context.projectId;
   const id = commandId(command);
   const cancelled = await confirmIfCritical(context, command, target, id);

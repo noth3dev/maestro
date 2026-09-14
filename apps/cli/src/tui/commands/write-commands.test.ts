@@ -46,10 +46,12 @@ describe("TUI write commands", () => {
     expect(client.selectFullAccessMode).toHaveBeenCalledWith(goalId, { projectId, capabilityKind: "ipython", sessionId: goalId, fullAccessMode: "skip_intermediate_approvals" });
   });
 
-  it("rejects an unsupported full-access mode before invoking the client", async () => {
+  it("rejects an unsupported full-access mode before invoking the client or confirmation", async () => {
     const client = api();
-    const result = await executeWriteCommand({ client, projectId, confirm: vi.fn() }, { name: "capability", action: "select-full-access-mode", options: { "goal-id": goalId, "capability-kind": "ipython", "session-id": goalId, "full-access-mode": "full_access" } });
+    const confirm = vi.fn();
+    const result = await executeWriteCommand({ client, projectId, confirm }, { name: "capability", action: "select-full-access-mode", options: { "goal-id": goalId, "capability-kind": "ipython", "session-id": goalId, "full-access-mode": "full_access" } });
     expect(result).toEqual({ title: "Unavailable", lines: ["--full-access-mode must be retain_intermediate_approvals or skip_intermediate_approvals"] });
+    expect(confirm).not.toHaveBeenCalled();
     expect(client.selectFullAccessMode).not.toHaveBeenCalled();
   });
 
