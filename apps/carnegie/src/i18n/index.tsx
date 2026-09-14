@@ -1,10 +1,15 @@
+import React from "react";
 import { createContext, useContext, type ReactNode } from "react";
 import { en, type Translations } from "./en.js";
+import { ko } from "./ko.js";
 
-export type Locale = "en";
+export type Locale = "en" | "ko";
 
-// ponytail: only "en" exists today; add a "ko.ts" satisfying `Translations` and register it here when Korean is built.
-const locales: Record<Locale, Translations> = { en };
+const locales: Record<Locale, Translations> = { en, ko };
+
+export function localeFromPreferences(locale: string | undefined): Locale {
+  return locale === "ko" ? "ko" : "en";
+}
 
 const TranslationsContext = createContext<Translations>(en);
 

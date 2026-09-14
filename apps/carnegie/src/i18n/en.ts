@@ -40,6 +40,33 @@ export const en = {
     darkMode: "dark mode",
     disconnect: "disconnect",
   },
+  radial: {
+    title: "organization floor",
+    back: "back",
+    controls: "Radial graph controls",
+    graph: "Organization radial graph",
+    linearAlternative: "Linear alternative",
+    linearHint: "Every graph node and operation is available without using the canvas.",
+    searchLabel: "Search graph nodes",
+    linearSearchLabel: "Search nodes in linear alternative",
+    searchPlaceholder: "Search nodes",
+    find: "Find",
+    zoomIn: "Zoom in",
+    zoomOut: "Zoom out",
+    fit: "Fit graph",
+    pan: "Pan graph",
+    panUp: "Pan up",
+    panDown: "Pan down",
+    panLeft: "Pan left",
+    panRight: "Pan right",
+    nodeStatus: "Status",
+    selected: "selected",
+    statusReady: "Graph selection updated",
+    backToFloor: "Back to floor",
+    nodeDetails: "Node details",
+    close: "Close",
+  },
 } as const;
 
-export type Translations = typeof en;
+type WidenStrings<T> = T extends string ? string : { [K in keyof T]: WidenStrings<T[K]> };
+export type Translations = WidenStrings<typeof en>;

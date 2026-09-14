@@ -1,9 +1,11 @@
-import React, { useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
+import React, { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { ReactFlow, ReactFlowProvider, useReactFlow, type Edge, type Node, type NodeMouseHandler, type Viewport } from "@xyflow/react";
 import type { ProjectionReadModel } from "@maestro/contracts";
 import { buildRadialLayout, type RadialGraphNode } from "./radial-layout.js";
 import { NodeActionControls } from "./NodeActionControls.js";
 import type { NodeActionsApi } from "../../../lib/node-actions.js";
+import { LinearAlternative } from "./LinearAlternative.js";
+import { useT } from "../../../i18n/index.js";
 import "@xyflow/react/dist/style.css";
 
 interface RadialNodeData extends Record<string, unknown> {
@@ -38,7 +40,7 @@ function stateClass(state: string | undefined): string {
 function flowNodes(nodes: readonly RadialGraphNode[], selectedNodeId: string | undefined): Node<RadialNodeData>[] {
   return nodes.map((node) => {
     const data: RadialNodeData = {
-      label: node.label,
+      label: node.state === undefined ? node.label : `${node.label} · ${node.state}`,
       kind: node.kind,
       ...(node.state === undefined ? {} : { state: node.state }),
       ...(node.version === undefined ? {} : { version: node.version }),
@@ -55,7 +57,7 @@ function flowNodes(nodes: readonly RadialGraphNode[], selectedNodeId: string | u
       hidden: node.collapsed === true,
       draggable: false,
       selectable: node.kind !== "concertmaster",
-      ariaLabel: `${node.label} ${node.kind}${node.state === undefined ? "" : `, ${node.state}`}`,
+      ariaLabel: `${node.label} ${node.kind}${node.state === undefined ? "" : `, Status: ${node.state}`}`,
     };
   });
 }
@@ -72,44 +74,76 @@ function flowEdges(edges: ReturnType<typeof buildRadialLayout>["edges"]): Edge[]
   }));
 }
 
-function GraphCanvas({ layout, selectedNodeId, onSelect, selectedProjectionNode, api }: { layout: ReturnType<typeof buildRadialLayout>; selectedNodeId: string | undefined; onSelect: (nodeId: string) => void; selectedProjectionNode?: import("@maestro/contracts").ProjectionNode; api?: NodeActionsApi }) {
+function GraphCanvas({ layout, selectedNodeId, onSelect, onBack, selectedProjectionNode, api }: { layout: ReturnType<typeof buildRadialLayout>; selectedNodeId: string | undefined; onSelect: (nodeId: string) => void; onBack: () => void; selectedProjectionNode?: import("@maestro/contracts").ProjectionNode; api?: NodeActionsApi }) {
+  const t = useT();
   const { zoomIn, zoomOut, fitView, getViewport, setViewport, setCenter } = useReactFlow();
   const [query, setQuery] = useState("");
+  const [reducedMotion, setReducedMotion] = useState(false);
   const nodes = useMemo(() => flowNodes(layout.nodes, selectedNodeId), [layout.nodes, selectedNodeId]);
   const edges = useMemo(() => flowEdges(layout.edges), [layout.edges]);
   const selected = nodes.find((node) => node.id === selectedNodeId);
   const matchingNode = nodes.find((node) => String(node.data.label).toLowerCase().includes(query.trim().toLowerCase()));
+  const motionOptions = { duration: reducedMotion ? 0 : 200 };
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReducedMotion(media.matches);
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
+
   const handleNodeClick: NodeMouseHandler = (_event, node) => onSelect(node.id);
   const panBy = (x: number, y: number) => {
     const viewport = getViewport();
-    void setViewport(panViewport(viewport, x, y), { duration: 150 });
+    void setViewport(panViewport(viewport, x, y), motionOptions);
+  };
+  const searchGraph = () => {
+    if (matchingNode === undefined) return;
+    onSelect(matchingNode.id);
+    void setCenter(matchingNode.position.x + 48, matchingNode.position.y + 28, { zoom: 1.1, ...motionOptions });
   };
   const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter" && matchingNode !== undefined) {
-      onSelect(matchingNode.id);
-      void setCenter(matchingNode.position.x + 48, matchingNode.position.y + 28, { zoom: 1.1, duration: 200 });
+    if (event.key === "Enter") {
+      event.preventDefault();
+      searchGraph();
     }
+  };
+  const panDirection = (direction: "up" | "down" | "left" | "right") => {
+    const offsets = { up: [0, 80], down: [0, -80], left: [80, 0], right: [-80, 0] } as const;
+    const [x, y] = offsets[direction];
+    panBy(x, y);
+  };
+  const operations = {
+    query,
+    onQueryChange: setQuery,
+    onSearch: searchGraph,
+    onZoomIn: () => void zoomIn(motionOptions),
+    onZoomOut: () => void zoomOut(motionOptions),
+    onFit: () => void fitView(motionOptions),
+    onPan: panDirection,
+    onBack,
   };
 
   return (
     <>
-      <div className="radial-toolbar" role="toolbar" aria-label="Radial graph controls">
+      <div className="radial-toolbar" role="toolbar" aria-label={t.radial.controls} data-reduced-motion="supported">
         <label className="radial-search">
-          <span>Find node</span>
-          <input aria-label="Search graph nodes" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Search nodes" />
+          <span>{t.radial.searchLabel}</span>
+          <input aria-label={t.radial.searchLabel} value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown} placeholder={t.radial.searchPlaceholder} />
         </label>
-        <button type="button" className="btn btn-sm" aria-label="Zoom in" onClick={() => void zoomIn()}><span aria-hidden="true">+</span> zoom</button>
-        <button type="button" className="btn btn-sm" aria-label="Zoom out" onClick={() => void zoomOut()}><span aria-hidden="true">−</span> zoom</button>
-        <button type="button" className="btn btn-sm" aria-label="Fit graph" onClick={() => void fitView({ duration: 200 })}>fit</button>
-        <span className="radial-pan-controls" aria-label="Pan graph">
-          <button type="button" className="btn btn-sm" aria-label="Pan up" onClick={() => panBy(0, 80)}>↑</button>
-          <button type="button" className="btn btn-sm" aria-label="Pan down" onClick={() => panBy(0, -80)}>↓</button>
-          <button type="button" className="btn btn-sm" aria-label="Pan left" onClick={() => panBy(80, 0)}>←</button>
-          <button type="button" className="btn btn-sm" aria-label="Pan right" onClick={() => panBy(-80, 0)}>→</button>
+        <button type="button" className="btn btn-sm" aria-label={t.radial.zoomIn} onClick={operations.onZoomIn}><span aria-hidden="true">+</span> {t.radial.zoomIn}</button>
+        <button type="button" className="btn btn-sm" aria-label={t.radial.zoomOut} onClick={operations.onZoomOut}><span aria-hidden="true">−</span> {t.radial.zoomOut}</button>
+        <button type="button" className="btn btn-sm" aria-label={t.radial.fit} onClick={operations.onFit}>{t.radial.fit}</button>
+        <span className="radial-pan-controls" aria-label={t.radial.pan}>
+          <button type="button" className="btn btn-sm" aria-label={t.radial.panUp} onClick={() => panDirection("up")}>↑</button>
+          <button type="button" className="btn btn-sm" aria-label={t.radial.panDown} onClick={() => panDirection("down")}>↓</button>
+          <button type="button" className="btn btn-sm" aria-label={t.radial.panLeft} onClick={() => panDirection("left")}>←</button>
+          <button type="button" className="btn btn-sm" aria-label={t.radial.panRight} onClick={() => panDirection("right")}>→</button>
         </span>
         {layout.virtualized && <span className="radial-virtualized" role="status">large organization · virtualized</span>}
       </div>
-      <div className="radial-flow" aria-label="Organization radial graph">
+      <div className="radial-flow" aria-label={t.radial.graph}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -129,13 +163,7 @@ function GraphCanvas({ layout, selectedNodeId, onSelect, selectedProjectionNode,
         <div className="radial-head-detail" role="status">Department Head: {selected.data.ownerId} · projection node {selected.id} · version {selected.data.version ?? "—"}</div>
       )}
       {selectedProjectionNode !== undefined && api !== undefined && <NodeActionControls node={selectedProjectionNode} api={api} />}
-      <div className="radial-accessible-nodes" aria-label="Radial graph nodes">
-        {nodes.map((node) => (
-          <button key={node.id} type="button" className="radial-node-link" data-radial-node-id={node.id} data-radial-node-version={node.data.version === undefined ? "" : String(node.data.version)} aria-pressed={node.selected === true} onClick={() => onSelect(node.id)}>
-            {String(node.data.label)} <span>{String(node.data.kind)}{node.data.state === undefined ? "" : ` · ${String(node.data.state)}`}</span>
-          </button>
-        ))}
-      </div>
+      <LinearAlternative nodes={layout.nodes} selectedNodeId={selectedNodeId} onSelect={onSelect} operations={operations} />
     </>
   );
 }
@@ -148,6 +176,7 @@ export function RadialGraph({ projection, selectedGoalId, onSelectGoal, onBack, 
   }), [projection, selectedGoalId, selectedNodeId]);
   const selected = layout.nodes.find((node) => node.id === selectedNodeId);
   const selectedProjectionNode = projection.nodes.find((node) => node.nodeId === selectedNodeId && !node.removed);
+  const t = useT();
   const onShellClick = (event: MouseEvent<HTMLDivElement>) => {
     if (event.target === event.currentTarget) setSelectedNodeId(undefined);
   };
@@ -161,25 +190,26 @@ export function RadialGraph({ projection, selectedGoalId, onSelectGoal, onBack, 
   return (
     <div className="floor-wrap radial-graph-shell" onClick={onShellClick}>
       <div className="floor-head radial-graph-head">
-        <button type="button" className="gitbar-back" onClick={onBack}><span aria-hidden="true">←</span> back</button>
-        <span className="radial-title">organization floor</span>
+        <button type="button" className="gitbar-back" onClick={onBack}><span aria-hidden="true">←</span> {t.radial.back}</button>
+        <span className="radial-title">{t.radial.title}</span>
         <span className="sub">durable projection · cursor {projection.eventCursor}</span>
-        {selected !== undefined && <span className="radial-selection" role="status">selected: {selected.label} · {selected.state ?? selected.kind}</span>}
+        {selected !== undefined && <span className="radial-selection" role="status">{t.radial.selected}: {selected.label} · {selected.state ?? selected.kind}</span>}
       </div>
       <ReactFlowProvider>
         <GraphCanvas
           layout={layout}
           selectedNodeId={selectedNodeId}
           onSelect={onSelectNode}
+          onBack={onBack}
           {...(api === undefined ? {} : { api })}
           {...(selectedProjectionNode === undefined ? {} : { selectedProjectionNode })}
         />
       </ReactFlowProvider>
       <div className="floor-legend radial-legend" aria-label="Radial graph legend">
-        <span><span className="legend-dot" style={{ background: "var(--terracotta)" }} /> Concertmaster</span>
-        <span><span className="legend-dot" style={{ background: "var(--p-teal)" }} /> Department</span>
-        <span><span className="legend-dot" style={{ background: "var(--olive)" }} /> Worker</span>
-        <span><span className="legend-dot" style={{ background: "var(--ochre)" }} /> select a node for cross-links</span>
+        <span><span className="legend-dot" style={{ background: "var(--terracotta)" }} /> <span aria-hidden="true">●</span> Concertmaster</span>
+        <span><span className="legend-dot" style={{ background: "var(--p-teal)" }} /> <span aria-hidden="true">□</span> Department</span>
+        <span><span className="legend-dot" style={{ background: "var(--olive)" }} /> <span aria-hidden="true">✓</span> Worker</span>
+        <span><span className="legend-dot" style={{ background: "var(--ochre)" }} /> <span aria-hidden="true">↗</span> select a node for cross-links</span>
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { ProjectionReadModel } from "@maestro/contracts";
 import { goalSelectionId, panViewport, RadialGraph } from "./RadialGraph.js";
 import { buildRadialLayout } from "./radial-layout.js";
+import { I18nProvider } from "../../../i18n/index.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
@@ -27,11 +28,42 @@ describe("RadialGraph", () => {
     expect(html).toContain("Search graph nodes");
     expect(html).toContain("Zoom in");
     expect(html).toContain("Pan left");
+    expect((html.match(/aria-label="Pan left"/g) ?? [])).toHaveLength(1);
     expect(html).not.toContain("illustrative");
   });
 
   it("exposes a keyboard-safe viewport pan operation", () => {
     expect(panViewport({ x: 10, y: 20, zoom: 1 }, 80, 0)).toEqual({ x: 90, y: 20, zoom: 1 });
+  });
+
+  it("provides a complete linear alternative with operation parity and explicit status cues", () => {
+    const html = renderToStaticMarkup(<RadialGraph projection={projection} onBack={() => undefined} />);
+    expect(html).toContain('aria-label="Linear alternative"');
+    expect(html).toContain('role="tree"');
+    for (const operation of ["search", "zoom-in", "zoom-out", "fit", "pan-up", "pan-down", "pan-left", "pan-right"]) {
+      expect(html).toContain(`data-linear-operation="${operation}"`);
+    }
+    expect(html).toContain(`data-radial-node-id="${goalId}"`);
+    expect(html).toContain("Status: active");
+    expect(html).toContain("status-marker");
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('aria-modal="true"');
+    expect(html).toContain("Node details");
+    expect(html).toContain('aria-label="Node details: Goal"');
+    expect((html.match(/aria-label="Node details:/g) ?? [])).toHaveLength(5);
+  });
+
+  it("renders the graph controls with a reduced-motion-safe operation mode", () => {
+    const html = renderToStaticMarkup(<RadialGraph projection={projection} onBack={() => undefined} />);
+    expect(html).toContain('data-reduced-motion="supported"');
+    expect(html).toContain('aria-live="polite"');
+  });
+
+  it("supports the Korean locale without changing projection identities", () => {
+    const html = renderToStaticMarkup(<I18nProvider locale="ko"><RadialGraph projection={projection} onBack={() => undefined} /></I18nProvider>);
+    expect(html).toContain("선형 대안");
+    expect(html).toContain("그래프 노드 검색");
+    expect(html).toContain(`data-radial-node-id="${goalId}"`);
   });
 
   it("uses the projection goalId rather than assuming nodeId identity", () => {
