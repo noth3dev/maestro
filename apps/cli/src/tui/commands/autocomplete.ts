@@ -24,6 +24,8 @@ const options: Record<string, readonly string[]> = {
   "evidence capture": ["--goal-id", "--project-id", "--correlation-id", "--command-id", "--kind", "--media-type", "--content-base64"],
   "evidence list": ["--goal-id", "--project-id"],
   "evidence bundle": ["--goal-id", "--project-id"],
+  "worker message": ["--worker-id", "--project-id", "--message", "--command-id"],
+  "git worker-advance": ["--worker-id", "--project-id", "--message", "--evidence-references", "--command-id"],
 };
 
 export function createCommandAutocompleteItems(registry: CommandRegistry): SlashCommand[] {

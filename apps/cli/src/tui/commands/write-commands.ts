@@ -96,7 +96,7 @@ const supportedKeys = new Set([
   "admin:project-access", "task-contract:create", "task-contract:amend", "task-contract:select-roles", "task-contract:confirm", "task-contract:launch",
   "goal:create", "goal:transition", "goal:pause", "goal:stop", "goal:resume", "goal:emergency-stop", "head:activate",
   "council:create", "council:submit-brief", "council:reveal", "council:decide", "department-plan:create", "department-plan:revise", "mission-bundle:create",
-  "worker:spawn", "worker:observe", "worker:cancel", "worker:accept", "worker:certify", "worker:certify-conditional", "certification:certify", "git:goal-branch", "git:department-branch", "git:worker-worktree", "git:goal-revision",
+  "worker:spawn", "worker:observe", "worker:cancel", "worker:message", "worker:accept", "worker:certify", "worker:certify-conditional", "certification:certify", "git:goal-branch", "git:department-branch", "git:worker-worktree", "git:goal-revision", "git:worker-advance",
   "metronome:scan", "metronome:challenge", "metronome:correct", "metronome:safe-pause", "metronome:resolve", "encore:review", "concertmaster-report:generate", "approval:approve-and-run", "critical-action:request", "critical-action:approve-and-run", "capability:select-full-access-mode", "evidence:capture",
 ]);
 
@@ -352,6 +352,12 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
     const observed = key.endsWith("observe") ? await context.client.observeWorker(workerId, { projectId: context.projectId }, id) : await context.client.cancelWorker(workerId, { projectId: context.projectId }, id);
     return { title: "Worker", lines: [`${observed.workerId} · ${observed.status}`] };
   }
+  if (key === "worker:message") {
+    const workerId = required(command, "worker-id"); const message = required(command, "message");
+    if (typeof workerId !== "string") return workerId; if (typeof message !== "string") return message;
+    const updated = await context.client.sendWorkerMessage(workerId, { projectId: context.projectId, message }, id);
+    return { title: "Worker", lines: [`${updated.workerId} · ${updated.status}${updated.answerText === null ? "" : ` · ${updated.answerText}`}`] };
+  }
   if (key === "worker:accept") {
     const workerId = required(command, "worker-id"); const reason = required(command, "reason"); if (typeof workerId !== "string") return workerId; if (typeof reason !== "string") return reason;
     const accepted = await context.client.acceptWorker(workerId, { projectId: context.projectId, reason }, id); return { title: "Worker acceptance", lines: [JSON.stringify(accepted)] };
@@ -381,6 +387,14 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
   if (key === "git:worker-worktree") {
     const workerId = required(command, "worker-id"); const worktreePath = required(command, "worktree-path"); if (typeof workerId !== "string") return workerId; if (typeof worktreePath !== "string") return worktreePath;
     const worktree = await context.client.createWorkerWorktree(workerId, { projectId: context.projectId, worktreePath }, id); return { title: "Git", lines: [worktree.worktreePath] };
+  }
+  if (key === "git:worker-advance") {
+    const workerId = required(command, "worker-id"); const message = required(command, "message"); const references = jsonValue(command, "evidence-references");
+    if (typeof workerId !== "string") return workerId; if (typeof message !== "string") return message;
+    if (isWriteError(references)) return references;
+    if (!Array.isArray(references) || references.some((reference) => typeof reference !== "string" || reference.length === 0)) return unavailable("--evidence-references must contain a JSON array of non-empty strings");
+    const committed = await context.client.advanceWorkerIntegration(workerId, { projectId: context.projectId, message, evidenceReferences: references }, id);
+    return { title: "Git", lines: [`${committed.commitSha} · ${committed.message} · ${committed.evidenceReferences.join(", ")}`] };
   }
   if (key === "git:goal-revision") {
     const goalId = selectedGoal(command, context); if (typeof goalId !== "string") return goalId;
