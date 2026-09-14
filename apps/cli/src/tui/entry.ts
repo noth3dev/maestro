@@ -9,8 +9,8 @@ import {
   VStack,
   matchesKey,
 } from "@earendil-works/pi-tui";
-import { createApiClient, type GoalEvent } from "@maestro/api-client";
-import type { ConversationEvent } from "@maestro/contracts";
+import { createApiClient, type ApiClient, type GoalEvent } from "@maestro/api-client";
+import type { ConversationEvent, ModelCatalogEntry } from "@maestro/contracts";
 
 import { resolveWorkspace } from "./workspace.js";
 
@@ -54,6 +54,57 @@ import { ConversationViewport, FramedComposer } from "./components/conversation-
 
 export { type InteractiveTuiOptions } from "./startup.js";
 import { initializeTui, shouldAutoBootstrapLocal, type InteractiveTuiOptions } from "./startup.js";
+
+/** A selected model is only resolvable when the gateway exposes that exact model. */
+export function shouldOfferAutomaticProviderSignIn(
+  models: readonly Pick<ModelCatalogEntry, "identity">[],
+  configuredModel: string | undefined,
+): boolean {
+  const selectedModel = configuredModel?.trim();
+  if (models.length === 0) return selectedModel === undefined || selectedModel === "";
+  if (selectedModel === undefined || selectedModel === "") return false;
+  return !models.some((model) => `${model.identity.provider}/${model.identity.id}` === selectedModel);
+}
+
+/** Prevent a dismissed or already-presented automatic offer from nagging again. */
+export function createAutomaticProviderSignInGate(): { claim: () => boolean } {
+  let claimed = false;
+  return {
+    claim: () => {
+      if (claimed) return false;
+      claimed = true;
+      return true;
+    },
+  };
+}
+
+export function isProviderLoginActive(
+  pendingProviderLogin: "openai" | "anthropic" | undefined,
+  providerLoginInFlight: boolean,
+  accountLoginSelection: AccountLoginProviderSelection | undefined,
+): boolean {
+  return pendingProviderLogin !== undefined || providerLoginInFlight || accountLoginSelection !== undefined;
+}
+
+export async function runAutomaticProviderSignInOffer(options: {
+  client: Pick<ApiClient, "listModels">;
+  getConfiguredModel: () => string | undefined;
+  gate: { claim: () => boolean };
+  isCurrent: () => boolean;
+  isManualLoginActive: () => boolean;
+  onOffer: () => void;
+}): Promise<void> {
+  if (!options.isCurrent() || options.isManualLoginActive()) return;
+  let models: readonly Pick<ModelCatalogEntry, "identity">[];
+  try {
+    models = await options.client.listModels();
+  } catch {
+    return;
+  }
+  if (!options.isCurrent() || options.isManualLoginActive() || !shouldOfferAutomaticProviderSignIn(models, options.getConfiguredModel())) return;
+  if (!options.gate.claim() || !options.isCurrent() || options.isManualLoginActive()) return;
+  options.onOffer();
+}
 import type { LocalBootstrapStepEvent } from "./local-bootstrap.js";
 import { createTuiRuntime } from "./runtime.js";
 
@@ -141,11 +192,15 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let activityController: AbortController | undefined;
     let conversationTurnController: AbortController | undefined;
     let pendingProviderLogin: "openai" | "anthropic" | undefined;
+    let providerLoginInFlight = false;
     let accountLoginSelection: AccountLoginProviderSelection | undefined;
     let accountLoginState: "selecting" | "opening" | "waiting" | undefined;
     let accountLoginController: AbortController | undefined;
     let accountLoginId: string | undefined;
     let accountLoginUrl: string | undefined;
+    let connectionGeneration = client === undefined ? 0 : 1;
+    let loginInteractionGeneration = 0;
+    const automaticProviderSignInGate = createAutomaticProviderSignInGate();
     const syncModelState = (): void => {
       const model = options.env.MAESTRO_MODEL?.trim() || session?.model;
       if (model === undefined) delete state.model;
@@ -358,6 +413,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       });
     };
     const retryConnection = async () => {
+      connectionGeneration += 1;
       appendWarning("Retrying Maestro startup checks…");
       if (startupError !== undefined) {
         try {
@@ -424,6 +480,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         if (projectDiscoveryNotice !== undefined) appendWarning(projectDiscoveryNotice);
         void refreshDashboard();
         restartActivity();
+        void offerAutomaticProviderSignIn();
       } catch {
         client = undefined;
         state.connection = { kind: "error", message: "Control Plane client could not be created" };
@@ -475,23 +532,46 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       } catch (error) { if (!controller.signal.aborted) appendError(`Account login failed: ${error instanceof Error ? error.message : "request failed"}`); }
       finally { if (accountLoginController === controller) { accountLoginController = undefined; accountLoginId = undefined; accountLoginUrl = undefined; accountLoginSelection = undefined; accountLoginState = undefined; editor.hidden = false; render(); } }
     };
+    const offerAutomaticProviderSignIn = (): void => {
+      if (client === undefined) return;
+      const candidateClient = client;
+      const candidateGeneration = connectionGeneration;
+      const candidateLoginInteractionGeneration = loginInteractionGeneration;
+      void runAutomaticProviderSignInOffer({
+        client: candidateClient,
+        getConfiguredModel: () => options.env.MAESTRO_MODEL?.trim() || session?.model,
+        gate: automaticProviderSignInGate,
+        isCurrent: () => !stopped && client === candidateClient && connectionGeneration === candidateGeneration && loginInteractionGeneration === candidateLoginInteractionGeneration && state.connection.kind === "connected",
+        isManualLoginActive: () => isProviderLoginActive(pendingProviderLogin, providerLoginInFlight, accountLoginSelection),
+        onOffer: () => {
+          accountLoginSelection = 0;
+          accountLoginState = "selecting";
+          editor.hidden = true;
+          editor.setText("");
+          render();
+        },
+      });
+    };
 
     const submit = async (text: string) => {
       if (text.trim() !== "") splash.dismiss();
       if (pendingProviderLogin !== undefined) {
         const providerId = pendingProviderLogin;
         pendingProviderLogin = undefined;
+        providerLoginInFlight = true;
         editor.hidden = false;
         editor.setText("");
-        if (client === undefined) {
-          appendWarning("Provider login is unavailable until the Control Plane is connected.");
-          return;
-        }
         try {
-          await client.loginProvider({ providerId, authMode: "api-key", secret: text });
-          appendSuccess(`Provider login complete: ${providerId} API key stored by the model gateway.`);
+          if (client === undefined) {
+            appendWarning("Provider login is unavailable until the Control Plane is connected.");
+          } else {
+            await client.loginProvider({ providerId, authMode: "api-key", secret: text });
+            appendSuccess(`Provider login complete: ${providerId} API key stored by the model gateway.`);
+          }
         } catch (error) {
           appendError(`Provider login failed: ${error instanceof Error ? error.message : "request failed"}`);
+        } finally {
+          providerLoginInFlight = false;
         }
         return;
       }
@@ -500,12 +580,14 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         if (parsed.kind === "command" && parsed.name === "help") {
           append(`Commands: ${createCommandPalette().map((item) => `${item.label} [${item.description}]`).join(" · ")}`);
         } else if (parsed.kind === "command" && parsed.name === "login" && parsed.action === undefined) {
+          loginInteractionGeneration += 1;
           accountLoginSelection = 0;
           accountLoginState = "selecting";
           editor.hidden = true;
           editor.setText("");
           render();
         } else if (parsed.kind === "command" && parsed.name === "login" && parsed.action === "openai-codex") {
+          loginInteractionGeneration += 1;
           accountLoginSelection = 0;
           accountLoginState = "selecting";
           editor.hidden = true;
@@ -516,6 +598,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           if (client === undefined) {
             appendWarning("Provider login is unavailable until the Control Plane is connected.");
           } else {
+            loginInteractionGeneration += 1;
             pendingProviderLogin = parsed.action;
             editor.hidden = true;
             editor.setText("");
@@ -938,6 +1021,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     runtime.start();
     if (projectDiscoveryNotice !== undefined) appendWarning(projectDiscoveryNotice);
     void refreshDashboard();
+    void offerAutomaticProviderSignIn();
     if (project.kind === "attached") {
       const activityGeneration = ++activityHydrationGeneration;
       void hydrateActivity(project.projectId, activityGeneration).then(() => {
