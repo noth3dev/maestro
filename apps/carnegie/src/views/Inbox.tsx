@@ -74,7 +74,7 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
   return (
     <div className="inbox-main">
       <div className="dash-head" style={{ padding: "20px 20px 0" }}><div className="dash-title">inbox</div></div>
-      <div className="dash-sub" style={{ padding: "0 20px 14px" }}>pending approvals and certifications across visible Goals</div>
+      <div className="dash-sub" style={{ padding: "0 20px 14px" }}>Pending approvals across visible Goals; certifications for the selected Goal.</div>
       <div className="inbox-list">
         {loading && <p style={{ padding: "0 20px" }}>loading…</p>}
         {displayError !== undefined && <div className="alert alert-warning" style={{ margin: "0 20px" }}>{displayError}</div>}
