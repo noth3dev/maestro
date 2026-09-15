@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  EVENT_STREAM_CHANNELS,
   createRendererEventStream,
   pumpEventStream,
-  type EventStreamIpcPort,
   type EventStreamMessage,
 } from "./event-stream-bridge.js";
 
@@ -20,47 +18,47 @@ const event = {
   occurredAt: "2026-01-01T00:00:00.000Z",
 };
 
-class FakePort implements EventStreamIpcPort {
-  sent: unknown[][] = [];
-  private listeners = new Map<string, Set<(...args: unknown[]) => void>>();
-  send(channel: string, ...args: unknown[]): void { this.sent.push([channel, ...args]); }
-  on(channel: string, listener: (...args: unknown[]) => void): void {
-    const listeners = this.listeners.get(channel) ?? new Set();
-    listeners.add(listener);
-    this.listeners.set(channel, listeners);
+class FakeSubscriber {
+  calls: Array<typeof query> = [];
+  listener: ((message: EventStreamMessage) => void) | undefined;
+  unsubscribeCount = 0;
+  subscribe(receivedQuery: typeof query, listener: (message: EventStreamMessage) => void): () => void {
+    this.calls.push(receivedQuery);
+    this.listener = listener;
+    return () => { this.unsubscribeCount += 1; this.listener = undefined; };
   }
-  removeListener(channel: string, listener: (...args: unknown[]) => void): void { this.listeners.get(channel)?.delete(listener); }
-  emit(channel: string, ...args: unknown[]): void { for (const listener of this.listeners.get(channel) ?? []) listener(...args); }
+  emit(message: EventStreamMessage): void { this.listener?.(message); }
 }
 
 describe("Carnegie Electron durable event bridge", () => {
   it("adapts one IPC stream into an async iterator and closes on end", async () => {
-    const port = new FakePort();
-    const stream = createRendererEventStream(port, query, () => "stream-1");
+    const subscriber = new FakeSubscriber();
+    const stream = createRendererEventStream(subscriber.subscribe.bind(subscriber), query);
     const next = stream[Symbol.asyncIterator]().next();
-    expect(port.sent).toEqual([[EVENT_STREAM_CHANNELS.start, "stream-1", query]]);
-    port.emit(EVENT_STREAM_CHANNELS.message, {}, "stream-1", { kind: "event", event });
+    expect(subscriber.calls).toEqual([query]);
+    subscriber.emit({ kind: "event", event });
     expect(await next).toEqual({ done: false, value: event });
     const done = stream[Symbol.asyncIterator]().next();
-    port.emit(EVENT_STREAM_CHANNELS.message, "stream-1", { kind: "end" });
+    subscriber.emit({ kind: "end" });
     expect(await done).toEqual({ done: true, value: undefined });
+    expect(subscriber.unsubscribeCount).toBe(1);
   });
 
   it("hands stream failure back to the polling owner and stops IPC on cancellation", async () => {
-    const port = new FakePort();
+    const subscriber = new FakeSubscriber();
     const controller = new AbortController();
-    const stream = createRendererEventStream(port, query, () => "stream-2", controller.signal);
+    const stream = createRendererEventStream(subscriber.subscribe.bind(subscriber), query, controller.signal);
     const iterator = stream[Symbol.asyncIterator]();
     const next = iterator.next();
-    port.emit(EVENT_STREAM_CHANNELS.message, "stream-2", { kind: "error", message: "SSE unavailable" });
+    subscriber.emit({ kind: "error", message: "SSE unavailable" });
     await expect(next).rejects.toThrow("SSE unavailable");
-    expect(port.sent).toEqual([[EVENT_STREAM_CHANNELS.start, "stream-2", query]]);
+    expect(subscriber.calls).toEqual([query]);
 
-    const second = createRendererEventStream(port, query, () => "stream-3", controller.signal);
+    const second = createRendererEventStream(subscriber.subscribe.bind(subscriber), query, controller.signal);
     const pending = second[Symbol.asyncIterator]().next();
     controller.abort();
     await expect(pending).resolves.toEqual({ done: true, value: undefined });
-    expect(port.sent.at(-1)).toEqual([EVENT_STREAM_CHANNELS.stop, "stream-3"]);
+    expect(subscriber.unsubscribeCount).toBe(2);
   });
 
   it("emits events, completion, and non-abort errors without leaking credentials", async () => {

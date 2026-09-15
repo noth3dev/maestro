@@ -7,6 +7,7 @@ import { loadConnectionConfig, saveConnectionConfig, clearConnectionConfig, type
 import { loadPreferences, savePreferences } from "./preferences.js";
 import { createBridgedApi, isExposedMethod } from "./apiBridge.js";
 import { EVENT_STREAM_CHANNELS, pumpEventStream, type EventStreamMessage } from "./event-stream-bridge.js";
+import { abortAllEventStreams, abortEventStreamsForSender, type ActiveEventStream } from "./event-stream-lifecycle.js";
 
 const dirName = dirname(fileURLToPath(import.meta.url));
 
@@ -18,20 +19,15 @@ const dirName = dirname(fileURLToPath(import.meta.url));
 if (process.platform === "linux") app.commandLine.appendSwitch("password-store", "basic");
 
 let api: ApiClient | undefined;
-type EventStreamSender = Pick<WebContents, "isDestroyed" | "send" | "once">;
-const activeEventStreams = new Map<string, { sender: EventStreamSender; controller: AbortController }>();
+type EventStreamSender = Pick<WebContents, "isDestroyed" | "send" | "once" | "removeListener">;
+const activeEventStreams = new Map<string, ActiveEventStream>();
 
 function stopEventStreamsForSender(sender: EventStreamSender): void {
-  for (const [streamId, active] of activeEventStreams) {
-    if (active.sender !== sender) continue;
-    active.controller.abort();
-    activeEventStreams.delete(streamId);
-  }
+  abortEventStreamsForSender(activeEventStreams, sender);
 }
 
 function stopAllEventStreams(): void {
-  for (const active of activeEventStreams.values()) active.controller.abort();
-  activeEventStreams.clear();
+  abortAllEventStreams(activeEventStreams);
 }
 
 function sendEventStreamMessage(sender: EventStreamSender, streamId: string, message: EventStreamMessage): void {
@@ -82,8 +78,14 @@ function registerIpcHandlers(): void {
     }
     const controller = new AbortController();
     const sender = event.sender;
-    activeEventStreams.set(streamId, { sender, controller });
-    sender.once("destroyed", () => stopEventStreamsForSender(sender));
+    const onDestroyed = (): void => stopEventStreamsForSender(sender);
+    const active: ActiveEventStream = {
+      sender,
+      controller,
+      removeLifecycleListener: () => sender.removeListener("destroyed", onDestroyed),
+    };
+    activeEventStreams.set(streamId, active);
+    sender.once("destroyed", onDestroyed);
     void pumpEventStream(
       (eventQuery, options) => client.streamEvents(eventQuery, options),
       query as Parameters<ApiClient["streamEvents"]>[0],
@@ -94,8 +96,11 @@ function registerIpcHandlers(): void {
         sendEventStreamMessage(sender, streamId, message);
       },
     ).finally(() => {
-      const active = activeEventStreams.get(streamId);
-      if (active?.controller === controller) activeEventStreams.delete(streamId);
+      const current = activeEventStreams.get(streamId);
+      if (current?.controller === controller) {
+        current.removeLifecycleListener();
+        activeEventStreams.delete(streamId);
+      }
     });
   });
 
@@ -104,6 +109,7 @@ function registerIpcHandlers(): void {
     const active = activeEventStreams.get(streamId);
     if (active?.sender !== event.sender) return;
     active.controller.abort();
+    active.removeLifecycleListener();
     activeEventStreams.delete(streamId);
   });
 
@@ -151,7 +157,13 @@ function createWindow(): void {
   window.webContents.on("did-fail-load", (_event, errorCode, errorDescription) =>
     console.log("[did-fail-load]", errorCode, errorDescription),
   );
-  window.webContents.on("render-process-gone", (_event, details) => console.log("[render-process-gone]", details));
+  window.webContents.on("render-process-gone", (_event, details) => {
+    stopEventStreamsForSender(window.webContents);
+    console.log("[render-process-gone]", details);
+  });
+  window.webContents.on("did-start-navigation", (_event, _url, _isInPlace, isMainFrame) => {
+    if (isMainFrame) stopEventStreamsForSender(window.webContents);
+  });
 
   const devServerUrl = process.env["MAESTRO_CARNEGIE_DEV_SERVER_URL"];
   if (devServerUrl !== undefined) {

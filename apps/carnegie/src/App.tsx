@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConnectionProvider, useConnection } from "./connection.js";
 import { GoalsProvider } from "./goals.js";
 import { ThemeProvider } from "./theme.js";
@@ -21,6 +21,8 @@ import { Flashmob } from "./views/Flashmob.js";
 import { FlashmobSession } from "./views/FlashmobSession.js";
 import type { ViewName } from "./views.js";
 import type { HomeMode } from "./homeMode.js";
+import type { EventQuery } from "@maestro/api-client";
+import { createRendererEventStream } from "../electron/event-stream-bridge.js";
 import { useDurableEvents, type DurableEventState } from "./useDurableEvents.js";
 
 function Shell({ eventState }: { eventState: DurableEventState }) {
@@ -64,7 +66,12 @@ function Shell({ eventState }: { eventState: DurableEventState }) {
 }
 
 function ConnectedWorkspace({ projectId }: { projectId: string }) {
-  const eventState = useDurableEvents(window.maestro.api, projectId);
+  const durableEventsApi = useMemo(() => ({
+    listEvents: (query: EventQuery) => window.maestro.api.listEvents(query),
+    streamEvents: (query: EventQuery, options?: { signal?: AbortSignal }) =>
+      createRendererEventStream(window.maestro.events.subscribe, query, options?.signal),
+  }), []);
+  const eventState = useDurableEvents(durableEventsApi, projectId);
   return (
     <GoalsProvider>
       <Shell eventState={eventState} />
