@@ -10,7 +10,7 @@ import { bootstrapPermanentOrganization } from "../../packages/persistence/src/o
 import { bootstrapLocalOperator } from "../../packages/persistence/src/auth.js";
 import { grantProjectMembership } from "../../packages/persistence/src/project-membership.js";
 import { appendEvidenceMetadata, getEvidenceMetadata } from "../../packages/persistence/src/evidence.js";
-import { capturePersonaGoalEvidence, readPersonaGoalEvidence, type PersonaGoalEvidenceInput } from "../../packages/persistence/src/persona-goal-evidence.js";
+import { capturePersonaGoalEvidence, listPersonaGoalEvidence, readPersonaGoalEvidence, type PersonaGoalEvidenceInput } from "../../packages/persistence/src/persona-goal-evidence.js";
 
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -109,5 +109,10 @@ describeDatabase("Plan 8 §S4 adversarial project isolation", () => {
       operatorId: operatorA, projectId: projectA, goalId: goalA,
     }, content)).resolves.toEqual(genericEvidenceA);
     expect(contentReads).toBe(1);
+
+    await expect(listPersonaGoalEvidence(pool, goalA, { operatorId: operatorA, projectId: projectB, goalId: goalB })).rejects.toThrow(/not found|project|Goal|access|membership/i);
+    await expect(listPersonaGoalEvidence(pool, goalA, { operatorId: operatorA, projectId: projectA, goalId: goalB })).rejects.toThrow(/not found|project|Goal|access|membership/i);
+    await expect(listPersonaGoalEvidence(pool, goalA, { operatorId: operatorB, projectId: projectA, goalId: goalA })).rejects.toThrow(/not found|project|Goal|access|membership/i);
+    await expect(listPersonaGoalEvidence(pool, goalA, { operatorId: operatorA, projectId: projectA, goalId: goalA })).resolves.toHaveLength(1);
   });
 });

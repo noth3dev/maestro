@@ -92,7 +92,10 @@ export async function readPersonaGoalEvidence(pool: Pool, evidenceId: string, au
   return mapEvidence(result.rows[0]!);
 }
 
-export async function listPersonaGoalEvidence(pool: Pool, goalId: string): Promise<readonly PersonaGoalEvidence[]> {
-  const result = await pool.query<EvidenceRow>(`SELECT evidence_id, project_id, goal_id, role_id, task_class, task_contract_version, active_profile_version, mission_overlay, payload, payload_hash, created_at FROM persona_goal_evidence WHERE goal_id = $1 ORDER BY created_at, evidence_id`, [goalId]);
+export async function listPersonaGoalEvidence(pool: Pool, goalId: string, authorization: PersonaGoalEvidenceReadAuthorization): Promise<readonly PersonaGoalEvidence[]> {
+  if (!authorization || typeof authorization.operatorId !== "string" || typeof authorization.projectId !== "string" || typeof authorization.goalId !== "string" || authorization.operatorId.trim() === "" || authorization.projectId.trim() === "" || authorization.goalId.trim() === "") throw new PersonaGoalEvidenceError("persona Goal evidence list authorization is required");
+  await assertProjectMembership(pool, authorization.operatorId, authorization.projectId);
+  if (authorization.goalId.toLowerCase() !== goalId.toLowerCase()) throw new PersonaGoalEvidenceNotFoundError(`Persona Goal evidence Goal not found: ${goalId}`);
+  const result = await pool.query<EvidenceRow>(`SELECT evidence_id, project_id, goal_id, role_id, task_class, task_contract_version, active_profile_version, mission_overlay, payload, payload_hash, created_at FROM persona_goal_evidence WHERE goal_id = $1 AND project_id = $2 ORDER BY created_at, evidence_id`, [goalId, authorization.projectId]);
   return result.rows.map(mapEvidence);
 }
