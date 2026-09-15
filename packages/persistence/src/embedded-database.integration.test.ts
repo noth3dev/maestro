@@ -30,4 +30,32 @@ describe("embedded PostgreSQL-compatible database", () => {
       await rm(dataDir, { recursive: true, force: true });
     }
   }, 120_000);
+
+
+  it("preserves user data when the same embedded data directory restarts", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "maestro-embedded-restart-"));
+    let first: EmbeddedDatabaseHandle | undefined;
+    let second: EmbeddedDatabaseHandle | undefined;
+    try {
+      first = await startEmbeddedDatabase({ dataDir, port: 0 });
+      const writer = new Pool({ connectionString: first.databaseUrl, max: 1 });
+      await writer.query("CREATE TABLE restart_probe (value text NOT NULL)");
+      await writer.query("INSERT INTO restart_probe (value) VALUES ('survives')");
+      await writer.end();
+      await first.stop();
+      first = undefined;
+
+      second = await startEmbeddedDatabase({ dataDir, port: 0 });
+      const reader = new Pool({ connectionString: second.databaseUrl, max: 1 });
+      try {
+        await expect(reader.query("SELECT value FROM restart_probe")).resolves.toMatchObject({ rows: [{ value: "survives" }] });
+      } finally {
+        await reader.end();
+      }
+    } finally {
+      await first?.stop();
+      await second?.stop();
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  }, 120_000);
 });
