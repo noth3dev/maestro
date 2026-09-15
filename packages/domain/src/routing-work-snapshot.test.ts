@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createRoutingWorkSnapshot, RoutingWorkSnapshotValidationError, type RoutingWorkSnapshotInput } from "./routing-work-snapshot.js";
+import { assertValidRoutingWorkSnapshot, createRoutingWorkSnapshot, RoutingWorkSnapshotValidationError, type RoutingWorkSnapshotInput } from "./routing-work-snapshot.js";
 
 const taskDemand = {
   schemaVersion: 1 as const,
@@ -42,5 +42,15 @@ describe("Goal/work routing snapshot", () => {
   it("rejects an overlay snapshot bound to another Goal or project", () => {
     expect(() => createRoutingWorkSnapshot(input({ operationalOverlay: { ...overlay, goalRef: "other-goal" } }))).toThrow(/Goal|overlay/i);
     expect(() => createRoutingWorkSnapshot(input({ operationalOverlay: { ...overlay, projectRef: "other-project" } }))).toThrow(/project|overlay/i);
+  });
+
+  it("rejects accessors/inherited fields and deep-freezes the selector input", () => {
+    const hostile = { ...input() } as Record<string, unknown>;
+    Object.defineProperty(hostile, "goalRef", { enumerable: true, get: () => "goal-1" });
+    expect(() => createRoutingWorkSnapshot(hostile as never)).toThrow(RoutingWorkSnapshotValidationError);
+    const snapshot = createRoutingWorkSnapshot(input());
+    expect(() => assertValidRoutingWorkSnapshot(snapshot)).not.toThrow();
+    expect(Object.isFrozen(snapshot.operationalOverlay.observations[0])).toBe(true);
+    expect(() => { (snapshot.operationalOverlay.observations[0] as { measuredCost: number }).measuredCost = 99; }).toThrow();
   });
 });
