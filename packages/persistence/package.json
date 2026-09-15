@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
-    "@electric-sql/pglite-socket": "^0.2.11",
+    "@electric-sql/pglite-socket": "0.2.11",
     "@maestro/authority": "*",
     "@maestro/contracts": "*",
     "@maestro/domain": "*",
