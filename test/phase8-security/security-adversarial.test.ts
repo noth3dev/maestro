@@ -16,7 +16,8 @@ import {
   type EvidenceBundle,
   type EnvironmentRecord,
   type MissionBundleSubstance,
-} from "@maestro/domain";
+  MODEL_CAPABILITY_AXES,
+} from "../../packages/domain/src/index.js";
 import { createLocalRuntimeAdapter, type SpawnedProcess } from "../../packages/environment-adapter/src/runtime-adapter.js";
 import { createReadOnlyHostRequestHandler } from "../../packages/agent-runtime/src/ipython-host.js";
 import { signDeviceGrantEnvelope, verifyDeviceGrantEnvelope, type UnsignedDeviceGrantEnvelope } from "@maestro/device-agent";
@@ -38,11 +39,7 @@ function taskDemand() {
   const requirement = { level: 80, rationale: "security suite" };
   return declareTaskDemand({
     taskKinds: ["coding"],
-    requirements: {
-      coding: requirement, debugging: requirement, knowledge: requirement, reasoning: requirement,
-      verification: requirement, "instruction-fidelity": requirement, "long-context": requirement,
-      "tool-use": requirement, "refusal-calibration": requirement,
-    },
+    requirements: Object.fromEntries(MODEL_CAPABILITY_AXES.map((axis) => [axis, requirement])) as never,
     taskContractRef: "task-contract:security",
     headDecisionRef: "head-decision:security",
   });
