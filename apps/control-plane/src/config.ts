@@ -42,6 +42,8 @@ export interface MaestroConfig {
   modelRoutingMode: ModelRoutingMode;
   /** Explicit provider-qualified model used only when routing mode is `pin`. */
   nativeModelRef?: string;
+  /** Trusted operator-supplied JSON catalog for ensemble candidate identities. */
+  ensembleCandidateCatalogPath?: string;
   modelGatewayToken?: string;
   modelGatewayOperatorId: string;
   modelAccountRefs: Readonly<Record<string, string>>;
@@ -74,6 +76,7 @@ const schema = z.object({
     .regex(/^[^/\s]+\/[^/\s]+$/)
     .optional(),
   MAESTRO_MODEL_ROUTING_MODE: z.enum(["ensemble", "pin"]).optional(),
+  MAESTRO_ENSEMBLE_CANDIDATE_CATALOG: z.string().min(1).optional(),
   MAESTRO_MODEL_ACCOUNT_REFS: z.string().optional(),
   MAESTRO_TLS_CERT_FILE: z.string().min(1).optional(),
   MAESTRO_TLS_KEY_FILE: z.string().min(1).optional(),
@@ -112,6 +115,7 @@ export function parseConfig(env: Record<string, string | undefined>): MaestroCon
     MAESTRO_MODEL_GATEWAY_OPERATOR_ID: modelGatewayOperatorId,
     MAESTRO_NATIVE_MODEL: nativeModelRef,
     MAESTRO_MODEL_ROUTING_MODE: configuredRoutingMode,
+    MAESTRO_ENSEMBLE_CANDIDATE_CATALOG: ensembleCandidateCatalogPath,
     MAESTRO_MODEL_ACCOUNT_REFS: modelAccountRefsRaw,
     MAESTRO_TLS_CERT_FILE: certFile,
     MAESTRO_TLS_KEY_FILE: keyFile,
@@ -173,6 +177,7 @@ export function parseConfig(env: Record<string, string | undefined>): MaestroCon
     modelGatewayUrl,
     ...(modelGatewayToken === undefined ? {} : { modelGatewayToken }),
     ...(nativeModelRef === undefined ? {} : { nativeModelRef }),
+    ...(ensembleCandidateCatalogPath === undefined ? {} : { ensembleCandidateCatalogPath }),
     ...(ceoOperatorId === undefined ? {} : { ceoOperatorId }),
     ...(operatorProvisioningAdminId === undefined ? {} : { operatorProvisioningAdminId }),
     ...(discordSignalCredential === undefined ? {} : { discordSignalCredential }),

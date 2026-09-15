@@ -32,6 +32,8 @@ export function createEnsembleNativeAdmission(
   input: EnsembleNativeAdmissionInput,
 ): EnsembleNativeAdmissionDecision {
   if (config.modelRoutingMode !== "ensemble") throw new Error("Ensemble native admission requires ensemble routing mode");
+  if (input.snapshot.projectRef !== input.base.context.projectId) throw new Error("Ensemble routing snapshot project binding mismatch");
+  if (input.snapshot.missionBundleRef !== input.base.context.missionBundleId) throw new Error("Ensemble routing snapshot Mission Bundle binding mismatch");
   const workInput = input.snapshot.routingWorkInput;
   if (workInput === undefined) throw new Error("Ensemble admission requires explicit WorkCharacter/pressure input");
   const pressureCalculation = calculatePressure(workInput.workCharacter, workInput.explicitHeadUplift);
@@ -47,7 +49,11 @@ export function createEnsembleNativeAdmission(
   });
   const admission = createNativeAdmissionFromRouting(
     config,
-    { ...selection, candidateBindings: input.candidates },
+    { ...selection, candidateBindings: selection.candidateRefs.map((candidateRef) => {
+      const candidate = input.candidates.find((entry) => entry.candidateRef === candidateRef);
+      if (candidate === undefined) throw new Error("Ensemble selection candidate binding is missing");
+      return candidate;
+    }) },
     input.base,
   );
   const modelProfile = input.modelMap.entries.find((entry) => entry.modelRef === selection.selectedModelRef);

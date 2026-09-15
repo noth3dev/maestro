@@ -48,4 +48,17 @@ describe("ensemble native admission", () => {
   it("does not invent pressure or route when the work-character input is absent", () => {
     expect(() => createEnsembleNativeAdmission(config, { snapshot: { ...snapshot, routingWorkInput: undefined } as never, modelMap, candidates: [{ candidateRef: "strong-primary", modelRef: "openai/model-strong", accountBinding: "openai-account" }], routeRef: "worker:worker-1:1", base })).toThrow(/work|pressure|routing/i);
   });
+
+  it("binds the route to the same project and Mission Bundle as native admission", () => {
+    expect(() => createEnsembleNativeAdmission(config, { snapshot: { ...snapshot, projectRef: "other-project" }, modelMap, candidates: [{ candidateRef: "strong-primary", modelRef: "openai/model-strong", accountBinding: "openai-account" }], routeRef: "worker:worker-1:1", base })).toThrow(/project/i);
+    expect(() => createEnsembleNativeAdmission(config, { snapshot: { ...snapshot, missionBundleRef: "other-bundle" }, modelMap, candidates: [{ candidateRef: "strong-primary", modelRef: "openai/model-strong", accountBinding: "openai-account" }], routeRef: "worker:worker-1:1", base })).toThrow(/Mission Bundle/i);
+  });
+
+  it("passes only eligible candidates to the shared admission validator", () => {
+    const decision = createEnsembleNativeAdmission(config, { snapshot, modelMap, candidates: [
+      { candidateRef: "strong-primary", modelRef: "openai/model-strong", accountBinding: "openai-account" },
+      { candidateRef: "unapproved", modelRef: "openai/model-strong", accountBinding: "openai-account" },
+    ], routeRef: "worker:worker-1:1", base });
+    expect(decision.admission.modelPolicy).toEqual(["openai/model-strong"]);
+  });
 });

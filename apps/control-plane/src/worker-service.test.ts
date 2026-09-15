@@ -18,6 +18,8 @@ describe("worker routing mode guard", () => {
     expect(() => assertWorkerRoutingMode("pin")).not.toThrow();
     expect(resolveWorkerModelForRouting("pin", "test/model-a", undefined)).toBe("test/model-a");
     expect(() => resolveWorkerModelForRouting("pin", "test/model-a", "other/model")).toThrow("pin identity");
+    expect(resolveWorkerModelForRouting("ensemble", undefined, undefined, true)).toBeUndefined();
+    expect(() => resolveWorkerModelForRouting("ensemble", undefined, "caller/model", true)).toThrow(/caller-selected/i);
   });
 
   it("blocks the production Worker service before any provider admission in ensemble mode", async () => {

@@ -26,6 +26,10 @@ describe("parseConfig", () => {
     });
   });
 
+  it("accepts an explicit ensemble candidate catalog path", () => {
+    expect(parseConfig({ ...required, MAESTRO_ENSEMBLE_CANDIDATE_CATALOG: "/etc/maestro/ensemble-candidates.json" }).ensembleCandidateCatalogPath).toBe("/etc/maestro/ensemble-candidates.json");
+  });
+
   it("accepts an explicit trusted IPython Python executable", () => {
     expect(parseConfig({ ...required, MAESTRO_IPYTHON_PYTHON: "/opt/python/bin/python3" }).ipythonPythonExecutable).toBe(
       "/opt/python/bin/python3",

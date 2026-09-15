@@ -128,6 +128,12 @@ export async function recordNativeExecutionBinding(pool: Pool, input: NativeExec
   }
 }
 
+/** Read the durable binding identity after admission so routing evidence can link to it. */
+export async function readNativeExecutionBindingId(pool: Pick<Pool, "query">, execution: ExecutionRef): Promise<string | null> {
+  const result = await pool.query<{ binding_id: string }>("SELECT binding_id FROM native_execution_bindings WHERE execution_ref = $1", [execution]);
+  return result.rowCount === 1 ? result.rows[0]!.binding_id : null;
+}
+
 export interface NativeExecutionBindingCapability {
   readonly execution: ExecutionRef;
   readonly invocation: InvocationRef;
