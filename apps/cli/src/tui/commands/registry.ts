@@ -12,6 +12,8 @@ export interface CommandDefinition {
   name: string;
   description: string;
   actions: CommandAction[];
+  /** Local shell commands execute directly without a remote action. */
+  actionless?: boolean;
 }
 
 type CommandActionDefinition = [string, CommandKind, (Pick<CommandAction, "requiresArguments" | "requiresGoal">)?];
@@ -19,6 +21,11 @@ type CommandActionDefinition = [string, CommandKind, (Pick<CommandAction, "requi
 const definitions: CommandDefinition[] = (
   [
     ["help", "show available commands", [["list", "read"]]],
+    ["clear", "clear the visible transcript", []],
+    ["exit", "exit the TUI", []],
+    ["quit", "exit the TUI", []],
+    ["version", "show the Maestro version", []],
+    ["copy", "copy the latest transcript line", []],
     ["admin", "operator and project administration", [["project-access", "critical"]]],
     [
       "critical-action",
@@ -268,6 +275,7 @@ const definitions: CommandDefinition[] = (
   name,
   description,
   actions: actions.map(([action, kind, requirements]) => ({ name: action, kind, description: `${name} ${action}`, ...(requirements ?? {}) })),
+  actionless: actions.length === 0,
 }));
 
 export class CommandRegistry {

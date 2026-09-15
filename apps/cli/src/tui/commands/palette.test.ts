@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createCommandPalette } from "./palette.js";
+import { createCommandPalette, dispatchCommandPaletteInput } from "./palette.js";
 
 describe("command palette", () => {
   it("lists commands with their read/write safety classification", () => {
@@ -21,3 +21,24 @@ describe("command palette", () => {
       "/budget forecast", "/approval list", "/evidence report", "/improvement-digests inspect",
     ]) expect(labels).not.toContain(entry);
   });
+
+
+  it("lists local shell commands and the raw keyboard shortcuts", () => {
+    const labels = createCommandPalette().map((item) => item.label);
+    for (const label of ["/clear", "/exit", "/quit", "/version", "/copy", "Ctrl+G", "Ctrl+E", "Ctrl+R", "Ctrl+A", "Ctrl+/"]) {
+      expect(labels).toContain(label);
+    }
+  });
+
+
+it("prints shortcut labels through the /help and Ctrl+K dispatch paths", () => {
+  const labels = ["Ctrl+G", "Ctrl+E", "Ctrl+R", "Ctrl+A", "Ctrl+/"];
+  const helpOutput: string[] = [];
+  const ctrlKOutput: string[] = [];
+  expect(dispatchCommandPaletteInput("help", (text) => helpOutput.push(text))).toBe(true);
+  expect(dispatchCommandPaletteInput("\x0b", (text) => ctrlKOutput.push(text))).toBe(true);
+  for (const label of labels) {
+    expect(helpOutput.join("\n")).toContain(label);
+    expect(ctrlKOutput.join("\n")).toContain(label);
+  }
+});
