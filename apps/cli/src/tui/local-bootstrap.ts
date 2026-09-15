@@ -330,7 +330,10 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
       ...(options.onStep === undefined ? {} : { onStep: options.onStep }),
       ...(options.startModelGateway === undefined ? {} : { startModelGateway: options.startModelGateway }),
     });
-    if (gateway.kind !== "ready") return { kind: "setup-required", reason: gateway.reason };
+    if (gateway.kind !== "ready") {
+      await stopOwnedProcesses();
+      return { kind: "setup-required", reason: gateway.reason };
+    }
     ownedGateway = gateway.process;
     gatewayReady = true;
   }

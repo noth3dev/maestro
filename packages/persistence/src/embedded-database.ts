@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,7 +7,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { Pool } from "pg";
-import { applyAllMigrations } from "./test-migrations.js";
+import { runMigrations } from "./migrate.js";
 
 export interface EmbeddedDatabaseOptions {
   readonly dataDir: string;
@@ -26,7 +26,7 @@ export interface EmbeddedDatabaseHandle {
 /** Start an embedded PostgreSQL-compatible server for the current process. */
 export async function openEmbeddedDatabase(options: Omit<EmbeddedDatabaseOptions, "detached">): Promise<EmbeddedDatabaseHandle> {
   const host = options.host ?? "127.0.0.1";
-  const port = options.port ?? 0;
+  const port = options.port ?? 55433;
   const databasePath = join(options.dataDir, "embedded-postgres");
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 });
   const db = await PGlite.create(databasePath, { extensions: { pgcrypto } });
@@ -39,7 +39,7 @@ export async function openEmbeddedDatabase(options: Omit<EmbeddedDatabaseOptions
     const databaseUrl = `postgresql://maestro@${serverHost}:${serverPort}/maestro_local`;
     const pool = new Pool({ connectionString: databaseUrl, max: 1 });
     try {
-      await applyAllMigrations(pool);
+      await runMigrations(pool);
     } catch (error) {
       await pool.end().catch(() => undefined);
       throw error;
@@ -66,14 +66,81 @@ export async function openEmbeddedDatabase(options: Omit<EmbeddedDatabaseOptions
  * Start the embedded server in a detached child so a one-shot `maestro`
  * command does not orphan its Control Plane from the local database.
  */
+async function waitForChildExit(child: ReturnType<typeof spawn>, timeoutMs = 2_000): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  await new Promise<void>((resolve) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (): void => {
+      if (timer !== undefined) clearTimeout(timer);
+      child.removeListener("exit", finish);
+      resolve();
+    };
+    timer = setTimeout(() => {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        /* already exited */
+      }
+      finish();
+    }, timeoutMs);
+    child.once("exit", finish);
+  });
+}
+
+async function readOwnedEmbeddedDatabase(
+  options: EmbeddedDatabaseOptions,
+  markerPath: string,
+): Promise<EmbeddedDatabaseHandle | undefined> {
+  let marker: { pid?: unknown; databaseUrl?: unknown };
+  try {
+    marker = JSON.parse(await readFile(markerPath, "utf8")) as { pid?: unknown; databaseUrl?: unknown };
+  } catch {
+    return undefined;
+  }
+  if (typeof marker.pid !== "number" || !Number.isInteger(marker.pid) || typeof marker.databaseUrl !== "string") return undefined;
+  const expectedHost = options.host ?? "127.0.0.1";
+  const expectedPort = options.port ?? 55433;
+  let url: URL;
+  try {
+    url = new URL(marker.databaseUrl);
+  } catch {
+    return undefined;
+  }
+  if (url.hostname !== expectedHost || Number(url.port) !== expectedPort) return undefined;
+  try {
+    process.kill(marker.pid, 0);
+    try {
+      const commandLine = await readFile(`/proc/${marker.pid}/cmdline`, "utf8");
+      if (!commandLine.includes("embedded-database-server")) return undefined;
+    } catch {
+      // Platforms without /proc still get PID liveness plus endpoint proof.
+    }
+  } catch {
+    return undefined;
+  }
+  const pool = new Pool({ connectionString: marker.databaseUrl, max: 1 });
+  try {
+    await pool.query("SELECT 1");
+    return { databaseUrl: marker.databaseUrl, stop: async () => undefined };
+  } catch {
+    return undefined;
+  } finally {
+    await pool.end().catch(() => undefined);
+  }
+}
+
 export async function startEmbeddedDatabase(options: EmbeddedDatabaseOptions): Promise<EmbeddedDatabaseHandle> {
   if (options.detached !== true) return openEmbeddedDatabase(options);
+  const markerPath = join(options.dataDir, "embedded-postgres", "server.json");
+  const existing = await readOwnedEmbeddedDatabase(options, markerPath);
+  if (existing !== undefined) return existing;
   const sourceEntry = fileURLToPath(new URL("./embedded-database-server.js", import.meta.url));
   const entry = existsSync(sourceEntry) ? sourceEntry : fileURLToPath(new URL("../dist/embedded-database-server.js", import.meta.url));
   const child = spawn(process.execPath, [entry], {
     env: {
       ...process.env,
       MAESTRO_EMBEDDED_DATABASE_DIR: options.dataDir,
+      MAESTRO_EMBEDDED_DATABASE_MARKER: markerPath,
       ...(options.host === undefined ? {} : { MAESTRO_EMBEDDED_DATABASE_HOST: options.host }),
       ...(options.port === undefined ? {} : { MAESTRO_EMBEDDED_DATABASE_PORT: String(options.port) }),
       ...(options.maxConnections === undefined ? {} : { MAESTRO_EMBEDDED_DATABASE_MAX_CONNECTIONS: String(options.maxConnections) }),
@@ -107,21 +174,13 @@ export async function startEmbeddedDatabase(options: EmbeddedDatabaseOptions): P
       });
     });
   } catch (error) {
-    // A prior CLI/Carnegie process may already own the fixed local socket.
-    // Reuse it after proving it is a live PostgreSQL endpoint, rather than
-    // opening the same PGlite data directory twice.
-    const host = options.host ?? "127.0.0.1";
-    const port = options.port ?? 55433;
-    const existingUrl = `postgresql://maestro@${host}:${port}/maestro_local`;
-    const pool = new Pool({ connectionString: existingUrl, max: 1 });
     try {
-      await pool.query("SELECT 1");
-      ready = existingUrl;
+      child.kill("SIGTERM");
     } catch {
-      throw error;
-    } finally {
-      await pool.end().catch(() => undefined);
+      /* already exited */
     }
+    await waitForChildExit(child);
+    throw error;
   } finally {
     output?.removeAllListeners();
     output?.destroy();
@@ -141,6 +200,7 @@ export async function startEmbeddedDatabase(options: EmbeddedDatabaseOptions): P
         } catch {
           /* already exited */
         }
+        await waitForChildExit(child);
       }
     },
   };
