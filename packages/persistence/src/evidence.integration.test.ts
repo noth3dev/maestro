@@ -7,14 +7,20 @@ import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { appendEvidenceMetadata, getEvidenceMetadata } from "./evidence.js";
+import { bootstrapLocalOperator } from "./auth.js";
+import { grantProjectMembership } from "./project-membership.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
-const context = () => ({ correlationId: randomUUID(), commandId: randomUUID(), projectId: randomUUID(), goalId: randomUUID(), actorId: "operator" });
+const context = (projectId: string, goalId: string, actorId: string) => ({ correlationId: randomUUID(), commandId: randomUUID(), projectId, goalId, actorId });
 
 async function captureAndAppend(pool: Pool): Promise<{ record: Awaited<ReturnType<typeof appendEvidenceMetadata>>; store: FileEvidenceStore }> {
   const store = new FileEvidenceStore(await mkdtemp(join(tmpdir(), "maestro-evidence-")));
-  const captured = await store.capture({ context: context(), bytes: Buffer.from("durable evidence"), kind: "test-result", mediaType: "text/plain" });
+  const projectId = randomUUID();
+  const goalId = randomUUID();
+  const operatorId = (await bootstrapLocalOperator(pool, { secret: randomUUID() })).operatorId;
+  await grantProjectMembership(pool, operatorId, projectId);
+  const captured = await store.capture({ context: context(projectId, goalId, operatorId), bytes: Buffer.from("durable evidence"), kind: "test-result", mediaType: "text/plain" });
   return { store, record: await appendEvidenceMetadata(pool, captured) };
 }
 
@@ -26,7 +32,7 @@ describeDatabase("durable evidence metadata", () => {
 
   it("reads valid captured evidence through the verified retrieval API", async () => {
     const { record, store } = await captureAndAppend(pool);
-    await expect(getEvidenceMetadata(pool, record.evidenceId, store)).resolves.toEqual(record);
+    await expect(getEvidenceMetadata(pool, record.evidenceId, { operatorId: record.context.actorId, projectId: record.context.projectId, goalId: record.context.goalId }, store)).resolves.toEqual(record);
   });
 
   it("rejects a durable metadata hash corrupted through raw SQL", async () => {
@@ -38,12 +44,16 @@ describeDatabase("durable evidence metadata", () => {
       await pool.query("ALTER TABLE evidence_records ENABLE TRIGGER evidence_records_immutable");
     }
 
-    await expect(getEvidenceMetadata(pool, record.evidenceId, store)).rejects.toBeInstanceOf(EvidenceIntegrityError);
+    await expect(getEvidenceMetadata(pool, record.evidenceId, { operatorId: record.context.actorId, projectId: record.context.projectId, goalId: record.context.goalId }, store)).rejects.toBeInstanceOf(EvidenceIntegrityError);
   });
 
   it("returns the original record for an exact command replay and rejects changed payloads", async () => {
     const store = new FileEvidenceStore(await mkdtemp(join(tmpdir(), "maestro-evidence-replay-")));
-    const shared = context();
+    const projectId = randomUUID();
+    const goalId = randomUUID();
+    const operatorId = (await bootstrapLocalOperator(pool, { secret: randomUUID() })).operatorId;
+    await grantProjectMembership(pool, operatorId, projectId);
+    const shared = context(projectId, goalId, operatorId);
     const first = await appendEvidenceMetadata(pool, await store.capture({ context: shared, bytes: Buffer.from("first payload"), kind: "test-result", mediaType: "text/plain" }));
     const replay = await appendEvidenceMetadata(pool, await store.capture({ context: shared, bytes: Buffer.from("first payload"), kind: "test-result", mediaType: "text/plain" }));
     expect(replay).toEqual(first);
@@ -57,6 +67,6 @@ describeDatabase("durable evidence metadata", () => {
   });
 
   it("rejects malformed hashes before database insertion", async () => {
-    await expect(appendEvidenceMetadata(pool, { evidenceId: randomUUID(), context: context(), sha256: "invalid", byteLength: 1, kind: "test-result", mediaType: "text/plain", retention: "project_lifetime" })).rejects.toThrow("SHA-256");
+    await expect(appendEvidenceMetadata(pool, { evidenceId: randomUUID(), context: context(randomUUID(), randomUUID(), randomUUID()), sha256: "invalid", byteLength: 1, kind: "test-result", mediaType: "text/plain", retention: "project_lifetime" })).rejects.toThrow("SHA-256");
   });
 });
