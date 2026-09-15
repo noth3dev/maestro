@@ -1,10 +1,15 @@
+import { mkdtemp, rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { FileEvidenceStore } from "@maestro/evidence";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { applyAllMigrations } from "../../packages/persistence/src/test-migrations.js";
 import { bootstrapPermanentOrganization } from "../../packages/persistence/src/organization.js";
 import { bootstrapLocalOperator } from "../../packages/persistence/src/auth.js";
 import { grantProjectMembership } from "../../packages/persistence/src/project-membership.js";
+import { appendEvidenceMetadata, getEvidenceMetadata } from "../../packages/persistence/src/evidence.js";
 import { capturePersonaGoalEvidence, readPersonaGoalEvidence, type PersonaGoalEvidenceInput } from "../../packages/persistence/src/persona-goal-evidence.js";
 
 
@@ -23,10 +28,15 @@ describeDatabase("Plan 8 §S4 adversarial project isolation", () => {
   let evidenceA: string;
   let operatorA: string;
   let operatorB: string;
+  let evidenceStore: FileEvidenceStore;
+  let evidenceStoreDir: string;
+  let genericEvidenceA: Awaited<ReturnType<typeof appendEvidenceMetadata>>;
 
   beforeAll(async () => {
     const configuredDatabaseUrl = databaseUrl;
     if (configuredDatabaseUrl === undefined) throw new Error("MAESTRO_TEST_DATABASE_URL is required");
+    evidenceStoreDir = await mkdtemp(join(tmpdir(), "maestro-s4-evidence-isolation-"));
+    evidenceStore = new FileEvidenceStore(evidenceStoreDir);
     basePool = new Pool({ connectionString: configuredDatabaseUrl });
     const url = new URL(configuredDatabaseUrl);
     url.searchParams.set("options", `-c search_path=${schema}`);
@@ -63,12 +73,17 @@ describeDatabase("Plan 8 §S4 adversarial project isolation", () => {
       comparedProfileVersions: ["head-security:1"],
     } satisfies PersonaGoalEvidenceInput);
     evidenceA = captured.evidenceId;
+    genericEvidenceA = await appendEvidenceMetadata(pool, await evidenceStore.capture({
+      context: { correlationId: randomUUID(), commandId: randomUUID(), projectId: projectA, goalId: goalA, actorId: operatorA },
+      bytes: Buffer.from("generic evidence A"), kind: "test-result", mediaType: "text/plain",
+    }));
   });
 
   afterAll(async () => {
     await pool.end();
     await basePool.query(`DROP SCHEMA ${schema} CASCADE`);
     await basePool.end();
+    await rm(evidenceStoreDir, { recursive: true, force: true });
   });
 
   it("denies foreign project, Goal, and operator reads while preserving the bound read", async () => {
@@ -77,5 +92,22 @@ describeDatabase("Plan 8 §S4 adversarial project isolation", () => {
     await expect(readPersonaGoalEvidence(pool, evidenceA, { operatorId: operatorA, projectId: projectA, goalId: goalB })).rejects.toThrow(/not found|project|Goal|access/i);
     await expect(readPersonaGoalEvidence(pool, evidenceA, { operatorId: operatorB, projectId: projectA, goalId: goalA })).rejects.toThrow(/membership|access|not found|project/i);
     await expect(readPersonaGoalEvidence(pool, evidenceA, { operatorId: operatorA, projectId: projectA, goalId: goalA })).resolves.toMatchObject({ evidenceId: evidenceA, projectId: projectA, goalId: goalA });
+
+    let contentReads = 0;
+    const content = { read: async () => { contentReads += 1; return Buffer.from("generic evidence A"); } };
+    await expect(getEvidenceMetadata(pool, genericEvidenceA.evidenceId, {
+      operatorId: operatorA, projectId: projectB, goalId: goalB,
+    }, content)).rejects.toThrow(/not found|project|Goal|access|membership/i);
+    await expect(getEvidenceMetadata(pool, genericEvidenceA.evidenceId, {
+      operatorId: operatorA, projectId: projectA, goalId: goalB,
+    }, content)).rejects.toThrow(/not found|project|Goal|access|membership/i);
+    await expect(getEvidenceMetadata(pool, genericEvidenceA.evidenceId, {
+      operatorId: operatorB, projectId: projectA, goalId: goalA,
+    }, content)).rejects.toThrow(/not found|project|Goal|access|membership/i);
+    expect(contentReads).toBe(0);
+    await expect(getEvidenceMetadata(pool, genericEvidenceA.evidenceId, {
+      operatorId: operatorA, projectId: projectA, goalId: goalA,
+    }, content)).resolves.toEqual(genericEvidenceA);
+    expect(contentReads).toBe(1);
   });
 });

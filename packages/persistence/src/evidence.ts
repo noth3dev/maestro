@@ -51,10 +51,28 @@ function sameEvidenceMetadata(existing: EvidenceRecord, input: EvidenceMetadataI
 }
 
 /** Retrieves evidence only after its durable metadata matches the immutable artifact. */
-export async function getEvidenceMetadata(pool: Pool, evidenceId: string, content: EvidenceContentReader): Promise<EvidenceRecord | undefined> {
-  const result = await pool.query<StoredEvidenceRecord>("SELECT * FROM evidence_records WHERE evidence_id = $1", [evidenceId]);
+export interface EvidenceMetadataReadAuthorization {
+  readonly operatorId: string;
+  readonly projectId: string;
+  readonly goalId: string;
+}
+
+export async function getEvidenceMetadata(
+  pool: Pool,
+  evidenceId: string,
+  authorization: EvidenceMetadataReadAuthorization,
+  content: EvidenceContentReader,
+): Promise<EvidenceRecord> {
+  if (!authorization || typeof authorization.operatorId !== "string" || typeof authorization.projectId !== "string" || typeof authorization.goalId !== "string" || authorization.operatorId.trim() === "" || authorization.projectId.trim() === "" || authorization.goalId.trim() === "") {
+    throw new Error("evidence metadata read authorization is required");
+  }
+  await assertProjectMembership(pool, authorization.operatorId, authorization.projectId);
+  const result = await pool.query<StoredEvidenceRecord>(
+    "SELECT * FROM evidence_records WHERE evidence_id = $1 AND project_id = $2 AND goal_id = $3",
+    [evidenceId, authorization.projectId, authorization.goalId],
+  );
   const row = result.rows[0];
-  if (row === undefined) return undefined;
+  if (row === undefined) throw new Error(`Evidence metadata not found: ${evidenceId}`);
   const record = toEvidenceRecord(row);
   await verifyEvidenceRecord(record, content);
   return record;
