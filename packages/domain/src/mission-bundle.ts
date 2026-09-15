@@ -122,6 +122,11 @@ export function assertValidMissionBundleSubstance(value: unknown): asserts value
   texts(value.allowedTools, "Mission bundle allowedTools");
   if (value.allowedTools.length > MAX_ALLOWED_TOOLS) throw new InvalidMissionBundleError(`Mission bundle allowedTools exceeds ${MAX_ALLOWED_TOOLS}`);
   texts(value.allowedPaths, "Mission bundle allowedPaths");
+  for (const allowedPath of value.allowedPaths) {
+    if (allowedPath.includes("\0") || allowedPath.includes("\\") || allowedPath.startsWith("/") || /^[A-Za-z]:/.test(allowedPath) || /[\r\n]/.test(allowedPath) || allowedPath.split("/").some((part) => part === "..")) {
+      throw new InvalidMissionBundleError("Mission bundle allowedPaths must be relative, NUL-free, and traversal-free");
+    }
+  }
   texts(value.environment, "Mission bundle environment");
   texts(value.authorityBoundary, "Mission bundle authorityBoundary");
   texts(value.externalServiceBoundary, "Mission bundle externalServiceBoundary");
