@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { assertValidRoutingWorkSnapshot, calculatePressure, getTaskKindRecipe, selectRoutedModel, taskDemandContentHash, type ExecutionAdmission, type ModelMap, type RoutingEvidence, type RouterCandidate, type RoutingWorkSnapshot } from "@maestro/domain";
+import { assertValidRoutingWorkSnapshot, calculatePressure, classifyPressureBand, getTaskKindRecipe, selectRoutedModel, taskDemandContentHash, RoutingSelectionError, type ExecutionAdmission, type ModelMap, type PressureBandProjection, type RoutingEvidence, type RoutingCandidateRejection, type RouterCandidate, type RoutingWorkSnapshot } from "@maestro/domain";
 import { createNativeAdmissionFromRouting, type RoutedNativeAdmissionBase } from "./native-admission.js";
 import type { MaestroConfig } from "./config.js";
 
@@ -12,6 +12,23 @@ export type RoutingEvidenceDraft = Omit<RoutingEvidence, "evidenceId" | "admissi
 export interface EnsembleNativeAdmissionDecision {
   readonly admission: ExecutionAdmission;
   readonly routingEvidence: RoutingEvidenceDraft;
+}
+
+export interface EnsembleRoutingShortfall {
+  readonly goalRef: string;
+  readonly projectRef: string;
+  readonly routeRef: string;
+  readonly pressure: PressureBandProjection;
+  readonly rejected: readonly RoutingCandidateRejection[];
+}
+
+export class EnsembleRoutingShortfallError extends Error {
+  readonly shortfall: EnsembleRoutingShortfall;
+  constructor(message: string, shortfall: EnsembleRoutingShortfall) {
+    super(message);
+    this.name = "EnsembleRoutingShortfallError";
+    this.shortfall = shortfall;
+  }
 }
 
 export interface EnsembleNativeAdmissionInput {
@@ -38,16 +55,31 @@ export function createEnsembleNativeAdmission(
   const workInput = input.snapshot.routingWorkInput;
   if (workInput === undefined) throw new Error("Ensemble admission requires explicit WorkCharacter/pressure input");
   const pressureCalculation = calculatePressure(workInput.workCharacter, workInput.explicitHeadUplift);
-  const selection = selectRoutedModel({
-    mode: "ensemble",
-    goalRef: input.snapshot.goalRef,
-    approvedModels: input.snapshot.approvedModels,
-    taskDemand: input.snapshot.taskDemand,
-    modelMap: input.modelMap,
-    operationalOverlay: input.snapshot.operationalOverlay,
-    candidates: input.candidates,
-    pressure: pressureCalculation.pressure,
-  });
+  let selection;
+  try {
+    selection = selectRoutedModel({
+      mode: "ensemble",
+      goalRef: input.snapshot.goalRef,
+      approvedModels: input.snapshot.approvedModels,
+      taskDemand: input.snapshot.taskDemand,
+      modelMap: input.modelMap,
+      operationalOverlay: input.snapshot.operationalOverlay,
+      candidates: input.candidates,
+      pressure: pressureCalculation.pressure,
+    });
+  } catch (error) {
+    if (error instanceof RoutingSelectionError && (error.message.startsWith("No candidate") || error.message === "candidates must be non-empty")) {
+      const pressure = classifyPressureBand(pressureCalculation.pressure);
+      throw new EnsembleRoutingShortfallError(`Ensemble routing shortfall escalated to ${pressure.decisionLayer}`, {
+        goalRef: input.snapshot.goalRef,
+        projectRef: input.snapshot.projectRef,
+        routeRef: input.routeRef,
+        pressure,
+        rejected: error.rejected,
+      });
+    }
+    throw error;
+  }
   const admission = createNativeAdmissionFromRouting(
     config,
     { ...selection, candidateBindings: selection.candidateRefs.map((candidateRef) => {

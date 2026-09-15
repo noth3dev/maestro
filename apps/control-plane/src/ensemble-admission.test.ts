@@ -54,6 +54,15 @@ describe("ensemble native admission", () => {
     expect(() => createEnsembleNativeAdmission(config, { snapshot: { ...snapshot, missionBundleRef: "other-bundle" }, modelMap, candidates: [{ candidateRef: "strong-primary", modelRef: "openai/model-strong", accountBinding: "openai-account" }], routeRef: "worker:worker-1:1", base })).toThrow(/Mission Bundle/i);
   });
 
+  it("escalates an unmet candidate set through the calculated pressure authority", () => {
+    expect(() => createEnsembleNativeAdmission(config, { snapshot, modelMap, candidates: [{ candidateRef: "strong-primary", modelRef: "openai/model-strong", accountBinding: "wrong-account" }], routeRef: "worker:worker-1:1", base })).toThrow(/Encore Council|user|Department Head|automatic progress/);
+    try {
+      createEnsembleNativeAdmission(config, { snapshot, modelMap, candidates: [{ candidateRef: "strong-primary", modelRef: "openai/model-strong", accountBinding: "wrong-account" }], routeRef: "worker:worker-1:1", base });
+    } catch (error) {
+      expect(error).toMatchObject({ name: "EnsembleRoutingShortfallError", shortfall: { pressure: { decisionLayer: "Encore Council" }, rejected: [{ candidateRef: "strong-primary" }] } });
+    }
+  });
+
   it("revalidates hostile snapshot boundaries before selecting a route", () => {
     expect(() => createEnsembleNativeAdmission(config, {
       snapshot: { ...snapshot, routingWorkInput: { ...snapshot.routingWorkInput, workCharacter: { ...snapshot.routingWorkInput!.workCharacter, provenance: { taskContractRef: "forged", headDecisionRef: "forged" } } } },

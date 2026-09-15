@@ -51,6 +51,7 @@ import { GitProjectMismatchError } from "./git-integration-service.js";
 import { ConcertmasterReportCommandReuseError, ConcertmasterReportGoalNotFoundError, ConcertmasterReportProjectMismatchError } from "./concertmaster-report-service.js";
 import { GitAuthorizationError } from "@maestro/git-adapter";
 import { PersonaInspectionError } from "./persona-inspection-service.js";
+import { EnsembleRoutingShortfallError } from "./ensemble-admission.js";
 import { AuthenticationRequiredError, AuthenticationUnavailableError, CredentialForbiddenError, CriticalActionDeniedError, CriticalActionRequiresApprovalError, RequestValidationError, isMalformedJsonError } from "./server-input.js";
 
 export function mapError(error: unknown): { status: number; body: StableApiError } {
@@ -61,6 +62,12 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   if (error instanceof PersonaInspectionError) return apiError(409, "encore_conflict", error.message);
   if (error instanceof CapabilityApprovalInvalidRequestError || error instanceof EvidenceCaptureError || error instanceof EvidenceCaptureGoalBindingError) return apiError(400, "validation_error", error.message);
   if (error instanceof CapabilityApprovalConflictError || error instanceof EvidenceMetadataConflictError) return apiError(409, "replay_conflict", error.message);
+  if (error instanceof EnsembleRoutingShortfallError) return apiError(409, "routing_shortfall", error.message, undefined, {
+    pressure: error.shortfall.pressure.pressure,
+    pressureBand: error.shortfall.pressure.band,
+    decisionLayer: error.shortfall.pressure.decisionLayer,
+    rejected: [...error.shortfall.rejected],
+  });
   if (error instanceof AuthenticationUnavailableError) return apiError(429, "authentication_unavailable", "Authentication is temporarily unavailable");
   if (error instanceof TaskContractProjectMismatchError || error instanceof TaskContractProjectBoundaryError || error instanceof CriticalActionProjectMismatchError) return apiError(400, "validation_error", error.message);
   if (error instanceof CriticalActionGoalNotFoundError) return apiError(404, "goal_not_found", error.message);
@@ -139,6 +146,6 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   return apiError(503, "durable_store_unavailable", "Durable store is unavailable");
 }
 
-function apiError(status: number, code: StableApiError["error"]["code"], message: string, detail?: string) {
-  return { status, body: StableApiErrorSchema.parse({ error: { code, message, ...(detail === undefined ? {} : { detail }) } }) };
+function apiError(status: number, code: StableApiError["error"]["code"], message: string, detail?: string, routing?: StableApiError["error"]["routing"]) {
+  return { status, body: StableApiErrorSchema.parse({ error: { code, message, ...(detail === undefined ? {} : { detail }), ...(routing === undefined ? {} : { routing }) } }) };
 }
