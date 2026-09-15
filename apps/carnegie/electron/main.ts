@@ -2,9 +2,11 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 import type { ApiClient } from "@maestro/api-client";
+import type { WebContents } from "electron";
 import { loadConnectionConfig, saveConnectionConfig, clearConnectionConfig, type ConnectionConfig } from "./store.js";
 import { loadPreferences, savePreferences } from "./preferences.js";
 import { createBridgedApi, isExposedMethod } from "./apiBridge.js";
+import { EVENT_STREAM_CHANNELS, pumpEventStream, type EventStreamMessage } from "./event-stream-bridge.js";
 
 const dirName = dirname(fileURLToPath(import.meta.url));
 
@@ -16,8 +18,28 @@ const dirName = dirname(fileURLToPath(import.meta.url));
 if (process.platform === "linux") app.commandLine.appendSwitch("password-store", "basic");
 
 let api: ApiClient | undefined;
+type EventStreamSender = Pick<WebContents, "isDestroyed" | "send" | "once">;
+const activeEventStreams = new Map<string, { sender: EventStreamSender; controller: AbortController }>();
+
+function stopEventStreamsForSender(sender: EventStreamSender): void {
+  for (const [streamId, active] of activeEventStreams) {
+    if (active.sender !== sender) continue;
+    active.controller.abort();
+    activeEventStreams.delete(streamId);
+  }
+}
+
+function stopAllEventStreams(): void {
+  for (const active of activeEventStreams.values()) active.controller.abort();
+  activeEventStreams.clear();
+}
+
+function sendEventStreamMessage(sender: EventStreamSender, streamId: string, message: EventStreamMessage): void {
+  if (!sender.isDestroyed()) sender.send(EVENT_STREAM_CHANNELS.message, streamId, message);
+}
 
 function connect(config: ConnectionConfig | undefined): void {
+  stopAllEventStreams();
   api = config === undefined ? undefined : createBridgedApi(config);
 }
 
@@ -43,8 +65,51 @@ function registerIpcHandlers(): void {
     savePreferences(preferences);
   });
 
+  ipcMain.on(EVENT_STREAM_CHANNELS.start, (event, streamId: unknown, query: unknown) => {
+    if (typeof streamId !== "string" || streamId.length === 0) return;
+    const existing = activeEventStreams.get(streamId);
+    if (existing !== undefined) {
+      sendEventStreamMessage(event.sender, streamId, {
+        kind: "error",
+        message: existing.sender === event.sender ? "Event stream is already active" : "Event stream ownership conflict",
+      });
+      return;
+    }
+    const client = api;
+    if (client === undefined) {
+      sendEventStreamMessage(event.sender, streamId, { kind: "error", message: "Not connected to a control plane yet" });
+      return;
+    }
+    const controller = new AbortController();
+    const sender = event.sender;
+    activeEventStreams.set(streamId, { sender, controller });
+    sender.once("destroyed", () => stopEventStreamsForSender(sender));
+    void pumpEventStream(
+      (eventQuery, options) => client.streamEvents(eventQuery, options),
+      query as Parameters<ApiClient["streamEvents"]>[0],
+      controller.signal,
+      (message) => {
+        const active = activeEventStreams.get(streamId);
+        if (active?.sender !== sender || active.controller !== controller) return;
+        sendEventStreamMessage(sender, streamId, message);
+      },
+    ).finally(() => {
+      const active = activeEventStreams.get(streamId);
+      if (active?.controller === controller) activeEventStreams.delete(streamId);
+    });
+  });
+
+  ipcMain.on(EVENT_STREAM_CHANNELS.stop, (event, streamId: unknown) => {
+    if (typeof streamId !== "string") return;
+    const active = activeEventStreams.get(streamId);
+    if (active?.sender !== event.sender) return;
+    active.controller.abort();
+    activeEventStreams.delete(streamId);
+  });
+
   ipcMain.handle("maestro:api", async (_event, method: string, args: unknown[]) => {
     if (!isExposedMethod(method)) throw new Error(`Method not exposed to the renderer: ${method}`);
+    if (method === "streamEvents") throw new Error("Use the dedicated durable event stream bridge");
     if (api === undefined) throw new Error("Not connected to a control plane yet");
     const call = api[method] as (...callArgs: unknown[]) => unknown;
     return call.apply(api, args);
