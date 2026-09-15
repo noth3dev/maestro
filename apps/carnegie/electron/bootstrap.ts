@@ -27,7 +27,7 @@ export async function initializeCarnegieConnection(options: CarnegieBootstrapOpt
 
   let local: ConnectionState;
   try {
-    local = await (options.resolveLocalConnection ?? resolveLocalConnection)({ env: options.env });
+    local = await (options.resolveLocalConnection ?? resolveLocalConnection)({ env: options.env, includeProjectId: true });
   } catch (error) {
     return { setupError: error instanceof Error ? error.message : "Local automatic setup failed" };
   }

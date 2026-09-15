@@ -63,6 +63,7 @@ export interface LocalBootstrapOptions {
   startModelGateway?: (options: LocalModelGatewayLaunchOptions) => Promise<LocalProcessHandle | void>;
   retryDelayMs?: number;
   onStep?: (event: LocalBootstrapStepEvent) => void;
+  includeProjectId?: boolean;
 }
 
 export const LOCAL_BOOTSTRAP_STEP_ORDER = [
@@ -214,7 +215,10 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
         ownedGateway = gateway.process;
         gatewayReady = true;
         const validation = await validateLocalToken(apiUrl, storedToken, fetch);
-        if (validation.kind === "valid") return { kind: "configured", apiUrl, token: storedToken };
+        if (validation.kind === "valid") {
+          const projectId = options.includeProjectId ? validation.projectId : undefined;
+          return { kind: "configured", apiUrl, token: storedToken, ...(projectId === undefined ? {} : { projectId }) };
+        }
         if (validation.kind === "unavailable") {
           reportSetupStep(options.onStep, "control-plane-up", "failed", validation.reason);
           await stopOwnedProcesses();
@@ -257,7 +261,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
       return { kind: "setup-required", reason: bootstrap.reason };
     }
     reportSetupStep(options.onStep, "migrations", "completed");
-    bootstrapProjectId = bootstrap.projectId;
+    bootstrapProjectId = options.includeProjectId ? bootstrap.projectId : undefined;
   }
 
   if (initialHealth.kind !== "ready") {
@@ -317,7 +321,10 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
   // back instead of issuing another credential on every launch.
   if (storedToken !== undefined) {
     const validation = await validateLocalToken(apiUrl, storedToken, fetch);
-    if (validation.kind === "valid") return { kind: "configured", apiUrl, token: storedToken };
+    if (validation.kind === "valid") {
+      const projectId = options.includeProjectId ? validation.projectId : undefined;
+      return { kind: "configured", apiUrl, token: storedToken, ...(projectId === undefined ? {} : { projectId }) };
+    }
     if (validation.kind === "unavailable") {
       reportSetupStep(options.onStep, "control-plane-up", "failed", validation.reason);
       await stopOwnedProcesses();
@@ -340,7 +347,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
     }
     reportSetupStep(options.onStep, "migrations", "completed");
     bootstrapSecret = secret;
-    bootstrapProjectId = bootstrap.projectId;
+    bootstrapProjectId = options.includeProjectId ? bootstrap.projectId : undefined;
   }
   const secret = bootstrapSecret!;
   if (bootstrap === undefined || bootstrap.kind !== "ready") {
@@ -371,7 +378,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
 }
 
 type LocalTokenValidation =
-  | { kind: "valid" }
+  | { kind: "valid"; projectId?: string }
   | { kind: "invalid" }
   | { kind: "unavailable"; reason: string };
 
@@ -380,14 +387,15 @@ async function validateLocalToken(apiUrl: string, token: string, fetch: typeof g
     const client = createApiClient({ baseUrl: apiUrl, token, fetch });
     const projects = (await client.listProjects()).projects;
     if (projects.length === 0) return { kind: "invalid" };
+    const projectId = projects.length === 1 ? projects[0] : undefined;
     // A healthy Control Plane alone is not enough for conversations or login:
     // this authenticated read proves its model-gateway composition is usable.
     await client.listModels();
-    if (projects.length !== 1) return { kind: "valid" };
-    const projectId = projects[0]!;
-    const goals = (await client.listGoals(projectId)).goals;
-    if (goals.length === 0) await client.createGoal({ projectId }, randomUUID());
-    return { kind: "valid" };
+    if (projects.length !== 1) return { kind: "valid", ...(projectId === undefined ? {} : { projectId }) };
+    const singleProjectId = projects[0]!;
+    const goals = (await client.listGoals(singleProjectId)).goals;
+    if (goals.length === 0) await client.createGoal({ projectId: singleProjectId }, randomUUID());
+    return { kind: "valid", ...(projectId === undefined ? {} : { projectId }) };
   } catch (error) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) return { kind: "invalid" };
     return { kind: "unavailable", reason: `Local Control Plane authentication check failed: ${error instanceof Error ? error.message : "request unavailable"}` };

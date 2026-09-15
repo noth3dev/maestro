@@ -21,7 +21,7 @@ describe("initializeCarnegieConnection", () => {
     await expect(initializeCarnegieConnection({ env: {}, load: () => undefined, save, resolveLocalConnection })).resolves.toEqual({
       config: bootstrapped,
     });
-    expect(resolveLocalConnection).toHaveBeenCalledOnce();
+    expect(resolveLocalConnection).toHaveBeenCalledWith({ env: {}, includeProjectId: true });
     expect(save).toHaveBeenCalledWith(bootstrapped);
   });
 
