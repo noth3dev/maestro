@@ -8,6 +8,7 @@ export interface ConnectionEnvironment {
   MAESTRO_CONTROL_PLANE_ENTRY?: string;
   MAESTRO_LOCAL_DATABASE_URL?: string;
   MAESTRO_LOCAL_DB_ENGINE?: string;
+  MAESTRO_LOCAL_DB_ENGINE?: string;
   MAESTRO_LOCAL_DATA_DIR?: string;
   MAESTRO_LOCAL_OPERATOR_ID?: string;
   MAESTRO_MODEL_GATEWAY_URL?: string;
