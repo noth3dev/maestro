@@ -75,3 +75,4 @@ export * from "./channel.js";
 export * from "./settings.js";
 
 export * from "./embedded-database.js";
+export * from "./release-checkpoint.js";
