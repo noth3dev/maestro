@@ -9,12 +9,19 @@ const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
 
 describeDatabase("Phase 8 §S3 real PostgreSQL chaos boundaries", () => {
-  const basePool = new Pool({ connectionString: databaseUrl });
+  let basePool: Pool;
+  let pool: Pool;
   const schema = `phase8_s3_chaos_${randomUUID().replaceAll("-", "")}`;
-  const scopedUrl = (() => { const url = new URL(databaseUrl!); url.searchParams.set("options", `-c search_path=${schema}`); return url.toString(); })();
-  const pool = new Pool({ connectionString: scopedUrl });
+  let scopedUrl: string;
 
   beforeAll(async () => {
+    const configuredDatabaseUrl = databaseUrl;
+    if (configuredDatabaseUrl === undefined) throw new Error("MAESTRO_TEST_DATABASE_URL is required");
+    basePool = new Pool({ connectionString: configuredDatabaseUrl });
+    const url = new URL(configuredDatabaseUrl);
+    url.searchParams.set("options", `-c search_path=${schema}`);
+    scopedUrl = url.toString();
+    pool = new Pool({ connectionString: scopedUrl });
     await basePool.query(`CREATE SCHEMA ${schema}`);
     await applyAllMigrations(pool);
   });

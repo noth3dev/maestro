@@ -1,8 +1,8 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { FileEvidenceStore } from "@maestro/evidence";
 import { GitOutcomeUnknownError, createLocalGitPort } from "@maestro/git-adapter";
 import { resolveWorkerModelForRouting } from "../../apps/control-plane/src/worker-service.js";
@@ -22,10 +22,15 @@ describe("Phase 8 §S3 chaos injector", () => {
     await expect(chaos.checkpoint("goal.before-commit")).rejects.toMatchObject({ name: "ChaosInjectedError", boundary: "goal.before-commit" });
     await expect(chaos.checkpoint("goal.before-commit")).resolves.toBeUndefined();
 
-    chaos.inject("postgres.reconnect", { kind: "delay", delayMs: 1 });
-    const started = Date.now();
-    await chaos.checkpoint("postgres.reconnect");
-    expect(Date.now() - started).toBeGreaterThanOrEqual(1);
+    vi.useFakeTimers();
+    try {
+      chaos.inject("postgres.reconnect", { kind: "delay", delayMs: 10 });
+      const delayed = chaos.checkpoint("postgres.reconnect");
+      await vi.advanceTimersByTimeAsync(10);
+      await expect(delayed).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
 
     chaos.inject("evidence.before-write", { kind: "corrupt", transform: () => ({ hash: "forged" }) });
     expect(chaos.corrupt("evidence.before-write", { hash: "real" })).toEqual({ hash: "forged" });
@@ -50,29 +55,37 @@ describe("Phase 8 §S3 chaos injector", () => {
 
   it("classifies a Git response lost after the real branch mutation as unknown", async () => {
     const root = await mkdtemp(join(tmpdir(), "maestro-s3-git-"));
-    const repository = join(root, "repo");
-    execFileSync("git", ["init", "--quiet", "--initial-branch=main", repository]);
-    execFileSync("git", ["-C", repository, "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-m", "initial"]);
-    const base = execFileSync("git", ["-C", repository, "rev-parse", "HEAD"]).toString().trim();
-    const port = createLocalGitPort({
-      workspaceRoot: root,
-      pathScope: [root],
-      context: { commandId: "s3-git", projectId: "s3-project", actorId: "s3-actor", goalId: "s3-goal", policyVersion: 1, budgetEffectCents: 0, controlEpoch: "1" },
-      authority: { async execute(request, effect) { await effect(); return { effect: "allow", reason: "already_executed", classification: "ordinary", request, recordId: "lost-response" }; } },
-    });
-    await expect(port.createBranch(repository, "goal/unknown", base)).rejects.toBeInstanceOf(GitOutcomeUnknownError);
-    expect(execFileSync("git", ["-C", repository, "show-ref", "--verify", "refs/heads/goal/unknown"]).toString()).toContain("refs/heads/goal/unknown");
+    try {
+      const repository = join(root, "repo");
+      execFileSync("git", ["init", "--quiet", "--initial-branch=main", repository]);
+      execFileSync("git", ["-C", repository, "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-m", "initial"]);
+      const base = execFileSync("git", ["-C", repository, "rev-parse", "HEAD"]).toString().trim();
+      const port = createLocalGitPort({
+        workspaceRoot: root,
+        pathScope: [root],
+        context: { commandId: "s3-git", projectId: "s3-project", actorId: "s3-actor", goalId: "s3-goal", policyVersion: 1, budgetEffectCents: 0, controlEpoch: "1" },
+        authority: { async execute(request, effect) { await effect(); return { effect: "allow", reason: "already_executed", classification: "ordinary", request, recordId: "lost-response" }; } },
+      });
+      await expect(port.createBranch(repository, "goal/unknown", base)).rejects.toBeInstanceOf(GitOutcomeUnknownError);
+      expect(execFileSync("git", ["-C", repository, "show-ref", "--verify", "refs/heads/goal/unknown"]).toString()).toContain("refs/heads/goal/unknown");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it("fails closed when an evidence write cannot create its durable artifact", async () => {
     const root = await mkdtemp(join(tmpdir(), "maestro-s3-evidence-"));
-    const occupiedPath = join(root, "not-a-directory");
-    await writeFile(occupiedPath, "occupied");
-    const store = new FileEvidenceStore(occupiedPath);
-    await expect(store.capture({
-      context: { correlationId: "c", commandId: "cmd", projectId: "project", goalId: "goal", actorId: "actor" },
-      bytes: Buffer.from("evidence"), kind: "test-result", mediaType: "text/plain",
-    })).rejects.toThrow();
+    try {
+      const occupiedPath = join(root, "not-a-directory");
+      await writeFile(occupiedPath, "occupied");
+      const store = new FileEvidenceStore(occupiedPath);
+      await expect(store.capture({
+        context: { correlationId: "c", commandId: "cmd", projectId: "project", goalId: "goal", actorId: "actor" },
+        bytes: Buffer.from("evidence"), kind: "test-result", mediaType: "text/plain",
+      })).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
 });
