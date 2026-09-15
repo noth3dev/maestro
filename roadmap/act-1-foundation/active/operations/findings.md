@@ -2186,3 +2186,8 @@ The existing typed read responses were audited before expanding TUI rendering. T
 ## 2026-09-15 — Plan 7 final verification repair
 
 The final authenticated serialized PostgreSQL gate initially passed 284/285 files and 1883/1887 tests; the only failures were four `packages/domain/src/worker-profile-derivation.test.ts` cases. Their shared fixture used `missionOverlayExpiresAt: "2026-09-15T00:00:00.000Z"`, which had become expired at runtime. This was a test determinism defect, not a production expiry defect. Test-only repair `df3fd17` uses a stable future default and explicitly freezes time plus supplies the original timestamp for the exact-boundary case. Independent no-edit review passed (`REVIEW: PASS`). After merge `0926426`, build, lint, diff-check, and the authenticated serialized PostgreSQL suite passed 285/285 files and 1887/1887 tests.
+
+
+## 2026-09-15 — Plan 7-c §S8 SSE bridge verification
+
+The initial idle-retry regression test exposed an unbounded retry/termination pattern and caused a Node heap exhaustion. The test was rewritten with a renderer-local stop control and deterministic empty SSE retries. The implementation then published `{ transport: "sse", stale: false }` immediately when an idle retry became healthy, before waiting for a future event. Final focused verification passed 4 files / 14 tests; the exact-HEAD independent no-edit review returned `REVIEW: PASS`. Post-merge build, lint, diff-check, and authenticated serialized PostgreSQL verification passed 287/287 files and 1895/1895 tests; no further S8 findings remain.
