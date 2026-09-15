@@ -32,6 +32,27 @@ describe("embedded PostgreSQL-compatible database", () => {
   }, 120_000);
 
 
+  it("reuses an already-running fixed-port embedded server for the same data directory", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "maestro-embedded-reuse-"));
+    let first: EmbeddedDatabaseHandle | undefined;
+    let second: EmbeddedDatabaseHandle | undefined;
+    try {
+      first = await startEmbeddedDatabase({ dataDir, detached: true });
+      second = await startEmbeddedDatabase({ dataDir, detached: true });
+      expect(second.databaseUrl).toBe(first.databaseUrl);
+      const pool = new Pool({ connectionString: first.databaseUrl, max: 1 });
+      try {
+        await expect(pool.query("SELECT 1")).resolves.toMatchObject({ rowCount: 1 });
+      } finally {
+        await pool.end();
+      }
+    } finally {
+      await second?.stop();
+      await first?.stop();
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
   it("preserves user data when the same embedded data directory restarts", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "maestro-embedded-restart-"));
     let first: EmbeddedDatabaseHandle | undefined;

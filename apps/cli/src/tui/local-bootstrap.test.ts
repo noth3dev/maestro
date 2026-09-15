@@ -321,6 +321,24 @@ describe("resolveLocalConnection", () => {
     expect(controlPlaneOptions?.modelGatewayToken).toBe((startModelGateway.mock.calls[0]?.[0] as { token: string }).token);
   });
 
+  it("stops an embedded database when model-gateway startup fails", async () => {
+    const stopDatabase = vi.fn(async () => undefined);
+    const fetch = vi.fn().mockRejectedValueOnce(new Error("Control Plane is down")).mockResolvedValueOnce(response({ status: "ok" }));
+    const runCommand = vi.fn(async () => ({ code: 0, stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }), stderr: "" }));
+    const result = await resolveLocalConnection({
+      env: { MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      fetch,
+      secretStore: secretStore(),
+      runCommand,
+      startEmbeddedDatabase: vi.fn(async () => ({ databaseUrl: "postgresql://maestro@127.0.0.1:55433/maestro_local", stop: stopDatabase })),
+      startControlPlane: vi.fn(async () => undefined),
+      startModelGateway: vi.fn(async () => { throw new Error("gateway failed"); }),
+      retryDelayMs: 0,
+    });
+    expect(result).toMatchObject({ kind: "setup-required", reason: expect.stringContaining("model gateway") });
+    expect(stopDatabase).toHaveBeenCalledOnce();
+  });
+
   it("reports migration helper failure before child startup", async () => {
     const fetch = vi.fn().mockRejectedValue(new Error("Control Plane is down"));
     const gatewayStop = vi.fn(async () => undefined);
