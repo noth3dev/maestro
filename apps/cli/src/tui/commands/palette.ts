@@ -1,4 +1,4 @@
-import type { AutocompleteItem } from "@earendil-works/pi-tui";
+import { matchesKey, type AutocompleteItem } from "@earendil-works/pi-tui";
 import { createCommandRegistry } from "./registry.js";
 
 const RAW_KEYBOARD_SHORTCUTS: readonly AutocompleteItem[] = [
@@ -23,6 +23,8 @@ export function createCommandPalette(): AutocompleteItem[] {
 }
 
 
-export function renderCommandPaletteText(): string {
-  return createCommandPalette().map((item) => `${item.label} [${item.description}]`).join(" · ");
+export function dispatchCommandPaletteInput(input: string, write: (text: string) => void): boolean {
+  if (input !== "help" && !matchesKey(input, "ctrl+k")) return false;
+  write(`Commands: ${createCommandPalette().map((item) => `${item.label} [${item.description}]`).join(" · ")}`);
+  return true;
 }

@@ -18,7 +18,7 @@ import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection } from "./local-bootstrap.js";
 import { createCommandRegistry } from "./commands/registry.js";
 import { createCommandAutocompleteItems } from "./commands/autocomplete.js";
-import { renderCommandPaletteText } from "./commands/palette.js";
+import { dispatchCommandPaletteInput } from "./commands/palette.js";
 import { parseInput } from "./commands/parser.js";
 import {
   executeReadCommand,
@@ -703,7 +703,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             version: MAESTRO_VERSION,
           });
         } else if (parsed.kind === "command" && parsed.name === "help") {
-          append(`Commands: ${renderCommandPaletteText()}`);
+          dispatchCommandPaletteInput("help", append);
         } else if (parsed.kind === "command" && parsed.name === "login" && parsed.action === undefined) {
           loginInteractionGeneration += 1;
           accountLoginSelection = 0;
@@ -1068,12 +1068,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         tui.requestRender(true);
         return { consume: true };
       }
-      if (matchesKey(data, "ctrl+k")) {
-        append(
-          `Commands: ${renderCommandPaletteText()}`,
-        );
-        return { consume: true };
-      }
+      if (dispatchCommandPaletteInput(data, append)) return { consume: true };
       if (matchesKey(data, "ctrl+g")) {
         void submit("/goals list");
         return { consume: true };

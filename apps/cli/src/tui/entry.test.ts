@@ -155,27 +155,25 @@ describe("automatic provider sign-in", () => {
 
 
 describe("basic shell command boundaries", () => {
-  it("clears visible transcript without changing connection, session, or selected Goal", async () => {
-    const durable = {
+  it("clears visible transcript without changing connection, session, selected Goal, or durable fields", async () => {
+    const state = {
+      visibleTranscript: ["old assistant line"],
       connection: { kind: "connected" as const },
       session: { sessionId: "session-1", goalId: "goal-1" },
       selectedGoal: "goal-1",
+      durable: { serverState: "unchanged" },
     };
-    let visibleTranscript = ["old assistant line"];
-    const context = basicShellContext({ clearTranscript: () => { visibleTranscript = []; } });
+    const before = { connection: state.connection, session: state.session, selectedGoal: state.selectedGoal, durable: state.durable };
+    const context = basicShellContext({ clearTranscript: () => { state.visibleTranscript = []; } });
     await executeBasicShellCommand("clear", context);
-    expect(visibleTranscript).toEqual([]);
-    expect(durable).toEqual({
-      connection: { kind: "connected" },
-      session: { sessionId: "session-1", goalId: "goal-1" },
-      selectedGoal: "goal-1",
-    });
+    expect(state.visibleTranscript).toEqual([]);
+    expect({ connection: state.connection, session: state.session, selectedGoal: state.selectedGoal, durable: state.durable }).toEqual(before);
   });
 
-  it("rejects late hydration results captured before clear", () => {
+  it("connects the clear command context to the hydration boundary", async () => {
     const boundary = createTranscriptClearBoundary();
     const hydrationGeneration = boundary.capture();
-    boundary.clear();
+    await executeBasicShellCommand("clear", basicShellContext({ clearTranscript: boundary.clear }));
     expect(boundary.isCurrent(hydrationGeneration)).toBe(false);
     expect(boundary.isCurrent(boundary.capture())).toBe(true);
   });
@@ -196,6 +194,13 @@ describe("basic shell command boundaries", () => {
     await executeBasicShellCommand("copy", context);
     expect(context.copyToClipboard).toHaveBeenCalledWith("system after assistant\nsecond line");
     expect(latestCopyableTranscriptText(addConversationMessage(conversation, "system", "   "))).toBe("system after assistant\nsecond line");
+  });
+
+  it("reports when copy has no non-empty assistant or system transcript", async () => {
+    const context = basicShellContext({ getLatestTranscriptText: () => undefined });
+    await executeBasicShellCommand("copy", context);
+    expect(context.copyToClipboard).not.toHaveBeenCalled();
+    expect(context.write).toHaveBeenCalledWith("No transcript text to copy.");
   });
 
   it("uses exactly the same version text as executeCli --version", async () => {
