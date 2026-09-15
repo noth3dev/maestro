@@ -19,6 +19,39 @@ function response(body: unknown, status = 200): Response {
 }
 
 describe("resolveLocalConnection", () => {
+  it("uses the embedded Postgres-compatible engine by default when Docker is unavailable", async () => {
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const fetch = vi.fn()
+      .mockRejectedValueOnce(new Error("connection refused"))
+      .mockRejectedValueOnce(new Error("connection refused"))
+      .mockResolvedValueOnce(response({ status: "ok" }))
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(response({ status: "ok" }))
+      .mockResolvedValueOnce(response({ projects: [projectId] }))
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(response({ goals: [] }))
+      .mockResolvedValueOnce(response({ goalId: "22222222-2222-4222-8222-222222222222", projectId, state: "draft", version: 1 }, 201));
+    const runCommand = vi.fn(async (file: string, args: readonly string[], options?: { env?: Record<string, string | undefined> }) => {
+      if (file === "docker") return { code: 127, stdout: "", stderr: "docker: command not found" };
+      if (file === process.execPath && args.some((arg) => arg.endsWith("local-bootstrap.js"))) {
+        expect(options?.env?.MAESTRO_LOCAL_BOOTSTRAP_SECRET).toBeTruthy();
+        return { code: 0, stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444", projectId }), stderr: "" };
+      }
+      throw new Error(`unexpected command: ${file} ${args.join(" ")}`);
+    });
+    const result = await resolveLocalConnection({
+      env: { MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      fetch,
+      secretStore: secretStore(),
+      runCommand,
+      startControlPlane: vi.fn(async () => undefined),
+      startModelGateway: vi.fn(async () => undefined),
+      retryDelayMs: 0,
+    });
+    expect(result).toMatchObject({ kind: "configured", apiUrl: "http://127.0.0.1:4310" });
+    expect(runCommand).not.toHaveBeenCalledWith("docker", expect.anything(), expect.anything());
+  });
+
   it("resolves the sibling Control Plane from the built shared module", () => {
     expect(resolveInstalledControlPlaneEntry("/opt/maestro/apps/cli/dist/tui")).toBe("/opt/maestro/apps/control-plane/dist/main.js");
   });
