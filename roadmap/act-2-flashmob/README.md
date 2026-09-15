@@ -82,6 +82,15 @@ Flashmob MUST reuse Act 1 cores:
 > **Flashmob** — fast investigation, drafts, small patches
 > **Maestro** — governed project execution through certification
 
+### 7. Landing Page
+
+Once Act 2 is complete, Maestro gets a simple public landing page — its first public-facing surface. Scope is deliberately kept small at this stage:
+
+- What Maestro is, in plain terms, and how to install/get started.
+- The **Transcription gallery** (`roadmap/act-3-arrangement/README.md` § 10) — public Arrangements shared by Conductors, browsable by anyone, since that is Act 3's own public surface and this is the page it lives on.
+
+Out of scope for this pass: a documentation hub, a community forum, or pricing pages. These can be added later if the product actually needs them — the landing page starts minimal on purpose.
+
 ---
 
 ## Act 1 dependency

@@ -218,6 +218,50 @@ Act 2 and Act 3 never receive authority to weaken Act 1 invariants.
 
 ---
 
+### 10. Transcription — Community Sharing
+
+**Transcription** is how a Conductor shares what their Arrangement-grown orchestration has become — a single certified Arrangement, or their whole accumulated set — with other people, at whatever level of openness they choose. It is not a new lifecycle: everything shared through Transcription is, and remains, a normal Arrangement under § 1–§ 7. Transcription only adds a **publication layer** on top of an already-certified Arrangement; it never changes how that Arrangement was created, evaluated, or certified.
+
+#### 10.1 What can be shared
+
+- **A single Arrangement** — one certified unit, shared on its own.
+- **A whole accumulated set** — everything a Conductor's orchestration has grown into through use (locally authored Arrangements and ones absorbed via Muze § 8 alike), shared together.
+
+#### 10.2 Disclosure is chosen per Arrangement, not globally
+
+For every Arrangement being shared, the sharer independently chooses:
+
+- **Personalization inclusion** — whether its personalization-axis content (§ 2) is included or stripped. Default: **stripped** (capability axis only); a sharer may opt in per Arrangement.
+- **Disclosure depth** — how much of the Arrangement is visible to whoever receives it: a summary (what it does, its measured `metrics` deltas) up through the full artifact. This is a per-Arrangement choice, never an all-or-nothing setting across an entire shared set.
+- **Attribution** — credited under the sharer's identity by default, or shared anonymously if chosen.
+
+#### 10.3 Visibility tiers
+
+- **Private** — not shared; the default state of every Arrangement.
+- **Link-shared** — visible only to whoever holds the specific link; not discoverable otherwise.
+- **Public** — discoverable in the open community gallery (§ 10.5), visible to anyone.
+
+A Conductor may move an Arrangement between these tiers at any time, including back to Private — **withdrawing a share is always possible**. This is independent of § 1's rule that an Arrangement's own certified content is immutable: visibility is a separate, always-revisable property layered on top of an immutable artifact, never a mutation of the artifact itself.
+
+#### 10.4 What a recipient can do
+
+- **By default:** browse the shared summary and metrics — a showcase, not an install.
+- **Optionally:** Transplant it (§ 7) into their own orchestration. A shared Arrangement is not auto-applied on receipt — the recipient's own Shadow Replay, Negative-Evidence check, and Certification (§ 3–§ 5) still gate it exactly as § 7 already requires for any Transplant, shared or not.
+
+#### 10.5 Pre-publication review (separate from Certification)
+
+Certification (§ 3) answers "is this change safe and effective." Before any Arrangement moves out of Private, a **separate pre-publication check** answers a different question: "is it safe to expose this publicly" (e.g., inadvertently included sensitive project content, not just personalization data). This check gates Link-shared and Public visibility; it never gates Certification itself, and it never re-litigates whether the Arrangement should have been certified.
+
+#### 10.6 Community interaction
+
+Public Arrangements support reactions and comments from other people from the outset — this is a genuine community surface, not a static listing.
+
+#### 10.7 Home
+
+The public gallery (§ 10.3's Public tier) lives on the Maestro landing page (`roadmap/act-2-flashmob/README.md` § 7) — Transcription does not stand up a separate site.
+
+---
+
 ## Future Extensions Placeholder
 
 _(Additional Act 3+ ideas will be appended here.)_
