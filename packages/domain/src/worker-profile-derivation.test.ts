@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CONCERTMASTER_PERSONA_BASELINE, type PersonaProfile } from "./persona.js";
 import { buildWorkerPersonaImprovementCandidate, deriveWorkerProfile, isWorkerPersonaOverlayExpired, type WorkerProfileDerivationInput } from "./worker-profile-derivation.js";
 
@@ -6,7 +6,7 @@ const template: PersonaProfile = Object.freeze({ ...CONCERTMASTER_PERSONA_BASELI
 const head: PersonaProfile = Object.freeze({ ...template, caution: 0.86, realism: 0.88, initiative: 0.87 });
 const input = (overrides: Partial<WorkerProfileDerivationInput> = {}): WorkerProfileDerivationInput => ({
   roleId: "head-security", taskClass: "incident-triage", taskClassTemplate: template, headProfile: head,
-  missionOverlay: { caution: 0.02, realism: 0.04, initiative: 0.03 }, missionOverlayExpiresAt: "2026-09-15T00:00:00.000Z",
+  missionOverlay: { caution: 0.02, realism: 0.04, initiative: 0.03 }, missionOverlayExpiresAt: "2099-01-01T00:00:00.000Z",
   assignmentRef: "mission-bundle-1", ...overrides,
 });
 
@@ -42,9 +42,14 @@ describe("bounded worker persona derivation", () => {
 
   it("expires the temporary overlay without mutating the Head or task template", () => {
     const beforeHead = { ...head }; const beforeTemplate = { ...template };
-    const result = deriveWorkerProfile(input());
-    expect(isWorkerPersonaOverlayExpired(result, new Date("2026-09-14T23:59:59.999Z"))).toBe(false);
-    expect(isWorkerPersonaOverlayExpired(result, new Date("2026-09-15T00:00:00.000Z"))).toBe(true);
-    expect(head).toEqual(beforeHead); expect(template).toEqual(beforeTemplate);
+    vi.setSystemTime(new Date("2026-09-14T23:59:59.999Z"));
+    try {
+      const result = deriveWorkerProfile(input({ missionOverlayExpiresAt: "2026-09-15T00:00:00.000Z" }));
+      expect(isWorkerPersonaOverlayExpired(result, new Date("2026-09-14T23:59:59.999Z"))).toBe(false);
+      expect(isWorkerPersonaOverlayExpired(result, new Date("2026-09-15T00:00:00.000Z"))).toBe(true);
+      expect(head).toEqual(beforeHead); expect(template).toEqual(beforeTemplate);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
