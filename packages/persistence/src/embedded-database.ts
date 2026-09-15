@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto";
-import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
+import { PGLiteSocketHandler, PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { Pool } from "pg";
 import { runMigrations } from "./migrate.js";
 
@@ -23,6 +23,53 @@ export interface EmbeddedDatabaseHandle {
   stop(): Promise<void>;
 }
 
+type EmbeddedSocketHandler = PGLiteSocketHandler;
+type EmbeddedSocketServerInternals = { handlers?: Set<EmbeddedSocketHandler> };
+
+interface EmbeddedSocketDetachTracker {
+  waitForQuiescence(): Promise<void>;
+  restore(): void;
+}
+
+function trackEmbeddedSocketDetaches(server: PGLiteSocketServer): EmbeddedSocketDetachTracker {
+  const internals = server as unknown as EmbeddedSocketServerInternals;
+  const handlers = internals.handlers;
+  if (handlers === undefined) throw new Error("PGLiteSocketServer handler set is unavailable");
+  const originalAdd = handlers.add.bind(handlers);
+  const pending = new Set<Promise<unknown>>();
+  const wrapped = new WeakSet<EmbeddedSocketHandler>();
+  const add = (handler: EmbeddedSocketHandler): Set<EmbeddedSocketHandler> => {
+    if (!wrapped.has(handler)) {
+      const detach = handler.detach.bind(handler);
+      handler.detach = (close?: boolean): Promise<PGLiteSocketHandler> => {
+        const operation = detach(close);
+        pending.add(operation);
+        void operation.then(
+          () => pending.delete(operation),
+          () => pending.delete(operation),
+        );
+        return operation;
+      };
+      wrapped.add(handler);
+    }
+    return originalAdd(handler);
+  };
+  handlers.add = add;
+  return {
+    async waitForQuiescence(): Promise<void> {
+      for (;;) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        const operations = [...pending];
+        if (operations.length === 0) return;
+        await Promise.all(operations);
+      }
+    },
+    restore(): void {
+      handlers.add = originalAdd;
+    },
+  };
+}
+
 /** Start an embedded PostgreSQL-compatible server for the current process. */
 export async function openEmbeddedDatabase(options: Omit<EmbeddedDatabaseOptions, "detached">): Promise<EmbeddedDatabaseHandle> {
   const host = options.host ?? "127.0.0.1";
@@ -31,7 +78,9 @@ export async function openEmbeddedDatabase(options: Omit<EmbeddedDatabaseOptions
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 });
   const db = await PGlite.create(databasePath, { extensions: { pgcrypto } });
   const server = new PGLiteSocketServer({ db, host, port, maxConnections: options.maxConnections ?? 8 });
+  let detachTracker: EmbeddedSocketDetachTracker | undefined;
   try {
+    detachTracker = trackEmbeddedSocketDetaches(server);
     await server.start();
     const [serverHost, serverPort] = server.getServerConn().split(":");
     if (serverHost === undefined || serverPort === undefined || !/^\d+$/.test(serverPort))
@@ -51,12 +100,22 @@ export async function openEmbeddedDatabase(options: Omit<EmbeddedDatabaseOptions
       stop: async () => {
         if (stopped) return;
         stopped = true;
+        // PGLiteSocketServer starts handler detaches without awaiting them.
+        // The tracker covers both handlers still in the server Set and handlers
+        // whose close event removed them before their async detach completed.
         await server.stop();
+        try {
+          await detachTracker!.waitForQuiescence();
+        } finally {
+          detachTracker!.restore();
+        }
         await db.close();
       },
     };
   } catch (error) {
     await server.stop().catch(() => undefined);
+    await detachTracker?.waitForQuiescence().catch(() => undefined);
+    detachTracker?.restore();
     await db.close().catch(() => undefined);
     throw error;
   }

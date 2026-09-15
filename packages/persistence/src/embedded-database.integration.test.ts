@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { afterEach, describe, expect, it } from "vitest";
 import { startEmbeddedDatabase, type EmbeddedDatabaseHandle } from "./embedded-database.js";
 
@@ -49,6 +49,47 @@ describe("embedded PostgreSQL-compatible database", () => {
     } finally {
       await second?.stop();
       await first?.stop();
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it("waits for active socket transaction cleanup before closing the database", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "maestro-embedded-shutdown-"));
+    let embedded: EmbeddedDatabaseHandle | undefined;
+    let pool: Pool | undefined;
+    let client: PoolClient | undefined;
+    try {
+      embedded = await startEmbeddedDatabase({ dataDir, port: 0 });
+      pool = new Pool({ connectionString: embedded.databaseUrl, max: 1 });
+      client = await pool.connect();
+      await client.query("BEGIN");
+      client.release(true);
+      client = undefined;
+      await expect(embedded.stop()).resolves.toBeUndefined();
+      embedded = undefined;
+    } finally {
+      client?.release(true);
+      await pool?.end();
+      await embedded?.stop();
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it("waits for a closed socket's asynchronous detach before closing the database", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "maestro-embedded-closed-socket-"));
+    let embedded: EmbeddedDatabaseHandle | undefined;
+    let pool: Pool | undefined;
+    try {
+      embedded = await startEmbeddedDatabase({ dataDir, port: 0 });
+      pool = new Pool({ connectionString: embedded.databaseUrl, max: 1 });
+      await expect(pool.query("SELECT 1")).resolves.toMatchObject({ rowCount: 1 });
+      await pool.end();
+      pool = undefined;
+      await expect(embedded.stop()).resolves.toBeUndefined();
+      embedded = undefined;
+    } finally {
+      await pool?.end();
+      await embedded?.stop();
       await rm(dataDir, { recursive: true, force: true });
     }
   }, 120_000);
