@@ -30,8 +30,20 @@ describe("TUI command registry", () => {
       "models",
       "conversation",
       "channel",
+      "clear",
+      "exit",
+      "quit",
+      "version",
+      "copy",
     ]) {
       expect(registry.find(command)).toBeDefined();
+    }
+  });
+
+  it("registers basic shell commands as actionless local commands", () => {
+    const registry = createCommandRegistry();
+    for (const name of ["clear", "exit", "quit", "version", "copy"]) {
+      expect(registry.find(name)).toMatchObject({ name, actionless: true });
     }
   });
 

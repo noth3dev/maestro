@@ -21,3 +21,11 @@ describe("command palette", () => {
       "/budget forecast", "/approval list", "/evidence report", "/improvement-digests inspect",
     ]) expect(labels).not.toContain(entry);
   });
+
+
+  it("lists local shell commands and the raw keyboard shortcuts", () => {
+    const labels = createCommandPalette().map((item) => item.label);
+    for (const label of ["/clear", "/exit", "/quit", "/version", "/copy", "Ctrl+G", "Ctrl+E", "Ctrl+R", "Ctrl+A", "Ctrl+/"]) {
+      expect(labels).toContain(label);
+    }
+  });

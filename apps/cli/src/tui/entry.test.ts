@@ -1,7 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import { parseInput } from "./commands/parser.js";
-import { createAutomaticProviderSignInGate, hydrateOrganizationOnReconnect, isProviderLoginActive, isSplashRestoreShortcut, runAutomaticProviderSignInOffer, shouldOfferAutomaticProviderSignIn } from "./entry.js";
+import { createAutomaticProviderSignInGate, executeBasicShellCommand, hydrateOrganizationOnReconnect, isProviderLoginActive, isSplashRestoreShortcut, runAutomaticProviderSignInOffer, shouldOfferAutomaticProviderSignIn } from "./entry.js";
 import type { TuiShellState } from "./components/shell.js";
+
+const basicShellContext = (overrides: Partial<Parameters<typeof executeBasicShellCommand>[1]> = {}) => ({
+  clearTranscript: vi.fn(),
+  stop: vi.fn(),
+  getLatestTranscriptText: vi.fn(() => "assistant response"),
+  copyToClipboard: vi.fn(async () => undefined),
+  write: vi.fn(),
+  version: "maestro development",
+  ...overrides,
+});
 
 const model = (provider: string, id: string) => ({
   identity: { provider, id },
@@ -137,5 +147,39 @@ describe("automatic provider sign-in", () => {
 
   it("recognizes the legacy raw Ctrl+/ byte used by ordinary terminals", () => {
     expect(isSplashRestoreShortcut("\x1f")).toBe(true);
+  });
+});
+
+
+describe("basic shell commands", () => {
+  it("clears only the visible transcript through the supplied local callback", async () => {
+    const context = basicShellContext();
+    await expect(executeBasicShellCommand("clear", context)).resolves.toBe(true);
+    expect(context.clearTranscript).toHaveBeenCalledOnce();
+    expect(context.stop).not.toHaveBeenCalled();
+  });
+
+  it("routes exit and quit through the existing stop callback", async () => {
+    for (const command of ["exit", "quit"] as const) {
+      const context = basicShellContext();
+      await expect(executeBasicShellCommand(command, context)).resolves.toBe(true);
+      expect(context.stop).toHaveBeenCalledOnce();
+    }
+  });
+
+  it("writes the shared CLI version", async () => {
+    const context = basicShellContext();
+    await expect(executeBasicShellCommand("version", context)).resolves.toBe(true);
+    expect(context.write).toHaveBeenCalledWith("maestro development");
+  });
+
+  it("copies the latest transcript and prints it when clipboard access fails", async () => {
+    const copied = basicShellContext();
+    await executeBasicShellCommand("copy", copied);
+    expect(copied.copyToClipboard).toHaveBeenCalledWith("assistant response");
+
+    const unavailable = basicShellContext({ copyToClipboard: vi.fn(async () => { throw new Error("unavailable"); }) });
+    await executeBasicShellCommand("copy", unavailable);
+    expect(unavailable.write).toHaveBeenCalledWith("Clipboard unavailable. Copy this transcript line: assistant response");
   });
 });

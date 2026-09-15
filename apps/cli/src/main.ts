@@ -8,6 +8,7 @@ import { startInteractiveTui } from "./tui/entry.js";
 import { resolveConnection } from "./tui/connection.js";
 import { resolveLocalConnection } from "./tui/local-bootstrap.js";
 import type { CertifyWorkerInput } from "@maestro/contracts";
+import { MAESTRO_VERSION } from "./version.js";
 
 export interface CliIo {
   fetch?: typeof globalThis.fetch;
@@ -30,7 +31,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
     return 0;
   }
   if (args[0] === "--version" || args[0] === "-V") {
-    io.stdout("maestro development\n");
+    io.stdout(`${MAESTRO_VERSION}\n`);
     return 0;
   }
   if (args.length === 0) {

@@ -50,6 +50,7 @@ import { createSplashController, renderInputPlaceholder, renderPendingDecisionDe
 import { getModeAccentProgress, setModeAccentProgress, tuiTheme, type TranscriptLine } from "./theme.js";
 
 import { copyToClipboard, openExternalUrl } from "../external-url.js";
+import { MAESTRO_VERSION } from "../version.js";
 import { editorTheme, SecretEditor } from "./components/editors.js";
 import { ConversationViewport, FramedComposer } from "./components/conversation-viewport.js";
 
@@ -60,6 +61,48 @@ import { hydrateOrganizationState, initializeTui, shouldAutoBootstrapLocal, type
 /** Ctrl+/ is sent as US (0x1f) by common terminals; Kitty/modifyOtherKeys uses matchesKey. */
 export function isSplashRestoreShortcut(data: string): boolean {
   return data === "\x1f" || matchesKey(data, "ctrl+/");
+}
+
+export type BasicShellCommandName = "clear" | "exit" | "quit" | "version" | "copy";
+
+export interface BasicShellCommandContext {
+  clearTranscript: () => void;
+  stop: () => void;
+  getLatestTranscriptText: () => string | undefined;
+  copyToClipboard: (text: string) => Promise<void>;
+  write: (text: string) => void;
+  version: string;
+}
+
+/** Execute commands that only affect the local interactive shell. */
+export async function executeBasicShellCommand(command: string, context: BasicShellCommandContext): Promise<boolean> {
+  if (command === "clear") {
+    context.clearTranscript();
+    return true;
+  }
+  if (command === "exit" || command === "quit") {
+    context.stop();
+    return true;
+  }
+  if (command === "version") {
+    context.write(context.version);
+    return true;
+  }
+  if (command === "copy") {
+    const text = context.getLatestTranscriptText()?.trim();
+    if (text === undefined || text === "") {
+      context.write("No transcript text to copy.");
+      return true;
+    }
+    try {
+      await context.copyToClipboard(text);
+      context.write("Transcript copied to the clipboard.");
+    } catch {
+      context.write(`Clipboard unavailable. Copy this transcript line: ${text}`);
+    }
+    return true;
+  }
+  return false;
 }
 
 export async function hydrateOrganizationOnReconnect(
@@ -184,6 +227,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     );
     let conversation: ConversationTranscriptState = createConversationTranscript();
     let activity: GoalEvent[] = [];
+    let visibleActivityStart = 0;
     let recovery: RecoverySummary = reconcileTuiSession(workspace.cwd, session);
     let pendingConfirmation: { summary: ApprovalDialogSummary; resolve: (decision: ConfirmationResult) => void } | undefined;
     const syncPendingDecisionState = (): void => {
@@ -227,7 +271,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       if (accountLoginSelection !== undefined && accountLoginState !== undefined) lines.push(...renderProviderLoginDialog(terminal.columns, accountLoginSelection, accountLoginState, accountLoginUrl));
       return lines;
     });
-    header.setOrderedStreamRenderer(() => renderUnifiedStreamEntries(conversation, activity, terminal.columns));
+    header.setOrderedStreamRenderer(() => renderUnifiedStreamEntries(conversation, activity.slice(visibleActivityStart), terminal.columns));
     const render = () => {
       syncPendingDecisionState();
       footer.setText(terminal.rows < 16 ? "" : renderTuiFooter(terminal.columns, state));
@@ -419,6 +463,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       activityStarted = false;
       activityController = undefined;
       activity = [];
+      visibleActivityStart = 0;
       state.pendingDecisions = [];
       const generation = ++activityHydrationGeneration;
       const projectId = project.kind === "attached" ? project.projectId : undefined;
@@ -592,7 +637,28 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       }
       try {
         const parsed = parseInput(text);
-        if (parsed.kind === "command" && parsed.name === "help") {
+        if (parsed.kind === "command" && parsed.action === undefined && Object.keys(parsed.options).length === 0 && (parsed.name === "clear" || parsed.name === "exit" || parsed.name === "quit" || parsed.name === "version" || parsed.name === "copy")) {
+          await executeBasicShellCommand(parsed.name, {
+            clearTranscript: () => {
+              conversationHydrationGeneration += 1;
+              conversationHydration = Promise.resolve();
+              conversation = createConversationTranscript();
+              visibleActivityStart = activity.length;
+              render();
+            },
+            stop,
+            getLatestTranscriptText: () => {
+              if (conversation.assistantText.trim() !== "") return conversation.assistantText;
+              for (const message of [...conversation.messages].reverse()) {
+                if ((message.role === "assistant" || message.role === "system") && message.content.trim() !== "") return message.content;
+              }
+              return undefined;
+            },
+            copyToClipboard: options.io.copyToClipboard ?? copyToClipboard,
+            write: append,
+            version: MAESTRO_VERSION,
+          });
+        } else if (parsed.kind === "command" && parsed.name === "help") {
           append(`Commands: ${createCommandPalette().map((item) => `${item.label} [${item.description}]`).join(" · ")}`);
         } else if (parsed.kind === "command" && parsed.name === "login" && parsed.action === undefined) {
           loginInteractionGeneration += 1;
