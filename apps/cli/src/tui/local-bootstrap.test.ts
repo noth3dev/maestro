@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
-import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, resolveLocalConnection, type LocalBootstrapStepEvent, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
+import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, resolveInstalledControlPlaneEntry, resolveLocalConnection, type LocalBootstrapStepEvent, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
 
 function secretStore(initial?: string): LocalSecretStore {
   let value = initial;
@@ -19,6 +19,10 @@ function response(body: unknown, status = 200): Response {
 }
 
 describe("resolveLocalConnection", () => {
+  it("resolves the sibling Control Plane from the built shared module", () => {
+    expect(resolveInstalledControlPlaneEntry("/opt/maestro/apps/cli/dist/tui")).toBe("/opt/maestro/apps/control-plane/dist/main.js");
+  });
+
   it("rejects a non-UUID local operator override before starting services", async () => {
     await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_OPERATOR_ID: "local-operator" }, fetch: vi.fn(), secretStore: secretStore(), runCommand: vi.fn() })).resolves.toEqual({
       kind: "setup-required",

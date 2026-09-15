@@ -616,12 +616,16 @@ function resolveModelGatewayEntry(env: ConnectionEnvironment): string | undefine
   return undefined;
 }
 
+export function resolveInstalledControlPlaneEntry(moduleDirectory = dirname(fileURLToPath(import.meta.url))): string {
+  return resolve(moduleDirectory, "../../../control-plane/dist/main.js");
+}
+
 function resolveControlPlaneEntry(env: ConnectionEnvironment): string | undefined {
   const explicit = env.MAESTRO_CONTROL_PLANE_ENTRY?.trim();
   if (explicit !== undefined && explicit !== "") return resolve(explicit);
   const cwdCandidate = resolve(process.cwd(), "apps", "control-plane", "dist", "main.js");
   try { if (requireFile(cwdCandidate)) return cwdCandidate; } catch { /* Continue to the installed-layout candidate. */ }
-  const installedCandidate = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../../apps/control-plane/dist/main.js");
+  const installedCandidate = resolveInstalledControlPlaneEntry();
   try { if (requireFile(installedCandidate)) return installedCandidate; } catch { /* No local bundled Control Plane. */ }
   return undefined;
 }
