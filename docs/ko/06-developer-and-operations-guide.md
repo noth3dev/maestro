@@ -43,6 +43,19 @@ Maestro는 **npm workspaces** 기반의 모노레포 구조로 관리됩니다:
 
 ---
 
+### Carnegie 및 CLI 무설정 로컬 시작 (Zero-config local startup)
+
+workspace를 빌드한 뒤 저장된 연결이나 명시적 연결 설정이 없으면 `maestro`와 Carnegie는 같은 로컬 bootstrap 경로를 사용합니다.
+
+- CLI와 Carnegie는 동일한 `resolveLocalConnection` 구현을 호출합니다. Carnegie는 먼저 암호화된 저장 연결을 확인하고, 명시적으로 원격 또는 팀 Control Plane에 연결하려는 경우에는 수동 Setup form을 fallback으로 유지합니다.
+- 기본 로컬 데이터베이스는 embedded PGlite + `pglite-socket` PostgreSQL-compatible adapter입니다. 기본 로컬 경로에는 Docker가 필요하지 않습니다.
+- 기존 Docker PostgreSQL 경로를 선택하려면 `MAESTRO_LOCAL_DB_ENGINE=docker`를 설정합니다. `MAESTRO_LOCAL_DATABASE_URL`, `MAESTRO_API_URL`, `MAESTRO_API_TOKEN`은 계속 명시적 override로 우선합니다.
+- Carnegie에서 수동 Setup form을 첫 시작 경로로 유지하려면 `MAESTRO_DISABLE_LOCAL_AUTOSTART=true`를 설정합니다.
+- 이 로컬 시작 경로는 로컬 Control Plane과 model gateway를 시작하지만 live-provider acceptance를 주장하지 않습니다.
+
+---
+
+
 ## 3. 빌드 및 테스트 명령어 (Build & Test Commands)
 
 ### 1) TypeScript 전체 빌드

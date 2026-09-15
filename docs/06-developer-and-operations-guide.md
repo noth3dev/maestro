@@ -43,6 +43,18 @@ Maestro uses **npm workspaces** to manage packages and applications:
 
 ---
 
+### Zero-config local startup (Carnegie and CLI)
+
+After the workspace is built, both `maestro` and Carnegie use the shared local bootstrap path when no saved or explicit connection is supplied:
+
+- The CLI and Carnegie call the same `resolveLocalConnection` implementation; Carnegie checks its encrypted saved connection first and keeps the manual Setup form as the fallback for an explicitly chosen remote or team Control Plane.
+- The default local database engine is the embedded PGlite + `pglite-socket` PostgreSQL-compatible adapter. Docker is not required for the default local path.
+- Set `MAESTRO_LOCAL_DB_ENGINE=docker` to opt into the existing Docker PostgreSQL path. `MAESTRO_LOCAL_DATABASE_URL`, `MAESTRO_API_URL`, and `MAESTRO_API_TOKEN` remain explicit overrides.
+- Set `MAESTRO_DISABLE_LOCAL_AUTOSTART=true` in Carnegie when the manual Setup form should remain the first-run path.
+- This local-start path bootstraps the local Control Plane and model gateway; it does not claim live-provider acceptance.
+
+---
+
 ## 3. Build & Test Commands
 
 ### 1) TypeScript Project Build
