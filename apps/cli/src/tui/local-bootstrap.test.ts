@@ -1,8 +1,9 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { startEmbeddedDatabase } from "@maestro/persistence";
 import { tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, resolveInstalledControlPlaneEntry, resolveLocalConnection, type LocalBootstrapStepEvent, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
+import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, resolveCodexAppServerCommand, resolveInstalledControlPlaneEntry, resolveLocalConnection, type LocalBootstrapStepEvent, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
 
 function secretStore(initial?: string): LocalSecretStore {
   let value = initial;
@@ -18,6 +19,129 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0
 function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
+
+describe("Codex app-server command discovery", () => {
+  it("finds an executable codex binary on PATH", async () => {
+    const directory = await mkdtemp(`${tmpdir()}/maestro-codex-path-`);
+    const codex = join(directory, "codex");
+    try {
+      await writeFile(codex, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      expect(resolveCodexAppServerCommand(undefined, directory)).toBe(codex);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("does not configure Codex when PATH has no codex binary", () => {
+    expect(resolveCodexAppServerCommand(undefined, `/tmp/maestro-no-codex${delimiter}/usr/bin`)).toBeUndefined();
+  });
+
+  it("keeps an explicit Codex app-server command instead of auto-detecting", () => {
+    expect(resolveCodexAppServerCommand("/custom/codex", "/tmp/maestro-no-codex")).toBe("/custom/codex");
+  });
+});
+
+async function probeSpawnedGatewayEnvironment(options: {
+  readonly pathDirectory: string;
+  readonly configuredCodexCommand?: string;
+}): Promise<Record<string, string | undefined>> {
+  const directory = await mkdtemp(`${tmpdir()}/maestro-codex-gateway-`);
+  const outputPath = `${directory}/environment.json`;
+  const port = 46000 + Math.floor(Math.random() * 1000);
+  const gatewayUrl = `http://127.0.0.1:${port}`;
+  const entry = `${directory}/gateway.mjs`;
+  await writeFile(
+    entry,
+    `import { createServer } from "node:http";
+import { writeFileSync } from "node:fs";
+const token = process.env.MAESTRO_MODEL_GATEWAY_TOKEN;
+const server = createServer((request, response) => {
+  if (request.url === "/healthz") { response.writeHead(200, { "content-type": "application/json" }); response.end(JSON.stringify({ status: "ok" })); return; }
+  if (request.url === "/v1/models" && request.headers.authorization === "Bearer " + token) { response.writeHead(200, { "content-type": "application/json" }); response.end("[]"); return; }
+  response.writeHead(401); response.end();
+});
+server.listen(Number(process.env.MAESTRO_MODEL_GATEWAY_PORT), process.env.MAESTRO_MODEL_GATEWAY_HOST, () => writeFileSync(${JSON.stringify(outputPath)}, JSON.stringify({ token, host: process.env.MAESTRO_MODEL_GATEWAY_HOST, port: process.env.MAESTRO_MODEL_GATEWAY_PORT, operator: process.env.MAESTRO_OPERATOR_ID, pid: process.pid, codexCommand: process.env.MAESTRO_CODEX_APP_SERVER_COMMAND, codexModels: process.env.MAESTRO_CODEX_MODELS })));
+process.on("SIGTERM", () => server.close(() => process.exit(0)));
+`,
+  );
+  const priorPath = process.env.PATH;
+  process.env.PATH = options.pathDirectory;
+  const realFetch = globalThis.fetch;
+  let controlPlaneStarted = false;
+  const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.startsWith(gatewayUrl)) return realFetch(input, init);
+    if (!controlPlaneStarted) throw new Error("Control Plane is down");
+    if (url.endsWith("/healthz")) return response({ status: "ok" });
+    return response({ error: { code: "authentication_required", message: "invalid credential" } }, 401);
+  });
+  try {
+    const env = {
+      MAESTRO_API_URL: "http://127.0.0.1:46199",
+      MAESTRO_MODEL_GATEWAY_URL: gatewayUrl,
+      MAESTRO_MODEL_GATEWAY_ENTRY: entry,
+      MAESTRO_CONTROL_PLANE_ENTRY: `${directory}/control.js`,
+      MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro",
+      ...(options.configuredCodexCommand === undefined ? {} : { MAESTRO_CODEX_APP_SERVER_COMMAND: options.configuredCodexCommand }),
+    };
+    const result = await resolveLocalConnection({
+      env,
+      fetch,
+      secretStore: secretStore(),
+      runCommand: vi.fn(async () => ({
+        code: 0,
+        stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }),
+        stderr: "",
+      })),
+      startControlPlane: vi.fn(async () => {
+        controlPlaneStarted = true;
+      }),
+      retryDelayMs: 0,
+    });
+    expect(result.kind).toBe("setup-required");
+    return JSON.parse(await readFile(outputPath, "utf8")) as Record<string, string | undefined>;
+  } finally {
+    if (priorPath === undefined) delete process.env.PATH;
+    else process.env.PATH = priorPath;
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+describe("Codex app-server command propagation", () => {
+  it("passes PATH auto-detected codex to the actual spawned gateway process when unset", async () => {
+    const pathDirectory = await mkdtemp(`${tmpdir()}/maestro-codex-path-`);
+    const codex = join(pathDirectory, "codex");
+    try {
+      await writeFile(codex, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      const environment = await probeSpawnedGatewayEnvironment({ pathDirectory });
+      expect(environment.codexCommand).toBe(codex);
+    } finally {
+      await rm(pathDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves Codex unset in the actual spawned gateway process when PATH has no executable", async () => {
+    const pathDirectory = await mkdtemp(`${tmpdir()}/maestro-no-codex-path-`);
+    try {
+      const environment = await probeSpawnedGatewayEnvironment({ pathDirectory });
+      expect(environment).not.toHaveProperty("codexCommand");
+    } finally {
+      await rm(pathDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves an explicit Codex command in the actual spawned gateway process", async () => {
+    const pathDirectory = await mkdtemp(`${tmpdir()}/maestro-explicit-codex-path-`);
+    const codex = join(pathDirectory, "codex");
+    try {
+      await writeFile(codex, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      const environment = await probeSpawnedGatewayEnvironment({ pathDirectory, configuredCodexCommand: "/custom/codex" });
+      expect(environment.codexCommand).toBe("/custom/codex");
+    } finally {
+      await rm(pathDirectory, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("resolveLocalConnection", () => {
   it("uses the embedded Postgres-compatible engine by default when Docker is unavailable", async () => {

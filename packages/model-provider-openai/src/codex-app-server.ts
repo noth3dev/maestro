@@ -32,7 +32,12 @@ export type CodexLoginStatus =
 
 export class CodexAppServerError extends Error {
   readonly name = "CodexAppServerError";
-  constructor(readonly code: "provider_auth" | "provider_unavailable" | "provider_cancelled" | "provider_malformed_response" | "account_login_session_unknown", message: string) { super(message); }
+  constructor(readonly code: "provider_auth" | "provider_unavailable" | "provider_cancelled" | "provider_malformed_response" | "account_login_session_unknown", message: string, readonly detail?: string) { super(message); }
+}
+
+class CodexAppServerTransportError extends Error {
+  readonly name = "CodexAppServerTransportError";
+  constructor(readonly kind: "spawn" | "transport", message: string) { super(message); }
 }
 
 export interface CodexAccountSummary {
@@ -94,8 +99,16 @@ class StdioTransport implements CodexAppServerTransport {
     });
     // Drain stderr without forwarding provider/account details to logs.
     this.child.stderr.resume();
-    this.child.once("error", (error) => { for (const listener of this.errorListeners) listener(error); });
-    this.child.once("exit", (code, signal) => { if (!this.child.killed) { for (const listener of this.errorListeners) listener(new Error(`Codex app-server exited (${code ?? signal ?? "unknown"})`)); } });
+    this.child.once("error", () => {
+      const failure = new CodexAppServerTransportError("spawn", "local codex executable could not be spawned");
+      for (const listener of this.errorListeners) listener(failure);
+    });
+    this.child.once("exit", (code, signal) => {
+      if (!this.child.killed) {
+        const failure = new CodexAppServerTransportError("transport", `Codex app-server transport disconnected (${code ?? signal ?? "unknown"})`);
+        for (const listener of this.errorListeners) listener(failure);
+      }
+    });
   }
 
   send(message: unknown): void {
@@ -138,16 +151,16 @@ export class CodexAppServerClient {
     this.requestTimeoutMs = options.requestTimeoutMs ?? 15_000;
     this.clientInfo = options.clientInfo ?? { name: "codex_cli_rs", title: "Maestro", version: "development" };
     this.unsubscribe = this.transport.onMessage((message) => this.handleMessage(message));
-    this.unsubscribeError = this.transport.onError?.(() => {
-      // Normalize every transport-level failure (spawn error, unexpected
-      // exit, stream error) to the same typed, structured error the rest of
-      // this class already uses for provider failures, and reuse the exact
-      // same object for already-pending requests. Two different wordings
-      // for the identical failure -- one for requests already in flight,
-      // another for requests made afterward -- made this failure mode
-      // unreliable to detect downstream (apps/model-gateway/src/rpc.ts's
-      // errorCode() maps on the structured code, not incidental wording).
-      this.transportError = new CodexAppServerError("provider_unavailable", "Codex app-server is unavailable");
+    this.unsubscribeError = this.transport.onError?.((error) => {
+      // Keep the stable provider_unavailable code for downstream recovery,
+      // while retaining a safe detail that distinguishes a local spawn
+      // failure from a later transport disconnect. Reuse one error object for
+      // pending and subsequent requests so both paths report the same cause.
+      if (this.transportError !== undefined) return;
+      const detail = error instanceof CodexAppServerTransportError
+        ? error.message
+        : "Codex app-server transport failed";
+      this.transportError = new CodexAppServerError("provider_unavailable", "Codex app-server is unavailable", detail);
       this.failPending(this.transportError);
     });
   }

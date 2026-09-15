@@ -194,6 +194,7 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: StableApiError["error"]["code"],
     message: string,
+    readonly detail?: string,
   ) {
     super(message);
   }
@@ -314,7 +315,7 @@ async function* readEventStream(fetch: Fetch, base: URL, headers: Record<string,
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => undefined);
     const stable = StableApiErrorSchema.safeParse(body);
-    if (stable.success) throw new ApiError(response.status, stable.data.error.code, stable.data.error.message);
+    if (stable.success) throw new ApiError(response.status, stable.data.error.code, stable.data.error.message, stable.data.error.detail);
     throw new Error(`Control plane event stream returned HTTP ${response.status}`);
   }
   if (response.body === null) throw new Error("Control plane event stream returned no body");
@@ -400,7 +401,7 @@ export function createApiClient({ baseUrl, token, fetch = globalThis.fetch, time
     clearTimeout(timer);
     if (!response.ok) {
       const stable = StableApiErrorSchema.safeParse(body);
-      if (stable.success) throw new ApiError(response.status, stable.data.error.code, stable.data.error.message);
+      if (stable.success) throw new ApiError(response.status, stable.data.error.code, stable.data.error.message, stable.data.error.detail);
       throw new Error(`Control plane returned HTTP ${response.status}`);
     }
     return parse.parse(body);

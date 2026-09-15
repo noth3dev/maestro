@@ -104,7 +104,7 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   if (error instanceof ModelGatewayClientError) {
     if (error.code === "model_not_allowed") return apiError(400, "model_not_allowed", "Requested model is not allowed");
     if (error.code === "account_login_session_unknown") return apiError(409, "account_login_session_unknown", "Account login session is unknown");
-    return apiError(503, "provider_unavailable", "Provider is currently unavailable");
+    return apiError(503, "provider_unavailable", "Provider is currently unavailable", error.detail);
   }
   if (error instanceof ConversationNotFoundError) return apiError(404, "conversation_not_found", "Conversation was not found");
   if (error instanceof ConversationConflictError) return apiError(409, "conversation_conflict", error.message);
@@ -139,6 +139,6 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   return apiError(503, "durable_store_unavailable", "Durable store is unavailable");
 }
 
-function apiError(status: number, code: StableApiError["error"]["code"], message: string) {
-  return { status, body: StableApiErrorSchema.parse({ error: { code, message } }) };
+function apiError(status: number, code: StableApiError["error"]["code"], message: string, detail?: string) {
+  return { status, body: StableApiErrorSchema.parse({ error: { code, message, ...(detail === undefined ? {} : { detail }) } }) };
 }

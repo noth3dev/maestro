@@ -28,6 +28,26 @@ describe("Control Plane model gateway client", () => {
     await expect(client.listModels({ operatorId: "operator-1" })).rejects.not.toThrow("do-not-leak");
   });
 
+  it("preserves a bounded provider diagnostic detail from the gateway", async () => {
+    const fetch = async () =>
+      response(
+        {
+          error: {
+            code: "provider_unavailable",
+            message: "provider is currently unavailable",
+            detail: "local codex executable could not be spawned",
+          },
+        },
+        503,
+      );
+    const client = createModelGatewayClient({ baseUrl: "http://127.0.0.1:4321", token: "gateway-secret", fetch });
+    await expect(client.listModels({ operatorId: "operator-1" })).rejects.toMatchObject({
+      code: "provider_unavailable",
+      message: "provider is currently unavailable",
+      detail: "local codex executable could not be spawned",
+    });
+  });
+
   it("sanitizes gateway stream errors and bounds incomplete records", async () => {
     const errorFetch = async () => new Response(`event: error\ndata: ${JSON.stringify({ code: "provider_secret_leak", message: "Bearer provider-secret-token" })}\n\n`, { status: 200, headers: { "content-type": "text/event-stream" } });
     const client = createModelGatewayClient({ baseUrl: "http://127.0.0.1:4321", token: "gateway-secret", fetch: errorFetch });
@@ -36,6 +56,13 @@ describe("Control Plane model gateway client", () => {
 
     const oversized = createModelGatewayClient({ baseUrl: "http://127.0.0.1:4321", token: "gateway-secret", fetch: async () => new Response("x".repeat(128_001), { status: 200, headers: { "content-type": "text/event-stream" } }) });
     await expect(oversized.turn(input)).rejects.toMatchObject({ code: "gateway_request_failed", message: "model gateway stream record is too large" });
+  });
+
+  it("preserves a local spawn detail from a streamed provider failure", async () => {
+    const fetch = async () => new Response(`event: error\ndata: ${JSON.stringify({ code: "provider_unavailable", message: "provider is currently unavailable", detail: "local codex executable could not be spawned" })}\n\n`, { status: 200, headers: { "content-type": "text/event-stream" } });
+    const client = createModelGatewayClient({ baseUrl: "http://127.0.0.1:4321", token: "gateway-secret", fetch });
+    const input = { binding: { bindingId: "binding-1", gatewayInstanceId: "gateway-1", provider: model.identity, account: { providerId: "openai", accountRef: "account-1", authMode: "api-key" as const }, dataPolicyHash: "policy-1" }, requestId: "request-1", sessionId: "session-1", turnId: "turn-1", messages: [], tools: [], limits: { maxModelTurns: 1, maxToolCalls: 0, maxChildCalls: 0, maxOutputTokens: 8, maxInputBytes: 1024, maxResultBytes: 1024, providerTimeoutMs: 1000, wallTimeMs: 1000 }, signal: new AbortController().signal, emit: () => {} };
+    await expect(client.turn(input)).rejects.toMatchObject({ code: "provider_unavailable", detail: "local codex executable could not be spawned" });
   });
 
   it("rejects a stale streamed result with a different request identity", async () => {

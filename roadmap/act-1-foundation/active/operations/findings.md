@@ -2200,3 +2200,9 @@ The initial idle-retry regression test exposed an unbounded retry/termination pa
 - `apps/carnegie/electron/store.ts:30-50` already provides the required encrypted persistence path and loopback guard. Carnegie can persist the resolver result by constructing its existing `ConnectionConfig`; no second storage format is needed.
 - S1 must therefore add a tested Electron-startup adapter around the exported CLI `resolveLocalConnection`, carry the helper's generated `projectId` to Carnegie, save through `saveConnectionConfig`, and expose a failure reason to the existing Setup fallback. Saved config must be checked first. Env endpoint/token overrides must suppress local auto-bootstrap.
 - The CLI source cannot be imported directly into the Carnegie TypeScript project without widening its `rootDir`; the built `apps/cli/dist/tui/local-bootstrap.js`/`.d.ts` is the compatible shared entry point after the root build. This keeps one implementation and avoids copying bootstrap logic.
+
+## 2026-09-15 — Plan 7-e §S3 Codex auto-detection and login diagnosability
+
+- The real local Codex CLI was detected at `/home/ubuntu/.nvm/versions/node/v24.19.0/bin/codex` (`0.153.4`), but `codex login status` returned exit `1` with `Not logged in`; the app-server `accountRead()` path reported `{"authMode":"null"}`.
+- The gated live acceptance test therefore remains intentionally skipped. An earlier ChatGPT/Plus-authenticated result was transient and is not reproducible; no live Codex login success is claimed.
+- Focused verification passed **88 tests with 1 intentional skip** across 6 files; `npm run build`, ESLint, and `git diff --check` passed. RED evidence was recorded before implementation for PATH discovery/spawn propagation and diagnostic detail.
