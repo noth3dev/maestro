@@ -1,5 +1,5 @@
 export type ConnectionState =
-  | { kind: "configured"; apiUrl: string; token: string }
+  | { kind: "configured"; apiUrl: string; token: string; projectId?: string }
   | { kind: "setup-required"; reason: string };
 
 export interface ConnectionEnvironment {

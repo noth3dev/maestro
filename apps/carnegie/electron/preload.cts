@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld("maestro", {
   api,
   config: {
     get: () => ipcRenderer.invoke("maestro:config:get"),
+    error: () => ipcRenderer.invoke("maestro:config:error"),
     save: (config: { apiUrl: string; token: string; projectId: string }) => ipcRenderer.invoke("maestro:config:save", config),
     clear: () => ipcRenderer.invoke("maestro:config:clear"),
   },

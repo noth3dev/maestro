@@ -174,6 +174,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
   const retryDelayMs = options.retryDelayMs ?? 500;
   let storedToken = secretStore.read();
   let bootstrapSecret: string | undefined;
+  let bootstrapProjectId: string | undefined;
   const configuredOperatorId = options.env.MAESTRO_LOCAL_OPERATOR_ID?.trim();
   if (configuredOperatorId !== undefined && !isCanonicalUuid(configuredOperatorId)) {
     return { kind: "setup-required", reason: "MAESTRO_LOCAL_OPERATOR_ID must be a canonical UUID" };
@@ -256,6 +257,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
       return { kind: "setup-required", reason: bootstrap.reason };
     }
     reportSetupStep(options.onStep, "migrations", "completed");
+    bootstrapProjectId = bootstrap.projectId;
   }
 
   if (initialHealth.kind !== "ready") {
@@ -338,6 +340,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
     }
     reportSetupStep(options.onStep, "migrations", "completed");
     bootstrapSecret = secret;
+    bootstrapProjectId = bootstrap.projectId;
   }
   const secret = bootstrapSecret!;
   if (bootstrap === undefined || bootstrap.kind !== "ready") {
@@ -364,7 +367,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
     secretStore.clear();
     return { kind: "setup-required", reason };
   }
-  return { kind: "configured", apiUrl, token };
+  return { kind: "configured", apiUrl, token, ...(bootstrapProjectId === undefined ? {} : { projectId: bootstrapProjectId }) };
 }
 
 type LocalTokenValidation =
@@ -530,7 +533,7 @@ async function runBootstrapHelper(options: {
   projectId: string;
   operatorId: string;
   runCommand: LocalCommandRunner;
-}): Promise<{ kind: "ready"; credentialId: string } | { kind: "unavailable"; reason: string }> {
+}): Promise<{ kind: "ready"; credentialId: string; projectId?: string } | { kind: "unavailable"; reason: string }> {
   const entry = resolveControlPlaneEntry(options.env);
   if (entry === undefined) return { kind: "unavailable", reason: "Local bootstrap helper was not found; set MAESTRO_CONTROL_PLANE_ENTRY or configure MAESTRO_API_URL and MAESTRO_API_TOKEN" };
   const result = await options.runCommand(process.execPath, [join(dirname(entry), "local-bootstrap.js")], {
@@ -538,9 +541,10 @@ async function runBootstrapHelper(options: {
   });
   if (result.code !== 0) return { kind: "unavailable", reason: "Local operator bootstrap failed; check PostgreSQL and Control Plane logs" };
   try {
-    const parsed = JSON.parse(result.stdout) as { credentialId?: unknown };
+    const parsed = JSON.parse(result.stdout) as { credentialId?: unknown; projectId?: unknown };
     if (typeof parsed.credentialId !== "string" || !isCanonicalUuid(parsed.credentialId)) throw new Error("invalid credential");
-    return { kind: "ready", credentialId: parsed.credentialId };
+    const projectId = typeof parsed.projectId === "string" && isCanonicalUuid(parsed.projectId) ? parsed.projectId : undefined;
+    return { kind: "ready", credentialId: parsed.credentialId, ...(projectId === undefined ? {} : { projectId }) };
   } catch {
     return { kind: "unavailable", reason: "Local operator bootstrap returned an invalid result" };
   }

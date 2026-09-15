@@ -44,6 +44,13 @@ describe("initializeCarnegieConnection", () => {
     expect(save).not.toHaveBeenCalled();
   });
 
+  it("honors the explicit local-autostart disable override", async () => {
+    const resolveLocalConnection = vi.fn();
+
+    await expect(initializeCarnegieConnection({ env: { MAESTRO_DISABLE_LOCAL_AUTOSTART: "true" }, load: () => undefined, save: vi.fn(), resolveLocalConnection })).resolves.toEqual({});
+    expect(resolveLocalConnection).not.toHaveBeenCalled();
+  });
+
   it("returns the bootstrap failure so Setup can explain why it is shown", async () => {
     const resolveLocalConnection = vi.fn(async () => ({ kind: "setup-required" as const, reason: "Docker is unavailable" }));
 

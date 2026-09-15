@@ -23,6 +23,7 @@ export interface MaestroBridge {
   api: BridgedApi;
   config: {
     get(): Promise<PublicConnectionConfig | undefined>;
+    error(): Promise<string | undefined>;
     save(config: ConnectionInput): Promise<PublicConnectionConfig>;
     clear(): Promise<void>;
   };
