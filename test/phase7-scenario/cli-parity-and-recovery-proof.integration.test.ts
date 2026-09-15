@@ -6,6 +6,7 @@ import { executeReadCommand } from "../../apps/cli/src/tui/commands/read-command
 import { reconcileTuiSession } from "../../apps/cli/src/tui/recovery.js";
 import { GoalDepartmentPanels } from "../../apps/carnegie/src/views/panels/GoalDepartmentPanels.js";
 import { buildRadialLayout } from "../../apps/carnegie/src/views/panels/radial/radial-layout.js";
+import { durableReadRefreshToken } from "../../apps/carnegie/src/lib/durable-refresh.js";
 import type { Certification, ProjectionReadModel } from "@maestro/contracts";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
@@ -121,6 +122,10 @@ describe("Plan 7 §S9 CLI parity and recovery proof (RED)", () => {
     const text = textFromReactTree(element);
     expect(text).toContain("routing-off");
     expect(text).toContain("below-requirement");
+  });
+
+  it("changes the typed read refresh token when durable SSE cursor advances", () => {
+    expect(durableReadRefreshToken("42")).not.toBe(durableReadRefreshToken("43"));
   });
 
   it("runs an existing Goal read through both the CLI entrypoint and the typed UI read path", async () => {
