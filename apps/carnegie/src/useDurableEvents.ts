@@ -187,7 +187,7 @@ export function useDurableEvents(api: DurableEventsApi, projectId: string, optio
       onState: setState,
     });
     return () => handle.stop();
-  }, [api, projectId, cursor, reconnectDelayMs, maxReconnectAttempts, pollIntervalMs, maxPollingAttempts]);
+  }, [api, projectId, cursor, reconnectDelayMs, maxReconnectAttempts, pollIntervalMs, maxPollingAttempts, pollingSseRetryAttempts]);
 
   return state;
 }
