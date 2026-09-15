@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { applyAllMigrations } from "./test-migrations.js";
+import { bootstrapLocalOperator } from "./auth.js";
+import { grantProjectMembership } from "./project-membership.js";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { capturePersonaGoalEvidence, readPersonaGoalEvidence, type PersonaGoalEvidenceInput } from "./persona-goal-evidence.js";
 
@@ -10,10 +12,12 @@ const describeDatabase = databaseUrl ? describe : describe.skip;
 describeDatabase("persona Goal evidence persistence", () => {
   const basePool = new Pool({ connectionString: databaseUrl }); const schema = `persona_evidence_${randomUUID().replaceAll("-", "")}`;
   const scopedUrl = databaseUrl === undefined ? undefined : (() => { const url = new URL(databaseUrl); url.searchParams.set("options", `-c search_path=${schema}`); return url.toString(); })(); let pool: Pool;
-  let goalId: string; let projectId: string; let contractId: string; let councilId: string;
+  let goalId: string; let projectId: string; let contractId: string; let councilId: string; let operatorId: string;
   beforeAll(async () => { await basePool.query(`CREATE SCHEMA ${schema}`); pool = new Pool({ connectionString: scopedUrl }); await applyAllMigrations(pool); await bootstrapPermanentOrganization(pool); });
   beforeEach(async () => {
     goalId = randomUUID(); projectId = randomUUID(); contractId = randomUUID(); councilId = randomUUID();
+    operatorId = (await bootstrapLocalOperator(pool, { secret: "persona-evidence-reader" })).operatorId;
+    await grantProjectMembership(pool, operatorId, projectId);
     await pool.query("INSERT INTO goals (goal_id, project_id, state, version, created_at, updated_at) VALUES ($1, $2, 'succeeded', 1, transaction_timestamp(), transaction_timestamp())", [goalId, projectId]);
     await pool.query("INSERT INTO task_contracts (contract_id, schema_version, version, content, content_hash, launch_state) VALUES ($1, 1, 3, '{}'::jsonb, $2, 'launched')", [contractId, "a".repeat(64)]);
     await pool.query("INSERT INTO head_councils (council_id, goal_id, contract_id, brief_deadline, state, snapshot_hash, snapshot_payload) VALUES ($1, $2, $3, transaction_timestamp() + interval '1 hour', 'collecting', $4, '{}'::jsonb)", [councilId, goalId, contractId, "b".repeat(64)]);
@@ -31,7 +35,7 @@ describeDatabase("persona Goal evidence persistence", () => {
   });
   it("captures every post-Goal field against the real Goal and replays idempotently", async () => {
     const first = await capturePersonaGoalEvidence(pool, evidence()); const retry = await capturePersonaGoalEvidence(pool, evidence());
-    expect(retry.evidenceId).toBe(first.evidenceId); await expect(readPersonaGoalEvidence(pool, first.evidenceId)).resolves.toMatchObject(evidence());
+    expect(retry.evidenceId).toBe(first.evidenceId); await expect(readPersonaGoalEvidence(pool, first.evidenceId, { operatorId, projectId, goalId })).resolves.toMatchObject(evidence());
   });
   it("rejects a project/Goal mismatch and preserves append-only provenance", async () => {
     await expect(capturePersonaGoalEvidence(pool, { ...evidence(), projectId: randomUUID() })).rejects.toThrow(/project/);

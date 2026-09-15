@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { canonicalJson, isGoalState, isTerminalGoalState, parsePersonaGoalEvidence, type PersonaGoalEvidence, type PersonaGoalEvidenceInput } from "@maestro/domain";
 import type { Pool } from "pg";
+import { assertProjectMembership } from "./project-membership.js";
 
 export class PersonaGoalEvidenceError extends Error {}
 export class PersonaGoalEvidenceNotFoundError extends PersonaGoalEvidenceError {}
@@ -77,8 +78,16 @@ export async function capturePersonaGoalEvidence(pool: Pool, input: PersonaGoalE
   } finally { client.release(); }
 }
 
-export async function readPersonaGoalEvidence(pool: Pool, evidenceId: string): Promise<PersonaGoalEvidence> {
-  const result = await pool.query<EvidenceRow>(`SELECT evidence_id, project_id, goal_id, role_id, task_class, task_contract_version, active_profile_version, mission_overlay, payload, payload_hash, created_at FROM persona_goal_evidence WHERE evidence_id = $1`, [evidenceId]);
+export interface PersonaGoalEvidenceReadAuthorization {
+  readonly operatorId: string;
+  readonly projectId: string;
+  readonly goalId: string;
+}
+
+export async function readPersonaGoalEvidence(pool: Pool, evidenceId: string, authorization: PersonaGoalEvidenceReadAuthorization): Promise<PersonaGoalEvidence> {
+  if (!authorization || typeof authorization.operatorId !== "string" || typeof authorization.projectId !== "string" || typeof authorization.goalId !== "string" || authorization.operatorId.trim() === "" || authorization.projectId.trim() === "" || authorization.goalId.trim() === "") throw new PersonaGoalEvidenceError("persona Goal evidence read authorization is required");
+  await assertProjectMembership(pool, authorization.operatorId, authorization.projectId);
+  const result = await pool.query<EvidenceRow>(`SELECT evidence_id, project_id, goal_id, role_id, task_class, task_contract_version, active_profile_version, mission_overlay, payload, payload_hash, created_at FROM persona_goal_evidence WHERE evidence_id = $1 AND project_id = $2 AND goal_id = $3`, [evidenceId, authorization.projectId, authorization.goalId]);
   if (result.rowCount !== 1) throw new PersonaGoalEvidenceNotFoundError(`Persona Goal evidence not found: ${evidenceId}`);
   return mapEvidence(result.rows[0]!);
 }
