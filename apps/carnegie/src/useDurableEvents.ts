@@ -21,6 +21,8 @@ export interface DurableEventSubscriptionOptions {
   maxReconnectAttempts?: number;
   pollIntervalMs?: number;
   maxPollingAttempts?: number;
+  /** Number of polling requests between SSE reconnect attempts. Defaults to 5 for the unbounded production fallback. */
+  pollingSseRetryAttempts?: number;
   onState: (state: DurableEventState) => void;
 }
 
@@ -72,6 +74,9 @@ export function createDurableEventSubscription(options: DurableEventSubscription
   const maxReconnectAttempts = safeCount(options.maxReconnectAttempts, 5);
   // Polling stays at a bounded interval until the subscription is stopped. Tests may cap attempts.
   const maxPollingAttempts = options.maxPollingAttempts === undefined ? Number.POSITIVE_INFINITY : safeCount(options.maxPollingAttempts, 0);
+  const retrySseAfterPolling = options.pollingSseRetryAttempts !== undefined || maxPollingAttempts === Number.POSITIVE_INFINITY;
+  const pollingSseRetryAttempts = safeCount(options.pollingSseRetryAttempts, 5);
+  const pollingAttemptLimit = retrySseAfterPolling ? Math.min(maxPollingAttempts, pollingSseRetryAttempts) : maxPollingAttempts;
   let state: DurableEventState = { events: [], cursor: options.cursor ?? "0", stale: false, transport: "connecting", error: undefined };
 
   const publish = (patch: Partial<DurableEventState>): void => {
@@ -99,10 +104,11 @@ export function createDurableEventSubscription(options: DurableEventSubscription
     }
   };
 
-  const poll = async (): Promise<void> => {
-    if (maxPollingAttempts === 0) return;
+  const poll = async (allowSseRetry = retrySseAfterPolling): Promise<boolean> => {
+    const attemptLimit = allowSseRetry ? pollingAttemptLimit : maxPollingAttempts;
+    if (attemptLimit === 0) return false;
     publish({ transport: "polling", stale: true });
-    for (let attempt = 0; attempt < maxPollingAttempts && !controller.signal.aborted; attempt += 1) {
+    for (let attempt = 0; attempt < attemptLimit && !controller.signal.aborted; attempt += 1) {
       try {
         const page = await options.api.listEvents({ projectId: options.projectId, after: state.cursor });
         append(page.events);
@@ -111,9 +117,11 @@ export function createDurableEventSubscription(options: DurableEventSubscription
       } catch (error) {
         publish({ transport: "polling", stale: true, error: errorMessage(error) });
       }
-      if (attempt + 1 < maxPollingAttempts) await waitFor(pollIntervalMs, controller.signal);
+      if (attempt + 1 < attemptLimit) await waitFor(pollIntervalMs, controller.signal);
     }
-    if (!controller.signal.aborted) publish({ stale: true });
+    if (controller.signal.aborted) return false;
+    publish({ stale: true });
+    return allowSseRetry && retrySseAfterPolling;
   };
 
   const run = async (): Promise<void> => {
@@ -126,12 +134,14 @@ export function createDurableEventSubscription(options: DurableEventSubscription
       }
 
       if (options.api.streamEvents === undefined) {
-        if (!controller.signal.aborted) await poll();
+        if (!controller.signal.aborted) await poll(false);
         return;
       }
 
       let reconnectAttempts = 0;
       while (!controller.signal.aborted) {
+        // A healthy reopened stream may be idle; publish the handback before awaiting its first event.
+        publish({ transport: "sse", stale: false, error: undefined });
         try {
           for await (const event of options.api.streamEvents({ projectId: options.projectId, after: state.cursor }, { signal: controller.signal })) {
             if (controller.signal.aborted) return;
@@ -145,10 +155,13 @@ export function createDurableEventSubscription(options: DurableEventSubscription
         }
         if (controller.signal.aborted) return;
         reconnectAttempts += 1;
-        if (reconnectAttempts > maxReconnectAttempts) break;
-        await waitFor(reconnectDelayMs, controller.signal);
+        if (reconnectAttempts <= maxReconnectAttempts) {
+          await waitFor(reconnectDelayMs, controller.signal);
+          continue;
+        }
+        if (!(await poll())) return;
+        reconnectAttempts = 0;
       }
-      if (!controller.signal.aborted) await poll();
     } catch (error) {
       if (!controller.signal.aborted) publish({ stale: true, error: errorMessage(error) });
     }
@@ -160,7 +173,7 @@ export function createDurableEventSubscription(options: DurableEventSubscription
 
 export function useDurableEvents(api: DurableEventsApi, projectId: string, options: Omit<DurableEventSubscriptionOptions, "api" | "projectId" | "onState"> = {}): DurableEventState {
   const [state, setState] = useState<DurableEventState>({ events: [], cursor: options.cursor ?? "0", stale: false, transport: "connecting", error: undefined });
-  const { cursor, reconnectDelayMs, maxReconnectAttempts, pollIntervalMs, maxPollingAttempts } = options;
+  const { cursor, reconnectDelayMs, maxReconnectAttempts, pollIntervalMs, maxPollingAttempts, pollingSseRetryAttempts } = options;
 
   useEffect(() => {
     setState({ events: [], cursor: cursor ?? "0", stale: false, transport: "connecting", error: undefined });
@@ -172,10 +185,11 @@ export function useDurableEvents(api: DurableEventsApi, projectId: string, optio
       ...(maxReconnectAttempts === undefined ? {} : { maxReconnectAttempts }),
       ...(pollIntervalMs === undefined ? {} : { pollIntervalMs }),
       ...(maxPollingAttempts === undefined ? {} : { maxPollingAttempts }),
+      ...(pollingSseRetryAttempts === undefined ? {} : { pollingSseRetryAttempts }),
       onState: setState,
     });
     return () => handle.stop();
-  }, [api, projectId, cursor, reconnectDelayMs, maxReconnectAttempts, pollIntervalMs, maxPollingAttempts]);
+  }, [api, projectId, cursor, reconnectDelayMs, maxReconnectAttempts, pollIntervalMs, maxPollingAttempts, pollingSseRetryAttempts]);
 
   return state;
 }

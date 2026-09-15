@@ -110,6 +110,83 @@ describe("durable Carnegie events", () => {
     expect(states.some((state) => state.transport === "polling" && !state.stale && state.events[0]?.eventId === "event-1")).toBe(true);
   });
 
+
+  it("returns to SSE after a bounded polling recovery window without duplicating events", async () => {
+    let streamAttempts = 0;
+    let listCalls = 0;
+    const control = { stop: undefined as (() => void) | undefined };
+    const states: Array<{ transport: string; events: readonly DurableEvent[] }> = [];
+    const api = apiFor(
+      async function* () {
+        streamAttempts += 1;
+        if (streamAttempts === 1) {
+          yield* [] as DurableEvent[];
+          throw new Error("temporary SSE disconnect");
+        }
+        yield event("event-1", "1");
+      },
+      async () => {
+        listCalls += 1;
+        return { events: [], nextCursor: "0" };
+      },
+    );
+
+    const handle = createDurableEventSubscription({
+      api,
+      projectId,
+      reconnectDelayMs: 0,
+      pollIntervalMs: 0,
+      maxReconnectAttempts: 0,
+      maxPollingAttempts: 1,
+      pollingSseRetryAttempts: 1,
+      onState: (state) => {
+        states.push({ transport: state.transport, events: state.events });
+        if (state.transport === "sse" && state.cursor === "1") control.stop?.();
+      },
+    });
+    control.stop = handle.stop;
+    await handle.completed;
+
+    expect(streamAttempts).toBe(2);
+    expect(listCalls).toBe(2);
+    expect(states.at(-1)).toMatchObject({ transport: "sse", events: [event("event-1", "1")] });
+  });
+
+  it("marks an idle SSE retry healthy before the next event arrives", async () => {
+    let streamAttempts = 0;
+    const control = { stop: undefined as (() => void) | undefined };
+    const states: Array<{ transport: string; stale: boolean }> = [];
+    const api = apiFor(
+      async function* () {
+        streamAttempts += 1;
+        if (streamAttempts === 2) queueMicrotask(() => control.stop?.());
+        if (streamAttempts === 1) {
+          yield* [] as DurableEvent[];
+          throw new Error("temporary SSE disconnect");
+        }
+        queueMicrotask(() => control.stop?.());
+        yield* [] as DurableEvent[];
+      },
+      async () => ({ events: [], nextCursor: "0" }),
+    );
+
+    const handle = createDurableEventSubscription({
+      api,
+      projectId,
+      reconnectDelayMs: 0,
+      pollIntervalMs: 0,
+      maxReconnectAttempts: 0,
+      maxPollingAttempts: 1,
+      pollingSseRetryAttempts: 1,
+      onState: (state) => states.push({ transport: state.transport, stale: state.stale }),
+    });
+    control.stop = handle.stop;
+    await handle.completed;
+
+    expect(streamAttempts).toBe(2);
+    expect(states.some((state, index) => index > 0 && state.transport === "sse" && !state.stale)).toBe(true);
+  });
+
   it("hydrates from the control plane on every new subscription", async () => {
     let reads = 0;
     const api = apiFor(
