@@ -69,13 +69,12 @@ export async function openEmbeddedDatabase(options: Omit<EmbeddedDatabaseOptions
 async function waitForChildExit(child: ReturnType<typeof spawn>, timeoutMs = 2_000): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return;
   await new Promise<void>((resolve) => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
     const finish = (): void => {
-      if (timer !== undefined) clearTimeout(timer);
+      clearTimeout(timer);
       child.removeListener("exit", finish);
       resolve();
     };
-    timer = setTimeout(() => {
+    const timer = setTimeout(() => {
       try {
         child.kill("SIGKILL");
       } catch {
