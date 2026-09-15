@@ -92,8 +92,11 @@ export class FileEvidenceStore {
 
   async read(sha256: string): Promise<Uint8Array> {
     const path = this.objectPath(sha256);
-    try { return await readFile(path); }
+    let bytes: Uint8Array;
+    try { bytes = await readFile(path); }
     catch { throw new EvidenceIntegrityError(`Evidence artifact is unavailable: ${sha256}`); }
+    if (sha256Hex(bytes) !== sha256) throw new EvidenceIntegrityError(`Evidence artifact hash mismatch: ${sha256}`);
+    return bytes;
   }
 
   async verify(sha256: string): Promise<void> {
