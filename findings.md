@@ -16,4 +16,12 @@
 5. Pinned-model routing is enforced by exact native admission, while the UI has no projection/read model for a failed A↔D or B/C pressure escalation.
 6. Routing-off and below-requirement markers have no durable projection/certification rendering contract.
 
-No route, migration, production data, `testbed/` file, or mockup fixture is added by this slice. The RED tests below intentionally fail against these current gaps and define the smallest next implementation seams.
+No route, migration, production data, or `testbed/` file is added by this slice. The test uses only contract-shaped local inputs; it adds no production/mockup data. The RED tests below intentionally fail against these current gaps and define the smallest next implementation seams.
+
+## Review repair (2026-09-15)
+
+- Removed all `as never` casts and untyped worker/approval/routing fields.
+- Recovery coverage now asserts only the existing typed project/Goal/cursor/active-worker summary; the missing worker/approval identity contract remains documented rather than fabricated.
+- Routing coverage now exercises the real typed selector and verifies fail-closed B/C rejection plus A↔D demand pressure.
+- The final parity test invokes the existing CLI entrypoint and typed TUI read path; it no longer treats an exposed-method whitelist as phase-suite evidence.
+- The focused RED rerun is 7 tests: 4 pass for existing seams and 3 expected failures for composite record panels, graph identity propagation, and routing-off/below-requirement rendering. ESLint passes.
