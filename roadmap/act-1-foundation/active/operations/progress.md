@@ -4267,3 +4267,6 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 
 - 2026-09-14 Plan 7-b §S6 authority correction: persistence-only primitives for environment/device/Discord/budget forecast/approval/improvement inspection do not constitute safe command backing because their required lease/actor/Goal/reservation/device-session inputs are absent from the registry and no project-scoped route exists. Exposing them as thin routes would invent an authority boundary or leak cross-project state, so they are class-(c) dead entries and are removed with evidence; only `evidence list/bundle` remains class-(a) already wired.
+
+
+- 2026-09-15 Plan 7 final verification and repair closeout: post-merge repair `13cdecc` (Plan 7-b decision-history scope), `9aa9e08` (Vitest persistence testing subpath alias), and `47c1ac3` (channel sequence assertion) were reverified. The final serialized PostgreSQL run then exposed four stale worker-profile expiry fixture failures; test-only repair `df3fd17` passed independent no-edit review (`REVIEW: PASS`) and was merged as `0926426`. Post-merge `npm run build`, `npm run lint`, `git diff --check`, and authenticated serialized PostgreSQL verification passed **285/285 files and 1887/1887 tests** in 571.08s (`/tmp/plan7-final-reverify-pg.log`). The merged repair worktree was removed; root `main` is clean.
