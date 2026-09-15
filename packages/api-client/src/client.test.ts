@@ -83,6 +83,31 @@ describe("persona client", () => {
   });
 });
 
+describe("provider diagnostics", () => {
+  it("preserves the bounded provider detail for TUI error rendering", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "provider_unavailable",
+              message: "Provider is currently unavailable",
+              detail: "local codex executable could not be spawned",
+            },
+          }),
+          { status: 503 },
+        ),
+      );
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+    await expect(client.listModels()).rejects.toMatchObject({
+      code: "provider_unavailable",
+      message: "Provider is currently unavailable",
+      detail: "local codex executable could not be spawned",
+    });
+  });
+});
+
 describe("createApiClient", () => {
   it("lists authenticated project memberships for first-run workspace discovery", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ projects: [projectId] }), { status: 200 }));

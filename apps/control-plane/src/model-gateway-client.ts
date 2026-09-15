@@ -4,7 +4,7 @@ export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Re
 
 export class ModelGatewayClientError extends Error {
   readonly name = "ModelGatewayClientError";
-  constructor(readonly code: string, readonly status: number, message: string) { super(message); }
+  constructor(readonly code: string, readonly status: number, message: string, readonly detail?: string) { super(message); }
 }
 
 function mapModel(model: { identity: { provider: string; id: string }; capabilities: readonly string[]; authModes: readonly ("api-key" | "managed-subscription")[]; dataPolicy: ModelCatalogEntry["dataPolicy"] }): ModelCatalogEntry {
@@ -28,10 +28,11 @@ function accountLoginStatus(value: unknown): GatewayAccountLoginStatusResult {
 }
 
 function parseError(body: unknown, status: number): ModelGatewayClientError {
-  const candidate = body && typeof body === "object" ? (body as { error?: { code?: unknown; message?: unknown } }).error : undefined;
+  const candidate = body && typeof body === "object" ? (body as { error?: { code?: unknown; message?: unknown; detail?: unknown } }).error : undefined;
   const code = candidate && typeof candidate.code === "string" ? candidate.code : status >= 500 ? "provider_unavailable" : "gateway_request_failed";
   const message = candidate && typeof candidate.message === "string" ? candidate.message : "model gateway request failed";
-  return new ModelGatewayClientError(code, status, message);
+  const detail = candidate && typeof candidate.detail === "string" ? candidate.detail.trim().slice(0, 512) : undefined;
+  return new ModelGatewayClientError(code, status, message, detail === "" ? undefined : detail);
 }
 
 
@@ -99,7 +100,9 @@ async function streamGatewayTurn(
         return;
       }
       if (eventName === "error") {
-        throw new ModelGatewayClientError("provider_unavailable", 502, "model gateway stream failed");
+        const record = parsed && typeof parsed === "object" ? parsed as { detail?: unknown } : undefined;
+        const detail = typeof record?.detail === "string" ? record.detail.trim().slice(0, 512) : undefined;
+        throw new ModelGatewayClientError("provider_unavailable", 502, "model gateway stream failed", detail === "" ? undefined : detail);
       }
       const event = parseGatewayStreamEvent(parsed);
       if (event.kind === "text-delta") {

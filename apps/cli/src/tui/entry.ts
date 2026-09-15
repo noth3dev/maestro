@@ -9,7 +9,7 @@ import {
   VStack,
   matchesKey,
 } from "@earendil-works/pi-tui";
-import { createApiClient, type ApiClient, type GoalEvent } from "@maestro/api-client";
+import { ApiError, createApiClient, type ApiClient, type GoalEvent } from "@maestro/api-client";
 import type { ConversationEvent, ModelCatalogEntry } from "@maestro/contracts";
 
 import { resolveWorkspace } from "./workspace.js";
@@ -544,7 +544,13 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         if (status.state === "succeeded") { appendSuccess("Account login complete: openai-codex"); void refreshDashboard(); }
         else if (status.state === "failed") appendError(`Account login ${status.state}: ${status.message ?? "no additional details"}`);
         else appendWarning(`Account login ${status.state}: ${status.message ?? "no additional details"}`);
-      } catch (error) { if (!controller.signal.aborted) appendError(`Account login failed: ${error instanceof Error ? error.message : "request failed"}`); }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          const message = error instanceof Error ? error.message : "request failed";
+          const detail = error instanceof ApiError && error.detail !== undefined ? ` (${error.detail})` : "";
+          appendError(`Account login failed: ${message}${detail}`);
+        }
+      }
       finally { if (accountLoginController === controller) { accountLoginController = undefined; accountLoginId = undefined; accountLoginUrl = undefined; accountLoginSelection = undefined; accountLoginState = undefined; editor.hidden = false; render(); } }
     };
     const offerAutomaticProviderSignIn = (): void => {

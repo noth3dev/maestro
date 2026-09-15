@@ -275,7 +275,7 @@ export const StableApiErrorCodeSchema = z.enum([
   "capability_unauthorized", "replay_conflict", "channel_not_found", "channel_conflict", "channel_closed",
 ]);
 export const StableApiErrorSchema = z.object({
-  error: z.object({ code: StableApiErrorCodeSchema, message: z.string().min(1) }).strict(),
+  error: z.object({ code: StableApiErrorCodeSchema, message: z.string().min(1), detail: z.string().min(1).max(512).optional() }).strict(),
 }).strict();
 export type StableApiError = z.infer<typeof StableApiErrorSchema>;
 

@@ -48,9 +48,14 @@ function authorized(request: { headers: Record<string, unknown> }, token: string
   return provided.length === expected.length && timingSafeEqual(provided, expected);
 }
 
-function errorCode(error: unknown): { status: number; code: string; message: string } {
+type MappedGatewayError = { status: number; code: string; message: string; detail?: string };
+
+function errorCode(error: unknown): MappedGatewayError {
   const message = error instanceof Error ? error.message : "model gateway request failed";
   const code = error && typeof error === "object" && "code" in error ? (error as { code?: unknown }).code : undefined;
+  const detail = error && typeof error === "object" && "detail" in error && typeof (error as { detail?: unknown }).detail === "string"
+    ? (error as { detail: string }).detail
+    : undefined;
   if (code === "account_login_session_unknown" || message === "account login session is unknown") return { status: 409, code: "account_login_session_unknown", message: "account login session is unknown" };
   // Every provider plugin (OpenAI, Anthropic, Codex) already throws a typed
   // error carrying code: "provider_unavailable" for auth-independent
@@ -60,12 +65,20 @@ function errorCode(error: unknown): { status: number; code: string; message: str
   // failed") and previously missed the Codex app-server's real process-exit
   // wording entirely, misclassifying a genuine provider crash as a 400
   // client request error instead of a 503 provider-unavailable error.
-  if (code === "provider_unavailable") return { status: 503, code: "provider_unavailable", message: "provider is currently unavailable" };
+  if (code === "provider_unavailable") return { status: 503, code: "provider_unavailable", message: "provider is currently unavailable", ...(detail === undefined ? {} : { detail }) };
   if (message.includes("credential binding")) return { status: 403, code: "provider_auth_required", message: "provider credential binding is unavailable" };
   if (message.includes("unknown provider") || message.includes("unknown model")) return { status: 400, code: "model_not_allowed", message: "provider or model is not allowed" };
   if (message.includes("identity") || message.includes("binding")) return { status: 409, code: "provider_binding_mismatch", message: "provider binding could not be verified" };
   if (message.includes("closed") || message.includes("transport")) return { status: 503, code: "provider_unavailable", message: "model gateway is unavailable" };
   return { status: 400, code: "invalid_gateway_request", message: "model gateway request is invalid" };
+}
+
+function mappedErrorData(mapped: MappedGatewayError): { code: string; message: string; detail?: string } {
+  return { code: mapped.code, message: mapped.message, ...(mapped.detail === undefined ? {} : { detail: mapped.detail }) };
+}
+
+function mappedErrorBody(mapped: MappedGatewayError): { error: ReturnType<typeof mappedErrorData> } {
+  return { error: mappedErrorData(mapped) };
 }
 
 export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; token: string; operatorId: string; bodyLimit?: number }): FastifyInstance {
@@ -82,7 +95,7 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
     try {
       const models = await options.gateway.listModels({ operatorId: options.operatorId });
       return models.map((model) => ({ ...model, capabilities: [...model.capabilities] }));
-    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send(mappedErrorBody(mapped)); }
   });
   app.post("/v1/credentials/bind", async (request, reply) => {
     if (!(await guard(request, reply))) return;
@@ -92,7 +105,7 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
     try {
       if (!options.gateway.bindCredential) throw new Error("credential binding is unavailable");
       return await options.gateway.bindCredential(parsed.data as GatewayCredentialBindRequest);
-    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send(mappedErrorBody(mapped)); }
   });
   app.post("/v1/account-logins/start", async (request, reply) => {
     if (!(await guard(request, reply))) return;
@@ -102,7 +115,7 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
     try {
       if (!options.gateway.startAccountLogin) throw new Error("account login is unavailable");
       return await options.gateway.startAccountLogin(parsed.data as GatewayAccountLoginStartRequest);
-    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send(mappedErrorBody(mapped)); }
   });
   app.post("/v1/account-logins/status", async (request, reply) => {
     if (!(await guard(request, reply))) return;
@@ -112,7 +125,7 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
     try {
       if (!options.gateway.accountLoginStatus) throw new Error("account login is unavailable");
       return await options.gateway.accountLoginStatus(parsed.data as GatewayAccountLoginStatusRequest);
-    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send(mappedErrorBody(mapped)); }
   });
   app.post("/v1/account-logins/logout", async (request, reply) => {
     if (!(await guard(request, reply))) return;
@@ -123,7 +136,7 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
       if (!options.gateway.logoutAccount) throw new Error("account logout is unavailable");
       await options.gateway.logoutAccount(parsed.data);
       return { revoked: true };
-    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send(mappedErrorBody(mapped)); }
   });
 
   app.post("/v1/account-logins/cancel", async (request, reply) => {
@@ -135,7 +148,7 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
       if (!options.gateway.cancelAccountLogin) throw new Error("account login is unavailable");
       await options.gateway.cancelAccountLogin(parsed.data as GatewayAccountLoginStatusRequest);
       return { cancelled: true };
-    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send(mappedErrorBody(mapped)); }
   });
 
   app.post("/v1/credentials/revoke", async (request, reply) => {
@@ -147,7 +160,7 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
       if (!options.gateway.revokeCredential) throw new Error("credential binding is unavailable");
       await options.gateway.revokeCredential(parsed.data as GatewayCredentialRevokeRequest);
       return { revoked: true };
-    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+    } catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send(mappedErrorBody(mapped)); }
   });
 
   app.post("/v1/admit", async (request, reply) => {
@@ -156,7 +169,7 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
     if (!parsed.success) return reply.code(400).send({ error: { code: "invalid_gateway_request", message: "invalid model admission request" } });
     if (parsed.data.operatorId !== options.operatorId) return reply.code(403).send({ error: { code: "gateway_auth_required", message: "gateway operator context is invalid" } });
     try { return await options.gateway.admit(parsed.data as GatewayAdmissionRequest); }
-    catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+    catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send(mappedErrorBody(mapped)); }
   });
   app.post("/v1/turn", async (request, reply) => {
     if (!(await guard(request, reply))) return;
@@ -171,7 +184,7 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
       emit: (_event: ModelStreamEvent) => { eventCount += 1; if (eventCount > eventLimit) throw new Error("gateway event limit exceeded"); },
     };
     try { return await options.gateway.turn(turn); }
-    catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+    catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send(mappedErrorBody(mapped)); }
   });
   app.post("/v1/turn/stream", async (request, reply) => {
     if (!(await guard(request, reply))) return;
@@ -215,7 +228,7 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
     } catch (error) {
       const mapped = errorCode(error);
       if (!closed && !reply.raw.writableEnded) {
-        try { writeFrame(`event: error\ndata: ${JSON.stringify({ code: mapped.code, message: mapped.message })}\n\n`); reply.raw.end(); }
+        try { writeFrame(`event: error\ndata: ${JSON.stringify(mappedErrorData(mapped))}\n\n`); reply.raw.end(); }
         catch { onClosed(); }
       }
       return reply;
@@ -230,14 +243,14 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
     const parsed = CancelSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: { code: "invalid_gateway_request", message: "invalid cancellation request" } });
     try { return await options.gateway.cancel(parsed.data.requestId); }
-    catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+    catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send(mappedErrorBody(mapped)); }
   });
   app.post("/v1/recover", async (request, reply) => {
     if (!(await guard(request, reply))) return;
     const parsed = RecoverSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: { code: "invalid_gateway_request", message: "invalid recovery request" } });
     try { return { state: await options.gateway.recover(parsed.data.binding as GatewayBinding) }; }
-    catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send({ error: { code: mapped.code, message: mapped.message } }); }
+    catch (error) { const mapped = errorCode(error); return reply.code(mapped.status).send(mappedErrorBody(mapped)); }
   });
   return app;
 }
