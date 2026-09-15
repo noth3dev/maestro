@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { calculatePressure, getTaskKindRecipe, selectRoutedModel, taskDemandContentHash, type ExecutionAdmission, type ModelMap, type RoutingEvidence, type RouterCandidate, type RoutingWorkSnapshot } from "@maestro/domain";
+import { assertValidRoutingWorkSnapshot, calculatePressure, getTaskKindRecipe, selectRoutedModel, taskDemandContentHash, type ExecutionAdmission, type ModelMap, type RoutingEvidence, type RouterCandidate, type RoutingWorkSnapshot } from "@maestro/domain";
 import { createNativeAdmissionFromRouting, type RoutedNativeAdmissionBase } from "./native-admission.js";
 import type { MaestroConfig } from "./config.js";
 
@@ -34,6 +34,7 @@ export function createEnsembleNativeAdmission(
   if (config.modelRoutingMode !== "ensemble") throw new Error("Ensemble native admission requires ensemble routing mode");
   if (input.snapshot.projectRef !== input.base.context.projectId) throw new Error("Ensemble routing snapshot project binding mismatch");
   if (input.snapshot.missionBundleRef !== input.base.context.missionBundleId) throw new Error("Ensemble routing snapshot Mission Bundle binding mismatch");
+  assertValidRoutingWorkSnapshot(input.snapshot);
   const workInput = input.snapshot.routingWorkInput;
   if (workInput === undefined) throw new Error("Ensemble admission requires explicit WorkCharacter/pressure input");
   const pressureCalculation = calculatePressure(workInput.workCharacter, workInput.explicitHeadUplift);

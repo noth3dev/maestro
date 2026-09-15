@@ -54,6 +54,13 @@ describe("ensemble native admission", () => {
     expect(() => createEnsembleNativeAdmission(config, { snapshot: { ...snapshot, missionBundleRef: "other-bundle" }, modelMap, candidates: [{ candidateRef: "strong-primary", modelRef: "openai/model-strong", accountBinding: "openai-account" }], routeRef: "worker:worker-1:1", base })).toThrow(/Mission Bundle/i);
   });
 
+  it("revalidates hostile snapshot boundaries before selecting a route", () => {
+    expect(() => createEnsembleNativeAdmission(config, {
+      snapshot: { ...snapshot, routingWorkInput: { ...snapshot.routingWorkInput, workCharacter: { ...snapshot.routingWorkInput!.workCharacter, provenance: { taskContractRef: "forged", headDecisionRef: "forged" } } } },
+      modelMap, candidates: [{ candidateRef: "strong-primary", modelRef: "openai/model-strong", accountBinding: "openai-account" }], routeRef: "worker:worker-1:1", base,
+    })).toThrow(/provenance|TaskDemand/i);
+  });
+
   it("passes only eligible candidates to the shared admission validator", () => {
     const decision = createEnsembleNativeAdmission(config, { snapshot, modelMap, candidates: [
       { candidateRef: "strong-primary", modelRef: "openai/model-strong", accountBinding: "openai-account" },
