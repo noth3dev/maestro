@@ -59,4 +59,19 @@ describe("release candidate identity", () => {
     expect(() => validateReleaseCandidateIdentity({ ...baseIdentity(), pins: { ...baseIdentity().pins, modelGateway: "" } })).toThrow("modelGateway");
     expect(() => validateReleaseCandidateIdentity({ ...baseIdentity(), schemaVersions: { ...baseIdentity().schemaVersions, database: "not-a-hash" } })).toThrow("database");
   });
+
+  it("fails closed on duplicate classes and colliding configuration keys", () => {
+    expect(() => validateReleaseCandidateIdentity({
+      ...baseIdentity(),
+      improvementClasses: { enabled: [], disabled: ["persona_axis", "persona_axis", "routing_capability_axis"], certified: [] },
+    })).toThrow("duplicate");
+    expect(() => validateReleaseCandidateIdentity({
+      ...baseIdentity(),
+      configuration: { " routingMode ": "ensemble", routingMode: "pin" },
+    })).toThrow("colliding");
+    expect(() => validateReleaseCandidateIdentity({
+      ...baseIdentity(),
+      configuration: JSON.parse('{"__proto__":"forbidden"}'),
+    })).toThrow("reserved");
+  });
 });

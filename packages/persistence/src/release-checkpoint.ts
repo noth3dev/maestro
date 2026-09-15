@@ -115,6 +115,20 @@ function hash(value: unknown, field: string): string {
   return normalized;
 }
 
+function ownFieldNames(value: object, field: string): string[] {
+  const keys = Reflect.ownKeys(value);
+  if (keys.some((key) => typeof key !== "string")) {
+    throw new ReleaseCheckpointValidationError(`${field} contains unsupported symbol fields`);
+  }
+  for (const key of keys) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !Object.hasOwn(descriptor, "value")) {
+      throw new ReleaseCheckpointValidationError(`${field} cannot contain accessor fields`);
+    }
+  }
+  return keys as string[];
+}
+
 function record(value: unknown, field: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new ReleaseCheckpointValidationError(`${field} must be an object`);
@@ -123,11 +137,12 @@ function record(value: unknown, field: string): Record<string, unknown> {
   if (prototype !== Object.prototype && prototype !== null) {
     throw new ReleaseCheckpointValidationError(`${field} must be a plain object`);
   }
+  ownFieldNames(value, field);
   return value as Record<string, unknown>;
 }
 
 function assertExactFields(value: Record<string, unknown>, fields: readonly string[], field: string): void {
-  const actual = Object.keys(value).sort();
+  const actual = ownFieldNames(value, field).sort();
   const expected = [...fields].sort();
   if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
     throw new ReleaseCheckpointValidationError(`${field} must contain exactly the declared fields`);
@@ -135,10 +150,17 @@ function assertExactFields(value: Record<string, unknown>, fields: readonly stri
 }
 
 function classList(value: unknown, field: string): ImprovementClass[] {
-  if (!Array.isArray(value)) {
-    throw new ReleaseCheckpointValidationError(`${field} must be an array`);
+  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) {
+    throw new ReleaseCheckpointValidationError(`${field} must be a standard array`);
   }
-  const result = [...new Set(value.map((item) => text(item, `${field} entry`, 64)))];
+  const arrayKeys = Reflect.ownKeys(value);
+  if (arrayKeys.some((key) => typeof key !== "string" || (key !== "length" && !/^(0|[1-9]\d*)$/u.test(key)))) {
+    throw new ReleaseCheckpointValidationError(`${field} contains unsupported array fields`);
+  }
+  const result = value.map((item) => text(item, `${field} entry`, 64));
+  if (new Set(result).size !== result.length) {
+    throw new ReleaseCheckpointValidationError(`${field} must not contain duplicate improvement classes`);
+  }
   for (const item of result) {
     if (!(RELEASE_CANDIDATE_IMPROVEMENT_CLASSES as readonly string[]).includes(item)) {
       throw new ReleaseCheckpointValidationError(`${field} contains an unknown improvement class: ${item}`);
@@ -173,9 +195,18 @@ function validateClasses(value: unknown): ReleaseCandidateImprovementClasses {
 
 function normalizeObject(value: unknown, field: string): Record<string, string> {
   const input = record(value, field);
-  const result: Record<string, string> = {};
-  for (const [key, item] of Object.entries(input)) {
+  const result = Object.create(null) as Record<string, string>;
+  const seenKeys = new Set<string>();
+  for (const key of ownFieldNames(input, field)) {
+    const item = input[key];
     const normalizedKey = text(key, `${field} key`, 128);
+    if (["__proto__", "constructor", "prototype"].includes(normalizedKey)) {
+      throw new ReleaseCheckpointValidationError(`${field} contains a reserved key`);
+    }
+    if (seenKeys.has(normalizedKey)) {
+      throw new ReleaseCheckpointValidationError(`${field} contains colliding keys after normalization`);
+    }
+    seenKeys.add(normalizedKey);
     result[normalizedKey] = text(item, `${field}.${normalizedKey}`, 1024);
   }
   return result;
@@ -183,8 +214,10 @@ function normalizeObject(value: unknown, field: string): Record<string, string> 
 
 export function validateReleaseCandidateIdentity(input: ReleaseCandidateIdentityInput): ReleaseCandidateIdentity {
   const root = record(input, "release candidate identity");
-  const rootFields = Object.keys(root).filter((key) => key !== "schemaVersion");
-  assertExactFields(Object.fromEntries(rootFields.map((key) => [key, root[key]])), IDENTITY_FIELDS, "release candidate identity");
+  const rootFields = ownFieldNames(root, "release candidate identity").filter((key) => key !== "schemaVersion");
+  const rootWithoutSchema = Object.create(null) as Record<string, unknown>;
+  for (const key of rootFields) rootWithoutSchema[key] = root[key];
+  assertExactFields(rootWithoutSchema, IDENTITY_FIELDS, "release candidate identity");
   if (Object.hasOwn(root, "schemaVersion") && root.schemaVersion !== RELEASE_CHECKPOINT_SCHEMA_VERSION) {
     throw new ReleaseCheckpointValidationError("schemaVersion is unsupported");
   }
@@ -265,6 +298,9 @@ export async function recordReleaseCheckpoint(pool: Pool, input: ReleaseCheckpoi
       throw new ReleaseCheckpointError("release checkpoint insert was not readable");
     }
     const checkpoint = rowToCheckpoint(row);
+    if (checkpoint.databaseExportPath !== databaseExportPath || checkpoint.databaseExportSha256 !== databaseExportSha256) {
+      throw new ReleaseCheckpointConflictError("Release checkpoint candidate already exists with different export identity");
+    }
     await client.query("COMMIT");
     return checkpoint;
   } catch (error) {

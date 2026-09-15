@@ -9,3 +9,20 @@ CREATE TABLE IF NOT EXISTS release_checkpoints (
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp()
 );
 REVOKE ALL ON release_checkpoints FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION prevent_release_checkpoint_mutation()
+RETURNS trigger LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  RAISE EXCEPTION 'release checkpoints are append-only';
+END;
+$$;
+DROP TRIGGER IF EXISTS release_checkpoints_append_only_row ON release_checkpoints;
+CREATE TRIGGER release_checkpoints_append_only_row
+BEFORE UPDATE OR DELETE ON release_checkpoints
+FOR EACH ROW EXECUTE FUNCTION prevent_release_checkpoint_mutation();
+DROP TRIGGER IF EXISTS release_checkpoints_append_only_truncate ON release_checkpoints;
+CREATE TRIGGER release_checkpoints_append_only_truncate
+BEFORE TRUNCATE ON release_checkpoints
+FOR EACH STATEMENT EXECUTE FUNCTION prevent_release_checkpoint_mutation();
