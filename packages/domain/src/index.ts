@@ -34,6 +34,7 @@ export * from "./model-profile.js";
 export * from "./task-demand.js";
 export * from "./work-character.js";
 export * from "./routing-work-input.js";
+export * from "./routing-work-snapshot.js";
 export * from "./pressure-band.js";
 export * from "./host-effect-classification.js";
 export * from "./provider-facts.js";
