@@ -3,7 +3,7 @@ import type { WorkerList } from "@maestro/api-client";
 import { useConnection } from "./connection.js";
 import { useGoals } from "./goals.js";
 
-export function useGoalWorkers(): { workers: WorkerList["workers"] | undefined; loading: boolean; error: string | undefined } {
+export function useGoalWorkers(refreshCursor = "0"): { workers: WorkerList["workers"] | undefined; loading: boolean; error: string | undefined } {
   const { config } = useConnection();
   const { selectedGoalId } = useGoals();
   const [workers, setWorkers] = useState<WorkerList["workers"] | undefined>(undefined);
@@ -29,7 +29,7 @@ export function useGoalWorkers(): { workers: WorkerList["workers"] | undefined; 
     return () => {
       cancelled = true;
     };
-  }, [config, selectedGoalId]);
+  }, [config, selectedGoalId, refreshCursor]);
 
   return { workers, loading, error };
 }

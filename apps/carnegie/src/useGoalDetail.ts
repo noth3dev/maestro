@@ -10,7 +10,7 @@ export interface GoalDetail extends GoalPageData {
   certifications: Certification[];
 }
 
-export function useGoalDetail(): { detail: GoalDetail | undefined; loading: boolean; error: string | undefined; refresh: () => void } {
+export function useGoalDetail(refreshCursor = "0"): { detail: GoalDetail | undefined; loading: boolean; error: string | undefined; refresh: () => void } {
   const { config } = useConnection();
   const { selectedGoalId } = useGoals();
   const [detail, setDetail] = useState<GoalDetail | undefined>(undefined);
@@ -43,7 +43,7 @@ export function useGoalDetail(): { detail: GoalDetail | undefined; loading: bool
     return () => {
       cancelled = true;
     };
-  }, [config, selectedGoalId, reloadToken]);
+  }, [config, selectedGoalId, reloadToken, refreshCursor]);
 
   return { detail, loading, error, refresh };
 }

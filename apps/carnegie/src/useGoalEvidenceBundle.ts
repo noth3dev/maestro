@@ -3,7 +3,7 @@ import type { EvidenceBundleRead } from "@maestro/api-client";
 import { useConnection } from "./connection.js";
 import { useGoals } from "./goals.js";
 
-export function useGoalEvidenceBundle(): { evidenceBundle: EvidenceBundleRead | undefined; error: string | undefined } {
+export function useGoalEvidenceBundle(refreshCursor = "0"): { evidenceBundle: EvidenceBundleRead | undefined; error: string | undefined } {
   const { config } = useConnection();
   const { selectedGoalId } = useGoals();
   const [evidenceBundle, setEvidenceBundle] = useState<EvidenceBundleRead | undefined>(undefined);
@@ -21,7 +21,7 @@ export function useGoalEvidenceBundle(): { evidenceBundle: EvidenceBundleRead | 
         setError(cause instanceof Error ? cause.message : "Could not load the evidence bundle");
       });
     return () => { cancelled = true; };
-  }, [config, selectedGoalId]);
+  }, [config, selectedGoalId, refreshCursor]);
 
   return { evidenceBundle, error };
 }

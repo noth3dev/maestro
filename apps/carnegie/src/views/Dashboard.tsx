@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "../icons.js";
 import { EmptyState } from "../components/EmptyState.js";
 import { useT } from "../i18n/index.js";
@@ -10,6 +10,8 @@ import { summarizeDashboard } from "../lib/dashboard-data.js";
 import { runGoalControlAction, type GoalControlAction } from "../lib/goal-control.js";
 import type { ViewName } from "../views.js";
 import type { DurableEventState } from "../useDurableEvents.js";
+import type { ConcertmasterFinalReport, EncoreCouncilRoundList, MetronomeChallenge } from "@maestro/api-client";
+import { durableReadRefreshToken } from "../lib/durable-refresh.js";
 import { useGoalEvidenceBundle } from "../useGoalEvidenceBundle.js";
 import { useGoalProjection } from "./panels/useGoalProjection.js";
 import { GoalDepartmentPanels } from "./panels/GoalDepartmentPanels.js";
@@ -29,10 +31,32 @@ export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate:
   const t = useT();
   const { config } = useConnection();
   const { goals, selectedGoalId, selectGoal } = useGoals();
-  const { detail, loading, error, refresh } = useGoalDetail();
-  const { workers, loading: workersLoading, error: workersError } = useGoalWorkers();
-  const { evidenceBundle, error: evidenceError } = useGoalEvidenceBundle();
+  const durableRefreshToken = durableReadRefreshToken(eventState.cursor);
+  const { detail, loading, error, refresh } = useGoalDetail(durableRefreshToken);
+  const { workers, loading: workersLoading, error: workersError } = useGoalWorkers(durableRefreshToken);
+  const { evidenceBundle, error: evidenceError } = useGoalEvidenceBundle(durableRefreshToken);
   const projectionState = useGoalProjection(config === undefined ? undefined : window.maestro.api, config?.projectId, selectedGoalId, eventState.cursor);
+  const [metronomeChallenges, setMetronomeChallenges] = useState<readonly MetronomeChallenge[] | undefined>(undefined);
+  const [encoreRounds, setEncoreRounds] = useState<EncoreCouncilRoundList["rounds"] | undefined>(undefined);
+  const [report, setReport] = useState<ConcertmasterFinalReport | undefined>(undefined);
+  useEffect(() => {
+    setMetronomeChallenges(undefined);
+    setEncoreRounds(undefined);
+    setReport(undefined);
+    if (config === undefined || selectedGoalId === undefined) return;
+    let cancelled = false;
+    void Promise.allSettled([
+      window.maestro.api.listMetronomeChallenges(selectedGoalId, { projectId: config.projectId }),
+      window.maestro.api.listEncoreCouncilRounds(selectedGoalId, { projectId: config.projectId }),
+      window.maestro.api.getConcertmasterReport(selectedGoalId, { projectId: config.projectId }),
+    ]).then(([metronome, encore, finalReport]) => {
+      if (cancelled) return;
+      setMetronomeChallenges(metronome.status === "fulfilled" ? metronome.value.challenges : undefined);
+      setEncoreRounds(encore.status === "fulfilled" ? encore.value.rounds : undefined);
+      setReport(finalReport.status === "fulfilled" ? finalReport.value : undefined);
+    });
+    return () => { cancelled = true; };
+  }, [config, selectedGoalId, durableRefreshToken]);
   const summary = summarizeDashboard(goals, detail);
   const [controlError, setControlError] = useState<string | undefined>(undefined);
   const [pendingAction, setPendingAction] = useState<GoalControlAction | undefined>(undefined);
@@ -153,6 +177,9 @@ export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate:
           budget={detail?.budget}
           certifications={detail?.certifications ?? []}
           evidenceBundle={evidenceBundle}
+          metronomeChallenges={metronomeChallenges}
+          encoreRounds={encoreRounds}
+          report={report}
           goalId={selectedGoalId}
         />
       )}
