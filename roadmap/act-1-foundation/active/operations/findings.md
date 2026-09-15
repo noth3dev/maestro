@@ -2201,6 +2201,20 @@ The initial idle-retry regression test exposed an unbounded retry/termination pa
 - S1 must therefore add a tested Electron-startup adapter around the exported CLI `resolveLocalConnection`, carry the helper's generated `projectId` to Carnegie, save through `saveConnectionConfig`, and expose a failure reason to the existing Setup fallback. Saved config must be checked first. Env endpoint/token overrides must suppress local auto-bootstrap.
 - The CLI source cannot be imported directly into the Carnegie TypeScript project without widening its `rootDir`; the built `apps/cli/dist/tui/local-bootstrap.js`/`.d.ts` is the compatible shared entry point after the root build. This keeps one implementation and avoids copying bootstrap logic.
 
+
+## 2026-09-15 — Plan 7-e §S2 goal-less natural-language intake investigation
+
+Investigation was completed before any Plan 7-e RED test or implementation. The goal-less intake capability does **not** exist below the TUI at the current HEAD:
+
+- `packages/contracts/src/index.ts:77-80` requires `CreateConversationInputSchema` to contain a UUID `projectId`, UUID `goalId`, and exact `model`; there is no nullable or optional Goal form. `ConversationTurnInputSchema` carries only `projectId` and text.
+- `apps/control-plane/src/server.ts:1185-1205` parses those schemas and delegates to `ConversationService`; the conversation routes cannot create or turn a conversation without a Goal.
+- `apps/control-plane/src/conversation-service.ts:138-183` verifies the Goal/project binding before creation, persists `goal_id NOT NULL`, and spawns runtime context with that Goal. `turn()` only operates on an existing Goal-bound conversation.
+- The conversation grant in `conversation-service.ts:93`/`:175` has `allowedTools: []`; the default `ToolRegistry` is empty for this service. No Concertmaster/Overture agent composition is wired there, and no conversation path can call `task-contract:create`.
+- `apps/control-plane/src/server.ts:1135-1175` exposes the real Task Contract lifecycle, but `task-contract:create` requires the fully elaborated `CreateTaskContractInputSchema` substance. `apps/cli/src/tui/commands/write-commands.ts:300-307` only forwards an already structured `substance-json`; it cannot honestly derive that structure from one sentence.
+- `docs/02-hierarchical-orchestration.md:8-24,43-54` requires the missing Concertmaster → Overture Crew → Task Contract draft path, then an explicit Single Launch Confirmation before execution. No implementation of that intake/drafting path was found in `apps/control-plane`, `packages/agent-runtime`, or the TUI command layer.
+
+Conclusion: removing only the TUI Goal guard would route into an API/schema that rejects the request, while inventing a Concertmaster/Overture agent loop in this TUI defect plan would expand scope and weaken the documented authority boundary. Per `execution/plan-7-e.md` §S2 decision 1 and exit evidence 4, S2 is blocked at the repository boundary and must not add an ad-hoc placeholder Task Contract or auto-approve launch. The finding is recorded for the user rather than silently claiming G2/G3.
+
 ## 2026-09-15 — Plan 7-e §S3 Codex auto-detection and login diagnosability
 
 - The real local Codex CLI was detected at `/home/ubuntu/.nvm/versions/node/v24.19.0/bin/codex` (`0.153.4`), but `codex login status` returned exit `1` with `Not logged in`; the app-server `accountRead()` path reported `{"authMode":"null"}`.
