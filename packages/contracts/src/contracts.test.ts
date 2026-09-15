@@ -153,6 +153,23 @@ describe("TaskDemand and Mission Bundle routing contracts", () => {
     expect(Object.isFrozen(parsedDemand.taskKinds)).toBe(false);
     expect(() => parsedDemand.taskKinds.push("verification")).not.toThrow();
     expect(MissionBundleSubstanceSchema.parse(substance)).toEqual(substance);
+    const routingWorkInput = {
+      schemaVersion: 1,
+      workCharacter: {
+        schemaVersion: 1,
+        risk: 100,
+        reversibility: 80,
+        verificationAttachment: 120,
+        materialScale: 60,
+        timePressure: 40,
+        budgetHeadroom: 100,
+        provenance: taskDemand.provenance,
+      },
+      explicitHeadUplift: 130,
+    };
+    expect(MissionBundleSubstanceSchema.parse({ ...substance, routingWorkInput }).routingWorkInput).toEqual(routingWorkInput);
+    expect(MissionBundleSubstanceSchema.safeParse({ ...substance, routingWorkInput: { ...routingWorkInput, extra: true } }).success).toBe(false);
+    expect(MissionBundleSubstanceSchema.safeParse({ ...substance, routingWorkInput: { ...routingWorkInput, workCharacter: { ...routingWorkInput.workCharacter, provenance: { ...routingWorkInput.workCharacter.provenance, headDecisionRef: "other-head" } } } }).success).toBe(false);
     expect(MissionBundleSubstanceSchema.safeParse({ ...substance, taskDemand: { ...taskDemand, provider: "openai" } }).success).toBe(false);
     expect(TaskDemandSchema.safeParse({ ...taskDemand, taskKinds: ["coding", "coding"] }).success).toBe(false);
     expect(TaskDemandSchema.safeParse({ ...taskDemand, requirements: { ...taskDemand.requirements, knowledge: undefined } }).success).toBe(

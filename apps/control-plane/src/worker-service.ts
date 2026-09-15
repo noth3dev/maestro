@@ -1,7 +1,7 @@
 import type { QueuedWorkerAdmission, SpawnWorkerInput, Worker, WorkerMessageInput, WorkerObservation } from "@maestro/contracts";
 import { toInvocationRef, type CapacityDemand, type ToolEvents, type ExecutionKernelPort } from "@maestro/domain";
 import { assertWorkspacePath } from "@maestro/git-adapter";
-import { assertProjectRole, cancelWorker, countActiveWorkersForProject, getGoalControl, listCapabilityJournal, listIpPythonSessionJournalForGoal, observeWorker, readDepartmentPlan, readHeadCouncil, readWorker, sendWorkerMessageUnderOwnerClaim, spawnWorker, WorkerError, WorkerProviderOutcomeUnknownError, LeaseUnavailableError, StaleGoalLeaseError, claimQueuedCapacity, listCapacityInventoryProjects, type CouncilActorContext, type OperatorContext } from "@maestro/persistence";
+import { assertProjectRole, cancelWorker, countActiveWorkersForProject, getGoalControl, listCapabilityJournal, listIpPythonSessionJournalForGoal, observeWorker, readDepartmentPlan, readHeadCouncil, readWorker, sendWorkerMessageUnderOwnerClaim, spawnWorker, WorkerError, WorkerProviderOutcomeUnknownError, LeaseUnavailableError, StaleGoalLeaseError, claimQueuedCapacity, listCapacityInventoryProjects, type CouncilActorContext, type OperatorContext, type WorkerAdmissionFactoryInput, type WorkerAdmissionDecision } from "@maestro/persistence";
 import type { Pool } from "pg";
 
 export interface WorkerService {
@@ -18,6 +18,8 @@ export interface WorkerServiceDependencies {
   modelRoutingMode: "ensemble" | "pin";
   /** Host-owned fixed model for the explicit pin mode. */
   nativeModelRef?: string;
+  /** Production ensemble route composer. Absent ensemble composition fails closed before provider admission. */
+  createEnsembleAdmission?: (input: WorkerAdmissionFactoryInput) => Promise<WorkerAdmissionDecision>;
   kernel: ExecutionKernelPort;
   workspaceRoot?: string;
   withGoalLease: <T>(goalId: string, operation: (proof: import("@maestro/persistence").GoalLeaseProof) => Promise<T>) => Promise<T>;
@@ -48,16 +50,21 @@ export class EnsembleRoutingUnavailableError extends Error {
   constructor() { super("Ensemble Router worker admission is not enabled"); this.name = "EnsembleRoutingUnavailableError"; }
 }
 
-export function assertWorkerRoutingMode(mode: "ensemble" | "pin"): void {
-  if (mode === "ensemble") throw new EnsembleRoutingUnavailableError();
+export function assertWorkerRoutingMode(mode: "ensemble" | "pin", ensembleAdmissionConfigured = false): void {
+  if (mode === "ensemble" && !ensembleAdmissionConfigured) throw new EnsembleRoutingUnavailableError();
 }
 
 export function resolveWorkerModelForRouting(
   mode: "ensemble" | "pin",
   nativeModelRef: string | undefined,
   requestedModel: string | undefined,
+  ensembleAdmissionConfigured = false,
 ): string | undefined {
-  assertWorkerRoutingMode(mode);
+  assertWorkerRoutingMode(mode, ensembleAdmissionConfigured);
+  if (mode === "ensemble") {
+    if (requestedModel !== undefined) throw new Error("Ensemble worker admission cannot accept a caller-selected model");
+    return undefined;
+  }
   if (nativeModelRef === undefined) throw new Error("Pin worker admission requires MAESTRO_NATIVE_MODEL");
   if (requestedModel !== undefined && requestedModel !== nativeModelRef)
     throw new Error("Worker model does not match the configured pin identity");
@@ -94,7 +101,7 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
   return {
     async spawn(councilId, departmentId, input, commandId, operator) {
       await assertProjectRole(deps.pool, operator.operatorId, input.projectId, `head-${departmentId}`);
-      const fixedModelRef = resolveWorkerModelForRouting(deps.modelRoutingMode, deps.nativeModelRef, input.model);
+      const fixedModelRef = resolveWorkerModelForRouting(deps.modelRoutingMode, deps.nativeModelRef, input.model, deps.createEnsembleAdmission !== undefined);
       if (deps.maxConcurrentWorkersPerProject !== undefined && deps.capacity === undefined) {
         const active = await countActiveWorkersForProject(deps.pool, input.projectId);
         if (active >= deps.maxConcurrentWorkersPerProject) throw new WorkerCapacityExceededError(deps.maxConcurrentWorkersPerProject);
@@ -126,7 +133,7 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
         const admission = deps.capacity === undefined ? { kind: "reserved" as const, reservationId: `legacy:${commandId}` } : await deps.capacity.reserve(capacityDemand, proof);
         if (admission.kind === "queued") return { kind: "queued", queueId: admission.queueId, reason: admission.reason, projectId: input.projectId, goalId: council.goalId, commandId, requirement: capacityDemand.requirement, pressure: capacityDemand.pressure } satisfies QueuedWorkerAdmission;
         try {
-          const worker = await spawnWorker(deps.pool, deps.kernel, { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, commandId, ...(fixedModelRef === undefined ? {} : { modelRef: fixedModelRef }), ...(input.repositoryPath === undefined ? {} : { repositoryPath: canonicalRepositoryPath!, worktreePath: input.worktreePath! }), ...(targetPreparation === undefined ? {} : { prepareWorktree: targetPreparation }) }, proof, context);
+          const worker = await spawnWorker(deps.pool, deps.kernel, { councilId, departmentId, planVersion: input.planVersion, itemId: input.itemId, commandId, ...(fixedModelRef === undefined ? {} : { modelRef: fixedModelRef }), ...(input.repositoryPath === undefined ? {} : { repositoryPath: canonicalRepositoryPath!, worktreePath: input.worktreePath! }), ...(targetPreparation === undefined ? {} : { prepareWorktree: targetPreparation }), ...(deps.createEnsembleAdmission === undefined ? {} : { createAdmission: deps.createEnsembleAdmission }) }, proof, context);
           return toApiWorker(worker);
         } catch (error) { if (deps.capacity !== undefined && !(error instanceof WorkerProviderOutcomeUnknownError)) await deps.capacity.release(admission.reservationId).catch(() => {}); throw error; }
       });
@@ -141,7 +148,7 @@ export function createWorkerService(deps: WorkerServiceDependencies): WorkerServ
             continue;
           }
           try {
-            await this.spawn(admission.councilId, admission.departmentId, { projectId: reservation.projectId, planVersion: admission.planVersion, itemId: admission.itemId, capacityDemand: { providerRate: reservation.providerRate, spendCents: reservation.spendCents, workerSlots: reservation.workerSlots, requirement: reservation.requirement, pressure: reservation.pressure, ...(reservation.priority === undefined ? {} : { priority: reservation.priority }) }, ...(admission.model === undefined ? {} : { model: admission.model }), ...(admission.repositoryPath === undefined ? {} : { repositoryPath: admission.repositoryPath, worktreePath: admission.worktreePath! }) }, reservation.commandId, { operatorId: admission.operatorId, credentialId: admission.credentialId });
+            await this.spawn(admission.councilId, admission.departmentId, { projectId: reservation.projectId, planVersion: admission.planVersion, itemId: admission.itemId, capacityDemand: { providerRate: reservation.providerRate, spendCents: reservation.spendCents, workerSlots: reservation.workerSlots, requirement: reservation.requirement, pressure: reservation.pressure, ...(reservation.priority === undefined ? {} : { priority: reservation.priority }) }, ...(admission.model === undefined ? {} : { model: admission.model }), ...(admission.repositoryPath === undefined ? {} : { repositoryPath: admission.repositoryPath, worktreePath: admission.worktreePath! }), ...(deps.createEnsembleAdmission === undefined ? {} : { createAdmission: deps.createEnsembleAdmission }) }, reservation.commandId, { operatorId: admission.operatorId, credentialId: admission.credentialId });
           } catch (error) {
             // Ordinary failures release in spawn; lease/replay failures must release here. Unknown provider outcomes remain reserved for reconciliation.
             if (error instanceof LeaseUnavailableError || error instanceof StaleGoalLeaseError) await Promise.resolve(deps.capacity.requeue(reservation.reservationId)).catch(() => {});

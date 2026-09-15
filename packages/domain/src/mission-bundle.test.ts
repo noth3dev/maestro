@@ -21,11 +21,51 @@ const substance = (overrides: Partial<MissionBundleSubstance> = {}): MissionBund
   ...overrides,
 });
 
+const valueTaskProvenance = () => ({ taskContractRef: "task-contract:fixture", headDecisionRef: "head-decision:fixture" });
+
 describe("Mission Bundle", () => {
-  it("accepts a valid scout substance and hashes canonically", () => {
-    const value = substance();
+  it("accepts an explicit routing work-character contract and includes it in the bundle hash", () => {
+    const value = substance({
+      routingWorkInput: {
+        schemaVersion: 1,
+        workCharacter: {
+          schemaVersion: 1,
+          risk: 120,
+          reversibility: 40,
+          verificationAttachment: 100,
+          materialScale: 80,
+          timePressure: 60,
+          budgetHeadroom: 90,
+          provenance: valueTaskProvenance(),
+        },
+        explicitHeadUplift: 135,
+      },
+    });
     expect(() => assertValidMissionBundleSubstance(value)).not.toThrow();
-    expect(missionBundleSubstanceContentHash(value)).toBe(missionBundleSubstanceContentHash({ ...value }));
+    expect(missionBundleSubstanceContentHash(value)).not.toBe(missionBundleSubstanceContentHash(substance()));
+  });
+
+  it("keeps routing input optional for existing pin bundles", () => {
+    expect(() => assertValidMissionBundleSubstance(substance())).not.toThrow();
+  });
+
+  it("rejects routing input whose provenance is not the sealed Task Demand provenance", () => {
+    expect(() => assertValidMissionBundleSubstance(substance({
+      routingWorkInput: {
+        schemaVersion: 1,
+        workCharacter: {
+          schemaVersion: 1,
+          risk: 120,
+          reversibility: 40,
+          verificationAttachment: 100,
+          materialScale: 80,
+          timePressure: 60,
+          budgetHeadroom: 90,
+          provenance: { taskContractRef: "other-contract", headDecisionRef: "head-decision:fixture" },
+        },
+        explicitHeadUplift: 135,
+      },
+    }))).toThrow(InvalidMissionBundleError);
   });
 
   it("rejects an unknown field", () => {

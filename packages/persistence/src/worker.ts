@@ -7,6 +7,9 @@ import {
   toInvocationRef,
   type ExecutionAdmission,
   type ExecutionKernelPort,
+  type InvocationContext,
+  type MissionBundle,
+  type RoutingEvidence,
   type ExecutionRef,
   type InvocationRef,
   type MissionRepairRepetitionScope,
@@ -18,7 +21,8 @@ import { StaleGoalLeaseError, isValidFencingToken, type GoalLeaseProof } from ".
 import { assertGoalControlOpen, isAuthorizedHeadCouncilActor, readHeadCouncil, type CouncilActorContext } from "./council.js";
 import { readMissionBundle } from "./mission-bundle.js";
 import { deriveWorkerProfileForMission } from "./worker-profile-derivation.js";
-import { recordNativeExecutionBindingIfSupported } from "./native-execution-binding.js";
+import { readNativeExecutionBindingId, recordNativeExecutionBindingIfSupported } from "./native-execution-binding.js";
+import { recordRoutingEvidence } from "./ensemble-router-artifacts.js";
 import { CapabilityApprovalError, CapabilityApprovalExpiredError, consumeCapabilityApprovals, createCapabilityApproval, getCapabilityApproval, RepetitionBudgetExhaustedError, type RepetitionScope } from "./capability-approval.js";
 
 export class WorkerError extends Error {}
@@ -26,6 +30,28 @@ export class WorkerProviderOutcomeUnknownError extends WorkerError {
   constructor(message = "Provider outcome is unknown; capacity remains reserved until reconciliation") { super(message); this.name = "WorkerProviderOutcomeUnknownError"; }
 }
 export class WorkerNotFoundError extends WorkerError {}
+
+export type WorkerRoutingEvidenceDraft = Omit<RoutingEvidence, "evidenceId" | "admissionBindingRef" | "createdAt"> & {
+  readonly evidenceId?: undefined;
+  readonly admissionBindingRef?: undefined;
+  readonly createdAt?: undefined;
+};
+
+export interface WorkerAdmissionDecision {
+  readonly admission: ExecutionAdmission;
+  readonly routingEvidence?: WorkerRoutingEvidenceDraft;
+}
+
+export interface WorkerAdmissionFactoryInput {
+  readonly workerId: string;
+  readonly routeRef: string;
+  readonly bundle: MissionBundle;
+  readonly base: {
+    readonly context: InvocationContext;
+    readonly grant: Omit<import("@maestro/domain").CapabilityGrant, "modelPolicy">;
+    readonly idempotencyKey: string;
+  };
+}
 
 export interface SpawnWorkerRequest {
   readonly councilId: string;
@@ -43,6 +69,8 @@ export interface SpawnWorkerRequest {
   readonly prepareWorktree?: (workerId: string) => Promise<string>;
   /** Exact provider-qualified model selected by the host and checked against the Mission Bundle. */
   readonly modelRef?: string;
+  /** Ensemble-only host seam. Pin callers leave this undefined and retain the existing path. */
+  readonly createAdmission?: (input: WorkerAdmissionFactoryInput) => Promise<WorkerAdmissionDecision>;
 }
 
 interface WorkerRow {
@@ -386,7 +414,7 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
     );
     if (active.rowCount !== 1) throw new WorkerError("Captured Head session is no longer authorized to spawn workers");
     const bundle = await readMissionBundle(pool, request.councilId, request.departmentId, request.planVersion, request.itemId);
-    const modelRef = selectWorkerModel(bundle, request.modelRef);
+    const fixedModelRef = request.createAdmission === undefined ? selectWorkerModel(bundle, request.modelRef) : undefined;
     assertWorkerPathScope(bundle.substance.allowedPaths);
     const requestHash = request.commandId === undefined ? undefined : createHash("sha256").update(JSON.stringify({
       councilId: request.councilId, departmentId: request.departmentId, planVersion: request.planVersion,
@@ -443,37 +471,50 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
         [workerId, JSON.stringify(workerProfile), proof.ownerId, proof.fencingToken],
       );
       if (persistedProfile.rowCount !== 1) throw new StaleGoalLeaseError(proof.goalId);
-      const providerAdmission: ExecutionAdmission = {
-        context: {
-          operatorId: context.actorId,
-          projectId: council.snapshot.projectId,
-          goalId: council.goalId,
-          missionBundleId: bundle.contentHash,
-          policyVersion: `${request.planVersion}:${bundle.contentHash}`,
-          authorityPolicyVersion: request.planVersion,
-          controlEpoch,
-          budgetEffectCents: 0,
-          fencingToken: proof.fencingToken,
-        },
-        grant: {
-          grantId: `worker:${workerId}`,
-          allowedTools: bundle.substance.allowedTools,
-          allowedSkills: bundle.substance.allowedSkills,
-          modelPolicy: [modelRef],
-          pathScope: bundle.substance.allowedPaths,
-          outboundDataClasses: canonicalOutboundDataClasses(bundle.substance.dataBoundary),
-          remaining: {
-            modelTurns: 8,
-            toolCalls: Math.max(1, bundle.substance.allowedTools.length * 8),
-            childCalls: bundle.substance.workerCeiling,
-            outputTokens: 8_192,
-            wallTimeMs: missionTimeLimitMs(bundle.substance.timeCeiling),
-            retryCount: bundle.substance.retryCeiling,
-          },
-        },
-        modelPolicy: [modelRef],
-        idempotencyKey: request.commandId ?? `worker:${workerId}`,
+      const admissionContext = {
+        operatorId: context.actorId,
+        projectId: council.snapshot.projectId,
+        goalId: council.goalId,
+        missionBundleId: bundle.contentHash,
+        policyVersion: `${request.planVersion}:${bundle.contentHash}`,
+        authorityPolicyVersion: request.planVersion,
+        controlEpoch,
+        budgetEffectCents: 0,
+        fencingToken: proof.fencingToken,
       };
+      const admissionGrant: Omit<import("@maestro/domain").CapabilityGrant, "modelPolicy"> = {
+        grantId: `worker:${workerId}`,
+        allowedTools: bundle.substance.allowedTools,
+        allowedSkills: bundle.substance.allowedSkills,
+        pathScope: bundle.substance.allowedPaths,
+        outboundDataClasses: canonicalOutboundDataClasses(bundle.substance.dataBoundary),
+        remaining: {
+          modelTurns: 8,
+          toolCalls: Math.max(1, bundle.substance.allowedTools.length * 8),
+          childCalls: bundle.substance.workerCeiling,
+          outputTokens: 8_192,
+          wallTimeMs: missionTimeLimitMs(bundle.substance.timeCeiling),
+          retryCount: bundle.substance.retryCeiling,
+        },
+      };
+      const admissionDecision = request.createAdmission === undefined
+        ? undefined
+        : await request.createAdmission({
+          workerId,
+          routeRef: `worker:${workerId}:${nextAttempt}`,
+          bundle,
+          base: { context: admissionContext, grant: admissionGrant, idempotencyKey: request.commandId ?? `worker:${workerId}` },
+        });
+      const providerAdmission: ExecutionAdmission = admissionDecision?.admission ?? (() => {
+        if (fixedModelRef === undefined) throw new WorkerError("Worker admission did not produce a routed model");
+        return {
+          context: admissionContext,
+          grant: { ...admissionGrant, modelPolicy: [fixedModelRef] },
+          modelPolicy: [fixedModelRef],
+          idempotencyKey: request.commandId ?? `worker:${workerId}`,
+        };
+      })();
+      const routingEvidenceDraft = admissionDecision?.routingEvidence;
       const providerRequest = {
         name: `${bundle.substance.role}:${request.itemId}:${nextAttempt}`,
         prompt: bundle.substance.goalBrief,
@@ -490,7 +531,7 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
       await assertCurrentWorkerLease(pool, workerId, proof);
       providerAttempted = true;
       spawned = await kernel.spawn(providerRequest);
-      await recordNativeExecutionBindingIfSupported(pool, kernel, {
+      const nativeBindingRecorded = await recordNativeExecutionBindingIfSupported(pool, kernel, {
         execution: spawned.execution,
         invocation: spawned.invocation,
         workerId,
@@ -499,6 +540,17 @@ export async function spawnWorker(pool: Pool, kernel: ExecutionKernelPort, reque
         admissionKind: "worker",
         admission: providerAdmission,
       });
+      if (routingEvidenceDraft !== undefined) {
+        if (!nativeBindingRecorded) throw new WorkerError("Ensemble routing evidence requires a durable native execution binding");
+        const binding = await readNativeExecutionBindingId(pool, spawned.execution);
+        if (binding === null) throw new WorkerError("Ensemble routing evidence binding was not durable");
+        await recordRoutingEvidence(pool, {
+          ...routingEvidenceDraft,
+          evidenceId: randomUUID(),
+          admissionBindingRef: binding,
+          createdAt: new Date().toISOString(),
+        });
+      }
     } catch (error) {
       // A transport timeout does not prove that the provider created nothing.
       // Keep the durable reservation ambiguous and block automatic retries

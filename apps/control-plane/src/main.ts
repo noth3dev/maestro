@@ -8,7 +8,7 @@ import { createLocalGitPort } from "@maestro/git-adapter";
 import { FileEvidenceStore } from "@maestro/evidence";
 import { classifyHostEffects, type EnvironmentRecord, type ExecutionAdmission, type ExecutionKernelPort, type GitPort } from "@maestro/domain";
 import { createIpPythonSessionManager, createIpPythonTool, createUnavailableIpPythonKernel, reapIpPythonProcessGroup, ToolRegistry, type IpPythonBlockApproval, type IpPythonHostRequest, type IpPythonKernel, type IpPythonSessionBinding, type IpPythonSessionManager, type IpPythonStageBoundary } from "@maestro/agent-runtime";
-import { appendCapabilityJournal, appendIpPythonSessionJournal, assertProjectMembership, consumeCapabilityApprovals, authenticateLocalOperator, bootstrapAuthorityRecord, bootstrapPermanentOrganization, createPostgresAccountLoginStore, createPostgresSettingsService, listProjectMemberships, listPermanentOrganization, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, readEnvironment, reconcileIpPythonOrphans, reconcileOnStartup, recordDiscordSignal, listPendingAuthorityApprovals, recordIpPythonSessionStarted, runMigrations, ensureCapacityInventory, reserveCapacity, releaseCapacityReservation, requeueCapacityReservation, readWorkerBySpawnCommand, getChannel, postChannelMessage, type IpPythonSessionJournalEntry } from "@maestro/persistence";
+import { appendCapabilityJournal, appendIpPythonSessionJournal, assertProjectMembership, consumeCapabilityApprovals, authenticateLocalOperator, bootstrapAuthorityRecord, bootstrapPermanentOrganization, createPostgresAccountLoginStore, createPostgresSettingsService, listProjectMemberships, listPermanentOrganization, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, readEnvironment, reconcileIpPythonOrphans, reconcileOnStartup, recordDiscordSignal, listPendingAuthorityApprovals, recordIpPythonSessionStarted, runMigrations, ensureCapacityInventory, reserveCapacity, releaseCapacityReservation, requeueCapacityReservation, readWorkerBySpawnCommand, getChannel, postChannelMessage, readRoutingWorkSnapshot, type IpPythonSessionJournalEntry } from "@maestro/persistence";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
 import { createCapabilityApprovalService } from "./capability-approval-service.js";
@@ -36,6 +36,8 @@ import { createNativeExecutionKernel, createUnavailableNativeExecutionKernel } f
 import { createPostgresConversationService } from "./conversation-service.js";
 import { createIpPythonProductionKernel } from "./ipython-composition.js";
 import { createPinnedNativeAdmission, type NativeAdmissionInput } from "./native-admission.js";
+import { createEnsembleNativeAdmission } from "./ensemble-admission.js";
+import { readRoutingCandidateCatalog } from "./ensemble-candidate-catalog.js";
 
 export type { NativeAdmissionInput } from "./native-admission.js";
 
@@ -736,7 +738,23 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     release: (reservationId: string) => releaseCapacityReservation(pool, reservationId).then(() => undefined),
     requeue: (reservationId: string) => requeueCapacityReservation(pool, reservationId).then(() => undefined),
   } : undefined;
-  const workerService = createWorkerService({ modelRoutingMode: config.modelRoutingMode, ...(config.nativeModelRef === undefined ? {} : { nativeModelRef: config.nativeModelRef }), pool, kernel: executionKernel, workspaceRoot: config.worktreeRoot, withGoalLease: goalService.withGoalLease!, prepareWorkerWorktree: (workerId, input, operatorId, commandId) => gitIntegrationService.createWorkerWorktree(workerId, input, operatorId, commandId), ...(config.maxConcurrentWorkersPerProject === undefined ? {} : { maxConcurrentWorkersPerProject: config.maxConcurrentWorkersPerProject }), ...(capacity === undefined ? {} : { capacity }) });
+  const ensembleAdmission = config.modelRoutingMode === "ensemble"
+    ? async (input: import("@maestro/persistence").WorkerAdmissionFactoryInput) => {
+      const catalogPath = config.ensembleCandidateCatalogPath;
+      if (catalogPath === undefined) throw new Error("Ensemble candidate catalog is not configured");
+      const snapshot = await readRoutingWorkSnapshot(pool, {
+        councilId: input.bundle.councilId,
+        departmentId: input.bundle.departmentId,
+        planVersion: input.bundle.planVersion,
+        itemId: input.bundle.itemId,
+        goalRef: input.base.context.goalId,
+        projectRef: input.base.context.projectId,
+      });
+      const catalog = readRoutingCandidateCatalog({ modelMapPath: resolve(process.cwd(), "config/model_map.json"), catalogPath });
+      return createEnsembleNativeAdmission(config, { snapshot, ...catalog, routeRef: input.routeRef, base: input.base });
+    }
+    : undefined;
+  const workerService = createWorkerService({ modelRoutingMode: config.modelRoutingMode, ...(config.nativeModelRef === undefined ? {} : { nativeModelRef: config.nativeModelRef }), ...(ensembleAdmission === undefined ? {} : { createEnsembleAdmission: ensembleAdmission }), pool, kernel: executionKernel, workspaceRoot: config.worktreeRoot, withGoalLease: goalService.withGoalLease!, prepareWorkerWorktree: (workerId, input, operatorId, commandId) => gitIntegrationService.createWorkerWorktree(workerId, input, operatorId, commandId), ...(config.maxConcurrentWorkersPerProject === undefined ? {} : { maxConcurrentWorkersPerProject: config.maxConcurrentWorkersPerProject }), ...(capacity === undefined ? {} : { capacity }) });
   const certificationService = createCertificationService({ pool, withGoalLease: goalService.withGoalLease! });
   const concertmasterReportService = createConcertmasterReportService({ pool, withGoalLease: goalService.withGoalLease! });
   const metronomeService = createMetronomeService({ pool, withGoalLease: goalService.withGoalLease! });

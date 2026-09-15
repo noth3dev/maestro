@@ -75,3 +75,5 @@ export * from "./channel.js";
 export * from "./settings.js";
 
 export * from "./embedded-database.js";
+
+export * from "./routing-work-snapshot.js";

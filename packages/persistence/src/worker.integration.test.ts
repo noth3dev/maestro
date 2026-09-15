@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { writeFileSync, rmSync } from "node:fs";
+import { resolve } from "node:path";
 import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -11,6 +13,12 @@ import { createMissionBundle } from "./mission-bundle.js";
 import { bindWorkerInvocation, cancelUnboundWorkerAfterBindingFailure, cancelWorker, countActiveWorkersForProject, expireAwaitingRepairWorker, listWorkersForGoal, markWorkerTerminal, markWorkerUnknown, observeWorker, promptWorkerUnderOwnerClaim, readWorker, recoverWorkerAfterRestart, sendWorkerMessageUnderOwnerClaim, spawnWorker, WorkerError, WorkerNotFoundError } from "./worker.js";
 import { reconcileOnStartup } from "./reconciliation.js";
 import { consumeCapabilityApproval, createCapabilityApproval } from "./capability-approval.js";
+import { recordOperationalOverlay, snapshotOperationalOverlayForGoalDurably } from "./ensemble-router-artifacts.js";
+import { readRoutingWorkSnapshot } from "./routing-work-snapshot.js";
+import type { WorkerAdmissionFactoryInput } from "./worker.js";
+import { readRoutingCandidateCatalog } from "../../../apps/control-plane/src/ensemble-candidate-catalog.js";
+import { createEnsembleNativeAdmission } from "../../../apps/control-plane/src/ensemble-admission.js";
+import type { MaestroConfig } from "../../../apps/control-plane/src/config.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -48,7 +56,7 @@ const bundleSubstance = (overrides: Partial<MissionBundleSubstance> = {}): Missi
 });
 
 /** A minimal, deterministic fake standing in for a real native execution kernel. */
-function fakeKernel(finalStatus: InvocationObservation["status"] = "succeeded"): ExecutionKernelPort & { spawnedCount: number; cancelledInvocations: string[]; releasedInvocations: string[]; messages: { execution: string; invocation: string; message: string }[]; spawnRequests: Parameters<ExecutionKernelPort["spawn"]>[0][] } {
+function fakeKernel(finalStatus: InvocationObservation["status"] = "succeeded", model = { provider: "test", id: "model-a" }, accountRef = "test-account"): ExecutionKernelPort & { spawnedCount: number; cancelledInvocations: string[]; releasedInvocations: string[]; messages: { execution: string; invocation: string; message: string }[]; spawnRequests: Parameters<ExecutionKernelPort["spawn"]>[0][] } {
   let counter = 0;
   const invocations = new Map<string, { execution: string; name: string }>();
   return {
@@ -77,8 +85,8 @@ function fakeKernel(finalStatus: InvocationObservation["status"] = "succeeded"):
     },
     async sendMessage(execution, invocation, message) { (this as { messages: { execution: string; invocation: string; message: string }[] }).messages.push({ execution: execution as unknown as string, invocation: invocation as unknown as string, message }); },
     async cancel(invocation) { (this as { cancelledInvocations: string[] }).cancelledInvocations.push(invocation as unknown as string); return { cancelled: true }; },
-    async getModelIdentity() { return { provider: "test", id: "model-a" }; },
-    async getExecutionBinding() { return { model: { provider: "test", id: "model-a" }, accountRef: "test-account", gatewayInstanceId: "gateway-test", gatewayBindingId: "binding-test", dataPolicyHash: "policy-test" }; },
+    async getModelIdentity() { return model; },
+    async getExecutionBinding() { return { model, accountRef, gatewayInstanceId: "gateway-test", gatewayBindingId: "binding-test", dataPolicyHash: "policy-test" }; },
     async getToolEvents() { return { state: "empty", events: [] }; },
     async getUsage() { return { state: "available", totalTokens: 42 }; },
     async getInvocationStatus() { return finalStatus; },
@@ -129,15 +137,55 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
   }
 
   beforeAll(async () => {
-    await pool.query("DROP TABLE IF EXISTS workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
+    await pool.query("DROP TABLE IF EXISTS ensemble_router_routing_evidence, ensemble_router_goal_overlay_snapshots, ensemble_router_operational_overlays, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, head_activation_edges, head_activation_attempts, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, role_persona_axes, permanent_roles, permanent_head_roles, departments, organization_groups, goal_leases, outbox, goal_events, command_receipts, goals, goal_controls CASCADE");
     await applyAllMigrations(pool);
   });
-  beforeEach(async () => { await pool.query("TRUNCATE goals, reconciler_leader_lease, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goal_controls RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
+  beforeEach(async () => { await pool.query("TRUNCATE goals, reconciler_leader_lease, ensemble_router_routing_evidence, ensemble_router_goal_overlay_snapshots, ensemble_router_operational_overlays, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, head_councils, goal_head_participations, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goal_controls RESTART IDENTITY CASCADE"); await bootstrapPermanentOrganization(pool); });
   afterAll(async () => { await pool.end(); });
 
   const repairHold = {
     repairHold: { approvalId: randomUUID(), window: "1 minute", repetitionScope: { kind: "bounded_count", count: 1 } },
   } as unknown as Partial<MissionBundleSubstance>;
+
+  it("admits ensemble routing through the durable Goal snapshot and records binding-linked evidence", async () => {
+    const base = bundleSubstance();
+    const taskDemand = {
+      ...base.taskDemand,
+      requirements: Object.fromEntries(Object.keys(base.taskDemand.requirements).map((axis) => [axis, { level: 0, rationale: "integration route" }])) as typeof base.taskDemand.requirements,
+    };
+    const routingWorkInput = {
+      schemaVersion: 1 as const,
+      workCharacter: { schemaVersion: 1 as const, risk: 80, reversibility: 40, verificationAttachment: 80, materialScale: 40, timePressure: 50, budgetHeadroom: 100, provenance: taskDemand.provenance },
+      explicitHeadUplift: 20,
+    };
+    const { council, plan, proof, goalId, projectId } = await setupBundle(["product"], { taskDemand, approvedModels: ["openai/gpt-5.6-sol"], routingWorkInput });
+    const candidateRef = "openai-primary";
+    const overlay = {
+      schemaVersion: 1 as const, installationRef: "worker-integration", projectRef: projectId, version: 1,
+      observations: [{ candidateRef, measuredLatencyMs: 10, measuredCost: 1, failureRate: 0, timeoutRate: 0, providerErrorRate: 0, currentAvailability: true, accountBinding: "openai-account", observedAt: "2026-09-15T00:00:00.000Z" }],
+    };
+    await recordOperationalOverlay(pool, overlay);
+    await snapshotOperationalOverlayForGoalDurably(pool, overlay, goalId);
+    const catalogPath = `/tmp/maestro-routing-catalog-${randomUUID()}.json`;
+    writeFileSync(catalogPath, JSON.stringify({ schemaVersion: 1, entries: [{ candidateRef, modelRef: "openai/gpt-5.6-sol", accountBinding: "openai-account" }] }));
+    const config = { modelRoutingMode: "ensemble", modelAccountRefs: { openai: "openai-account" } } as unknown as MaestroConfig;
+    const kernel = fakeKernel("succeeded", { provider: "openai", id: "gpt-5.6-sol" }, "openai-account");
+    try {
+      const createAdmission = async (input: WorkerAdmissionFactoryInput) => {
+        const snapshot = await readRoutingWorkSnapshot(pool, { councilId: input.bundle.councilId, departmentId: input.bundle.departmentId, planVersion: input.bundle.planVersion, itemId: input.bundle.itemId, goalRef: input.base.context.goalId, projectRef: input.base.context.projectId });
+        const catalog = readRoutingCandidateCatalog({ modelMapPath: resolve(process.cwd(), "config/model_map.json"), catalogPath });
+        return createEnsembleNativeAdmission(config, { snapshot, ...catalog, routeRef: input.routeRef, base: input.base });
+      };
+      const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1", createAdmission }, proof, headContext("product"));
+      expect(worker.status).toBe("spawned");
+      const binding = await pool.query<{ binding_id: string }>("SELECT binding_id FROM native_execution_bindings WHERE worker_id = $1", [worker.workerId]);
+      expect(binding.rows).toHaveLength(1);
+      const evidence = await pool.query<{ admission_binding_ref: string; selected_model_ref: string; pressure_band: string; decision_layer: string }>("SELECT admission_binding_ref, selected_model_ref, pressure_band, decision_layer FROM ensemble_router_routing_evidence WHERE goal_ref = $1", [goalId]);
+      expect(evidence.rows).toEqual([{ admission_binding_ref: binding.rows[0]!.binding_id, selected_model_ref: "openai/gpt-5.6-sol", pressure_band: expect.any(String), decision_layer: expect.any(String) }]);
+    } finally {
+      rmSync(catalogPath, { force: true });
+    }
+  });
 
   it("holds a completed worker for repair without releasing its bound session", async () => {
     const { council, plan, proof } = await setupBundle(["product"], repairHold);
