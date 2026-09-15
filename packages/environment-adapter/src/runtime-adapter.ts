@@ -87,9 +87,14 @@ const DEFAULT_OUTPUT_CAP_BYTES = 1024 * 1024;
 const DEFAULT_CANCEL_GRACE_MS = 250;
 const SECRET_NAME = /(?:password|passwd|secret|token|private[_-]?key|api[_-]?key)/i;
 const SECRET_OUTPUT_ASSIGNMENT = /(^|\n)(\s*(?:api[_-]?(?:key|token)|access[_-]?token|auth[_-]?token|password|passwd|secret|private[_-]?key)\s*[:=]\s*)([^\r\n]*)/gim;
+// Provider-shaped tokens can be emitted without an assignment label. Keep the
+// output boundary fail-closed for common opaque credential formats as well.
+const SECRET_OUTPUT_TOKEN = /\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{12,}|xox[baprs]-[A-Za-z0-9-]{12,})\b/g;
 
 function redactSecretOutput(value: string): string {
-  return value.replace(SECRET_OUTPUT_ASSIGNMENT, "$1$2[REDACTED]");
+  return value
+    .replace(SECRET_OUTPUT_ASSIGNMENT, "$1$2[REDACTED]")
+    .replace(SECRET_OUTPUT_TOKEN, "[REDACTED]");
 }
 
 const ENVIRONMENT_ALLOWLIST_KEYS = [
