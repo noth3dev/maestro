@@ -1,7 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { accessSync, constants } from "node:fs";
-import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { resolveCodexAppServerCommand } from "../../../apps/cli/src/tui/local-bootstrap.js";
 import { CodexAppServerClient, type CodexAppServerTransport } from "./codex-app-server.js";
 
 class FakeTransport implements CodexAppServerTransport {
@@ -26,40 +25,18 @@ class FakeTransport implements CodexAppServerTransport {
   async close(): Promise<void> {}
 }
 
-function installedCodexCommand(): string | undefined {
-  const configured = process.env.MAESTRO_CODEX_APP_SERVER_COMMAND?.trim();
-  if (configured !== undefined && configured !== "") {
-    try {
-      accessSync(configured, constants.X_OK);
-      return configured;
-    } catch {
-      return undefined;
-    }
-  }
-  for (const entry of process.env.PATH?.split(delimiter).filter(Boolean) ?? []) {
-    const candidate = join(entry, process.platform === "win32" ? "codex.exe" : "codex");
-    try {
-      accessSync(candidate, constants.X_OK);
-      return candidate;
-    } catch {
-      /* continue */
-    }
-  }
-  return undefined;
-}
-
 function hasChatGptLogin(command: string | undefined): boolean {
   if (command === undefined) return false;
   const status = spawnSync(command, ["login", "status"], { encoding: "utf8" });
   return /logged in using ChatGPT/i.test(`${status.stdout ?? ""}${status.stderr ?? ""}`);
 }
 
-const liveCodexCommand = installedCodexCommand();
+const liveCodexCommand = resolveCodexAppServerCommand(process.env.MAESTRO_CODEX_APP_SERVER_COMMAND);
 const describeLiveCodex = hasChatGptLogin(liveCodexCommand) ? describe : describe.skip;
 
 describeLiveCodex("live local Codex account login acceptance", () => {
   it("reads the authenticated ChatGPT account through the real installed Codex app-server", async () => {
-    const command = installedCodexCommand();
+    const command = liveCodexCommand;
     if (command === undefined) return;
     const status = spawnSync(command, ["login", "status"], { encoding: "utf8" });
     expect(`${status.stdout ?? ""}${status.stderr ?? ""}`).toMatch(/logged in using ChatGPT/i);
