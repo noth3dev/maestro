@@ -576,6 +576,21 @@ const PressureCalculationSchema = z.object({
   pressure: z.number().finite().min(0).max(200),
   explicitHeadUplift: z.number().int().min(0).max(200),
 }).strict();
+const WorkCharacterSchema = z.object({
+  schemaVersion: z.literal(1),
+  risk: z.number().int().min(0).max(200),
+  reversibility: z.number().int().min(0).max(200),
+  verificationAttachment: z.number().int().min(0).max(200),
+  materialScale: z.number().int().min(0).max(200),
+  timePressure: z.number().int().min(0).max(200),
+  budgetHeadroom: z.number().int().min(0).max(200),
+  provenance: z.object({ taskContractRef: NonEmptyLineSchema, headDecisionRef: NonEmptyLineSchema }).strict(),
+}).strict();
+const RoutingWorkInputSchema = z.object({
+  schemaVersion: z.literal(1),
+  workCharacter: WorkCharacterSchema,
+  explicitHeadUplift: z.number().int().min(0).max(200),
+}).strict();
 const RoutingRefSchema = z.string().regex(/^\S+$/);
 const RoutingCandidateRefSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/);
 const RoutingApprovalIdentitySchema = z.object({
@@ -629,10 +644,7 @@ const RoutingEvidencePayloadSchema = z.object({
   admissionBindingRef: RoutingRefSchema, rationale: NonEmptyLineSchema, createdAt: z.string().datetime(),
   pressureCalculation: PressureCalculationSchema, taskKindRecipeVersions: z.record(z.string().min(1), z.number().int().positive()),
   taskDemand: TaskDemandSchema,
-  workCharacter: z.object({
-    schemaVersion: z.literal(1), risk: z.number().int().min(0).max(200), reversibility: z.number().int().min(0).max(200), verificationAttachment: z.number().int().min(0).max(200), materialScale: z.number().int().min(0).max(200), timePressure: z.number().int().min(0).max(200), budgetHeadroom: z.number().int().min(0).max(200),
-    provenance: z.object({ taskContractRef: NonEmptyLineSchema, headDecisionRef: NonEmptyLineSchema }).strict(),
-  }).strict(),
+  workCharacter: WorkCharacterSchema,
   modelProfile: ModelProfileSchema,
   operationalOverlaySnapshot: OperationalOverlaySnapshotSchema,
   approvalRef: RoutingRefSchema.nullable(), approvalIdentity: RoutingApprovalIdentitySchema.nullable(),
@@ -663,7 +675,7 @@ export type RoutingEvidence = z.infer<typeof RoutingEvidenceSchema>;
 
 export const MissionBundleSubstanceSchema = z.object({
   role: z.enum(["head", "scout", "execution"]), profileRef: z.string().min(1), goalBrief: z.string().min(1),
-  taskDemand: TaskDemandSchema, approvedModels: NonEmptyStringListSchema, allowedSkills: NonEmptyStringListSchema, allowedTools: NonEmptyStringListSchema,
+  taskDemand: TaskDemandSchema, routingWorkInput: RoutingWorkInputSchema.optional(), approvedModels: NonEmptyStringListSchema, allowedSkills: NonEmptyStringListSchema, allowedTools: NonEmptyStringListSchema,
   allowedPaths: NonEmptyStringListSchema, environment: NonEmptyStringListSchema, authorityBoundary: NonEmptyStringListSchema,
   externalServiceBoundary: NonEmptyStringListSchema, dataBoundary: NonEmptyStringListSchema, costCeiling: z.string().min(1),
   timeCeiling: z.string().min(1), retryCeiling: z.number().int().nonnegative(), workerCeiling: z.number().int().nonnegative(),
