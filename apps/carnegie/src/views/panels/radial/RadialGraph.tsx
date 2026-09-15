@@ -15,6 +15,8 @@ interface RadialNodeData extends Record<string, unknown> {
   version?: number | null;
   goalId?: string;
   ownerId?: string | null;
+  sourceRevision?: string;
+  eventCursor?: string;
 }
 
 export function panViewport(viewport: Viewport, x: number, y: number): Viewport {
@@ -46,6 +48,8 @@ function flowNodes(nodes: readonly RadialGraphNode[], selectedNodeId: string | u
       ...(node.version === undefined ? {} : { version: node.version }),
       ...(node.ownerId === undefined ? {} : { ownerId: node.ownerId }),
       ...(node.goalId === undefined ? {} : { goalId: node.goalId }),
+      ...(node.sourceRevision === undefined ? {} : { sourceRevision: node.sourceRevision }),
+      ...(node.eventCursor === undefined ? {} : { eventCursor: node.eventCursor }),
     };
     return {
       id: node.id,

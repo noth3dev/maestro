@@ -23,6 +23,8 @@ export interface RadialGraphNode {
   state?: string;
   ownerId?: string | null;
   goalId?: string;
+  sourceRevision?: string;
+  eventCursor?: string;
   collapsed?: boolean;
   compressed?: boolean;
 }
@@ -130,7 +132,7 @@ export function buildRadialLayout(projection: ProjectionReadModel, options: Radi
     const angle = goalAngles.get(goal.goalId) ?? -Math.PI / 2;
     const radius = !multipleGoals || goal.goalId === options.selectedGoalId ? nodeRadii.goal : 120;
     const position = point(radius, angle);
-    result.push({ id: goal.nodeId, label: goal.goalId === options.selectedGoalId || !multipleGoals ? "Goal" : `Goal · ${goal.goalId.slice(0, 8)}`, kind: goal.kind, synthetic: false, ...position, radius, angle, labelRotation: 0, sourceKey: goal.sourceKey, version: goal.version, state: goal.state, ownerId: goal.ownerId, goalId: goal.goalId, compressed: multipleGoals && goal.goalId !== options.selectedGoalId });
+    result.push({ id: goal.nodeId, label: goal.goalId === options.selectedGoalId || !multipleGoals ? "Goal" : `Goal · ${goal.goalId.slice(0, 8)}`, kind: goal.kind, synthetic: false, ...position, radius, angle, labelRotation: 0, sourceKey: goal.sourceKey, version: goal.version, state: goal.state, ownerId: goal.ownerId, goalId: goal.goalId, sourceRevision: goal.sourceRevision, eventCursor: goal.eventCursor, compressed: multipleGoals && goal.goalId !== options.selectedGoalId });
   }
 
   for (const sector of sectors) {
@@ -144,7 +146,7 @@ export function buildRadialLayout(projection: ProjectionReadModel, options: Radi
       const nodeAngle = angle + spread;
       const radius = nodeRadii[node.kind];
       const position = point(radius, nodeAngle);
-      result.push({ id: node.nodeId, label: multipleGoals && node.goalId !== options.selectedGoalId && node.kind === "department_plan" ? sectorFor(node) : labelFor(node), kind: node.kind, synthetic: false, ...position, radius, angle: nodeAngle, labelRotation: 0, sourceKey: node.sourceKey, version: node.version, state: node.state, ownerId: node.ownerId, goalId: node.goalId, collapsed: isCollapsed(node, options, multipleGoals, sleepingDepartmentIds), compressed: multipleGoals && node.goalId !== options.selectedGoalId });
+      result.push({ id: node.nodeId, label: multipleGoals && node.goalId !== options.selectedGoalId && node.kind === "department_plan" ? sectorFor(node) : labelFor(node), kind: node.kind, synthetic: false, ...position, radius, angle: nodeAngle, labelRotation: 0, sourceKey: node.sourceKey, version: node.version, state: node.state, ownerId: node.ownerId, goalId: node.goalId, sourceRevision: node.sourceRevision, eventCursor: node.eventCursor, collapsed: isCollapsed(node, options, multipleGoals, sleepingDepartmentIds), compressed: multipleGoals && node.goalId !== options.selectedGoalId });
     });
   }
 

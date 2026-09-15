@@ -26,6 +26,7 @@ function projectionWithRecords(): ProjectionReadModel {
       node({ nodeId: "goal-2", goalId: "33333333-3333-4333-8333-333333333333", kind: "goal", state: "running", sectorId: "goal", sourceKey: ["goal-2"] }),
       node({ nodeId: "sleeping-department", kind: "department_plan", state: "sleeping", sectorId: "finance" }),
       node({ nodeId: "worker-1", parentNodeId: "sleeping-department", kind: "worker" }),
+      node({ nodeId: "approval-1", kind: "capability_approval", state: "below_requirement", sectorId: "engineering" }),
     ],
     edges: [],
   };
@@ -113,7 +114,10 @@ describe("Plan 7 §S9 CLI parity and recovery proof (RED)", () => {
       departmentAcceptanceId: "77777777-7777-4777-8777-777777777777", integrationRevisionId: "88888888-8888-4888-8888-888888888888",
       verdict: "passed", certifiedByDepartment: "quality", producingDepartment: "engineering",
     };
-    const element = GoalDepartmentPanels({ projection: projectionWithRecords(), events: [], certifications: [certification], goalId });
+    const element = GoalDepartmentPanels({
+      projection: projectionWithRecords(), events: [], certifications: [certification], goalId,
+      evidenceBundle: { bundleId: "99999999-9999-4999-8999-999999999999", goalId, content: { routingEvidence: [] }, hash: "b".repeat(64) },
+    });
     const text = textFromReactTree(element);
     expect(text).toContain("routing-off");
     expect(text).toContain("below-requirement");
