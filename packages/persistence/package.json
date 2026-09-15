@@ -15,12 +15,14 @@
     }
   },
   "dependencies": {
-    "@maestro/domain": "*",
-    "drizzle-orm": "^0.45.2",
-    "pg": "^8.23.0",
+    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "^0.2.11",
     "@maestro/authority": "*",
     "@maestro/contracts": "*",
+    "@maestro/domain": "*",
     "@maestro/evidence": "*",
-    "@maestro/git-adapter": "*"
+    "@maestro/git-adapter": "*",
+    "drizzle-orm": "^0.45.2",
+    "pg": "^8.23.0"
   }
 }
