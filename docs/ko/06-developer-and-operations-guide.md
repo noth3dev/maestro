@@ -119,9 +119,9 @@ node apps/cli/dist/main.js report get <goalId>
 
 - Control Plane은 인증된 route, PostgreSQL lease/fencing, project role, capability grant 및 idempotency를 소유합니다. gateway 또는 구체적인 effect adapter가 없으면 fail-closed입니다.
 - Model Gateway만 provider credential, account admission, model identity, cancellation 및 managed login을 소유합니다.
-- Native `ToolRegistry`는 등록된 도구의 이름·입력·출력 schema와 grant/data class를 검증하지만, production composition에는 현재 host tool이 **0개** 등록되어 있습니다. 미등록 도구는 거부됩니다.
+- Native `ToolRegistry`는 등록된 도구의 이름·입력·출력 schema와 grant/data class를 검증합니다. production composition에는 IPython host tool이 등록돼 있고(`apps/control-plane/src/main.ts`의 `tools.register(createIpPythonTool(...))`), 그 외 host tool은 등록돼 있지 않습니다. 미등록 도구는 거부됩니다.
 - OpenAI Codex app-server adapter는 tool-bearing turn을 거부하고 read-only sandbox/no-approval로 동작합니다. 현재 native Worker는 제한된 text generation 경계입니다.
-- Git adapter는 `AuthorizedEffectExecutor`를 통과하는 명시적 Control Plane Git 작업을 제공합니다. remote push와 critical effect는 별도 승인과 구체적 adapter가 필요합니다.
+- Git adapter는 `AuthorizedEffectExecutor`를 통과하는 명시적 Control Plane Git 작업을 제공합니다. `@maestro/git-adapter`에는 remote push·merge·rewrite·release·deploy 작업이 **설계상 아예 존재하지 않습니다** — 미완성이 아니라 의도된 보안 경계입니다. remote push 등 critical/deploy effect는 Maestro를 배포하는 쪽이 외부에서 구체적 effect adapter를 직접 연결해야 하며, Maestro 자체 코드베이스는 그런 adapter를 절대 내장하지 않습니다.
 - CLI/TUI와 Carnegie는 API client일 뿐 PostgreSQL, provider, gateway credential 또는 device transport에 직접 연결하지 않습니다.
 
 도구·권한·파일시스템 범위·네트워크 범위를 문서화하려면 먼저 이름 있는 계약, action 분류, 구체적 adapter 및 실제 gateway/process acceptance가 필요합니다.
