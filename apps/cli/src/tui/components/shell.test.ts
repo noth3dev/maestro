@@ -178,6 +178,16 @@ describe("Maestro TUI shell", () => {
     expect(output.split("\n").every((line) => line.length <= 60)).toBe(true);
   });
 
+  it("omits Docker-specific setup language for the embedded database path", () => {
+    const output = renderSetupSteps({
+      ...state,
+      connection: { kind: "setup-required", message: "starting" },
+      setupSteps: [{ step: "postgres-ready", status: "completed", message: "Embedded PostgreSQL-compatible database is ready" }],
+    }, 80).join("\n");
+    expect(output).not.toContain("Docker");
+    expect(output).toContain("PostgreSQL ready");
+  });
+
   it("renders the complete pending setup sequence before the first callback", () => {
     const output = renderSetupSteps({ ...state, connection: { kind: "connecting" } }, 80);
     expect(output).toEqual([
