@@ -14,6 +14,7 @@ import { runActivityStream, subscribeToEvents } from "../../cli/src/tui/activity
 import type { TranscriptLine } from "../../cli/src/tui/theme.js";
 import { renderStatusHeader } from "../../cli/src/tui/components/shell.js";
 import { createControlPlane } from "./main.js";
+import { pumpEventStream } from "../../carnegie/electron/event-stream-bridge.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -98,6 +99,19 @@ describeDatabase("TUI SSE cursor and failure semantics against real PostgreSQL",
       const durablePage = await client.listEvents({ projectId, after: "0" });
       const durableIds = durablePage.events.map((event) => event.eventId);
       expect(durablePage.events.length).toBeGreaterThanOrEqual(2);
+      const pushed: Array<{ kind: string; event?: GoalEvent }> = [];
+      const pushController = new AbortController();
+      await pumpEventStream(
+        (query, options) => client.streamEvents(query, options),
+        { projectId, after: "0" },
+        pushController.signal,
+        (message) => {
+          pushed.push(message.kind === "event" ? { kind: message.kind, event: message.event } : { kind: message.kind });
+          if (message.kind === "event") pushController.abort();
+        },
+      );
+      expect(pushed[0]).toMatchObject({ kind: "event", event: { eventId: durableIds[0] } });
+      expect(pushed.some((message) => message.kind === "error")).toBe(false);
       const calls: string[] = [];
       let streamAttempt = 0;
       const streamClient = {
