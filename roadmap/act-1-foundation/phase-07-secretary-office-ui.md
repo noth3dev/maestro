@@ -1,6 +1,10 @@
 # Phase 7 — Full Secretary Office and Radial Control Surface
 
-> **Current status (2026-09-08):** Phase 7 is planned and not accepted. Its UI contract now includes IPython session scope, pending Head/Encore/user approvals, repetition budgets, full-access mode, individually activated external capabilities, live stop, and durable audit evidence. No UI surface may imply host-tool or external capability availability before the server grants it.
+> **Current status (2026-09-15):** Phase 7 implementation slices §S1–§S9 are merged. §S9 is the mechanical phase exit gate; mechanical verification is complete, with the user visual/interaction handoff pending. Its UI contract includes IPython session scope, pending Head/Encore/user approvals, repetition budgets, full-access mode, individually activated external capabilities, live stop, and durable audit evidence. No live-provider acceptance is claimed, and no UI surface may imply host-tool or external capability availability before the server grants it.
+
+### §S9 mechanical phase exit-gate evidence
+
+Implementation merge `cf4108d`, branding repair merge `544623f`, and follow-up forbidden-token repair `417f359` are recorded, with independent `REVIEW: PASS`. Post-repair `npm run build`, `npm run lint`, `git diff --check`, and the authenticated serialized PostgreSQL run passed **290/290 files and 1917/1917 tests**, exit 0, in **637.86s**; the run is recorded at `/tmp/plan7-s9-repair-pg.log`. This is mechanical evidence only: no live-provider acceptance is claimed. Remaining visual/interaction judgment is a user-owned handoff, not a mechanical test claim.
 
 ## Outcome
 
