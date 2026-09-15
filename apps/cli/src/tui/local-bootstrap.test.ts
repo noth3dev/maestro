@@ -1,4 +1,5 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { startEmbeddedDatabase } from "@maestro/persistence";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
 import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, resolveInstalledControlPlaneEntry, resolveLocalConnection, type LocalBootstrapStepEvent, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
@@ -40,19 +41,30 @@ describe("resolveLocalConnection", () => {
       throw new Error(`unexpected command: ${file} ${args.join(" ")}`);
     });
     const setupEvents: LocalBootstrapStepEvent[] = [];
-    const result = await resolveLocalConnection({
-      env: { MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
-      fetch,
-      secretStore: secretStore(),
-      runCommand,
-      startControlPlane: vi.fn(async () => undefined),
-      startModelGateway: vi.fn(async () => undefined),
-      retryDelayMs: 0,
-      onStep: (event) => setupEvents.push(event),
-    });
-    expect(result).toMatchObject({ kind: "configured", apiUrl: "http://127.0.0.1:4310" });
-    expect(setupEvents).not.toContainEqual(expect.objectContaining({ step: "docker-check" }));
-    expect(setupEvents).toContainEqual(expect.objectContaining({ step: "postgres-ready", status: "completed", message: expect.stringContaining("Embedded") }));
+    const dataDir = await mkdtemp(`${tmpdir()}/maestro-embedded-bootstrap-`);
+    let embedded: Awaited<ReturnType<typeof startEmbeddedDatabase>> | undefined;
+    try {
+      const result = await resolveLocalConnection({
+        env: { MAESTRO_LOCAL_DATA_DIR: dataDir, MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+        fetch,
+        secretStore: secretStore(),
+        runCommand,
+        startEmbeddedDatabase: async (options) => {
+          embedded = await startEmbeddedDatabase({ dataDir: options.dataDir, detached: false, port: 0 });
+          return embedded;
+        },
+        startControlPlane: vi.fn(async () => undefined),
+        startModelGateway: vi.fn(async () => undefined),
+        retryDelayMs: 0,
+        onStep: (event) => setupEvents.push(event),
+      });
+      expect(result).toMatchObject({ kind: "configured", apiUrl: "http://127.0.0.1:4310" });
+      expect(setupEvents).not.toContainEqual(expect.objectContaining({ step: "docker-check" }));
+      expect(setupEvents).toContainEqual(expect.objectContaining({ step: "postgres-ready", status: "completed", message: expect.stringContaining("Embedded") }));
+    } finally {
+      await embedded?.stop();
+      await rm(dataDir, { recursive: true, force: true });
+    }
     expect(runCommand).not.toHaveBeenCalledWith("docker", expect.anything(), expect.anything());
   });
 
