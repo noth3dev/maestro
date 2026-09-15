@@ -2191,3 +2191,12 @@ The final authenticated serialized PostgreSQL gate initially passed 284/285 file
 ## 2026-09-15 — Plan 7-c §S8 SSE bridge verification
 
 The initial idle-retry regression test exposed an unbounded retry/termination pattern and caused a Node heap exhaustion. The test was rewritten with a renderer-local stop control and deterministic empty SSE retries. The implementation then published `{ transport: "sse", stale: false }` immediately when an idle retry became healthy, before waiting for a future event. Final focused verification passed 4 files / 14 tests; the exact-HEAD independent no-edit review returned `REVIEW: PASS`. Post-merge build, lint, diff-check, and authenticated serialized PostgreSQL verification passed 287/287 files and 1895/1895 tests; no further S8 findings remain.
+
+
+## 2026-09-15 — Plan 7-d §S1 Carnegie shared-bootstrap investigation
+
+- `apps/carnegie/electron/main.ts:37-57,176-179` currently connects only a saved `store.ts` config before registering IPC and creating the window; a fresh launch therefore leaves the renderer at `Setup` (`apps/carnegie/src/App.tsx:79-87`). No Carnegie path invokes the CLI bootstrap.
+- `apps/cli/src/tui/local-bootstrap.ts:166-291` is the sole local bootstrap implementation. It starts/checks Docker PostgreSQL, starts the Control Plane and model gateway, runs the Control Plane `local-bootstrap.js` helper, validates the bearer, and writes the bearer via its injected `LocalSecretStore`; `apps/control-plane/src/local-bootstrap.ts:10-37` already emits `projectId`, but the CLI resolver currently returns only `{ apiUrl, token }`.
+- `apps/carnegie/electron/store.ts:30-50` already provides the required encrypted persistence path and loopback guard. Carnegie can persist the resolver result by constructing its existing `ConnectionConfig`; no second storage format is needed.
+- S1 must therefore add a tested Electron-startup adapter around the exported CLI `resolveLocalConnection`, carry the helper's generated `projectId` to Carnegie, save through `saveConnectionConfig`, and expose a failure reason to the existing Setup fallback. Saved config must be checked first. Env endpoint/token overrides must suppress local auto-bootstrap.
+- The CLI source cannot be imported directly into the Carnegie TypeScript project without widening its `rootDir`; the built `apps/cli/dist/tui/local-bootstrap.js`/`.d.ts` is the compatible shared entry point after the root build. This keeps one implementation and avoids copying bootstrap logic.
