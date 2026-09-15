@@ -4,6 +4,7 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import type { ApiClient } from "@maestro/api-client";
 import type { WebContents } from "electron";
 import { loadConnectionConfig, saveConnectionConfig, clearConnectionConfig, type ConnectionConfig } from "./store.js";
+import { initializeCarnegieConnection } from "./bootstrap.js";
 import { loadPreferences, savePreferences } from "./preferences.js";
 import { createBridgedApi, isExposedMethod } from "./apiBridge.js";
 import { EVENT_STREAM_CHANNELS, pumpEventStream, type EventStreamMessage } from "./event-stream-bridge.js";
@@ -19,6 +20,7 @@ const dirName = dirname(fileURLToPath(import.meta.url));
 if (process.platform === "linux") app.commandLine.appendSwitch("password-store", "basic");
 
 let api: ApiClient | undefined;
+let setupError: string | undefined;
 type EventStreamSender = Pick<WebContents, "isDestroyed" | "send" | "once" | "removeListener">;
 const activeEventStreams = new Map<string, ActiveEventStream>();
 
@@ -45,14 +47,18 @@ function registerIpcHandlers(): void {
     return config === undefined ? undefined : { apiUrl: config.apiUrl, projectId: config.projectId };
   });
 
+  ipcMain.handle("maestro:config:error", () => setupError);
+
   ipcMain.handle("maestro:config:save", (_event, config: ConnectionConfig) => {
     const publicConfig = saveConnectionConfig(config);
+    setupError = undefined;
     connect(config);
     return publicConfig;
   });
 
   ipcMain.handle("maestro:config:clear", () => {
     clearConnectionConfig();
+    setupError = undefined;
     connect(undefined);
   });
 
@@ -173,8 +179,15 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
-  connect(loadConnectionConfig());
+app.whenReady().then(async () => {
+  try {
+    const result = await initializeCarnegieConnection({ env: process.env, load: loadConnectionConfig, save: saveConnectionConfig });
+    setupError = result.setupError;
+    connect(result.config);
+  } catch (error) {
+    setupError = error instanceof Error ? error.message : "Could not load the saved connection";
+    connect(undefined);
+  }
   registerIpcHandlers();
   createWindow();
 

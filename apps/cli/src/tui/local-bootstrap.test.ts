@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
-import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, resolveLocalConnection, type LocalBootstrapStepEvent, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
+import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, resolveInstalledControlPlaneEntry, resolveLocalConnection, type LocalBootstrapStepEvent, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
 
 function secretStore(initial?: string): LocalSecretStore {
   let value = initial;
@@ -19,6 +19,10 @@ function response(body: unknown, status = 200): Response {
 }
 
 describe("resolveLocalConnection", () => {
+  it("resolves the sibling Control Plane from the built shared module", () => {
+    expect(resolveInstalledControlPlaneEntry("/opt/maestro/apps/cli/dist/tui")).toBe("/opt/maestro/apps/control-plane/dist/main.js");
+  });
+
   it("rejects a non-UUID local operator override before starting services", async () => {
     await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_OPERATOR_ID: "local-operator" }, fetch: vi.fn(), secretStore: secretStore(), runCommand: vi.fn() })).resolves.toEqual({
       kind: "setup-required",
@@ -53,6 +57,24 @@ describe("resolveLocalConnection", () => {
     });
     expect(runCommand).not.toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledTimes(7);
+  });
+
+  it("returns the single local project when a consumer requests it", async () => {
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(response({ status: "ok" }))
+      .mockResolvedValueOnce(response({ status: "ok" }))
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(response({ projects: [projectId] }))
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(response({ goals: [{ goalId: "22222222-2222-4222-8222-222222222222", projectId, state: "draft", version: 1 }] }));
+
+    await expect(resolveLocalConnection({ env: {}, fetch, includeProjectId: true, secretStore: secretStore("credential.secret"), runCommand: vi.fn() })).resolves.toEqual({
+      kind: "configured",
+      apiUrl: "http://127.0.0.1:4310",
+      token: "credential.secret",
+      projectId,
+    });
   });
 
   it("restarts a missing model gateway while retaining the Control Plane session", async () => {

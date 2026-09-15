@@ -4,11 +4,11 @@ import { useT } from "../i18n/index.js";
 
 export function Setup() {
   const t = useT();
-  const { connect } = useConnection();
+  const { connect, setupError } = useConnection();
   const [apiUrl, setApiUrl] = useState("http://127.0.0.1:4310");
   const [token, setToken] = useState("");
   const [projectId, setProjectId] = useState("");
-  const [error, setError] = useState<string | undefined>(undefined);
+  const [error, setError] = useState<string | undefined>(setupError);
   const [connecting, setConnecting] = useState(false);
 
   const submit = async (event: React.FormEvent) => {
