@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { existsSync, chmodSync, mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, statSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -87,6 +87,11 @@ function exportDatabase(databaseUrl, exportPath) {
       throw new Error(`pg_dump failed${result.status === null ? " to start" : ` with exit code ${result.status}`}`);
     }
     if (!existsSync(temporaryPath) || statSync(temporaryPath).size === 0) throw new Error("pg_dump produced an empty database export");
+    // PostgreSQL 17 adds a random \restrict token to every dump. Stabilize
+    // that transport-only token so identical database state has one identity.
+    const dump = readFileSync(temporaryPath, "utf8");
+    const stableDump = dump.replace(/^\\restrict [^\r\n]+$/gmu, "\\restrict maestro_release_checkpoint").replace(/^\\unrestrict [^\r\n]+$/gmu, "\\unrestrict maestro_release_checkpoint");
+    if (stableDump !== dump) writeFileSync(temporaryPath, stableDump, "utf8");
     chmodSync(temporaryPath, 0o600);
     renameSync(temporaryPath, absolutePath);
     chmodSync(absolutePath, 0o600);
