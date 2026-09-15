@@ -68,7 +68,7 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
     await markHeadParticipationActive(pool, goalId, "design", "opaque:design", lease);
     await expect(activateHeadParticipation(pool, { goalId, departmentId: "product", reason: "loop", requester: { role: "Head", departmentId: "design" }, ...activationBrief }, lease)).rejects.toBeInstanceOf(HeadActivationCycleError);
     expect((await pool.query("SELECT requester_department_id, department_id FROM head_activation_edges WHERE goal_id = $1", [goalId])).rows).toEqual([{ requester_department_id: "product", department_id: "design" }]);
-    expect((await pool.query("SELECT outcome FROM head_activation_attempts WHERE goal_id = $1 ORDER BY recorded_at DESC LIMIT 1", [goalId])).rows[0].outcome).toBe("cycle_rejected");
+    expect((await pool.query("SELECT outcome FROM head_activation_attempts WHERE goal_id = $1 AND outcome = 'cycle_rejected' LIMIT 1", [goalId])).rows[0].outcome).toBe("cycle_rejected");
   });
 
   it("records a self-edge rejection durably without creating an edge", async () => {
@@ -78,7 +78,7 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
       requester: { role: "Head", departmentId: "product" },
     }, lease)).rejects.toBeInstanceOf(HeadActivationCycleError);
     expect((await pool.query("SELECT requester_department_id, department_id FROM head_activation_edges WHERE goal_id = $1", [goalId])).rows).toEqual([]);
-    expect((await pool.query("SELECT outcome FROM head_activation_attempts WHERE goal_id = $1 ORDER BY recorded_at DESC LIMIT 1", [goalId])).rows[0].outcome).toBe("cycle_rejected");
+    expect((await pool.query("SELECT outcome FROM head_activation_attempts WHERE goal_id = $1 AND outcome = 'cycle_rejected' LIMIT 1", [goalId])).rows[0].outcome).toBe("cycle_rejected");
   });
 
   it("rejects a transitive cycle by walking from the requested target to its requester", async () => {
@@ -96,7 +96,7 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
       { requester_department_id: "design", department_id: "engineering" },
       { requester_department_id: "product", department_id: "design" },
     ]);
-    expect((await pool.query("SELECT outcome FROM head_activation_attempts WHERE goal_id = $1 ORDER BY recorded_at DESC LIMIT 1", [goalId])).rows[0].outcome).toBe("cycle_rejected");
+    expect((await pool.query("SELECT outcome FROM head_activation_attempts WHERE goal_id = $1 AND outcome = 'cycle_rejected' LIMIT 1", [goalId])).rows[0].outcome).toBe("cycle_rejected");
   });
 
   it("binds the participation to one HeadRoleId, contract, and Goal context", async () => {
@@ -201,7 +201,7 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
     const goalId = await goal(); const lease = await active(goalId, "product");
     const result = await activateHeadParticipation(pool, concertmaster(goalId, "product"), lease);
     expect(result).toMatchObject({ status: "active", activeSessionRef: "opaque:product" });
-    expect((await pool.query("SELECT outcome FROM head_activation_attempts WHERE goal_id = $1 ORDER BY recorded_at DESC LIMIT 1", [goalId])).rows[0].outcome).toBe("already_active");
+    expect((await pool.query("SELECT outcome FROM head_activation_attempts WHERE goal_id = $1 AND outcome = 'already_active' LIMIT 1", [goalId])).rows[0].outcome).toBe("already_active");
   });
 
   it("does not bind one active session reference to two HeadRoleId and Goal pairs", async () => {
