@@ -140,6 +140,8 @@ export function createDurableEventSubscription(options: DurableEventSubscription
 
       let reconnectAttempts = 0;
       while (!controller.signal.aborted) {
+        // A healthy reopened stream may be idle; publish the handback before awaiting its first event.
+        publish({ transport: "sse", stale: false, error: undefined });
         try {
           for await (const event of options.api.streamEvents({ projectId: options.projectId, after: state.cursor }, { signal: controller.signal })) {
             if (controller.signal.aborted) return;
