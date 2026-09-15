@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MODEL_CAPABILITY_AXES, type ExecutionAdmission, type ModelMap, type RoutingWorkSnapshot } from "@maestro/domain";
+import { MODEL_CAPABILITY_AXES, type ModelMap, type RoutingWorkSnapshot } from "@maestro/domain";
 import type { MaestroConfig } from "./config.js";
 import { createEnsembleNativeAdmission } from "./ensemble-admission.js";
 
@@ -24,13 +24,13 @@ const taskDemand = {
 };
 
 const snapshot: RoutingWorkSnapshot = {
-  schemaVersion: 1, goalRef: "goal-1", projectRef: "project-1", missionBundleRef: "bundle-1", approvedModels: ["openai/model-strong"], taskDemand,
+  schemaVersion: 1, goalRef: "goal-1", projectRef: "project-1", missionBundleRef: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", approvedModels: ["openai/model-strong"], taskDemand,
   routingWorkInput: { schemaVersion: 1, workCharacter: { schemaVersion: 1, risk: 120, reversibility: 60, verificationAttachment: 100, materialScale: 50, timePressure: 80, budgetHeadroom: 100, provenance: taskDemand.provenance }, explicitHeadUplift: 130 },
   operationalOverlay: { schemaVersion: 1, installationRef: "installation-1", projectRef: "project-1", goalRef: "goal-1", overlayVersion: 2, observations: [{ candidateRef: "strong-primary", measuredLatencyMs: 10, measuredCost: 1, failureRate: 0, timeoutRate: 0, providerErrorRate: 0, currentAvailability: true, accountBinding: "openai-account", observedAt: "2026-09-15T00:00:00.000Z" }] },
 };
 
 const base = {
-  context: { operatorId: "head-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1", authorityPolicyVersion: 1, budgetEffectCents: 0, fencingToken: "1" },
+  context: { operatorId: "head-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", policyVersion: "policy-1", authorityPolicyVersion: 1, budgetEffectCents: 0, fencingToken: "1" },
   grant: { grantId: "grant-1", allowedTools: ["read"], allowedSkills: ["coding"], pathScope: ["packages"], outboundDataClasses: ["workspace"], remaining: { modelTurns: 8, toolCalls: 8, childCalls: 0, outputTokens: 8192, wallTimeMs: 120000, retryCount: 0 } },
   idempotencyKey: "command-1",
 };

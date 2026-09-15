@@ -23,7 +23,7 @@ const overlay = {
 };
 
 const input = (overrides: Partial<RoutingWorkSnapshotInput> = {}): RoutingWorkSnapshotInput => ({
-  goalRef: "goal-1", projectRef: "project-1", missionBundleRef: "bundle-hash", approvedModels: ["openai/gpt-5.6-sol"], taskDemand, routingWorkInput: workInput, operationalOverlay: overlay, ...overrides,
+  goalRef: "goal-1", projectRef: "project-1", missionBundleRef: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", approvedModels: ["openai/gpt-5.6-sol"], taskDemand, routingWorkInput: workInput, operationalOverlay: overlay, ...overrides,
 });
 
 describe("Goal/work routing snapshot", () => {
@@ -37,6 +37,10 @@ describe("Goal/work routing snapshot", () => {
 
   it("rejects a missing work-character contract instead of deriving pressure", () => {
     expect(() => createRoutingWorkSnapshot(input({ routingWorkInput: undefined }))).toThrow(RoutingWorkSnapshotValidationError);
+  });
+
+  it("requires the Mission Bundle content hash rather than an arbitrary route label", () => {
+    expect(() => createRoutingWorkSnapshot(input({ missionBundleRef: "bundle-label" }))).toThrow(/SHA-256|hash/i);
   });
 
   it("rejects an overlay snapshot bound to another Goal or project", () => {

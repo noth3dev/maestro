@@ -91,6 +91,7 @@ function validate(value: RoutingWorkSnapshotInput): RoutingWorkSnapshot {
   line(input.goalRef, "Routing work snapshot goalRef");
   line(input.projectRef, "Routing work snapshot projectRef");
   line(input.missionBundleRef, "Routing work snapshot missionBundleRef");
+  if (!/^[a-f0-9]{64}$/.test(input.missionBundleRef)) throw new RoutingWorkSnapshotValidationError("Routing work snapshot missionBundleRef must be a lowercase SHA-256 hash");
   const approvedModels = standardStringArray(input.approvedModels, "Routing work snapshot approvedModels");
   const approved = new Set<string>();
   for (const model of approvedModels) {
