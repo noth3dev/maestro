@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createCommandPalette } from "./palette.js";
+import { createCommandPalette, renderCommandPaletteText } from "./palette.js";
 
 describe("command palette", () => {
   it("lists commands with their read/write safety classification", () => {
@@ -29,3 +29,15 @@ describe("command palette", () => {
       expect(labels).toContain(label);
     }
   });
+
+
+it("uses the same shortcut labels for /help and Ctrl+K output", () => {
+  const labels = ["Ctrl+G", "Ctrl+E", "Ctrl+R", "Ctrl+A", "Ctrl+/"];
+  const helpOutput = renderCommandPaletteText();
+  const ctrlKOutput = renderCommandPaletteText();
+  expect(ctrlKOutput).toBe(helpOutput);
+  for (const label of labels) {
+    expect(helpOutput).toContain(label);
+    expect(ctrlKOutput).toContain(label);
+  }
+});

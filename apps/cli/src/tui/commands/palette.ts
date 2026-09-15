@@ -21,3 +21,8 @@ export function createCommandPalette(): AutocompleteItem[] {
   });
   return [...commands, ...RAW_KEYBOARD_SHORTCUTS];
 }
+
+
+export function renderCommandPaletteText(): string {
+  return createCommandPalette().map((item) => `${item.label} [${item.description}]`).join(" · ");
+}

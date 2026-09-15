@@ -18,7 +18,7 @@ import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection } from "./local-bootstrap.js";
 import { createCommandRegistry } from "./commands/registry.js";
 import { createCommandAutocompleteItems } from "./commands/autocomplete.js";
-import { createCommandPalette } from "./commands/palette.js";
+import { renderCommandPaletteText } from "./commands/palette.js";
 import { parseInput } from "./commands/parser.js";
 import {
   executeReadCommand,
@@ -72,6 +72,50 @@ export interface BasicShellCommandContext {
   copyToClipboard: (text: string) => Promise<void>;
   write: (text: string) => void;
   version: string;
+}
+
+/** Generation gate used to reject asynchronous transcript work started before `/clear`. */
+export function createTranscriptClearBoundary(): {
+  capture: () => number;
+  clear: () => void;
+  isCurrent: (generation: number) => boolean;
+} {
+  let generation = 0;
+  return {
+    capture: () => generation,
+    clear: () => { generation += 1; },
+    isCurrent: (candidate) => candidate === generation,
+  };
+}
+
+/** Return the latest non-empty assistant or system transcript content in display order. */
+export function latestCopyableTranscriptText(state: ConversationTranscriptState): string | undefined {
+  const candidates: { text: string; occurredAt: string; order: number }[] = [];
+  let order = 0;
+  for (const item of state.manualMessages) {
+    if ((item.message.role === "assistant" || item.message.role === "system") && item.message.content.trim() !== "") {
+      candidates.push({ text: item.message.content, occurredAt: item.occurredAt, order: order++ });
+    }
+  }
+  const assistantEvents = state.events.filter((event) => event.eventType === "turn_delta" || event.eventType === "turn_completed");
+  const latestAssistantEvent = assistantEvents.at(-1);
+  if (state.assistantText.trim() !== "") {
+    candidates.push({ text: state.assistantText, occurredAt: latestAssistantEvent?.occurredAt ?? "", order: order++ });
+  }
+  for (const message of state.messages) {
+    if ((message.role === "assistant" || message.role === "system") && message.content.trim() !== "" && !candidates.some((candidate) => candidate.text === message.content)) {
+      candidates.push({ text: message.content, occurredAt: "", order: order++ });
+    }
+  }
+  if (candidates.length === 0) return undefined;
+  candidates.sort((left, right) => {
+    const leftTime = Date.parse(left.occurredAt);
+    const rightTime = Date.parse(right.occurredAt);
+    if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) return leftTime - rightTime;
+    if (Number.isFinite(leftTime) !== Number.isFinite(rightTime)) return Number.isFinite(leftTime) ? 1 : -1;
+    return left.order - right.order;
+  });
+  return candidates.at(-1)?.text;
 }
 
 /** Execute commands that only affect the local interactive shell. */
@@ -247,6 +291,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     };
     let activityStarted = false;
     let activityHydrationGeneration = 0;
+    const activityHistoryBoundary = createTranscriptClearBoundary();
+    const conversationDisplayBoundary = createTranscriptClearBoundary();
     let activityController: AbortController | undefined;
     let conversationTurnController: AbortController | undefined;
     let pendingProviderLogin: "openai" | "anthropic" | undefined;
@@ -341,23 +387,23 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         render();
       }
     };
-    const hydrateActivity = async (projectId: string, generation: number): Promise<void> => {
+    const hydrateActivity = async (projectId: string, generation: number, historyGeneration = activityHistoryBoundary.capture()): Promise<void> => {
       if (client === undefined) return;
       try {
         let cursor = "0";
         const history: GoalEvent[] = [];
         for (let page = 0; page < 64; page += 1) {
           const result = await client.listEvents({ projectId, after: cursor });
-          if (generation !== activityHydrationGeneration || project.kind !== "attached" || project.projectId !== projectId) return;
+          if (generation !== activityHydrationGeneration || !activityHistoryBoundary.isCurrent(historyGeneration) || project.kind !== "attached" || project.projectId !== projectId) return;
           history.push(...result.events);
           if (result.events.length === 0 || result.nextCursor === cursor || result.events.length < 100) break;
           cursor = result.nextCursor;
         }
-        if (generation !== activityHydrationGeneration || project.kind !== "attached" || project.projectId !== projectId) return;
+        if (generation !== activityHydrationGeneration || !activityHistoryBoundary.isCurrent(historyGeneration) || project.kind !== "attached" || project.projectId !== projectId) return;
         activity = mergeEvents(activity, history);
         render();
       } catch (error) {
-        if (generation === activityHydrationGeneration && project.kind === "attached" && project.projectId === projectId) {
+        if (generation === activityHydrationGeneration && activityHistoryBoundary.isCurrent(historyGeneration) && project.kind === "attached" && project.projectId === projectId) {
           appendWarning(`Activity history unavailable: ${error instanceof Error ? error.message : "Control Plane request failed"}`);
         }
       }
@@ -391,7 +437,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let conversationStreamController: AbortController | undefined;
     let conversationHydration: Promise<void> = Promise.resolve();
     let conversationHydrationGeneration = 0;
-    const streamConversation = async (conversationId: string, projectId: string, controller: AbortController): Promise<void> => {
+    const streamConversation = async (conversationId: string, projectId: string, controller: AbortController, displayGeneration = conversationDisplayBoundary.capture()): Promise<void> => {
       if (client === undefined) return;
       const signal = controller.signal;
       try {
@@ -407,7 +453,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           maxReconnectAttempts: 5,
           onReconnect: (attempt, maxAttempts) => append({ kind: "warning", text: `Conversation stream reconnecting (${attempt}/${maxAttempts})` }),
         })) {
-          if (signal.aborted || session?.conversationId !== conversationId || project.kind !== "attached" || project.projectId !== projectId) return;
+          if (signal.aborted || !conversationDisplayBoundary.isCurrent(displayGeneration) || session?.conversationId !== conversationId || project.kind !== "attached" || project.projectId !== projectId) return;
           conversation = applyConversationEvent(conversation, event);
           splash.dismiss();
           render();
@@ -640,6 +686,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         if (parsed.kind === "command" && parsed.action === undefined && Object.keys(parsed.options).length === 0 && (parsed.name === "clear" || parsed.name === "exit" || parsed.name === "quit" || parsed.name === "version" || parsed.name === "copy")) {
           await executeBasicShellCommand(parsed.name, {
             clearTranscript: () => {
+              activityHistoryBoundary.clear();
+              conversationDisplayBoundary.clear();
+              conversationStreamController?.abort();
+              conversationStreamController = undefined;
               conversationHydrationGeneration += 1;
               conversationHydration = Promise.resolve();
               conversation = createConversationTranscript();
@@ -647,19 +697,13 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               render();
             },
             stop,
-            getLatestTranscriptText: () => {
-              if (conversation.assistantText.trim() !== "") return conversation.assistantText;
-              for (const message of [...conversation.messages].reverse()) {
-                if ((message.role === "assistant" || message.role === "system") && message.content.trim() !== "") return message.content;
-              }
-              return undefined;
-            },
+            getLatestTranscriptText: () => latestCopyableTranscriptText(conversation),
             copyToClipboard: options.io.copyToClipboard ?? copyToClipboard,
             write: append,
             version: MAESTRO_VERSION,
           });
         } else if (parsed.kind === "command" && parsed.name === "help") {
-          append(`Commands: ${createCommandPalette().map((item) => `${item.label} [${item.description}]`).join(" · ")}`);
+          append(`Commands: ${renderCommandPaletteText()}`);
         } else if (parsed.kind === "command" && parsed.name === "login" && parsed.action === undefined) {
           loginInteractionGeneration += 1;
           accountLoginSelection = 0;
@@ -933,7 +977,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               const streamController = new AbortController();
               conversationStreamController?.abort();
               conversationStreamController = streamController;
-              void streamConversation(activeConversationId, project.projectId, streamController);
+              const displayGeneration = conversationDisplayBoundary.capture();
+              void streamConversation(activeConversationId, project.projectId, streamController, displayGeneration);
               const turnController = new AbortController();
               conversationTurnController = turnController;
               state.working = true;
@@ -954,8 +999,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
                   payload: { turnId: result.turn.turnId, status: result.conversation.status, ...(result.turn.status === "completed" ? { content: result.turn.content } : { message: result.turn.content }) },
                   occurredAt: result.turn.createdAt,
                 };
-                conversation = applyConversationEvent(conversation, terminalEvent);
-                render();
+                if (conversationDisplayBoundary.isCurrent(displayGeneration)) {
+                  conversation = applyConversationEvent(conversation, terminalEvent);
+                  render();
+                }
               } finally {
                 if (conversationTurnController === turnController) conversationTurnController = undefined;
                 state.working = false;
@@ -1023,9 +1070,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       }
       if (matchesKey(data, "ctrl+k")) {
         append(
-          `Commands: ${createCommandPalette()
-            .map((item) => `${item.label} [${item.description}]`)
-            .join(" · ")}`,
+          `Commands: ${renderCommandPaletteText()}`,
         );
         return { consume: true };
       }

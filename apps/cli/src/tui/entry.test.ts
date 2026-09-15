@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { parseInput } from "./commands/parser.js";
-import { createAutomaticProviderSignInGate, executeBasicShellCommand, hydrateOrganizationOnReconnect, isProviderLoginActive, isSplashRestoreShortcut, runAutomaticProviderSignInOffer, shouldOfferAutomaticProviderSignIn } from "./entry.js";
+import { executeCli } from "../main.js";
+import { MAESTRO_VERSION } from "../version.js";
+import { createAutomaticProviderSignInGate, createTranscriptClearBoundary, executeBasicShellCommand, latestCopyableTranscriptText, hydrateOrganizationOnReconnect, isProviderLoginActive, isSplashRestoreShortcut, runAutomaticProviderSignInOffer, shouldOfferAutomaticProviderSignIn } from "./entry.js";
 import type { TuiShellState } from "./components/shell.js";
+import { addConversationMessage, applyConversationEvent, createConversationTranscript } from "./conversation-transcript.js";
 
 const basicShellContext = (overrides: Partial<Parameters<typeof executeBasicShellCommand>[1]> = {}) => ({
   clearTranscript: vi.fn(),
@@ -147,6 +150,61 @@ describe("automatic provider sign-in", () => {
 
   it("recognizes the legacy raw Ctrl+/ byte used by ordinary terminals", () => {
     expect(isSplashRestoreShortcut("\x1f")).toBe(true);
+  });
+});
+
+
+describe("basic shell command boundaries", () => {
+  it("clears visible transcript without changing connection, session, or selected Goal", async () => {
+    const durable = {
+      connection: { kind: "connected" as const },
+      session: { sessionId: "session-1", goalId: "goal-1" },
+      selectedGoal: "goal-1",
+    };
+    let visibleTranscript = ["old assistant line"];
+    const context = basicShellContext({ clearTranscript: () => { visibleTranscript = []; } });
+    await executeBasicShellCommand("clear", context);
+    expect(visibleTranscript).toEqual([]);
+    expect(durable).toEqual({
+      connection: { kind: "connected" },
+      session: { sessionId: "session-1", goalId: "goal-1" },
+      selectedGoal: "goal-1",
+    });
+  });
+
+  it("rejects late hydration results captured before clear", () => {
+    const boundary = createTranscriptClearBoundary();
+    const hydrationGeneration = boundary.capture();
+    boundary.clear();
+    expect(boundary.isCurrent(hydrationGeneration)).toBe(false);
+    expect(boundary.isCurrent(boundary.capture())).toBe(true);
+  });
+
+  it("copies the latest transcript line in sequence, including multiline and empty lines", async () => {
+    let conversation = createConversationTranscript();
+    conversation = applyConversationEvent(conversation, {
+      cursor: "1", eventId: "event-1", conversationId: "conversation-1", projectId: "project-1",
+      eventType: "turn_started", payload: { turnId: "turn-1", text: "question" }, occurredAt: "2020-01-01T00:00:00.000Z",
+    });
+    conversation = applyConversationEvent(conversation, {
+      cursor: "2", eventId: "event-2", conversationId: "conversation-1", projectId: "project-1",
+      eventType: "turn_completed", payload: { turnId: "turn-1", content: "assistant response" }, occurredAt: "2020-01-01T00:00:01.000Z",
+    });
+    conversation = addConversationMessage(conversation, "system", "system after assistant\nsecond line");
+    expect(latestCopyableTranscriptText(conversation)).toBe("system after assistant\nsecond line");
+    const context = basicShellContext({ getLatestTranscriptText: () => latestCopyableTranscriptText(conversation) });
+    await executeBasicShellCommand("copy", context);
+    expect(context.copyToClipboard).toHaveBeenCalledWith("system after assistant\nsecond line");
+    expect(latestCopyableTranscriptText(addConversationMessage(conversation, "system", "   "))).toBe("system after assistant\nsecond line");
+  });
+
+  it("uses exactly the same version text as executeCli --version", async () => {
+    const output: string[] = [];
+    await executeCli(["--version"], {}, { stdout: (text) => output.push(text), stderr: () => undefined });
+    expect(output.join("").trim()).toBe(MAESTRO_VERSION);
+    const context = basicShellContext({ version: MAESTRO_VERSION });
+    await executeBasicShellCommand("version", context);
+    expect(context.write).toHaveBeenCalledWith(output.join("").trim());
   });
 });
 
