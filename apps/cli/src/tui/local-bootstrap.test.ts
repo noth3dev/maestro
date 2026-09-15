@@ -1,4 +1,5 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { startEmbeddedDatabase } from "@maestro/persistence";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
 import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, resolveInstalledControlPlaneEntry, resolveLocalConnection, type LocalBootstrapStepEvent, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
@@ -19,6 +20,54 @@ function response(body: unknown, status = 200): Response {
 }
 
 describe("resolveLocalConnection", () => {
+  it("uses the embedded Postgres-compatible engine by default when Docker is unavailable", async () => {
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const fetch = vi.fn()
+      .mockRejectedValueOnce(new Error("connection refused"))
+      .mockRejectedValueOnce(new Error("connection refused"))
+      .mockResolvedValueOnce(response({ status: "ok" }))
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(response({ status: "ok" }))
+      .mockResolvedValueOnce(response({ projects: [projectId] }))
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(response({ goals: [] }))
+      .mockResolvedValueOnce(response({ goalId: "22222222-2222-4222-8222-222222222222", projectId, state: "draft", version: 1 }, 201));
+    const runCommand = vi.fn(async (file: string, args: readonly string[], options?: { env?: Record<string, string | undefined> }) => {
+      if (file === "docker") return { code: 127, stdout: "", stderr: "docker: command not found" };
+      if (file === process.execPath && args.some((arg) => arg.endsWith("local-bootstrap.js"))) {
+        expect(options?.env?.MAESTRO_LOCAL_BOOTSTRAP_SECRET).toBeTruthy();
+        return { code: 0, stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444", projectId }), stderr: "" };
+      }
+      throw new Error(`unexpected command: ${file} ${args.join(" ")}`);
+    });
+    const setupEvents: LocalBootstrapStepEvent[] = [];
+    const dataDir = await mkdtemp(`${tmpdir()}/maestro-embedded-bootstrap-`);
+    let embedded: Awaited<ReturnType<typeof startEmbeddedDatabase>> | undefined;
+    try {
+      const result = await resolveLocalConnection({
+        env: { MAESTRO_LOCAL_DATA_DIR: dataDir, MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+        fetch,
+        secretStore: secretStore(),
+        runCommand,
+        startEmbeddedDatabase: async (options) => {
+          embedded = await startEmbeddedDatabase({ dataDir: options.dataDir, detached: false, port: 0 });
+          return embedded;
+        },
+        startControlPlane: vi.fn(async () => undefined),
+        startModelGateway: vi.fn(async () => undefined),
+        retryDelayMs: 0,
+        onStep: (event) => setupEvents.push(event),
+      });
+      expect(result).toMatchObject({ kind: "configured", apiUrl: "http://127.0.0.1:4310" });
+      expect(setupEvents).not.toContainEqual(expect.objectContaining({ step: "docker-check" }));
+      expect(setupEvents).toContainEqual(expect.objectContaining({ step: "postgres-ready", status: "completed", message: expect.stringContaining("Embedded") }));
+    } finally {
+      await embedded?.stop();
+      await rm(dataDir, { recursive: true, force: true });
+    }
+    expect(runCommand).not.toHaveBeenCalledWith("docker", expect.anything(), expect.anything());
+  });
+
   it("resolves the sibling Control Plane from the built shared module", () => {
     expect(resolveInstalledControlPlaneEntry("/opt/maestro/apps/cli/dist/tui")).toBe("/opt/maestro/apps/control-plane/dist/main.js");
   });
@@ -152,7 +201,7 @@ describe("resolveLocalConnection", () => {
     });
     const startControlPlane = vi.fn(async () => undefined);
 
-    await expect(resolveLocalConnection({ env: {}, fetch, secretStore: secretStore("credential.secret"), runCommand, startControlPlane, retryDelayMs: 0 })).resolves.toEqual({
+    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_DB_ENGINE: "docker" }, fetch, secretStore: secretStore("credential.secret"), runCommand, startControlPlane, retryDelayMs: 0 })).resolves.toEqual({
       kind: "configured",
       apiUrl: "http://127.0.0.1:4310",
       token: "credential.secret",
@@ -191,7 +240,7 @@ describe("resolveLocalConnection", () => {
     const startControlPlane = vi.fn(async () => undefined);
 
     const setupEvents: LocalBootstrapStepEvent[] = [];
-    const result = await resolveLocalConnection({ env: {}, fetch, secretStore: store, runCommand, startModelGateway, startControlPlane, retryDelayMs: 0, onStep: (event) => setupEvents.push(event) });
+    const result = await resolveLocalConnection({ env: { MAESTRO_LOCAL_DB_ENGINE: "docker" }, fetch, secretStore: store, runCommand, startModelGateway, startControlPlane, retryDelayMs: 0, onStep: (event) => setupEvents.push(event) });
     expect(setupEvents.filter((event) => event.status === "started").map((event) => event.step)).toEqual([
       "docker-check",
       "postgres-ready",
@@ -242,6 +291,7 @@ describe("resolveLocalConnection", () => {
 
     const options = {
       env: {
+        MAESTRO_LOCAL_DB_ENGINE: "docker",
         MAESTRO_CODEX_APP_SERVER_COMMAND: "/tmp/codex/app-server",
         MAESTRO_CODEX_MODELS: "gpt-5.3-codex",
         MAESTRO_MODEL_GATEWAY_OPERATOR_ID: "local-operator",
@@ -269,6 +319,24 @@ describe("resolveLocalConnection", () => {
     });
     expect(controlPlaneOptions?.modelGatewayOperatorId).toBe((startModelGateway.mock.calls[0]?.[0] as { operatorId: string }).operatorId);
     expect(controlPlaneOptions?.modelGatewayToken).toBe((startModelGateway.mock.calls[0]?.[0] as { token: string }).token);
+  });
+
+  it("stops an embedded database when model-gateway startup fails", async () => {
+    const stopDatabase = vi.fn(async () => undefined);
+    const fetch = vi.fn().mockRejectedValueOnce(new Error("Control Plane is down")).mockResolvedValueOnce(response({ status: "ok" }));
+    const runCommand = vi.fn(async () => ({ code: 0, stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }), stderr: "" }));
+    const result = await resolveLocalConnection({
+      env: { MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      fetch,
+      secretStore: secretStore(),
+      runCommand,
+      startEmbeddedDatabase: vi.fn(async () => ({ databaseUrl: "postgresql://maestro@127.0.0.1:55433/maestro_local", stop: stopDatabase })),
+      startControlPlane: vi.fn(async () => undefined),
+      startModelGateway: vi.fn(async () => { throw new Error("gateway failed"); }),
+      retryDelayMs: 0,
+    });
+    expect(result).toMatchObject({ kind: "setup-required", reason: expect.stringContaining("model gateway") });
+    expect(stopDatabase).toHaveBeenCalledOnce();
   });
 
   it("reports migration helper failure before child startup", async () => {
@@ -486,7 +554,7 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     const fetch = vi.fn().mockRejectedValue(new Error("connection refused"));
     const runCommand = vi.fn(async () => ({ code: 127, stdout: "", stderr: "docker: command not found" }));
 
-    await resolveLocalConnection({ env: {}, fetch, secretStore: secretStore(), runCommand, retryDelayMs: 0, onStep: (event) => setupEvents.push(event) });
+    await resolveLocalConnection({ env: { MAESTRO_LOCAL_DB_ENGINE: "docker" }, fetch, secretStore: secretStore(), runCommand, retryDelayMs: 0, onStep: (event) => setupEvents.push(event) });
 
     expect(setupEvents.at(-1)).toMatchObject({ step: "docker-check", status: "failed", message: expect.stringContaining("Docker") });
   });
@@ -495,7 +563,7 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     const fetch = vi.fn().mockRejectedValue(new Error("connection refused"));
     const runCommand = vi.fn(async () => ({ code: 127, stdout: "", stderr: "docker: command not found" }));
 
-    await expect(resolveLocalConnection({ env: {}, fetch, secretStore: secretStore(), runCommand, retryDelayMs: 0 })).resolves.toMatchObject({
+    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_DB_ENGINE: "docker" }, fetch, secretStore: secretStore(), runCommand, retryDelayMs: 0 })).resolves.toMatchObject({
       kind: "setup-required",
       reason: expect.stringContaining("Docker"),
     });

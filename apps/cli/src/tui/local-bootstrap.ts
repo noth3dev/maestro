@@ -6,11 +6,13 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Entry } from "@napi-rs/keyring";
 import { ApiError, createApiClient } from "@maestro/api-client";
+import { startEmbeddedDatabase, type EmbeddedDatabaseHandle } from "@maestro/persistence";
 import type { ConnectionEnvironment, ConnectionState } from "./connection.js";
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 
 export const DEFAULT_LOCAL_API_URL = "http://127.0.0.1:4310";
-export const DEFAULT_LOCAL_DATABASE_URL = "postgresql://maestro@127.0.0.1:55432/maestro_local";
+export const DEFAULT_LOCAL_DATABASE_URL = "postgresql://maestro@127.0.0.1:55433/maestro_local";
+export const DOCKER_LOCAL_DATABASE_URL = "postgresql://maestro@127.0.0.1:55432/maestro_local";
 export const LOCAL_POSTGRES_CONTAINER = "maestro-local-postgres";
 
 export interface LocalSecretStore {
@@ -61,6 +63,7 @@ export interface LocalBootstrapOptions {
   runCommand?: LocalCommandRunner;
   startControlPlane?: (options: LocalControlPlaneLaunchOptions) => Promise<LocalProcessHandle | void>;
   startModelGateway?: (options: LocalModelGatewayLaunchOptions) => Promise<LocalProcessHandle | void>;
+  startEmbeddedDatabase?: (options: { dataDir: string; detached?: boolean }) => Promise<EmbeddedDatabaseHandle>;
   retryDelayMs?: number;
   onStep?: (event: LocalBootstrapStepEvent) => void;
   includeProjectId?: boolean;
@@ -184,13 +187,17 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
   let gatewayReady = false;
   let ownedGateway: LocalProcessHandle | undefined;
   let ownedControlPlane: LocalProcessHandle | undefined;
+  let ownedDatabase: EmbeddedDatabaseHandle | undefined;
   const stopOwnedProcesses = async (): Promise<void> => {
     const controlPlane = ownedControlPlane;
     const gateway = ownedGateway;
     ownedControlPlane = undefined;
     ownedGateway = undefined;
+    const database = ownedDatabase;
+    ownedDatabase = undefined;
     await controlPlane?.stop().catch(() => undefined);
     await gateway?.stop().catch(() => undefined);
+    await database?.stop().catch(() => undefined);
   };
 
   if (storedToken !== undefined) {
@@ -234,9 +241,19 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
     }
   }
 
-  const databaseUrl = options.env.MAESTRO_LOCAL_DATABASE_URL?.trim() || DEFAULT_LOCAL_DATABASE_URL;
-  const database = await ensureLocalDatabase({ databaseUrl, runCommand, retryDelayMs, ...(options.onStep === undefined ? {} : { onStep: options.onStep }) });
-  if (database.kind === "unavailable") return { kind: "setup-required", reason: database.reason };
+  const configuredDatabaseUrl = options.env.MAESTRO_LOCAL_DATABASE_URL?.trim();
+  const databaseSelection = await ensureLocalDatabase({
+    env: options.env,
+    databaseUrl: configuredDatabaseUrl,
+    dataDir: options.env.MAESTRO_LOCAL_DATA_DIR?.trim() || join(homedir(), ".local", "share", "maestro"),
+    runCommand,
+    retryDelayMs,
+    ...(options.startEmbeddedDatabase === undefined ? {} : { startEmbeddedDatabase: options.startEmbeddedDatabase }),
+    ...(options.onStep === undefined ? {} : { onStep: options.onStep }),
+  });
+  if (databaseSelection.kind === "unavailable") return { kind: "setup-required", reason: databaseSelection.reason };
+  const databaseUrl = databaseSelection.databaseUrl;
+  ownedDatabase = databaseSelection.process;
 
   const initialHealth = await ensureLocalControlPlane({ apiUrl, fetch });
   let bootstrap: Awaited<ReturnType<typeof runBootstrapHelper>> | undefined;
@@ -249,6 +266,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
     if (initialHealth.kind !== "ready" && entry === undefined) {
       const reason = "Local Control Plane is not running and its executable was not found; set MAESTRO_CONTROL_PLANE_ENTRY or configure MAESTRO_API_URL and MAESTRO_API_TOKEN";
       reportSetupStep(options.onStep, "control-plane-up", "failed", reason);
+      await stopOwnedProcesses();
       return { kind: "setup-required", reason };
     }
     bootstrapSecret = bootstrapSecret ?? randomBytes(32).toString("base64url");
@@ -269,6 +287,7 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
     if (entry === undefined) {
       const reason = "Local Control Plane is not running and its executable was not found; set MAESTRO_CONTROL_PLANE_ENTRY or configure MAESTRO_API_URL and MAESTRO_API_TOKEN";
       reportSetupStep(options.onStep, "control-plane-up", "failed", reason);
+      await stopOwnedProcesses();
       return { kind: "setup-required", reason };
     }
     bootstrapSecret = bootstrapSecret ?? extractLocalSecret(storedToken) ?? randomBytes(32).toString("base64url");
@@ -311,7 +330,10 @@ export async function resolveLocalConnection(options: LocalBootstrapOptions): Pr
       ...(options.onStep === undefined ? {} : { onStep: options.onStep }),
       ...(options.startModelGateway === undefined ? {} : { startModelGateway: options.startModelGateway }),
     });
-    if (gateway.kind !== "ready") return { kind: "setup-required", reason: gateway.reason };
+    if (gateway.kind !== "ready") {
+      await stopOwnedProcesses();
+      return { kind: "setup-required", reason: gateway.reason };
+    }
     ownedGateway = gateway.process;
     gatewayReady = true;
   }
@@ -474,6 +496,7 @@ async function ensureLocalModelGatewayForBootstrap(options: {
   fetch: typeof globalThis.fetch;
   retryDelayMs: number;
   startModelGateway?: (options: LocalModelGatewayLaunchOptions) => Promise<LocalProcessHandle | void>;
+  startEmbeddedDatabase?: (options: { dataDir: string; detached?: boolean }) => Promise<EmbeddedDatabaseHandle>;
 }): Promise<{ kind: "ready"; process?: LocalProcessHandle } | { kind: "setup-required"; reason: string }> {
   let current = await probeLocalModelGateway({ apiUrl: options.apiUrl, token: options.token, fetch: options.fetch });
   if (current.kind === "ready") return current;
@@ -559,12 +582,37 @@ async function runBootstrapHelper(options: {
 }
 
 async function ensureLocalDatabase(options: {
+  env: ConnectionEnvironment;
+  databaseUrl: string | undefined;
+  dataDir: string;
+  runCommand: LocalCommandRunner;
+  retryDelayMs: number;
+  startEmbeddedDatabase?: (options: { dataDir: string; detached?: boolean }) => Promise<EmbeddedDatabaseHandle>;
+  onStep?: (event: LocalBootstrapStepEvent) => void;
+}): Promise<{ kind: "ready"; databaseUrl: string; process?: EmbeddedDatabaseHandle } | { kind: "unavailable"; reason: string }> {
+  const engine = options.env.MAESTRO_LOCAL_DB_ENGINE?.trim().toLowerCase();
+  if (options.databaseUrl !== undefined && options.databaseUrl !== "") return { kind: "ready", databaseUrl: options.databaseUrl };
+  if (engine === "docker") return ensureDockerDatabase({ databaseUrl: DOCKER_LOCAL_DATABASE_URL, runCommand: options.runCommand, retryDelayMs: options.retryDelayMs, ...(options.onStep === undefined ? {} : { onStep: options.onStep }) });
+  if (engine !== undefined && engine !== "embedded") return { kind: "unavailable", reason: "MAESTRO_LOCAL_DB_ENGINE must be embedded or docker" };
+
+  reportSetupStep(options.onStep, "postgres-ready", "started", "Starting embedded PostgreSQL-compatible database");
+  try {
+    const process = await (options.startEmbeddedDatabase ?? startEmbeddedDatabase)({ dataDir: options.dataDir, detached: options.startEmbeddedDatabase === undefined });
+    reportSetupStep(options.onStep, "postgres-ready", "completed", "Embedded PostgreSQL-compatible database is ready");
+    return { kind: "ready", databaseUrl: process.databaseUrl, process };
+  } catch (error) {
+    const reason = `Embedded PostgreSQL-compatible database could not be started: ${error instanceof Error ? error.message : "unknown error"}`;
+    reportSetupStep(options.onStep, "postgres-ready", "failed", reason);
+    return { kind: "unavailable", reason };
+  }
+}
+
+async function ensureDockerDatabase(options: {
   databaseUrl: string;
   runCommand: LocalCommandRunner;
   retryDelayMs: number;
   onStep?: (event: LocalBootstrapStepEvent) => void;
 }): Promise<{ kind: "ready"; databaseUrl: string } | { kind: "unavailable"; reason: string }> {
-  if (options.databaseUrl !== DEFAULT_LOCAL_DATABASE_URL) return { kind: "ready", databaseUrl: options.databaseUrl };
   reportSetupStep(options.onStep, "docker-check", "started");
   const inspect = await options.runCommand("docker", ["inspect", "--format", "{{.State.Running}}", LOCAL_POSTGRES_CONTAINER]);
   if (inspect.code !== 0) {

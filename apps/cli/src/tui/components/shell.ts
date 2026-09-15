@@ -201,7 +201,9 @@ export function renderSetupSteps(state: TuiShellState, width: number): string[] 
   if (state.connection.kind === "connected") return [];
   const latest = new Map<LocalBootstrapStepName, SetupStep>();
   for (const step of state.setupSteps ?? []) latest.set(step.step, step);
-  return LOCAL_BOOTSTRAP_STEP_ORDER.map((stepName) => {
+  const embedded = latest.get("postgres-ready")?.message?.toLowerCase().includes("embedded") === true;
+  const visibleSteps = embedded ? LOCAL_BOOTSTRAP_STEP_ORDER.filter((stepName) => stepName !== "docker-check") : LOCAL_BOOTSTRAP_STEP_ORDER;
+  return visibleSteps.map((stepName) => {
     const step = latest.get(stepName) ?? { step: stepName, status: "pending" as const };
     const message = step.status === "failed" && step.message !== undefined ? ` · ${step.message}` : "";
     return tuiTheme.text(fitPlain(`${setupStepGlyph(step.status)} ${setupStepLabels[step.step]}${message}`, width));
