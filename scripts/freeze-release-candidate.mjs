@@ -59,12 +59,13 @@ function databaseEnvironment(databaseUrl) {
     throw new Error("Database URL is invalid");
   }
   if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") throw new Error("Database URL must use postgres:// or postgresql://");
-  const environment = { ...process.env, PGHOST: parsed.hostname, PGPORT: parsed.port || "5432", PGDATABASE: decodeURIComponent(parsed.pathname.slice(1)) };
-  if (parsed.username) environment.PGUSER = decodeURIComponent(parsed.username);
-  if (parsed.password) environment.PGPASSWORD = decodeURIComponent(parsed.password);
-  const sslMode = parsed.searchParams.get("sslmode");
-  if (sslMode) environment.PGSSLMODE = sslMode;
-  return environment;
+  // Keep the original URL query intact (including options/search_path and TLS
+  // parameters), but do not put the password in the pg_dump process argv.
+  const password = parsed.password ? decodeURIComponent(parsed.password) : undefined;
+  parsed.password = "";
+  const environment = { ...process.env };
+  if (password !== undefined) environment.PGPASSWORD = password;
+  return { environment, connectionString: parsed.toString() };
 }
 
 function exportDatabase(databaseUrl, exportPath) {
@@ -75,9 +76,10 @@ function exportDatabase(databaseUrl, exportPath) {
   const temporaryPath = join(temporaryDirectory, "database.sql");
   try {
     const command = process.env.MAESTRO_PG_DUMP_COMMAND ?? "pg_dump";
-    const result = spawnSync(command, ["--format=plain", "--no-owner", "--no-privileges", "--file", temporaryPath], {
+    const connection = databaseEnvironment(databaseUrl);
+    const result = spawnSync(command, ["--format=plain", "--no-owner", "--no-privileges", "--file", temporaryPath, "--dbname", connection.connectionString], {
       cwd: repositoryRoot,
-      env: databaseEnvironment(databaseUrl),
+      env: connection.environment,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -107,12 +109,22 @@ async function migrationLedgerHash(pool) {
   return sha256(canonicalJson(ledger));
 }
 
+function currentPin(name) {
+  const environmentNames = [`MAESTRO_RELEASE_${name}_PIN`, `MAESTRO_${name}_PIN`, `MAESTRO_RELEASE_${name}_VERSION`, `MAESTRO_${name}_VERSION`];
+  const value = environmentNames.map((key) => process.env[key]).find((candidate) => candidate !== undefined);
+  return requiredText(value, environmentNames.join(" or "));
+}
+
 async function assertRuntimePins(pool, identity, packageLockHash) {
   if (identity.pins.node !== process.version) throw new Error(`Manifest Node pin ${identity.pins.node} does not match this runtime ${process.version}`);
   if (identity.pins.packages !== packageLockHash) throw new Error("Manifest package pin does not match package-lock.json");
   const result = await pool.query("SHOW server_version");
   const serverVersion = String(result.rows[0]?.server_version ?? "").trim();
   if (identity.pins.postgres !== serverVersion) throw new Error(`Manifest PostgreSQL pin ${identity.pins.postgres} does not match the connected server ${serverVersion}`);
+  for (const [field, name] of [["modelGateway", "MODEL_GATEWAY"], ["providerAdapters", "PROVIDER_ADAPTER"], ["browser", "BROWSER"]]) {
+    const actual = currentPin(name);
+    if (identity.pins[field] !== actual) throw new Error(`Manifest ${field} pin does not match the current ${name.toLowerCase()} pin`);
+  }
 }
 
 async function main() {
@@ -146,8 +158,8 @@ async function main() {
       databaseExportPath: exported.path,
       databaseExportSha256: exported.sha256,
     });
-    console.log(JSON.stringify({ candidateId: checkpoint.candidateId, databaseExportPath: checkpoint.databaseExportPath, databaseExportSha256: checkpoint.databaseExportSha256, createdAt: checkpoint.createdAt }));
-    // Compute once after persistence as an explicit integrity assertion for the CLI boundary.
+    // Compute before emitting success so a failed integrity assertion can never
+    // be mistaken for a successful freeze by a line-oriented caller.
     const persistedIdentity = {
       schemaVersions: checkpoint.schemaVersions,
       pins: checkpoint.pins,
@@ -156,6 +168,7 @@ async function main() {
       improvementClasses: checkpoint.improvementClasses,
     };
     if (computeReleaseCandidateIdentity(persistedIdentity) !== checkpoint.candidateId) throw new Error("Persisted release checkpoint identity could not be reproduced");
+    console.log(JSON.stringify({ candidateId: checkpoint.candidateId, databaseExportPath: checkpoint.databaseExportPath, databaseExportSha256: checkpoint.databaseExportSha256, createdAt: checkpoint.createdAt }));
   } finally {
     await pool.end();
   }
