@@ -689,7 +689,14 @@ export const MissionBundleSubstanceSchema = z.object({
       z.object({ kind: z.literal("bounded_time"), expiresAt: z.string().datetime() }).strict(),
     ]),
   }).strict().optional(),
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (value.routingWorkInput !== undefined && (
+    value.routingWorkInput.workCharacter.provenance.taskContractRef !== value.taskDemand.provenance.taskContractRef ||
+    value.routingWorkInput.workCharacter.provenance.headDecisionRef !== value.taskDemand.provenance.headDecisionRef
+  )) {
+    context.addIssue({ code: "custom", path: ["routingWorkInput", "workCharacter", "provenance"], message: "WorkCharacter provenance must match TaskDemand provenance" });
+  }
+});
 type MissionBundleSubstanceSchemaOutput = z.infer<typeof MissionBundleSubstanceSchema>;
 export type MissionBundleSubstance = Omit<MissionBundleSubstanceSchemaOutput, "taskDemand"> & { readonly taskDemand: TaskDemand };
 export const MissionBundleSchema = z.object({
