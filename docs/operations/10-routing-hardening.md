@@ -20,4 +20,4 @@ Status: **partially exercised**. Generated routing evidence is canonical, replay
 
 ## Stop condition
 
-Do not close §S7 or start §S8 until the routing-evidence redaction boundary has an independently verified implementation or an explicit owner-approved scope decision. Do not call a live provider to make this runbook pass.
+Do not close §S7 or start §S8 until the routing-evidence redaction boundary, provider-result identity equality, and stale-observation freshness behavior have independently verified evidence or explicit owner-approved scope decisions. Do not call a live provider to make this runbook pass.
