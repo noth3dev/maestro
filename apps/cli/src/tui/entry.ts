@@ -112,6 +112,10 @@ export function compactReviewAcknowledgement(
   return fitPlain(`Review: ${first.action} · ${decisions.length} pending · ⏸ ${first.tier}`, width);
 }
 
+export function compactHelpAcknowledgement(width: number): string {
+  return fitPlain("Help available; resize to view commands", width);
+}
+
 export function noModelSelectionMessage(): string {
   return [
     "No model selected.",
@@ -271,11 +275,14 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const editor = new SecretEditor(tui, editorTheme, { paddingX: 2, autocompleteMaxVisible: 6 });
     const inputPanel = new Box(1, 0, tuiTheme.inputSurface);
     let compactReview: string | undefined;
+    let compactHelp: string | undefined;
     const inputLabel = createDynamicRegion((width) => [
       tuiTheme.muted(
-        compactReview !== undefined && terminal.rows < 16
-          ? fitPlain(compactReview, width)
-          : renderInputPlaceholder(state, width, terminal.rows < 16),
+        compactHelp !== undefined && terminal.rows < 16
+          ? fitPlain(compactHelp, width)
+          : compactReview !== undefined && terminal.rows < 16
+            ? fitPlain(compactReview, width)
+            : renderInputPlaceholder(state, width, terminal.rows < 16),
       ),
     ]);
     inputPanel.addChild(inputLabel);
@@ -787,6 +794,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             version: MAESTRO_VERSION,
           });
         } else if (parsed.kind === "command" && parsed.name === "help") {
+          compactHelp = terminal.rows < 16 ? compactHelpAcknowledgement(terminal.columns) : undefined;
           dispatchCommandPaletteInput("help", append);
         } else if (parsed.kind === "command" && parsed.name === "login" && parsed.action === undefined) {
           if (terminal.rows < COMPACT_PROVIDER_LOGIN_MIN_HEIGHT) {
@@ -1184,6 +1192,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     tui.addInputListener((data) => {
       const reviewShortcut = matchesKey(data, "ctrl+a");
       const reviewAvailable = pendingConfirmation !== undefined || (state.pendingDecisions?.length ?? 0) > 0;
+      if (compactHelp !== undefined) {
+        compactHelp = undefined;
+        render();
+      }
       if (compactReview !== undefined && (!reviewShortcut || !reviewAvailable)) {
         compactReview = undefined;
         render();

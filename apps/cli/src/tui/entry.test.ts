@@ -13,6 +13,7 @@ import {
   isProviderLoginActive,
   isSplashRestoreShortcut,
   compactReviewAcknowledgement,
+  compactHelpAcknowledgement,
   noModelSelectionMessage,
   runAutomaticProviderSignInOffer,
   shouldOfferAutomaticProviderSignIn,
@@ -67,6 +68,16 @@ describe("compact review presentation", () => {
     expect(output).toContain("Review:");
     expect(output).toContain("deploy release");
     expect(output!.length).toBeLessThanOrEqual(40);
+  });
+});
+
+describe("compact help feedback", () => {
+  it("keeps the help result visible without claiming the hidden transcript is open", () => {
+    for (const width of [40, 60, 80]) {
+      const output = compactHelpAcknowledgement(width);
+      expect(output).toBe("Help available; resize to view commands");
+      expect(output.length).toBeLessThanOrEqual(width);
+    }
   });
 });
 
