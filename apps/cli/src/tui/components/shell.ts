@@ -85,12 +85,25 @@ function connectionMessage(state: TuiShellState): string | undefined {
   return state.connection.message;
 }
 
+export function setupRequiredGuidance(width: number, compact = false): string {
+  const guidance = compact ? "Set URL+token or local start; restart" : "Set MAESTRO_API_URL + MAESTRO_API_TOKEN; restart";
+  return fitPlain(guidance, width);
+}
+
+function setupRequiredAutostartHint(width: number, compact = false): string {
+  return fitPlain(compact ? "or enable local autostart; restart" : "Or enable local autostart; restart", width);
+}
+
 function pendingPaint(text: string): string {
   return tuiTheme.warning(text);
 }
 
 /** One-line status, ordered by what can change the operator's next action. */
 export function renderStatusRow(state: TuiShellState, width: number): string {
+  if (state.connection.kind === "setup-required") {
+    const detail = width >= 100 ? `⚠ ${state.connection.message} · ${setupRequiredGuidance(width)}` : `⚠ ${setupRequiredGuidance(width)}`;
+    return tuiTheme.warning(fitPlain(detail, width));
+  }
   const connection = connectionMessage(state);
   if (connection !== undefined) return tuiTheme.warning(fitPlain(`⚠ ${connection} · retry with ctrl+r`, width));
 
@@ -172,6 +185,7 @@ function hasPendingDecisionRows(state: TuiShellState): boolean {
 }
 
 export function renderInputPlaceholder(state: TuiShellState, width: number, compact = false): string {
+  if (state.connection.kind === "setup-required") return setupRequiredGuidance(width, compact);
   const decisions = pendingDecisionRows(state);
   if (decisions.length > 0) {
     const tier = decisions[0]?.tier ?? "authority";
@@ -278,6 +292,7 @@ export function createSplashController(): SplashController {
 }
 
 function hintText(state: TuiShellState, width = 80): string {
+  if (state.connection.kind === "setup-required") return setupRequiredAutostartHint(width, width < 60);
   if (connectionMessage(state) !== undefined) return "ctrl+r retry · /help for commands";
   if (state.working === true) return `esc stop · ctrl+a decisions${pendingCount(state) > 0 ? ` (${pendingCount(state)})` : ""}`;
   const count = pendingCount(state);

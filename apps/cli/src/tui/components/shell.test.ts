@@ -115,7 +115,12 @@ describe("Maestro TUI shell", () => {
     for (const connection of connections) {
       for (const width of [40, 80, 120]) {
         const output = stripAnsi(renderTuiFooter(width, { ...state, connection }));
-        expect(output).toBe("ctrl+r retry · /help for commands");
+        if (connection.kind === "setup-required") {
+          expect(output).toContain("restart");
+          expect(output).not.toContain("ctrl+r retry");
+        } else {
+          expect(output).toBe("ctrl+r retry · /help for commands");
+        }
         expect(output).not.toContain("/status");
         expect(output.length).toBeLessThanOrEqual(width);
       }
@@ -271,6 +276,21 @@ describe("Maestro TUI shell", () => {
     expect(splash.visible()).toBe(true);
   });
 
+  it("gives setup-required operators a concrete restart path", () => {
+    const setupRequired = { ...state, connection: { kind: "setup-required", message: "Control Plane is not configured" } } as TuiShellState;
+    for (const [width, height] of [[80, 24], [40, 15]] as const) {
+      const frame = renderTuiLayout(setupRequired, width, height);
+      const output = [...frame.status, ...frame.input, ...frame.hints].join("\n");
+      expect(output).toContain("restart");
+      expect(output).not.toContain("message to Concertmaster");
+      expect(output).not.toContain("retry with ctrl+r");
+      expect(output.split("\n").every((line) => stripAnsi(line).length <= width)).toBe(true);
+    }
+    const normal = renderTuiLayout(setupRequired, 80, 24);
+    expect(normal.status.join("\n")).toContain("MAESTRO_API_URL");
+    expect(normal.status.join("\n")).toContain("MAESTRO_API_TOKEN");
+  });
+
   it("renders truthful setup progress with distinct status glyphs", () => {
     const steps: SetupStep[] = [
       { step: "docker-check", status: "completed" },
@@ -313,7 +333,7 @@ describe("Maestro TUI shell", () => {
       80,
       24,
     ).join("\n");
-    expect(status).toContain("Control Plane connection is not configured");
+    expect(status).toContain("MAESTRO_API_URL");
     expect(status).not.toContain("Docker check");
     expect(status).not.toContain("Model gateway");
   });

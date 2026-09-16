@@ -110,8 +110,13 @@ describe("compact connection recovery priority", () => {
       { kind: "setup-required", message: "configure endpoint" } as const,
       { kind: "error", message: "gateway unavailable" } as const,
     ]) {
-      expect(compactConnectionRecoveryAcknowledgement(connection, 40)).toBe("ctrl+r retry · /help");
-      expect(compactConnectionRecoveryAcknowledgement(connection, 80)).toBe("ctrl+r retry · /help");
+      if (connection.kind === "setup-required") {
+        expect(compactConnectionRecoveryAcknowledgement(connection, 40)).toContain("restart");
+        expect(compactConnectionRecoveryAcknowledgement(connection, 80)).toContain("restart");
+      } else {
+        expect(compactConnectionRecoveryAcknowledgement(connection, 40)).toBe("ctrl+r retry · /help");
+        expect(compactConnectionRecoveryAcknowledgement(connection, 80)).toBe("ctrl+r retry · /help");
+      }
     }
     expect(compactConnectionRecoveryAcknowledgement({ kind: "connected" }, 40)).toBeUndefined();
   });

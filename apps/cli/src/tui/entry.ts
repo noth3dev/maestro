@@ -78,6 +78,7 @@ import {
   renderInputPlaceholder,
   renderPendingDecisionDetails,
   renderTuiFooter,
+  setupRequiredGuidance,
   type PendingDecision,
   type TuiShellState,
 } from "./components/shell.js";
@@ -150,7 +151,9 @@ export function compactTaskContractAcknowledgement(width: number): string {
 }
 
 export function compactConnectionRecoveryAcknowledgement(connection: TuiShellState["connection"], width: number): string | undefined {
-  return connection.kind === "connected" ? undefined : fitPlain("ctrl+r retry · /help", width);
+  if (connection.kind === "connected") return undefined;
+  if (connection.kind === "setup-required") return setupRequiredGuidance(width, true);
+  return fitPlain("ctrl+r retry · /help", width);
 }
 
 export function shouldBlockConcurrentTurnSubmit(
