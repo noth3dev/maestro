@@ -63,6 +63,12 @@ describe("command argument autocomplete", () => {
     const taskContract = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "task-contract");
     expect(taskContract?.getArgumentCompletions?.("create --su")).toEqual([expect.objectContaining({ value: "--substance-json " })]);
   });
+
+  it("suggests the guided project-index attach option alongside project-id", () => {
+    const session = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "session");
+    expect(session?.getArgumentCompletions?.("attach --project-i")).toEqual(expect.arrayContaining([expect.objectContaining({ value: "--project-index " })]));
+    expect(session?.getArgumentCompletions?.("attach --project-id")).toEqual([expect.objectContaining({ value: "--project-id " })]);
+  });
 });
 
 

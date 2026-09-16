@@ -24,7 +24,7 @@ const options: Record<string, readonly string[]> = {
   "channel list": ["--goal-id"],
   "channel read": ["--goal-id", "--channel-kind", "--channel-id"],
   "channel post": ["--goal-id", "--channel-kind", "--channel-id", "--content", "--command-id"],
-  "session attach": ["--project-id"],
+  "session attach": ["--project-id", "--project-index"],
   "capability select-full-access-mode": ["--goal-id", "--project-id", "--capability-kind", "--session-id", "--full-access-mode"],
   "evidence capture": ["--goal-id", "--project-id", "--correlation-id", "--command-id", "--kind", "--media-type", "--content-base64"],
   "evidence list": ["--goal-id", "--project-id"],
