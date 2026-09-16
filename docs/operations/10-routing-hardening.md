@@ -16,7 +16,7 @@ Evidence: `/tmp/plan8-s7-routing-evidence-final2.log` — exit status `0`; **10/
 
 ## Current boundary
 
-Status: **partially exercised**. Generated routing evidence is canonical, replayable, and structurally tamper-rejected, and the selected identity remains separate from native binding identity. This batch does not claim that an untrusted routing-evidence write is redacted at the domain/persistence boundary; that redaction seam is outside the allowed S7 test-only scope and remains a release blocker. The selector also has no freshness threshold: the stale-observation property records that limitation rather than claiming stale-overlay fail-closed behavior. The bundle reuses existing multi-Goal and pressure evidence rather than claiming a new full-system soak.
+Status: **partially exercised**. Generated routing evidence is canonical, replayable, and structurally tamper-rejected, and the selected identity remains separate from native binding identity. Provider-result identity equality is not claimed here because the batch does not invoke a live provider or fabricate a provider result. This batch does not claim that an untrusted routing-evidence write is redacted at the domain/persistence boundary; that redaction seam is outside the allowed S7 test-only scope and remains a release blocker. The selector also has no freshness threshold: the stale-observation property records that limitation rather than claiming stale-overlay fail-closed behavior. The bundle reuses existing multi-Goal and pressure evidence rather than claiming a new full-system soak.
 
 ## Stop condition
 
