@@ -85,6 +85,12 @@ describe("Plan 8 §S9 representative scenario contract", () => {
     expect(() => validateScenarioReport(report)).toThrow(/live/);
   });
 
+  it("rejects non-string actual runtime identities", () => {
+    const report = createPassedRecordFixture();
+    report.scenarios[0].actual.models = [null];
+    expect(() => validateScenarioReport(report)).toThrow(/string array/);
+  });
+
   it("requires Goal and Task Contract identity for a live passed record", () => {
     const base = createPassedRecordFixture();
     expect(() => validateScenarioReport(base)).toThrow(/Goal|Task Contract|preconditions/i);

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { validateScenarioReport } from "../test/phase8-scenarios/scenario-catalog.mjs";
+import { scenarioReportContentHash, validateScenarioReport } from "../test/phase8-scenarios/scenario-catalog.mjs";
 
 export const REQUIRED_RELEASE_GATES = Object.freeze([
   "phaseExitGates",
@@ -30,6 +30,23 @@ function object(value, name) {
 function readGateValues(gates) {
   const input = object(gates, "gates");
   return Object.fromEntries(REQUIRED_RELEASE_GATES.map((gate) => [gate, input[gate] === true]));
+}
+function validateGateBinding(source, scenarioReport, gates, blockers) {
+  const binding = source.gateManifest;
+  if (binding === undefined) {
+    blockers.push("gate manifest identity and evidence binding is required");
+    return;
+  }
+  try {
+    object(binding, "gateManifest");
+    if (binding.candidateId !== scenarioReport.candidateId) blockers.push("gate manifest candidateId does not match the frozen scenario candidate");
+    if (binding.checkpointId !== scenarioReport.checkpointId) blockers.push("gate manifest checkpointId does not match the scenario checkpoint");
+    if (binding.runId !== scenarioReport.runId) blockers.push("gate manifest runId does not match the scenario run");
+    const evidence = object(binding.gateEvidence, "gateManifest.gateEvidence");
+    for (const gate of REQUIRED_RELEASE_GATES) {
+      if (gates[gate] && (typeof evidence[gate] !== "string" || !/^[a-f0-9]{64}$/.test(evidence[gate]))) blockers.push(`gate evidence hash is missing or invalid: ${gate}`);
+    }
+  } catch (error) { blockers.push(error instanceof Error ? error.message : String(error)); }
 }
 function noncriticalFindings(value) {
   const findings = value ?? [];
@@ -79,7 +96,9 @@ export function evaluateReleaseDecision(input) {
   const noncritical = noncriticalFindings(source.findings?.noncritical);
   const blockers = [];
   if (scenarioReport.status !== "passed" || scenarioReport.mode !== "live-disposable" || typeof scenarioReport.runId !== "string" || scenarioReport.runId.trim() === "" || scenarioReport.scenarios.some((scenario) => scenario.status !== "passed" || scenario.live !== true)) blockers.push("S9 live representative scenarios are incomplete or lack a live-disposable run identity");
+  if (typeof scenarioReport.contentHash !== "string" || !/^[a-f0-9]{64}$/.test(scenarioReport.contentHash) || scenarioReport.contentHash !== scenarioReportContentHash(scenarioReport)) blockers.push("S9 scenario report content hash is missing or does not match its canonical content");
   if (scenarioReport.scenarios.some((scenario) => scenario.limitations.some((limitation) => /pending|mapped suite|not available|not.*claim/i.test(limitation)))) blockers.push("S9 scenario limitations still deny a complete live-system claim");
+  validateGateBinding(source, scenarioReport, gates, blockers);
   for (const gate of REQUIRED_RELEASE_GATES) if (!gates[gate]) blockers.push(`release gate is not demonstrated: ${gate}`);
   if (critical.length > 0) blockers.push(`${critical.length} critical finding(s) remain open; critical findings cannot be waived`);
   if (noncritical.some((finding) => !finding.owner || !finding.consequence || !finding.deadline)) blockers.push("every noncritical finding needs an owner, consequence, and deadline");

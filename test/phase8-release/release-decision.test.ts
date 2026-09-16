@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createBlockedScenarioReport } from "../../scripts/run-phase8-scenarios.mjs";
+import { scenarioReportContentHash } from "../../test/phase8-scenarios/scenario-catalog.mjs";
 import { evaluateReleaseDecision } from "../../scripts/release-decision.mjs";
 import { runRollback } from "../../scripts/release-rollback.mjs";
 
@@ -51,6 +52,25 @@ describe("Plan 8 §S10 release decision", () => {
     expect(result.blockers.join(" ")).toMatch(/critical/i);
   });
 
+
+  it("rejects a live-shaped scenario report with a missing or mismatched content hash", () => {
+    const report = { ...passedReport(), mode: "live-disposable", runId: "run-1", scenarios: passedReport().scenarios.map((scenario) => ({ ...scenario, limitations: ["bounded fixture"] })) };
+    const input = { scenarioReport: report, gates: completeGates, findings: { critical: [], noncritical: [] }, supportedScope: ["disposable"], disabledCapabilities: ["external"], knownLimitations: ["workspace deps"], costs: { totalCents: 1 }, confidence: "not certified", dissent: [] };
+    expect(evaluateReleaseDecision(input).blockers.join(" ")).toMatch(/hash/i);
+    expect(evaluateReleaseDecision({ ...input, scenarioReport: { ...report, contentHash: "0".repeat(64) } }).blockers.join(" ")).toMatch(/hash/i);
+  });
+
+  it("binds every demonstrated gate to the same candidate, checkpoint, and run", () => {
+    const reportBase = { ...passedReport(), mode: "live-disposable", runId: "run-1", scenarios: passedReport().scenarios.map((scenario) => ({ ...scenario, limitations: ["bounded fixture"] })) };
+    const report = { ...reportBase, contentHash: scenarioReportContentHash(reportBase) };
+    const result = evaluateReleaseDecision({
+      scenarioReport: report, gates: completeGates, findings: { critical: [], noncritical: [] },
+      gateManifest: { candidateId: "other-candidate", checkpointId: report.checkpointId, runId: report.runId, gateEvidence: Object.fromEntries(Object.keys(completeGates).map((gate) => [gate, "a".repeat(64)])) },
+      supportedScope: ["disposable"], disabledCapabilities: ["external"], knownLimitations: ["workspace deps"], costs: { totalCents: 1 }, confidence: "bounded", dissent: [],
+    });
+    expect(result.status).toBe("blocked"); expect(result.blockers.join(" ")).toMatch(/candidateId/);
+  });
+
   it("requires real report metadata before producing the final release report", () => {
     const result = evaluateReleaseDecision({ scenarioReport: passedReport(), gates: completeGates, findings: { critical: [], noncritical: [] } });
     expect(result.status).toBe("blocked");
@@ -70,7 +90,7 @@ describe("Plan 8 §S10 rollback protocol", () => {
     await writeFile(evidencePath, JSON.stringify({ scenario: "07-encore-improvement", events: ["failed"] }));
     await writeFile(candidatePath, JSON.stringify({ candidateId: "candidate-1", version: 1 }));
     await writeFile(failurePath, JSON.stringify({ status: "failed", scenarioId: "07-encore-improvement", phaseGate: "G7", critical: false }));
-    const result = await runRollback({ statePath, evidencePath, candidatePath, failurePath, reportPath, reruns: [
+    const result = await runRollback({ disposableFixture: true, statePath, evidencePath, candidatePath, failurePath, reportPath, reruns: [
       { name: "failed scenario", command: process.execPath, args: ["-e", "process.exit(0)"] },
       { name: "phase gate", command: process.execPath, args: ["-e", "process.exit(0)"] },
       { name: "full regression gate", command: process.execPath, args: ["-e", "process.exit(0)"] },
@@ -81,5 +101,38 @@ describe("Plan 8 §S10 rollback protocol", () => {
     expect(state).toMatchObject({ releaseProgression: "stopped", externalAuthority: "disabled", improvementAuthority: "disabled", activeGoals: [{ id: "goal-1", state: "paused" }] });
     expect(result.preserved.candidate).toBeDefined();
     expect(result.preserved.evidence).toBeDefined();
+  });
+
+  it("rejects an unapproved rerun command before mutating rollback state", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "maestro-s10-command-"));
+    const statePath = join(directory, "state.json"); const evidencePath = join(directory, "evidence.json"); const candidatePath = join(directory, "candidate.json"); const failurePath = join(directory, "failure.json");
+    await writeFile(statePath, JSON.stringify({ candidateId: "candidate-1", releaseProgression: "running", externalAuthority: "enabled", improvementAuthority: "enabled", activeGoals: [] }));
+    await writeFile(evidencePath, "{}"); await writeFile(candidatePath, JSON.stringify({ candidateId: "candidate-1" })); await writeFile(failurePath, JSON.stringify({ status: "failed", scenarioId: "s", phaseGate: "G7" }));
+    const result = await runRollback({ statePath, evidencePath, candidatePath, failurePath, reruns: [
+      { name: "failed scenario", command: "/bin/sh", args: ["-c", "exit 0"] }, { name: "phase gate", command: process.execPath, args: ["-e", "process.exit(0)"] }, { name: "full regression gate", command: process.execPath, args: ["-e", "process.exit(0)"] },
+    ] });
+    expect(result.status).toBe("blocked");
+    expect(JSON.parse(await readFile(statePath, "utf8")).releaseProgression).toBe("running");
+  });
+
+  it("bounds approved reruns and records a timeout without hanging", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "maestro-s10-timeout-"));
+    const statePath = join(directory, "state.json"); const evidencePath = join(directory, "evidence.json"); const candidatePath = join(directory, "candidate.json"); const failurePath = join(directory, "failure.json");
+    await writeFile(statePath, JSON.stringify({ candidateId: "candidate-1", releaseProgression: "running", externalAuthority: "enabled", improvementAuthority: "enabled", activeGoals: [] }));
+    await writeFile(evidencePath, "{}"); await writeFile(candidatePath, JSON.stringify({ candidateId: "candidate-1" })); await writeFile(failurePath, JSON.stringify({ status: "failed", scenarioId: "s", phaseGate: "G7" }));
+    const slow = { name: "failed scenario", command: process.execPath, args: ["-e", "setTimeout(() => {}, 1000)"] };
+    const quick = { name: "phase gate", command: process.execPath, args: ["-e", "process.exit(0)"] };
+    const full = { name: "full regression gate", command: process.execPath, args: ["-e", "process.exit(0)"] };
+    const result = await runRollback({ disposableFixture: true, timeoutMs: 20, statePath, evidencePath, candidatePath, failurePath, reruns: [slow, quick, full] });
+    expect(result.status).toBe("rollback_reruns_failed");
+    expect(result.reruns[0]).toMatchObject({ timedOut: true, exitCode: null });
+  });
+
+  it("confines preserved rollback evidence and rejects path traversal in candidate identity", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "maestro-s10-path-"));
+    const statePath = join(directory, "state.json"); const evidencePath = join(directory, "evidence.json"); const candidatePath = join(directory, "candidate.json"); const failurePath = join(directory, "failure.json");
+    await writeFile(statePath, JSON.stringify({ candidateId: "../escape", releaseProgression: "running", activeGoals: [] })); await writeFile(evidencePath, "{}"); await writeFile(candidatePath, JSON.stringify({ candidateId: "../escape" })); await writeFile(failurePath, JSON.stringify({ status: "failed", scenarioId: "s", phaseGate: "G7" }));
+    const result = await runRollback({ disposableFixture: true, statePath, evidencePath, candidatePath, failurePath, reruns: [] });
+    expect(result.status).toBe("blocked"); expect(result.blockers.join(" ")).toMatch(/identity|path|segment/i);
   });
 });

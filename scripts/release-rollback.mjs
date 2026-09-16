@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { chmod, copyFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { chmod, copyFile, lstat, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname, relative, resolve } from "node:path";
 import { spawn } from "node:child_process";
 
 export const REQUIRED_ROLLBACK_RERUNS = Object.freeze(["failed scenario", "phase gate", "full regression gate"]);
@@ -30,22 +30,53 @@ async function writeJson(path, value) {
 }
 function digest(value) { return createHash("sha256").update(value).digest("hex"); }
 function commandResult(command, args, result) {
-  return { name: command.name, command: command.command, args: command.args, exitCode: result.code ?? null, signal: result.signal ?? null, stdoutSha256: digest(result.stdout), stderrSha256: digest(result.stderr) };
+  return { name: command.name, command: command.command, args: command.args, exitCode: result.code ?? null, signal: result.signal ?? null, timedOut: result.timedOut === true, stdoutSha256: digest(result.stdout), stderrSha256: digest(result.stderr) };
 }
-function runCommand(command) {
+function effectDisabledEnvironment() {
+  const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/(TOKEN|SECRET|PASSWORD|CREDENTIAL|PRIVATE_KEY|API_KEY)/i.test(key)));
+  return { ...environment, MAESTRO_EXTERNAL_EFFECTS: "disabled", MAESTRO_IMPROVEMENT_AUTHORITY: "disabled", MAESTRO_RELEASE_ROLLBACK: "1" };
+}
+function runCommand(command, timeoutMs) {
   return new Promise((resolvePromise) => {
-    const child = spawn(command.command, command.args, { cwd: command.cwd ?? process.cwd(), env: process.env, shell: false, stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = ""; let stderr = "";
+    const child = spawn(command.command, command.args, { cwd: command.cwd ?? process.cwd(), env: effectDisabledEnvironment(), shell: false, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = ""; let stderr = ""; let settled = false; let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true; child.kill("SIGTERM");
+      setTimeout(() => { if (!settled) child.kill("SIGKILL"); }, 100).unref();
+    }, timeoutMs);
+    const finish = (result) => { if (settled) return; settled = true; clearTimeout(timer); resolvePromise({ ...result, stdout, stderr, timedOut }); };
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.stderr.on("data", (chunk) => { stderr += chunk; });
-    child.once("error", (error) => resolvePromise({ code: null, signal: null, stdout: "", stderr: error.message }));
-    child.once("close", (code, signal) => resolvePromise({ code, signal, stdout, stderr }));
+    child.once("error", (error) => finish({ code: null, signal: null, stderr: error.message }));
+    child.once("close", (code, signal) => finish({ code, signal }));
   });
 }
 async function preserve(source, destination) {
   await copyFile(resolve(source), resolve(destination));
   await chmod(resolve(destination), 0o600);
   return resolve(destination);
+}
+function safeSegment(value, name) {
+  const normalized = text(value, name);
+  if (!/^[A-Za-z0-9_-]+$/.test(normalized) || normalized === "." || normalized === "..") throw new Error(`${name} must be a safe path segment`);
+  return normalized;
+}
+function confinedPath(root, path, name) {
+  const resolved = resolve(path);
+  const remainder = relative(resolve(root), resolved);
+  if (remainder === "" || remainder === ".." || remainder.startsWith(`..${requireSeparator()}`) || remainder.startsWith(requireSeparator())) throw new Error(`${name} must remain inside the rollback directory`);
+  return resolved;
+}
+function requireSeparator() { return process.platform === "win32" ? "\\" : "/"; }
+async function assertRegularFile(path, name) {
+  const info = await lstat(resolve(path));
+  if (!info.isFile()) throw new Error(`${name} must be a regular file`);
+}
+function approvedRerun(rerun, disposableFixture) {
+  if (disposableFixture === true && resolve(rerun.command) === resolve(process.execPath) && rerun.args[0] === "-e") return true;
+  if (rerun.command === "npm" && ["test", "run"].includes(rerun.args[0])) return true;
+  if (rerun.command === "node" && rerun.args[0] === "node_modules/vitest/vitest.mjs" && rerun.args[1] === "run") return true;
+  return false;
 }
 function missingOptions(options) {
   return ["statePath", "evidencePath", "candidatePath", "failurePath"].filter((name) => typeof options[name] !== "string" || options[name].trim() === "");
@@ -66,17 +97,22 @@ export async function runRollback(options = {}) {
     object(state, "rollback state"); object(evidence, "failure evidence"); object(candidate, "candidate version");
     const failureRecord = object(failure, "failed scenario");
     if (failureRecord.status !== "failed") throw new Error("rollback requires a failed scenario record");
-    const candidateId = text(candidate.candidateId ?? state.candidateId, "candidateId");
+    const candidateId = safeSegment(candidate.candidateId ?? state.candidateId, "candidateId");
     if (state.candidateId !== candidateId) throw new Error("candidate identity does not match rollback state");
     if (!Array.isArray(state.activeGoals)) throw new Error("rollback state must list active test Goals");
     if (!Array.isArray(options.reruns) || options.reruns.length !== REQUIRED_ROLLBACK_RERUNS.length) throw new Error("rollback requires failed scenario, phase gate, and full regression reruns");
     const names = options.reruns.map((rerun) => text(rerun?.name, "rerun.name"));
     for (const required of REQUIRED_ROLLBACK_RERUNS) if (!names.includes(required)) throw new Error(`rollback rerun is missing: ${required}`);
+    const timeoutMs = options.timeoutMs ?? 60_000;
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 300_000) throw new Error("timeoutMs must be between 1 and 300000 milliseconds");
     for (const rerun of options.reruns) {
       object(rerun, "rerun"); text(rerun.command, "rerun.command");
       if (!Array.isArray(rerun.args) || rerun.args.some((arg) => typeof arg !== "string")) throw new Error("rerun.args must be a string array");
+      if (!approvedRerun(rerun, options.disposableFixture)) throw new Error(`rerun command is not approved: ${rerun.name}`);
     }
-    const preservedDir = resolve(options.preservedDir ?? joinFallback(options.statePath, candidateId));
+    const rollbackRoot = dirname(resolve(options.statePath));
+    const preservedDir = confinedPath(rollbackRoot, options.preservedDir ?? joinFallback(options.statePath, candidateId), "preservedDir");
+    await Promise.all([[options.candidatePath, "candidate"], [options.evidencePath, "evidence"], [options.failurePath, "failure"]].map(([path, name]) => assertRegularFile(path, name)));
     await mkdir(preservedDir, { recursive: true, mode: 0o700 });
     const preserved = {
       candidate: await preserve(options.candidatePath, `${preservedDir}/candidate.json`),
@@ -93,7 +129,7 @@ export async function runRollback(options = {}) {
     };
     await writeJson(options.statePath, nextState);
     const reruns = [];
-    for (const rerun of options.reruns) reruns.push(commandResult(rerun, rerun.args, await runCommand({ ...rerun, args: rerun.args })));
+    for (const rerun of options.reruns) reruns.push(commandResult(rerun, rerun.args, await runCommand({ ...rerun, args: rerun.args }, timeoutMs)));
     const report = { schemaVersion: 1, status: reruns.every((run) => run.exitCode === 0) ? "rolled_back" : "rollback_reruns_failed", candidateId, failedScenarioId: failureRecord.scenarioId, phaseGate: failureRecord.phaseGate, preserved, reruns, state: { releaseProgression: "stopped", externalAuthority: "disabled", improvementAuthority: "disabled" } };
     if (options.reportPath) await writeJson(options.reportPath, report);
     return report;
