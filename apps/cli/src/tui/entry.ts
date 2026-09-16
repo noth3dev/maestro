@@ -110,6 +110,18 @@ export function resolveConfiguredModel(environmentModel: string | undefined, ses
   return environmentModel?.trim() || sessionModel;
 }
 
+export function handleConversationStreamEvent(options: {
+  conversation: ConversationTranscriptState;
+  event: ConversationEvent;
+  dismissSplash: () => void;
+  render: () => void;
+}): { conversation: ConversationTranscriptState; terminal: boolean } {
+  const conversation = applyConversationEvent(options.conversation, options.event);
+  options.dismissSplash();
+  options.render();
+  return { conversation, terminal: isTerminalConversationEvent(conversation, options.event) };
+}
+
 export function shouldOfferAutomaticProviderSignIn(
   models: readonly Pick<ModelCatalogEntry, "identity">[],
   configuredModel: string | undefined,
@@ -440,10 +452,14 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             project.projectId !== projectId
           )
             return;
-          conversation = applyConversationEvent(conversation, event);
-          splash.dismiss();
-          render();
-          if (isTerminalConversationEvent(conversation, event)) {
+          const handled = handleConversationStreamEvent({
+            conversation,
+            event,
+            dismissSplash: () => splash.dismiss(),
+            render,
+          });
+          conversation = handled.conversation;
+          if (handled.terminal) {
             if (!signal.aborted) controller.abort();
             return;
           }
