@@ -2,7 +2,7 @@ import type { DashboardReadModel } from "./commands/read-commands.js";
 import type { AsyncState } from "./components/shell.js";
 
 export interface DashboardStateValues {
-  goal: AsyncState<{ goalId?: string; name: string; state: string }>;
+  goal: AsyncState<{ goalId: string; name: string; state: string }>;
   workers: AsyncState<number>;
   budget: AsyncState<{ spentCents: number; ceilingCents: number }>;
 }

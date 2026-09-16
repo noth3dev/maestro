@@ -15,7 +15,7 @@ const state: TuiShellState = {
   model: "test/model",
   mode: "maestro",
   connection: { kind: "connected" },
-  goal: { kind: "value", value: { name: "auth-refactor", state: "running" } },
+  goal: { kind: "value", value: { goalId: "auth-refactor", name: "auth-refactor", state: "running" } },
   workers: { kind: "value", value: 3 },
   approvals: { kind: "value", value: 0 },
   budget: { kind: "value", value: { spentCents: 124, ceilingCents: 500 } },

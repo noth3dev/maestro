@@ -137,7 +137,7 @@ describe("Maestro TUI shell", () => {
       {
         ...state,
         working: true,
-        goal: { kind: "value", value: { name: "auth-refactor", state: "running" } },
+        goal: { kind: "value", value: { goalId: "auth-refactor", name: "auth-refactor", state: "running" } },
         workers: { kind: "value", value: 2 },
       },
       80,
@@ -206,7 +206,7 @@ describe("Maestro TUI shell", () => {
   it("orients an attached Goal from the same state values as the status row without pressure", () => {
     const oriented = {
       ...state,
-      goal: { kind: "value", value: { name: "auth-refactor", state: "running", pressureBand: "high" } },
+      goal: { kind: "value", value: { goalId: "auth-refactor", name: "auth-refactor", state: "running", pressureBand: "high" } },
       workers: { kind: "value", value: 3 },
     } as unknown as TuiShellState;
     const splash = renderSplash(oriented, 120).join("\n");

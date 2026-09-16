@@ -1113,14 +1113,15 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               appendWarning(noModelSelectionMessage());
             } else {
               if (session.conversationId === undefined) {
+                const conversationGoalId = selectedConversationGoalId(state.goal, session.goalId);
                 const created = await client.createConversation(
-                  buildConversationInput(project.projectId, selectedConversationGoalId(state.goal, session.goalId), configuredModel!),
+                  buildConversationInput(project.projectId, conversationGoalId, configuredModel!),
                   { idempotencyKey: randomUUID() },
                 );
                 session = {
                   workspacePath: workspace.cwd,
                   projectId: project.projectId,
-                  ...(session.goalId === undefined ? {} : { goalId: session.goalId }),
+                  ...(conversationGoalId === undefined ? {} : { goalId: conversationGoalId }),
                   ...(session.lastEventCursor === undefined ? {} : { lastEventCursor: session.lastEventCursor }),
                   conversationId: created.conversationId,
                   model: created.model,

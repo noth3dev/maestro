@@ -24,7 +24,7 @@ export interface TuiShellState {
   working?: boolean;
   connection:
     { kind: "connected" } | { kind: "connecting" } | { kind: "setup-required"; message: string } | { kind: "error"; message: string };
-  goal: AsyncState<{ name: string; state: string }>;
+  goal: AsyncState<{ goalId: string; name: string; state: string }>;
   workers: AsyncState<number>;
   approvals: AsyncState<number>;
   budget: AsyncState<{ spentCents: number; ceilingCents: number }>;
