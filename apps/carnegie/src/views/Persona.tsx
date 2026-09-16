@@ -1,8 +1,35 @@
 import { useEffect, useState } from "react";
 import type { PersonaInspection } from "@maestro/contracts";
+import type { ImprovementCandidate, ImprovementCandidateInput } from "@maestro/domain";
 import { useConnection } from "../connection.js";
 import { useGoals } from "../goals.js";
 import { PersonaPanel } from "./panels/persona/PersonaPanel.js";
+
+export function buildPersonaCandidateInput(
+  source: ImprovementCandidateInput | ImprovementCandidate,
+  projectId: string,
+  goalId: string,
+  changes: readonly ImprovementCandidateInput["changes"][number][],
+): ImprovementCandidateInput {
+  return {
+    schemaVersion: source.schemaVersion,
+    projectId,
+    goalId,
+    kind: source.kind,
+    target: source.target,
+    changes,
+    sourceEvidenceIds: source.sourceEvidenceIds,
+    evidencePattern: source.evidencePattern,
+    predictedEffect: source.predictedEffect,
+    expectedMetrics: source.expectedMetrics,
+    protectedMetrics: source.protectedMetrics,
+    scenarioSuite: source.scenarioSuite,
+    scenarioSuiteHash: source.scenarioSuiteHash,
+    confidence: source.confidence,
+    dataSufficiency: source.dataSufficiency,
+    rollbackTarget: source.rollbackTarget,
+  };
+}
 
 export function Persona() {
   const { config } = useConnection();
@@ -21,12 +48,12 @@ export function Persona() {
     const prior = model.candidates.at(-1);
     const source = prior?.candidate ?? model.proposalTemplate;
     if (source === undefined || typeof source !== "object" || Array.isArray(source)) { setError("No durable evidence-backed candidate proposal is available for this Goal."); return; }
-    const changes = Array.isArray(source.changes) ? source.changes.map((change) => ({ ...(change as Record<string, unknown>) })) : [];
+    const changes = Array.isArray(source.changes) ? source.changes.map((change) => ({ ...change })) : [];
     const existing = changes.find((change) => change.axis === axis);
     if (existing !== undefined) existing.proposedValue = value;
     else if (changes.length < 2) changes.push({ axis, currentValue: model.profile[axis], proposedValue: value });
     else { setError("The learned candidate contract permits at most two axes per proposal."); return; }
-    const candidate = { ...source, projectId: config.projectId, goalId: selectedGoalId, changes };
+    const candidate = buildPersonaCandidateInput(source, config.projectId, selectedGoalId, changes);
     const operation = prior === undefined
       ? window.maestro.api.proposePersona({ projectId: config.projectId, goalId: selectedGoalId, candidate }, globalThis.crypto.randomUUID())
       : window.maestro.api.editPersonaCandidate(prior.candidateId, { projectId: config.projectId, goalId: selectedGoalId, candidate }, globalThis.crypto.randomUUID());

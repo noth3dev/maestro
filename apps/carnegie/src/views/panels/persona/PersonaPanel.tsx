@@ -1,5 +1,6 @@
 import React from "react";
-import type { PersonaAxis, PersonaCoreIdentity, PersonaProfile } from "@maestro/domain";
+import type { PersonaInspection } from "@maestro/contracts";
+import type { PersonaAxis } from "@maestro/domain";
 
 const PERSONA_AXES: readonly PersonaAxis[] = ["agreeableness", "extraversion", "imagination", "realism", "conscientiousness", "caution", "initiative", "empathy", "adaptability", "sociability"];
 
@@ -11,16 +12,12 @@ export interface PersonaRolloutSummary {
   readonly rollbackTarget: { readonly candidateId: string; readonly version: number; readonly contentHash: string };
   readonly evidence: readonly { readonly kind: string; readonly evidenceId: string }[];
 }
-export interface PersonaInspectionModel {
-  readonly roleId: string; readonly taskClass: string; readonly profile: PersonaProfile; readonly version: number; readonly coreIdentity: PersonaCoreIdentity;
-  readonly taskClassAdjustment: { readonly roleId: string; readonly taskClass: string; readonly version: number; readonly delta: Readonly<Partial<Record<PersonaAxis, number>>>; readonly reason: string };
-  readonly missionOverlay: Readonly<Partial<Record<PersonaAxis, number>>>; readonly proposalTemplate?: Record<string, unknown>; readonly candidates: readonly PersonaCandidateSummary[]; readonly rollouts: readonly PersonaRolloutSummary[];
-}
+export type PersonaInspectionModel = PersonaInspection;
 
 const DISTINCTIVE_AXES: readonly PersonaAxis[] = ["caution", "initiative", "conscientiousness"];
 const axisLabel = (axis: string) => axis.replaceAll("_", " ");
 
-export function PersonaPanel({ model, expanded = false, error, onPropose }: { model: PersonaInspectionModel; expanded?: boolean; error?: string; onPropose?: (axis: PersonaAxis, value: number) => void }) {
+export function PersonaPanel({ model, expanded = false, error, onPropose }: { model: PersonaInspectionModel; expanded?: boolean; error?: string | undefined; onPropose?: (axis: PersonaAxis, value: number) => void }) {
   const axes = expanded ? PERSONA_AXES : DISTINCTIVE_AXES;
   return (
     <section className="persona-panel" aria-labelledby="persona-title">
@@ -41,9 +38,9 @@ export function PersonaPanel({ model, expanded = false, error, onPropose }: { mo
       <div className="persona-axes" aria-label={expanded ? "all persona axes" : "distinctive persona axes"}>
         {axes.map((axis) => (
           <label key={axis} className="persona-axis" data-axis={axis}>
-            <span>{axisLabel(axis)} <output>{model.profile[axis].toFixed(2)}</output></span>
-            {onPropose === undefined ? <div className="persona-axis-bar" aria-hidden="true"><span style={{ width: `${model.profile[axis] * 100}%` }} /></div> : (
-              <input data-editable-axis={axis} aria-label={`propose ${axis}`} type="range" min="0" max="1" step="0.01" defaultValue={model.profile[axis]} onChange={(event) => onPropose(axis, Number(event.target.value))} />
+            <span>{axisLabel(axis)} <output>{(model.profile[axis] ?? 0).toFixed(2)}</output></span>
+            {onPropose === undefined ? <div className="persona-axis-bar" aria-hidden="true"><span style={{ width: `${(model.profile[axis] ?? 0) * 100}%` }} /></div> : (
+              <input data-editable-axis={axis} aria-label={`propose ${axis}`} type="range" min="0" max="1" step="0.01" defaultValue={model.profile[axis] ?? 0} onChange={(event) => onPropose(axis, Number(event.target.value))} />
             )}
           </label>
         ))}

@@ -11,7 +11,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b",
     "check": "npm run build && npm test",
-    "build": "tsc -b",
+    "build": "tsc -b && npm run typecheck:renderer --workspace @maestro/carnegie",
     "worktree:add": "node scripts/create-worktree.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
