@@ -36,4 +36,10 @@ function SmokeProbe() {
   return null;
 }
 
-createRoot(document.getElementById("root")!).render(<><RadialGraph projection={projection} selectedGoalId={goalId} onBack={() => undefined} /><SmokeProbe /></>);
+createRoot(document.getElementById("root")!).render(
+  <main aria-labelledby="radial-page-title">
+    <h1 id="radial-page-title" className="sr-only">Organization radial graph</h1>
+    <RadialGraph projection={projection} selectedGoalId={goalId} onBack={() => undefined} />
+    <SmokeProbe />
+  </main>,
+);
