@@ -17,5 +17,6 @@ export async function loadActivityHistory(options: ActivityHistoryOptions): Prom
     if (result.events.length === 0 || result.nextCursor === cursor || result.events.length < 100) break;
     cursor = result.nextCursor;
   }
+  if (!options.isCurrent()) return undefined;
   return history;
 }

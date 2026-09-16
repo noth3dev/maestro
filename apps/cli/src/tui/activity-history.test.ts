@@ -46,4 +46,18 @@ describe("activity history loading boundary", () => {
     ).resolves.toBeUndefined();
     expect(listEvents).toHaveBeenCalledOnce();
   });
+
+  it("rechecks freshness before returning the final page", async () => {
+    const listEvents = vi.fn(async (): Promise<GoalEventPage> => ({ events: [event("1")], nextCursor: "1" }));
+    let freshnessChecks = 0;
+
+    await expect(
+      loadActivityHistory({
+        client: { listEvents },
+        projectId: "22222222-2222-4222-8222-222222222222",
+        isCurrent: () => freshnessChecks++ === 0,
+      }),
+    ).resolves.toBeUndefined();
+    expect(freshnessChecks).toBe(2);
+  });
 });
