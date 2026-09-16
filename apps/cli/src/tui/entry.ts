@@ -576,6 +576,9 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             project = discovered;
             if (discovered.kind === "unavailable") projectDiscoveryNotice = discovered.reason;
           },
+          onSessionAttached: (attachedSession) => {
+            session = attachedSession;
+          },
         });
         session = reconnectedProject.session;
         await hydrateOrganizationOnReconnect(state, client);

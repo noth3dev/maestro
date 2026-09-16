@@ -9,6 +9,7 @@ export interface ReconnectWorkspaceProjectOptions {
   saveSession: (session: WorkspaceSession) => Promise<void>;
   syncModelState: () => void;
   onDiscovered: (project: WorkspaceProject) => void;
+  onSessionAttached: (session: WorkspaceSession) => void;
 }
 
 export interface ReconnectWorkspaceProjectResult {
@@ -29,6 +30,7 @@ export async function reconnectWorkspaceProject(options: ReconnectWorkspaceProje
   if (project.kind === "attached") {
     if (previousProject.kind !== "attached" || previousProject.projectId !== project.projectId) {
       session = attachWorkspaceSession(options.workspacePath, session, project.projectId);
+      options.onSessionAttached(session);
       options.syncModelState();
       await options.saveSession(session);
     }
