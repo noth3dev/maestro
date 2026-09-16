@@ -40,6 +40,13 @@ describe("command argument autocomplete", () => {
     expect(channel?.getArgumentCompletions?.("post --con")).toEqual([expect.objectContaining({ value: "--content " })]);
   });
 
+  it("suggests the required expected version for every goal lifecycle action", () => {
+    const goal = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "goal");
+    for (const action of ["pause", "resume", "stop", "emergency-stop"]) {
+      expect(goal?.getArgumentCompletions?.(`${action} --expected-v`), action).toEqual([expect.objectContaining({ value: "--expected-version " })]);
+    }
+  });
+
   it("suggests the exact model option for conversations", () => {
     const conversation = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "conversation");
     expect(conversation?.getArgumentCompletions?.("create --m")).toEqual([expect.objectContaining({ value: "--model " })]);
