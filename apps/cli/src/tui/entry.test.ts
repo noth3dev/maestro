@@ -12,6 +12,7 @@ import {
   hydrateOrganizationOnReconnect,
   isProviderLoginActive,
   isSplashRestoreShortcut,
+  compactReviewAcknowledgement,
   runAutomaticProviderSignInOffer,
   shouldOfferAutomaticProviderSignIn,
   taskContractDraftForConversation,
@@ -39,6 +40,33 @@ const model = (provider: string, id: string) => ({
     trainsOnCustomerData: false,
     regions: ["US"],
   },
+});
+
+describe("compact review presentation", () => {
+  it("acknowledges both durable decisions and live approvals within the terminal width", () => {
+    expect(
+      compactReviewAcknowledgement(
+        undefined,
+        [{ identity: "decision-1", tier: "Encore Council", action: "deploy release", actor: "worker-2" }],
+        80,
+      ),
+    ).toBe("Review: deploy release · 1 pending · ⏸ Encore Council");
+    expect(
+      compactReviewAcknowledgement({ action: "git push origin main", target: "origin/main", effect: "remote push", tier: "user" }, [], 80),
+    ).toBe("Review: git push origin main · approval · You");
+    expect(compactReviewAcknowledgement(undefined, [], 80)).toBeUndefined();
+  });
+
+  it("keeps the acknowledgement action-first and bounded on a narrow terminal", () => {
+    const output = compactReviewAcknowledgement(
+      undefined,
+      [{ identity: "decision-1", tier: "Encore Council", action: "deploy release", actor: "worker-2" }],
+      40,
+    );
+    expect(output).toContain("Review:");
+    expect(output).toContain("deploy release");
+    expect(output!.length).toBeLessThanOrEqual(40);
+  });
 });
 
 describe("hydrated conversation application", () => {
