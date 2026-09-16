@@ -1,6 +1,6 @@
 import { Markdown, type MarkdownTheme } from "@earendil-works/pi-tui";
 import type { ConversationTranscriptBlock, UnifiedStreamEntry } from "../conversation-transcript.js";
-import { transcriptPaint, tuiTheme } from "../theme.js";
+import { frameRule, transcriptPaint, tuiTheme } from "../theme.js";
 
 const markdownTheme: MarkdownTheme = {
   heading: (text) => tuiTheme.primary(text),
@@ -40,15 +40,32 @@ export class ConversationViewport {
   }
 
   private renderBlock(block: ConversationTranscriptBlock, width: number): string[] {
-    const glyph = block.kind === "error" ? "✗ " : block.kind === "success" ? "✓ " : block.kind === "warning" ? "⚠ " : block.kind === "system" ? "◆ " : "";
-    const markdown = new Markdown(`${glyph}${block.heading}\n\n${block.content}`, 0, 0, markdownTheme, { color: transcriptPaint(block.kind) });
+    const glyph =
+      block.kind === "error"
+        ? "✗ "
+        : block.kind === "success"
+          ? "✓ "
+          : block.kind === "warning"
+            ? "⚠ "
+            : block.kind === "system"
+              ? "◆ "
+              : "";
+    const markdown = new Markdown(`${glyph}${block.heading}\n\n${block.content}`, 0, 0, markdownTheme, {
+      color: transcriptPaint(block.kind),
+    });
     return markdown.render(width);
   }
 
   render(width: number): string[] {
     const status = this.statusRenderer();
     const orderedStream = this.orderedStreamRenderer();
-    if (orderedStream.length > 0) return [...status, ...orderedStream.flatMap((entry) => typeof entry.content === "string" ? entry.content.split("\n") : this.renderBlock(entry.content, width))];
+    if (orderedStream.length > 0)
+      return [
+        ...status,
+        ...orderedStream.flatMap((entry) =>
+          typeof entry.content === "string" ? entry.content.split("\n") : this.renderBlock(entry.content, width),
+        ),
+      ];
     const blocks = this.transcriptRenderer();
     const stream = this.streamRenderer();
     if (blocks.length === 0) return [...status, ...stream];
@@ -69,8 +86,8 @@ export class FramedComposer {
     if (width < 2) return this.content.render(width);
     const innerWidth = width - 2;
     const lines = this.content.render(innerWidth);
-    const top = tuiTheme.border(`╭${"─".repeat(Math.max(0, innerWidth - 2))}╮`);
-    const bottom = tuiTheme.border(`╰${"─".repeat(Math.max(0, innerWidth - 2))}╯`);
+    const top = frameRule(width, true);
+    const bottom = frameRule(width);
     return [top, ...lines.map((line) => `${tuiTheme.border("│")}${line}${tuiTheme.border("│")}`), bottom];
   }
 
