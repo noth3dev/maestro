@@ -4,6 +4,7 @@ import { executeCli } from "../main.js";
 import { MAESTRO_VERSION } from "../version.js";
 import {
   createAutomaticProviderSignInGate,
+  handleConversationStreamEvent,
   createTranscriptClearBoundary,
   executeBasicShellCommand,
   latestCopyableTranscriptText,
@@ -37,6 +38,49 @@ const model = (provider: string, id: string) => ({
     trainsOnCustomerData: false,
     regions: ["US"],
   },
+});
+
+describe("conversation stream event handling", () => {
+  it("applies, dismisses the splash, renders, and classifies terminal events in order", () => {
+    const order: string[] = [];
+    let conversation = createConversationTranscript();
+    conversation = applyConversationEvent(conversation, {
+      cursor: "1",
+      eventId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f04",
+      conversationId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f03",
+      projectId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01",
+      occurredAt: "2030-01-01T00:00:00.000Z",
+      eventType: "turn_started",
+      payload: { turnId: "turn-1", text: "question" },
+    });
+    conversation = applyConversationEvent(conversation, {
+      cursor: "2",
+      eventId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05",
+      conversationId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f03",
+      projectId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01",
+      occurredAt: "2030-01-01T00:00:00.000Z",
+      eventType: "turn_delta",
+      payload: { turnId: "turn-1", text: "answer" },
+    });
+    const result = handleConversationStreamEvent({
+      conversation,
+      event: {
+        cursor: "3",
+        eventId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f04",
+        conversationId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f03",
+        projectId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01",
+        occurredAt: "2030-01-01T00:00:00.000Z",
+        eventType: "turn_completed",
+        payload: { turnId: "turn-1", status: "succeeded" },
+      },
+      dismissSplash: () => order.push("dismiss"),
+      render: () => order.push("render"),
+    });
+
+    expect(result.terminal).toBe(true);
+    expect(result.conversation.status).toBe("succeeded");
+    expect(order).toEqual(["dismiss", "render"]);
+  });
 });
 
 describe("organization hydration on reconnect", () => {
