@@ -14,6 +14,7 @@ import {
   isSplashRestoreShortcut,
   compactReviewAcknowledgement,
   compactHelpAcknowledgement,
+  compactProjectAttachmentNotice,
   noModelSelectionMessage,
   runAutomaticProviderSignInOffer,
   shouldOfferAutomaticProviderSignIn,
@@ -78,6 +79,16 @@ describe("compact help feedback", () => {
       expect(output).toBe("Help available; resize to view commands");
       expect(output.length).toBeLessThanOrEqual(width);
     }
+  });
+});
+
+describe("compact project attachment guidance", () => {
+  it("keeps the executable attach command visible while discovery is unresolved", () => {
+    const notice = "Multiple projects are available; choose one with /session attach --project-index=<1-2>";
+
+    expect(compactProjectAttachmentNotice(notice, 40)).toBe("/session attach --project-index=<1-2>");
+    expect(compactProjectAttachmentNotice(notice, 80)).toBe("/session attach --project-index=<1-2>");
+    expect(compactProjectAttachmentNotice(undefined, 40)).toBe("/session attach");
   });
 });
 

@@ -126,6 +126,12 @@ export function noModelSelectionMessage(): string {
   ].join("\n");
 }
 
+export function compactProjectAttachmentNotice(projectDiscoveryNotice: string | undefined, width: number): string {
+  const match = projectDiscoveryNotice?.match(/\/session attach(?:\s+--project-index=<[^>]+>)?/);
+  const command = match?.[0] ?? "/session attach";
+  return fitPlain(command.length <= width ? command : "/session attach", width);
+}
+
 export { createTranscriptClearBoundary, executeBasicShellCommand, latestCopyableTranscriptText };
 export type { BasicShellCommandContext, BasicShellCommandName } from "./basic-shell.js";
 
@@ -276,13 +282,16 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const inputPanel = new Box(1, 0, tuiTheme.inputSurface);
     let compactReview: string | undefined;
     let compactHelp: string | undefined;
+    let compactProjectNotice = projectDiscoveryNotice;
     const inputLabel = createDynamicRegion((width) => [
       tuiTheme.muted(
         compactHelp !== undefined && terminal.rows < 16
           ? fitPlain(compactHelp, width)
           : compactReview !== undefined && terminal.rows < 16
             ? fitPlain(compactReview, width)
-            : renderInputPlaceholder(state, width, terminal.rows < 16),
+            : terminal.rows < 16 && project.kind !== "attached"
+              ? compactProjectAttachmentNotice(compactProjectNotice, width)
+              : renderInputPlaceholder(state, width, terminal.rows < 16),
       ),
     ]);
     inputPanel.addChild(inputLabel);
@@ -638,6 +647,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           },
         });
         await applySuccessfulRetryHandoff(reconnectedProject.session, projectDiscoveryNotice);
+        compactProjectNotice = project.kind === "attached" ? undefined : projectDiscoveryNotice;
       } catch {
         client = undefined;
         state.connection = { kind: "error", message: "Control Plane client could not be created" };
@@ -913,6 +923,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             }
             project = discoverWorkspaceProject(workspace.cwd, session);
             projectDiscoveryNotice = undefined;
+            compactProjectNotice = undefined;
             recovery = reconcileTuiSession(workspace.cwd, session);
             append(renderRecoveryBanner(recovery, terminal.columns).join(" · "));
             void refreshDashboard();
