@@ -73,9 +73,10 @@ import {
   renderInputPlaceholder,
   renderPendingDecisionDetails,
   renderTuiFooter,
+  type PendingDecision,
   type TuiShellState,
 } from "./components/shell.js";
-import { getModeAccentProgress, setModeAccentProgress, tuiTheme, type TranscriptLine } from "./theme.js";
+import { fitPlain, getModeAccentProgress, setModeAccentProgress, tuiTheme, type TranscriptLine } from "./theme.js";
 
 import { copyToClipboard, openExternalUrl } from "../external-url.js";
 import { MAESTRO_VERSION } from "../version.js";
@@ -90,6 +91,24 @@ import { hydrateOrganizationState, initializeTui, shouldAutoBootstrapLocal, type
 /** Ctrl+/ is sent as US (0x1f) by common terminals; Kitty/modifyOtherKeys uses matchesKey. */
 export function isSplashRestoreShortcut(data: string): boolean {
   return data === "\x1f" || matchesKey(data, "ctrl+/");
+}
+
+export function compactReviewAcknowledgement(
+  summary: Pick<ApprovalDialogSummary, "action" | "tier"> | undefined,
+  pendingDecisions: readonly PendingDecision[],
+  width: number,
+): string | undefined {
+  if (summary !== undefined) {
+    const tier = summary.tier === "user" ? "You" : (summary.tier ?? "You");
+    return fitPlain(`Reviewed approval · ${tier} · ${summary.action}`, width);
+  }
+  const decisions = pendingDecisions.filter((decision) => decision.identity.trim() !== "");
+  const first = decisions[0];
+  if (first === undefined) return undefined;
+  return fitPlain(
+    `Reviewed ${decisions.length} pending decision${decisions.length === 1 ? "" : "s"} · ⏸ ${first.tier} · ${first.action}`,
+    width,
+  );
 }
 
 export { createTranscriptClearBoundary, executeBasicShellCommand, latestCopyableTranscriptText };
@@ -240,7 +259,14 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
   return await new Promise<number>((resolve) => {
     const editor = new SecretEditor(tui, editorTheme, { paddingX: 2, autocompleteMaxVisible: 6 });
     const inputPanel = new Box(1, 0, tuiTheme.inputSurface);
-    const inputLabel = createDynamicRegion((width) => [tuiTheme.muted(renderInputPlaceholder(state, width, terminal.rows < 16))]);
+    let compactReview: string | undefined;
+    const inputLabel = createDynamicRegion((width) => [
+      tuiTheme.muted(
+        compactReview !== undefined && terminal.rows < 16
+          ? fitPlain(compactReview, width)
+          : renderInputPlaceholder(state, width, terminal.rows < 16),
+      ),
+    ]);
     inputPanel.addChild(inputLabel);
     inputPanel.addChild(editor);
     const composer = new FramedComposer(inputPanel);
@@ -1130,6 +1156,12 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       });
 
     tui.addInputListener((data) => {
+      const reviewShortcut = matchesKey(data, "ctrl+a");
+      const reviewAvailable = pendingConfirmation !== undefined || (state.pendingDecisions?.length ?? 0) > 0;
+      if (compactReview !== undefined && (!reviewShortcut || !reviewAvailable)) {
+        compactReview = undefined;
+        render();
+      }
       if (isSplashRestoreShortcut(data)) {
         splash.restore();
         tui.requestRender(true);
@@ -1201,10 +1233,13 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         return { consume: true };
       }
       if (matchesKey(data, "ctrl+a") && pendingConfirmation !== undefined) {
+        compactReview = terminal.rows < 16 ? compactReviewAcknowledgement(pendingConfirmation.summary, [], terminal.columns) : undefined;
         append(renderApprovalDialog(pendingConfirmation.summary, terminal.columns).join("\n"));
         return { consume: true };
       }
       if (matchesKey(data, "ctrl+a") && pendingConfirmation === undefined && (state.pendingDecisions?.length ?? 0) > 0) {
+        compactReview =
+          terminal.rows < 16 ? compactReviewAcknowledgement(undefined, state.pendingDecisions ?? [], terminal.columns) : undefined;
         append(renderPendingDecisionDetails(state, terminal.columns).join("\n"));
         return { consume: true };
       }
