@@ -60,8 +60,14 @@ export function parseInput(input: string): ParsedInput {
   for (let index = 0; index < rest.length; index += 1) {
     const token = rest[index]!;
     if (!token.startsWith("--")) throw new Error(`Unexpected argument: ${token}`);
-    const key = token.slice(2);
+    const rawOption = token.slice(2);
+    const separator = rawOption.indexOf("=");
+    const key = separator === -1 ? rawOption : rawOption.slice(0, separator);
     if (key === "") throw new Error("Option name is required");
+    if (separator !== -1) {
+      options[key] = rawOption.slice(separator + 1);
+      continue;
+    }
     const next = rest[index + 1];
     if (next !== undefined && !next.startsWith("--")) { options[key] = next; index += 1; }
     else options[key] = true;

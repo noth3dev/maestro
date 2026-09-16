@@ -2,6 +2,21 @@ import { describe, expect, it } from "vitest";
 import { parseInput, parseSlashCommand, tokenize } from "./parser.js";
 
 describe("TUI command parser", () => {
+  it("parses inline equals values for the same long-option grammar as separated values", () => {
+    expect(parseInput("/session attach --project-index=1")).toEqual({
+      kind: "command",
+      name: "session",
+      action: "attach",
+      options: { "project-index": "1" },
+    });
+    expect(parseInput("/session attach --project-index 1")).toEqual({
+      kind: "command",
+      name: "session",
+      action: "attach",
+      options: { "project-index": "1" },
+    });
+  });
+
   it("parses slash commands and quoted values without executing them", () => {
     expect(parseInput('/goal get --goal-id "goal 1" --json')).toEqual({
       kind: "command",
