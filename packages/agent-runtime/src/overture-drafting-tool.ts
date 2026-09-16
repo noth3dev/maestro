@@ -7,7 +7,7 @@ import {
   type CreateTaskContractInput,
   type TaskContract,
 } from "@maestro/contracts";
-import type { ToolDefinition, ToolExecutionResult } from "./agent-runtime.js";
+import type { ToolDefinition, ToolExecutionResult, ToolContext } from "./agent-runtime.js";
 
 /** The only capability exposed to a goal-less conversational intake runtime. */
 export const OVERTURE_TASK_CONTRACT_CREATE_TOOL = "task-contract:create" as const;
@@ -53,7 +53,10 @@ const substanceJsonSchema = (() => {
  * TaskContractSubstance before invoking it; a raw or vague brief is answered
  * with a clarification request and never reaches durable storage.
  */
-export function createTaskContractDraftingTool(options: { createTaskContract: TaskContractCreator["createTaskContract"] }): ToolDefinition {
+export function createTaskContractDraftingTool(options: {
+  createTaskContract: TaskContractCreator["createTaskContract"];
+  onCreated?: (contract: TaskContract, context: Pick<ToolContext, "commandId">) => void;
+}): ToolDefinition {
   const creator = options.createTaskContract;
   return {
     name: OVERTURE_TASK_CONTRACT_CREATE_TOOL,
@@ -87,6 +90,7 @@ export function createTaskContractDraftingTool(options: { createTaskContract: Ta
       // Validate the durable service response at this authority boundary. A
       // malformed or shadow response must never be presented as a contract.
       const parsed = TaskContractSchema.parse(contract);
+      options.onCreated?.(parsed, context);
       return { status: "ok", content: JSON.stringify(parsed) };
     },
   };

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { TaskContractService } from "./task-contract-service.js";
 import type { OperatorContext } from "@maestro/persistence";
-import { UuidSchema, type Conversation, type ConversationEvent, type ConversationTurnInput, type ConversationTurnResult, type CreateConversationInput, type ModelCatalogEntry } from "@maestro/contracts";
+import { UuidSchema, type Conversation, type ConversationEvent, type ConversationTurnInput, type ConversationTurnResult, type CreateConversationInput, type ModelCatalogEntry, type TaskContract } from "@maestro/contracts";
 import { createMaestroAgentRuntime, createTaskContractDraftingTool, OVERTURE_TASK_CONTRACT_CREATE_TOOL, ToolRegistry, parseModelRef, formatModelRef, type ModelGatewayPort, type GatewayBinding, type ModelMessage } from "@maestro/agent-runtime";
 
 export class ConversationNotFoundError extends Error {}
@@ -79,10 +79,15 @@ export function createPostgresConversationService(options: {
   taskContractService?: TaskContractService;
 }): ConversationService {
   const runtimes = new Map<string, RuntimeHandle>();
+  // The provider's final text is not authoritative draft state. Keep the
+  // durable tool result keyed by the root conversation id so clients can
+  // review it even when the provider replies with a summary such as "Draft created".
+  const draftedContracts = new Map<string, TaskContract>();
   const tools = options.tools ?? new ToolRegistry();
   if (options.taskContractService !== undefined && tools.get(OVERTURE_TASK_CONTRACT_CREATE_TOOL) === undefined) {
     tools.register(createTaskContractDraftingTool({
       createTaskContract: (contractId, input, actor) => options.taskContractService!.createTaskContract(contractId, input, { operatorId: actor.operatorId, credentialId: "conversation-runtime" }),
+      onCreated: (contract, context) => draftedContracts.set(context.commandId, contract),
     }));
   }
   const policyHash = options.dataPolicyHash ?? "maestro-local-v1";
@@ -248,6 +253,15 @@ export function createPostgresConversationService(options: {
       try { await handle.stream.pending; } catch { streamWriteFailed = true; }
       let status: Conversation["status"] = streamWriteFailed ? "unknown" : statusFromObservation(observed?.status ?? "unknown");
       let content = observed?.answer.state === "available" ? observed.answer.text : status === "failed" ? "Model turn failed" : status === "cancelled" ? cancellationContent("cancelled") : "Model turn outcome is unavailable";
+      const draftedContract = draftedContracts.get(conversationId);
+      if (draftedContract !== undefined) {
+        draftedContracts.delete(conversationId);
+        if (status === "succeeded") {
+          // Return the host-validated durable contract, not provider prose, so a
+          // TUI or other client can render the exact content before confirmation.
+          content = JSON.stringify(draftedContract);
+        }
+      }
       const resultClient = await options.pool.connect();
       let completedCursor: string;
       let finalConversation: Conversation;

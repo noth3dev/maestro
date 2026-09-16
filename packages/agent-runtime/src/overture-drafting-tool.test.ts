@@ -31,11 +31,13 @@ const context = { commandId: "command-1", turnId: "turn-1", toolCallId: "tool-1"
 describe("Overture Task Contract drafting tool", () => {
   it("creates the full substance through the injected durable Task Contract creator", async () => {
     const create = vi.fn(async (contractId: string, input: unknown, _operator: { operatorId: string }) => ({ contractId, ...(input as { substance: object }).substance, schemaVersion: 1, version: 1, decisionHistory: [], contentHash: "a".repeat(64), launchState: "awaiting_confirmation" }));
-    const tool = createTaskContractDraftingTool({ createTaskContract: create });
+    let observed: TaskContract | undefined;
+    const tool = createTaskContractDraftingTool({ createTaskContract: create, onCreated: (contract) => { observed = contract; } });
     const result = await tool.execute({ projectId, substance }, context);
     expect(result.status).toBe("ok");
     expect(create).toHaveBeenCalledWith(deriveTaskContractId(context.commandId, context.turnId, context.toolCallId), { projectId, substance }, { operatorId: context.operatorId });
     expect(JSON.parse(result.content)).toMatchObject({ desiredOutcome: substance.desiredOutcome, project: substance.project, launchState: "awaiting_confirmation" });
+    expect(observed).toMatchObject({ desiredOutcome: substance.desiredOutcome, launchState: "awaiting_confirmation" });
   });
 
   it("binds repeated identical tool proposals to one durable idempotency identity", async () => {

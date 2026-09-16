@@ -287,7 +287,11 @@ describe("goal-less Overture drafting boundary", () => {
     const service = createPostgresConversationService({ pool: pool as never, gateway, gatewayOperatorId: "gateway-operator", accountRefs: { openai: "acct-1" }, taskContractService: { createTaskContract } as never });
     const conversation = await service.create({ projectId, goalId: null, model: "openai/gpt-5" }, operator);
     const result = await service.turn(conversation.conversationId, { projectId, text: "Ship the intake feature" }, operator);
-    expect(result.turn.content).toBe("Draft created");
+    expect(JSON.parse(result.turn.content)).toMatchObject({
+      contractId: expect.any(String),
+      desiredOutcome: draft.desiredOutcome,
+      launchState: "awaiting_confirmation",
+    });
     expect(createTaskContract).toHaveBeenCalledOnce();
     expect(requests[0]).toMatchObject({ tools: [{ name: "task-contract:create" }], childCalls: 0 });
     expect(requests[0]!.tools).not.toEqual(expect.arrayContaining([expect.objectContaining({ name: expect.stringMatching(/worker|mission|ipython/i) })]));
