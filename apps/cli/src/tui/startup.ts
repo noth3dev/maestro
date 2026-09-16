@@ -119,6 +119,7 @@ export async function initializeTui(options: InteractiveTuiOptions): Promise<{
     approvals: { kind: "error", message: "Approval read surface is not available" },
     budget: { kind: "empty" },
     organization: organizationState,
+    project: project.kind === "attached" ? { kind: "attached" } : { kind: "unavailable", guidance: projectDiscoveryNotice ?? project.reason },
   };
 
   return { workspace, ...(startupError === undefined ? {} : { startupError }), connection, session, project, ...(projectDiscoveryNotice === undefined ? {} : { projectDiscoveryNotice }), ...(client === undefined ? {} : { client }), state };

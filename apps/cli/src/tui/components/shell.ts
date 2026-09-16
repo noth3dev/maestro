@@ -29,6 +29,7 @@ export interface TuiShellState {
   approvals: AsyncState<number>;
   budget: AsyncState<{ spentCents: number; ceilingCents: number }>;
   organization?: AsyncState<OrganizationReadModel>;
+  project?: { kind: "attached" } | { kind: "unavailable"; guidance?: string };
   pendingDecisions?: readonly PendingDecision[];
 }
 
@@ -143,7 +144,15 @@ export function renderPendingDecisionDetails(state: TuiShellState, width: number
     .map((decision) => fitPlain(`⏸ ${decision.tier} · ${decision.action} · requested by ${decision.actor}`, width));
 }
 
-function nextActionText(): string {
+function projectActionText(state: TuiShellState): string {
+  if (state.connection.kind !== "connected" || state.project?.kind !== "unavailable") return "";
+  const match = state.project.guidance?.match(/\/session attach(?:\s+--project-index=<[^>]+>)?/);
+  const command = match?.[0] ?? "/session attach";
+  return command;
+}
+
+function nextActionText(state: TuiShellState): string {
+  if (state.connection.kind === "connected" && state.project?.kind === "unavailable") return projectActionText(state);
   return getZeroArgumentNoGoalActions()
     .slice(0, 3)
     .map((action) => `/${action.command} ${action.action}`)
@@ -176,7 +185,14 @@ export function renderSplash(state: TuiShellState, width: number): string[] {
     return [
       tuiTheme.primary(fitPlain(`✦ ${state.goal.value.name}`, width)),
       tuiTheme.secondary(fitPlain(`Performing · ${state.goal.value.state} · ${workerText(state)}`, width)),
-      tuiTheme.dim(fitPlain(`ctrl+/ show home · Next: ${nextActionText()}`, width)),
+      tuiTheme.dim(
+        fitPlain(
+          state.connection.kind === "connected" && state.project?.kind === "unavailable"
+            ? nextActionText(state)
+            : `ctrl+/ show home · Next: ${nextActionText(state)}`,
+          width,
+        ),
+      ),
     ];
   }
   const organization = state.organization;
@@ -187,7 +203,14 @@ export function renderSplash(state: TuiShellState, width: number): string[] {
   return [
     tuiTheme.primary(fitPlain("✦ MAESTRO", width)),
     tuiTheme.secondary(fitPlain(`Concertmaster ready · ${departmentHeads}`, width)),
-    tuiTheme.dim(fitPlain(`ctrl+/ show home · Next: ${nextActionText()}`, width)),
+    tuiTheme.dim(
+      fitPlain(
+        state.connection.kind === "connected" && state.project?.kind === "unavailable"
+          ? nextActionText(state)
+          : `ctrl+/ show home · Next: ${nextActionText(state)}`,
+        width,
+      ),
+    ),
   ];
 }
 
@@ -252,6 +275,7 @@ function hintText(state: TuiShellState): string {
   const count = pendingCount(state);
   if (count > 0) return `ctrl+a review ${count} pending decision${count === 1 ? "" : "s"}`;
   if (state.workers.kind === "loading") return "esc stop · ctrl+a decisions";
+  if (state.connection.kind === "connected" && state.project?.kind === "unavailable") return projectActionText(state);
   return "/ commands · ctrl+g goals · /help";
 }
 

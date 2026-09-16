@@ -281,6 +281,9 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
   Object.assign(liveState, initialized.state);
   let { workspace, startupError, connection, session, project, projectDiscoveryNotice, client } = initialized;
   const state = liveState;
+  const syncProjectPresentation = (): void => {
+    state.project = project.kind === "attached" ? { kind: "attached" } : { kind: "unavailable", guidance: projectDiscoveryNotice ?? project.reason };
+  };
   return await new Promise<number>((resolve) => {
     const editor = new SecretEditor(tui, editorTheme, { paddingX: 2, autocompleteMaxVisible: 6 });
     const inputPanel = new Box(1, 0, tuiTheme.inputSurface);
@@ -636,6 +639,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         });
         project = discoverWorkspaceProject(workspace.cwd, session);
         projectDiscoveryNotice = undefined;
+        syncProjectPresentation();
         const reconnectedProject = await reconnectWorkspaceProject({
           workspacePath: workspace.cwd,
           session,
@@ -645,6 +649,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           onDiscovered: (discovered) => {
             project = discovered;
             if (discovered.kind === "unavailable") projectDiscoveryNotice = discovered.reason;
+            syncProjectPresentation();
           },
           onSessionAttached: (attachedSession) => {
             session = attachedSession;
@@ -929,6 +934,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             project = discoverWorkspaceProject(workspace.cwd, session);
             projectDiscoveryNotice = undefined;
             compactProjectNotice = undefined;
+            syncProjectPresentation();
             recovery = reconcileTuiSession(workspace.cwd, session);
             append(renderRecoveryBanner(recovery, terminal.columns).join(" · "));
             void refreshDashboard();

@@ -43,6 +43,29 @@ describe("Maestro TUI shell", () => {
     }
   });
 
+  it("shows attach guidance instead of project-bound actions when project discovery is unresolved", () => {
+    const unresolved = {
+      ...state,
+      project: { kind: "unavailable", guidance: "Multiple projects are available; choose one with /session attach --project-index=<1-2>" },
+    } as TuiShellState;
+
+    for (const width of [40, 60, 80, 120]) {
+      const splash = renderSplash(unresolved, width).map(stripAnsi).join("\n");
+      const footer = stripAnsi(renderTuiFooter(width, unresolved));
+      expect(splash).not.toMatch(/\/goal create|\/projection read|\/billing get|ctrl\+g goals/);
+      expect(splash).toContain("/session attach --project-index=<1-2>");
+      expect(footer).toBe("/session attach --project-index=<1-2>");
+      expect(splash.split("\n").every((line) => line.length <= width)).toBe(true);
+      expect(footer.length).toBeLessThanOrEqual(width);
+    }
+
+    const attached = renderSplash(state, 80).join("\n");
+    expect(attached).toContain("/goal create");
+
+    const disconnected = renderSplash({ ...unresolved, connection: { kind: "error", message: "gateway unavailable" } }, 80).join("\n");
+    expect(disconnected).toContain("Next: /goal create");
+  });
+
   it("keeps disconnected recovery hints truthful and copyable", () => {
     const connections: TuiShellState["connection"][] = [
       { kind: "connecting" },
