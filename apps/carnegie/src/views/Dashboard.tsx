@@ -90,7 +90,12 @@ export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate:
       </div>
       <div className="dash-sub">
         {loading && t.common.loading}
-        {error !== undefined && `Could not load Goal state: ${error}`}
+        {error !== undefined && (
+          <span role="alert">
+            Could not load Goal state: {error}
+            <button type="button" className="btn" onClick={() => refresh()}>Retry</button>
+          </span>
+        )}
         {!loading && error === undefined && summary.selectedGoal !== undefined && `durable version ${summary.selectedGoal.version}`}
       </div>
 
