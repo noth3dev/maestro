@@ -100,6 +100,10 @@ export function isSplashRestoreShortcut(data: string): boolean {
   return data === "\x1f" || matchesKey(data, "ctrl+/");
 }
 
+export function isStartupCancellationInput(data: string): boolean {
+  return matchesKey(data, "ctrl+c") || matchesKey(data, "escape");
+}
+
 export function compactReviewAcknowledgement(
   summary: Pick<ApprovalDialogSummary, "action" | "tier"> | undefined,
   pendingDecisions: readonly PendingDecision[],
@@ -349,7 +353,15 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     organization: { kind: "empty" },
   };
   const splash = createSplashController();
+  const startupAbortController = new AbortController();
+  let startupCancelled = false;
+  let startupSettled = false;
+  let resolveStartupCancellation: (() => void) | undefined;
+  const startupCancellation = new Promise<void>((resolve) => {
+    resolveStartupCancellation = resolve;
+  });
   const updateSetupStep = (event: LocalBootstrapStepEvent): void => {
+    if (startupCancelled) return;
     const steps = [...(liveState.setupSteps ?? [])];
     const existing = steps.findIndex((step) => step.step === event.step);
     if (existing === -1) steps.push(event);
@@ -364,6 +376,14 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
   };
   const statusRegion = createStatusRegion({ state: liveState, height: () => terminal.rows, splash });
   tui.setLayoutRoot(new VStack([{ component: statusRegion, basis: "auto", shrink: 0, minSize: 1 }]));
+  const removeStartupInput = tui.addInputListener((data) => {
+    if (startupSettled || !isStartupCancellationInput(data)) return undefined;
+    startupCancelled = true;
+    startupAbortController.abort();
+    tui.stop();
+    resolveStartupCancellation?.();
+    return { consume: true };
+  });
   let tuiStarted = false;
   const startTui = (): void => {
     if (tuiStarted) return;
@@ -372,9 +392,19 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
   };
   startTui();
   let initialized: Awaited<ReturnType<typeof initializeTui>>;
+  const initialization = initializeTui({ ...options, signal: startupAbortController.signal, onSetupStep: updateSetupStep });
   try {
-    initialized = await initializeTui({ ...options, onSetupStep: updateSetupStep });
+    const result = await Promise.race([initialization, startupCancellation.then(() => undefined)]);
+    startupSettled = true;
+    removeStartupInput();
+    if (result === undefined) {
+      void initialization.catch(() => undefined);
+      return 0;
+    }
+    initialized = result;
   } catch (error) {
+    startupSettled = true;
+    removeStartupInput();
     tui.stop();
     throw error;
   }

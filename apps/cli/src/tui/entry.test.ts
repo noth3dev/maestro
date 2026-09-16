@@ -12,6 +12,7 @@ import {
   hydrateOrganizationOnReconnect,
   isProviderLoginActive,
   isSplashRestoreShortcut,
+  isStartupCancellationInput,
   compactReviewAcknowledgement,
   compactHelpAcknowledgement,
   compactProjectAttachmentNotice,
@@ -510,6 +511,14 @@ describe("automatic provider sign-in", () => {
 
   it("recognizes the legacy raw Ctrl+/ byte used by ordinary terminals", () => {
     expect(isSplashRestoreShortcut("\x1f")).toBe(true);
+  });
+});
+
+describe("startup cancellation input", () => {
+  it("recognizes Ctrl+C and Escape without consuming ordinary input", () => {
+    expect(isStartupCancellationInput("\u0003")).toBe(true);
+    expect(isStartupCancellationInput("\u001b")).toBe(true);
+    expect(isStartupCancellationInput("a")).toBe(false);
   });
 });
 

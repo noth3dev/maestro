@@ -145,6 +145,157 @@ describe("Codex app-server command propagation", () => {
 });
 
 describe("resolveLocalConnection", () => {
+  it("stops a database process that finishes after startup cancellation", async () => {
+    const controller = new AbortController();
+    let finishDatabase: ((database: { databaseUrl: string; stop: () => Promise<void> }) => void) | undefined;
+    const stop = vi.fn(async () => undefined);
+    const database = new Promise<{ databaseUrl: string; stop: () => Promise<void> }>((resolve) => {
+      finishDatabase = resolve;
+    });
+    const startup = resolveLocalConnection({
+      env: {},
+      fetch: vi.fn(),
+      secretStore: secretStore(),
+      runCommand: vi.fn(),
+      startEmbeddedDatabase: async () => database,
+      signal: controller.signal,
+    });
+    controller.abort();
+    await expect(startup).rejects.toMatchObject({ name: "AbortError" });
+    finishDatabase?.({ databaseUrl: "postgresql://localhost/maestro", stop });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it("does not start a model gateway when its initial probe is cancelled", async () => {
+    const controller = new AbortController();
+    const fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (!url.includes(":4321")) return Promise.resolve(response({ status: "ok" }));
+      controller.abort();
+      return Promise.reject(new Error("aborted"));
+    });
+    const startModelGateway = vi.fn(async () => ({ stop: vi.fn(async () => undefined) }));
+    const startup = resolveLocalConnection({
+      env: { MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      fetch,
+      secretStore: secretStore("44444444-4444-4444-8444-444444444444.secret"),
+      runCommand: vi.fn(),
+      startModelGateway,
+      signal: controller.signal,
+      retryDelayMs: 0,
+    });
+    await expect(startup).rejects.toMatchObject({ name: "AbortError" });
+    expect(startModelGateway).not.toHaveBeenCalled();
+  });
+
+  it("stops a gateway when its final ready probe races with cancellation", async () => {
+    const controller = new AbortController();
+    let gatewayChecks = 0;
+    const fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (!url.includes(":4321")) return Promise.resolve(response({ status: "ok" }));
+      gatewayChecks += 1;
+      if (gatewayChecks === 1) return Promise.reject(new Error("Model gateway is down"));
+      if (url.endsWith("/v1/models")) controller.abort();
+      return Promise.resolve(response({ data: [] }));
+    });
+    const stop = vi.fn(async () => undefined);
+    const startModelGateway = vi.fn(async () => ({ stop }));
+    const startup = resolveLocalConnection({
+      env: { MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      fetch,
+      secretStore: secretStore("44444444-4444-4444-8444-444444444444.secret"),
+      runCommand: vi.fn(),
+      startModelGateway,
+      signal: controller.signal,
+      retryDelayMs: 0,
+    });
+    await expect(startup).rejects.toMatchObject({ name: "AbortError" });
+    expect(startModelGateway).toHaveBeenCalledOnce();
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it("propagates startup cancellation through local token validation", async () => {
+    const controller = new AbortController();
+    let controlPlaneHealth = true;
+    const fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes(":4321")) return Promise.resolve(url.endsWith("/healthz") ? response({ status: "ok" }) : response({ data: [] }));
+      if (controlPlaneHealth) {
+        controlPlaneHealth = false;
+        return Promise.resolve(response({ status: "ok" }));
+      }
+      controller.abort();
+      return Promise.reject(new Error("aborted"));
+    });
+    const startup = resolveLocalConnection({
+      env: {},
+      fetch,
+      secretStore: secretStore("44444444-4444-4444-8444-444444444444.secret"),
+      runCommand: vi.fn(),
+      signal: controller.signal,
+      retryDelayMs: 0,
+    });
+    await expect(startup).rejects.toMatchObject({ message: "Control plane request failed" });
+  });
+
+  it("stops a started model gateway when readiness polling is cancelled", async () => {
+    const controller = new AbortController();
+    let gatewayChecks = 0;
+    const fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (!url.includes(":4321")) return Promise.resolve(response({ status: "ok" }));
+      gatewayChecks += 1;
+      if (gatewayChecks === 1) return Promise.reject(new Error("Model gateway is down"));
+      controller.abort();
+      return Promise.reject(new Error("aborted"));
+    });
+    const stop = vi.fn(async () => undefined);
+    const startModelGateway = vi.fn(async () => ({ stop }));
+    const startup = resolveLocalConnection({
+      env: { MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      fetch,
+      secretStore: secretStore("44444444-4444-4444-8444-444444444444.secret"),
+      runCommand: vi.fn(),
+      startModelGateway,
+      signal: controller.signal,
+      retryDelayMs: 0,
+    });
+    await expect(startup).rejects.toMatchObject({ name: "AbortError" });
+    expect(startModelGateway).toHaveBeenCalledOnce();
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it("stops an owned Control Plane when readiness polling is cancelled", async () => {
+    const controller = new AbortController();
+    let healthChecks = 0;
+    const fetch = vi.fn((_input: RequestInfo | URL) => {
+      healthChecks += 1;
+      if (healthChecks === 1) return Promise.reject(new Error("Control Plane is down"));
+      controller.abort();
+      return Promise.reject(new Error("aborted"));
+    });
+    const stop = vi.fn(async () => undefined);
+    const startControlPlane = vi.fn(async () => ({ stop }));
+    const startup = resolveLocalConnection({
+      env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js" },
+      fetch,
+      secretStore: secretStore(),
+      runCommand: vi.fn(async () => ({
+        code: 0,
+        stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }),
+        stderr: "",
+      })),
+      startControlPlane,
+      signal: controller.signal,
+      retryDelayMs: 0,
+    });
+    await expect(startup).rejects.toMatchObject({ name: "AbortError" });
+    expect(startControlPlane).toHaveBeenCalledOnce();
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
   it("uses the embedded Postgres-compatible engine by default when Docker is unavailable", async () => {
     const projectId = "11111111-1111-4111-8111-111111111111";
     const fetch = vi.fn()

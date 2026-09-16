@@ -13,6 +13,14 @@ export interface InteractiveTuiOptions {
   env: Record<string, string | undefined>;
   io: CliIo;
   onSetupStep?: (event: LocalBootstrapStepEvent) => void;
+  signal?: AbortSignal;
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) return;
+  const error = new Error("TUI startup cancelled");
+  error.name = "AbortError";
+  throw error;
 }
 
 export function shouldAutoBootstrapLocal(env: Record<string, string | undefined>): boolean {
@@ -43,7 +51,9 @@ export async function initializeTui(options: InteractiveTuiOptions): Promise<{
   let startupError: string | undefined;
   try {
     workspace = await resolveWorkspace(options.cwd);
+    throwIfAborted(options.signal);
   } catch (error) {
+    if (options.signal?.aborted) throw error;
     workspace = { cwd: options.cwd };
     startupError = error instanceof Error ? error.message : "Workspace could not be resolved";
   }
@@ -55,19 +65,28 @@ export async function initializeTui(options: InteractiveTuiOptions): Promise<{
     options.onSetupStep?.(event);
   };
   let connection = await resolveConnection(options.env);
+  throwIfAborted(options.signal);
   if (connection.kind !== "configured" && shouldAutoBootstrapLocal(options.env)) {
     connection = await resolveLocalConnection({
       env: options.env,
       ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }),
       onStep: onSetupStep,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
+    throwIfAborted(options.signal);
   }
   const controlPlane =
     connection.kind === "configured"
-      ? await ensureLocalControlPlane({ apiUrl: connection.apiUrl, ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }) })
+      ? await ensureLocalControlPlane({
+          apiUrl: connection.apiUrl,
+          ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }),
+          ...(options.signal === undefined ? {} : { signal: options.signal }),
+        })
       : undefined;
+  throwIfAborted(options.signal);
   const sessionWorkspacePath = workspaceIdentity(workspace);
   let session = await loadWorkspaceSession(sessionWorkspacePath);
+  throwIfAborted(options.signal);
   const connectionReady = connection.kind === "configured" && controlPlane?.kind === "ready";
   let project = discoverWorkspaceProject(sessionWorkspacePath, session);
   let projectDiscoveryNotice: string | undefined;
@@ -81,16 +100,19 @@ export async function initializeTui(options: InteractiveTuiOptions): Promise<{
       });
       const previousProject = project;
       const discovered = await discoverWorkspaceProjectFromControlPlane({ workspacePath: sessionWorkspacePath, session, client });
+      throwIfAborted(options.signal);
       project = discovered;
       if (discovered.kind === "attached") {
         if (previousProject.kind !== "attached" || previousProject.projectId !== discovered.projectId) {
           session = attachWorkspaceSession(sessionWorkspacePath, session, discovered.projectId);
           await saveWorkspaceSession(session);
+          throwIfAborted(options.signal);
         }
       } else {
         projectDiscoveryNotice = discovered.reason;
       }
-    } catch {
+    } catch (error) {
+      if (options.signal?.aborted) throw error;
       // The resolver already validates the endpoint. Keep the UI truthful if
       // a future client invariant rejects it at construction time.
       client = undefined;
@@ -99,6 +121,7 @@ export async function initializeTui(options: InteractiveTuiOptions): Promise<{
   const organizationState: NonNullable<TuiShellState["organization"]> = client === undefined
     ? { kind: "empty" }
     : await hydrateOrganizationState(client);
+  throwIfAborted(options.signal);
   const initialModel = options.env.MAESTRO_MODEL?.trim() || session?.model;
   const state: TuiShellState = {
     workspace,

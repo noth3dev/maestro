@@ -20,6 +20,17 @@ describe("ensureLocalControlPlane", () => {
     await expect(ensureLocalControlPlane({ apiUrl: "http://127.0.0.1:4310", fetch, timeoutMs: 5 })).resolves.toMatchObject({ kind: "unavailable", reason: "Control Plane health check timed out" });
   });
 
+
+  it("aborts an in-flight health check when startup is cancelled", async () => {
+    const controller = new AbortController();
+    const fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    }));
+    const health = ensureLocalControlPlane({ apiUrl: "http://127.0.0.1:4310", fetch, signal: controller.signal });
+    controller.abort();
+    await expect(health).resolves.toEqual({ kind: "unavailable", apiUrl: "http://127.0.0.1:4310", reason: "Control Plane health check cancelled" });
+  });
+
   it("does not accept a non-success health response", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response("down", { status: 503 }));
     await expect(ensureLocalControlPlane({ apiUrl: "http://127.0.0.1:4310", fetch })).resolves.toMatchObject({ kind: "unavailable" });
