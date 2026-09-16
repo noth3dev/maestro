@@ -41,7 +41,11 @@ import {
 import { executeWriteCommand } from "./commands/write-commands.js";
 import { dispatchInteractiveWriteCommand } from "./commands/interactive-dispatch.js";
 import { renderApprovalDialog } from "./components/approval-dialog.js";
-import { renderProviderLoginDialog, type AccountLoginProviderSelection } from "./components/provider-login-dialog.js";
+import {
+  COMPACT_PROVIDER_LOGIN_MIN_HEIGHT,
+  renderProviderLoginDialog,
+  type AccountLoginProviderSelection,
+} from "./components/provider-login-dialog.js";
 import { reconcileTuiSession, type RecoverySummary } from "./recovery.js";
 import { renderRecoveryBanner } from "./components/recovery-banner.js";
 import {
@@ -319,10 +323,12 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     };
     const decisionRegion = createDecisionRegion({ state, height: () => terminal.rows });
     const noticeRegion = createDynamicRegion(() => {
-      if (terminal.rows < 16) return [];
-      const lines = [...renderRecoveryBanner(recovery, terminal.columns)];
+      if (terminal.rows < 16 && accountLoginSelection === undefined) return [];
+      const lines = terminal.rows < 16 ? [] : [...renderRecoveryBanner(recovery, terminal.columns)];
       if (accountLoginSelection !== undefined && accountLoginState !== undefined)
-        lines.push(...renderProviderLoginDialog(terminal.columns, accountLoginSelection, accountLoginState, accountLoginUrl));
+        lines.push(
+          ...renderProviderLoginDialog(terminal.columns, accountLoginSelection, accountLoginState, accountLoginUrl, terminal.rows < 16),
+        );
       return lines;
     });
     header.setOrderedStreamRenderer(() => renderUnifiedStreamEntries(conversation, activity.slice(visibleActivityStart), terminal.columns));
@@ -718,6 +724,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           state.connection.kind === "connected",
         isManualLoginActive: () => isProviderLoginActive(pendingProviderLogin, providerLoginInFlight, accountLoginSelection),
         onOffer: () => {
+          if (terminal.rows < COMPACT_PROVIDER_LOGIN_MIN_HEIGHT) return;
           accountLoginSelection = 0;
           accountLoginState = "selecting";
           editor.hidden = true;
@@ -782,20 +789,28 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         } else if (parsed.kind === "command" && parsed.name === "help") {
           dispatchCommandPaletteInput("help", append);
         } else if (parsed.kind === "command" && parsed.name === "login" && parsed.action === undefined) {
-          loginInteractionGeneration += 1;
-          accountLoginSelection = 0;
-          accountLoginState = "selecting";
-          editor.hidden = true;
-          editor.setText("");
-          render();
+          if (terminal.rows < COMPACT_PROVIDER_LOGIN_MIN_HEIGHT) {
+            appendWarning(`Provider sign-in chooser needs at least ${COMPACT_PROVIDER_LOGIN_MIN_HEIGHT} terminal rows.`);
+          } else {
+            loginInteractionGeneration += 1;
+            accountLoginSelection = 0;
+            accountLoginState = "selecting";
+            editor.hidden = true;
+            editor.setText("");
+            render();
+          }
         } else if (parsed.kind === "command" && parsed.name === "login" && parsed.action === "openai-codex") {
-          loginInteractionGeneration += 1;
-          accountLoginSelection = 0;
-          accountLoginState = "selecting";
-          editor.hidden = true;
-          editor.setText("");
-          render();
-          void startAccountLogin();
+          if (terminal.rows < COMPACT_PROVIDER_LOGIN_MIN_HEIGHT) {
+            appendWarning(`Provider sign-in chooser needs at least ${COMPACT_PROVIDER_LOGIN_MIN_HEIGHT} terminal rows.`);
+          } else {
+            loginInteractionGeneration += 1;
+            accountLoginSelection = 0;
+            accountLoginState = "selecting";
+            editor.hidden = true;
+            editor.setText("");
+            render();
+            void startAccountLogin();
+          }
         } else if (parsed.kind === "command" && parsed.name === "login" && (parsed.action === "openai" || parsed.action === "anthropic")) {
           if (client === undefined) {
             appendWarning("Provider login is unavailable until the Control Plane is connected.");
@@ -1127,7 +1142,13 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         { component: statusRegion, basis: "auto", shrink: 0, minSize: 1 },
         { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 },
         { component: decisionRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => (state.pendingDecisions?.length ?? 0) > 0 },
-        { component: noticeRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => terminal.rows >= 16 },
+        {
+          component: noticeRegion,
+          basis: "auto",
+          shrink: 0,
+          minSize: 0,
+          visible: () => terminal.rows >= 16 || accountLoginSelection !== undefined,
+        },
         { component: dock, basis: "auto", shrink: 1, minSize: 1 },
       ]),
     );
