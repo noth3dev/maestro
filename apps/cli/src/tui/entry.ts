@@ -137,6 +137,11 @@ export function compactConnectionRecoveryAcknowledgement(connection: TuiShellSta
   return connection.kind === "connected" ? undefined : fitPlain("ctrl+r retry · /help", width);
 }
 
+export function firstAvailableModelIdentity(models: readonly Pick<ModelCatalogEntry, "identity">[]): string | undefined {
+  const model = models[0];
+  return model === undefined ? undefined : `${model.identity.provider}/${model.identity.id}`;
+}
+
 export function compactModelListAcknowledgement(identities: readonly string[], width: number, unavailableLabel?: string): string {
   if (identities.length === 0) return fitPlain(unavailableLabel === undefined ? "No models available · retry /models list" : "Catalog unavailable · retry /models", width);
   const identity = identities[0]!;
@@ -733,6 +738,24 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         if (status === undefined) return;
         if (status.state === "succeeded") {
           appendSuccess("Account login complete: openai-codex");
+          const configuredModel = resolveConfiguredModel(options.env.MAESTRO_MODEL, session?.model);
+          if (configuredModel === undefined && session?.conversationId === undefined) {
+            try {
+              const models = await client.listModels();
+              const selectedModel = firstAvailableModelIdentity(models);
+              if (selectedModel === undefined) {
+                appendWarning("No model is available after account login. Run /models list, then /model use --model provider/model.");
+              } else {
+                session = selectWorkspaceModel(workspace.cwd, session, selectedModel);
+                await saveWorkspaceSession(session);
+                state.model = selectedModel;
+                appendSuccess(`Model selected after account login: ${selectedModel}`);
+              }
+            } catch (error) {
+              const message = error instanceof Error ? error.message : "request failed";
+              appendWarning(`Account login complete, but model discovery failed: ${message}. Run /models list, then /model use --model provider/model.`);
+            }
+          }
           void refreshDashboard();
         } else if (status.state === "failed") appendError(`Account login ${status.state}: ${status.message ?? "no additional details"}`);
         else appendWarning(`Account login ${status.state}: ${status.message ?? "no additional details"}`);

@@ -16,6 +16,7 @@ import {
   compactHelpAcknowledgement,
   compactProjectAttachmentNotice,
   compactModelListAcknowledgement,
+  firstAvailableModelIdentity,
   compactConnectionRecoveryAcknowledgement,
   shouldIgnoreEmptySubmit,
   noModelSelectionMessage,
@@ -96,6 +97,13 @@ describe("compact connection recovery priority", () => {
       expect(compactConnectionRecoveryAcknowledgement(connection, 80)).toBe("ctrl+r retry · /help");
     }
     expect(compactConnectionRecoveryAcknowledgement({ kind: "connected" }, 40)).toBeUndefined();
+  });
+});
+
+describe("account-login model handoff", () => {
+  it("selects the first live catalog identity and leaves empty catalogs unresolved", () => {
+    expect(firstAvailableModelIdentity([{ identity: { provider: "openai-codex", id: "gpt-5.3-codex" } }])).toBe("openai-codex/gpt-5.3-codex");
+    expect(firstAvailableModelIdentity([])).toBeUndefined();
   });
 });
 
