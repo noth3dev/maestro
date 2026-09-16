@@ -137,6 +137,21 @@ export function compactConnectionRecoveryAcknowledgement(connection: TuiShellSta
   return connection.kind === "connected" ? undefined : fitPlain("ctrl+r retry · /help", width);
 }
 
+export function shouldBlockConcurrentTurnSubmit(
+  text: string,
+  working: boolean,
+  activeController: AbortController | undefined,
+): boolean {
+  return text.trim() !== "" && !text.trim().startsWith("/") && (working || activeController !== undefined);
+}
+
+export function isCurrentConversationTurnController(
+  controller: AbortController,
+  activeController: AbortController | undefined,
+): boolean {
+  return activeController === controller;
+}
+
 export function shouldDeferAutomaticProviderSignIn(draft: string): boolean {
   return draft.trim() !== "";
 }
@@ -814,6 +829,12 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
 
     const submit = async (text: string) => {
       if (shouldIgnoreEmptySubmit(text, pendingProviderLogin)) return;
+      if (shouldBlockConcurrentTurnSubmit(text, state.working === true, conversationTurnController)) {
+        editor.setText(text);
+        appendWarning("Turn in progress · Esc to stop");
+        render();
+        return;
+      }
       if (text.trim() !== "") splash.dismiss();
       if (pendingProviderLogin !== undefined) {
         const providerId = pendingProviderLogin;
@@ -1208,9 +1229,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
                   render();
                 }
               } finally {
-                if (conversationTurnController === turnController) conversationTurnController = undefined;
-                state.working = false;
-                render();
+                if (isCurrentConversationTurnController(turnController, conversationTurnController)) {
+                  conversationTurnController = undefined;
+                  state.working = false;
+                  render();
+                }
               }
             }
           }

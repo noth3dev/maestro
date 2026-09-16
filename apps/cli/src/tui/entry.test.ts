@@ -19,6 +19,8 @@ import {
   firstAvailableModelIdentity,
   isCurrentAccountLoginOperation,
   shouldDeferAutomaticProviderSignIn,
+  shouldBlockConcurrentTurnSubmit,
+  isCurrentConversationTurnController,
   compactConnectionRecoveryAcknowledgement,
   shouldIgnoreEmptySubmit,
   noModelSelectionMessage,
@@ -99,6 +101,17 @@ describe("compact connection recovery priority", () => {
       expect(compactConnectionRecoveryAcknowledgement(connection, 80)).toBe("ctrl+r retry · /help");
     }
     expect(compactConnectionRecoveryAcknowledgement({ kind: "connected" }, 40)).toBeUndefined();
+  });
+});
+
+describe("concurrent conversation turn submission", () => {
+  it("blocks only natural-language submits while a turn is active", () => {
+    const controller = new AbortController();
+    expect(shouldBlockConcurrentTurnSubmit("second", true, controller)).toBe(true);
+    expect(shouldBlockConcurrentTurnSubmit("/help", true, controller)).toBe(false);
+    expect(shouldBlockConcurrentTurnSubmit("second", false, undefined)).toBe(false);
+    expect(isCurrentConversationTurnController(controller, controller)).toBe(true);
+    expect(isCurrentConversationTurnController(controller, undefined)).toBe(false);
   });
 });
 
