@@ -25,6 +25,7 @@ import {
   compactConnectionRecoveryAcknowledgement,
   compactCommandResultAcknowledgement,
   shouldIgnoreEmptySubmit,
+  shouldCancelPendingProviderLogin,
   noModelSelectionMessage,
   runAutomaticProviderSignInOffer,
   shouldOfferAutomaticProviderSignIn,
@@ -177,6 +178,14 @@ describe("compact model-list recovery", () => {
     expect(compactModelListAcknowledgement(["openai/gpt-5"], 80)).toContain("openai/gpt-5");
     expect(compactModelListAcknowledgement([], 40)).toBe("No models available · retry /models list");
     expect(compactModelListAcknowledgement([], 40, "Model catalog unavailable")).toBe("Catalog unavailable · retry /models");
+  });
+});
+
+describe("provider login cancellation", () => {
+  it("only treats Escape as a provider-login cancel while a secret is pending", () => {
+    expect(shouldCancelPendingProviderLogin("openai")).toBe(true);
+    expect(shouldCancelPendingProviderLogin("anthropic")).toBe(true);
+    expect(shouldCancelPendingProviderLogin(undefined)).toBe(false);
   });
 });
 

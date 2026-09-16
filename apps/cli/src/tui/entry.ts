@@ -175,6 +175,10 @@ export function shouldHandoffAfterProviderLogin(configuredModel: string | undefi
   return configuredModel === undefined && conversationId === undefined;
 }
 
+export function shouldCancelPendingProviderLogin(pendingProviderLogin: string | undefined): boolean {
+  return pendingProviderLogin !== undefined;
+}
+
 export function compactModelListAcknowledgement(identities: readonly string[], width: number, unavailableLabel?: string): string {
   if (identities.length === 0) return fitPlain(unavailableLabel === undefined ? "No models available · retry /models list" : "Catalog unavailable · retry /models", width);
   const identity = identities[0]!;
@@ -1357,6 +1361,14 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       if (matchesKey(data, "ctrl+c")) {
         if (cancelActiveConversation()) return { consume: true };
         stop();
+        return { consume: true };
+      }
+      if (matchesKey(data, "escape") && shouldCancelPendingProviderLogin(pendingProviderLogin)) {
+        pendingProviderLogin = undefined;
+        editor.hidden = false;
+        editor.setText("");
+        appendWarning("Provider login cancelled.");
+        render();
         return { consume: true };
       }
       if (accountLoginSelection !== undefined && accountLoginState === "opening" && matchesKey(data, "escape")) {
