@@ -1,5 +1,5 @@
 import { createApiClient, type ApiClient } from "@maestro/api-client";
-import { resolveWorkspace, type Workspace } from "./workspace.js";
+import { resolveWorkspace, workspaceIdentity, type Workspace } from "./workspace.js";
 import { resolveConnection } from "./connection.js";
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection, type LocalBootstrapStepEvent } from "./local-bootstrap.js";
@@ -66,9 +66,10 @@ export async function initializeTui(options: InteractiveTuiOptions): Promise<{
     connection.kind === "configured"
       ? await ensureLocalControlPlane({ apiUrl: connection.apiUrl, ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }) })
       : undefined;
-  let session = await loadWorkspaceSession(workspace.cwd);
+  const sessionWorkspacePath = workspaceIdentity(workspace);
+  let session = await loadWorkspaceSession(sessionWorkspacePath);
   const connectionReady = connection.kind === "configured" && controlPlane?.kind === "ready";
-  let project = discoverWorkspaceProject(workspace.cwd, session);
+  let project = discoverWorkspaceProject(sessionWorkspacePath, session);
   let projectDiscoveryNotice: string | undefined;
   let client: ApiClient | undefined;
   if (connectionReady && connection.kind === "configured") {
@@ -79,11 +80,11 @@ export async function initializeTui(options: InteractiveTuiOptions): Promise<{
         ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }),
       });
       const previousProject = project;
-      const discovered = await discoverWorkspaceProjectFromControlPlane({ workspacePath: workspace.cwd, session, client });
+      const discovered = await discoverWorkspaceProjectFromControlPlane({ workspacePath: sessionWorkspacePath, session, client });
       project = discovered;
       if (discovered.kind === "attached") {
         if (previousProject.kind !== "attached" || previousProject.projectId !== discovered.projectId) {
-          session = attachWorkspaceSession(workspace.cwd, session, discovered.projectId);
+          session = attachWorkspaceSession(sessionWorkspacePath, session, discovered.projectId);
           await saveWorkspaceSession(session);
         }
       } else {

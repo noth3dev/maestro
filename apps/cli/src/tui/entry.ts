@@ -13,6 +13,7 @@ import { ApiError, createApiClient, type ApiClient, type GoalEvent } from "@maes
 import type { ConversationEvent, ModelCatalogEntry, TaskContract } from "@maestro/contracts";
 
 import { resolveRetryWorkspace } from "./retry-workspace.js";
+import { workspaceIdentity } from "./workspace.js";
 import { createTranscriptClearBoundary, executeBasicShellCommand, latestCopyableTranscriptText } from "./basic-shell.js";
 import { waitForAccountLogin } from "./account-login.js";
 import { hydrateActivityHistory } from "./activity-history-hydration.js";
@@ -379,6 +380,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
   }
   Object.assign(liveState, initialized.state);
   let { workspace, startupError, connection, session, project, projectDiscoveryNotice, client } = initialized;
+  const sessionWorkspacePath = workspaceIdentity(workspace);
   const state = liveState;
   const syncProjectPresentation = (): void => {
     state.project = project.kind === "attached" ? { kind: "attached" } : { kind: "unavailable", guidance: projectDiscoveryNotice ?? project.reason };
@@ -426,7 +428,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let renderedDraftIdentity: string | undefined;
     let activity: GoalEvent[] = [];
     let visibleActivityStart = 0;
-    let recovery: RecoverySummary = reconcileTuiSession(workspace.cwd, session);
+    let recovery: RecoverySummary = reconcileTuiSession(sessionWorkspacePath, session);
     let pendingConfirmation: { summary: ApprovalDialogSummary; resolve: (decision: ConfirmationResult) => void } | undefined;
     const syncPendingDecisionState = (): void => {
       const goalId = selectedConversationGoalId(state.goal, session?.goalId);
@@ -496,7 +498,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         if (selectedModel === undefined) {
           appendWarning(`${loginLabel} complete, but no model is available. Run /models list, then /model use --model provider/model.`);
         } else {
-          session = selectWorkspaceModel(workspace.cwd, session, selectedModel);
+          session = selectWorkspaceModel(sessionWorkspacePath, session, selectedModel);
           await saveWorkspaceSession(session);
           state.model = selectedModel;
           appendSuccess(`Model selected after ${loginLabel}: ${selectedModel}`);
@@ -551,7 +553,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           state.budget = dashboardState.budget;
         },
         setRecovery: (dashboard) => {
-          recovery = reconcileTuiSession(workspace.cwd, session, {
+          recovery = reconcileTuiSession(sessionWorkspacePath, session, {
             ...(dashboard.selectedGoal === undefined ? {} : { goalState: dashboard.selectedGoal.state }),
             ...(dashboard.workerCount === undefined ? {} : { activeWorkers: dashboard.workerCount }),
           });
@@ -589,7 +591,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         projectId,
         signal,
         readState: () => ({ activity, session }),
-        workspacePath: workspace.cwd,
+        workspacePath: sessionWorkspacePath,
         isCurrent: () => generation === activityHydrationGeneration && project.kind === "attached" && project.projectId === projectId,
         dismissSplash: () => splash.dismiss(),
         setActivity: (nextActivity) => {
@@ -725,7 +727,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       session = sessionResult;
       await hydrateOrganizationOnReconnect(state, client!);
       state.connection = { kind: "connected" };
-      recovery = reconcileTuiSession(workspace.cwd, session);
+      recovery = reconcileTuiSession(sessionWorkspacePath, session);
       appendSuccess("Control Plane connected.");
       if (notice !== undefined) appendWarning(notice);
       void refreshDashboard();
@@ -780,11 +782,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           token: connection.token,
           ...(options.io.fetch === undefined ? {} : { fetch: options.io.fetch }),
         });
-        project = discoverWorkspaceProject(workspace.cwd, session);
+        project = discoverWorkspaceProject(sessionWorkspacePath, session);
         projectDiscoveryNotice = undefined;
         syncProjectPresentation();
         const reconnectedProject = await reconnectWorkspaceProject({
-          workspacePath: workspace.cwd,
+          workspacePath: sessionWorkspacePath,
           session,
           client,
           saveSession: saveWorkspaceSession,
@@ -1034,9 +1036,9 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             conversation = createConversationTranscript();
             draftedTaskContract = undefined;
             renderedDraftIdentity = undefined;
-            session = startNewConversationSession(workspace.cwd, session);
+            session = startNewConversationSession(sessionWorkspacePath, session);
             await saveWorkspaceSession(session);
-            recovery = reconcileTuiSession(workspace.cwd, session);
+            recovery = reconcileTuiSession(sessionWorkspacePath, session);
             appendSuccess("New Concertmaster conversation started. Durable Goal state was preserved.");
           } else if (parsed.action === "attach") {
             conversationStreamController?.abort();
@@ -1048,9 +1050,9 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             renderedDraftIdentity = undefined;
             const requestedProjectId = parsed.options["project-id"];
             const requestedProjectIndex = parsed.options["project-index"];
-            const current = await loadWorkspaceSession(workspace.cwd);
+            const current = await loadWorkspaceSession(sessionWorkspacePath);
             if (typeof requestedProjectId === "string" && requestedProjectId.trim() !== "") {
-              session = attachWorkspaceSession(workspace.cwd, current, requestedProjectId);
+              session = attachWorkspaceSession(sessionWorkspacePath, current, requestedProjectId);
               syncModelState();
               await saveWorkspaceSession(session);
             } else if (typeof requestedProjectIndex === "string" && requestedProjectIndex.trim() !== "") {
@@ -1064,30 +1066,30 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
                 appendWarning(`Project index must be a number from 1 to ${projects.length}.`);
                 return;
               }
-              session = attachWorkspaceSession(workspace.cwd, current, projects[index - 1]!);
+              session = attachWorkspaceSession(sessionWorkspacePath, current, projects[index - 1]!);
               syncModelState();
               await saveWorkspaceSession(session);
             } else if (current?.projectId !== undefined) {
               session = current;
               syncModelState();
             } else if (client !== undefined) {
-              const discovered = await discoverWorkspaceProjectFromControlPlane({ workspacePath: workspace.cwd, session: current, client });
+              const discovered = await discoverWorkspaceProjectFromControlPlane({ workspacePath: sessionWorkspacePath, session: current, client });
               if (discovered.kind !== "attached") {
                 appendWarning(discovered.reason);
                 return;
               }
-              session = attachWorkspaceSession(workspace.cwd, current, discovered.projectId);
+              session = attachWorkspaceSession(sessionWorkspacePath, current, discovered.projectId);
               syncModelState();
               await saveWorkspaceSession(session);
             } else {
               appendWarning("Session attach requires a connected Control Plane or --project-id.");
               return;
             }
-            project = discoverWorkspaceProject(workspace.cwd, session);
+            project = discoverWorkspaceProject(sessionWorkspacePath, session);
             projectDiscoveryNotice = undefined;
             compactProjectNotice = undefined;
             syncProjectPresentation();
-            recovery = reconcileTuiSession(workspace.cwd, session);
+            recovery = reconcileTuiSession(sessionWorkspacePath, session);
             append(renderRecoveryBanner(recovery, terminal.columns).join(" · "));
             void refreshDashboard();
             restartActivity();
@@ -1097,11 +1099,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               void offerAutomaticProviderSignIn();
             }
           } else if (parsed.action === "list") {
-            const current = await loadWorkspaceSession(workspace.cwd);
+            const current = await loadWorkspaceSession(sessionWorkspacePath);
             append(
               current === undefined
                 ? "Session: no saved workspace session"
-                : renderRecoveryBanner(reconcileTuiSession(workspace.cwd, current), terminal.columns).join(" · "),
+                : renderRecoveryBanner(reconcileTuiSession(sessionWorkspacePath, current), terminal.columns).join(" · "),
             );
           } else {
             appendWarning(`Command: /session ${parsed.action ?? ""} (unknown session action)`.trim());
@@ -1115,10 +1117,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           } else {
             const selected = await client.getGoal(requestedGoalId, { projectId: project.projectId });
             if (selected.projectId !== project.projectId) throw new Error("Selected Goal is bound to another project");
-            const current = await loadWorkspaceSession(workspace.cwd);
-            session = selectWorkspaceGoal(workspace.cwd, current ?? session, selected.goalId);
+            const current = await loadWorkspaceSession(sessionWorkspacePath);
+            session = selectWorkspaceGoal(sessionWorkspacePath, current ?? session, selected.goalId);
             await saveWorkspaceSession(session);
-            recovery = reconcileTuiSession(workspace.cwd, session, { goalState: selected.state });
+            recovery = reconcileTuiSession(sessionWorkspacePath, session, { goalState: selected.state });
             appendSuccess(`Selected Goal: ${selected.goalId} · ${selected.state} · v${selected.version}`);
             void refreshDashboard();
           }
@@ -1167,7 +1169,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             } else if (session?.conversationId !== undefined) {
               appendWarning("The active conversation is bound to its model. Use /session new before selecting another model.");
             } else {
-              session = selectWorkspaceModel(workspace.cwd, session, requestedModel);
+              session = selectWorkspaceModel(sessionWorkspacePath, session, requestedModel);
               await saveWorkspaceSession(session);
               state.model = requestedModel;
               appendSuccess(`Selected model: ${requestedModel}`);
@@ -1251,7 +1253,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
                   { idempotencyKey: randomUUID() },
                 );
                 session = {
-                  workspacePath: workspace.cwd,
+                  workspacePath: sessionWorkspacePath,
                   projectId: project.projectId,
                   ...(conversationGoalId === undefined ? {} : { goalId: conversationGoalId }),
                   ...(session.lastEventCursor === undefined ? {} : { lastEventCursor: session.lastEventCursor }),

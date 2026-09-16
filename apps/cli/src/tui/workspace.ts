@@ -10,6 +10,10 @@ export interface Workspace {
   gitRoot?: string;
 }
 
+export function workspaceIdentity(workspace: Workspace): string {
+  return workspace.gitRoot ?? workspace.cwd;
+}
+
 export async function resolveWorkspace(cwd: string): Promise<Workspace> {
   const resolvedCwd = await realpath(cwd);
   try {
