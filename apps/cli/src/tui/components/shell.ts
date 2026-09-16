@@ -247,7 +247,7 @@ export function createSplashController(): SplashController {
 }
 
 function hintText(state: TuiShellState): string {
-  if (connectionMessage(state) !== undefined) return "ctrl+r retry · /status for detail";
+  if (connectionMessage(state) !== undefined) return "ctrl+r retry · /help for commands";
   if (state.working === true) return `esc stop · ctrl+a decisions${pendingCount(state) > 0 ? ` (${pendingCount(state)})` : ""}`;
   const count = pendingCount(state);
   if (count > 0) return `ctrl+a review ${count} pending decision${count === 1 ? "" : "s"}`;
