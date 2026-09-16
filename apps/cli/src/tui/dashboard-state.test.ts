@@ -1,0 +1,41 @@
+import { describe, expect, it } from "vitest";
+import type { DashboardReadModel } from "./commands/read-commands.js";
+import { dashboardErrorState, dashboardStateFromReadModel } from "./dashboard-state.js";
+
+describe("dashboard state mapping", () => {
+  it("maps a selected dashboard read model into TUI async states", () => {
+    const dashboard = {
+      projectId: "project-1",
+      goals: [],
+      selectedGoal: { goalId: "goal-1", state: "running" },
+      budget: { goalId: "goal-1", projectId: "project-1", budgetCents: 500, reservedCents: 100, costCents: 25 },
+      workerCount: 2,
+    } satisfies DashboardReadModel;
+
+    expect(dashboardStateFromReadModel(dashboard)).toEqual({
+      goal: { kind: "value", value: { name: "goal-1", state: "running" } },
+      workers: { kind: "value", value: 2 },
+      budget: { kind: "value", value: { spentCents: 25, ceilingCents: 500 } },
+    });
+  });
+
+  it("maps an empty or failed dashboard read without inventing values", () => {
+    const empty = {
+      projectId: "project-1",
+      goals: [],
+      selectedGoal: undefined,
+      budget: undefined,
+      workerCount: undefined,
+    } satisfies DashboardReadModel;
+    expect(dashboardStateFromReadModel(empty)).toEqual({
+      goal: { kind: "empty" },
+      workers: { kind: "empty" },
+      budget: { kind: "empty" },
+    });
+    expect(dashboardErrorState("Control Plane read failed")).toEqual({
+      goal: { kind: "error", message: "Control Plane read failed" },
+      workers: { kind: "error", message: "Control Plane read failed" },
+      budget: { kind: "error", message: "Control Plane read failed" },
+    });
+  });
+});
