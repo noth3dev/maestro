@@ -6,6 +6,8 @@ import {
   createTaskContractDraft,
   launchTaskContractDraft,
   updateTaskContractDraft,
+  submitHomeBrief,
+  formatTaskContractReview,
   type TaskContractAuthoringApi,
 } from "./task-contract-authoring.js";
 
@@ -70,11 +72,136 @@ describe("task contract authoring", () => {
     const api = fakeApi();
 
     await confirmTaskContractDraft(api, contract, commandId);
-    expect(api.confirmTaskContract).toHaveBeenCalledWith(contractId, { projectId, version: 1, contentHash: contract.contentHash }, commandId);
+    expect(api.confirmTaskContract).toHaveBeenCalledWith(
+      contractId,
+      { projectId, version: 1, contentHash: contract.contentHash },
+      commandId,
+    );
     expect(api.launchTaskContract).not.toHaveBeenCalled();
 
     await launchTaskContractDraft(api, contract, commandId);
     expect(api.launchTaskContract).toHaveBeenCalledWith(contractId, projectId, commandId);
+  });
+
+  it("formats every Task Contract field for visible pre-confirmation review", () => {
+    const review = formatTaskContractReview(contract);
+
+    expect(review).toContain('"nonGoals"');
+    expect(review).toContain('"forbiddenEffects"');
+    expect(review).toContain('"budget"');
+    expect(review).toContain('"externalServiceAssumptions"');
+  });
+
+  it("sends a no-Goal Home brief through the durable conversation intake and returns the reviewed draft", async () => {
+    const api = {
+      listModels: vi.fn(async () => [
+        {
+          identity: { provider: "openai", id: "gpt-5" },
+          capabilities: ["text"],
+          authModes: ["api-key"],
+          dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy", trainsOnCustomerData: false, regions: [] },
+        },
+      ]),
+      createConversation: vi.fn(async () => ({
+        conversationId: "44444444-4444-4444-8444-444444444444",
+        projectId,
+        goalId: null,
+        model: "openai/gpt-5",
+        status: "active" as const,
+        version: 1,
+      })),
+      sendConversationTurn: vi.fn(async () => ({
+        conversation: {
+          conversationId: "44444444-4444-4444-8444-444444444444",
+          projectId,
+          goalId: null,
+          model: "openai/gpt-5",
+          status: "succeeded" as const,
+          version: 2,
+        },
+        turn: {
+          turnId: "55555555-5555-4555-8555-555555555555",
+          conversationId: "44444444-4444-4444-8444-444444444444",
+          role: "assistant" as const,
+          content: JSON.stringify(contract),
+          status: "completed" as const,
+          cursor: "1",
+          createdAt: "2026-09-16T00:00:00.000Z",
+        },
+      })),
+    };
+
+    const result = await submitHomeBrief(api, { projectId, text: "Ship the pricing copy safely", selectedGoalId: undefined });
+
+    expect(api.createConversation).toHaveBeenCalledWith(
+      { projectId, goalId: null, model: "openai/gpt-5" },
+      expect.objectContaining({ idempotencyKey: expect.any(String) }),
+    );
+    expect(api.sendConversationTurn).toHaveBeenCalledWith(
+      "44444444-4444-4444-8444-444444444444",
+      { projectId, text: "Ship the pricing copy safely" },
+      expect.objectContaining({ idempotencyKey: expect.any(String) }),
+    );
+    expect(result.draft).toEqual(contract);
+  });
+
+  it("keeps a clarification response reviewable without fabricating a Task Contract", async () => {
+    const api = {
+      listModels: vi.fn(async () => [
+        {
+          identity: { provider: "openai", id: "gpt-5" },
+          capabilities: ["text"],
+          authModes: ["api-key"],
+          dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy", trainsOnCustomerData: false, regions: [] },
+        },
+      ]),
+      createConversation: vi.fn(async () => ({
+        conversationId: "44444444-4444-4444-8444-444444444444",
+        projectId,
+        goalId: null,
+        model: "openai/gpt-5",
+        status: "active" as const,
+        version: 1,
+      })),
+      sendConversationTurn: vi.fn(async () => ({
+        conversation: {
+          conversationId: "44444444-4444-4444-8444-444444444444",
+          projectId,
+          goalId: null,
+          model: "openai/gpt-5",
+          status: "succeeded" as const,
+          version: 2,
+        },
+        turn: {
+          turnId: "55555555-5555-4555-8555-555555555555",
+          conversationId: "44444444-4444-4444-8444-444444444444",
+          role: "assistant" as const,
+          content: "Please tell me the desired outcome and budget ceiling.",
+          status: "completed" as const,
+          cursor: "1",
+          createdAt: "2026-09-16T00:00:00.000Z",
+        },
+      })),
+    };
+
+    const result = await submitHomeBrief(api, { projectId, text: "help", selectedGoalId: undefined });
+
+    expect(result.draft).toBeUndefined();
+    expect(result.message).toContain("desired outcome");
+  });
+
+  it("routes Home with an attached Goal through its existing direct authoring path", async () => {
+    const api = { ...fakeApi(), listModels: vi.fn(), createConversation: vi.fn(), sendConversationTurn: vi.fn() };
+
+    const result = await submitHomeBrief(api, {
+      projectId,
+      text: "Ship the pricing copy safely",
+      selectedGoalId: contract.project.projectId,
+    });
+
+    expect(api.createTaskContract).toHaveBeenCalledOnce();
+    expect(api.createConversation).not.toHaveBeenCalled();
+    expect(result.draft).toEqual(contract);
   });
 
   it("lets the server's rejection reason reach the caller unchanged", async () => {
