@@ -199,6 +199,9 @@ export function renderUnifiedStreamEntries(state: ConversationTranscriptState, a
     if (left.occurredAt !== right.occurredAt) return left.occurredAt.localeCompare(right.occurredAt);
     return left.stable.localeCompare(right.stable);
   });
+  if (entries.length === 0) {
+    return [{ occurredAt: "", stable: "empty-state", content: renderActivityTimeline([], width).join("\n") }];
+  }
   return entries;
 }
 

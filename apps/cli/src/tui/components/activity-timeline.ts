@@ -118,7 +118,7 @@ export function pendingDecisionsFromActivity(events: readonly ActivityTimelineEv
 }
 
 export function renderActivityTimeline(events: readonly ActivityTimelineEvent[], width: number): string[] {
-  if (events.length === 0) return [tuiTheme.dim("  No activity yet.")];
+  if (events.length === 0) return [tuiTheme.dim(fitPlain("  No activity yet.", width))];
   return events.map((event) => {
     if (event.effect !== undefined) return renderEffect(event, width);
     const line = fitPlain(`  ● #${event.cursor}  ${event.eventType}`, width);

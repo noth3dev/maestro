@@ -6,6 +6,7 @@ import {
   renderConversationBlocks,
   renderConversationMarkdown,
   renderUnifiedStream,
+  renderUnifiedStreamEntries,
 } from "./conversation-transcript.js";
 
 const base = {
@@ -19,6 +20,25 @@ const base = {
 const event = (eventType: string, cursor: string, payload: Record<string, unknown>) => ({ ...base, eventType, cursor, payload });
 
 describe("conversation transcript", () => {
+  it("shows a truthful empty state in the unified stream", () => {
+    const ansiEscapePattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+    for (const width of [40, 60, 80, 120]) {
+      const rendered = renderUnifiedStream(createConversationTranscript(), [], width).map((line) => line.replace(ansiEscapePattern, ""));
+      expect(rendered).toEqual(["  No activity yet."]);
+      expect(rendered.every((line) => line.length <= width)).toBe(true);
+    }
+
+    const entries = renderUnifiedStreamEntries(createConversationTranscript(), [], 80);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.content).toContain("No activity yet.");
+  });
+
+  it("omits the empty state once a conversation message exists", () => {
+    const state = addConversationMessage(createConversationTranscript(), "user", "hello");
+
+    expect(renderUnifiedStream(state, [], 80).join("\n")).not.toContain("No activity yet.");
+  });
+
   it("carries the source semantic kind with transcript messages", () => {
     const state = addConversationMessage(createConversationTranscript(), "system", "Gateway unavailable", "error");
 
