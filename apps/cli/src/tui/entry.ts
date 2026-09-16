@@ -15,6 +15,7 @@ import type { ConversationEvent, ModelCatalogEntry, TaskContract } from "@maestr
 import { resolveWorkspace } from "./workspace.js";
 import { createTranscriptClearBoundary, executeBasicShellCommand, latestCopyableTranscriptText } from "./basic-shell.js";
 import { waitForAccountLogin } from "./account-login.js";
+import { loadActivityHistory } from "./activity-history.js";
 
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection } from "./local-bootstrap.js";
@@ -349,28 +350,16 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     ): Promise<void> => {
       if (client === undefined) return;
       try {
-        let cursor = "0";
-        const history: GoalEvent[] = [];
-        for (let page = 0; page < 64; page += 1) {
-          const result = await client.listEvents({ projectId, after: cursor });
-          if (
-            generation !== activityHydrationGeneration ||
-            !activityHistoryBoundary.isCurrent(historyGeneration) ||
-            project.kind !== "attached" ||
-            project.projectId !== projectId
-          )
-            return;
-          history.push(...result.events);
-          if (result.events.length === 0 || result.nextCursor === cursor || result.events.length < 100) break;
-          cursor = result.nextCursor;
-        }
-        if (
-          generation !== activityHydrationGeneration ||
-          !activityHistoryBoundary.isCurrent(historyGeneration) ||
-          project.kind !== "attached" ||
-          project.projectId !== projectId
-        )
-          return;
+        const history = await loadActivityHistory({
+          client,
+          projectId,
+          isCurrent: () =>
+            generation === activityHydrationGeneration &&
+            activityHistoryBoundary.isCurrent(historyGeneration) &&
+            project.kind === "attached" &&
+            project.projectId === projectId,
+        });
+        if (history === undefined) return;
         activity = mergeEvents(activity, history);
         render();
       } catch (error) {
