@@ -139,6 +139,8 @@ describe("concurrent conversation turn submission", () => {
     expect(shouldBlockConcurrentTurnSubmit("second", true, controller)).toBe(true);
     expect(shouldBlockConcurrentTurnSubmit("/help", true, controller)).toBe(false);
     expect(shouldBlockConcurrentTurnSubmit("second", false, undefined)).toBe(false);
+    expect(shouldBlockConcurrentTurnSubmit("second", false, undefined, true)).toBe(true);
+    expect(shouldBlockConcurrentTurnSubmit("/help", false, undefined, true)).toBe(false);
     expect(isCurrentConversationTurnController(controller, controller)).toBe(true);
     expect(isCurrentConversationTurnController(controller, undefined)).toBe(false);
   });

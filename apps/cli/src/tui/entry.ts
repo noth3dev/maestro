@@ -165,8 +165,9 @@ export function shouldBlockConcurrentTurnSubmit(
   text: string,
   working: boolean,
   activeController: AbortController | undefined,
+  submitInFlight = false,
 ): boolean {
-  return text.trim() !== "" && !text.trim().startsWith("/") && (working || activeController !== undefined);
+  return text.trim() !== "" && !text.trim().startsWith("/") && (working || activeController !== undefined || submitInFlight);
 }
 
 export function isCurrentConversationTurnController(
@@ -499,6 +500,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const conversationDisplayBoundary = createTranscriptClearBoundary();
     let activityController: AbortController | undefined;
     let conversationTurnController: AbortController | undefined;
+    let naturalSubmitInFlight = false;
     let pendingProviderLogin: "openai" | "anthropic" | undefined;
     let providerLoginInFlight = false;
     let accountLoginSelection: AccountLoginProviderSelection | undefined;
@@ -981,7 +983,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
 
     const submit = async (text: string) => {
       if (shouldIgnoreEmptySubmit(text, pendingProviderLogin)) return;
-      if (shouldBlockConcurrentTurnSubmit(text, state.working === true, conversationTurnController)) {
+      if (shouldBlockConcurrentTurnSubmit(text, state.working === true, conversationTurnController, naturalSubmitInFlight)) {
         editor.setText(text);
         appendWarning("Turn in progress · Esc to stop");
         render();
@@ -1009,8 +1011,13 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         }
         return;
       }
+      let ownsNaturalSubmit = false;
       try {
         const parsed = parseInput(text);
+        if (parsed.kind === "natural-language") {
+          naturalSubmitInFlight = true;
+          ownsNaturalSubmit = true;
+        }
         if (
           parsed.kind === "command" &&
           parsed.action === undefined &&
@@ -1404,6 +1411,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         }
       } catch (error) {
         appendError(`Input error: ${error instanceof Error ? error.message : "invalid input"}`);
+      } finally {
+        if (ownsNaturalSubmit) naturalSubmitInFlight = false;
       }
       editor.addToHistory(text);
     };
