@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
+import type { TaskContractService } from "./task-contract-service.js";
 import type { OperatorContext } from "@maestro/persistence";
 import { UuidSchema, type Conversation, type ConversationEvent, type ConversationTurnInput, type ConversationTurnResult, type CreateConversationInput, type ModelCatalogEntry } from "@maestro/contracts";
-import { createMaestroAgentRuntime, ToolRegistry, parseModelRef, formatModelRef, type ModelGatewayPort, type GatewayBinding, type ModelMessage } from "@maestro/agent-runtime";
+import { createMaestroAgentRuntime, createTaskContractDraftingTool, OVERTURE_TASK_CONTRACT_CREATE_TOOL, ToolRegistry, parseModelRef, formatModelRef, type ModelGatewayPort, type GatewayBinding, type ModelMessage } from "@maestro/agent-runtime";
 
 export class ConversationNotFoundError extends Error {}
 export class ConversationConflictError extends Error {}
@@ -74,9 +75,16 @@ export function createPostgresConversationService(options: {
   accountRefs: Readonly<Record<string, string>>;
   dataPolicyHash?: string;
   tools?: ToolRegistry;
+  /** Narrow creator used only by project-scoped, goal-less Overture intake. */
+  taskContractService?: TaskContractService;
 }): ConversationService {
   const runtimes = new Map<string, RuntimeHandle>();
   const tools = options.tools ?? new ToolRegistry();
+  if (options.taskContractService !== undefined && tools.get(OVERTURE_TASK_CONTRACT_CREATE_TOOL) === undefined) {
+    tools.register(createTaskContractDraftingTool({
+      createTaskContract: (contractId, input, actor) => options.taskContractService!.createTaskContract(contractId, input, { operatorId: actor.operatorId, credentialId: "conversation-runtime" }),
+    }));
+  }
   const policyHash = options.dataPolicyHash ?? "maestro-local-v1";
 
   async function read(conversationId: string, projectId: string, operatorId: string): Promise<ConversationRow> {
@@ -90,7 +98,8 @@ export function createPostgresConversationService(options: {
   }
 
   function grantFor(row: ConversationRow, _accountRef: string) {
-    return { grantId: `grant-${row.conversation_id}`, allowedTools: [], allowedSkills: [], modelPolicy: [formatModelRef({ provider: row.model_provider, id: row.model_id })], pathScope: [], outboundDataClasses: ["public", "workspace"], remaining: { modelTurns: 8, toolCalls: 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } };
+    const goalLessDrafting = row.goal_id === null && options.taskContractService !== undefined;
+    return { grantId: `grant-${row.conversation_id}`, allowedTools: goalLessDrafting ? [OVERTURE_TASK_CONTRACT_CREATE_TOOL] : [], allowedSkills: [], modelPolicy: [formatModelRef({ provider: row.model_provider, id: row.model_id })], pathScope: [], outboundDataClasses: ["public", "workspace"], remaining: { modelTurns: 8, toolCalls: goalLessDrafting ? 2 : 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } };
   }
   function createStreamState(): RuntimeStreamState { return { turnId: undefined, requestId: undefined, pending: Promise.resolve(), error: undefined }; }
   function queueTextDelta(state: RuntimeStreamState, conversationId: string, projectId: string, event: import("@maestro/agent-runtime").ModelStreamEvent): void {
@@ -175,7 +184,7 @@ export function createPostgresConversationService(options: {
       const runtime = createMaestroAgentRuntime({ gateway: options.gateway, binding: binding!, tools, onModelEvent: (event) => queueTextDelta(stream, conversationId, input.projectId, event) });
       let spawned: Awaited<ReturnType<typeof runtime.spawn>>;
       try {
-        spawned = await runtime.spawn({ name: `conversation-${conversationId}`, context: { operatorId: operator.operatorId, projectId: input.projectId, ...(goalId === null ? {} : { goalId }), missionBundleId: "conversation", policyVersion: "1", accountRef: binding!.account.accountRef }, grant: { grantId: `grant-${conversationId}`, allowedTools: [], allowedSkills: [], modelPolicy: [input.model], pathScope: [], outboundDataClasses: ["public", "workspace"], remaining: { modelTurns: 8, toolCalls: 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } }, modelPolicy: [input.model], idempotencyKey: conversationId });
+        spawned = await runtime.spawn({ name: `conversation-${conversationId}`, context: { operatorId: operator.operatorId, projectId: input.projectId, ...(goalId === null ? {} : { goalId }), missionBundleId: "conversation", policyVersion: "1", accountRef: binding!.account.accountRef }, grant: { grantId: `grant-${conversationId}`, allowedTools: goalId === null && options.taskContractService !== undefined ? [OVERTURE_TASK_CONTRACT_CREATE_TOOL] : [], allowedSkills: [], modelPolicy: [input.model], pathScope: [], outboundDataClasses: ["public", "workspace"], remaining: { modelTurns: 8, toolCalls: goalId === null && options.taskContractService !== undefined ? 2 : 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } }, modelPolicy: [input.model], idempotencyKey: conversationId });
       } catch {
         await markConversationUnknown(conversationId, input.projectId, "runtime_admission_failed", "Conversation runtime admission failed");
         await runtime.close?.();

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createPostgresConversationService } from "./conversation-service.js";
 import type { ModelGatewayPort } from "@maestro/agent-runtime";
 import type { OperatorContext } from "@maestro/persistence";
@@ -263,4 +263,45 @@ describe("postgres conversation service", () => {
     await expect(service.turn("018f3c9b-7e71-7b44-ae23-3b5d4e8c9f03", { projectId, text: "hi" }, operator)).resolves.toMatchObject({ turn: { content: "hello from model" } });
   });
 
+});
+
+
+describe("goal-less Overture drafting boundary", () => {
+  const draft = {
+    desiredOutcome: "Ship the intake feature", userVisibleBehavior: ["The operator can submit a brief"], successCriteria: ["A durable Task Contract exists"], liveEvidence: ["A persisted row"],
+    scope: ["Project-scoped intake"], nonGoals: ["Launching workers"], priorities: ["Safety"], acceptableTradeoffs: ["Ask clarifying questions"], constraints: ["No execution effects"], knownEdgeCases: ["Vague brief"],
+    project: { projectId, repository: "/repo", immutableBaseRevision: "abc123", dataBoundary: "repository files only" }, evidenceReferences: ["brief"], approvedPreviewReferences: [], expectedGroups: ["Product Group"], expectedDepartments: ["Product Department"], criticalActionExpectations: ["Human confirmation"], forbiddenEffects: ["Worker spawn", "Mission Bundle"], environmentAssumptions: ["PostgreSQL"], externalServiceAssumptions: ["None"], budget: { ceiling: "100 USD", reportingExpectations: ["Report spend"], stoppingConditions: ["Stop at ceiling"] },
+  };
+  function contract(contractId: string) { return { contractId, schemaVersion: 1 as const, version: 1, ...draft, decisionHistory: [], contentHash: "a".repeat(64), launchState: "awaiting_confirmation" as const }; }
+
+  it("offers only task-contract:create to goal-less runtime and creates through the durable service", async () => {
+    const pool = new FakePool();
+    const createTaskContract = vi.fn(async (contractId: string) => contract(contractId));
+    const requests: Array<{ tools: readonly { name: string }[]; childCalls: number }> = [];
+    const gateway = fakeGateway();
+    gateway.turn = async (request) => {
+      requests.push({ tools: request.tools, childCalls: request.limits.maxChildCalls });
+      if (requests.length === 1) return { requestId: request.requestId, model: { provider: "openai", id: "gpt-5" }, text: "", toolCalls: [{ id: "create-1", name: "task-contract:create", arguments: { state: "valid", value: { projectId, substance: draft } } }], stopReason: "tool_use", usage: { state: "available", totalTokens: 3 } };
+      return { requestId: request.requestId, model: { provider: "openai", id: "gpt-5" }, text: "Draft created", toolCalls: [], stopReason: "end_turn", usage: { state: "available", totalTokens: 3 } };
+    };
+    const service = createPostgresConversationService({ pool: pool as never, gateway, gatewayOperatorId: "gateway-operator", accountRefs: { openai: "acct-1" }, taskContractService: { createTaskContract } as never });
+    const conversation = await service.create({ projectId, goalId: null, model: "openai/gpt-5" }, operator);
+    const result = await service.turn(conversation.conversationId, { projectId, text: "Ship the intake feature" }, operator);
+    expect(result.turn.content).toBe("Draft created");
+    expect(createTaskContract).toHaveBeenCalledOnce();
+    expect(requests[0]).toMatchObject({ tools: [{ name: "task-contract:create" }], childCalls: 0 });
+    expect(requests[0]!.tools).not.toEqual(expect.arrayContaining([expect.objectContaining({ name: expect.stringMatching(/worker|mission|ipython/i) })]));
+  });
+
+  it("keeps the existing Goal-bound grant empty even when the model proposes the drafting tool", async () => {
+    const pool = new FakePool();
+    const createTaskContract = vi.fn();
+    const gateway = fakeGateway();
+    gateway.turn = async (request) => ({ requestId: request.requestId, model: { provider: "openai", id: "gpt-5" }, text: "", toolCalls: [{ id: "create-1", name: "task-contract:create", arguments: { state: "valid", value: { projectId, substance: draft } } }], stopReason: "tool_use", usage: { state: "available", totalTokens: 3 } });
+    const service = createPostgresConversationService({ pool: pool as never, gateway, gatewayOperatorId: "gateway-operator", accountRefs: { openai: "acct-1" }, taskContractService: { createTaskContract } as never });
+    const conversation = await service.create({ projectId, goalId, model: "openai/gpt-5" }, operator);
+    const result = await service.turn(conversation.conversationId, { projectId, text: "Do not use intake" }, operator);
+    expect(result.turn.status).toBe("failed");
+    expect(createTaskContract).not.toHaveBeenCalled();
+  });
 });
