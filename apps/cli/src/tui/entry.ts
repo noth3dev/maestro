@@ -132,6 +132,10 @@ export function compactProjectAttachmentNotice(projectDiscoveryNotice: string | 
   return fitPlain(command.length <= width ? command : "/session attach", width);
 }
 
+export function compactConnectionRecoveryAcknowledgement(connection: TuiShellState["connection"], width: number): string | undefined {
+  return connection.kind === "connected" ? undefined : fitPlain("ctrl+r retry · /help", width);
+}
+
 export function compactModelListAcknowledgement(identities: readonly string[], width: number, unavailableLabel?: string): string {
   if (identities.length === 0) return fitPlain(unavailableLabel === undefined ? "No models available · retry /models list" : "Catalog unavailable · retry /models", width);
   const identity = identities[0]!;
@@ -308,9 +312,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           ? fitPlain(compactHelp, width)
           : compactReview !== undefined && terminal.rows < 16
             ? fitPlain(compactReview, width)
-            : compactModelList !== undefined && terminal.rows < 16
-              ? compactModelListAcknowledgement(compactModelList.identities, width, compactModelList.unavailableLabel)
-              : terminal.rows < 16 && project.kind !== "attached"
+            : terminal.rows < 16 && state.connection.kind !== "connected"
+              ? compactConnectionRecoveryAcknowledgement(state.connection, width) ?? renderInputPlaceholder(state, width, terminal.rows < 16)
+              : compactModelList !== undefined && terminal.rows < 16
+                ? compactModelListAcknowledgement(compactModelList.identities, width, compactModelList.unavailableLabel)
+                : terminal.rows < 16 && project.kind !== "attached"
                 ? compactProjectAttachmentNotice(compactProjectNotice, width)
               : renderInputPlaceholder(state, width, terminal.rows < 16),
       ),

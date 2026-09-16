@@ -16,6 +16,7 @@ import {
   compactHelpAcknowledgement,
   compactProjectAttachmentNotice,
   compactModelListAcknowledgement,
+  compactConnectionRecoveryAcknowledgement,
   shouldIgnoreEmptySubmit,
   noModelSelectionMessage,
   runAutomaticProviderSignInOffer,
@@ -81,6 +82,20 @@ describe("compact help feedback", () => {
       expect(output).toBe("Help available; resize to view commands");
       expect(output.length).toBeLessThanOrEqual(width);
     }
+  });
+});
+
+describe("compact connection recovery priority", () => {
+  it("shows retry/help for every disconnected compact state and nothing when connected", () => {
+    for (const connection of [
+      { kind: "connecting" } as const,
+      { kind: "setup-required", message: "configure endpoint" } as const,
+      { kind: "error", message: "gateway unavailable" } as const,
+    ]) {
+      expect(compactConnectionRecoveryAcknowledgement(connection, 40)).toBe("ctrl+r retry · /help");
+      expect(compactConnectionRecoveryAcknowledgement(connection, 80)).toBe("ctrl+r retry · /help");
+    }
+    expect(compactConnectionRecoveryAcknowledgement({ kind: "connected" }, 40)).toBeUndefined();
   });
 });
 
