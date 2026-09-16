@@ -12,7 +12,7 @@ import {
 import { ApiError, createApiClient, type ApiClient, type GoalEvent } from "@maestro/api-client";
 import type { ConversationEvent, ModelCatalogEntry, TaskContract } from "@maestro/contracts";
 
-import { resolveWorkspace } from "./workspace.js";
+import { resolveRetryWorkspace } from "./retry-workspace.js";
 import { createTranscriptClearBoundary, executeBasicShellCommand, latestCopyableTranscriptText } from "./basic-shell.js";
 import { waitForAccountLogin } from "./account-login.js";
 import { loadActivityHistory } from "./activity-history.js";
@@ -521,16 +521,16 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       connectionGeneration += 1;
       appendWarning("Retrying Maestro startup checks…");
       if (startupError !== undefined) {
-        try {
-          workspace = await resolveWorkspace(options.cwd);
-          state.workspace = workspace;
-          startupError = undefined;
-        } catch (error) {
-          startupError = error instanceof Error ? error.message : "Workspace could not be resolved";
+        const retriedWorkspace = await resolveRetryWorkspace(options.cwd);
+        if (retriedWorkspace.kind === "error") {
+          startupError = retriedWorkspace.message;
           state.connection = { kind: "error", message: `Workspace unavailable: ${startupError}` };
           appendError(`Startup retry failed: ${startupError}`);
           return;
         }
+        workspace = retriedWorkspace.workspace;
+        state.workspace = workspace;
+        startupError = undefined;
       }
       if (connection.kind !== "configured") {
         if (shouldAutoBootstrapLocal(options.env)) {
