@@ -197,6 +197,18 @@ export function shouldCancelPendingProviderLogin(pendingProviderLogin: string | 
   return pendingProviderLogin !== undefined;
 }
 
+export function shouldConsumePendingProviderLoginBackgroundInput(pendingProviderLogin: string | undefined, data: string): boolean {
+  if (pendingProviderLogin === undefined || matchesKey(data, "ctrl+c") || matchesKey(data, "escape")) return false;
+  return (
+    isSplashRestoreShortcut(data) ||
+    matchesKey(data, "ctrl+k") ||
+    matchesKey(data, "ctrl+g") ||
+    matchesKey(data, "ctrl+e") ||
+    matchesKey(data, "ctrl+r") ||
+    matchesKey(data, "ctrl+a")
+  );
+}
+
 export function shouldConsumeAccountLoginBackgroundInput(
   accountLoginState: "selecting" | "opening" | "waiting" | undefined,
   isCtrlC: boolean,
@@ -1412,6 +1424,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       });
 
     tui.addInputListener((data) => {
+      if (shouldConsumePendingProviderLoginBackgroundInput(pendingProviderLogin, data)) return { consume: true };
       const reviewShortcut = matchesKey(data, "ctrl+a");
       const reviewAvailable = pendingConfirmation !== undefined || (state.pendingDecisions?.length ?? 0) > 0;
       if (compactHelp !== undefined) {

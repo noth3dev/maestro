@@ -29,6 +29,7 @@ import {
   compactConversationAcknowledgement,
   shouldIgnoreEmptySubmit,
   shouldCancelPendingProviderLogin,
+  shouldConsumePendingProviderLoginBackgroundInput,
   shouldConsumeAccountLoginBackgroundInput,
   noModelSelectionMessage,
   runAutomaticProviderSignInOffer,
@@ -207,6 +208,19 @@ describe("provider login cancellation", () => {
     expect(shouldCancelPendingProviderLogin("openai")).toBe(true);
     expect(shouldCancelPendingProviderLogin("anthropic")).toBe(true);
     expect(shouldCancelPendingProviderLogin(undefined)).toBe(false);
+  });
+});
+
+describe("provider API-key modal input capture", () => {
+  it("consumes global shortcuts without consuming secret editing input", () => {
+    for (const data of ["\x01", "\x05", "\x07", "\x0b", "\x12", "\x1f"]) {
+      expect(shouldConsumePendingProviderLoginBackgroundInput("openai", data)).toBe(true);
+    }
+
+    for (const data of ["h", "help", "\x7f", "\x1b[A", "\r", "\x1b", "\x03"]) {
+      expect(shouldConsumePendingProviderLoginBackgroundInput("openai", data)).toBe(false);
+    }
+    expect(shouldConsumePendingProviderLoginBackgroundInput(undefined, "\x0b")).toBe(false);
   });
 });
 
