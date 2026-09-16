@@ -15,8 +15,9 @@ class FakePool {
   async query(sql: string, _params: unknown[] = []) {
     if (sql.startsWith("SELECT project_id FROM goals")) return { rowCount: 1, rows: [{ project_id: projectId }] };
     if (sql.startsWith("SELECT conversation_id")) {
-      const ownerMatches = _params.length < 3 || _params[2] === operator.operatorId;
-      return ownerMatches && this.conversation ? { rowCount: 1, rows: [this.conversation] } : { rowCount: 0, rows: [] };
+      const projectMatches = _params.length < 2 || _params[1] === projectId;
+      const ownerMatches = sql.includes("operator_id =") === false || _params[sql.includes("operator_id = $1") ? 0 : 2] === operator.operatorId;
+      return projectMatches && ownerMatches && this.conversation ? { rowCount: 1, rows: [this.conversation] } : { rowCount: 0, rows: [] };
     }
     if (sql.startsWith("SELECT turn_ref")) {
       const found = this.turns.find((turn) => turn.request_id === _params[1] && turn.role === "user");
@@ -34,7 +35,11 @@ class FakePool {
   async connect() {
     return { query: async (sql: string, params: unknown[] = []) => {
       if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") return { rowCount: 1, rows: [] };
-      if (sql.startsWith("SELECT conversation_id")) return { rowCount: this.conversation ? 1 : 0, rows: this.conversation ? [this.conversation] : [] };
+      if (sql.startsWith("SELECT conversation_id")) {
+        const projectMatches = params.length < 2 || params[1] === projectId;
+        const ownerMatches = sql.includes("operator_id =") === false || params[sql.includes("operator_id = $1") ? 0 : 2] === operator.operatorId;
+        return projectMatches && ownerMatches && this.conversation ? { rowCount: 1, rows: [this.conversation] } : { rowCount: 0, rows: [] };
+      }
       if (sql.startsWith("SELECT turn_ref")) { const found = this.turns.find((turn) => turn.request_id === params[1] && turn.role === "user"); return found === undefined ? { rowCount: 0, rows: [] } : { rowCount: 1, rows: [{ turn_ref: found.turn_ref, content: found.content }] }; }
       if (sql.startsWith("SELECT turn_id, content, status, cursor::text AS cursor")) { const found = this.turns.find((turn) => turn.turn_ref === params[1] && turn.role === "assistant"); return found === undefined ? { rowCount: 0, rows: [] } : { rowCount: 1, rows: [{ ...found, created_at: new Date() }] }; }
       if (sql.startsWith("SELECT cursor::text AS cursor FROM conversation_events")) return { rowCount: 0, rows: [] };
@@ -78,6 +83,51 @@ describe("postgres conversation service", () => {
     expect(result.conversation.status).toBe("succeeded");
     expect(pool.events).toEqual(expect.arrayContaining([expect.objectContaining({ event_type: "turn_delta", payload: expect.objectContaining({ text: "hello from model" }) })]));
   });
+  it("creates and resumes a durable project-scoped conversation without a Goal", async () => {
+    const pool = new FakePool();
+    const service = createPostgresConversationService({ pool: pool as never, gateway: fakeGateway(), gatewayOperatorId: "gateway-operator", accountRefs: { openai: "acct-1" } });
+
+    const conversation = await service.create({ projectId, goalId: null, model: "openai/gpt-5" }, operator);
+    expect(conversation).toMatchObject({ projectId, goalId: null, model: "openai/gpt-5", status: "active" });
+    const result = await service.turn(conversation.conversationId, { projectId, text: "start from the project brief" }, operator);
+
+    expect(result.conversation.goalId).toBeNull();
+    expect(result.turn.content).toBe("hello from model");
+    expect(pool.turns).toEqual(expect.arrayContaining([expect.objectContaining({ role: "user", content: "start from the project brief" })]));
+  });
+
+  it("denies a Goal-less conversation read from another project", async () => {
+    const pool = new FakePool();
+    const service = createPostgresConversationService({ pool: pool as never, gateway: fakeGateway(), gatewayOperatorId: "gateway-operator", accountRefs: { openai: "acct-1" } });
+    const conversation = await service.create({ projectId, goalId: null, model: "openai/gpt-5" }, operator);
+
+    await expect(service.get(conversation.conversationId, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f99", operator)).rejects.toBeInstanceOf(Error);
+  });
+
+  it("denies a Goal-less conversation turn from another project", async () => {
+    const pool = new FakePool();
+    const service = createPostgresConversationService({ pool: pool as never, gateway: fakeGateway(), gatewayOperatorId: "gateway-operator", accountRefs: { openai: "acct-1" } });
+    const conversation = await service.create({ projectId, goalId: null, model: "openai/gpt-5" }, operator);
+
+    await expect(service.turn(conversation.conversationId, { projectId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f99", text: "cross-project" }, operator)).rejects.toBeInstanceOf(Error);
+  });
+
+  it("denies Goal-less conversation events from another project", async () => {
+    const pool = new FakePool();
+    const service = createPostgresConversationService({ pool: pool as never, gateway: fakeGateway(), gatewayOperatorId: "gateway-operator", accountRefs: { openai: "acct-1" } });
+    const conversation = await service.create({ projectId, goalId: null, model: "openai/gpt-5" }, operator);
+
+    await expect(service.listEvents(conversation.conversationId, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f99", "0", operator)).rejects.toBeInstanceOf(Error);
+  });
+
+  it("denies Goal-less conversation cancellation from another project", async () => {
+    const pool = new FakePool();
+    const service = createPostgresConversationService({ pool: pool as never, gateway: fakeGateway(), gatewayOperatorId: "gateway-operator", accountRefs: { openai: "acct-1" } });
+    const conversation = await service.create({ projectId, goalId: null, model: "openai/gpt-5" }, operator);
+
+    await expect(service.cancel(conversation.conversationId, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f99", operator)).rejects.toBeInstanceOf(Error);
+  });
+
   it("uses the configured gateway peer identity for model admission", async () => {
     const pool = new FakePool();
     const gateway = fakeGateway();

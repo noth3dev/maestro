@@ -68,14 +68,14 @@ export type ConversationStatus = z.infer<typeof ConversationStatusSchema>;
 export const ConversationSchema = z.object({
   conversationId: UuidSchema,
   projectId: UuidSchema,
-  goalId: UuidSchema,
+  goalId: UuidSchema.nullable(),
   model: ModelRefSchema,
   status: ConversationStatusSchema,
   version: CommandVersionSchema,
 }).strict();
 export type Conversation = z.infer<typeof ConversationSchema>;
-export const CreateConversationInputSchema = z.object({ projectId: UuidSchema, goalId: UuidSchema, model: ModelRefSchema }).strict();
-export type CreateConversationInput = z.infer<typeof CreateConversationInputSchema>;
+export const CreateConversationInputSchema = z.object({ projectId: UuidSchema, goalId: UuidSchema.nullable().default(null), model: ModelRefSchema }).strict();
+export type CreateConversationInput = z.input<typeof CreateConversationInputSchema>;
 export const ConversationTurnInputSchema = z.object({ projectId: UuidSchema, text: z.string().min(1).max(64_000) }).strict();
 export type ConversationTurnInput = z.infer<typeof ConversationTurnInputSchema>;
 export const ConversationTurnSchema = z.object({

@@ -14,6 +14,8 @@ import {
   PressureBandProjectionSchema,
   RoutingEvidenceSchema,
   OrganizationReadModelSchema,
+  ConversationSchema,
+  CreateConversationInputSchema,
 } from "./index.js";
 
 const projectId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01";
@@ -102,6 +104,23 @@ describe("conversation streaming contracts", () => {
         occurredAt: "2030-01-01T00:00:00.000Z",
       }).eventType,
     ).toBe("turn_delta");
+  });
+});
+
+describe("conversation intake contracts", () => {
+  const input = { projectId, goalId: null, model: "openai/gpt-5" };
+  const conversation = { conversationId: projectId, projectId, goalId: null, model: input.model, status: "active" as const, version: 1 };
+
+  it("accepts a project-scoped conversation without a Goal while preserving Goal-bound values", () => {
+    expect(CreateConversationInputSchema.parse(input)).toEqual(input);
+    expect(CreateConversationInputSchema.parse({ projectId, model: input.model })).toEqual(input);
+    expect(CreateConversationInputSchema.parse({ ...input, goalId: projectId }).goalId).toBe(projectId);
+    expect(ConversationSchema.parse(conversation)).toEqual(conversation);
+  });
+
+  it("keeps the conversation wire shape strict", () => {
+    expect(CreateConversationInputSchema.parse({ ...input, goalId: undefined })).toEqual(input);
+    expect(ConversationSchema.safeParse({ ...conversation, scope: "project" }).success).toBe(false);
   });
 });
 

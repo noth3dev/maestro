@@ -23,7 +23,7 @@ export interface ConversationService {
 
 type RuntimeStreamState = { turnId: string | undefined; requestId: string | undefined; pending: Promise<void>; error: unknown | undefined };
 type RuntimeHandle = { execution: import("@maestro/domain").ExecutionRef; invocation: import("@maestro/domain").InvocationRef; runtime: ReturnType<typeof createMaestroAgentRuntime>; binding: GatewayBinding; stream: RuntimeStreamState };
-type ConversationRow = { conversation_id: string; operator_id: string; project_id: string; goal_id: string; model_provider: string; model_id: string; status: Conversation["status"]; version: number; binding: GatewayBinding; active_turn_id: string | null; active_request_id: string | null; create_request_id: string | null };
+type ConversationRow = { conversation_id: string; operator_id: string; project_id: string; goal_id: string | null; model_provider: string; model_id: string; status: Conversation["status"]; version: number; binding: GatewayBinding; active_turn_id: string | null; active_request_id: string | null; create_request_id: string | null };
 
 const MAX_TEXT = 64_000;
 const MAX_PERSISTED_TEXT_BYTES = 60_000;
@@ -47,7 +47,7 @@ function assertSafeText(text: string): void {
   }
 }
 function modelFromRow(row: ConversationRow): Conversation {
-  return { conversationId: UuidSchema.parse(row.conversation_id), projectId: UuidSchema.parse(row.project_id), goalId: UuidSchema.parse(row.goal_id), model: formatModelRef({ provider: row.model_provider, id: row.model_id }), status: row.status, version: row.version };
+  return { conversationId: UuidSchema.parse(row.conversation_id), projectId: UuidSchema.parse(row.project_id), goalId: row.goal_id === null ? null : UuidSchema.parse(row.goal_id), model: formatModelRef({ provider: row.model_provider, id: row.model_id }), status: row.status, version: row.version };
 }
 function statusFromObservation(status: string): Conversation["status"] {
   if (status === "succeeded") return "succeeded";
@@ -114,7 +114,7 @@ export function createPostgresConversationService(options: {
     const initialMessages: ModelMessage[] = history.rows.map((turn) => ({ role: turn.role, content: [{ kind: "text", text: boundedText(turn.content) }] }));
     const stream = createStreamState();
     const runtime = createMaestroAgentRuntime({ gateway: options.gateway, binding: row.binding, tools, initialMessages, onModelEvent: (event) => queueTextDelta(stream, row.conversation_id, row.project_id, event) });
-    const spawned = await runtime.spawn({ name: `conversation-${row.conversation_id}`, context: { operatorId: row.operator_id, projectId: row.project_id, goalId: row.goal_id, missionBundleId: "conversation", policyVersion: "1", accountRef: row.binding.account.accountRef }, grant: grantFor(row, row.binding.account.accountRef), modelPolicy: [formatModelRef({ provider: row.model_provider, id: row.model_id })], idempotencyKey: row.conversation_id });
+    const spawned = await runtime.spawn({ name: `conversation-${row.conversation_id}`, context: { operatorId: row.operator_id, projectId: row.project_id, ...(row.goal_id === null ? {} : { goalId: row.goal_id }), missionBundleId: "conversation", policyVersion: "1", accountRef: row.binding.account.accountRef }, grant: grantFor(row, row.binding.account.accountRef), modelPolicy: [formatModelRef({ provider: row.model_provider, id: row.model_id })], idempotencyKey: row.conversation_id });
     return { execution: spawned.execution, invocation: spawned.invocation, runtime, binding: row.binding, stream };
   }
   async function markConversationUnknown(conversationId: string, projectId: string, reason: string, message: string): Promise<void> {
@@ -138,8 +138,11 @@ export function createPostgresConversationService(options: {
     },
     async create(input, operator, requestId = randomUUID()) {
       const normalizedRequestId = UuidSchema.parse(requestId);
-      const goal = await options.pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [input.goalId]);
-      if (goal.rowCount !== 1 || goal.rows[0]!.project_id !== input.projectId) throw new ConversationConflictError("conversation Goal/project binding is invalid");
+      const goalId = input.goalId ?? null;
+      if (goalId !== null) {
+        const goal = await options.pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId]);
+        if (goal.rowCount !== 1 || goal.rows[0]!.project_id !== input.projectId) throw new ConversationConflictError("conversation Goal/project binding is invalid");
+      }
       const parsed = parseModelRef(input.model);
 
       const client = await options.pool.connect();
@@ -151,7 +154,7 @@ export function createPostgresConversationService(options: {
         const existing = await client.query<ConversationRow>("SELECT conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding, active_turn_id, active_request_id, create_request_id FROM conversations WHERE operator_id = $1 AND project_id = $2 AND create_request_id = $3", [operator.operatorId, input.projectId, normalizedRequestId]);
         if (existing.rowCount === 1) {
           const row = existing.rows[0]!;
-          if (row.goal_id !== input.goalId || formatModelRef({ provider: row.model_provider, id: row.model_id }) !== input.model) throw new ConversationConflictError("idempotency key is bound to a different conversation request");
+          if (row.goal_id !== goalId || formatModelRef({ provider: row.model_provider, id: row.model_id }) !== input.model) throw new ConversationConflictError("idempotency key is bound to a different conversation request");
           await client.query("COMMIT");
           client.release();
           return modelFromRow(row);
@@ -162,7 +165,7 @@ export function createPostgresConversationService(options: {
         const accountRef = options.accountRefs[parsed.provider] ?? `${parsed.provider}-${operator.operatorId}`;
         conversationId = randomUUID();
         binding = await options.gateway.admit({ requestId: `admit-${normalizedRequestId}`, operatorId: options.gatewayOperatorId, providerId: parsed.provider, model: parsed, accountRef, dataPolicyHash: policyHash });
-        await client.query("INSERT INTO conversations (conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding, create_request_id) VALUES ($1, $2, $3, $4, $5, $6, 'active', 1, $7, $8)", [conversationId, operator.operatorId, input.projectId, input.goalId, parsed.provider, parsed.id, JSON.stringify(binding), normalizedRequestId]);
+        await client.query("INSERT INTO conversations (conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding, create_request_id) VALUES ($1, $2, $3, $4, $5, $6, 'active', 1, $7, $8)", [conversationId, operator.operatorId, input.projectId, goalId, parsed.provider, parsed.id, JSON.stringify(binding), normalizedRequestId]);
         await addEvent(client, conversationId, input.projectId, "conversation_created", { model: input.model });
         await client.query("COMMIT");
       } catch (error) { await client.query("ROLLBACK"); client.release(); throw error; }
@@ -172,14 +175,14 @@ export function createPostgresConversationService(options: {
       const runtime = createMaestroAgentRuntime({ gateway: options.gateway, binding: binding!, tools, onModelEvent: (event) => queueTextDelta(stream, conversationId, input.projectId, event) });
       let spawned: Awaited<ReturnType<typeof runtime.spawn>>;
       try {
-        spawned = await runtime.spawn({ name: `conversation-${conversationId}`, context: { operatorId: operator.operatorId, projectId: input.projectId, goalId: input.goalId, missionBundleId: "conversation", policyVersion: "1", accountRef: binding!.account.accountRef }, grant: { grantId: `grant-${conversationId}`, allowedTools: [], allowedSkills: [], modelPolicy: [input.model], pathScope: [], outboundDataClasses: ["public", "workspace"], remaining: { modelTurns: 8, toolCalls: 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } }, modelPolicy: [input.model], idempotencyKey: conversationId });
+        spawned = await runtime.spawn({ name: `conversation-${conversationId}`, context: { operatorId: operator.operatorId, projectId: input.projectId, ...(goalId === null ? {} : { goalId }), missionBundleId: "conversation", policyVersion: "1", accountRef: binding!.account.accountRef }, grant: { grantId: `grant-${conversationId}`, allowedTools: [], allowedSkills: [], modelPolicy: [input.model], pathScope: [], outboundDataClasses: ["public", "workspace"], remaining: { modelTurns: 8, toolCalls: 0, childCalls: 0, outputTokens: 8_192, wallTimeMs: 120_000, retryCount: 0 } }, modelPolicy: [input.model], idempotencyKey: conversationId });
       } catch {
         await markConversationUnknown(conversationId, input.projectId, "runtime_admission_failed", "Conversation runtime admission failed");
         await runtime.close?.();
         throw new ConversationUnavailableError("conversation runtime admission failed");
       }
       runtimes.set(conversationId, { execution: spawned.execution, invocation: spawned.invocation, runtime, binding: binding!, stream });
-      return { conversationId, projectId: input.projectId, goalId: input.goalId, model: input.model, status: "active", version: 1 };
+      return { conversationId, projectId: input.projectId, goalId, model: input.model, status: "active", version: 1 };
     },
     async get(conversationId, projectId, operator) { return modelFromRow(await read(conversationId, projectId, operator.operatorId)); },
     async turn(conversationId, input, _operator, requestId = randomUUID()) {

@@ -110,6 +110,12 @@ describe("persistent ipython tool boundary", () => {
   });
 
 
+  it("fails closed for a project-scoped context without a Goal", async () => {
+    const manager = createIpPythonSessionManager({ createKernel: () => ({ async execute() { return { state: "ok", dataClass: "workspace", content: "must-not-run" }; } }) });
+    const tool = createIpPythonTool({ sessions: manager });
+    await expect(tool.execute({ code: "print('x')" }, { ...context, goalId: undefined })).rejects.toThrow("Goal-bound conversation");
+  });
+
   it("fails closed when the host-owned authority context is missing", async () => {
     const { authorityPolicyVersion: _policy, controlEpoch: _epoch, budgetEffectCents: _budget, ...withoutAuthority } = context;
     const manager = createIpPythonSessionManager({ createKernel: () => ({ async execute() { return { state: "ok", dataClass: "workspace", content: "must-not-run" }; } }) });
