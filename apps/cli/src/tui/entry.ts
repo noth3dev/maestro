@@ -17,6 +17,7 @@ import { createTranscriptClearBoundary, executeBasicShellCommand, latestCopyable
 import { waitForAccountLogin } from "./account-login.js";
 import { loadActivityHistory } from "./activity-history.js";
 import { processActivityEvent } from "./activity-event.js";
+import { dashboardErrorState, dashboardStateFromReadModel } from "./dashboard-state.js";
 
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection } from "./local-bootstrap.js";
@@ -326,15 +327,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           projectId: project.projectId,
           ...(session?.goalId === undefined ? {} : { goalId: session.goalId }),
         });
-        state.goal =
-          dashboard.selectedGoal === undefined
-            ? { kind: "empty" }
-            : { kind: "value", value: { name: dashboard.selectedGoal.goalId, state: dashboard.selectedGoal.state } };
-        state.workers = dashboard.workerCount === undefined ? { kind: "empty" } : { kind: "value", value: dashboard.workerCount };
-        state.budget =
-          dashboard.budget === undefined
-            ? { kind: "empty" }
-            : { kind: "value", value: { spentCents: dashboard.budget.costCents, ceilingCents: dashboard.budget.budgetCents } };
+        const dashboardState = dashboardStateFromReadModel(dashboard);
+        state.goal = dashboardState.goal;
+        state.workers = dashboardState.workers;
+        state.budget = dashboardState.budget;
         recovery = reconcileTuiSession(workspace.cwd, session, {
           ...(dashboard.selectedGoal === undefined ? {} : { goalState: dashboard.selectedGoal.state }),
           ...(dashboard.workerCount === undefined ? {} : { activeWorkers: dashboard.workerCount }),
@@ -342,9 +338,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         render();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Control Plane read failed";
-        state.goal = { kind: "error", message };
-        state.workers = { kind: "error", message };
-        state.budget = { kind: "error", message };
+        const dashboardState = dashboardErrorState(message);
+        state.goal = dashboardState.goal;
+        state.workers = dashboardState.workers;
+        state.budget = dashboardState.budget;
         render();
       }
     };
