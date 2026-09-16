@@ -18,6 +18,7 @@ import { waitForAccountLogin } from "./account-login.js";
 import { loadActivityHistory } from "./activity-history.js";
 import { processActivityEvent } from "./activity-event.js";
 import { dashboardErrorState, dashboardStateFromReadModel } from "./dashboard-state.js";
+import { loadConversationHistory } from "./conversation-history.js";
 
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection } from "./local-bootstrap.js";
@@ -461,29 +462,17 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const hydrateConversation = async (conversationId: string | undefined, projectId: string, generation: number): Promise<void> => {
       if (client === undefined || conversationId === undefined) return;
       try {
-        let hydrated = createConversationTranscript();
-        let cursor = "0";
-        for (let page = 0; page < 64; page += 1) {
-          const events = await client.listConversationEvents(conversationId, { projectId, after: cursor });
-          if (
-            generation !== conversationHydrationGeneration ||
-            session?.conversationId !== conversationId ||
-            project.kind !== "attached" ||
-            project.projectId !== projectId
-          )
-            return;
-          for (const event of events) hydrated = applyConversationEvent(hydrated, event);
-          const nextCursor = events.at(-1)?.cursor;
-          if (nextCursor === undefined || events.length < 256) break;
-          cursor = nextCursor;
-        }
-        if (
-          generation !== conversationHydrationGeneration ||
-          session?.conversationId !== conversationId ||
-          project.kind !== "attached" ||
-          project.projectId !== projectId
-        )
-          return;
+        const hydrated = await loadConversationHistory({
+          client,
+          conversationId,
+          projectId,
+          isCurrent: () =>
+            generation === conversationHydrationGeneration &&
+            session?.conversationId === conversationId &&
+            project.kind === "attached" &&
+            project.projectId === projectId,
+        });
+        if (hydrated === undefined) return;
         conversation = hydrated;
         const priorDraft = [...hydrated.messages]
           .reverse()
