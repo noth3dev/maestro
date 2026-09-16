@@ -21,6 +21,7 @@ import { dashboardErrorState, dashboardStateFromReadModel } from "./dashboard-st
 import { loadConversationHistory } from "./conversation-history.js";
 import { pendingDecisionsForView } from "./pending-decisions.js";
 import { draftForPresentation } from "./draft-presentation.js";
+import { animateAccentProgress } from "./flashmob-animation.js";
 
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection } from "./local-bootstrap.js";
@@ -300,16 +301,15 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       const to = enabled ? 1 : 0;
       flashmobMode = enabled;
       state.mode = enabled ? "flashmob" : "maestro";
-      const steps = 12;
-      for (let step = 1; step <= steps; step += 1) {
-        if (animationId !== flashmobAnimationId) return;
-        setModeAccentProgress(from + ((to - from) * step) / steps);
-        render();
-        await new Promise<void>((resolveFrame) => setTimeout(resolveFrame, 18));
-      }
-      if (animationId !== flashmobAnimationId) return;
-      setModeAccentProgress(to);
-      render();
+      const completed = await animateAccentProgress({
+        from,
+        to,
+        isCurrent: () => animationId === flashmobAnimationId,
+        setProgress: setModeAccentProgress,
+        render,
+        wait: (milliseconds) => new Promise<void>((resolveFrame) => setTimeout(resolveFrame, milliseconds)),
+      });
+      if (!completed) return;
       appendSuccess(`Flashmob ${enabled ? "enabled" : "disabled"} · ${enabled ? "blue" : "Warm Earth"} accent`);
     };
     const refreshDashboard = async () => {
