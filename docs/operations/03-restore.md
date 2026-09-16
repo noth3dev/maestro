@@ -2,20 +2,22 @@
 
 ## Purpose
 
-Restore only into a disposable PostgreSQL database or schema, then run migrations and read back the expected fixture. The repository currently has no production restore helper; do not claim a restore until this exercise is run.
+Restore a previously captured plain export only into a disposable PostgreSQL database or schema, then read back the expected fixture. The repository has no production restore helper; never use `applyAllMigrations` as a substitute for restoring a dump.
 
 ## Preconditions
 
 - Use a disposable fixture and the repository checkout.
+- Use a `psql` client matching the major version of the dump and target server.
+- Set `MAESTRO_RESTORE_DATABASE_URL` to the disposable target and `MAESTRO_RELEASE_EXPORT_PATH` to the captured export.
 - Keep secrets in the environment; do not place credentials in logs or this document.
 
 ## Exercise
 
-Command: `MAESTRO_TEST_DATABASE_URL=postgres://... npm test -- packages/persistence/src/test-migrations.integration.test.ts`
+Command: `psql "$MAESTRO_RESTORE_DATABASE_URL" --file "$MAESTRO_RELEASE_EXPORT_PATH" --single-transaction --set ON_ERROR_STOP=1 && psql "$MAESTRO_RESTORE_DATABASE_URL" --tuples-only --no-align --set ON_ERROR_STOP=1 --command="SELECT (SELECT count(*) FROM schema_migrations), (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'), (SELECT count(*) FROM release_checkpoints);"`
 
-Status: **pending §S6 real-fixture exercise**. This inventory slice records the command without claiming that it has run successfully.
+Status: **exercised against a disposable PostgreSQL 16 fixture**. The plain export restored successfully and the readback returned `107|133|0` (migration rows, public tables, release checkpoints).
 
-Evidence: **pending** — replace this marker with the captured test output path and exit status after the exercise gate runs.
+Evidence: `/tmp/maestro-release/restore-exercise.log` — exit status `0`; the disposable restore database was dropped after readback.
 
 ## Stop condition
 
