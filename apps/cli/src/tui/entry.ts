@@ -32,7 +32,12 @@ import { renderApprovalDialog } from "./components/approval-dialog.js";
 import { renderProviderLoginDialog, type AccountLoginProviderSelection } from "./components/provider-login-dialog.js";
 import { reconcileTuiSession, type RecoverySummary } from "./recovery.js";
 import { renderRecoveryBanner } from "./components/recovery-banner.js";
-import { nextApprovalDialogScope, type ApprovalDialogSummary, type CriticalActionSummary, type ConfirmationResult } from "./confirmation.js";
+import {
+  nextApprovalDialogScope,
+  type ApprovalDialogSummary,
+  type CriticalActionSummary,
+  type ConfirmationResult,
+} from "./confirmation.js";
 import {
   advanceWorkspaceSession,
   attachWorkspaceSession,
@@ -43,10 +48,23 @@ import {
   startNewConversationSession,
 } from "./session.js";
 import { mergeEvents, runActivityStream, subscribeToEvents } from "./activity-stream.js";
-import { addConversationMessage, applyConversationEvent, createConversationTranscript, isTerminalConversationEvent, renderUnifiedStreamEntries, type ConversationTranscriptState } from "./conversation-transcript.js";
+import {
+  addConversationMessage,
+  applyConversationEvent,
+  createConversationTranscript,
+  isTerminalConversationEvent,
+  renderUnifiedStreamEntries,
+  type ConversationTranscriptState,
+} from "./conversation-transcript.js";
 import { pendingDecisionsFromActivity, toActivityTimelineEvent } from "./components/activity-timeline.js";
 import { createDecisionRegion, createDynamicRegion, createStatusRegion } from "./components/regions.js";
-import { createSplashController, renderInputPlaceholder, renderPendingDecisionDetails, renderTuiFooter, type TuiShellState } from "./components/shell.js";
+import {
+  createSplashController,
+  renderInputPlaceholder,
+  renderPendingDecisionDetails,
+  renderTuiFooter,
+  type TuiShellState,
+} from "./components/shell.js";
 import { getModeAccentProgress, setModeAccentProgress, tuiTheme, type TranscriptLine } from "./theme.js";
 
 import { copyToClipboard, openExternalUrl } from "../external-url.js";
@@ -84,7 +102,9 @@ export function createTranscriptClearBoundary(): {
   let generation = 0;
   return {
     capture: () => generation,
-    clear: () => { generation += 1; },
+    clear: () => {
+      generation += 1;
+    },
     isCurrent: (candidate) => candidate === generation,
   };
 }
@@ -104,7 +124,11 @@ export function latestCopyableTranscriptText(state: ConversationTranscriptState)
     candidates.push({ text: state.assistantText, occurredAt: latestAssistantEvent?.occurredAt ?? "", order: order++ });
   }
   for (const message of state.messages) {
-    if ((message.role === "assistant" || message.role === "system") && message.content.trim() !== "" && !candidates.some((candidate) => candidate.text === message.content)) {
+    if (
+      (message.role === "assistant" || message.role === "system") &&
+      message.content.trim() !== "" &&
+      !candidates.some((candidate) => candidate.text === message.content)
+    ) {
       candidates.push({ text: message.content, occurredAt: "", order: order++ });
     }
   }
@@ -203,7 +227,8 @@ export async function runAutomaticProviderSignInOffer(options: {
   } catch {
     return;
   }
-  if (!options.isCurrent() || options.isManualLoginActive() || !shouldOfferAutomaticProviderSignIn(models, options.getConfiguredModel())) return;
+  if (!options.isCurrent() || options.isManualLoginActive() || !shouldOfferAutomaticProviderSignIn(models, options.getConfiguredModel()))
+    return;
   if (!options.gate.claim() || !options.isCurrent() || options.isManualLoginActive()) return;
   options.onOffer();
 }
@@ -229,9 +254,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     if (existing === -1) steps.push(event);
     else steps[existing] = event;
     liveState.setupSteps = steps;
-    liveState.connection = event.status === "failed"
-      ? { kind: "setup-required", message: event.message ?? `${event.step} failed` }
-      : { kind: "setup-required", message: `Local setup · ${event.step}` };
+    liveState.connection =
+      event.status === "failed"
+        ? { kind: "setup-required", message: event.message ?? `${event.step} failed` }
+        : { kind: "setup-required", message: `Local setup · ${event.step}` };
     tui.requestRender(true);
     options.onSetupStep?.(event);
   };
@@ -264,12 +290,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const footer = new Text("", 0, 0);
     const header = new ConversationViewport();
     const registry = createCommandRegistry();
-    editor.setAutocompleteProvider(
-      new CombinedAutocompleteProvider(
-        createCommandAutocompleteItems(registry),
-        workspace.cwd,
-      ),
-    );
+    editor.setAutocompleteProvider(new CombinedAutocompleteProvider(createCommandAutocompleteItems(registry), workspace.cwd));
     let conversation: ConversationTranscriptState = createConversationTranscript();
     let draftedTaskContract: TaskContract | undefined;
     let renderedDraftIdentity: string | undefined;
@@ -317,7 +338,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const noticeRegion = createDynamicRegion(() => {
       if (terminal.rows < 16) return [];
       const lines = [...renderRecoveryBanner(recovery, terminal.columns)];
-      if (accountLoginSelection !== undefined && accountLoginState !== undefined) lines.push(...renderProviderLoginDialog(terminal.columns, accountLoginSelection, accountLoginState, accountLoginUrl));
+      if (accountLoginSelection !== undefined && accountLoginState !== undefined)
+        lines.push(...renderProviderLoginDialog(terminal.columns, accountLoginSelection, accountLoginState, accountLoginUrl));
       return lines;
     });
     header.setOrderedStreamRenderer(() => renderUnifiedStreamEntries(conversation, activity.slice(visibleActivityStart), terminal.columns));
@@ -399,23 +421,44 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         render();
       }
     };
-    const hydrateActivity = async (projectId: string, generation: number, historyGeneration = activityHistoryBoundary.capture()): Promise<void> => {
+    const hydrateActivity = async (
+      projectId: string,
+      generation: number,
+      historyGeneration = activityHistoryBoundary.capture(),
+    ): Promise<void> => {
       if (client === undefined) return;
       try {
         let cursor = "0";
         const history: GoalEvent[] = [];
         for (let page = 0; page < 64; page += 1) {
           const result = await client.listEvents({ projectId, after: cursor });
-          if (generation !== activityHydrationGeneration || !activityHistoryBoundary.isCurrent(historyGeneration) || project.kind !== "attached" || project.projectId !== projectId) return;
+          if (
+            generation !== activityHydrationGeneration ||
+            !activityHistoryBoundary.isCurrent(historyGeneration) ||
+            project.kind !== "attached" ||
+            project.projectId !== projectId
+          )
+            return;
           history.push(...result.events);
           if (result.events.length === 0 || result.nextCursor === cursor || result.events.length < 100) break;
           cursor = result.nextCursor;
         }
-        if (generation !== activityHydrationGeneration || !activityHistoryBoundary.isCurrent(historyGeneration) || project.kind !== "attached" || project.projectId !== projectId) return;
+        if (
+          generation !== activityHydrationGeneration ||
+          !activityHistoryBoundary.isCurrent(historyGeneration) ||
+          project.kind !== "attached" ||
+          project.projectId !== projectId
+        )
+          return;
         activity = mergeEvents(activity, history);
         render();
       } catch (error) {
-        if (generation === activityHydrationGeneration && activityHistoryBoundary.isCurrent(historyGeneration) && project.kind === "attached" && project.projectId === projectId) {
+        if (
+          generation === activityHydrationGeneration &&
+          activityHistoryBoundary.isCurrent(historyGeneration) &&
+          project.kind === "attached" &&
+          project.projectId === projectId
+        ) {
           appendWarning(`Activity history unavailable: ${error instanceof Error ? error.message : "Control Plane request failed"}`);
         }
       }
@@ -429,7 +472,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         cursor: activity.at(-1)?.cursor ?? session?.lastEventCursor ?? "0",
         signal,
         maxReconnectAttempts: 5,
-        onReconnect: (attempt, maxAttempts) => append({ kind: "warning", text: `Activity stream reconnecting (${attempt}/${maxAttempts})` }),
+        onReconnect: (attempt, maxAttempts) =>
+          append({ kind: "warning", text: `Activity stream reconnecting (${attempt}/${maxAttempts})` }),
         onEvent: async (event) => {
           if (generation !== activityHydrationGeneration || project.kind !== "attached" || project.projectId !== projectId) return;
           activity = mergeEvents(activity, [event]);
@@ -449,7 +493,12 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let conversationStreamController: AbortController | undefined;
     let conversationHydration: Promise<void> = Promise.resolve();
     let conversationHydrationGeneration = 0;
-    const streamConversation = async (conversationId: string, projectId: string, controller: AbortController, displayGeneration = conversationDisplayBoundary.capture()): Promise<void> => {
+    const streamConversation = async (
+      conversationId: string,
+      projectId: string,
+      controller: AbortController,
+      displayGeneration = conversationDisplayBoundary.capture(),
+    ): Promise<void> => {
       if (client === undefined) return;
       const signal = controller.signal;
       try {
@@ -463,9 +512,17 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           cursor: conversation.lastCursor,
           signal,
           maxReconnectAttempts: 5,
-          onReconnect: (attempt, maxAttempts) => append({ kind: "warning", text: `Conversation stream reconnecting (${attempt}/${maxAttempts})` }),
+          onReconnect: (attempt, maxAttempts) =>
+            append({ kind: "warning", text: `Conversation stream reconnecting (${attempt}/${maxAttempts})` }),
         })) {
-          if (signal.aborted || !conversationDisplayBoundary.isCurrent(displayGeneration) || session?.conversationId !== conversationId || project.kind !== "attached" || project.projectId !== projectId) return;
+          if (
+            signal.aborted ||
+            !conversationDisplayBoundary.isCurrent(displayGeneration) ||
+            session?.conversationId !== conversationId ||
+            project.kind !== "attached" ||
+            project.projectId !== projectId
+          )
+            return;
           conversation = applyConversationEvent(conversation, event);
           splash.dismiss();
           render();
@@ -487,13 +544,25 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         let cursor = "0";
         for (let page = 0; page < 64; page += 1) {
           const events = await client.listConversationEvents(conversationId, { projectId, after: cursor });
-          if (generation !== conversationHydrationGeneration || session?.conversationId !== conversationId || project.kind !== "attached" || project.projectId !== projectId) return;
+          if (
+            generation !== conversationHydrationGeneration ||
+            session?.conversationId !== conversationId ||
+            project.kind !== "attached" ||
+            project.projectId !== projectId
+          )
+            return;
           for (const event of events) hydrated = applyConversationEvent(hydrated, event);
           const nextCursor = events.at(-1)?.cursor;
           if (nextCursor === undefined || events.length < 256) break;
           cursor = nextCursor;
         }
-        if (generation !== conversationHydrationGeneration || session?.conversationId !== conversationId || project.kind !== "attached" || project.projectId !== projectId) return;
+        if (
+          generation !== conversationHydrationGeneration ||
+          session?.conversationId !== conversationId ||
+          project.kind !== "attached" ||
+          project.projectId !== projectId
+        )
+          return;
         conversation = hydrated;
         const priorDraft = [...hydrated.messages]
           .reverse()
@@ -507,7 +576,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         splash.dismiss();
         render();
       } catch (error) {
-        if (generation === conversationHydrationGeneration) appendError(`Conversation history unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
+        if (generation === conversationHydrationGeneration)
+          appendError(`Conversation history unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
       }
     };
 
@@ -534,9 +604,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       state.pendingDecisions = [];
       const generation = ++activityHydrationGeneration;
       const projectId = project.kind === "attached" ? project.projectId : undefined;
-      if (projectId !== undefined) void hydrateActivity(projectId, generation).then(() => {
-        if (generation === activityHydrationGeneration) startActivity();
-      });
+      if (projectId !== undefined)
+        void hydrateActivity(projectId, generation).then(() => {
+          if (generation === activityHydrationGeneration) startActivity();
+        });
     };
     const retryConnection = async () => {
       connectionGeneration += 1;
@@ -629,8 +700,16 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       render();
     };
     const startAccountLogin = async (): Promise<void> => {
-      if (client === undefined) { appendWarning("Account login is unavailable until the Control Plane is connected."); cancelAccountLogin(); return; }
-      if (accountLoginSelection === 1) { appendWarning("Claude Pro / Max account login is unavailable until Anthropic approves a public OAuth integration."); cancelAccountLogin(); return; }
+      if (client === undefined) {
+        appendWarning("Account login is unavailable until the Control Plane is connected.");
+        cancelAccountLogin();
+        return;
+      }
+      if (accountLoginSelection === 1) {
+        appendWarning("Claude Pro / Max account login is unavailable until Anthropic approves a public OAuth integration.");
+        cancelAccountLogin();
+        return;
+      }
       accountLoginState = "opening";
       render();
       const controller = new AbortController();
@@ -642,8 +721,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         if (controller.signal.aborted) return;
         accountLoginState = "waiting";
         render();
-        try { await (options.io.openExternalUrl ?? openExternalUrl)(login.authUrl); }
-        catch { append(`Open this URL in your browser to sign in: ${login.authUrl}`); }
+        try {
+          await (options.io.openExternalUrl ?? openExternalUrl)(login.authUrl);
+        } catch {
+          append(`Open this URL in your browser to sign in: ${login.authUrl}`);
+        }
         const timeoutMs = Number(options.env.MAESTRO_LOGIN_TIMEOUT_MS ?? "120000");
         const pollMs = Number(options.env.MAESTRO_LOGIN_POLL_MS ?? "500");
         const deadline = Date.now() + (Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 120000);
@@ -653,8 +735,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           status = await client.accountLoginStatus(login.loginId);
         }
         if (controller.signal.aborted) return;
-        if (status.state === "succeeded") { appendSuccess("Account login complete: openai-codex"); void refreshDashboard(); }
-        else if (status.state === "failed") appendError(`Account login ${status.state}: ${status.message ?? "no additional details"}`);
+        if (status.state === "succeeded") {
+          appendSuccess("Account login complete: openai-codex");
+          void refreshDashboard();
+        } else if (status.state === "failed") appendError(`Account login ${status.state}: ${status.message ?? "no additional details"}`);
         else appendWarning(`Account login ${status.state}: ${status.message ?? "no additional details"}`);
       } catch (error) {
         if (!controller.signal.aborted) {
@@ -662,8 +746,17 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           const detail = error instanceof ApiError && error.detail !== undefined ? ` (${error.detail})` : "";
           appendError(`Account login failed: ${message}${detail}`);
         }
+      } finally {
+        if (accountLoginController === controller) {
+          accountLoginController = undefined;
+          accountLoginId = undefined;
+          accountLoginUrl = undefined;
+          accountLoginSelection = undefined;
+          accountLoginState = undefined;
+          editor.hidden = false;
+          render();
+        }
       }
-      finally { if (accountLoginController === controller) { accountLoginController = undefined; accountLoginId = undefined; accountLoginUrl = undefined; accountLoginSelection = undefined; accountLoginState = undefined; editor.hidden = false; render(); } }
     };
     const offerAutomaticProviderSignIn = (): void => {
       if (client === undefined) return;
@@ -674,7 +767,12 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         client: candidateClient,
         getConfiguredModel: () => options.env.MAESTRO_MODEL?.trim() || session?.model,
         gate: automaticProviderSignInGate,
-        isCurrent: () => !stopped && client === candidateClient && connectionGeneration === candidateGeneration && loginInteractionGeneration === candidateLoginInteractionGeneration && state.connection.kind === "connected",
+        isCurrent: () =>
+          !stopped &&
+          client === candidateClient &&
+          connectionGeneration === candidateGeneration &&
+          loginInteractionGeneration === candidateLoginInteractionGeneration &&
+          state.connection.kind === "connected",
         isManualLoginActive: () => isProviderLoginActive(pendingProviderLogin, providerLoginInFlight, accountLoginSelection),
         onOffer: () => {
           accountLoginSelection = 0;
@@ -710,7 +808,16 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       }
       try {
         const parsed = parseInput(text);
-        if (parsed.kind === "command" && parsed.action === undefined && Object.keys(parsed.options).length === 0 && (parsed.name === "clear" || parsed.name === "exit" || parsed.name === "quit" || parsed.name === "version" || parsed.name === "copy")) {
+        if (
+          parsed.kind === "command" &&
+          parsed.action === undefined &&
+          Object.keys(parsed.options).length === 0 &&
+          (parsed.name === "clear" ||
+            parsed.name === "exit" ||
+            parsed.name === "quit" ||
+            parsed.name === "version" ||
+            parsed.name === "copy")
+        ) {
           await executeBasicShellCommand(parsed.name, {
             clearTranscript: () => {
               activityHistoryBoundary.clear();
@@ -884,7 +991,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             );
             append(`${readResult.title}: ${readResult.lines.join(" · ")}`);
           }
-        } else if (parsed.kind === "command" && (parsed.name === "models" || parsed.name === "model") && (parsed.action === undefined || parsed.action === "list")) {
+        } else if (
+          parsed.kind === "command" &&
+          (parsed.name === "models" || parsed.name === "model") &&
+          (parsed.action === undefined || parsed.action === "list")
+        ) {
           if (client === undefined) appendWarning("Model catalog unavailable until the Control Plane is connected.");
           else {
             const models = await client.listModels();
@@ -920,12 +1031,15 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           } else {
             const requestedConversationId = parsed.options["conversation-id"];
             if (requestedConversationId === session?.conversationId) conversationTurnController?.abort();
-            const cancelResult = await executeWriteCommand({
-              client,
-              projectId: project.projectId,
-              ...(session?.goalId === undefined ? {} : { goalId: session.goalId }),
-              confirm,
-            }, parsed);
+            const cancelResult = await executeWriteCommand(
+              {
+                client,
+                projectId: project.projectId,
+                ...(session?.goalId === undefined ? {} : { goalId: session.goalId }),
+                confirm,
+              },
+              parsed,
+            );
             append(`${cancelResult.title}: ${cancelResult.lines.join(" · ")}`);
           }
         } else if (parsed.kind === "command" && client !== undefined && project.kind === "attached") {
@@ -1021,14 +1135,25 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
                   { projectId: project.projectId, text },
                   { signal: turnController.signal, idempotencyKey: randomUUID() },
                 );
-                const terminalType = result.turn.status === "completed" ? "turn_completed" : result.turn.status === "cancelled" ? "turn_cancelled" : result.turn.status === "failed" ? "turn_failed" : "turn_unknown";
+                const terminalType =
+                  result.turn.status === "completed"
+                    ? "turn_completed"
+                    : result.turn.status === "cancelled"
+                      ? "turn_cancelled"
+                      : result.turn.status === "failed"
+                        ? "turn_failed"
+                        : "turn_unknown";
                 const terminalEvent: ConversationEvent = {
                   cursor: result.turn.cursor,
                   eventId: result.turn.turnId,
                   conversationId: result.turn.conversationId,
                   projectId: project.projectId,
                   eventType: terminalType,
-                  payload: { turnId: result.turn.turnId, status: result.conversation.status, ...(result.turn.status === "completed" ? { content: result.turn.content } : { message: result.turn.content }) },
+                  payload: {
+                    turnId: result.turn.turnId,
+                    status: result.conversation.status,
+                    ...(result.turn.status === "completed" ? { content: result.turn.content } : { message: result.turn.content }),
+                  },
                   occurredAt: result.turn.createdAt,
                 };
                 if (conversationDisplayBoundary.isCurrent(displayGeneration)) {
@@ -1056,13 +1181,15 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     // conversation/activity stream may scroll or follow new output.
     const transcriptView = new ScrollView(header, { follow: "end", primary: true, overscroll: "chain", scrollbar: "auto" });
     const dock = new VStack([composer, footer]);
-    tui.setLayoutRoot(new VStack([
-      { component: statusRegion, basis: "auto", shrink: 0, minSize: 1 },
-      { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 },
-      { component: decisionRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => (state.pendingDecisions?.length ?? 0) > 0 },
-      { component: noticeRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => terminal.rows >= 16 },
-      { component: dock, basis: "auto", shrink: 1, minSize: 1 },
-    ]));
+    tui.setLayoutRoot(
+      new VStack([
+        { component: statusRegion, basis: "auto", shrink: 0, minSize: 1 },
+        { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 },
+        { component: decisionRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => (state.pendingDecisions?.length ?? 0) > 0 },
+        { component: noticeRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => terminal.rows >= 16 },
+        { component: dock, basis: "auto", shrink: 1, minSize: 1 },
+      ]),
+    );
     tui.setFocus(editor);
     render();
 
@@ -1090,7 +1217,9 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         void client
           .cancelConversation(session.conversationId, { projectId: project.projectId })
           .then((cancelled) => appendWarning(`Conversation ${cancelled.conversationId}: ${cancelled.status}`))
-          .catch((error) => appendError(`Conversation cancellation unavailable: ${error instanceof Error ? error.message : "unknown error"}`));
+          .catch((error) =>
+            appendError(`Conversation cancellation unavailable: ${error instanceof Error ? error.message : "unknown error"}`),
+          );
       }
       return true;
     };
@@ -1126,8 +1255,14 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           render();
           return { consume: true };
         }
-        if (matchesKey(data, "escape")) { cancelAccountLogin(); return { consume: true }; }
-        if (matchesKey(data, "enter")) { void startAccountLogin(); return { consume: true }; }
+        if (matchesKey(data, "escape")) {
+          cancelAccountLogin();
+          return { consume: true };
+        }
+        if (matchesKey(data, "enter")) {
+          void startAccountLogin();
+          return { consume: true };
+        }
         return { consume: true };
       }
       if (accountLoginSelection !== undefined && accountLoginState === "waiting" && matchesKey(data, "alt+c")) {
@@ -1145,7 +1280,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         appendWarning("Account login cancelled.");
         return { consume: true };
       }
-      if (pendingConfirmation !== undefined && (matchesKey(data, "up") || matchesKey(data, "down")) && pendingConfirmation.summary.repetitionScope !== undefined) {
+      if (
+        pendingConfirmation !== undefined &&
+        (matchesKey(data, "up") || matchesKey(data, "down")) &&
+        pendingConfirmation.summary.repetitionScope !== undefined
+      ) {
         pendingConfirmation = {
           ...pendingConfirmation,
           summary: {
@@ -1166,18 +1305,21 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       }
       if (pendingConfirmation !== undefined && data === "?") {
         const { summary } = pendingConfirmation;
-        appendWarning(`Approval tier: ${summary.tier === "user" ? "You" : summary.tier ?? "You"}; scope: ${summary.repetitionScope ?? "once"}. Reject proposes: ${summary.saferAlternative ?? "a safer alternative"}`);
+        appendWarning(
+          `Approval tier: ${summary.tier === "user" ? "You" : (summary.tier ?? "You")}; scope: ${summary.repetitionScope ?? "once"}. Reject proposes: ${summary.saferAlternative ?? "a safer alternative"}`,
+        );
         return { consume: true };
       }
       if (
         pendingConfirmation !== undefined &&
         (data === "y" || data === "Y" || data === "n" || data === "N" || data === "\r" || data === "\u001b")
       ) {
-        const decision: ConfirmationResult = data === "y" || data === "Y"
-          ? (pendingConfirmation.summary.repetitionScope === undefined
-            ? "approved"
-            : { decision: "approved", repetitionScope: pendingConfirmation.summary.repetitionScope })
-          : "cancelled";
+        const decision: ConfirmationResult =
+          data === "y" || data === "Y"
+            ? pendingConfirmation.summary.repetitionScope === undefined
+              ? "approved"
+              : { decision: "approved", repetitionScope: pendingConfirmation.summary.repetitionScope }
+            : "cancelled";
         const resolveConfirmation = pendingConfirmation.resolve;
         pendingConfirmation = undefined;
         syncPendingDecisionState();
