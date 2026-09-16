@@ -93,6 +93,12 @@ export interface BasicShellCommandContext {
   version: string;
 }
 
+/** Extract draft state only for the goal-less conversation surface. */
+export function taskContractDraftForConversation(content: string, goalId: string | null | undefined): TaskContract | undefined {
+  if (goalId !== null && goalId !== undefined) return undefined;
+  return extractTaskContractDraft(content);
+}
+
 /** Generation gate used to reject asynchronous transcript work started before `/clear`. */
 export function createTranscriptClearBoundary(): {
   capture: () => number;
@@ -359,7 +365,9 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const appendSuccess = (text: string): void => append({ kind: "success", text });
     const appendWarning = (text: string): void => append({ kind: "warning", text });
     const showDraftIfPresent = (content: string): void => {
-      const draft = extractTaskContractDraft(content) ?? draftedTaskContract;
+      const goalId = session?.goalId;
+      if (goalId !== undefined) return;
+      const draft = taskContractDraftForConversation(content, goalId) ?? draftedTaskContract;
       if (draft === undefined) return;
       draftedTaskContract = draft;
       const identity = `${draft.contractId}:${draft.version}:${draft.contentHash}`;
@@ -567,7 +575,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         const priorDraft = [...hydrated.messages]
           .reverse()
           .filter((message) => message.role === "assistant")
-          .map((message) => extractTaskContractDraft(message.content))
+          .map((message) => taskContractDraftForConversation(message.content, session?.goalId))
           .find((draft): draft is TaskContract => draft !== undefined);
         if (priorDraft !== undefined) {
           draftedTaskContract = priorDraft;
