@@ -23,6 +23,7 @@ import { pendingDecisionsForView } from "./pending-decisions.js";
 import { draftForPresentation } from "./draft-presentation.js";
 import { animateAccentProgress } from "./flashmob-animation.js";
 import { reconnectWorkspaceProject } from "./project-reconnect.js";
+import { cancelConversationTurn } from "./conversation-cancellation.js";
 
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection } from "./local-bootstrap.js";
@@ -1116,20 +1117,15 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       tui.stop();
       resolve(0);
     };
-    const cancelActiveConversation = (): boolean => {
-      if (conversationTurnController === undefined) return false;
-      conversationTurnController.abort();
-      appendWarning("Cancelling the active conversation turn…");
-      if (client !== undefined && project.kind === "attached" && session?.conversationId !== undefined) {
-        void client
-          .cancelConversation(session.conversationId, { projectId: project.projectId })
-          .then((cancelled) => appendWarning(`Conversation ${cancelled.conversationId}: ${cancelled.status}`))
-          .catch((error) =>
-            appendError(`Conversation cancellation unavailable: ${error instanceof Error ? error.message : "unknown error"}`),
-          );
-      }
-      return true;
-    };
+    const cancelActiveConversation = (): boolean =>
+      cancelConversationTurn({
+        controller: conversationTurnController,
+        client,
+        projectId: project.kind === "attached" ? project.projectId : undefined,
+        conversationId: session?.conversationId,
+        onWarning: appendWarning,
+        onError: appendError,
+      });
 
     tui.addInputListener((data) => {
       if (isSplashRestoreShortcut(data)) {
