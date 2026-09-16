@@ -137,6 +137,10 @@ export function compactConnectionRecoveryAcknowledgement(connection: TuiShellSta
   return connection.kind === "connected" ? undefined : fitPlain("ctrl+r retry · /help", width);
 }
 
+export function isCurrentAccountLoginOperation(controller: AbortController, activeController: AbortController | undefined): boolean {
+  return activeController === controller && !controller.signal.aborted;
+}
+
 export function firstAvailableModelIdentity(models: readonly Pick<ModelCatalogEntry, "identity">[]): string | undefined {
   const model = models[0];
   return model === undefined ? undefined : `${model.identity.provider}/${model.identity.id}`;
@@ -720,9 +724,9 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       accountLoginController = controller;
       try {
         const login = await client.startAccountLogin();
+        if (!isCurrentAccountLoginOperation(controller, accountLoginController)) return;
         accountLoginId = login.loginId;
         accountLoginUrl = login.authUrl;
-        if (controller.signal.aborted) return;
         accountLoginState = "waiting";
         render();
         const status = await waitForAccountLogin({
@@ -735,7 +739,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           timeoutMs: Number(options.env.MAESTRO_LOGIN_TIMEOUT_MS ?? "120000"),
           pollMs: Number(options.env.MAESTRO_LOGIN_POLL_MS ?? "500"),
         });
-        if (status === undefined) return;
+        if (!isCurrentAccountLoginOperation(controller, accountLoginController) || status === undefined) return;
         if (status.state === "succeeded") {
           appendSuccess("Account login complete: openai-codex");
           const configuredModel = resolveConfiguredModel(options.env.MAESTRO_MODEL, session?.model);
@@ -1300,6 +1304,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       if (matchesKey(data, "ctrl+c")) {
         if (cancelActiveConversation()) return { consume: true };
         stop();
+        return { consume: true };
+      }
+      if (accountLoginSelection !== undefined && accountLoginState === "opening" && matchesKey(data, "escape")) {
+        cancelAccountLogin();
+        appendWarning("Account login cancelled.");
         return { consume: true };
       }
       if (accountLoginSelection !== undefined && accountLoginState === "selecting") {

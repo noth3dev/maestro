@@ -17,6 +17,7 @@ import {
   compactProjectAttachmentNotice,
   compactModelListAcknowledgement,
   firstAvailableModelIdentity,
+  isCurrentAccountLoginOperation,
   compactConnectionRecoveryAcknowledgement,
   shouldIgnoreEmptySubmit,
   noModelSelectionMessage,
@@ -97,6 +98,19 @@ describe("compact connection recovery priority", () => {
       expect(compactConnectionRecoveryAcknowledgement(connection, 80)).toBe("ctrl+r retry · /help");
     }
     expect(compactConnectionRecoveryAcknowledgement({ kind: "connected" }, 40)).toBeUndefined();
+  });
+});
+
+describe("account-login cancellation", () => {
+  it("rejects aborted and stale opening operations", () => {
+    const controller = new AbortController();
+    expect(isCurrentAccountLoginOperation(controller, controller)).toBe(true);
+    controller.abort();
+    expect(isCurrentAccountLoginOperation(controller, controller)).toBe(false);
+
+    const stale = new AbortController();
+    const current = new AbortController();
+    expect(isCurrentAccountLoginOperation(stale, current)).toBe(false);
   });
 });
 
