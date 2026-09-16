@@ -132,6 +132,10 @@ export function compactProjectAttachmentNotice(projectDiscoveryNotice: string | 
   return fitPlain(command.length <= width ? command : "/session attach", width);
 }
 
+export function shouldIgnoreEmptySubmit(text: string, pendingProviderLogin: string | undefined): boolean {
+  return pendingProviderLogin === undefined && text.trim() === "";
+}
+
 export { createTranscriptClearBoundary, executeBasicShellCommand, latestCopyableTranscriptText };
 export type { BasicShellCommandContext, BasicShellCommandName } from "./basic-shell.js";
 
@@ -752,6 +756,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     };
 
     const submit = async (text: string) => {
+      if (shouldIgnoreEmptySubmit(text, pendingProviderLogin)) return;
       if (text.trim() !== "") splash.dismiss();
       if (pendingProviderLogin !== undefined) {
         const providerId = pendingProviderLogin;

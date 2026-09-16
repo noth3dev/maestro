@@ -15,6 +15,7 @@ import {
   compactReviewAcknowledgement,
   compactHelpAcknowledgement,
   compactProjectAttachmentNotice,
+  shouldIgnoreEmptySubmit,
   noModelSelectionMessage,
   runAutomaticProviderSignInOffer,
   shouldOfferAutomaticProviderSignIn,
@@ -79,6 +80,17 @@ describe("compact help feedback", () => {
       expect(output).toBe("Help available; resize to view commands");
       expect(output.length).toBeLessThanOrEqual(width);
     }
+  });
+});
+
+describe("empty conversation submit", () => {
+  it("ignores blank normal submits but preserves provider-login input", () => {
+    for (const text of ["", "   ", "\t\n"]) {
+      expect(shouldIgnoreEmptySubmit(text, undefined)).toBe(true);
+      expect(shouldIgnoreEmptySubmit(text, "openai")).toBe(false);
+    }
+
+    expect(shouldIgnoreEmptySubmit("hello", undefined)).toBe(false);
   });
 });
 
