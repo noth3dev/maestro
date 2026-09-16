@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { createSplashController, renderSetupSteps, renderShell, renderSplash, renderStatusHeader, renderTuiFooter, renderTuiLayout, type SetupStep, type TuiShellState } from "./shell.js";
+import {
+  createSplashController,
+  renderSetupSteps,
+  renderShell,
+  renderSplash,
+  renderStatusHeader,
+  renderTuiFooter,
+  renderTuiLayout,
+  type SetupStep,
+  type TuiShellState,
+} from "./shell.js";
 import { getZeroArgumentNoGoalActions } from "../commands/registry.js";
 
 const state: TuiShellState = {
@@ -21,6 +31,12 @@ describe("Maestro TUI shell", () => {
     expect(output).toContain("MAESTRO");
     expect(renderShell(state, 120, 30).join("\n")).not.toContain("MAESTRO");
     expect(output).not.toContain("Secretary");
+  });
+
+  it("advertises the working help shortcut without reserving literal question marks", () => {
+    const output = renderTuiFooter(80, state);
+    expect(output).toContain("ctrl+k help");
+    expect(output).not.toContain("? help");
   });
 
   it("shows a stop hint while a conversation turn is active", () => {
@@ -52,10 +68,14 @@ describe("Maestro TUI shell", () => {
   it("uses distinct addressee-aware placeholders for idle, work, and pending decisions", () => {
     const idle = renderTuiLayout(state, 80, 30).input[0];
     const working = renderTuiLayout({ ...state, working: true }, 80, 30).input[0];
-    const pending = renderTuiLayout({
-      ...state,
-      pendingDecisions: [{ identity: "decision-1", tier: "Council", action: "approve", actor: "operator" }],
-    }, 80, 30).input[0];
+    const pending = renderTuiLayout(
+      {
+        ...state,
+        pendingDecisions: [{ identity: "decision-1", tier: "Council", action: "approve", actor: "operator" }],
+      },
+      80,
+      30,
+    ).input[0];
     expect(idle).toBe("message to Concertmaster · Enter to send");
     expect(working).toContain("in progress");
     expect(pending).toContain("Council");
@@ -70,12 +90,16 @@ describe("Maestro TUI shell", () => {
   });
 
   it("uses known Goal and worker values when work is in flight", () => {
-    const input = renderTuiLayout({
-      ...state,
-      working: true,
-      goal: { kind: "value", value: { name: "auth-refactor", state: "running" } },
-      workers: { kind: "value", value: 2 },
-    }, 80, 30).input[0];
+    const input = renderTuiLayout(
+      {
+        ...state,
+        working: true,
+        goal: { kind: "value", value: { name: "auth-refactor", state: "running" } },
+        workers: { kind: "value", value: 2 },
+      },
+      80,
+      30,
+    ).input[0];
     expect(input).toContain("auth-refactor");
     expect(input).toContain("2 workers");
   });
@@ -126,7 +150,9 @@ describe("Maestro TUI shell", () => {
       organization: { kind: "value", value: { departments: ["Product Department", "Quality Department"] } },
     } as TuiShellState;
     const splash = renderSplash(oriented, 120).join("\n");
-    const nextActions = getZeroArgumentNoGoalActions().map((action) => `/${action.command} ${action.action}`).join(" · ");
+    const nextActions = getZeroArgumentNoGoalActions()
+      .map((action) => `/${action.command} ${action.action}`)
+      .join(" · ");
     expect(splash).toContain("Concertmaster ready");
     expect(splash).toContain("2 Department Heads");
     expect(splash).toContain(`Next: ${nextActions}`);
@@ -169,7 +195,9 @@ describe("Maestro TUI shell", () => {
       { step: "migrations", status: "pending" },
       { step: "control-plane-up", status: "failed", message: "Control Plane is not reachable" },
     ];
-    const output = renderSetupSteps({ ...state, connection: { kind: "setup-required", message: "starting" }, setupSteps: steps }, 60).join("\n");
+    const output = renderSetupSteps({ ...state, connection: { kind: "setup-required", message: "starting" }, setupSteps: steps }, 60).join(
+      "\n",
+    );
     expect(output).toContain("✓");
     expect(output).toContain("›");
     expect(output).toContain("·");
@@ -179,24 +207,21 @@ describe("Maestro TUI shell", () => {
   });
 
   it("omits Docker-specific setup language for the embedded database path", () => {
-    const output = renderSetupSteps({
-      ...state,
-      connection: { kind: "setup-required", message: "starting" },
-      setupSteps: [{ step: "postgres-ready", status: "completed", message: "Embedded PostgreSQL-compatible database is ready" }],
-    }, 80).join("\n");
+    const output = renderSetupSteps(
+      {
+        ...state,
+        connection: { kind: "setup-required", message: "starting" },
+        setupSteps: [{ step: "postgres-ready", status: "completed", message: "Embedded PostgreSQL-compatible database is ready" }],
+      },
+      80,
+    ).join("\n");
     expect(output).not.toContain("Docker");
     expect(output).toContain("PostgreSQL ready");
   });
 
   it("renders the complete pending setup sequence before the first callback", () => {
     const output = renderSetupSteps({ ...state, connection: { kind: "connecting" } }, 80);
-    expect(output).toEqual([
-      "· Docker check",
-      "· PostgreSQL ready",
-      "· Migrations",
-      "· Control Plane",
-      "· Model gateway",
-    ]);
+    expect(output).toEqual(["· Docker check", "· PostgreSQL ready", "· Migrations", "· Control Plane", "· Model gateway"]);
   });
 
   it("renders setup progress at the narrow supported width", () => {
