@@ -96,7 +96,8 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
       startControlPlane: vi.fn(async () => {
         controlPlaneStarted = true;
       }),
-      retryDelayMs: 0,
+      // Detached child startup can exceed the zero-delay polling window on CI.
+      retryDelayMs: 50,
     });
     expect(result.kind).toBe("setup-required");
     return JSON.parse(await readFile(outputPath, "utf8")) as Record<string, string | undefined>;
