@@ -6,16 +6,17 @@ Verify overdue or missing Discord observations become `uncertain`, not a fabrica
 
 ## Preconditions
 
-- Use a disposable fixture and the repository checkout.
+- Use a disposable PostgreSQL fixture and the repository checkout.
+- Use synthetic signals only; do not call Discord or a live external provider.
 - Keep secrets in the environment; do not place credentials in logs or this document.
 
 ## Exercise
 
 Command: `MAESTRO_TEST_DATABASE_URL=postgres://... npm test -- packages/persistence/src/discord-incident.integration.test.ts`
 
-Status: **pending §S6 real-fixture exercise**. This inventory slice records the command without claiming that it has run successfully.
+Status: **exercised against a disposable PostgreSQL fixture with synthetic signals**. Missing and silent observations became `uncertain` with explicit reasons, without creating a no-incident conclusion; incident signal history and deduplication paths also passed.
 
-Evidence: **pending** — replace this marker with the captured test output path and exit status after the exercise gate runs.
+Evidence: `/tmp/plan8-s6-discord-silence.log` — exit status `0`; **1/1** file and **6/6** tests passed. This proves the synthetic persistence path only, not live Discord detection.
 
 ## Stop condition
 

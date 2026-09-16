@@ -6,16 +6,16 @@ Force a protected-metric or source-retirement failure and confirm the bounded ro
 
 ## Preconditions
 
-- Use a disposable fixture and the repository checkout.
+- Use a disposable PostgreSQL fixture and the repository checkout.
 - Keep secrets in the environment; do not place credentials in logs or this document.
 
 ## Exercise
 
 Command: `MAESTRO_TEST_DATABASE_URL=postgres://... npm test -- packages/persistence/src/rollout-controller.integration.test.ts`
 
-Status: **pending §S6 real-fixture exercise**. This inventory slice records the command without claiming that it has run successfully.
+Status: **exercised against a disposable PostgreSQL fixture**. The integration suite covered source-evidence rollback, bounded scope, protected candidate isolation, interrupted-rollout reconciliation, and the routing-capability rollback path without mutating the human model baseline.
 
-Evidence: **pending** — replace this marker with the captured test output path and exit status after the exercise gate runs.
+Evidence: `/tmp/plan8-s6-failed-rollout.log` — exit status `0`; **1/1** file and **9/9** tests passed.
 
 ## Stop condition
 
