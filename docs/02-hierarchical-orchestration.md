@@ -39,6 +39,8 @@ flowchart TD
     CONCERTMASTER -->|15. Final Certified Report| CONDUCTOR
 ```
 
+**Implementation status (Plan 9 S1–S4):** The diagram's intake entry is now implemented for an attached project with no selected Goal. The project-scoped conversation, goal-less-only Overture Task Contract drafting tool, TUI route, and Carnegie route shipped in merges `eb9407d`, `c8bb854`, `c093965`, and `02c3bef`, respectively. The draft remains awaiting confirmation until the operator explicitly confirms and launches it. This note records the shipped code and test boundaries; it does not claim a real PostgreSQL drafting-to-row run, live provider, external effect, Mission Bundle, or worker execution.
+
 ---
 
 ## 2. Key Personas and Organizational Roles
