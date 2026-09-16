@@ -19,6 +19,7 @@ import { loadActivityHistory } from "./activity-history.js";
 import { processActivityEvent } from "./activity-event.js";
 import { dashboardErrorState, dashboardStateFromReadModel } from "./dashboard-state.js";
 import { loadConversationHistory } from "./conversation-history.js";
+import { pendingDecisionsForView } from "./pending-decisions.js";
 
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection } from "./local-bootstrap.js";
@@ -61,7 +62,6 @@ import {
   renderUnifiedStreamEntries,
   type ConversationTranscriptState,
 } from "./conversation-transcript.js";
-import { pendingDecisionsFromActivity, toActivityTimelineEvent } from "./components/activity-timeline.js";
 import { createDecisionRegion, createDynamicRegion, createStatusRegion } from "./components/regions.js";
 import {
   createSplashController,
@@ -227,18 +227,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let pendingConfirmation: { summary: ApprovalDialogSummary; resolve: (decision: ConfirmationResult) => void } | undefined;
     const syncPendingDecisionState = (): void => {
       const goalId = session?.goalId ?? (state.goal.kind === "value" ? state.goal.value.name : undefined);
-      const scopedActivity = goalId === undefined ? [] : activity.filter((event) => event.goalId === goalId).map(toActivityTimelineEvent);
-      const decisions = pendingDecisionsFromActivity(scopedActivity);
-      if (pendingConfirmation !== undefined) {
-        const summary = pendingConfirmation.summary;
-        const identity = summary.identity?.trim();
-        const actor = summary.actor?.trim();
-        const tier = summary.tier === "user" ? "You" : summary.tier;
-        if (identity !== undefined && identity !== "" && actor !== undefined && actor !== "" && tier !== undefined) {
-          decisions.unshift({ identity, tier, action: `${summary.action} ${summary.target}`, actor });
-        }
-      }
-      state.pendingDecisions = decisions;
+      state.pendingDecisions = pendingDecisionsForView({
+        goalId,
+        activity,
+        ...(pendingConfirmation === undefined ? {} : { pendingConfirmation }),
+      });
     };
     let activityStarted = false;
     let activityHydrationGeneration = 0;
