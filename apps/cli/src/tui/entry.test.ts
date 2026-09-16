@@ -2,7 +2,18 @@ import { describe, expect, it, vi } from "vitest";
 import { parseInput } from "./commands/parser.js";
 import { executeCli } from "../main.js";
 import { MAESTRO_VERSION } from "../version.js";
-import { createAutomaticProviderSignInGate, createTranscriptClearBoundary, executeBasicShellCommand, latestCopyableTranscriptText, hydrateOrganizationOnReconnect, isProviderLoginActive, isSplashRestoreShortcut, runAutomaticProviderSignInOffer, shouldOfferAutomaticProviderSignIn } from "./entry.js";
+import {
+  createAutomaticProviderSignInGate,
+  createTranscriptClearBoundary,
+  executeBasicShellCommand,
+  latestCopyableTranscriptText,
+  hydrateOrganizationOnReconnect,
+  isProviderLoginActive,
+  isSplashRestoreShortcut,
+  runAutomaticProviderSignInOffer,
+  shouldOfferAutomaticProviderSignIn,
+  taskContractDraftForConversation,
+} from "./entry.js";
 import type { TuiShellState } from "./components/shell.js";
 import { addConversationMessage, applyConversationEvent, createConversationTranscript } from "./conversation-transcript.js";
 
@@ -34,7 +45,16 @@ describe("organization hydration on reconnect", () => {
     await hydrateOrganizationOnReconnect(state, {
       getOrganization: async () => ({
         groups: [{ groupId: "product", displayName: "Product Group" }],
-        departments: [{ departmentId: "product", groupId: "product", displayName: "Product Department", status: "sleeping", activeSessionId: null, goalContext: null }],
+        departments: [
+          {
+            departmentId: "product",
+            groupId: "product",
+            displayName: "Product Department",
+            status: "sleeping",
+            activeSessionId: null,
+            goalContext: null,
+          },
+        ],
       }),
     });
     expect(state.organization).toEqual({ kind: "value", value: { departments: ["Product Department"] } });
@@ -94,7 +114,12 @@ describe("automatic provider sign-in", () => {
     const manualGeneration = loginInteractionGeneration;
     const manualOffer = vi.fn();
     const manualRequest = runAutomaticProviderSignInOffer({
-      client: { listModels: () => new Promise<readonly []>((resolve) => { resolveModels = resolve; }) },
+      client: {
+        listModels: () =>
+          new Promise<readonly []>((resolve) => {
+            resolveModels = resolve;
+          }),
+      },
       getConfiguredModel: () => undefined,
       gate: createAutomaticProviderSignInGate(),
       isCurrent: () => loginInteractionGeneration === manualGeneration,
@@ -112,7 +137,12 @@ describe("automatic provider sign-in", () => {
     resolveModels = undefined;
     const staleOffer = vi.fn();
     const staleRequest = runAutomaticProviderSignInOffer({
-      client: { listModels: () => new Promise<readonly []>((resolve) => { resolveModels = resolve; }) },
+      client: {
+        listModels: () =>
+          new Promise<readonly []>((resolve) => {
+            resolveModels = resolve;
+          }),
+      },
       getConfiguredModel: () => undefined,
       gate: createAutomaticProviderSignInGate(),
       isCurrent: () => current,
@@ -128,7 +158,12 @@ describe("automatic provider sign-in", () => {
   it("does not consume the offer gate when model discovery fails", async () => {
     let unavailable = true;
     const onOffer = vi.fn();
-    const client = { listModels: vi.fn(async () => { if (unavailable) throw new Error("gateway unavailable"); return []; }) };
+    const client = {
+      listModels: vi.fn(async () => {
+        if (unavailable) throw new Error("gateway unavailable");
+        return [];
+      }),
+    };
     const gate = createAutomaticProviderSignInGate();
     const options = {
       client,
@@ -153,6 +188,54 @@ describe("automatic provider sign-in", () => {
   });
 });
 
+describe("Task Contract draft display boundary", () => {
+  const validDraft = JSON.stringify({
+    contractId: "33333333-3333-4333-8333-333333333333",
+    schemaVersion: 1,
+    version: 1,
+    desiredOutcome: "Ship the intake",
+    userVisibleBehavior: ["A brief is accepted"],
+    successCriteria: ["A durable contract exists"],
+    liveEvidence: ["Contract row"],
+    scope: ["Project only"],
+    nonGoals: ["No workers yet"],
+    priorities: ["Safety"],
+    acceptableTradeoffs: ["Ask when unclear"],
+    constraints: ["No execution before approval"],
+    knownEdgeCases: ["Vague brief"],
+    project: {
+      projectId: "11111111-1111-4111-8111-111111111111",
+      repository: "/repo",
+      immutableBaseRevision: "abc",
+      dataBoundary: "project only",
+    },
+    evidenceReferences: ["brief"],
+    approvedPreviewReferences: [],
+    expectedGroups: [],
+    expectedDepartments: [],
+    criticalActionExpectations: ["Explicit confirmation"],
+    forbiddenEffects: ["Worker spawn"],
+    environmentAssumptions: ["Control Plane"],
+    externalServiceAssumptions: [],
+    budget: { ceiling: "100 USD", reportingExpectations: ["Report spend"], stoppingConditions: ["Stop at ceiling"] },
+    decisionHistory: [],
+    contentHash: "a".repeat(64),
+    launchState: "awaiting_confirmation",
+  });
+
+  it("keeps Goal-bound live-turn JSON as ordinary chat content", () => {
+    expect(taskContractDraftForConversation(validDraft, "goal-1")).toBeUndefined();
+  });
+
+  it("keeps Goal-bound hydrated-history JSON as ordinary chat content", () => {
+    expect(taskContractDraftForConversation(validDraft, "goal-1")).toBeUndefined();
+  });
+
+  it("accepts the durable draft for goal-less live and hydrated conversation content", () => {
+    expect(taskContractDraftForConversation(validDraft, undefined)).toMatchObject({ contractId: "33333333-3333-4333-8333-333333333333" });
+    expect(taskContractDraftForConversation(validDraft, null)).toMatchObject({ launchState: "awaiting_confirmation" });
+  });
+});
 
 describe("basic shell command boundaries", () => {
   it("clears visible transcript without changing connection, session, selected Goal, or durable fields", async () => {
@@ -164,10 +247,16 @@ describe("basic shell command boundaries", () => {
       durable: { serverState: "unchanged" },
     };
     const before = { connection: state.connection, session: state.session, selectedGoal: state.selectedGoal, durable: state.durable };
-    const context = basicShellContext({ clearTranscript: () => { state.visibleTranscript = []; } });
+    const context = basicShellContext({
+      clearTranscript: () => {
+        state.visibleTranscript = [];
+      },
+    });
     await executeBasicShellCommand("clear", context);
     expect(state.visibleTranscript).toEqual([]);
-    expect({ connection: state.connection, session: state.session, selectedGoal: state.selectedGoal, durable: state.durable }).toEqual(before);
+    expect({ connection: state.connection, session: state.session, selectedGoal: state.selectedGoal, durable: state.durable }).toEqual(
+      before,
+    );
   });
 
   it("connects the clear command context to the hydration boundary", async () => {
@@ -181,12 +270,22 @@ describe("basic shell command boundaries", () => {
   it("copies the latest transcript line in sequence, including multiline and empty lines", async () => {
     let conversation = createConversationTranscript();
     conversation = applyConversationEvent(conversation, {
-      cursor: "1", eventId: "event-1", conversationId: "conversation-1", projectId: "project-1",
-      eventType: "turn_started", payload: { turnId: "turn-1", text: "question" }, occurredAt: "2020-01-01T00:00:00.000Z",
+      cursor: "1",
+      eventId: "event-1",
+      conversationId: "conversation-1",
+      projectId: "project-1",
+      eventType: "turn_started",
+      payload: { turnId: "turn-1", text: "question" },
+      occurredAt: "2020-01-01T00:00:00.000Z",
     });
     conversation = applyConversationEvent(conversation, {
-      cursor: "2", eventId: "event-2", conversationId: "conversation-1", projectId: "project-1",
-      eventType: "turn_completed", payload: { turnId: "turn-1", content: "assistant response" }, occurredAt: "2020-01-01T00:00:01.000Z",
+      cursor: "2",
+      eventId: "event-2",
+      conversationId: "conversation-1",
+      projectId: "project-1",
+      eventType: "turn_completed",
+      payload: { turnId: "turn-1", content: "assistant response" },
+      occurredAt: "2020-01-01T00:00:01.000Z",
     });
     conversation = addConversationMessage(conversation, "system", "system after assistant\nsecond line");
     expect(latestCopyableTranscriptText(conversation)).toBe("system after assistant\nsecond line");
@@ -212,7 +311,6 @@ describe("basic shell command boundaries", () => {
     expect(context.write).toHaveBeenCalledWith(output.join("").trim());
   });
 });
-
 
 describe("basic shell commands", () => {
   it("clears only the visible transcript through the supplied local callback", async () => {
@@ -241,7 +339,11 @@ describe("basic shell commands", () => {
     await executeBasicShellCommand("copy", copied);
     expect(copied.copyToClipboard).toHaveBeenCalledWith("assistant response");
 
-    const unavailable = basicShellContext({ copyToClipboard: vi.fn(async () => { throw new Error("unavailable"); }) });
+    const unavailable = basicShellContext({
+      copyToClipboard: vi.fn(async () => {
+        throw new Error("unavailable");
+      }),
+    });
     await executeBasicShellCommand("copy", unavailable);
     expect(unavailable.write).toHaveBeenCalledWith("Clipboard unavailable. Copy this transcript line: assistant response");
   });
