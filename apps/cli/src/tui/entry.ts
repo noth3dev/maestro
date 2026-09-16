@@ -20,6 +20,7 @@ import { processActivityEvent } from "./activity-event.js";
 import { dashboardErrorState, dashboardStateFromReadModel } from "./dashboard-state.js";
 import { loadConversationHistory } from "./conversation-history.js";
 import { pendingDecisionsForView } from "./pending-decisions.js";
+import { draftForPresentation } from "./draft-presentation.js";
 
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection } from "./local-bootstrap.js";
@@ -279,15 +280,17 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const appendSuccess = (text: string): void => append({ kind: "success", text });
     const appendWarning = (text: string): void => append({ kind: "warning", text });
     const showDraftIfPresent = (content: string): void => {
-      const goalId = session?.goalId;
-      if (goalId !== undefined) return;
-      const draft = taskContractDraftForConversation(content, goalId) ?? draftedTaskContract;
-      if (draft === undefined) return;
-      draftedTaskContract = draft;
-      const identity = `${draft.contractId}:${draft.version}:${draft.contentHash}`;
-      if (renderedDraftIdentity === identity) return;
-      renderedDraftIdentity = identity;
-      append({ kind: "system", text: renderTaskContractDraft(draft).join("\n") });
+      const presentation = draftForPresentation({
+        content,
+        goalId: session?.goalId,
+        current: draftedTaskContract,
+        renderedIdentity: renderedDraftIdentity,
+      });
+      if (presentation === undefined) return;
+      draftedTaskContract = presentation.draft;
+      if (!presentation.shouldRender) return;
+      renderedDraftIdentity = presentation.identity;
+      append({ kind: "system", text: renderTaskContractDraft(presentation.draft).join("\n") });
     };
     let flashmobMode = false;
     let flashmobAnimationId = 0;
