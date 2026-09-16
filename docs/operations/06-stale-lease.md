@@ -6,16 +6,16 @@ Exercise stale and forged fencing tokens and confirm every rejected operation le
 
 ## Preconditions
 
-- Use a disposable fixture and the repository checkout.
+- Use a disposable PostgreSQL fixture and the repository checkout.
 - Keep secrets in the environment; do not place credentials in logs or this document.
 
 ## Exercise
 
 Command: `MAESTRO_TEST_DATABASE_URL=postgres://... npm test -- packages/persistence/src/fencing.property.test.ts`
 
-Status: **pending §S6 real-fixture exercise**. This inventory slice records the command without claiming that it has run successfully.
+Status: **exercised against a disposable PostgreSQL fixture**. Property-based cases rejected stale, forged, and mismatched lease proofs without durable writes or lease mutation.
 
-Evidence: **pending** — replace this marker with the captured test output path and exit status after the exercise gate runs.
+Evidence: `/tmp/plan8-s6-stale-lease.log` — exit status `0`; **1/1** file and **4/4** tests passed, including 25 generated cases for each stale-token property.
 
 ## Stop condition
 
