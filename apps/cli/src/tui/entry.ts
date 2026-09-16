@@ -133,6 +133,10 @@ export function compactProjectAttachmentNotice(projectDiscoveryNotice: string | 
   return fitPlain(command.length <= width ? command : "/session attach", width);
 }
 
+export function compactCommandResultAcknowledgement(text: string, width: number): string {
+  return fitPlain(text, width);
+}
+
 export function compactConnectionRecoveryAcknowledgement(connection: TuiShellState["connection"], width: number): string | undefined {
   return connection.kind === "connected" ? undefined : fitPlain("ctrl+r retry · /help", width);
 }
@@ -334,6 +338,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let compactReview: string | undefined;
     let compactHelp: string | undefined;
     let compactModelList: { identities: string[]; unavailableLabel?: string } | undefined;
+    let compactCommandResult: string | undefined;
     let compactProjectNotice = projectDiscoveryNotice;
     const inputLabel = createDynamicRegion((width) => [
       tuiTheme.muted(
@@ -347,6 +352,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
                 ? compactModelListAcknowledgement(compactModelList.identities, width, compactModelList.unavailableLabel)
                 : terminal.rows < 16 && project.kind !== "attached"
                 ? compactProjectAttachmentNotice(compactProjectNotice, width)
+                : compactCommandResult !== undefined && terminal.rows < 16
+                  ? compactCommandResultAcknowledgement(compactCommandResult, width)
               : renderInputPlaceholder(state, width, terminal.rows < 16),
       ),
     ]);
@@ -412,6 +419,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const append = (line: string | TranscriptLine) => {
       splash.dismiss();
       const semanticLine: TranscriptLine = typeof line === "string" ? { kind: "system", text: line } : line;
+      if (terminal.rows < 16) compactCommandResult = semanticLine.text;
       const next = addConversationMessage(conversation, "system", semanticLine.text, semanticLine.kind);
       conversation = { ...next, messages: next.messages.slice(-80) };
       render();
@@ -1303,6 +1311,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       }
       if (compactModelList !== undefined) {
         compactModelList = undefined;
+        render();
+      }
+      if (compactCommandResult !== undefined) {
+        compactCommandResult = undefined;
         render();
       }
       if (compactReview !== undefined && (!reviewShortcut || !reviewAvailable)) {

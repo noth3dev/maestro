@@ -22,6 +22,7 @@ import {
   shouldBlockConcurrentTurnSubmit,
   isCurrentConversationTurnController,
   compactConnectionRecoveryAcknowledgement,
+  compactCommandResultAcknowledgement,
   shouldIgnoreEmptySubmit,
   noModelSelectionMessage,
   runAutomaticProviderSignInOffer,
@@ -101,6 +102,13 @@ describe("compact connection recovery priority", () => {
       expect(compactConnectionRecoveryAcknowledgement(connection, 80)).toBe("ctrl+r retry · /help");
     }
     expect(compactConnectionRecoveryAcknowledgement({ kind: "connected" }, 40)).toBeUndefined();
+  });
+});
+
+describe("compact command result presentation", () => {
+  it("keeps ordinary command results bounded for the compact dock", () => {
+    expect(compactCommandResultAcknowledgement("Goals: a very long result", 12)).toBe("Goals: a ve…");
+    expect(compactCommandResultAcknowledgement("Goals: ok", 80)).toBe("Goals: ok");
   });
 });
 
