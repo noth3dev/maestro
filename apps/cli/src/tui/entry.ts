@@ -22,6 +22,7 @@ import { loadConversationHistory } from "./conversation-history.js";
 import { pendingDecisionsForView } from "./pending-decisions.js";
 import { draftForPresentation } from "./draft-presentation.js";
 import { animateAccentProgress } from "./flashmob-animation.js";
+import { reconnectWorkspaceProject } from "./project-reconnect.js";
 
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection } from "./local-bootstrap.js";
@@ -565,18 +566,18 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         });
         project = discoverWorkspaceProject(workspace.cwd, session);
         projectDiscoveryNotice = undefined;
-        const previousProject = project;
-        const discovered = await discoverWorkspaceProjectFromControlPlane({ workspacePath: workspace.cwd, session, client });
-        project = discovered;
-        if (discovered.kind === "attached") {
-          if (previousProject.kind !== "attached" || previousProject.projectId !== discovered.projectId) {
-            session = attachWorkspaceSession(workspace.cwd, session, discovered.projectId);
-            syncModelState();
-            await saveWorkspaceSession(session);
-          }
-        } else {
-          projectDiscoveryNotice = discovered.reason;
-        }
+        const reconnectedProject = await reconnectWorkspaceProject({
+          workspacePath: workspace.cwd,
+          session,
+          client,
+          saveSession: saveWorkspaceSession,
+          syncModelState,
+          onDiscovered: (discovered) => {
+            project = discovered;
+            if (discovered.kind === "unavailable") projectDiscoveryNotice = discovered.reason;
+          },
+        });
+        session = reconnectedProject.session;
         await hydrateOrganizationOnReconnect(state, client);
         state.connection = { kind: "connected" };
         recovery = reconcileTuiSession(workspace.cwd, session);
