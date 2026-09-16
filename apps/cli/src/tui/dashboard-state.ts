@@ -2,7 +2,7 @@ import type { DashboardReadModel } from "./commands/read-commands.js";
 import type { AsyncState } from "./components/shell.js";
 
 export interface DashboardStateValues {
-  goal: AsyncState<{ name: string; state: string }>;
+  goal: AsyncState<{ goalId?: string; name: string; state: string }>;
   workers: AsyncState<number>;
   budget: AsyncState<{ spentCents: number; ceilingCents: number }>;
 }
@@ -12,13 +12,17 @@ export function dashboardStateFromReadModel(dashboard: DashboardReadModel): Dash
     goal:
       dashboard.selectedGoal === undefined
         ? { kind: "empty" }
-        : { kind: "value", value: { name: dashboard.selectedGoal.goalId, state: dashboard.selectedGoal.state } },
+        : { kind: "value", value: { goalId: dashboard.selectedGoal.goalId, name: dashboard.selectedGoal.goalId, state: dashboard.selectedGoal.state } },
     workers: dashboard.workerCount === undefined ? { kind: "empty" } : { kind: "value", value: dashboard.workerCount },
     budget:
       dashboard.budget === undefined
         ? { kind: "empty" }
         : { kind: "value", value: { spentCents: dashboard.budget.costCents, ceilingCents: dashboard.budget.budgetCents } },
   };
+}
+
+export function selectedConversationGoalId(goal: DashboardStateValues["goal"], sessionGoalId: string | undefined): string | undefined {
+  return sessionGoalId ?? (goal.kind === "value" ? goal.value.goalId : undefined);
 }
 
 export function dashboardErrorState(message: string): DashboardStateValues {

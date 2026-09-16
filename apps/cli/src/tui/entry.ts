@@ -18,6 +18,7 @@ import { waitForAccountLogin } from "./account-login.js";
 import { hydrateActivityHistory } from "./activity-history-hydration.js";
 import { runLiveActivityStream } from "./activity-live-stream.js";
 import { refreshDashboardState } from "./dashboard-refresh.js";
+import { selectedConversationGoalId } from "./dashboard-state.js";
 import { loadConversationHistory } from "./conversation-history.js";
 import { pendingDecisionsForView } from "./pending-decisions.js";
 import { draftForPresentation } from "./draft-presentation.js";
@@ -336,7 +337,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let recovery: RecoverySummary = reconcileTuiSession(workspace.cwd, session);
     let pendingConfirmation: { summary: ApprovalDialogSummary; resolve: (decision: ConfirmationResult) => void } | undefined;
     const syncPendingDecisionState = (): void => {
-      const goalId = session?.goalId ?? (state.goal.kind === "value" ? state.goal.value.name : undefined);
+      const goalId = selectedConversationGoalId(state.goal, session?.goalId);
       state.pendingDecisions = pendingDecisionsForView({
         goalId,
         activity,
@@ -1113,7 +1114,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             } else {
               if (session.conversationId === undefined) {
                 const created = await client.createConversation(
-                  buildConversationInput(project.projectId, session.goalId, configuredModel!),
+                  buildConversationInput(project.projectId, selectedConversationGoalId(state.goal, session.goalId), configuredModel!),
                   { idempotencyKey: randomUUID() },
                 );
                 session = {
