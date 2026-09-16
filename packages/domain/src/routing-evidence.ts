@@ -3,6 +3,7 @@ import { assertValidTaskDemand, taskDemandContentHash, TASK_KIND_RECIPES, type T
 import { assertValidWorkCharacter, calculatePressure, type PressureCalculation, type WorkCharacter } from "./work-character.js";
 import { assertValidModelMap, type ModelMapEntry } from "./model-map.js";
 import { assertValidOperationalOverlaySnapshot, type OperationalOverlaySnapshot } from "./operational-overlay.js";
+import { redactDiscordSecretLikeText } from "./discord-identity.js";
 
 export const ROUTING_EVIDENCE_SCHEMA_VERSION = 1 as const;
 export const ROUTING_MODES = Object.freeze(["ensemble", "pin"] as const);
@@ -96,7 +97,8 @@ function sha(value: unknown, field: string): asserts value is string {
 }
 function opaqueCandidateRef(value: unknown, field: string): asserts value is string {
   ref(value, field);
-  if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/.test(value)) throw new RoutingEvidenceValidationError(`${field} must be an opaque candidate reference`);
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/.test(value))
+    throw new RoutingEvidenceValidationError(`${field} must be an opaque candidate reference`);
 }
 
 function strictArray(value: unknown, field: string, allowEmpty: boolean): asserts value is readonly unknown[] {
@@ -109,7 +111,13 @@ function strictArray(value: unknown, field: string, allowEmpty: boolean): assert
         throw new RoutingEvidenceValidationError(`${field} length must be an ordinary array length`);
       continue;
     }
-    if (typeof key !== "string" || !/^(?:0|[1-9]\d*)$/.test(key) || Number(key) >= value.length || !descriptor?.enumerable || !("value" in descriptor))
+    if (
+      typeof key !== "string" ||
+      !/^(?:0|[1-9]\d*)$/.test(key) ||
+      Number(key) >= value.length ||
+      !descriptor?.enumerable ||
+      !("value" in descriptor)
+    )
       throw new RoutingEvidenceValidationError(`${field} contains an extra or accessor property`);
   }
   for (let index = 0; index < value.length; index += 1)
@@ -159,6 +167,19 @@ function timestamp(value: unknown, field: string): asserts value is string {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value) || !Number.isFinite(Date.parse(value)))
     throw new RoutingEvidenceValidationError(`${field} must be a valid UTC datetime`);
 }
+function rejectSecretLikeStrings(value: unknown, field = "Routing evidence"): void {
+  if (typeof value === "string") {
+    if (redactDiscordSecretLikeText(value) !== value) throw new RoutingEvidenceValidationError(`${field} contains secret-like material`);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !("value" in descriptor)) throw new RoutingEvidenceValidationError(`${field} contains an accessor`);
+    rejectSecretLikeStrings(descriptor.value, `${field}.${String(key)}`);
+  }
+}
+
 function modelRef(value: unknown): asserts value is string {
   ref(value, "selectedModelRef");
   const slash = value.indexOf("/");
@@ -172,27 +193,55 @@ function recipeVersions(value: unknown, taskKinds: readonly string[]): asserts v
   if (keys.length !== taskKinds.length || taskKinds.some((kind) => !Object.hasOwn(value, kind)))
     throw new RoutingEvidenceValidationError("taskKindRecipeVersions must cover exactly the declared task kinds");
   for (const key of keys) {
-    if (typeof key !== "string" || !taskKinds.includes(key)) throw new RoutingEvidenceValidationError("taskKindRecipeVersions contains an undeclared task kind");
+    if (typeof key !== "string" || !taskKinds.includes(key))
+      throw new RoutingEvidenceValidationError("taskKindRecipeVersions contains an undeclared task kind");
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     const recipe = TASK_KIND_RECIPES.find((candidate) => candidate.kind === key);
-    if (!descriptor?.enumerable || !("value" in descriptor) || typeof descriptor.value !== "number" || !Number.isSafeInteger(descriptor.value) || descriptor.value < 1 || recipe === undefined || descriptor.value !== recipe.schemaVersion)
+    if (
+      !descriptor?.enumerable ||
+      !("value" in descriptor) ||
+      typeof descriptor.value !== "number" ||
+      !Number.isSafeInteger(descriptor.value) ||
+      descriptor.value < 1 ||
+      recipe === undefined ||
+      descriptor.value !== recipe.schemaVersion
+    )
       throw new RoutingEvidenceValidationError(`taskKindRecipeVersions.${key} must match the known recipe version`);
   }
 }
 function modelProfile(value: unknown, selectedModelRef: string): asserts value is ModelMapEntry {
-  try { assertValidModelMap({ schemaVersion: 1, entries: [value] }); } catch { throw new RoutingEvidenceValidationError("modelProfile is invalid"); }
-  if ((value as ModelMapEntry).modelRef !== selectedModelRef) throw new RoutingEvidenceValidationError("modelProfile.modelRef must match selectedModelRef");
+  try {
+    assertValidModelMap({ schemaVersion: 1, entries: [value] });
+  } catch {
+    throw new RoutingEvidenceValidationError("modelProfile is invalid");
+  }
+  if ((value as ModelMapEntry).modelRef !== selectedModelRef)
+    throw new RoutingEvidenceValidationError("modelProfile.modelRef must match selectedModelRef");
 }
 
 function pressureCalculation(value: unknown, character: WorkCharacter, pressure: number): asserts value is PressureCalculation {
   const keys = ["pressureFloor", "pressure", "explicitHeadUplift"] as const;
   const candidate = own(value, keys, "pressureCalculation");
   required(candidate, keys, "pressureCalculation");
-  if (typeof candidate.pressureFloor !== "number" || !Number.isFinite(candidate.pressureFloor) || candidate.pressureFloor < 0 || candidate.pressureFloor > 200) throw new RoutingEvidenceValidationError("pressureCalculation.pressureFloor is invalid");
-  if (typeof candidate.pressure !== "number" || !Number.isFinite(candidate.pressure) || candidate.pressure !== pressure) throw new RoutingEvidenceValidationError("pressureCalculation.pressure does not match routing pressure");
-  if (typeof candidate.explicitHeadUplift !== "number" || !Number.isSafeInteger(candidate.explicitHeadUplift) || candidate.explicitHeadUplift < 0 || candidate.explicitHeadUplift > 200) throw new RoutingEvidenceValidationError("pressureCalculation.explicitHeadUplift is invalid");
+  if (
+    typeof candidate.pressureFloor !== "number" ||
+    !Number.isFinite(candidate.pressureFloor) ||
+    candidate.pressureFloor < 0 ||
+    candidate.pressureFloor > 200
+  )
+    throw new RoutingEvidenceValidationError("pressureCalculation.pressureFloor is invalid");
+  if (typeof candidate.pressure !== "number" || !Number.isFinite(candidate.pressure) || candidate.pressure !== pressure)
+    throw new RoutingEvidenceValidationError("pressureCalculation.pressure does not match routing pressure");
+  if (
+    typeof candidate.explicitHeadUplift !== "number" ||
+    !Number.isSafeInteger(candidate.explicitHeadUplift) ||
+    candidate.explicitHeadUplift < 0 ||
+    candidate.explicitHeadUplift > 200
+  )
+    throw new RoutingEvidenceValidationError("pressureCalculation.explicitHeadUplift is invalid");
   const expected = calculatePressure(character, candidate.explicitHeadUplift);
-  if (expected.pressureFloor !== candidate.pressureFloor || expected.pressure !== candidate.pressure) throw new RoutingEvidenceValidationError("pressureCalculation cannot be replayed from WorkCharacter");
+  if (expected.pressureFloor !== candidate.pressureFloor || expected.pressure !== candidate.pressure)
+    throw new RoutingEvidenceValidationError("pressureCalculation cannot be replayed from WorkCharacter");
 }
 
 function approvalIdentity(value: unknown): asserts value is RoutingApprovalIdentity | null {
@@ -286,7 +335,8 @@ export function assertValidRoutingEvidence(value: unknown): asserts value is Rou
   list(record.candidateRefs, "candidateRefs");
   for (const candidateRef of record.candidateRefs) opaqueCandidateRef(candidateRef, "candidateRefs entry");
   opaqueCandidateRef(record.selectedCandidateRef, "selectedCandidateRef");
-  if (!record.candidateRefs.includes(record.selectedCandidateRef)) throw new RoutingEvidenceValidationError("selectedCandidateRef must be in candidateRefs");
+  if (!record.candidateRefs.includes(record.selectedCandidateRef))
+    throw new RoutingEvidenceValidationError("selectedCandidateRef must be in candidateRefs");
   rejectionList(record.rejections, "rejections");
   sha(record.taskDemandHash, "taskDemandHash");
   if (typeof record.pressure !== "number" || !Number.isFinite(record.pressure) || record.pressure < 0 || record.pressure > 200)
@@ -301,27 +351,52 @@ export function assertValidRoutingEvidence(value: unknown): asserts value is Rou
   if (typeof record.overlayVersion !== "number" || !Number.isSafeInteger(record.overlayVersion) || record.overlayVersion < 1)
     throw new RoutingEvidenceValidationError("Routing evidence overlayVersion is invalid");
   timestamp(record.createdAt, "Routing evidence createdAt");
-  if (record.approvalRef !== null && record.approvalIdentity === null) throw new RoutingEvidenceValidationError("approvalIdentity is required when approvalRef is present");
-  if (record.approvalRef === null && record.approvalIdentity !== null) throw new RoutingEvidenceValidationError("approvalIdentity requires approvalRef");
+  if (record.approvalRef !== null && record.approvalIdentity === null)
+    throw new RoutingEvidenceValidationError("approvalIdentity is required when approvalRef is present");
+  if (record.approvalRef === null && record.approvalIdentity !== null)
+    throw new RoutingEvidenceValidationError("approvalIdentity requires approvalRef");
   approvalIdentity(record.approvalIdentity);
-  try { assertValidTaskDemand(record.taskDemand); } catch { throw new RoutingEvidenceValidationError("Routing evidence taskDemand is invalid"); }
+  try {
+    assertValidTaskDemand(record.taskDemand);
+  } catch {
+    throw new RoutingEvidenceValidationError("Routing evidence taskDemand is invalid");
+  }
   const taskDemand = record.taskDemand as TaskDemand;
   recipeVersions(record.taskKindRecipeVersions, taskDemand.taskKinds);
-  try { assertValidWorkCharacter(record.workCharacter); } catch { throw new RoutingEvidenceValidationError("Routing evidence workCharacter is invalid"); }
+  try {
+    assertValidWorkCharacter(record.workCharacter);
+  } catch {
+    throw new RoutingEvidenceValidationError("Routing evidence workCharacter is invalid");
+  }
   const workCharacter = record.workCharacter as WorkCharacter;
-  if (workCharacter.provenance.taskContractRef !== taskDemand.provenance.taskContractRef || workCharacter.provenance.headDecisionRef !== taskDemand.provenance.headDecisionRef)
+  if (
+    workCharacter.provenance.taskContractRef !== taskDemand.provenance.taskContractRef ||
+    workCharacter.provenance.headDecisionRef !== taskDemand.provenance.headDecisionRef
+  )
     throw new RoutingEvidenceValidationError("TaskDemand and WorkCharacter provenance must agree");
   pressureCalculation(record.pressureCalculation, workCharacter, record.pressure);
   const expectedTaskDemandHash = taskDemandContentHash(taskDemand);
-  if (record.taskDemandHash !== expectedTaskDemandHash) throw new RoutingEvidenceValidationError("taskDemandHash does not match the sealed TaskDemand");
+  if (record.taskDemandHash !== expectedTaskDemandHash)
+    throw new RoutingEvidenceValidationError("taskDemandHash does not match the sealed TaskDemand");
   modelProfile(record.modelProfile, record.selectedModelRef);
-  try { assertValidOperationalOverlaySnapshot(record.operationalOverlaySnapshot); } catch { throw new RoutingEvidenceValidationError("Routing evidence operationalOverlaySnapshot is invalid"); }
+  try {
+    assertValidOperationalOverlaySnapshot(record.operationalOverlaySnapshot);
+  } catch {
+    throw new RoutingEvidenceValidationError("Routing evidence operationalOverlaySnapshot is invalid");
+  }
   const overlay = record.operationalOverlaySnapshot as OperationalOverlaySnapshot;
   if (overlay.goalRef !== record.goalRef || overlay.projectRef !== record.projectRef || overlay.overlayVersion !== record.overlayVersion)
     throw new RoutingEvidenceValidationError("Routing evidence operational overlay identity does not match route");
   const selectedObservation = overlay.observations.find((observation) => observation.candidateRef === record.selectedCandidateRef);
-  if (selectedObservation === undefined || !selectedObservation.currentAvailability || selectedObservation.accountBinding !== record.accountBinding)
+  if (
+    selectedObservation === undefined ||
+    !selectedObservation.currentAvailability ||
+    selectedObservation.accountBinding !== record.accountBinding
+  )
     throw new RoutingEvidenceValidationError("Selected candidate is not available under the recorded account binding");
-  for (const candidateRef of record.candidateRefs) if (!overlay.observations.some((observation) => observation.candidateRef === candidateRef)) throw new RoutingEvidenceValidationError("Every candidate must have an operational observation");
+  for (const candidateRef of record.candidateRefs)
+    if (!overlay.observations.some((observation) => observation.candidateRef === candidateRef))
+      throw new RoutingEvidenceValidationError("Every candidate must have an operational observation");
   if (record.approvalRef !== null) ref(record.approvalRef, "approvalRef");
+  rejectSecretLikeStrings(record);
 }

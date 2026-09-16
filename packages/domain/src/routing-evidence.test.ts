@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MODEL_CAPABILITY_AXES } from "./model-profile.js";
+import { taskDemandContentHash } from "./task-demand.js";
 import {
   ROUTING_EVIDENCE_SCHEMA_VERSION,
   RoutingEvidenceValidationError,
@@ -27,18 +28,79 @@ const evidence = (): RoutingEvidence => ({
   rationale: "selected after hard filters and matching",
   createdAt: "2026-09-08T12:00:00Z",
   pressureCalculation: { pressureFloor: 200 / 3, pressure: 100, explicitHeadUplift: 100 },
-        approvalIdentity: null,
+  approvalIdentity: null,
   taskKindRecipeVersions: { coding: 1 },
-  taskDemand: { schemaVersion: 1, taskKinds: ["coding"], requirements: Object.fromEntries(MODEL_CAPABILITY_AXES.map((axis) => [axis, { level: 80, rationale: "Head requirement" }])), provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" } },
-  workCharacter: { schemaVersion: 1, risk: 40, reversibility: 120, verificationAttachment: 80, materialScale: 20, timePressure: 30, budgetHeadroom: 150, provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" } },
-  modelProfile: { modelRef: "provider/model", capability: { schemaVersion: 2, axes: Object.fromEntries(MODEL_CAPABILITY_AXES.map((axis) => [axis, { status: "scored", score: 180, rationale: "review", evidence: ["review-1"] }])) }, providerFacts: { schemaVersion: 1, contextCapacity: 128000, pricing: { inputPerMillionTokens: 1, outputPerMillionTokens: 2 }, authentication: { modes: ["api-key"] }, dataPolicy: { allowedDataClasses: ["public"], retention: "transient", trainingUse: "never", regions: ["us"] }, modalities: ["text"], toolCalls: { supported: true }, provenance: { source: "docs", observedAt: "2026-09-08" } }, provenance: { owner: "human", sourceRefs: ["review-1"], reviewedAt: "2026-09-08" } },
-  operationalOverlaySnapshot: { schemaVersion: 1, installationRef: "installation-1", projectRef: "project-1", goalRef: "goal-1", overlayVersion: 2, observations: [{ candidateRef: "candidate-1", measuredLatencyMs: 10, measuredCost: 1, failureRate: 0, timeoutRate: 0, providerErrorRate: 0, currentAvailability: true, accountBinding: "account-1", observedAt: "2026-09-08T12:00:00Z" }] },
+  taskDemand: {
+    schemaVersion: 1,
+    taskKinds: ["coding"],
+    requirements: Object.fromEntries(MODEL_CAPABILITY_AXES.map((axis) => [axis, { level: 80, rationale: "Head requirement" }])),
+    provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" },
+  },
+  workCharacter: {
+    schemaVersion: 1,
+    risk: 40,
+    reversibility: 120,
+    verificationAttachment: 80,
+    materialScale: 20,
+    timePressure: 30,
+    budgetHeadroom: 150,
+    provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" },
+  },
+  modelProfile: {
+    modelRef: "provider/model",
+    capability: {
+      schemaVersion: 2,
+      axes: Object.fromEntries(
+        MODEL_CAPABILITY_AXES.map((axis) => [axis, { status: "scored", score: 180, rationale: "review", evidence: ["review-1"] }]),
+      ),
+    },
+    providerFacts: {
+      schemaVersion: 1,
+      contextCapacity: 128000,
+      pricing: { inputPerMillionTokens: 1, outputPerMillionTokens: 2 },
+      authentication: { modes: ["api-key"] },
+      dataPolicy: { allowedDataClasses: ["public"], retention: "transient", trainingUse: "never", regions: ["us"] },
+      modalities: ["text"],
+      toolCalls: { supported: true },
+      provenance: { source: "docs", observedAt: "2026-09-08" },
+    },
+    provenance: { owner: "human", sourceRefs: ["review-1"], reviewedAt: "2026-09-08" },
+  },
+  operationalOverlaySnapshot: {
+    schemaVersion: 1,
+    installationRef: "installation-1",
+    projectRef: "project-1",
+    goalRef: "goal-1",
+    overlayVersion: 2,
+    observations: [
+      {
+        candidateRef: "candidate-1",
+        measuredLatencyMs: 10,
+        measuredCost: 1,
+        failureRate: 0,
+        timeoutRate: 0,
+        providerErrorRate: 0,
+        currentAvailability: true,
+        accountBinding: "account-1",
+        observedAt: "2026-09-08T12:00:00Z",
+      },
+    ],
+  },
   approvalRef: null,
 });
 describe("routing evidence boundary", () => {
   it("accepts a complete selection record", () => expect(() => assertValidRoutingEvidence(evidence())).not.toThrow());
+  it("rejects secret-like text before routing evidence can cross the boundary", () => {
+    const secret = "api_key=sk-proj-routing-evidence-secret";
+    expect(() => assertValidRoutingEvidence({ ...evidence(), rationale: secret })).toThrow(RoutingEvidenceValidationError);
+
+    const nested = structuredClone(evidence()) as RoutingEvidence;
+    (nested.taskDemand.requirements.coding as { rationale: string }).rationale = `Authorization: Bearer ${secret}`;
+    expect(() => assertValidRoutingEvidence({ ...nested, taskDemandHash: taskDemandContentHash(nested.taskDemand) })).toThrow(RoutingEvidenceValidationError);
+  });
   it("requires immutable routing inputs used for certification", () => {
-    const incomplete = { ...evidence() }; delete (incomplete as Record<string, unknown>).taskDemand;
+    const incomplete = { ...evidence() };
+    delete (incomplete as Record<string, unknown>).taskDemand;
     expect(() => assertValidRoutingEvidence(incomplete)).toThrow(RoutingEvidenceValidationError);
   });
   it("rejects identity, authority, and hash boundary violations", () => {
@@ -47,8 +109,12 @@ describe("routing evidence boundary", () => {
     expect(() => assertValidRoutingEvidence({ ...evidence(), authority: "ceo" })).toThrow(RoutingEvidenceValidationError);
   });
   it("requires replayable E pressure and known recipe versions", () => {
-    expect(() => assertValidRoutingEvidence({ ...evidence(), pressureCalculation: { pressureFloor: 1, pressure: 100, explicitHeadUplift: 100 } })).toThrow(RoutingEvidenceValidationError);
-    expect(() => assertValidRoutingEvidence({ ...evidence(), taskKindRecipeVersions: { coding: 999 } })).toThrow(RoutingEvidenceValidationError);
+    expect(() =>
+      assertValidRoutingEvidence({ ...evidence(), pressureCalculation: { pressureFloor: 1, pressure: 100, explicitHeadUplift: 100 } }),
+    ).toThrow(RoutingEvidenceValidationError);
+    expect(() => assertValidRoutingEvidence({ ...evidence(), taskKindRecipeVersions: { coding: 999 } })).toThrow(
+      RoutingEvidenceValidationError,
+    );
     expect(() => assertValidRoutingEvidence({ ...evidence(), selectedCandidateRef: "missing" })).toThrow(RoutingEvidenceValidationError);
   });
 
@@ -76,13 +142,16 @@ describe("routing evidence boundary", () => {
 
     const approvalIdentity = { capabilityKind: "ipython", commandId: "command-1", action: "edit", target: "src/server.ts" };
     Object.defineProperty(approvalIdentity, "target", { enumerable: true, get: () => "src/server.ts" });
-    expect(() => assertValidRoutingEvidence({ ...evidence(), approvalRef: "approval-1", approvalIdentity })).toThrow(RoutingEvidenceValidationError);
+    expect(() => assertValidRoutingEvidence({ ...evidence(), approvalRef: "approval-1", approvalIdentity })).toThrow(
+      RoutingEvidenceValidationError,
+    );
   });
-
 });
 
 it("accepts selector-compatible malformed-candidate rejection records", () => {
-  expect(() => assertValidRoutingEvidence({ ...evidence(), rejections: [{ candidateRef: "<invalid>", reason: "candidate shape was rejected" }] })).not.toThrow();
+  expect(() =>
+    assertValidRoutingEvidence({ ...evidence(), rejections: [{ candidateRef: "<invalid>", reason: "candidate shape was rejected" }] }),
+  ).not.toThrow();
 });
 
 it("requires RFC3339 UTC timestamps like the wire contract", () => {
