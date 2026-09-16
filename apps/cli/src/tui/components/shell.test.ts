@@ -44,6 +44,25 @@ describe("Maestro TUI shell", () => {
     }
   });
 
+  it("shows retry guidance when project discovery fails", () => {
+    const failedDiscovery = {
+      ...state,
+      project: { kind: "unavailable", guidance: "Project discovery unavailable: gateway timeout" },
+    } as TuiShellState;
+
+    for (const width of [40, 80]) {
+      const splash = stripAnsi(renderSplash(failedDiscovery, width).join("\n"));
+      const footer = stripAnsi(renderTuiFooter(width, failedDiscovery));
+      expect(splash).not.toContain("/session attach");
+      expect(splash).toContain("Project discovery failed");
+      expect(splash).toContain("ctrl+r retry");
+      expect(footer).not.toContain("/session attach");
+      expect(footer).toContain("ctrl+r retry");
+      expect(splash.split("\n").every((line) => line.length <= width)).toBe(true);
+      expect(footer.length).toBeLessThanOrEqual(width);
+    }
+  });
+
   it("shows provisioning and retry guidance when no projects are available", () => {
     const zeroProjects = {
       ...state,

@@ -153,6 +153,7 @@ function noProjectRecoveryAcknowledgement(width: number): string {
 function projectActionText(state: TuiShellState, width = 80): string {
   if (state.connection.kind !== "connected" || state.project?.kind !== "unavailable") return "";
   if (state.project.guidance === "No projects are available for this operator") return noProjectRecoveryAcknowledgement(width);
+  if (state.project.guidance?.startsWith("Project discovery unavailable:")) return fitPlain("Project discovery failed · ctrl+r retry", width);
   const match = state.project.guidance?.match(/\/session attach(?:\s+--project-index=\d+)?/);
   const command = match?.[0] ?? "/session attach";
   return command;

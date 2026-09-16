@@ -190,6 +190,7 @@ describe("compact project attachment guidance", () => {
 
     expect(compactProjectAttachmentNotice(notice, 40)).toBe("/session attach --project-index=1");
     expect(compactProjectAttachmentNotice(notice, 80)).toBe("/session attach --project-index=1");
+    expect(compactProjectAttachmentNotice("Project discovery unavailable: gateway timeout", 40)).toBe("Discovery failed · ctrl+r retry");
     expect(compactProjectAttachmentNotice(undefined, 40)).toBe("/session attach");
   });
 });
