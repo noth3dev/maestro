@@ -30,6 +30,7 @@ import {
   shouldIgnoreEmptySubmit,
   shouldCancelPendingProviderLogin,
   shouldConsumePendingProviderLoginBackgroundInput,
+  shouldRetryAutomaticProviderSignIn,
   shouldConsumeAccountLoginBackgroundInput,
   noModelSelectionMessage,
   runAutomaticProviderSignInOffer,
@@ -493,6 +494,34 @@ describe("automatic provider sign-in", () => {
     resolveModels!([]);
     await staleRequest;
     expect(staleOffer).not.toHaveBeenCalled();
+  });
+
+  it("does not consume the offer gate when the chooser cannot fit", async () => {
+    const gate = createAutomaticProviderSignInGate();
+    const onOffer = vi.fn();
+    let canRender = false;
+    const options = {
+      client: { listModels: async () => [] },
+      getConfiguredModel: () => undefined,
+      gate,
+      isCurrent: () => true,
+      isManualLoginActive: () => false,
+      canOffer: () => canRender,
+      onOffer,
+    };
+
+    await runAutomaticProviderSignInOffer(options);
+    expect(onOffer).not.toHaveBeenCalled();
+    canRender = true;
+    await runAutomaticProviderSignInOffer(options);
+    expect(onOffer).toHaveBeenCalledOnce();
+  });
+
+  it("retries only when terminal height crosses the chooser threshold", () => {
+    expect(shouldRetryAutomaticProviderSignIn(7, 8)).toBe(true);
+    expect(shouldRetryAutomaticProviderSignIn(8, 9)).toBe(false);
+    expect(shouldRetryAutomaticProviderSignIn(7, 7)).toBe(false);
+    expect(shouldRetryAutomaticProviderSignIn(16, 7)).toBe(false);
   });
 
   it("does not consume the offer gate when model discovery fails", async () => {

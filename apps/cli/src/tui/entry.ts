@@ -309,6 +309,10 @@ export function shouldOfferAutomaticProviderSignIn(
   return !models.some((model) => `${model.identity.provider}/${model.identity.id}` === selectedModel);
 }
 
+export function shouldRetryAutomaticProviderSignIn(previousRows: number, currentRows: number): boolean {
+  return previousRows < COMPACT_PROVIDER_LOGIN_MIN_HEIGHT && currentRows >= COMPACT_PROVIDER_LOGIN_MIN_HEIGHT;
+}
+
 /** Prevent a dismissed or already-presented automatic offer from nagging again. */
 export function createAutomaticProviderSignInGate(): { claim: () => boolean } {
   let claimed = false;
@@ -335,6 +339,7 @@ export async function runAutomaticProviderSignInOffer(options: {
   gate: { claim: () => boolean };
   isCurrent: () => boolean;
   isManualLoginActive: () => boolean;
+  canOffer?: () => boolean;
   onOffer: () => void;
 }): Promise<void> {
   if (!options.isCurrent() || options.isManualLoginActive()) return;
@@ -346,6 +351,7 @@ export async function runAutomaticProviderSignInOffer(options: {
   }
   if (!options.isCurrent() || options.isManualLoginActive() || !shouldOfferAutomaticProviderSignIn(models, options.getConfiguredModel()))
     return;
+  if (options.canOffer !== undefined && !options.canOffer()) return;
   if (!options.gate.claim() || !options.isCurrent() || options.isManualLoginActive()) return;
   options.onOffer();
 }
@@ -437,27 +443,34 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let compactConversationResult: string | undefined;
     let compactTaskContractReview = false;
     let compactProjectNotice = projectDiscoveryNotice;
-    const inputLabel = createDynamicRegion((width) => [
-      tuiTheme.muted(
-        compactHelp !== undefined && terminal.rows < 16
-          ? fitPlain(compactHelp, width)
-          : compactReview !== undefined && terminal.rows < 16
-            ? fitPlain(compactReview, width)
-            : terminal.rows < 16 && state.connection.kind !== "connected"
-              ? compactConnectionRecoveryAcknowledgement(state.connection, width) ?? renderInputPlaceholder(state, width, terminal.rows < 16)
-              : compactModelList !== undefined && terminal.rows < 16
-                ? compactModelListAcknowledgement(compactModelList.identities, width, compactModelList.unavailableLabel)
-                : terminal.rows < 16 && project.kind !== "attached"
-                ? compactProjectAttachmentNotice(compactProjectNotice, width)
-                : compactTaskContractReview && terminal.rows < 16
-                  ? compactTaskContractAcknowledgement(width)
-                  : compactConversationResult !== undefined && terminal.rows < 16
-                    ? compactConversationResult
-                    : compactCommandResult !== undefined && terminal.rows < 16
-                      ? compactCommandResultAcknowledgement(compactCommandResult, width)
-                      : renderInputPlaceholder(state, width, terminal.rows < 16),
-      ),
-    ]);
+    let lastRenderedTerminalRows = terminal.rows;
+    let offerAutomaticProviderSignIn = (): void => undefined;
+    const inputLabel = createDynamicRegion((width) => {
+      const shouldRetryOffer = shouldRetryAutomaticProviderSignIn(lastRenderedTerminalRows, terminal.rows);
+      lastRenderedTerminalRows = terminal.rows;
+      if (shouldRetryOffer) queueMicrotask(offerAutomaticProviderSignIn);
+      return [
+        tuiTheme.muted(
+          compactHelp !== undefined && terminal.rows < 16
+            ? fitPlain(compactHelp, width)
+            : compactReview !== undefined && terminal.rows < 16
+              ? fitPlain(compactReview, width)
+              : terminal.rows < 16 && state.connection.kind !== "connected"
+                ? compactConnectionRecoveryAcknowledgement(state.connection, width) ?? renderInputPlaceholder(state, width, terminal.rows < 16)
+                : compactModelList !== undefined && terminal.rows < 16
+                  ? compactModelListAcknowledgement(compactModelList.identities, width, compactModelList.unavailableLabel)
+                  : terminal.rows < 16 && project.kind !== "attached"
+                    ? compactProjectAttachmentNotice(compactProjectNotice, width)
+                    : compactTaskContractReview && terminal.rows < 16
+                      ? compactTaskContractAcknowledgement(width)
+                      : compactConversationResult !== undefined && terminal.rows < 16
+                        ? compactConversationResult
+                        : compactCommandResult !== undefined && terminal.rows < 16
+                          ? compactCommandResultAcknowledgement(compactCommandResult, width)
+                          : renderInputPlaceholder(state, width, terminal.rows < 16),
+        ),
+      ];
+    });
     inputPanel.addChild(inputLabel);
     inputPanel.addChild(editor);
     const composer = new FramedComposer(inputPanel);
@@ -921,7 +934,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         }
       }
     };
-    const offerAutomaticProviderSignIn = (): void => {
+    offerAutomaticProviderSignIn = (): void => {
       if (client === undefined) return;
       const candidateClient = client;
       const candidateGeneration = connectionGeneration;
@@ -938,6 +951,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           state.connection.kind === "connected" &&
           isAutomaticProviderSignInProjectEligible(project.kind),
         isManualLoginActive: () => isProviderLoginActive(pendingProviderLogin, providerLoginInFlight, accountLoginSelection),
+        canOffer: () => terminal.rows >= COMPACT_PROVIDER_LOGIN_MIN_HEIGHT && !shouldDeferAutomaticProviderSignIn(editor.getText()),
         onOffer: () => {
           if (terminal.rows < COMPACT_PROVIDER_LOGIN_MIN_HEIGHT || shouldDeferAutomaticProviderSignIn(editor.getText())) return;
           accountLoginSelection = 0;
