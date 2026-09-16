@@ -15,7 +15,7 @@ import type { ConversationEvent, ModelCatalogEntry, TaskContract } from "@maestr
 import { resolveRetryWorkspace } from "./retry-workspace.js";
 import { createTranscriptClearBoundary, executeBasicShellCommand, latestCopyableTranscriptText } from "./basic-shell.js";
 import { waitForAccountLogin } from "./account-login.js";
-import { loadActivityHistory } from "./activity-history.js";
+import { hydrateActivityHistory } from "./activity-history-hydration.js";
 import { runLiveActivityStream } from "./activity-live-stream.js";
 import { refreshDashboardState } from "./dashboard-refresh.js";
 import { loadConversationHistory } from "./conversation-history.js";
@@ -58,7 +58,7 @@ import {
   selectWorkspaceModel,
   startNewConversationSession,
 } from "./session.js";
-import { mergeEvents, subscribeToEvents } from "./activity-stream.js";
+import { subscribeToEvents } from "./activity-stream.js";
 import {
   addConversationMessage,
   applyConversationEvent,
@@ -367,29 +367,21 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       historyGeneration = activityHistoryBoundary.capture(),
     ): Promise<void> => {
       if (client === undefined) return;
-      try {
-        const history = await loadActivityHistory({
-          client,
-          projectId,
-          isCurrent: () =>
-            generation === activityHydrationGeneration &&
-            activityHistoryBoundary.isCurrent(historyGeneration) &&
-            project.kind === "attached" &&
-            project.projectId === projectId,
-        });
-        if (history === undefined) return;
-        activity = mergeEvents(activity, history);
-        render();
-      } catch (error) {
-        if (
+      await hydrateActivityHistory({
+        client,
+        projectId,
+        readActivity: () => activity,
+        setActivity: (nextActivity) => {
+          activity = nextActivity;
+        },
+        isCurrent: () =>
           generation === activityHydrationGeneration &&
           activityHistoryBoundary.isCurrent(historyGeneration) &&
           project.kind === "attached" &&
-          project.projectId === projectId
-        ) {
-          appendWarning(`Activity history unavailable: ${error instanceof Error ? error.message : "Control Plane request failed"}`);
-        }
-      }
+          project.projectId === projectId,
+        onWarning: (message) => appendWarning(message),
+        render,
+      });
     };
 
     const streamActivity = async (signal: AbortSignal, projectId: string, generation: number) => {
