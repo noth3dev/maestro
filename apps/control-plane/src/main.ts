@@ -742,12 +742,14 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     ? async (input: import("@maestro/persistence").WorkerAdmissionFactoryInput) => {
       const catalogPath = config.ensembleCandidateCatalogPath;
       if (catalogPath === undefined) throw new Error("Ensemble candidate catalog is not configured");
+      const goalId = input.base.context.goalId;
+      if (typeof goalId !== "string" || goalId.trim() === "") throw new Error("Ensemble admission requires a Goal-bound context");
       const snapshot = await readRoutingWorkSnapshot(pool, {
         councilId: input.bundle.councilId,
         departmentId: input.bundle.departmentId,
         planVersion: input.bundle.planVersion,
         itemId: input.bundle.itemId,
-        goalRef: input.base.context.goalId,
+        goalRef: goalId,
         projectRef: input.base.context.projectId,
       });
       const catalog = readRoutingCandidateCatalog({ modelMapPath: resolve(process.cwd(), "config/model_map.json"), catalogPath });

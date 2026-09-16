@@ -84,6 +84,30 @@ describeDatabase("conversation service PostgreSQL integration", () => {
     expect(JSON.stringify(events.rows)).not.toContain("integration-account");
   });
 
+  it("persists and resumes a project-scoped conversation with a null Goal", async () => {
+    const fixture = gatewayFixture();
+    const service = createPostgresConversationService({ pool, gateway: fixture.gateway, gatewayOperatorId: "integration-gateway", accountRefs: { openai: "integration-account" } });
+    const intakeProjectId = randomUUID();
+    const conversation = await service.create({ projectId: intakeProjectId, goalId: null, model: "openai/gpt-5" }, operator);
+
+    try {
+      expect(conversation.goalId).toBeNull();
+      const result = await service.turn(conversation.conversationId, { projectId: intakeProjectId, text: "begin from this project brief" }, operator);
+      const stored = await pool.query<{ goal_id: string | null; project_id: string }>("SELECT goal_id, project_id FROM conversations WHERE conversation_id = $1", [conversation.conversationId]);
+      const turns = await pool.query<{ role: string; project_id: string }>("SELECT role, project_id FROM conversation_turns WHERE conversation_id = $1 ORDER BY created_at", [conversation.conversationId]);
+
+      expect(result.conversation.goalId).toBeNull();
+      expect(stored.rows[0]).toEqual({ goal_id: null, project_id: intakeProjectId });
+      expect(turns.rows.map((row) => row.role)).toEqual(["user", "assistant"]);
+      expect(turns.rows.every((row) => row.project_id === intakeProjectId)).toBe(true);
+    } finally {
+      await pool.query("DELETE FROM conversation_turns WHERE conversation_id = $1", [conversation.conversationId]);
+      await pool.query("DELETE FROM conversation_events WHERE conversation_id = $1", [conversation.conversationId]);
+      await pool.query("DELETE FROM conversations WHERE conversation_id = $1", [conversation.conversationId]);
+      await service.close?.();
+    }
+  });
+
   it("restores durable user and assistant context after runtime restart", async () => {
     const fixture = gatewayFixture();
     const service = createPostgresConversationService({ pool, gateway: fixture.gateway, gatewayOperatorId: "integration-gateway", accountRefs: { openai: "integration-account" } });

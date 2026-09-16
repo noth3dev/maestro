@@ -169,6 +169,7 @@ function sessionIdFor(context: ToolContext): string {
   for (const [value, label] of [[context.commandId, "command identity"], [context.toolCallId, "tool-call identity"], [context.operatorId, "operator identity"]] as const) {
     if (typeof value !== "string" || value.trim() === "") throw new Error(`IPython tool requires ${label}`);
   }
+  if (typeof context.goalId !== "string" || context.goalId.trim() === "") throw new Error("IPython tool requires a Goal-bound conversation");
   const parts = [context.projectId, context.goalId, context.conversationId];
   if (parts.some((part) => part.trim() === "")) throw new Error("IPython tool requires project, Goal, and conversation identity");
   return JSON.stringify(parts);
@@ -217,8 +218,10 @@ export function createIpPythonTool(options: { sessions: IpPythonSessionManager }
     async execute(args, context) {
       const { code } = parseCode(args);
       const sessionId = sessionIdFor(context);
+      const goalId = context.goalId;
+      if (typeof goalId !== "string" || goalId.trim() === "") throw new Error("IPython tool requires a Goal-bound conversation");
       const authority = authorityContext(context);
-      return toolResult(await options.sessions.execute({ sessionId, code, binding: { sessionId, admissionCommandId: context.commandId, commandId: deriveIpPythonToolCallCommandId(context.commandId, context.turnId, context.toolCallId), toolCallId: context.toolCallId, operatorId: context.operatorId, projectId: context.projectId, goalId: context.goalId, pathScope: context.capabilityGrant.pathScope, outboundDataClasses: context.capabilityGrant.outboundDataClasses, ...authority } }), context);
+      return toolResult(await options.sessions.execute({ sessionId, code, binding: { sessionId, admissionCommandId: context.commandId, commandId: deriveIpPythonToolCallCommandId(context.commandId, context.turnId, context.toolCallId), toolCallId: context.toolCallId, operatorId: context.operatorId, projectId: context.projectId, goalId, pathScope: context.capabilityGrant.pathScope, outboundDataClasses: context.capabilityGrant.outboundDataClasses, ...authority } }), context);
     },
   };
 }

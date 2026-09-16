@@ -38,7 +38,8 @@ export interface SpawnCapabilities {
 export interface InvocationContext {
   readonly operatorId: string;
   readonly projectId: string;
-  readonly goalId: string;
+  /** Goal-bound invocations carry a Goal; project-scoped intake deliberately does not. */
+  readonly goalId?: string;
   readonly missionBundleId: string;
   readonly policyVersion: string;
   /** Numeric authority policy version required by local host effects. */

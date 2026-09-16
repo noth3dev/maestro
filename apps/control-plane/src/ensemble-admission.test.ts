@@ -45,6 +45,16 @@ describe("ensemble native admission", () => {
     expect(decision.routingEvidence.approvalRef).toBeNull();
   });
 
+  it("rejects project-scoped context before ensemble worker routing", () => {
+    expect(() => createEnsembleNativeAdmission(config, {
+      snapshot,
+      modelMap,
+      candidates: [{ candidateRef: "strong-primary", modelRef: "openai/model-strong", accountBinding: "openai-account" }],
+      routeRef: "worker:worker-1:1",
+      base: { ...base, context: { ...base.context, goalId: undefined } },
+    })).toThrow("Goal binding");
+  });
+
   it("does not invent pressure or route when the work-character input is absent", () => {
     expect(() => createEnsembleNativeAdmission(config, { snapshot: { ...snapshot, routingWorkInput: undefined } as never, modelMap, candidates: [{ candidateRef: "strong-primary", modelRef: "openai/model-strong", accountBinding: "openai-account" }], routeRef: "worker:worker-1:1", base })).toThrow(/work|pressure|routing/i);
   });
