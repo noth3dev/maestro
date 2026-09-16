@@ -15,7 +15,7 @@ Maestro는 각 단계의 검증 증거가 완료되어야 다음 단계로 진�
 | **Phase 5** | Concurrent Goals & Portfolio Control | **활성 remediation/capacity 작업** | 프로젝트별 worker cap은 구현됨. Resource inventory, demand reservation 및 portfolio scheduling은 향후 작업 |
 | **Phase 6** | Encore Learning & 10-Axis Adaptation | **전체 체인 검증 완료** *(Step 1–11)* | 라우팅·페르소나가 candidate, replay/synthetic/shadow, 독립 Council, 제안/제한 롤아웃, 결과, 롤백, 출처 손실 안전성, Worker profile 소비까지 검증됨 |
 | **Phase 7** | Full Concertmaster Office & Radial Control Surface | **기계적 검증 완료; §S9 exit gate 완료; 사용자 시각/상호작용 핸드오프 대기** | Phase 7 구현 slice §S1–§S9가 병합됨. §S9는 기계적 단계 종료 게이트이며, 구현 `cf4108d`, branding repair `544623f`, 독립 `REVIEW: PASS`가 포함된 forbidden-token repair `417f359`가 증거임. 수리 후 build, lint, `git diff --check`, 인증된 직렬 PostgreSQL 검증이 290/290 files 및 1917/1917 tests, exit 0, 637.86초로 통과함(`/tmp/plan7-s9-repair-pg.log`). live-provider acceptance는 주장하지 않으며, 남은 시각/상호작용 판단은 기계적 테스트 주장이 아닌 사용자 소유 핸드오프임. Electron + Vite + React 19가 계속 목표이며 현재 목표는 Next.js/PWA가 아님 |
-| **Phase 8** | Full-System Hardening & Release Certification | 예정 | 적대적 장애 주입, 보안 침투 감사, 지속 부하 검증 및 릴리즈 프리즈 |
+| **Phase 8** | Full-System Hardening & Release Certification | **S9 차단; 미승인** | 11개 시나리오 catalog/report 계약은 있으나 하나의 frozen candidate에 대한 live full-system 증거가 없습니다. S10은 release를 거부하며 S11 artifact는 준비되었지만 private workspace dependency로 clean global install이 차단됩니다 |
 
 ### Phase 7 §S9 종료 게이트 증거
 
@@ -110,3 +110,7 @@ flowchart LR
 2. **재무부(Treasury Department) 소속**: **Operations / Finance Group (Treasury Department)** 관할 하에 Head Council 기획 시 태스크별 Spending Ceiling 할당.
 3. **자율 집행 및 옵션 2단계 승인**: 승인 예산 범위 내 지출은 `payment.spend` 액션으로 자율 집행되며, 고액 지출 시 Conductor 사전 승인 2-step 락 설정 가능.
 4. **Audit-Before-Spend & Metronome 실시간 감시**: 결제 전 트랜잭션 의도 및 복식부기 영수증을 PostgreSQL에 먼저 기록하며, **Metronome**이 이상 지출 속도를 실시간 모니터링.
+
+### Phase 8 §S9–§S12 현재 증거
+
+Phase 8은 **승인되지 않았습니다**. 11개 시나리오 catalog와 bounded runner는 [`test/phase8-scenarios/`](../../test/phase8-scenarios/) 및 [`docs/operations/12-representative-scenarios.md`](../../docs/operations/12-representative-scenarios.md)에 있으며, 현재 `blocked` inventory/component 증거만 기록하고 live full-system proof를 주장하지 않습니다. 따라서 §S10은 이 보고서로 `do_not_release`를 반환하며 rollback automation은 입력이 있을 때만 실행됩니다. §S11은 artifact를 준비했지만 private unpublished workspace dependency 때문에 clean global installation이 차단되어 있으며 publish하지 않았습니다. 수동 handoff는 [`docs/operations/13-cli-release.md`](../../docs/operations/13-cli-release.md)에 있고 [`scripts/install.sh`](../../scripts/install.sh)는 Node.js 24+를 전제로 합니다. npm publish, tag push, remote deployment, external send 또는 critical release effect는 실행하지 않았습니다.

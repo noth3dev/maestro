@@ -9,11 +9,11 @@
 From the repository root:
 
 ```bash
-rm -f /tmp/plan8-s9-scenarios.json /tmp/plan8-s9-scenarios.json.lock
-node scripts/run-phase8-scenarios.mjs --report /tmp/plan8-s9-scenarios.json
+rm -f /tmp/plan8-s9-scenarios-20260916-v2.json /tmp/plan8-s9-scenarios-20260916-v2.json.lock
+node scripts/run-phase8-scenarios.mjs --report /tmp/plan8-s9-scenarios-20260916-v2.json
 ```
 
-The command intentionally exits `2` with `status=blocked` until live evidence is available. It writes an atomic `0600` report and removes its exclusive lock. The final fixture report is `/tmp/plan8-s9-scenarios.json`, exit status `2`, mode `0600`, lock absent, content hash `42865b5a9503d2dc13b85ad9d35ab6a3c29f9bd5ca842ac63a021c2521d2318b`, and **11/11** catalog records.
+The command intentionally exits `2` with `status=blocked` until live evidence is available. It writes an atomic `0600` report and removes its exclusive lock. The final fixture report is `/tmp/plan8-s9-scenarios-20260916-v2.json`, exit status `2`, mode `0600`, lock absent, content hash `e8088a4235516e7d8f6be7c889564cad6c9c4ac6468da2c30c49f237f3604791`, and **11/11** catalog records.
 
 `--execute` is additionally gated by `MAESTRO_PHASE8_SCENARIOS_LIVE=1`. Even then, mapped suite output remains `blocked` unless the same run supplies the required actors, models, skills, tools, costs, durable events/evidence, certifications, dissent, and cleanup record. Passing component suites is not converted into a false full-system claim.
 
@@ -33,7 +33,7 @@ The command intentionally exits `2` with `status=blocked` until live evidence is
 | `10-critical-gate`          | Critical gate                   | `test/release-scenario/critical-action-forbidden-effect.integration.test.ts`, `test/phase8-security/security-adversarial.test.ts`                                                                  | No remote or external effect is invoked by this fixture.                           |
 | `11-radial-app`             | Radial app                      | `test/phase7-scenario/cli-parity-and-recovery-proof.integration.test.ts`, `test/phase8-performance/radial-graph-large-portfolio-baseline.integration.test.ts`                                      | Full Electron visual and screen-reader acceptance pending.                         |
 
-Each catalog record includes the required fields for actual actors, models, skills, tools, costs, injected failures, durable events/evidence, expected/observed behavior, certifications, dissent, limitations, and cleanup. Empty actual fields in the blocked report mean **not observed**, not zero activity.
+Each catalog record includes the required fields for actual actors, models, skills, tools, costs, injected failures, durable events/evidence, expected/observed behavior, certifications, dissent, limitations, and cleanup. A live passed record must additionally include its preconditions, Goal identity, and Task Contract version. Empty actual fields in the blocked report mean **not observed**, not zero activity.
 
 ## Explicit limitations
 

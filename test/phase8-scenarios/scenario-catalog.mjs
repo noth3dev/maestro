@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export const REQUIRED_CHECKPOINT_ID = "phase8-s9-disposable-checkpoint-v1";
 
 export const REQUIRED_RECORD_FIELDS = Object.freeze([
@@ -197,6 +199,13 @@ function requireStringArray(value, label) {
     throw new Error(`${label} must be a string array`);
 }
 
+export function scenarioReportContentHash(report) {
+  if (report === null || typeof report !== "object" || Array.isArray(report)) throw new Error("scenario report must be an object");
+  const content = { ...report };
+  delete content.contentHash;
+  return createHash("sha256").update(JSON.stringify(content), "utf8").digest("hex");
+}
+
 export function validateScenarioReport(report) {
   if (!isRecord(report) || report.schemaVersion !== 1 || !["blocked", "passed", "failed"].includes(report.status))
     throw new Error("invalid scenario report identity");
@@ -247,10 +256,17 @@ export function validateScenarioReport(report) {
       (record.actual.costs !== null && !isRecord(record.actual.costs))
     )
       throw new Error("actual runtime record is invalid");
+    requireStringArray(record.actual.actors, "scenario.actual.actors");
+    requireStringArray(record.actual.models, "scenario.actual.models");
+    requireStringArray(record.actual.skills, "scenario.actual.skills");
+    requireStringArray(record.actual.tools, "scenario.actual.tools");
     requireText(record.cleanup, "scenario.cleanup");
     if (record.status === "blocked" && !record.limitations.some((item) => /pending|disabled|unavailable|not.*claim/i.test(item)))
       throw new Error("blocked scenario must explain its limitation");
     if (record.status === "passed") {
+      requireStringArray(record.preconditions, "scenario.preconditions");
+      if (record.preconditions.length === 0 || typeof record.goalId !== "string" || record.goalId.trim() === "" || typeof record.taskContractVersion !== "string" || record.taskContractVersion.trim() === "")
+        throw new Error("passed scenario must include preconditions, Goal identity, and Task Contract version");
       if (
         record.actual.actors.length === 0 ||
         record.actual.models.length === 0 ||

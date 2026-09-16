@@ -3,6 +3,25 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { REQUIRED_SCENARIO_IDS, REPRESENTATIVE_SCENARIOS, validateScenarioReport } from "./scenario-catalog.mjs";
 
+
+function createPassedRecordFixture() {
+  const blocked = {
+    schemaVersion: 1,
+    candidateId: "phase8-s9-disposable-candidate-v1",
+    checkpointId: "phase8-s9-disposable-checkpoint-v1",
+    status: "passed",
+    scenarios: REPRESENTATIVE_SCENARIOS.map((scenario) => ({
+      scenarioId: scenario.id, fixtureId: scenario.fixtureId, status: "passed", live: true,
+      actors: ["actor"], models: ["model"], skills: ["skill"], tools: ["tool"], costs: {},
+      actual: { actors: ["actor"], models: ["model"], skills: ["skill"], tools: ["tool"], costs: {} },
+      injectedFailures: [], durableEvents: ["event"], durableEvidence: ["evidence"], expectedBehavior: scenario.expectedBehavior,
+      observedBehavior: "observed", certifications: ["certified"], dissent: [], limitations: [], cleanup: scenario.cleanup,
+    })),
+    limitations: ["bounded fixture"],
+  };
+  return blocked;
+}
+
 describe("Plan 8 §S9 representative scenario contract", () => {
   it("defines all eleven executable scenarios with complete evidence fields", () => {
     expect(REPRESENTATIVE_SCENARIOS).toHaveLength(11);
@@ -64,6 +83,17 @@ describe("Plan 8 §S9 representative scenario contract", () => {
       limitations: [],
     };
     expect(() => validateScenarioReport(report)).toThrow(/live/);
+  });
+
+  it("rejects non-string actual runtime identities", () => {
+    const report = createPassedRecordFixture();
+    report.scenarios[0].actual.models = [null];
+    expect(() => validateScenarioReport(report)).toThrow(/string array/);
+  });
+
+  it("requires Goal and Task Contract identity for a live passed record", () => {
+    const base = createPassedRecordFixture();
+    expect(() => validateScenarioReport(base)).toThrow(/Goal|Task Contract|preconditions/i);
   });
 
   it("requires blocked fixture reports to state that live acceptance is pending", () => {
