@@ -7,15 +7,17 @@ Create a new, mode-0600 PostgreSQL plain export and record its release-candidate
 ## Preconditions
 
 - Use a disposable fixture and the repository checkout.
+- Use a `pg_dump` client matching the major version of the fixture server.
+- Set the release model-gateway, provider-adapter, and browser pins in the environment.
 - Keep secrets in the environment; do not place credentials in logs or this document.
 
 ## Exercise
 
 Command: `node scripts/freeze-release-candidate.mjs --manifest /tmp/maestro-release/identity.json --export-path /tmp/maestro-release/database.sql --database-url "$MAESTRO_TEST_DATABASE_URL"`
 
-Status: **pending §S6 real-fixture exercise**. This inventory slice records the command without claiming that it has run successfully.
+Status: **exercised against a disposable PostgreSQL 16 fixture**. The export was new, mode `0600`, and the release checkpoint recorded the same export hash.
 
-Evidence: **pending** — replace this marker with the captured test output path and exit status after the exercise gate runs.
+Evidence: `/tmp/maestro-release/backup-exercise.log` — exit status `0`; export mode `600`, size `649884` bytes, SHA-256 `429d85e2bf83d01ec82f85c02f0617cd2b34784b9836566c2c89e904b06a47b0`; candidate `48caa3cdb96265e9131c19e47b4334f9be9892b5678334a58ecef086bad602b1`.
 
 ## Stop condition
 
