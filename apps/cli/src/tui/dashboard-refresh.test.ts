@@ -43,4 +43,57 @@ describe("dashboard refresh orchestration", () => {
     });
     expect(order).toEqual(["loading", "render", "error:offline", "render"]);
   });
+
+  it("ignores a stale dashboard success after a newer refresh starts", async () => {
+    const oldDashboard = { ...dashboard, projectId: "old-project" };
+    const newDashboard = { ...dashboard, projectId: "new-project" };
+    const events: string[] = [];
+    let resolveOld!: (value: DashboardReadModel) => void;
+    let generation = 1;
+    const oldRefresh = refreshDashboardState({
+      client: {} as never,
+      projectId: "old-project",
+      readDashboard: () => new Promise((resolve) => { resolveOld = resolve; }),
+      isCurrent: () => generation === 1,
+      setDashboardState: (state) => events.push(state.goal.kind === "loading" ? "loading" : `state:${state.goal.kind}`),
+      setRecovery: (value) => events.push(`recovery:${value.projectId}`),
+      render: () => events.push("render"),
+    });
+
+    generation = 2;
+    await refreshDashboardState({
+      client: {} as never,
+      projectId: "new-project",
+      readDashboard: async () => newDashboard,
+      isCurrent: () => generation === 2,
+      setDashboardState: (state) => events.push(state.goal.kind === "loading" ? "loading" : `state:${state.goal.kind}`),
+      setRecovery: (value) => events.push(`recovery:${value.projectId}`),
+      render: () => events.push("render"),
+    });
+    resolveOld(oldDashboard);
+    await oldRefresh;
+
+    expect(events).toEqual(["loading", "render", "loading", "render", "state:empty", "recovery:new-project", "render"]);
+  });
+
+  it("ignores a stale dashboard failure after a newer refresh starts", async () => {
+    const events: string[] = [];
+    let rejectOld!: (reason?: unknown) => void;
+    let generation = 1;
+    const oldRefresh = refreshDashboardState({
+      client: {} as never,
+      projectId: "old-project",
+      readDashboard: () => new Promise<DashboardReadModel>((_, reject) => { rejectOld = reject; }),
+      isCurrent: () => generation === 1,
+      setDashboardState: (state) => events.push(state.goal.kind === "loading" ? "loading" : `state:${state.goal.kind}`),
+      setRecovery: () => events.push("recovery"),
+      render: () => events.push("render"),
+    });
+
+    generation = 2;
+    rejectOld(new Error("old project offline"));
+    await oldRefresh;
+
+    expect(events).toEqual(["loading", "render"]);
+  });
 });

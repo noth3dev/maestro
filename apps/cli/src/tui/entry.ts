@@ -595,13 +595,28 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       if (!completed) return;
       appendSuccess(`Flashmob ${enabled ? "enabled" : "disabled"} · ${enabled ? "blue" : "Warm Earth"} accent`);
     };
+    let dashboardRefreshGeneration = 0;
+    const invalidateDashboardRefreshes = (): void => {
+      dashboardRefreshGeneration += 1;
+    };
     const refreshDashboard = async () => {
+      const generation = ++dashboardRefreshGeneration;
       if (client === undefined || project.kind !== "attached") return;
+      const requestClient = client;
+      const requestProjectId = project.projectId;
+      const requestGoalId = session?.goalId;
       await refreshDashboardState({
-        client,
-        projectId: project.projectId,
-        ...(session?.goalId === undefined ? {} : { goalId: session.goalId }),
+        client: requestClient,
+        projectId: requestProjectId,
+        ...(requestGoalId === undefined ? {} : { goalId: requestGoalId }),
         readDashboard,
+        isCurrent: () =>
+          !stopped &&
+          generation === dashboardRefreshGeneration &&
+          client === requestClient &&
+          project.kind === "attached" &&
+          project.projectId === requestProjectId &&
+          session?.goalId === requestGoalId,
         setDashboardState: (dashboardState) => {
           state.goal = dashboardState.goal;
           state.workers = dashboardState.workers;
@@ -791,6 +806,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     };
     const retryConnection = async () => {
       connectionGeneration += 1;
+      invalidateDashboardRefreshes();
       appendWarning("Retrying Maestro startup checks…");
       if (startupError !== undefined) {
         const retriedWorkspace = await resolveRetryWorkspace(options.cwd);
@@ -1063,6 +1079,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         } else if (parsed.kind === "command" && parsed.name === "logout" && parsed.action === "openai-codex") {
           if (client === undefined) appendWarning("Account logout is unavailable until the Control Plane is connected.");
           else {
+            invalidateDashboardRefreshes();
             await client.logoutAccount();
             appendSuccess("ChatGPT account signed out; its model bindings were revoked.");
             void refreshDashboard();
@@ -1085,6 +1102,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           if (parsed.action === "retry") {
             await retryConnection();
           } else if (parsed.action === "new") {
+            invalidateDashboardRefreshes();
             conversationStreamController?.abort();
             conversationStreamController = undefined;
             conversationHydrationGeneration += 1;
@@ -1097,6 +1115,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             recovery = reconcileTuiSession(sessionWorkspacePath, session);
             appendSuccess("New Concertmaster conversation started. Durable Goal state was preserved.");
           } else if (parsed.action === "attach") {
+            invalidateDashboardRefreshes();
             conversationStreamController?.abort();
             conversationStreamController = undefined;
             conversationHydrationGeneration += 1;
@@ -1171,6 +1190,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           } else if (typeof requestedGoalId !== "string" || requestedGoalId.trim() === "") {
             appendWarning("Goal selection requires --goal-id.");
           } else {
+            invalidateDashboardRefreshes();
             const selected = await client.getGoal(requestedGoalId, { projectId: project.projectId });
             if (selected.projectId !== project.projectId) throw new Error("Selected Goal is bound to another project");
             const current = await loadWorkspaceSession(sessionWorkspacePath);
@@ -1265,6 +1285,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             } as Parameters<typeof executeWriteCommand>[0];
             const selectedModel = resolveConfiguredModel(options.env.MAESTRO_MODEL, session?.model);
             if (selectedModel !== undefined) writeContext.model = selectedModel;
+            invalidateDashboardRefreshes();
             const writeResult = await dispatchInteractiveWriteCommand(writeContext, parsed);
             pendingConfirmation = undefined;
             syncPendingDecisionState();
@@ -1415,6 +1436,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const stop = () => {
       if (stopped) return;
       stopped = true;
+      invalidateDashboardRefreshes();
       pendingConfirmation?.resolve("cancelled");
       pendingConfirmation = undefined;
       syncPendingDecisionState();
