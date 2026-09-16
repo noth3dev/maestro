@@ -171,6 +171,10 @@ export function firstAvailableModelIdentity(models: readonly Pick<ModelCatalogEn
   return model === undefined ? undefined : `${model.identity.provider}/${model.identity.id}`;
 }
 
+export function shouldHandoffAfterProviderLogin(configuredModel: string | undefined, conversationId: string | undefined): boolean {
+  return configuredModel === undefined && conversationId === undefined;
+}
+
 export function compactModelListAcknowledgement(identities: readonly string[], width: number, unavailableLabel?: string): string {
   if (identities.length === 0) return fitPlain(unavailableLabel === undefined ? "No models available · retry /models list" : "Catalog unavailable · retry /models", width);
   const identity = identities[0]!;
@@ -433,6 +437,24 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const appendError = (text: string): void => append({ kind: "error", text });
     const appendSuccess = (text: string): void => append({ kind: "success", text });
     const appendWarning = (text: string): void => append({ kind: "warning", text });
+    const handoffToAvailableModel = async (loginLabel: string): Promise<void> => {
+      if (client === undefined || !shouldHandoffAfterProviderLogin(resolveConfiguredModel(options.env.MAESTRO_MODEL, session?.model), session?.conversationId)) return;
+      try {
+        const models = await client.listModels();
+        const selectedModel = firstAvailableModelIdentity(models);
+        if (selectedModel === undefined) {
+          appendWarning(`${loginLabel} complete, but no model is available. Run /models list, then /model use --model provider/model.`);
+        } else {
+          session = selectWorkspaceModel(workspace.cwd, session, selectedModel);
+          await saveWorkspaceSession(session);
+          state.model = selectedModel;
+          appendSuccess(`Model selected after ${loginLabel}: ${selectedModel}`);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "request failed";
+        appendWarning(`${loginLabel} complete, but model discovery failed: ${message}. Run /models list, then /model use --model provider/model.`);
+      }
+    };
     const showDraftIfPresent = (content: string): void => {
       const presentation = draftForPresentation({
         content,
@@ -775,24 +797,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         if (!isCurrentAccountLoginOperation(controller, accountLoginController) || status === undefined) return;
         if (status.state === "succeeded") {
           appendSuccess("Account login complete: openai-codex");
-          const configuredModel = resolveConfiguredModel(options.env.MAESTRO_MODEL, session?.model);
-          if (configuredModel === undefined && session?.conversationId === undefined) {
-            try {
-              const models = await client.listModels();
-              const selectedModel = firstAvailableModelIdentity(models);
-              if (selectedModel === undefined) {
-                appendWarning("No model is available after account login. Run /models list, then /model use --model provider/model.");
-              } else {
-                session = selectWorkspaceModel(workspace.cwd, session, selectedModel);
-                await saveWorkspaceSession(session);
-                state.model = selectedModel;
-                appendSuccess(`Model selected after account login: ${selectedModel}`);
-              }
-            } catch (error) {
-              const message = error instanceof Error ? error.message : "request failed";
-              appendWarning(`Account login complete, but model discovery failed: ${message}. Run /models list, then /model use --model provider/model.`);
-            }
-          }
+          await handoffToAvailableModel("Account login");
           void refreshDashboard();
         } else if (status.state === "failed") appendError(`Account login ${status.state}: ${status.message ?? "no additional details"}`);
         else appendWarning(`Account login ${status.state}: ${status.message ?? "no additional details"}`);
@@ -863,6 +868,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           } else {
             await client.loginProvider({ providerId, authMode: "api-key", secret: text });
             appendSuccess(`Provider login complete: ${providerId} API key stored by the model gateway.`);
+            await handoffToAvailableModel("Provider login");
           }
         } catch (error) {
           appendError(`Provider login failed: ${error instanceof Error ? error.message : "request failed"}`);

@@ -17,6 +17,7 @@ import {
   compactProjectAttachmentNotice,
   compactModelListAcknowledgement,
   firstAvailableModelIdentity,
+  shouldHandoffAfterProviderLogin,
   isCurrentAccountLoginOperation,
   shouldDeferAutomaticProviderSignIn,
   shouldBlockConcurrentTurnSubmit,
@@ -157,6 +158,12 @@ describe("account-login model handoff", () => {
   it("selects the first live catalog identity and leaves empty catalogs unresolved", () => {
     expect(firstAvailableModelIdentity([{ identity: { provider: "openai-codex", id: "gpt-5.3-codex" } }])).toBe("openai-codex/gpt-5.3-codex");
     expect(firstAvailableModelIdentity([])).toBeUndefined();
+  });
+
+  it("only hands off a model for a model-less session without a conversation", () => {
+    expect(shouldHandoffAfterProviderLogin(undefined, undefined)).toBe(true);
+    expect(shouldHandoffAfterProviderLogin("openai/gpt-5", undefined)).toBe(false);
+    expect(shouldHandoffAfterProviderLogin(undefined, "conversation-1")).toBe(false);
   });
 });
 
