@@ -24,6 +24,7 @@ import {
   isCurrentConversationTurnController,
   compactConnectionRecoveryAcknowledgement,
   compactCommandResultAcknowledgement,
+  compactTaskContractAcknowledgement,
   shouldIgnoreEmptySubmit,
   shouldCancelPendingProviderLogin,
   noModelSelectionMessage,
@@ -197,6 +198,14 @@ describe("empty conversation submit", () => {
     }
 
     expect(shouldIgnoreEmptySubmit("hello", undefined)).toBe(false);
+  });
+});
+
+describe("compact task contract guidance", () => {
+  it("keeps resize and both exact actions visible in bounded rows", () => {
+    const lines = compactTaskContractAcknowledgement(40).split("\n");
+    expect(lines).toEqual(["Task contract ready · resize to review", "/task-contract confirm", "/task-contract launch"]);
+    expect(lines.every((line) => line.length <= 40)).toBe(true);
   });
 });
 
