@@ -102,6 +102,11 @@ export async function hydrateOrganizationOnReconnect(
   state.organization = await hydrateOrganizationState(client);
 }
 
+/** Prefer the explicitly configured model, falling back to the persisted session selection. */
+export function resolveConfiguredModel(environmentModel: string | undefined, sessionModel: string | undefined): string | undefined {
+  return environmentModel?.trim() || sessionModel;
+}
+
 export function shouldOfferAutomaticProviderSignIn(
   models: readonly Pick<ModelCatalogEntry, "identity">[],
   configuredModel: string | undefined,
@@ -250,7 +255,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let loginInteractionGeneration = 0;
     const automaticProviderSignInGate = createAutomaticProviderSignInGate();
     const syncModelState = (): void => {
-      const model = options.env.MAESTRO_MODEL?.trim() || session?.model;
+      const model = resolveConfiguredModel(options.env.MAESTRO_MODEL, session?.model);
       if (model === undefined) delete state.model;
       else state.model = model;
     };
@@ -672,7 +677,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       const candidateLoginInteractionGeneration = loginInteractionGeneration;
       void runAutomaticProviderSignInOffer({
         client: candidateClient,
-        getConfiguredModel: () => options.env.MAESTRO_MODEL?.trim() || session?.model,
+        getConfiguredModel: () => resolveConfiguredModel(options.env.MAESTRO_MODEL, session?.model),
         gate: automaticProviderSignInGate,
         isCurrent: () =>
           !stopped &&
@@ -964,7 +969,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               ...(session?.goalId === undefined ? {} : { goalId: session.goalId }),
               confirm,
             } as Parameters<typeof executeWriteCommand>[0];
-            const selectedModel = options.env.MAESTRO_MODEL?.trim() || session?.model;
+            const selectedModel = resolveConfiguredModel(options.env.MAESTRO_MODEL, session?.model);
             if (selectedModel !== undefined) writeContext.model = selectedModel;
             const writeResult = await dispatchInteractiveWriteCommand(writeContext, parsed);
             pendingConfirmation = undefined;
@@ -999,7 +1004,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               appendError("Concertmaster requires an attached workspace session.");
               return;
             }
-            const configuredModel = options.env.MAESTRO_MODEL?.trim() || session.model;
+            const configuredModel = resolveConfiguredModel(options.env.MAESTRO_MODEL, session.model);
             if (session.conversationId === undefined && configuredModel === undefined) {
               append(
                 "No model selected. Set MAESTRO_MODEL to an exact provider/model (for example openai/gpt-5), then start a new session.",
