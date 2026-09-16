@@ -17,7 +17,7 @@ import { createTranscriptClearBoundary, executeBasicShellCommand, latestCopyable
 import { waitForAccountLogin } from "./account-login.js";
 import { loadActivityHistory } from "./activity-history.js";
 import { processActivityEvent } from "./activity-event.js";
-import { dashboardErrorState, dashboardStateFromReadModel } from "./dashboard-state.js";
+import { refreshDashboardState } from "./dashboard-refresh.js";
 import { loadConversationHistory } from "./conversation-history.js";
 import { pendingDecisionsForView } from "./pending-decisions.js";
 import { draftForPresentation } from "./draft-presentation.js";
@@ -342,33 +342,24 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     };
     const refreshDashboard = async () => {
       if (client === undefined || project.kind !== "attached") return;
-      state.goal = { kind: "loading" };
-      state.workers = { kind: "loading" };
-      state.budget = { kind: "loading" };
-      render();
-      try {
-        const dashboard = await readDashboard({
-          client,
-          projectId: project.projectId,
-          ...(session?.goalId === undefined ? {} : { goalId: session.goalId }),
-        });
-        const dashboardState = dashboardStateFromReadModel(dashboard);
-        state.goal = dashboardState.goal;
-        state.workers = dashboardState.workers;
-        state.budget = dashboardState.budget;
-        recovery = reconcileTuiSession(workspace.cwd, session, {
-          ...(dashboard.selectedGoal === undefined ? {} : { goalState: dashboard.selectedGoal.state }),
-          ...(dashboard.workerCount === undefined ? {} : { activeWorkers: dashboard.workerCount }),
-        });
-        render();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Control Plane read failed";
-        const dashboardState = dashboardErrorState(message);
-        state.goal = dashboardState.goal;
-        state.workers = dashboardState.workers;
-        state.budget = dashboardState.budget;
-        render();
-      }
+      await refreshDashboardState({
+        client,
+        projectId: project.projectId,
+        ...(session?.goalId === undefined ? {} : { goalId: session.goalId }),
+        readDashboard,
+        setDashboardState: (dashboardState) => {
+          state.goal = dashboardState.goal;
+          state.workers = dashboardState.workers;
+          state.budget = dashboardState.budget;
+        },
+        setRecovery: (dashboard) => {
+          recovery = reconcileTuiSession(workspace.cwd, session, {
+            ...(dashboard.selectedGoal === undefined ? {} : { goalState: dashboard.selectedGoal.state }),
+            ...(dashboard.workerCount === undefined ? {} : { activeWorkers: dashboard.workerCount }),
+          });
+        },
+        render,
+      });
     };
     const hydrateActivity = async (
       projectId: string,
