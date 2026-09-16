@@ -5,6 +5,7 @@ import { MAESTRO_VERSION } from "../version.js";
 import {
   createAutomaticProviderSignInGate,
   handleConversationStreamEvent,
+  applyHydratedConversation,
   createTranscriptClearBoundary,
   executeBasicShellCommand,
   latestCopyableTranscriptText,
@@ -38,6 +39,21 @@ const model = (provider: string, id: string) => ({
     trainsOnCustomerData: false,
     regions: ["US"],
   },
+});
+
+describe("hydrated conversation application", () => {
+  it("assigns hydrated state and keeps rendering delegated to the existing draft callback", () => {
+    const hydrated = createConversationTranscript();
+    const setConversation = vi.fn();
+    const setDraft = vi.fn();
+    const showDraft = vi.fn();
+
+    applyHydratedConversation(hydrated, undefined, { setConversation, setDraft, showDraft });
+
+    expect(setConversation).toHaveBeenCalledWith(hydrated);
+    expect(setDraft).not.toHaveBeenCalled();
+    expect(showDraft).not.toHaveBeenCalled();
+  });
 });
 
 describe("conversation stream event handling", () => {

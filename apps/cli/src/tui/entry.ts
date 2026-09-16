@@ -122,6 +122,23 @@ export function handleConversationStreamEvent(options: {
   return { conversation, terminal: isTerminalConversationEvent(conversation, options.event) };
 }
 
+export function applyHydratedConversation(
+  hydrated: ConversationTranscriptState,
+  goalId: string | null | undefined,
+  callbacks: {
+    setConversation: (conversation: ConversationTranscriptState) => void;
+    setDraft: (draft: TaskContract) => void;
+    showDraft: (content: string) => void;
+  },
+): void {
+  callbacks.setConversation(hydrated);
+  const priorDraft = priorTaskContractDraft(hydrated.messages, goalId);
+  if (priorDraft !== undefined) {
+    callbacks.setDraft(priorDraft);
+    callbacks.showDraft(JSON.stringify(priorDraft));
+  }
+}
+
 export function shouldOfferAutomaticProviderSignIn(
   models: readonly Pick<ModelCatalogEntry, "identity">[],
   configuredModel: string | undefined,
@@ -484,12 +501,15 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             project.projectId === projectId,
         });
         if (hydrated === undefined) return;
-        conversation = hydrated;
-        const priorDraft = priorTaskContractDraft(hydrated.messages, session?.goalId);
-        if (priorDraft !== undefined) {
-          draftedTaskContract = priorDraft;
-          showDraftIfPresent(JSON.stringify(priorDraft));
-        }
+        applyHydratedConversation(hydrated, session?.goalId, {
+          setConversation: (nextConversation) => {
+            conversation = nextConversation;
+          },
+          setDraft: (draft) => {
+            draftedTaskContract = draft;
+          },
+          showDraft: showDraftIfPresent,
+        });
         splash.dismiss();
         render();
       } catch (error) {
