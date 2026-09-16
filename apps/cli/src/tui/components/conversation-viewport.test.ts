@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { ConversationViewport } from "./conversation-viewport.js";
+import { ConversationViewport, FramedComposer } from "./conversation-viewport.js";
 
 const originalNoColor = process.env.NO_COLOR;
 const originalColorTerm = process.env.COLORTERM;
@@ -16,11 +16,13 @@ afterEach(() => {
 describe("ConversationViewport", () => {
   it("renders ordered conversation entries through Markdown", () => {
     const viewport = new ConversationViewport();
-    viewport.setOrderedStreamRenderer(() => [{
-      occurredAt: "2026-01-01T00:00:00.000Z",
-      stable: "conversation:event-1:1",
-      content: { heading: "**Maestro**", content: "Use **bold** safely", kind: "success" },
-    }]);
+    viewport.setOrderedStreamRenderer(() => [
+      {
+        occurredAt: "2026-01-01T00:00:00.000Z",
+        stable: "conversation:event-1:1",
+        content: { heading: "**Maestro**", content: "Use **bold** safely", kind: "success" },
+      },
+    ]);
 
     const output = stripAnsi(viewport.render(80).join("\n"));
 
@@ -57,5 +59,28 @@ describe("ConversationViewport", () => {
 
     expect(output).toContain("Gateway unavailable");
     expect(output).toContain("\u001b[38;2;200;106;88m");
+  });
+});
+
+describe("FramedComposer geometry", () => {
+  it("keeps the chrome and body aligned at every supported width", () => {
+    const composer = new FramedComposer({
+      render: (width) => ["x".repeat(width)],
+      invalidate: () => undefined,
+    });
+
+    for (const width of [2, 40, 60, 80, 120]) {
+      const lines = composer.render(width).map(stripAnsi);
+      expect(lines.map((line) => line.length)).toEqual([width, width, width]);
+    }
+  });
+
+  it("keeps the existing unframed behavior below the frame boundary", () => {
+    const composer = new FramedComposer({
+      render: (width) => ["x".repeat(width)],
+      invalidate: () => undefined,
+    });
+
+    expect(composer.render(1).map(stripAnsi)).toEqual(["x"]);
   });
 });
