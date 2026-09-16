@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSplashController, type TuiShellState } from "./shell.js";
+import { createSplashController, type SetupStep, type TuiShellState } from "./shell.js";
 import { createStatusRegion } from "./regions.js";
 
 const state: TuiShellState = {
@@ -30,7 +30,14 @@ describe("TUI startup regions", () => {
 
   it("keeps the splash controller owned during the initial connecting frame", () => {
     const splash = createSplashController();
-    const region = createStatusRegion({ state, height: () => 30, splash });
+    const setupSteps: SetupStep[] = [
+      { step: "docker-check", status: "started" },
+      { step: "postgres-ready", status: "pending" },
+      { step: "migrations", status: "pending" },
+      { step: "control-plane-up", status: "pending" },
+      { step: "model-gateway-up", status: "pending" },
+    ];
+    const region = createStatusRegion({ state: { ...state, setupSteps }, height: () => 30, splash });
     const output = region.render(120).join("\n");
 
     expect(output).toContain("Docker check");

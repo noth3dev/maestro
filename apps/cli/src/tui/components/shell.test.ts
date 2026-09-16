@@ -5,6 +5,7 @@ import {
   renderShell,
   renderSplash,
   renderStatusHeader,
+  renderStatusRegion,
   renderTuiFooter,
   renderTuiLayout,
   type SetupStep,
@@ -262,9 +263,20 @@ describe("Maestro TUI shell", () => {
     expect(output).toContain("PostgreSQL ready");
   });
 
-  it("renders the complete pending setup sequence before the first callback", () => {
-    const output = renderSetupSteps({ ...state, connection: { kind: "connecting" } }, 80);
-    expect(output).toEqual(["· Docker check", "· PostgreSQL ready", "· Migrations", "· Control Plane", "· Model gateway"]);
+  it("does not invent local setup progress before any bootstrap callback", () => {
+    const output = renderSetupSteps(
+      { ...state, connection: { kind: "setup-required", message: "Control Plane connection is not configured" } },
+      80,
+    );
+    expect(output).toEqual([]);
+    const status = renderStatusRegion(
+      { ...state, connection: { kind: "setup-required", message: "Control Plane connection is not configured" } },
+      80,
+      24,
+    ).join("\n");
+    expect(status).toContain("Control Plane connection is not configured");
+    expect(status).not.toContain("Docker check");
+    expect(status).not.toContain("Model gateway");
   });
 
   it("renders setup progress at the narrow supported width", () => {

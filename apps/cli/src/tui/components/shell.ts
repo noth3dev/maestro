@@ -230,7 +230,7 @@ function setupStepGlyph(status: SetupStep["status"]): string {
 }
 
 export function renderSetupSteps(state: TuiShellState, width: number): string[] {
-  if (state.connection.kind === "connected") return [];
+  if (state.connection.kind === "connected" || state.setupSteps === undefined || state.setupSteps.length === 0) return [];
   const latest = new Map<LocalBootstrapStepName, SetupStep>();
   for (const step of state.setupSteps ?? []) latest.set(step.step, step);
   const embedded = latest.get("postgres-ready")?.message?.toLowerCase().includes("embedded") === true;
