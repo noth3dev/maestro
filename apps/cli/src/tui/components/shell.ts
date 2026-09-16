@@ -144,15 +144,22 @@ export function renderPendingDecisionDetails(state: TuiShellState, width: number
     .map((decision) => fitPlain(`⏸ ${decision.tier} · ${decision.action} · requested by ${decision.actor}`, width));
 }
 
-function projectActionText(state: TuiShellState): string {
+function noProjectRecoveryAcknowledgement(width: number): string {
+  const full = "No projects available · ask admin to provision access · ctrl+r retry";
+  if (width >= full.length) return full;
+  return fitPlain("No project · admin provision · ctrl+r", width);
+}
+
+function projectActionText(state: TuiShellState, width = 80): string {
   if (state.connection.kind !== "connected" || state.project?.kind !== "unavailable") return "";
+  if (state.project.guidance === "No projects are available for this operator") return noProjectRecoveryAcknowledgement(width);
   const match = state.project.guidance?.match(/\/session attach(?:\s+--project-index=\d+)?/);
   const command = match?.[0] ?? "/session attach";
   return command;
 }
 
-function nextActionText(state: TuiShellState): string {
-  if (state.connection.kind === "connected" && state.project?.kind === "unavailable") return projectActionText(state);
+function nextActionText(state: TuiShellState, width = 80): string {
+  if (state.connection.kind === "connected" && state.project?.kind === "unavailable") return projectActionText(state, width);
   return getZeroArgumentNoGoalActions()
     .slice(0, 3)
     .map((action) => `/${action.command} ${action.action}`)
@@ -188,8 +195,8 @@ export function renderSplash(state: TuiShellState, width: number): string[] {
       tuiTheme.dim(
         fitPlain(
           state.connection.kind === "connected" && state.project?.kind === "unavailable"
-            ? nextActionText(state)
-            : `ctrl+/ show home · Next: ${nextActionText(state)}`,
+            ? nextActionText(state, width)
+            : `ctrl+/ show home · Next: ${nextActionText(state, width)}`,
           width,
         ),
       ),
@@ -206,8 +213,8 @@ export function renderSplash(state: TuiShellState, width: number): string[] {
     tuiTheme.dim(
       fitPlain(
         state.connection.kind === "connected" && state.project?.kind === "unavailable"
-          ? nextActionText(state)
-          : `ctrl+/ show home · Next: ${nextActionText(state)}`,
+          ? nextActionText(state, width)
+          : `ctrl+/ show home · Next: ${nextActionText(state, width)}`,
         width,
       ),
     ),
@@ -269,18 +276,18 @@ export function createSplashController(): SplashController {
   };
 }
 
-function hintText(state: TuiShellState): string {
+function hintText(state: TuiShellState, width = 80): string {
   if (connectionMessage(state) !== undefined) return "ctrl+r retry · /help for commands";
   if (state.working === true) return `esc stop · ctrl+a decisions${pendingCount(state) > 0 ? ` (${pendingCount(state)})` : ""}`;
   const count = pendingCount(state);
   if (count > 0) return `ctrl+a review ${count} pending decision${count === 1 ? "" : "s"}`;
   if (state.workers.kind === "loading") return "esc stop · ctrl+a decisions";
-  if (state.connection.kind === "connected" && state.project?.kind === "unavailable") return projectActionText(state);
+  if (state.connection.kind === "connected" && state.project?.kind === "unavailable") return projectActionText(state, width);
   return "/ commands · ctrl+g goals · /help";
 }
 
 export function renderHints(state: TuiShellState, width: number): string {
-  return tuiTheme.dim(fitPlain(hintText(state), width));
+  return tuiTheme.dim(fitPlain(hintText(state, width), width));
 }
 
 export function renderTuiLayout(state: TuiShellState, width: number, height: number, options: TuiLayoutOptions = {}): TuiLayoutFrame {

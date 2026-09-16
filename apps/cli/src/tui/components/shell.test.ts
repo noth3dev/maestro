@@ -44,6 +44,26 @@ describe("Maestro TUI shell", () => {
     }
   });
 
+  it("shows provisioning and retry guidance when no projects are available", () => {
+    const zeroProjects = {
+      ...state,
+      project: { kind: "unavailable", guidance: "No projects are available for this operator" },
+    } as TuiShellState;
+
+    for (const width of [40, 80]) {
+      const splash = stripAnsi(renderSplash(zeroProjects, width).join("\n"));
+      const footer = stripAnsi(renderTuiFooter(width, zeroProjects));
+      expect(splash).not.toContain("/session attach");
+      expect(splash).toMatch(/ask admin|admin provision/);
+      expect(splash).toContain("ctrl+r");
+      expect(footer).not.toContain("/session attach");
+      expect(footer).toMatch(/ask admin|admin provision/);
+      expect(footer).toContain("ctrl+r");
+      expect(splash.split("\n").every((line) => line.length <= width)).toBe(true);
+      expect(footer.length).toBeLessThanOrEqual(width);
+    }
+  });
+
   it("shows attach guidance instead of project-bound actions when project discovery is unresolved", () => {
     const unresolved = {
       ...state,
