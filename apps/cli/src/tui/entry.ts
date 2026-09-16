@@ -240,7 +240,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
   return await new Promise<number>((resolve) => {
     const editor = new SecretEditor(tui, editorTheme, { paddingX: 2, autocompleteMaxVisible: 6 });
     const inputPanel = new Box(1, 0, tuiTheme.inputSurface);
-    const inputLabel = createDynamicRegion((width) => [tuiTheme.muted(renderInputPlaceholder(state, width))]);
+    const inputLabel = createDynamicRegion((width) => [tuiTheme.muted(renderInputPlaceholder(state, width, terminal.rows < 16))]);
     inputPanel.addChild(inputLabel);
     inputPanel.addChild(editor);
     const composer = new FramedComposer(inputPanel);

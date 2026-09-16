@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { renderActivityTimeline } from "./activity-timeline.js";
-import { createSplashController, renderDecisionRegion, renderStatusRow, renderTuiLayout, type PendingDecision, type TuiShellState } from "./shell.js";
+import {
+  createSplashController,
+  renderDecisionRegion,
+  renderStatusRow,
+  renderTuiLayout,
+  type PendingDecision,
+  type TuiShellState,
+} from "./shell.js";
 import { createStatusRegion } from "./regions.js";
 
 const state: TuiShellState = {
@@ -24,8 +31,10 @@ const pendingState: TuiShellState = {
   ],
 };
 
-// eslint-disable-next-line no-control-regex
-function plain(value: string): string { return value.replace(/\u001b\[[0-9;]*m/g, ""); }
+function plain(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/\u001b\[[0-9;]*m/g, "");
+}
 
 describe("Maestro TUI layout and hierarchy", () => {
   it("gives the stream at least 70 percent of an 80x24 frame at rest", () => {
@@ -83,6 +92,17 @@ describe("Maestro TUI layout and hierarchy", () => {
     expect(plain(renderStatusRow(state, 50))).not.toContain("auth-refactor");
   });
 
+  it("keeps pending decision review discoverable in compact height without changing normal copy", () => {
+    const compact = renderTuiLayout(pendingState, 80, 15);
+    expect(compact.input[0]).toBe("ctrl+a review · ⏸ 3 pending decisions");
+    expect(compact.input[0]).not.toContain("...");
+    expect(compact.input[0]!.length).toBeLessThanOrEqual(80);
+
+    const normal = renderTuiLayout(pendingState, 80, 16);
+    expect(normal.input[0]).toBe("⏸ Encore Council · 3 pending decisions · operator response required");
+    expect(normal.input[0]).not.toContain("ctrl+a review");
+  });
+
   it("renders only status and input below 16 rows", () => {
     const frame = renderTuiLayout(pendingState, 80, 15, { stream: ["conversation"] });
     expect(frame.status).toHaveLength(1);
@@ -107,7 +127,8 @@ describe("Maestro TUI layout and hierarchy", () => {
 
   it("keeps organization events in the stream without a panel", () => {
     const events = ["head_activated", "council_convened", "certification_issued"].map((eventType, index) => ({
-      cursor: String(index + 1), eventType,
+      cursor: String(index + 1),
+      eventType,
     }));
     const stream = renderActivityTimeline(events, 100).join("\n");
     expect(stream).toContain("head_activated");
