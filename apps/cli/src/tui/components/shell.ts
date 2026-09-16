@@ -84,7 +84,9 @@ function connectionMessage(state: TuiShellState): string | undefined {
   return state.connection.message;
 }
 
-function pendingPaint(text: string): string { return tuiTheme.warning(text); }
+function pendingPaint(text: string): string {
+  return tuiTheme.warning(text);
+}
 
 /** One-line status, ordered by what can change the operator's next action. */
 export function renderStatusRow(state: TuiShellState, width: number): string {
@@ -94,7 +96,8 @@ export function renderStatusRow(state: TuiShellState, width: number): string {
   const count = pendingCount(state);
   const pending = count > 0 ? ` · ⏸ ${count} need you` : "";
   let base: string;
-  if (width >= 100) base = `${state.mode === "flashmob" ? "flashmob" : "maestro"} · ${goalText(state)} · ${workerText(state)} · ${budgetText(state)}`;
+  if (width >= 100)
+    base = `${state.mode === "flashmob" ? "flashmob" : "maestro"} · ${goalText(state)} · ${workerText(state)} · ${budgetText(state)}`;
   else if (width >= 80) base = `${state.mode === "flashmob" ? "flashmob" : "maestro"} · ${goalText(state)} · ${workerText(state)}`;
   else if (width >= 60) base = `${state.mode === "flashmob" ? "flashmob" : "maestro"} · ${goalStateText(state)}`;
   else base = goalStateText(state);
@@ -126,7 +129,11 @@ export function renderDecisionRegion(state: TuiShellState, width: number, height
   const rows = decisionRows(state, width, height);
   if (rows.length === 0) return [];
   if (width < 60 || height < 24) return rows.map((row) => tuiTheme.warning(row));
-  return [tuiTheme.border("─".repeat(Math.max(0, width))), ...rows.map((row) => tuiTheme.warning(row)), tuiTheme.border("─".repeat(Math.max(0, width)))];
+  return [
+    tuiTheme.border("─".repeat(Math.max(0, width))),
+    ...rows.map((row) => tuiTheme.warning(row)),
+    tuiTheme.border("─".repeat(Math.max(0, width))),
+  ];
 }
 
 /** Details shown by the one-keystroke review action when a decision was replayed from storage. */
@@ -147,11 +154,12 @@ function hasPendingDecisionRows(state: TuiShellState): boolean {
   return pendingDecisionRows(state).length > 0;
 }
 
-export function renderInputPlaceholder(state: TuiShellState, width: number): string {
+export function renderInputPlaceholder(state: TuiShellState, width: number, compact = false): string {
   const decisions = pendingDecisionRows(state);
   if (decisions.length > 0) {
     const tier = decisions[0]?.tier ?? "authority";
     const count = decisions.length;
+    if (compact) return fitPlain(`ctrl+a review · ⏸ ${count} pending decision${count === 1 ? "" : "s"}`, width);
     return fitPlain(`⏸ ${tier} · ${count} pending decision${count === 1 ? "" : "s"} · operator response required`, width);
   }
   if (state.working === true) {
@@ -172,9 +180,10 @@ export function renderSplash(state: TuiShellState, width: number): string[] {
     ];
   }
   const organization = state.organization;
-  const departmentHeads = organization?.kind === "value"
-    ? `${organization.value.departments.length} Department Head${organization.value.departments.length === 1 ? "" : "s"}`
-    : "Department Heads unavailable";
+  const departmentHeads =
+    organization?.kind === "value"
+      ? `${organization.value.departments.length} Department Head${organization.value.departments.length === 1 ? "" : "s"}`
+      : "Department Heads unavailable";
   return [
     tuiTheme.primary(fitPlain("✦ MAESTRO", width)),
     tuiTheme.secondary(fitPlain(`Concertmaster ready · ${departmentHeads}`, width)),
@@ -222,8 +231,14 @@ export function createSplashController(): SplashController {
   let restored = false;
   return {
     visible: () => isVisible,
-    dismiss: () => { isVisible = false; restored = false; },
-    restore: () => { isVisible = true; restored = true; },
+    dismiss: () => {
+      isVisible = false;
+      restored = false;
+    },
+    restore: () => {
+      isVisible = true;
+      restored = true;
+    },
     consume: () => {
       if (restored) restored = false;
       else isVisible = false;
@@ -248,7 +263,7 @@ export function renderTuiLayout(state: TuiShellState, width: number, height: num
   const splash = options.showSplash === true && width >= 40 && height >= 16 ? renderSplash(state, width) : [];
   const status = [renderStatusRow(state, width)];
   const decisions = renderDecisionRegion(state, width, height);
-  const input = [fitPlain(options.input?.[0] ?? renderInputPlaceholder(state, width), width)];
+  const input = [fitPlain(options.input?.[0] ?? renderInputPlaceholder(state, width, height < 16), width)];
   const hints = [renderHints(state, width)];
   if (height < 16) return { splash, status, stream: [], decisions: [], input, hints: [] };
   const streamHeight = Math.max(0, height - status.length - decisions.length - input.length - hints.length - splash.length);
@@ -276,7 +291,15 @@ export function renderStatusHeader(state: TuiShellState, width: number, _height 
 }
 
 export function renderTuiFooter(width: number, state?: TuiShellState): string {
-  return renderHints(state ?? {
-    workspace: { cwd: "", gitRoot: "" }, connection: { kind: "connected" }, goal: { kind: "empty" }, workers: { kind: "empty" }, approvals: { kind: "empty" }, budget: { kind: "empty" },
-  }, width);
+  return renderHints(
+    state ?? {
+      workspace: { cwd: "", gitRoot: "" },
+      connection: { kind: "connected" },
+      goal: { kind: "empty" },
+      workers: { kind: "empty" },
+      approvals: { kind: "empty" },
+      budget: { kind: "empty" },
+    },
+    width,
+  );
 }
