@@ -37,10 +37,69 @@ const overlay: OperationalOverlay = {
 };
 const routingInputs = {
   taskKindRecipeVersions: { coding: 1 },
-  taskDemand: { schemaVersion: 1, taskKinds: ["coding"], requirements: Object.fromEntries(["reasoning", "coding", "verification", "instruction-fidelity", "tool-use", "long-context", "knowledge", "refusal-calibration"].map((axis) => [axis, { level: 80, rationale: "Head requirement" }])), provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" } },
-  workCharacter: { schemaVersion: 1, risk: 40, reversibility: 120, verificationAttachment: 80, materialScale: 20, timePressure: 30, budgetHeadroom: 150, provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" } },
-  modelProfile: { modelRef: "provider/model", capability: { schemaVersion: 2, axes: Object.fromEntries(["reasoning", "coding", "verification", "instruction-fidelity", "tool-use", "long-context", "knowledge", "refusal-calibration"].map((axis) => [axis, { status: "scored", score: 180, rationale: "review", evidence: ["review-1"] }])) }, providerFacts: { schemaVersion: 1, contextCapacity: 128000, pricing: { inputPerMillionTokens: 1, outputPerMillionTokens: 2 }, authentication: { modes: ["api-key"] }, dataPolicy: { allowedDataClasses: ["public"], retention: "transient", trainingUse: "never", regions: ["us"] }, modalities: ["text"], toolCalls: { supported: true }, provenance: { source: "docs", observedAt: "2026-09-08" } }, provenance: { owner: "human", sourceRefs: ["review-1"], reviewedAt: "2026-09-08" } },
-  operationalOverlaySnapshot: { schemaVersion: 1, installationRef: "installation-1", projectRef: "project-1", goalRef: "goal-1", overlayVersion: 1, observations: [{ candidateRef: "candidate-1", measuredLatencyMs: 10, measuredCost: 1, failureRate: 0, timeoutRate: 0, providerErrorRate: 0, currentAvailability: true, accountBinding: "account-1", observedAt: "2026-09-08T12:00:00Z" }] }, approvalRef: null,
+  taskDemand: {
+    schemaVersion: 1,
+    taskKinds: ["coding"],
+    requirements: Object.fromEntries(
+      ["reasoning", "coding", "verification", "instruction-fidelity", "tool-use", "long-context", "knowledge", "refusal-calibration"].map(
+        (axis) => [axis, { level: 80, rationale: "Head requirement" }],
+      ),
+    ),
+    provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" },
+  },
+  workCharacter: {
+    schemaVersion: 1,
+    risk: 40,
+    reversibility: 120,
+    verificationAttachment: 80,
+    materialScale: 20,
+    timePressure: 30,
+    budgetHeadroom: 150,
+    provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" },
+  },
+  modelProfile: {
+    modelRef: "provider/model",
+    capability: {
+      schemaVersion: 2,
+      axes: Object.fromEntries(
+        ["reasoning", "coding", "verification", "instruction-fidelity", "tool-use", "long-context", "knowledge", "refusal-calibration"].map(
+          (axis) => [axis, { status: "scored", score: 180, rationale: "review", evidence: ["review-1"] }],
+        ),
+      ),
+    },
+    providerFacts: {
+      schemaVersion: 1,
+      contextCapacity: 128000,
+      pricing: { inputPerMillionTokens: 1, outputPerMillionTokens: 2 },
+      authentication: { modes: ["api-key"] },
+      dataPolicy: { allowedDataClasses: ["public"], retention: "transient", trainingUse: "never", regions: ["us"] },
+      modalities: ["text"],
+      toolCalls: { supported: true },
+      provenance: { source: "docs", observedAt: "2026-09-08" },
+    },
+    provenance: { owner: "human", sourceRefs: ["review-1"], reviewedAt: "2026-09-08" },
+  },
+  operationalOverlaySnapshot: {
+    schemaVersion: 1,
+    installationRef: "installation-1",
+    projectRef: "project-1",
+    goalRef: "goal-1",
+    overlayVersion: 1,
+    observations: [
+      {
+        candidateRef: "candidate-1",
+        measuredLatencyMs: 10,
+        measuredCost: 1,
+        failureRate: 0,
+        timeoutRate: 0,
+        providerErrorRate: 0,
+        currentAvailability: true,
+        accountBinding: "account-1",
+        observedAt: "2026-09-08T12:00:00Z",
+      },
+    ],
+  },
+  approvalRef: null,
 } as const;
 
 const evidence: RoutingEvidence = {
@@ -64,7 +123,7 @@ const evidence: RoutingEvidence = {
   rationale: "selected after hard filters",
   createdAt: "2026-09-08T12:00:00Z",
   pressureCalculation: { pressureFloor: 200 / 3, pressure: 100, explicitHeadUplift: 100 },
-        approvalIdentity: null,
+  approvalIdentity: null,
   ...routingInputs,
 };
 
@@ -135,6 +194,13 @@ describe("Ensemble Router artifact persistence", () => {
     await expect(readLatestOperationalOverlay(fake, overlay.installationRef, overlay.projectRef)).resolves.toEqual(overlay);
     await expect(snapshotOperationalOverlayForGoalDurably(pool(fake), overlay, "goal-1")).resolves.toEqual(snapshot);
     await expect(readGoalOperationalOverlaySnapshot(new FakePool([]), "goal-1")).resolves.toBeNull();
+  });
+
+  it("rejects secret-like routing evidence before issuing a persistence write", async () => {
+    const fake = new FakePool([]);
+    const unsafe = { ...evidence, rationale: "Authorization: Bearer routing-evidence-secret" } as RoutingEvidence;
+    await expect(recordRoutingEvidence(pool(fake), unsafe)).rejects.toBeInstanceOf(EnsembleRouterArtifactIntegrityError);
+    expect(fake.calls).toHaveLength(0);
   });
 
   it("persists routing evidence only when stored columns and JSON agree", async () => {
