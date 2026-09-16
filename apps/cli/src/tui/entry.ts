@@ -231,6 +231,10 @@ export function applyHydratedConversation(
   }
 }
 
+export function isAutomaticProviderSignInProjectEligible(projectKind: "attached" | "unavailable"): boolean {
+  return projectKind === "attached";
+}
+
 export function shouldOfferAutomaticProviderSignIn(
   models: readonly Pick<ModelCatalogEntry, "identity">[],
   configuredModel: string | undefined,
@@ -822,7 +826,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           client === candidateClient &&
           connectionGeneration === candidateGeneration &&
           loginInteractionGeneration === candidateLoginInteractionGeneration &&
-          state.connection.kind === "connected",
+          state.connection.kind === "connected" &&
+          isAutomaticProviderSignInProjectEligible(project.kind),
         isManualLoginActive: () => isProviderLoginActive(pendingProviderLogin, providerLoginInFlight, accountLoginSelection),
         onOffer: () => {
           if (terminal.rows < COMPACT_PROVIDER_LOGIN_MIN_HEIGHT || shouldDeferAutomaticProviderSignIn(editor.getText())) return;
@@ -1023,6 +1028,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             if (project.kind === "attached") {
               const generation = ++conversationHydrationGeneration;
               conversationHydration = hydrateConversation(session?.conversationId, project.projectId, generation);
+              void offerAutomaticProviderSignIn();
             }
           } else if (parsed.action === "list") {
             const current = await loadWorkspaceSession(workspace.cwd);

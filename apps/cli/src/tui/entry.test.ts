@@ -27,6 +27,7 @@ import {
   noModelSelectionMessage,
   runAutomaticProviderSignInOffer,
   shouldOfferAutomaticProviderSignIn,
+  isAutomaticProviderSignInProjectEligible,
   taskContractDraftForConversation,
 } from "./entry.js";
 import type { TuiShellState } from "./components/shell.js";
@@ -52,6 +53,13 @@ const model = (provider: string, id: string) => ({
     trainsOnCustomerData: false,
     regions: ["US"],
   },
+});
+
+describe("automatic provider-login project eligibility", () => {
+  it("requires an attached project", () => {
+    expect(isAutomaticProviderSignInProjectEligible("unavailable")).toBe(false);
+    expect(isAutomaticProviderSignInProjectEligible("attached")).toBe(true);
+  });
 });
 
 describe("compact review presentation", () => {
@@ -292,6 +300,30 @@ describe("automatic provider sign-in", () => {
 
   it("does not offer sign-in when the session or environment model is available", () => {
     expect(shouldOfferAutomaticProviderSignIn([model("openai", "gpt-5")], "openai/gpt-5")).toBe(false);
+  });
+
+  it("does not consume the offer gate while the project is unattached", async () => {
+    const gate = createAutomaticProviderSignInGate();
+    const listModels = vi.fn(async () => []);
+    const onOffer = vi.fn();
+    await runAutomaticProviderSignInOffer({
+      client: { listModels },
+      getConfiguredModel: () => undefined,
+      gate,
+      isCurrent: () => false,
+      isManualLoginActive: () => false,
+      onOffer,
+    });
+    expect(listModels).not.toHaveBeenCalled();
+    await runAutomaticProviderSignInOffer({
+      client: { listModels },
+      getConfiguredModel: () => undefined,
+      gate,
+      isCurrent: () => true,
+      isManualLoginActive: () => false,
+      onOffer,
+    });
+    expect(onOffer).toHaveBeenCalledOnce();
   });
 
   it("enters the account sign-in flow from a connected empty catalog without a keypress", async () => {
