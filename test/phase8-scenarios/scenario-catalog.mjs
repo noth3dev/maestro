@@ -251,6 +251,9 @@ export function validateScenarioReport(report) {
     if (record.status === "blocked" && !record.limitations.some((item) => /pending|disabled|unavailable|not.*claim/i.test(item)))
       throw new Error("blocked scenario must explain its limitation");
     if (record.status === "passed") {
+      requireStringArray(record.preconditions, "scenario.preconditions");
+      if (record.preconditions.length === 0 || typeof record.goalId !== "string" || record.goalId.trim() === "" || typeof record.taskContractVersion !== "string" || record.taskContractVersion.trim() === "")
+        throw new Error("passed scenario must include preconditions, Goal identity, and Task Contract version");
       if (
         record.actual.actors.length === 0 ||
         record.actual.models.length === 0 ||

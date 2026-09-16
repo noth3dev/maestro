@@ -1,6 +1,6 @@
 # Phase 8 — Full-System Hardening and Release Certification
 
-> **Current status (2026-09-08):** Phase 8 is not accepted. Its Prime compatibility references are legacy acceptance criteria; the current native backend plan supersedes them for the runtime cutover. Required hardening/recovery gates now include IPython authority enforcement, whole-block approval, full-access isolation, external-capability activation, interruption, and forbidden-action denial.
+> **Current status (2026-09-16):** Phase 8 is not accepted. §S9 live acceptance is blocked: the repository has only a reusable eleven-scenario catalog and bounded inventory runner, not one frozen-candidate full-system run. §S10 therefore refuses release, and §S11 only prepares a publish-ready package/install artifact. Its Prime compatibility references are legacy acceptance criteria; the current native backend plan supersedes them for the runtime cutover. Required hardening/recovery gates now include IPython authority enforcement, whole-block approval, full-access isolation, external-capability activation, interruption, and forbidden-action denial.
 
 
 ## Outcome
