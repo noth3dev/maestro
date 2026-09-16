@@ -86,8 +86,8 @@ describe("workspace project reconnect", () => {
         onSessionAttached: vi.fn(),
       }),
     ).resolves.toEqual({
-      project: { kind: "unavailable", reason: "Multiple projects are available; choose one with /session attach --project-index=<1-2>" },
-      notice: "Multiple projects are available; choose one with /session attach --project-index=<1-2>",
+      project: { kind: "unavailable", reason: "Multiple projects are available; choose one: /session attach --project-index=1 or /session attach --project-index=2" },
+      notice: "Multiple projects are available; choose one: /session attach --project-index=1 or /session attach --project-index=2",
       session: undefined,
     });
     expect(saveSession).not.toHaveBeenCalled();

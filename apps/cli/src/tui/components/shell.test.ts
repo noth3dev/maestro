@@ -47,15 +47,15 @@ describe("Maestro TUI shell", () => {
   it("shows attach guidance instead of project-bound actions when project discovery is unresolved", () => {
     const unresolved = {
       ...state,
-      project: { kind: "unavailable", guidance: "Multiple projects are available; choose one with /session attach --project-index=<1-2>" },
+      project: { kind: "unavailable", guidance: "Multiple projects are available; choose one: /session attach --project-index=1 or /session attach --project-index=2" },
     } as TuiShellState;
 
     for (const width of [40, 60, 80, 120]) {
       const splash = renderSplash(unresolved, width).map(stripAnsi).join("\n");
       const footer = stripAnsi(renderTuiFooter(width, unresolved));
       expect(splash).not.toMatch(/\/goal create|\/projection read|\/billing get|ctrl\+g goals/);
-      expect(splash).toContain("/session attach --project-index=<1-2>");
-      expect(footer).toBe("/session attach --project-index=<1-2>");
+      expect(splash).toContain("/session attach --project-index=1");
+      expect(footer).toBe("/session attach --project-index=1");
       expect(splash.split("\n").every((line) => line.length <= width)).toBe(true);
       expect(footer.length).toBeLessThanOrEqual(width);
     }

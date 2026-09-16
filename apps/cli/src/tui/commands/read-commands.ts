@@ -39,7 +39,8 @@ export async function discoverWorkspaceProjectFromControlPlane(options: { worksp
     if (existing.kind === "attached" && projects.includes(existing.projectId)) return existing;
     if (projects.length === 1) return { kind: "attached", projectId: projects[0]! };
     if (projects.length === 0) return { kind: "unavailable", reason: "No projects are available for this operator" };
-    return { kind: "unavailable", reason: `Multiple projects are available; choose one with /session attach --project-index=<1-${projects.length}>` };
+    const attachCommands = projects.map((_, index) => `/session attach --project-index=${index + 1}`).join(" or ");
+    return { kind: "unavailable", reason: `Multiple projects are available; choose one: ${attachCommands}` };
   } catch (error) {
     return { kind: "unavailable", reason: `Project discovery unavailable: ${error instanceof Error ? error.message : "Control Plane request failed"}` };
   }

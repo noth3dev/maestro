@@ -128,7 +128,7 @@ export function noModelSelectionMessage(): string {
 }
 
 export function compactProjectAttachmentNotice(projectDiscoveryNotice: string | undefined, width: number): string {
-  const match = projectDiscoveryNotice?.match(/\/session attach(?:\s+--project-index=<[^>]+>)?/);
+  const match = projectDiscoveryNotice?.match(/\/session attach(?:\s+--project-index=\d+)?/);
   const command = match?.[0] ?? "/session attach";
   return fitPlain(command.length <= width ? command : "/session attach", width);
 }

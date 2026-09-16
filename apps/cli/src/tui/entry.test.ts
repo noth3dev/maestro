@@ -178,10 +178,10 @@ describe("empty conversation submit", () => {
 
 describe("compact project attachment guidance", () => {
   it("keeps the executable attach command visible while discovery is unresolved", () => {
-    const notice = "Multiple projects are available; choose one with /session attach --project-index=<1-2>";
+    const notice = "Multiple projects are available; choose one: /session attach --project-index=1 or /session attach --project-index=2";
 
-    expect(compactProjectAttachmentNotice(notice, 40)).toBe("/session attach --project-index=<1-2>");
-    expect(compactProjectAttachmentNotice(notice, 80)).toBe("/session attach --project-index=<1-2>");
+    expect(compactProjectAttachmentNotice(notice, 40)).toBe("/session attach --project-index=1");
+    expect(compactProjectAttachmentNotice(notice, 80)).toBe("/session attach --project-index=1");
     expect(compactProjectAttachmentNotice(undefined, 40)).toBe("/session attach");
   });
 });

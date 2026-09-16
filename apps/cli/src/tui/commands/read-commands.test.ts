@@ -40,7 +40,7 @@ describe("workspace read commands", () => {
     const empty = await discoverWorkspaceProjectFromControlPlane({ workspacePath: "/work/acme", session: undefined, client: { listProjects: vi.fn().mockResolvedValue({ projects: [] }) } });
     const many = await discoverWorkspaceProjectFromControlPlane({ workspacePath: "/work/acme", session: undefined, client: { listProjects: vi.fn().mockResolvedValue({ projects: [projectId, "44444444-4444-4444-8444-444444444444"] }) } });
     expect(empty).toEqual({ kind: "unavailable", reason: "No projects are available for this operator" });
-    expect(many).toEqual({ kind: "unavailable", reason: "Multiple projects are available; choose one with /session attach --project-index=<1-2>" });
+    expect(many).toEqual({ kind: "unavailable", reason: "Multiple projects are available; choose one: /session attach --project-index=1 or /session attach --project-index=2" });
   });
 
   it("keeps an existing workspace attachment when it is still visible", async () => {

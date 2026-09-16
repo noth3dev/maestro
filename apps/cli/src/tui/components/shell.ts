@@ -146,7 +146,7 @@ export function renderPendingDecisionDetails(state: TuiShellState, width: number
 
 function projectActionText(state: TuiShellState): string {
   if (state.connection.kind !== "connected" || state.project?.kind !== "unavailable") return "";
-  const match = state.project.guidance?.match(/\/session attach(?:\s+--project-index=<[^>]+>)?/);
+  const match = state.project.guidance?.match(/\/session attach(?:\s+--project-index=\d+)?/);
   const command = match?.[0] ?? "/session attach";
   return command;
 }
