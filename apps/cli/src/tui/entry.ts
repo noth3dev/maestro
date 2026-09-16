@@ -16,7 +16,7 @@ import { resolveRetryWorkspace } from "./retry-workspace.js";
 import { createTranscriptClearBoundary, executeBasicShellCommand, latestCopyableTranscriptText } from "./basic-shell.js";
 import { waitForAccountLogin } from "./account-login.js";
 import { loadActivityHistory } from "./activity-history.js";
-import { processActivityEvent } from "./activity-event.js";
+import { runLiveActivityStream } from "./activity-live-stream.js";
 import { refreshDashboardState } from "./dashboard-refresh.js";
 import { loadConversationHistory } from "./conversation-history.js";
 import { pendingDecisionsForView } from "./pending-decisions.js";
@@ -58,7 +58,7 @@ import {
   selectWorkspaceModel,
   startNewConversationSession,
 } from "./session.js";
-import { mergeEvents, runActivityStream, subscribeToEvents } from "./activity-stream.js";
+import { mergeEvents, subscribeToEvents } from "./activity-stream.js";
 import {
   addConversationMessage,
   applyConversationEvent,
@@ -394,36 +394,23 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
 
     const streamActivity = async (signal: AbortSignal, projectId: string, generation: number) => {
       if (client === undefined) return;
-      await runActivityStream({
+      await runLiveActivityStream({
         client,
         projectId,
-        cursor: activity.at(-1)?.cursor ?? session?.lastEventCursor ?? "0",
         signal,
-        maxReconnectAttempts: 5,
-        onReconnect: (attempt, maxAttempts) =>
-          append({ kind: "warning", text: `Activity stream reconnecting (${attempt}/${maxAttempts})` }),
-        onEvent: async (event) => {
-          if (generation !== activityHydrationGeneration || project.kind !== "attached" || project.projectId !== projectId) return;
-          splash.dismiss();
-          const update = await processActivityEvent({
-            activity,
-            event,
-            workspacePath: workspace.cwd,
-            current: session,
-            isCurrent: () => generation === activityHydrationGeneration && project.kind === "attached" && project.projectId === projectId,
-            saveSession: saveWorkspaceSession,
-            onMerged: (nextActivity) => {
-              activity = nextActivity;
-            },
-          });
-          if (update === undefined) return;
-          activity = update.activity;
-          if (update.session === undefined) return;
-          session = update.session;
-          render();
+        readState: () => ({ activity, session }),
+        workspacePath: workspace.cwd,
+        isCurrent: () => generation === activityHydrationGeneration && project.kind === "attached" && project.projectId === projectId,
+        dismissSplash: () => splash.dismiss(),
+        setActivity: (nextActivity) => {
+          activity = nextActivity;
         },
-        onUnavailable: (message) => append(message),
-        onFailure: (message) => append(message),
+        setSession: (nextSession) => {
+          session = nextSession;
+        },
+        saveSession: saveWorkspaceSession,
+        append,
+        render,
       });
     };
 
