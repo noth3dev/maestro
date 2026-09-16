@@ -650,7 +650,8 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     ? createUnavailableNativeExecutionKernel()
     : createNativeExecutionKernel({ gateway: modelGateway, gatewayOperatorId: config.modelGatewayOperatorId, accountRefs: config.modelAccountRefs, dataPolicyHash: createHash("sha256").update("maestro-native-data-policy:v1").digest("hex"), tools }));
   const nativeAdmission = overrides.nativeAdmission ?? (modelGateway === undefined ? undefined : (input: NativeAdmissionInput) => createHostNativeAdmission(config, input));
-  const conversationService = modelGateway === undefined ? undefined : createPostgresConversationService({ pool, gateway: modelGateway, gatewayOperatorId: config.modelGatewayOperatorId, accountRefs: config.modelAccountRefs });
+  const taskContractService = createDurableTaskContractService(pool);
+  const conversationService = modelGateway === undefined ? undefined : createPostgresConversationService({ pool, gateway: modelGateway, gatewayOperatorId: config.modelGatewayOperatorId, accountRefs: config.modelAccountRefs, taskContractService });
   const goalService = createDurableGoalService({
     pool,
     actorId: config.actorId,
@@ -853,7 +854,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     personaInspectionService,
     readStateService: createReadStateService(pool),
     projectionService: createProjectionService(pool),
-    taskContractService: createDurableTaskContractService(pool),
+    taskContractService,
     ...(config.discordSignalCredential === undefined ? {} : {
       discordSignalService: { record: (envelope) => recordDiscordSignal(pool, envelope, config.discordSignalCredential!) },
     }),
