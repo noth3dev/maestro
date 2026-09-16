@@ -66,6 +66,12 @@ describe("command argument autocomplete", () => {
     expect(items.find((item) => item.name === "git")?.getArgumentCompletions?.("worker-")).toEqual(expect.arrayContaining([expect.objectContaining({ value: "worker-advance" })]));
   });
 
+  it("suggests the required contract id for task contract reads", () => {
+    const taskContract = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "task-contract");
+    expect(taskContract?.getArgumentCompletions?.("get --")).toEqual([expect.objectContaining({ value: "--contract-id " })]);
+    expect(taskContract?.getArgumentCompletions?.("get --c")).toEqual([expect.objectContaining({ value: "--contract-id " })]);
+  });
+
   it("suggests task contract creation options", () => {
     const taskContract = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "task-contract");
     expect(taskContract?.getArgumentCompletions?.("create --su")).toEqual([expect.objectContaining({ value: "--substance-json " })]);
