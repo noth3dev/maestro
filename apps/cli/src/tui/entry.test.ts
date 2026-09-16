@@ -27,6 +27,7 @@ import {
   compactTaskContractAcknowledgement,
   shouldIgnoreEmptySubmit,
   shouldCancelPendingProviderLogin,
+  shouldConsumeAccountLoginBackgroundInput,
   noModelSelectionMessage,
   runAutomaticProviderSignInOffer,
   shouldOfferAutomaticProviderSignIn,
@@ -179,6 +180,18 @@ describe("compact model-list recovery", () => {
     expect(compactModelListAcknowledgement(["openai/gpt-5"], 80)).toContain("openai/gpt-5");
     expect(compactModelListAcknowledgement([], 40)).toBe("No models available · retry /models list");
     expect(compactModelListAcknowledgement([], 40, "Model catalog unavailable")).toBe("Catalog unavailable · retry /models");
+  });
+});
+
+describe("account-login modal input capture", () => {
+  it("consumes background input during opening and waiting except documented controls", () => {
+    expect(shouldConsumeAccountLoginBackgroundInput("opening", false, false, false)).toBe(true);
+    expect(shouldConsumeAccountLoginBackgroundInput("opening", false, true, false)).toBe(false);
+    expect(shouldConsumeAccountLoginBackgroundInput("waiting", false, false, false)).toBe(true);
+    expect(shouldConsumeAccountLoginBackgroundInput("waiting", false, true, false)).toBe(false);
+    expect(shouldConsumeAccountLoginBackgroundInput("waiting", false, false, true)).toBe(false);
+    expect(shouldConsumeAccountLoginBackgroundInput("waiting", true, false, false)).toBe(false);
+    expect(shouldConsumeAccountLoginBackgroundInput("selecting", false, false, false)).toBe(false);
   });
 });
 

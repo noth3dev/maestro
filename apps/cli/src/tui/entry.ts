@@ -189,6 +189,17 @@ export function shouldCancelPendingProviderLogin(pendingProviderLogin: string | 
   return pendingProviderLogin !== undefined;
 }
 
+export function shouldConsumeAccountLoginBackgroundInput(
+  accountLoginState: "selecting" | "opening" | "waiting" | undefined,
+  isCtrlC: boolean,
+  isEscape: boolean,
+  isAltC: boolean,
+): boolean {
+  if (accountLoginState === undefined || accountLoginState === "selecting" || isCtrlC) return false;
+  if (accountLoginState === "opening") return !isEscape;
+  return !isEscape && !isAltC;
+}
+
 export function compactModelListAcknowledgement(identities: readonly string[], width: number, unavailableLabel?: string): string {
   if (identities.length === 0) return fitPlain(unavailableLabel === undefined ? "No models available · retry /models list" : "Catalog unavailable · retry /models", width);
   const identity = identities[0]!;
@@ -1358,6 +1369,16 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       if (compactReview !== undefined && (!reviewShortcut || !reviewAvailable)) {
         compactReview = undefined;
         render();
+      }
+      if (
+        shouldConsumeAccountLoginBackgroundInput(
+          accountLoginState,
+          matchesKey(data, "ctrl+c"),
+          matchesKey(data, "escape"),
+          matchesKey(data, "alt+c"),
+        )
+      ) {
+        return { consume: true };
       }
       if (isSplashRestoreShortcut(data)) {
         splash.restore();
