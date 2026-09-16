@@ -9,11 +9,11 @@
 From the repository root:
 
 ```bash
-rm -f /tmp/plan8-s9-scenarios-20260916.json /tmp/plan8-s9-scenarios-20260916.json.lock
-node scripts/run-phase8-scenarios.mjs --report /tmp/plan8-s9-scenarios-20260916.json
+rm -f /tmp/plan8-s9-scenarios-20260916-v2.json /tmp/plan8-s9-scenarios-20260916-v2.json.lock
+node scripts/run-phase8-scenarios.mjs --report /tmp/plan8-s9-scenarios-20260916-v2.json
 ```
 
-The command intentionally exits `2` with `status=blocked` until live evidence is available. It writes an atomic `0600` report and removes its exclusive lock. The final fixture report is `/tmp/plan8-s9-scenarios-20260916.json`, exit status `2`, mode `0600`, lock absent, content hash `d204f03aaef2b8b323c71c71313a649dd36c69c59098def82f6d23f37494540d`, and **11/11** catalog records.
+The command intentionally exits `2` with `status=blocked` until live evidence is available. It writes an atomic `0600` report and removes its exclusive lock. The final fixture report is `/tmp/plan8-s9-scenarios-20260916-v2.json`, exit status `2`, mode `0600`, lock absent, content hash `e8088a4235516e7d8f6be7c889564cad6c9c4ac6468da2c30c49f237f3604791`, and **11/11** catalog records.
 
 `--execute` is additionally gated by `MAESTRO_PHASE8_SCENARIOS_LIVE=1`. Even then, mapped suite output remains `blocked` unless the same run supplies the required actors, models, skills, tools, costs, durable events/evidence, certifications, dissent, and cleanup record. Passing component suites is not converted into a false full-system claim.
 
