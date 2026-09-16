@@ -14,6 +14,7 @@ import type { ConversationEvent, ModelCatalogEntry, TaskContract } from "@maestr
 
 import { resolveWorkspace } from "./workspace.js";
 import { createTranscriptClearBoundary, executeBasicShellCommand, latestCopyableTranscriptText } from "./basic-shell.js";
+import { waitForAccountLogin } from "./account-login.js";
 
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection } from "./local-bootstrap.js";
@@ -641,20 +642,17 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         if (controller.signal.aborted) return;
         accountLoginState = "waiting";
         render();
-        try {
-          await (options.io.openExternalUrl ?? openExternalUrl)(login.authUrl);
-        } catch {
-          append(`Open this URL in your browser to sign in: ${login.authUrl}`);
-        }
-        const timeoutMs = Number(options.env.MAESTRO_LOGIN_TIMEOUT_MS ?? "120000");
-        const pollMs = Number(options.env.MAESTRO_LOGIN_POLL_MS ?? "500");
-        const deadline = Date.now() + (Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 120000);
-        let status = await client.accountLoginStatus(login.loginId);
-        while (status.state === "pending" && Date.now() < deadline && !controller.signal.aborted) {
-          await new Promise<void>((resolveFrame) => setTimeout(resolveFrame, Number.isFinite(pollMs) && pollMs >= 0 ? pollMs : 500));
-          status = await client.accountLoginStatus(login.loginId);
-        }
-        if (controller.signal.aborted) return;
+        const status = await waitForAccountLogin({
+          client,
+          loginId: login.loginId,
+          authUrl: login.authUrl,
+          signal: controller.signal,
+          openExternalUrl: options.io.openExternalUrl ?? openExternalUrl,
+          onOpenFailure: (url) => append(`Open this URL in your browser to sign in: ${url}`),
+          timeoutMs: Number(options.env.MAESTRO_LOGIN_TIMEOUT_MS ?? "120000"),
+          pollMs: Number(options.env.MAESTRO_LOGIN_POLL_MS ?? "500"),
+        });
+        if (status === undefined) return;
         if (status.state === "succeeded") {
           appendSuccess("Account login complete: openai-codex");
           void refreshDashboard();
