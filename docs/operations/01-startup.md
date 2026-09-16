@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Boot the local CLI, Control Plane, Model Gateway, Carnegie client, and Discord process in the documented order.
+Exercise the documented local CLI bootstrap path and record the boundary where the complete five-process startup still needs an operator fixture. This runbook does not claim that the Control Plane, Model Gateway, Carnegie client, and Discord process all started together.
 
 ## Preconditions
 
@@ -13,9 +13,9 @@ Boot the local CLI, Control Plane, Model Gateway, Carnegie client, and Discord p
 
 Command: `npm test -- apps/cli/src/tui/local-bootstrap.test.ts`
 
-Status: **pending §S6 real-fixture exercise**. This inventory slice records the command without claiming that it has run successfully.
+Status: **partially exercised**. The local CLI bootstrap fixture passed, including the Docker-unavailable embedded PostgreSQL-compatible fallback; the complete five-process startup remains pending because no deterministic connected-app fixture is available.
 
-Evidence: **pending** — replace this marker with the captured test output path and exit status after the exercise gate runs.
+Evidence: `/tmp/plan8-s6-startup.log` — exit status `0`; **1/1** file and **29/29** tests passed.
 
 ## Stop condition
 
