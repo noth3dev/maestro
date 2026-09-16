@@ -38,6 +38,23 @@ describe("Overture Task Contract drafting tool", () => {
     expect(JSON.parse(result.content)).toMatchObject({ desiredOutcome: substance.desiredOutcome, project: substance.project, launchState: "awaiting_confirmation" });
   });
 
+  it("binds repeated identical tool proposals to one durable idempotency identity", async () => {
+    const durable = new Map<string, object>();
+    const create = vi.fn(async (contractId: string, input: unknown) => {
+      const existing = durable.get(contractId);
+      if (existing !== undefined) return existing;
+      const created = { contractId, ...(input as { substance: object }).substance, schemaVersion: 1, version: 1, decisionHistory: [], contentHash: "a".repeat(64), launchState: "awaiting_confirmation" as const };
+      durable.set(contractId, created);
+      return created;
+    });
+    const tool = createTaskContractDraftingTool({ createTaskContract: create });
+    await tool.execute({ projectId, substance }, context);
+    await tool.execute({ projectId, substance }, context);
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(new Set(create.mock.calls.map(([contractId]) => contractId))).toHaveLength(1);
+    expect(durable).toHaveLength(1);
+  });
+
   it("returns an honest clarification for a vague brief without creating a contract", async () => {
     const create = vi.fn();
     const tool = createTaskContractDraftingTool({ createTaskContract: create });
