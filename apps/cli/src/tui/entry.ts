@@ -137,6 +137,10 @@ export function compactConnectionRecoveryAcknowledgement(connection: TuiShellSta
   return connection.kind === "connected" ? undefined : fitPlain("ctrl+r retry · /help", width);
 }
 
+export function shouldDeferAutomaticProviderSignIn(draft: string): boolean {
+  return draft.trim() !== "";
+}
+
 export function isCurrentAccountLoginOperation(controller: AbortController, activeController: AbortController | undefined): boolean {
   return activeController === controller && !controller.signal.aborted;
 }
@@ -798,7 +802,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           state.connection.kind === "connected",
         isManualLoginActive: () => isProviderLoginActive(pendingProviderLogin, providerLoginInFlight, accountLoginSelection),
         onOffer: () => {
-          if (terminal.rows < COMPACT_PROVIDER_LOGIN_MIN_HEIGHT) return;
+          if (terminal.rows < COMPACT_PROVIDER_LOGIN_MIN_HEIGHT || shouldDeferAutomaticProviderSignIn(editor.getText())) return;
           accountLoginSelection = 0;
           accountLoginState = "selecting";
           editor.hidden = true;

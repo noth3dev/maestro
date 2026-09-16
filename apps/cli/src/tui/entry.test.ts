@@ -18,6 +18,7 @@ import {
   compactModelListAcknowledgement,
   firstAvailableModelIdentity,
   isCurrentAccountLoginOperation,
+  shouldDeferAutomaticProviderSignIn,
   compactConnectionRecoveryAcknowledgement,
   shouldIgnoreEmptySubmit,
   noModelSelectionMessage,
@@ -98,6 +99,15 @@ describe("compact connection recovery priority", () => {
       expect(compactConnectionRecoveryAcknowledgement(connection, 80)).toBe("ctrl+r retry · /help");
     }
     expect(compactConnectionRecoveryAcknowledgement({ kind: "connected" }, 40)).toBeUndefined();
+  });
+});
+
+describe("automatic provider-login draft preservation", () => {
+  it("defers only when the pending editor draft is non-empty", () => {
+    expect(shouldDeferAutomaticProviderSignIn("hello")).toBe(true);
+    expect(shouldDeferAutomaticProviderSignIn("  hello  ")).toBe(true);
+    expect(shouldDeferAutomaticProviderSignIn("   ")).toBe(false);
+    expect(shouldDeferAutomaticProviderSignIn("")).toBe(false);
   });
 });
 
