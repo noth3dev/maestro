@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { chmod, copyFile, lstat, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { chmod, copyFile, lstat, mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { spawn } from "node:child_process";
 
@@ -38,11 +38,13 @@ function effectDisabledEnvironment() {
 }
 function runCommand(command, timeoutMs) {
   return new Promise((resolvePromise) => {
-    const child = spawn(command.command, command.args, { cwd: command.cwd ?? process.cwd(), env: effectDisabledEnvironment(), shell: false, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command.command, command.args, { cwd: command.cwd ?? process.cwd(), env: effectDisabledEnvironment(), shell: false, detached: true, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = ""; let stderr = ""; let settled = false; let timedOut = false;
     const timer = setTimeout(() => {
-      timedOut = true; child.kill("SIGTERM");
-      setTimeout(() => { if (!settled) child.kill("SIGKILL"); }, 100).unref();
+      timedOut = true;
+      const terminate = (signal) => { try { if (child.pid !== undefined && process.platform !== "win32") process.kill(-child.pid, signal); else child.kill(signal); } catch { /* process already exited */ } };
+      terminate("SIGTERM");
+      setTimeout(() => { if (!settled) terminate("SIGKILL"); }, 100).unref();
     }, timeoutMs);
     const finish = (result) => { if (settled) return; settled = true; clearTimeout(timer); resolvePromise({ ...result, stdout, stderr, timedOut }); };
     child.stdout.on("data", (chunk) => { stdout += chunk; });
@@ -73,10 +75,17 @@ async function assertRegularFile(path, name) {
   if (!info.isFile()) throw new Error(`${name} must be a regular file`);
 }
 function approvedRerun(rerun, disposableFixture) {
-  if (disposableFixture === true && resolve(rerun.command) === resolve(process.execPath) && rerun.args[0] === "-e") return true;
-  if (rerun.command === "npm" && ["test", "run"].includes(rerun.args[0])) return true;
-  if (rerun.command === "node" && rerun.args[0] === "node_modules/vitest/vitest.mjs" && rerun.args[1] === "run") return true;
-  return false;
+  if (rerun.command === "npm") {
+    const templates = {
+      "failed scenario": ["test", "--", "--run", "test/phase8-scenarios"],
+      "phase gate": ["test", "--", "--run", "test/phase8"],
+      "full regression gate": ["test"],
+    };
+    return JSON.stringify(rerun.args) === JSON.stringify(templates[rerun.name]);
+  }
+  if (disposableFixture !== true) return false;
+  const fixtureScript = resolve("test/phase8-release/approved-rerun.mjs");
+  return resolve(rerun.command) === resolve(process.execPath) && JSON.stringify(rerun.args) === JSON.stringify([fixtureScript, rerun.name]);
 }
 function missingOptions(options) {
   return ["statePath", "evidencePath", "candidatePath", "failurePath"].filter((name) => typeof options[name] !== "string" || options[name].trim() === "");
@@ -111,7 +120,9 @@ export async function runRollback(options = {}) {
       if (!approvedRerun(rerun, options.disposableFixture)) throw new Error(`rerun command is not approved: ${rerun.name}`);
     }
     const rollbackRoot = dirname(resolve(options.statePath));
-    const preservedDir = confinedPath(rollbackRoot, options.preservedDir ?? joinFallback(options.statePath, candidateId), "preservedDir");
+    const requestedPreservedDir = confinedPath(rollbackRoot, options.preservedDir ?? joinFallback(options.statePath, candidateId), "preservedDir");
+    await mkdir(requestedPreservedDir, { recursive: true, mode: 0o700 });
+    const preservedDir = confinedPath(await realpath(rollbackRoot), await realpath(requestedPreservedDir), "preservedDir");
     await Promise.all([[options.candidatePath, "candidate"], [options.evidencePath, "evidence"], [options.failurePath, "failure"]].map(([path, name]) => assertRegularFile(path, name)));
     await mkdir(preservedDir, { recursive: true, mode: 0o700 });
     const preserved = {

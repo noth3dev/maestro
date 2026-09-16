@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import { REQUIRED_CHECKPOINT_ID, REPRESENTATIVE_SCENARIOS, validateScenarioReport } from "../test/phase8-scenarios/scenario-catalog.mjs";
 
 const SCHEMA_VERSION = 1;
+export const SCENARIO_RUNNER_ID = "scripts/run-phase8-scenarios.mjs@1";
 const DEFAULT_CANDIDATE_ID = "phase8-s9-disposable-candidate-v1";
 const DEFAULT_REPORT_PATH = "/tmp/plan8-s9-scenarios.json";
 
@@ -62,6 +63,7 @@ export function createBlockedScenarioReport(candidateId = DEFAULT_CANDIDATE_ID, 
     schemaVersion: SCHEMA_VERSION,
     candidateId,
     checkpointId: REQUIRED_CHECKPOINT_ID,
+    runnerId: SCENARIO_RUNNER_ID,
     status: "blocked",
     mode: "inventory-only",
     scenarios: REPRESENTATIVE_SCENARIOS.map((scenario) => emptyRecord(scenario, "blocked", false, reason)),
@@ -142,6 +144,7 @@ export async function runScenarioBundle({
     schemaVersion: SCHEMA_VERSION,
     candidateId,
     checkpointId: REQUIRED_CHECKPOINT_ID,
+    runnerId: SCENARIO_RUNNER_ID,
     status: "blocked",
     mode: "suite-observation-incomplete",
     scenarios: REPRESENTATIVE_SCENARIOS.map((scenario) => {

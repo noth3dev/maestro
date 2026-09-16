@@ -1,11 +1,16 @@
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { execFile } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { createBlockedScenarioReport } from "../../scripts/run-phase8-scenarios.mjs";
 import { scenarioReportContentHash } from "../../test/phase8-scenarios/scenario-catalog.mjs";
 import { evaluateReleaseDecision } from "../../scripts/release-decision.mjs";
 import { runRollback } from "../../scripts/release-rollback.mjs";
+
+function runDecisionCli(args, cwd = process.cwd()) {
+  return new Promise((resolve) => execFile(process.execPath, ["scripts/release-decision.mjs", ...args], { cwd }, (error, stdout, stderr) => resolve({ code: error?.code ?? 0, stdout, stderr })));
+}
 
 const completeGates = {
   phaseExitGates: true,
@@ -71,6 +76,17 @@ describe("Plan 8 §S10 release decision", () => {
     expect(result.status).toBe("blocked"); expect(result.blockers.join(" ")).toMatch(/candidateId/);
   });
 
+  it("accepts the documented flat gate manifest through the CLI and binds it", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "maestro-s10-cli-"));
+    const reportPath = join(directory, "scenario-report.json"); const manifestPath = join(directory, "gates.json"); const outputPath = join(directory, "decision.json");
+    const reportBase = { ...passedReport(), mode: "live-disposable", runId: "run-1", scenarios: passedReport().scenarios.map((scenario) => ({ ...scenario, limitations: ["bounded fixture"] })) };
+    const report = { ...reportBase, contentHash: scenarioReportContentHash(reportBase) };
+    await writeFile(reportPath, JSON.stringify(report));
+    await writeFile(manifestPath, JSON.stringify({ candidateId: report.candidateId, checkpointId: report.checkpointId, runId: report.runId, scenarioReportHash: report.contentHash, gateEvidence: Object.fromEntries(Object.keys(completeGates).map((gate) => [gate, "a".repeat(64)])), gates: completeGates, findings: { critical: [], noncritical: [] }, supportedScope: ["disposable"], disabledCapabilities: ["external"], knownLimitations: ["workspace deps"], costs: { totalCents: 1 }, confidence: "bounded", dissent: [] }));
+    const result = await runDecisionCli(["--scenario-report", reportPath, "--gate-manifest", manifestPath, "--report", outputPath]);
+    expect(result.code).toBe(0); expect(JSON.parse(await readFile(outputPath, "utf8"))).toMatchObject({ status: "approved", recommendation: "release" });
+  });
+
   it("requires real report metadata before producing the final release report", () => {
     const result = evaluateReleaseDecision({ scenarioReport: passedReport(), gates: completeGates, findings: { critical: [], noncritical: [] } });
     expect(result.status).toBe("blocked");
@@ -91,9 +107,9 @@ describe("Plan 8 §S10 rollback protocol", () => {
     await writeFile(candidatePath, JSON.stringify({ candidateId: "candidate-1", version: 1 }));
     await writeFile(failurePath, JSON.stringify({ status: "failed", scenarioId: "07-encore-improvement", phaseGate: "G7", critical: false }));
     const result = await runRollback({ disposableFixture: true, statePath, evidencePath, candidatePath, failurePath, reportPath, reruns: [
-      { name: "failed scenario", command: process.execPath, args: ["-e", "process.exit(0)"] },
-      { name: "phase gate", command: process.execPath, args: ["-e", "process.exit(0)"] },
-      { name: "full regression gate", command: process.execPath, args: ["-e", "process.exit(0)"] },
+      { name: "failed scenario", command: process.execPath, args: [join(process.cwd(), "test/phase8-release/approved-rerun.mjs"), "failed scenario"] },
+      { name: "phase gate", command: process.execPath, args: [join(process.cwd(), "test/phase8-release/approved-rerun.mjs"), "phase gate"] },
+      { name: "full regression gate", command: process.execPath, args: [join(process.cwd(), "test/phase8-release/approved-rerun.mjs"), "full regression gate"] },
     ] });
     expect(result.status).toBe("rolled_back");
     expect(result.reruns.every((run) => run.exitCode === 0)).toBe(true);
@@ -120,9 +136,10 @@ describe("Plan 8 §S10 rollback protocol", () => {
     const statePath = join(directory, "state.json"); const evidencePath = join(directory, "evidence.json"); const candidatePath = join(directory, "candidate.json"); const failurePath = join(directory, "failure.json");
     await writeFile(statePath, JSON.stringify({ candidateId: "candidate-1", releaseProgression: "running", externalAuthority: "enabled", improvementAuthority: "enabled", activeGoals: [] }));
     await writeFile(evidencePath, "{}"); await writeFile(candidatePath, JSON.stringify({ candidateId: "candidate-1" })); await writeFile(failurePath, JSON.stringify({ status: "failed", scenarioId: "s", phaseGate: "G7" }));
-    const slow = { name: "failed scenario", command: process.execPath, args: ["-e", "setTimeout(() => {}, 1000)"] };
-    const quick = { name: "phase gate", command: process.execPath, args: ["-e", "process.exit(0)"] };
-    const full = { name: "full regression gate", command: process.execPath, args: ["-e", "process.exit(0)"] };
+    const fixtureScript = join(process.cwd(), "test/phase8-release/approved-rerun.mjs");
+    const slow = { name: "failed scenario", command: process.execPath, args: [fixtureScript, "failed scenario"] };
+    const quick = { name: "phase gate", command: process.execPath, args: [fixtureScript, "phase gate"] };
+    const full = { name: "full regression gate", command: process.execPath, args: [fixtureScript, "full regression gate"] };
     const result = await runRollback({ disposableFixture: true, timeoutMs: 20, statePath, evidencePath, candidatePath, failurePath, reruns: [slow, quick, full] });
     expect(result.status).toBe("rollback_reruns_failed");
     expect(result.reruns[0]).toMatchObject({ timedOut: true, exitCode: null });

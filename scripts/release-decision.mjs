@@ -42,6 +42,7 @@ function validateGateBinding(source, scenarioReport, gates, blockers) {
     if (binding.candidateId !== scenarioReport.candidateId) blockers.push("gate manifest candidateId does not match the frozen scenario candidate");
     if (binding.checkpointId !== scenarioReport.checkpointId) blockers.push("gate manifest checkpointId does not match the scenario checkpoint");
     if (binding.runId !== scenarioReport.runId) blockers.push("gate manifest runId does not match the scenario run");
+    if (binding.scenarioReportHash !== scenarioReport.contentHash) blockers.push("gate manifest scenarioReportHash does not match the scenario report");
     const evidence = object(binding.gateEvidence, "gateManifest.gateEvidence");
     for (const gate of REQUIRED_RELEASE_GATES) {
       if (gates[gate] && (typeof evidence[gate] !== "string" || !/^[a-f0-9]{64}$/.test(evidence[gate]))) blockers.push(`gate evidence hash is missing or invalid: ${gate}`);
@@ -95,7 +96,7 @@ export function evaluateReleaseDecision(input) {
   if (!Array.isArray(critical)) throw new Error("findings.critical must be an array");
   const noncritical = noncriticalFindings(source.findings?.noncritical);
   const blockers = [];
-  if (scenarioReport.status !== "passed" || scenarioReport.mode !== "live-disposable" || typeof scenarioReport.runId !== "string" || scenarioReport.runId.trim() === "" || scenarioReport.scenarios.some((scenario) => scenario.status !== "passed" || scenario.live !== true)) blockers.push("S9 live representative scenarios are incomplete or lack a live-disposable run identity");
+  if (scenarioReport.status !== "passed" || scenarioReport.mode !== "live-disposable" || scenarioReport.runnerId !== "scripts/run-phase8-scenarios.mjs@1" || typeof scenarioReport.runId !== "string" || scenarioReport.runId.trim() === "" || scenarioReport.scenarios.some((scenario) => scenario.status !== "passed" || scenario.live !== true)) blockers.push("S9 live representative scenarios are incomplete or lack a live-disposable runner identity");
   if (typeof scenarioReport.contentHash !== "string" || !/^[a-f0-9]{64}$/.test(scenarioReport.contentHash) || scenarioReport.contentHash !== scenarioReportContentHash(scenarioReport)) blockers.push("S9 scenario report content hash is missing or does not match its canonical content");
   if (scenarioReport.scenarios.some((scenario) => scenario.limitations.some((limitation) => /pending|mapped suite|not available|not.*claim/i.test(limitation)))) blockers.push("S9 scenario limitations still deny a complete live-system claim");
   validateGateBinding(source, scenarioReport, gates, blockers);
@@ -154,7 +155,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     const args = parseArgs(process.argv.slice(2));
     if (!args.scenario_report || !args.gate_manifest) throw new Error("--scenario-report and --gate-manifest are required");
-    const result = evaluateReleaseDecision({ scenarioReport: await readJson(args.scenario_report, "scenario report"), ...(await readJson(args.gate_manifest, "release gate manifest")) });
+    const manifest = await readJson(args.gate_manifest, "release gate manifest");
+    const normalizedManifest = manifest.gateManifest === undefined && manifest.candidateId !== undefined
+      ? { ...manifest, gateManifest: { candidateId: manifest.candidateId, checkpointId: manifest.checkpointId, runId: manifest.runId, scenarioReportHash: manifest.scenarioReportHash, gateEvidence: manifest.gateEvidence } }
+      : manifest;
+    const result = evaluateReleaseDecision({ scenarioReport: await readJson(args.scenario_report, "scenario report"), ...normalizedManifest });
     if (args.report) await writeJson(args.report, result);
     console.log(JSON.stringify({ status: result.status, recommendation: result.recommendation, candidateId: result.candidateId, reportPath: args.report ? resolve(args.report) : null, blockers: result.blockers ?? [] }));
     process.exitCode = result.status === "approved" ? 0 : 2;

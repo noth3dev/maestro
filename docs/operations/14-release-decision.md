@@ -6,7 +6,7 @@
 
 ## Decision gate
 
-Prepare a gate manifest with every required boolean, the same S9 `candidateId`/`checkpointId`/`runId`, and one SHA-256 `gateEvidence` value per demonstrated gate. The S9 report `contentHash` must be the canonical hash emitted by the runner. Add final-report metadata, then run:
+Prepare a gate manifest with every required boolean, the same S9 `candidateId`/`checkpointId`/`runId`, `scenarioReportHash`, and one SHA-256 `gateEvidence` value per demonstrated gate. The CLI accepts these identity fields at the manifest top level and binds them as `gateManifest`. The S9 report `contentHash` must be the canonical hash emitted by the runner. Add final-report metadata, then run:
 
 ```sh
 node scripts/release-decision.mjs \
