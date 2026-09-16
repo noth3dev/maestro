@@ -22,12 +22,13 @@ export function createStatusRegion(options: {
     const setupInProgress = options.state.connection.kind === "connecting";
     const showSplash = canShowSplash && !setupVisible && options.state.connection.kind === "connected" && options.splash.visible();
     const lines = renderStatusRegion(options.state, width, options.height(), { showSplash });
-    const dashboardStatePending = [options.state.goal, options.state.workers, options.state.budget, options.state.organization]
-      .some((value) => value?.kind === "loading" || value?.kind === "error");
-    // Do not consume the first-frame splash while initialization or dashboard
-    // hydration is still unresolved; a loading/error state is not evidence that
-    // this workspace has no Goal. A restored splash remains visible for the
-    // frame that follows ctrl+/.
+    const dashboardStatePending = [options.state.goal, options.state.workers, options.state.budget, options.state.organization].some(
+      (value) => value?.kind === "loading",
+    );
+    // Keep the first-frame splash while initialization or dashboard hydration is
+    // still loading. Errors are settled state, so expose the truthful status and
+    // recovery regions instead of preserving a permanent home splash. A restored
+    // splash remains visible for the frame that follows ctrl+/.
     if (options.splash.visible() && !setupInProgress && !setupVisible && !dashboardStatePending) options.splash.consume();
     return lines;
   });
