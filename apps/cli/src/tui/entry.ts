@@ -100,15 +100,12 @@ export function compactReviewAcknowledgement(
 ): string | undefined {
   if (summary !== undefined) {
     const tier = summary.tier === "user" ? "You" : (summary.tier ?? "You");
-    return fitPlain(`Reviewed approval · ${tier} · ${summary.action}`, width);
+    return fitPlain(`Review: ${summary.action} · approval · ${tier}`, width);
   }
   const decisions = pendingDecisions.filter((decision) => decision.identity.trim() !== "");
   const first = decisions[0];
   if (first === undefined) return undefined;
-  return fitPlain(
-    `Reviewed ${decisions.length} pending decision${decisions.length === 1 ? "" : "s"} · ⏸ ${first.tier} · ${first.action}`,
-    width,
-  );
+  return fitPlain(`Review: ${first.action} · ${decisions.length} pending · ⏸ ${first.tier}`, width);
 }
 
 export { createTranscriptClearBoundary, executeBasicShellCommand, latestCopyableTranscriptText };

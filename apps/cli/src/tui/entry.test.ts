@@ -50,10 +50,10 @@ describe("compact review presentation", () => {
         [{ identity: "decision-1", tier: "Encore Council", action: "deploy release", actor: "worker-2" }],
         80,
       ),
-    ).toBe("Reviewed 1 pending decision · ⏸ Encore Council · deploy release");
+    ).toBe("Review: deploy release · 1 pending · ⏸ Encore Council");
     expect(
       compactReviewAcknowledgement({ action: "git push origin main", target: "origin/main", effect: "remote push", tier: "user" }, [], 80),
-    ).toBe("Reviewed approval · You · git push origin main");
+    ).toBe("Review: git push origin main · approval · You");
     expect(compactReviewAcknowledgement(undefined, [], 80)).toBeUndefined();
   });
 
@@ -63,7 +63,8 @@ describe("compact review presentation", () => {
       [{ identity: "decision-1", tier: "Encore Council", action: "deploy release", actor: "worker-2" }],
       40,
     );
-    expect(output).toContain("Reviewed");
+    expect(output).toContain("Review:");
+    expect(output).toContain("deploy release");
     expect(output!.length).toBeLessThanOrEqual(40);
   });
 });
