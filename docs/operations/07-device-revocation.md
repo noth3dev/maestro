@@ -2,20 +2,20 @@
 
 ## Purpose
 
-Revoke an enrolled device and confirm its prior grant cannot be reused. Use generated disposable certificates and keys; never use `testbed/`.
+Revoke an enrolled device and confirm its prior grant cannot be reused. Use generated disposable device keys; never use `testbed/`.
 
 ## Preconditions
 
-- Use a disposable fixture and the repository checkout.
+- Use a disposable PostgreSQL fixture and the repository checkout.
 - Keep secrets in the environment; do not place credentials in logs or this document.
 
 ## Exercise
 
 Command: `MAESTRO_TEST_DATABASE_URL=postgres://... npm test -- packages/persistence/src/device.integration.test.ts packages/persistence/src/device-agent-runtime.integration.test.ts`
 
-Status: **pending §S6 real-fixture exercise**. This inventory slice records the command without claiming that it has run successfully.
+Status: **exercised against a disposable PostgreSQL fixture**. The device and device-agent runtime integration suites exercised enrollment, policy/grant/session checks, command claim/replay, natural expiry, terminal close, and revocation behavior with generated disposable keys.
 
-Evidence: **pending** — replace this marker with the captured test output path and exit status after the exercise gate runs.
+Evidence: `/tmp/plan8-s6-device-revocation.log` — exit status `0`; **2/2** files and **14/14** tests passed. No `testbed/` fixture was used.
 
 ## Stop condition
 

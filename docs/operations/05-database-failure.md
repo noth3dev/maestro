@@ -6,16 +6,16 @@ Kill and restart the Control Plane against the disposable database. Confirm stal
 
 ## Preconditions
 
-- Use a disposable fixture and the repository checkout.
+- Use a disposable PostgreSQL fixture and the repository checkout.
 - Keep secrets in the environment; do not place credentials in logs or this document.
 
 ## Exercise
 
 Command: `MAESTRO_TEST_DATABASE_URL=postgres://... npm test -- apps/control-plane/src/main.kill-restart.integration.test.ts`
 
-Status: **pending §S6 real-fixture exercise**. This inventory slice records the command without claiming that it has run successfully.
+Status: **exercised against a disposable PostgreSQL fixture**. The real Control Plane process was SIGKILLed after a committed transition, restarted against the same database, and the test confirmed no duplicate/lost transition and fail-closed handling of the dangling Goal lease.
 
-Evidence: **pending** — replace this marker with the captured test output path and exit status after the exercise gate runs.
+Evidence: `/tmp/plan8-s6-database-failure.log` — exit status `0`; **1/1** test passed. Observed process-A kill-to-exit **17 ms**, process-B ready after kill **1444 ms**, total **4663 ms** in the captured run.
 
 ## Stop condition
 
