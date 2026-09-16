@@ -108,6 +108,16 @@ export function compactReviewAcknowledgement(
   return fitPlain(`Review: ${first.action} · ${decisions.length} pending · ⏸ ${first.tier}`, width);
 }
 
+export function noModelSelectionMessage(): string {
+  return [
+    "No model selected.",
+    "Run /models list.",
+    "If a model is available, run:",
+    "/model use --model provider/model",
+    "Set MAESTRO_MODEL before a new session.",
+  ].join("\n");
+}
+
 export { createTranscriptClearBoundary, executeBasicShellCommand, latestCopyableTranscriptText };
 export type { BasicShellCommandContext, BasicShellCommandName } from "./basic-shell.js";
 
@@ -1027,9 +1037,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             }
             const configuredModel = resolveConfiguredModel(options.env.MAESTRO_MODEL, session.model);
             if (session.conversationId === undefined && configuredModel === undefined) {
-              append(
-                "No model selected. Set MAESTRO_MODEL to an exact provider/model (for example openai/gpt-5), then start a new session.",
-              );
+              appendWarning(noModelSelectionMessage());
             } else {
               if (session.conversationId === undefined) {
                 const created = await client.createConversation(

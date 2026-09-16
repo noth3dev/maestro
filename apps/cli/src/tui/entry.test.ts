@@ -13,6 +13,7 @@ import {
   isProviderLoginActive,
   isSplashRestoreShortcut,
   compactReviewAcknowledgement,
+  noModelSelectionMessage,
   runAutomaticProviderSignInOffer,
   shouldOfferAutomaticProviderSignIn,
   taskContractDraftForConversation,
@@ -66,6 +67,24 @@ describe("compact review presentation", () => {
     expect(output).toContain("Review:");
     expect(output).toContain("deploy release");
     expect(output!.length).toBeLessThanOrEqual(40);
+  });
+});
+
+describe("no-model first-turn guidance", () => {
+  it("gives a first-time user an in-session model selection path", () => {
+    const lines = noModelSelectionMessage().split("\n");
+
+    expect(lines).toEqual([
+      "No model selected.",
+      "Run /models list.",
+      "If a model is available, run:",
+      "/model use --model provider/model",
+      "Set MAESTRO_MODEL before a new session.",
+    ]);
+    expect(lines.every((line) => line.length <= 40)).toBe(true);
+    expect(lines.join(" ")).toContain("/models list");
+    expect(lines.join(" ")).toContain("/model use --model provider/model");
+    expect(lines.join(" ")).toContain("MAESTRO_MODEL");
   });
 });
 
