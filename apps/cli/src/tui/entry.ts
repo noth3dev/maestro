@@ -16,6 +16,7 @@ import { resolveWorkspace } from "./workspace.js";
 import { createTranscriptClearBoundary, executeBasicShellCommand, latestCopyableTranscriptText } from "./basic-shell.js";
 import { waitForAccountLogin } from "./account-login.js";
 import { loadActivityHistory } from "./activity-history.js";
+import { processActivityEvent } from "./activity-event.js";
 
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection } from "./local-bootstrap.js";
@@ -42,7 +43,6 @@ import {
   type ConfirmationResult,
 } from "./confirmation.js";
 import {
-  advanceWorkspaceSession,
   attachWorkspaceSession,
   loadWorkspaceSession,
   saveWorkspaceSession,
@@ -391,13 +391,22 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           append({ kind: "warning", text: `Activity stream reconnecting (${attempt}/${maxAttempts})` }),
         onEvent: async (event) => {
           if (generation !== activityHydrationGeneration || project.kind !== "attached" || project.projectId !== projectId) return;
-          activity = mergeEvents(activity, [event]);
           splash.dismiss();
-          const nextSession = advanceWorkspaceSession(workspace.cwd, session, event);
-          if (generation !== activityHydrationGeneration || project.kind !== "attached" || project.projectId !== projectId) return;
-          await saveWorkspaceSession(nextSession);
-          if (generation !== activityHydrationGeneration || project.kind !== "attached" || project.projectId !== projectId) return;
-          session = nextSession;
+          const update = await processActivityEvent({
+            activity,
+            event,
+            workspacePath: workspace.cwd,
+            current: session,
+            isCurrent: () => generation === activityHydrationGeneration && project.kind === "attached" && project.projectId === projectId,
+            saveSession: saveWorkspaceSession,
+            onMerged: (nextActivity) => {
+              activity = nextActivity;
+            },
+          });
+          if (update === undefined) return;
+          activity = update.activity;
+          if (update.session === undefined) return;
+          session = update.session;
           render();
         },
         onUnavailable: (message) => append(message),
