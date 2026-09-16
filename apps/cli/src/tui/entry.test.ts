@@ -15,6 +15,7 @@ import {
   compactReviewAcknowledgement,
   compactHelpAcknowledgement,
   compactProjectAttachmentNotice,
+  compactModelListAcknowledgement,
   shouldIgnoreEmptySubmit,
   noModelSelectionMessage,
   runAutomaticProviderSignInOffer,
@@ -80,6 +81,19 @@ describe("compact help feedback", () => {
       expect(output).toBe("Help available; resize to view commands");
       expect(output.length).toBeLessThanOrEqual(width);
     }
+  });
+});
+
+describe("compact model-list recovery", () => {
+  it("shows a directly usable model selection command or truthful fallback", () => {
+    expect(compactModelListAcknowledgement(["openai/gpt-5"], 40)).toBe("/model use --model openai/gpt-5");
+    expect(compactModelListAcknowledgement(["anthropic/claude-sonnet-4-20250514"], 40)).toBe("anthropic/claude-sonnet-4-20250514");
+    const wrapped = compactModelListAcknowledgement(["provider/" + "m".repeat(50)], 40);
+    expect(wrapped.split("\n").every((line) => line.length <= 40)).toBe(true);
+    expect(wrapped.replaceAll("\n", "")).toBe("provider/" + "m".repeat(50));
+    expect(compactModelListAcknowledgement(["openai/gpt-5"], 80)).toContain("openai/gpt-5");
+    expect(compactModelListAcknowledgement([], 40)).toBe("No models available · retry /models list");
+    expect(compactModelListAcknowledgement([], 40, "Model catalog unavailable")).toBe("Catalog unavailable · retry /models");
   });
 });
 

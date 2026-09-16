@@ -132,6 +132,17 @@ export function compactProjectAttachmentNotice(projectDiscoveryNotice: string | 
   return fitPlain(command.length <= width ? command : "/session attach", width);
 }
 
+export function compactModelListAcknowledgement(identities: readonly string[], width: number, unavailableLabel?: string): string {
+  if (identities.length === 0) return fitPlain(unavailableLabel === undefined ? "No models available · retry /models list" : "Catalog unavailable · retry /models", width);
+  const identity = identities[0]!;
+  const command = `/model use --model ${identity}`;
+  if (command.length <= width) return command;
+  if (width <= 0) return "";
+  const lines: string[] = [];
+  for (let offset = 0; offset < identity.length; offset += width) lines.push(identity.slice(offset, offset + width));
+  return lines.join("\n");
+}
+
 export function shouldIgnoreEmptySubmit(text: string, pendingProviderLogin: string | undefined): boolean {
   return pendingProviderLogin === undefined && text.trim() === "";
 }
@@ -289,6 +300,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const inputPanel = new Box(1, 0, tuiTheme.inputSurface);
     let compactReview: string | undefined;
     let compactHelp: string | undefined;
+    let compactModelList: { identities: string[]; unavailableLabel?: string } | undefined;
     let compactProjectNotice = projectDiscoveryNotice;
     const inputLabel = createDynamicRegion((width) => [
       tuiTheme.muted(
@@ -296,8 +308,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           ? fitPlain(compactHelp, width)
           : compactReview !== undefined && terminal.rows < 16
             ? fitPlain(compactReview, width)
-            : terminal.rows < 16 && project.kind !== "attached"
-              ? compactProjectAttachmentNotice(compactProjectNotice, width)
+            : compactModelList !== undefined && terminal.rows < 16
+              ? compactModelListAcknowledgement(compactModelList.identities, width, compactModelList.unavailableLabel)
+              : terminal.rows < 16 && project.kind !== "attached"
+                ? compactProjectAttachmentNotice(compactProjectNotice, width)
               : renderInputPlaceholder(state, width, terminal.rows < 16),
       ),
     ]);
@@ -984,14 +998,21 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           (parsed.name === "models" || parsed.name === "model") &&
           (parsed.action === undefined || parsed.action === "list")
         ) {
-          if (client === undefined) appendWarning("Model catalog unavailable until the Control Plane is connected.");
-          else {
-            const models = await client.listModels();
-            append(
-              models.length === 0
-                ? "No models are currently available."
-                : `Models: ${models.map((model) => `${model.identity.provider}/${model.identity.id}`).join(" · ")}`,
-            );
+          if (client === undefined) {
+            const unavailableLabel = "Model catalog unavailable";
+            appendWarning("Model catalog unavailable until the Control Plane is connected.");
+            compactModelList = terminal.rows < 16 ? { identities: [], unavailableLabel } : undefined;
+          } else {
+            try {
+              const models = await client.listModels();
+              const identities = models.map((model) => `${model.identity.provider}/${model.identity.id}`);
+              append(identities.length === 0 ? "No models are currently available." : `Models: ${identities.join(" · ")}`);
+              compactModelList = terminal.rows < 16 ? { identities } : undefined;
+            } catch (error) {
+              const message = `Model catalog unavailable: ${error instanceof Error ? error.message : "request failed"}`;
+              appendError(message);
+              compactModelList = terminal.rows < 16 ? { identities: [], unavailableLabel: "Model catalog unavailable" } : undefined;
+            }
           }
         } else if (parsed.kind === "command" && (parsed.name === "models" || parsed.name === "model") && parsed.action === "use") {
           const requestedModel = parsed.options["model"];
@@ -1216,6 +1237,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       const reviewAvailable = pendingConfirmation !== undefined || (state.pendingDecisions?.length ?? 0) > 0;
       if (compactHelp !== undefined) {
         compactHelp = undefined;
+        render();
+      }
+      if (compactModelList !== undefined) {
+        compactModelList = undefined;
         render();
       }
       if (compactReview !== undefined && (!reviewShortcut || !reviewAvailable)) {
