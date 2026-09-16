@@ -21,6 +21,7 @@ import { dashboardErrorState, dashboardStateFromReadModel } from "./dashboard-st
 import { loadConversationHistory } from "./conversation-history.js";
 import { pendingDecisionsForView } from "./pending-decisions.js";
 import { draftForPresentation } from "./draft-presentation.js";
+import { priorTaskContractDraft, taskContractDraftForConversation } from "./conversation-draft.js";
 import { animateAccentProgress } from "./flashmob-animation.js";
 import { reconnectWorkspaceProject } from "./project-reconnect.js";
 import { cancelConversationTurn } from "./conversation-cancellation.js";
@@ -80,7 +81,7 @@ import { copyToClipboard, openExternalUrl } from "../external-url.js";
 import { MAESTRO_VERSION } from "../version.js";
 import { editorTheme, SecretEditor } from "./components/editors.js";
 import { ConversationViewport, FramedComposer } from "./components/conversation-viewport.js";
-import { buildConversationInput, extractTaskContractDraft, renderTaskContractDraft } from "./goal-less-intake.js";
+import { buildConversationInput, renderTaskContractDraft } from "./goal-less-intake.js";
 
 export { type InteractiveTuiOptions } from "./startup.js";
 import { hydrateOrganizationState, initializeTui, shouldAutoBootstrapLocal, type InteractiveTuiOptions } from "./startup.js";
@@ -94,11 +95,7 @@ export function isSplashRestoreShortcut(data: string): boolean {
 export { createTranscriptClearBoundary, executeBasicShellCommand, latestCopyableTranscriptText };
 export type { BasicShellCommandContext, BasicShellCommandName } from "./basic-shell.js";
 
-/** Extract draft state only for the goal-less conversation surface. */
-export function taskContractDraftForConversation(content: string, goalId: string | null | undefined): TaskContract | undefined {
-  if (goalId !== null && goalId !== undefined) return undefined;
-  return extractTaskContractDraft(content);
-}
+export { taskContractDraftForConversation };
 
 export async function hydrateOrganizationOnReconnect(
   state: Pick<TuiShellState, "organization">,
@@ -472,11 +469,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         });
         if (hydrated === undefined) return;
         conversation = hydrated;
-        const priorDraft = [...hydrated.messages]
-          .reverse()
-          .filter((message) => message.role === "assistant")
-          .map((message) => taskContractDraftForConversation(message.content, session?.goalId))
-          .find((draft): draft is TaskContract => draft !== undefined);
+        const priorDraft = priorTaskContractDraft(hydrated.messages, session?.goalId);
         if (priorDraft !== undefined) {
           draftedTaskContract = priorDraft;
           showDraftIfPresent(JSON.stringify(priorDraft));
