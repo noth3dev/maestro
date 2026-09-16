@@ -214,6 +214,17 @@ export function compactModelListAcknowledgement(identities: readonly string[], w
   return lines.join("\n");
 }
 
+export function compactConversationAcknowledgement(
+  conversation: Pick<ConversationTranscriptState, "assistantText" | "status" | "statusMessage">,
+  width: number,
+): string {
+  const content = (conversation.assistantText || conversation.statusMessage || (conversation.status === "streaming" ? "Waiting for response…" : conversation.status))
+    .replace(/\s+/g, " ")
+    .trim();
+  const label = conversation.status === "streaming" ? "Maestro · streaming" : `Maestro · ${conversation.status}`;
+  return fitPlain(`${label}: ${content}`, width);
+}
+
 export function shouldIgnoreEmptySubmit(text: string, pendingProviderLogin: string | undefined): boolean {
   return pendingProviderLogin === undefined && text.trim() === "";
 }
@@ -240,10 +251,12 @@ export function handleConversationStreamEvent(options: {
   conversation: ConversationTranscriptState;
   event: ConversationEvent;
   dismissSplash: () => void;
+  onCompactOutcome?: (conversation: ConversationTranscriptState) => void;
   render: () => void;
 }): { conversation: ConversationTranscriptState; terminal: boolean } {
   const conversation = applyConversationEvent(options.conversation, options.event);
   options.dismissSplash();
+  options.onCompactOutcome?.(conversation);
   options.render();
   return { conversation, terminal: isTerminalConversationEvent(conversation, options.event) };
 }
@@ -377,6 +390,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let compactHelp: string | undefined;
     let compactModelList: { identities: string[]; unavailableLabel?: string } | undefined;
     let compactCommandResult: string | undefined;
+    let compactConversationResult: string | undefined;
     let compactTaskContractReview = false;
     let compactProjectNotice = projectDiscoveryNotice;
     const inputLabel = createDynamicRegion((width) => [
@@ -393,9 +407,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
                 ? compactProjectAttachmentNotice(compactProjectNotice, width)
                 : compactTaskContractReview && terminal.rows < 16
                   ? compactTaskContractAcknowledgement(width)
-                  : compactCommandResult !== undefined && terminal.rows < 16
-                    ? compactCommandResultAcknowledgement(compactCommandResult, width)
-                    : renderInputPlaceholder(state, width, terminal.rows < 16),
+                  : compactConversationResult !== undefined && terminal.rows < 16
+                    ? compactConversationResult
+                    : compactCommandResult !== undefined && terminal.rows < 16
+                      ? compactCommandResultAcknowledgement(compactCommandResult, width)
+                      : renderInputPlaceholder(state, width, terminal.rows < 16),
       ),
     ]);
     inputPanel.addChild(inputLabel);
@@ -461,6 +477,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       splash.dismiss();
       const semanticLine: TranscriptLine = typeof line === "string" ? { kind: "system", text: line } : line;
       if (terminal.rows < 16) {
+        compactConversationResult = undefined;
         compactTaskContractReview = semanticLine.text.includes("/task-contract confirm") && semanticLine.text.includes("/task-contract launch");
         compactCommandResult = compactTaskContractReview ? undefined : semanticLine.text;
       }
@@ -624,6 +641,13 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             conversation,
             event,
             dismissSplash: () => splash.dismiss(),
+            onCompactOutcome: (nextConversation) => {
+              if (terminal.rows < 16) {
+                compactConversationResult = compactConversationAcknowledgement(nextConversation, terminal.columns);
+                compactCommandResult = undefined;
+                compactTaskContractReview = false;
+              }
+            },
             render,
           });
           conversation = handled.conversation;
@@ -1281,6 +1305,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
                 };
                 if (conversationDisplayBoundary.isCurrent(displayGeneration)) {
                   conversation = applyConversationEvent(conversation, terminalEvent);
+                  if (terminal.rows < 16) {
+                    compactConversationResult = compactConversationAcknowledgement(conversation, terminal.columns);
+                    compactCommandResult = undefined;
+                    compactTaskContractReview = false;
+                  }
                   showDraftIfPresent(result.turn.content);
                   render();
                 }
@@ -1363,6 +1392,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       }
       if (compactTaskContractReview) {
         compactTaskContractReview = false;
+        render();
+      }
+      if (compactConversationResult !== undefined) {
+        compactConversationResult = undefined;
         render();
       }
       if (compactCommandResult !== undefined) {

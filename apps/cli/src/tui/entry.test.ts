@@ -25,6 +25,7 @@ import {
   compactConnectionRecoveryAcknowledgement,
   compactCommandResultAcknowledgement,
   compactTaskContractAcknowledgement,
+  compactConversationAcknowledgement,
   shouldIgnoreEmptySubmit,
   shouldCancelPendingProviderLogin,
   shouldConsumeAccountLoginBackgroundInput,
@@ -219,6 +220,25 @@ describe("empty conversation submit", () => {
   });
 });
 
+describe("compact conversation output", () => {
+  it("keeps streaming and terminal assistant outcomes bounded and visible", () => {
+    const base = {
+      messages: [],
+      manualMessages: [],
+      events: [],
+      activeTurnId: "turn-1",
+      assistantText: "The answer is ready.",
+      status: "succeeded" as const,
+      statusMessage: undefined,
+      lastCursor: "1",
+    };
+    expect(compactConversationAcknowledgement({ ...base, status: "streaming", assistantText: "Partial answer" }, 40)).toContain("Partial answer");
+    expect(compactConversationAcknowledgement(base, 80)).toContain("The answer is ready.");
+    expect(compactConversationAcknowledgement({ ...base, assistantText: "", status: "failed", statusMessage: "gateway timeout" }, 40)).toContain("gateway timeout");
+    expect(compactConversationAcknowledgement(base, 40).length).toBeLessThanOrEqual(40);
+  });
+});
+
 describe("compact task contract guidance", () => {
   it("keeps resize and both exact actions visible in bounded rows", () => {
     const lines = compactTaskContractAcknowledgement(40).split("\n");
@@ -293,6 +313,7 @@ describe("conversation stream event handling", () => {
       eventType: "turn_delta",
       payload: { turnId: "turn-1", text: "answer" },
     });
+    let compactOutcome: ConversationTranscriptState | undefined;
     const result = handleConversationStreamEvent({
       conversation,
       event: {
@@ -305,12 +326,17 @@ describe("conversation stream event handling", () => {
         payload: { turnId: "turn-1", status: "succeeded" },
       },
       dismissSplash: () => order.push("dismiss"),
+      onCompactOutcome: (nextConversation) => {
+        compactOutcome = nextConversation;
+        order.push("compact");
+      },
       render: () => order.push("render"),
     });
 
     expect(result.terminal).toBe(true);
     expect(result.conversation.status).toBe("succeeded");
-    expect(order).toEqual(["dismiss", "render"]);
+    expect(compactOutcome?.assistantText).toBe("answer");
+    expect(order).toEqual(["dismiss", "compact", "render"]);
   });
 });
 
