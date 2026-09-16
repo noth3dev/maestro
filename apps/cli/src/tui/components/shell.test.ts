@@ -33,10 +33,14 @@ describe("Maestro TUI shell", () => {
     expect(output).not.toContain("Secretary");
   });
 
-  it("advertises the working help shortcut without reserving literal question marks", () => {
-    const output = renderTuiFooter(80, state);
-    expect(output).toContain("ctrl+k help");
-    expect(output).not.toContain("? help");
+  it("advertises a copyable help command for first-time users", () => {
+    for (const width of [40, 60, 80]) {
+      const output = stripAnsi(renderTuiFooter(width, state));
+      expect(output).toBe("/ commands · ctrl+g goals · /help");
+      expect(output).not.toContain("? help");
+      expect(output).not.toContain("ctrl+k help");
+      expect(output.length).toBeLessThanOrEqual(width);
+    }
   });
 
   it("shows a stop hint while a conversation turn is active", () => {

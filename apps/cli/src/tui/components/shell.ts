@@ -252,7 +252,7 @@ function hintText(state: TuiShellState): string {
   const count = pendingCount(state);
   if (count > 0) return `ctrl+a review ${count} pending decision${count === 1 ? "" : "s"}`;
   if (state.workers.kind === "loading") return "esc stop · ctrl+a decisions";
-  return "/ commands · ctrl+g goals · ctrl+k help";
+  return "/ commands · ctrl+g goals · /help";
 }
 
 export function renderHints(state: TuiShellState, width: number): string {
