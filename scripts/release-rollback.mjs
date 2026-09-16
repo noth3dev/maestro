@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { chmod, copyFile, lstat, mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { spawn } from "node:child_process";
 
@@ -54,7 +55,7 @@ function runCommand(command, timeoutMs) {
   });
 }
 async function preserve(source, destination) {
-  await copyFile(resolve(source), resolve(destination));
+  await copyFile(resolve(source), resolve(destination), constants.COPYFILE_EXCL);
   await chmod(resolve(destination), 0o600);
   return resolve(destination);
 }
@@ -75,14 +76,6 @@ async function assertRegularFile(path, name) {
   if (!info.isFile()) throw new Error(`${name} must be a regular file`);
 }
 function approvedRerun(rerun, disposableFixture) {
-  if (rerun.command === "npm") {
-    const templates = {
-      "failed scenario": ["test", "--", "--run", "test/phase8-scenarios"],
-      "phase gate": ["test", "--", "--run", "test/phase8"],
-      "full regression gate": ["test"],
-    };
-    return JSON.stringify(rerun.args) === JSON.stringify(templates[rerun.name]);
-  }
   if (disposableFixture !== true) return false;
   const fixtureScript = resolve("test/phase8-release/approved-rerun.mjs");
   return resolve(rerun.command) === resolve(process.execPath) && JSON.stringify(rerun.args) === JSON.stringify([fixtureScript, rerun.name]);
@@ -117,6 +110,7 @@ export async function runRollback(options = {}) {
     for (const rerun of options.reruns) {
       object(rerun, "rerun"); text(rerun.command, "rerun.command");
       if (!Array.isArray(rerun.args) || rerun.args.some((arg) => typeof arg !== "string")) throw new Error("rerun.args must be a string array");
+      if (rerun.cwd !== undefined && resolve(rerun.cwd) !== resolve(process.cwd())) throw new Error("rerun cwd must be the repository directory");
       if (!approvedRerun(rerun, options.disposableFixture)) throw new Error(`rerun command is not approved: ${rerun.name}`);
     }
     const rollbackRoot = dirname(resolve(options.statePath));

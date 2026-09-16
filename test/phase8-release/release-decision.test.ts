@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -131,6 +131,16 @@ describe("Plan 8 §S10 rollback protocol", () => {
     expect(JSON.parse(await readFile(statePath, "utf8")).releaseProgression).toBe("running");
   });
 
+  it("rejects an approved command redirected to an untrusted working directory", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "maestro-s10-cwd-"));
+    const statePath = join(directory, "state.json"); const evidencePath = join(directory, "evidence.json"); const candidatePath = join(directory, "candidate.json"); const failurePath = join(directory, "failure.json");
+    await writeFile(statePath, JSON.stringify({ candidateId: "candidate-1", releaseProgression: "running", activeGoals: [] })); await writeFile(evidencePath, "{}"); await writeFile(candidatePath, JSON.stringify({ candidateId: "candidate-1" })); await writeFile(failurePath, JSON.stringify({ status: "failed", scenarioId: "s", phaseGate: "G7" }));
+    const fixtureScript = join(process.cwd(), "test/phase8-release/approved-rerun.mjs");
+    const reruns = ["failed scenario", "phase gate", "full regression gate"].map((name) => ({ name, command: process.execPath, args: [fixtureScript, name], cwd: "/tmp" }));
+    const result = await runRollback({ disposableFixture: true, statePath, evidencePath, candidatePath, failurePath, reruns });
+    expect(result.status).toBe("blocked"); expect(JSON.parse(await readFile(statePath, "utf8")).releaseProgression).toBe("running");
+  });
+
   it("bounds approved reruns and records a timeout without hanging", async () => {
     const directory = await mkdtemp(join(tmpdir(), "maestro-s10-timeout-"));
     const statePath = join(directory, "state.json"); const evidencePath = join(directory, "evidence.json"); const candidatePath = join(directory, "candidate.json"); const failurePath = join(directory, "failure.json");
@@ -151,5 +161,15 @@ describe("Plan 8 §S10 rollback protocol", () => {
     await writeFile(statePath, JSON.stringify({ candidateId: "../escape", releaseProgression: "running", activeGoals: [] })); await writeFile(evidencePath, "{}"); await writeFile(candidatePath, JSON.stringify({ candidateId: "../escape" })); await writeFile(failurePath, JSON.stringify({ status: "failed", scenarioId: "s", phaseGate: "G7" }));
     const result = await runRollback({ disposableFixture: true, statePath, evidencePath, candidatePath, failurePath, reruns: [] });
     expect(result.status).toBe("blocked"); expect(result.blockers.join(" ")).toMatch(/identity|path|segment/i);
+  });
+
+  it("refuses an existing symlink at a preserved evidence destination", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "maestro-s10-symlink-"));
+    const statePath = join(directory, "state.json"); const evidencePath = join(directory, "evidence.json"); const candidatePath = join(directory, "candidate.json"); const failurePath = join(directory, "failure.json"); const outside = join(directory, "outside.json"); const preservedDir = join(directory, "preserved");
+    await writeFile(statePath, JSON.stringify({ candidateId: "candidate-1", releaseProgression: "running", activeGoals: [] })); await writeFile(evidencePath, "{}"); await writeFile(candidatePath, JSON.stringify({ candidateId: "candidate-1" })); await writeFile(failurePath, JSON.stringify({ status: "failed", scenarioId: "s", phaseGate: "G7" })); await writeFile(outside, "untouched");
+    await mkdir(preservedDir); await symlink(outside, join(preservedDir, "candidate.json"));
+    const fixtureScript = join(process.cwd(), "test/phase8-release/approved-rerun.mjs"); const reruns = ["failed scenario", "phase gate", "full regression gate"].map((name) => ({ name, command: process.execPath, args: [fixtureScript, name] }));
+    const result = await runRollback({ disposableFixture: true, statePath, evidencePath, candidatePath, failurePath, preservedDir, reruns });
+    expect(result.status).toBe("blocked"); expect(await readFile(outside, "utf8")).toBe("untouched");
   });
 });
