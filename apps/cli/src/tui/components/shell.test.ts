@@ -43,6 +43,22 @@ describe("Maestro TUI shell", () => {
     }
   });
 
+  it("keeps disconnected recovery hints truthful and copyable", () => {
+    const connections: TuiShellState["connection"][] = [
+      { kind: "connecting" },
+      { kind: "setup-required", message: "Control Plane setup required" },
+      { kind: "error", message: "Control Plane unavailable" },
+    ];
+    for (const connection of connections) {
+      for (const width of [40, 80, 120]) {
+        const output = stripAnsi(renderTuiFooter(width, { ...state, connection }));
+        expect(output).toBe("ctrl+r retry · /help for commands");
+        expect(output).not.toContain("/status");
+        expect(output.length).toBeLessThanOrEqual(width);
+      }
+    }
+  });
+
   it("shows a stop hint while a conversation turn is active", () => {
     const output = renderTuiFooter(80, { ...state, working: true });
     expect(output).toContain("esc stop");
