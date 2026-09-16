@@ -516,6 +516,17 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           if (generation === activityHydrationGeneration) startActivity();
         });
     };
+    const applySuccessfulRetryHandoff = async (sessionResult: typeof session, notice: string | undefined): Promise<void> => {
+      session = sessionResult;
+      await hydrateOrganizationOnReconnect(state, client!);
+      state.connection = { kind: "connected" };
+      recovery = reconcileTuiSession(workspace.cwd, session);
+      appendSuccess("Control Plane connected.");
+      if (notice !== undefined) appendWarning(notice);
+      void refreshDashboard();
+      restartActivity();
+      void offerAutomaticProviderSignIn();
+    };
     const retryConnection = async () => {
       connectionGeneration += 1;
       appendWarning("Retrying Maestro startup checks…");
@@ -580,15 +591,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             session = attachedSession;
           },
         });
-        session = reconnectedProject.session;
-        await hydrateOrganizationOnReconnect(state, client);
-        state.connection = { kind: "connected" };
-        recovery = reconcileTuiSession(workspace.cwd, session);
-        appendSuccess("Control Plane connected.");
-        if (projectDiscoveryNotice !== undefined) appendWarning(projectDiscoveryNotice);
-        void refreshDashboard();
-        restartActivity();
-        void offerAutomaticProviderSignIn();
+        await applySuccessfulRetryHandoff(reconnectedProject.session, projectDiscoveryNotice);
       } catch {
         client = undefined;
         state.connection = { kind: "error", message: "Control Plane client could not be created" };
