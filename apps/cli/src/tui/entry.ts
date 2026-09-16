@@ -10,7 +10,7 @@ import {
   matchesKey,
 } from "@earendil-works/pi-tui";
 import { ApiError, createApiClient, type ApiClient, type GoalEvent } from "@maestro/api-client";
-import type { ConversationEvent, ModelCatalogEntry } from "@maestro/contracts";
+import type { ConversationEvent, ModelCatalogEntry, TaskContract } from "@maestro/contracts";
 
 import { resolveWorkspace } from "./workspace.js";
 
@@ -53,6 +53,7 @@ import { copyToClipboard, openExternalUrl } from "../external-url.js";
 import { MAESTRO_VERSION } from "../version.js";
 import { editorTheme, SecretEditor } from "./components/editors.js";
 import { ConversationViewport, FramedComposer } from "./components/conversation-viewport.js";
+import { buildConversationInput, extractTaskContractDraft, renderTaskContractDraft } from "./goal-less-intake.js";
 
 export { type InteractiveTuiOptions } from "./startup.js";
 import { hydrateOrganizationState, initializeTui, shouldAutoBootstrapLocal, type InteractiveTuiOptions } from "./startup.js";
@@ -270,6 +271,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       ),
     );
     let conversation: ConversationTranscriptState = createConversationTranscript();
+    let draftedTaskContract: TaskContract | undefined;
+    let renderedDraftIdentity: string | undefined;
     let activity: GoalEvent[] = [];
     let visibleActivityStart = 0;
     let recovery: RecoverySummary = reconcileTuiSession(workspace.cwd, session);
@@ -333,6 +336,15 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const appendError = (text: string): void => append({ kind: "error", text });
     const appendSuccess = (text: string): void => append({ kind: "success", text });
     const appendWarning = (text: string): void => append({ kind: "warning", text });
+    const showDraftIfPresent = (content: string): void => {
+      const draft = extractTaskContractDraft(content) ?? draftedTaskContract;
+      if (draft === undefined) return;
+      draftedTaskContract = draft;
+      const identity = `${draft.contractId}:${draft.version}:${draft.contentHash}`;
+      if (renderedDraftIdentity === identity) return;
+      renderedDraftIdentity = identity;
+      append({ kind: "system", text: renderTaskContractDraft(draft).join("\n") });
+    };
     let flashmobMode = false;
     let flashmobAnimationId = 0;
     const animateFlashmobMode = async (enabled: boolean): Promise<void> => {
@@ -483,6 +495,15 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         }
         if (generation !== conversationHydrationGeneration || session?.conversationId !== conversationId || project.kind !== "attached" || project.projectId !== projectId) return;
         conversation = hydrated;
+        const priorDraft = [...hydrated.messages]
+          .reverse()
+          .filter((message) => message.role === "assistant")
+          .map((message) => extractTaskContractDraft(message.content))
+          .find((draft): draft is TaskContract => draft !== undefined);
+        if (priorDraft !== undefined) {
+          draftedTaskContract = priorDraft;
+          showDraftIfPresent(JSON.stringify(priorDraft));
+        }
         splash.dismiss();
         render();
       } catch (error) {
@@ -766,6 +787,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             conversationHydrationGeneration += 1;
             conversationHydration = Promise.resolve();
             conversation = createConversationTranscript();
+            draftedTaskContract = undefined;
+            renderedDraftIdentity = undefined;
             session = startNewConversationSession(workspace.cwd, session);
             await saveWorkspaceSession(session);
             recovery = reconcileTuiSession(workspace.cwd, session);
@@ -776,6 +799,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             conversationHydrationGeneration += 1;
             conversationHydration = Promise.resolve();
             conversation = createConversationTranscript();
+            draftedTaskContract = undefined;
+            renderedDraftIdentity = undefined;
             const requestedProjectId = parsed.options["project-id"];
             const requestedProjectIndex = parsed.options["project-index"];
             const current = await loadWorkspaceSession(workspace.cwd);
@@ -948,9 +973,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             append(
               "Flashmob is a planned bounded fast path, but its Vanguard runtime is not wired yet. Switch to /mode maestro for governed conversation.",
             );
-          } else if (session?.goalId === undefined) {
-            appendWarning("Select a Goal before sending a Concertmaster message (use /goal select --goal-id <id>).");
           } else {
+            if (session === undefined) {
+              appendError("Concertmaster requires an attached workspace session.");
+              return;
+            }
             const configuredModel = options.env.MAESTRO_MODEL?.trim() || session.model;
             if (session.conversationId === undefined && configuredModel === undefined) {
               append(
@@ -958,15 +985,14 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               );
             } else {
               if (session.conversationId === undefined) {
-                const created = await client.createConversation({
-                  projectId: project.projectId,
-                  goalId: session.goalId,
-                  model: configuredModel!,
-                }, { idempotencyKey: randomUUID() });
+                const created = await client.createConversation(
+                  buildConversationInput(project.projectId, session.goalId, configuredModel!),
+                  { idempotencyKey: randomUUID() },
+                );
                 session = {
                   workspacePath: workspace.cwd,
                   projectId: project.projectId,
-                  goalId: session.goalId,
+                  ...(session.goalId === undefined ? {} : { goalId: session.goalId }),
                   ...(session.lastEventCursor === undefined ? {} : { lastEventCursor: session.lastEventCursor }),
                   conversationId: created.conversationId,
                   model: created.model,
@@ -1007,6 +1033,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
                 };
                 if (conversationDisplayBoundary.isCurrent(displayGeneration)) {
                   conversation = applyConversationEvent(conversation, terminalEvent);
+                  showDraftIfPresent(result.turn.content);
                   render();
                 }
               } finally {
