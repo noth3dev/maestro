@@ -50,6 +50,31 @@ describe("TUI startup regions", () => {
     expect(second).not.toContain("ctrl+/ show home");
   });
 
+  it("preserves the splash through a compact frame until it can render", () => {
+    const splash = createSplashController();
+    let height = 15;
+    const region = createStatusRegion({
+      state: {
+        ...state,
+        connection: { kind: "connected" },
+        goal: { kind: "value", value: { goalId: "goal-1", name: "goal-1", state: "running" } },
+        workers: { kind: "value", value: 0 },
+        budget: { kind: "value", value: { spentCents: 0, ceilingCents: 500 } },
+        organization: { kind: "value", value: { departments: ["Product Department"] } },
+      },
+      height: () => height,
+      splash,
+    });
+
+    expect(region.render(80).join("\n")).not.toContain("ctrl+/ show home");
+    expect(splash.visible()).toBe(true);
+
+    height = 24;
+    expect(region.render(80).join("\n")).toContain("ctrl+/ show home");
+    expect(splash.visible()).toBe(false);
+    expect(region.render(80).join("\n")).not.toContain("ctrl+/ show home");
+  });
+
   it("keeps the splash controller owned during the initial connecting frame", () => {
     const splash = createSplashController();
     const setupSteps: SetupStep[] = [

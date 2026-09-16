@@ -29,7 +29,7 @@ export function createStatusRegion(options: {
     // still loading. Errors are settled state, so expose the truthful status and
     // recovery regions instead of preserving a permanent home splash. A restored
     // splash remains visible for the frame that follows ctrl+/.
-    if (options.splash.visible() && !setupInProgress && !setupVisible && !dashboardStatePending) options.splash.consume();
+    if (canShowSplash && options.splash.visible() && !setupInProgress && !setupVisible && !dashboardStatePending) options.splash.consume();
     return lines;
   });
 }

@@ -66,14 +66,14 @@ describe("Maestro TUI layout and hierarchy", () => {
     expect(renderTuiLayout(state, 120, 30, { showSplash: splash.visible() }).splash).toEqual([]);
   });
 
-  it("consumes the splash on a cramped first render", () => {
+  it("preserves the splash until a cramped frame can render it", () => {
     let height = 10;
     const splash = createSplashController();
     const region = createStatusRegion({ state, height: () => height, splash });
 
     expect(splash.visible()).toBe(true);
     region.render(80);
-    expect(splash.visible()).toBe(false);
+    expect(splash.visible()).toBe(true);
     height = 30;
     region.render(120);
     expect(splash.visible()).toBe(false);
