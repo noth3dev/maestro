@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { executeCli, shouldRunAsMain } from "./main.js";
+import { MAESTRO_VERSION } from "./version.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
@@ -25,7 +26,7 @@ describe("executeCli", () => {
     expect(stderr.lines).toEqual([]);
     stdout.lines.length = 0;
     expect(await executeCli(["--version"], {}, { stdout: stdout.write, stderr: stderr.write })).toBe(0);
-    expect(stdout.lines[0]).toMatch(/^maestro /);
+    expect(stdout.lines[0]).toBe(`${MAESTRO_VERSION}\n`);
   });
 
   it("reads provider login secrets through the hidden-input boundary, not argv", async () => {
