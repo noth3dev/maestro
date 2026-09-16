@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ToolContext } from "./agent-runtime.js";
-import { createTaskContractDraftingTool } from "./overture-drafting-tool.js";
+import { createTaskContractDraftingTool, deriveTaskContractId } from "./overture-drafting-tool.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const substance = {
@@ -26,7 +26,7 @@ const substance = {
   budget: { ceiling: "100 USD", reportingExpectations: ["Report spend"], stoppingConditions: ["Stop at ceiling"] },
 };
 
-const context = { operatorId: "22222222-2222-4222-8222-222222222222", projectId, conversationId: "33333333-3333-4333-8333-333333333333", goalId: undefined, capabilityGrant: { grantId: "grant", allowedTools: ["task-contract:create"], allowedSkills: [], modelPolicy: ["fake/model"], pathScope: [], outboundDataClasses: ["public", "workspace"], remaining: { modelTurns: 1, toolCalls: 1, childCalls: 0, outputTokens: 1000, wallTimeMs: 1000, retryCount: 0 } } } as unknown as ToolContext;
+const context = { commandId: "command-1", turnId: "turn-1", toolCallId: "tool-1", operatorId: "22222222-2222-4222-8222-222222222222", projectId, conversationId: "33333333-3333-4333-8333-333333333333", goalId: undefined, capabilityGrant: { grantId: "grant", allowedTools: ["task-contract:create"], allowedSkills: [], modelPolicy: ["fake/model"], pathScope: [], outboundDataClasses: ["public", "workspace"], remaining: { modelTurns: 1, toolCalls: 1, childCalls: 0, outputTokens: 1000, wallTimeMs: 1000, retryCount: 0 } } } as unknown as ToolContext;
 
 describe("Overture Task Contract drafting tool", () => {
   it("creates the full substance through the injected durable Task Contract creator", async () => {
@@ -34,7 +34,7 @@ describe("Overture Task Contract drafting tool", () => {
     const tool = createTaskContractDraftingTool({ createTaskContract: create });
     const result = await tool.execute({ projectId, substance }, context);
     expect(result.status).toBe("ok");
-    expect(create).toHaveBeenCalledWith(expect.any(String), { projectId, substance }, { operatorId: context.operatorId });
+    expect(create).toHaveBeenCalledWith(deriveTaskContractId(context.commandId, context.turnId, context.toolCallId), { projectId, substance }, { operatorId: context.operatorId });
     expect(JSON.parse(result.content)).toMatchObject({ desiredOutcome: substance.desiredOutcome, project: substance.project, launchState: "awaiting_confirmation" });
   });
 

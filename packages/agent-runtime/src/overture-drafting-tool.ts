@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import {
   CreateTaskContractInputSchema,
   TaskContractSchema,
@@ -17,6 +17,14 @@ export interface TaskContractCreator {
 }
 
 type DraftingInput = CreateTaskContractInput | { projectId: string; brief: string };
+
+/** Stable idempotency identity for one exact conversation tool proposal. */
+export function deriveTaskContractId(commandId: string, turnId: string, toolCallId: string): string {
+  const digest = createHash("sha256").update(JSON.stringify([commandId, turnId, toolCallId]), "utf8").digest("hex").split("");
+  digest[12] = "5";
+  digest[16] = ((Number.parseInt(digest[16]!, 16) & 0x3) | 0x8).toString(16);
+  return `${digest.slice(0, 8).join("")}-${digest.slice(8, 12).join("")}-${digest.slice(12, 16).join("")}-${digest.slice(16, 20).join("")}-${digest.slice(20, 32).join("")}`;
+}
 
 function parseDraftingInput(value: unknown): DraftingInput {
   if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("Task Contract drafting input must be an object");
@@ -75,7 +83,7 @@ export function createTaskContractDraftingTool(options: { createTaskContract: Ta
         return { status: "ok", content: "I need clarification before creating a Task Contract. Please specify the desired outcome, user-visible behavior, success criteria, scope, non-goals, constraints, and budget ceiling." };
       }
       if (input.substance.project.projectId !== context.projectId) throw new Error("Task Contract substance project does not match the conversation project");
-      const contract = await creator(randomUUID(), input, { operatorId: context.operatorId });
+      const contract = await creator(deriveTaskContractId(context.commandId, context.turnId, context.toolCallId), input, { operatorId: context.operatorId });
       // Validate the durable service response at this authority boundary. A
       // malformed or shadow response must never be presented as a contract.
       const parsed = TaskContractSchema.parse(contract);
