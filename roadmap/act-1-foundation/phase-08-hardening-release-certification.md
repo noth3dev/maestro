@@ -1,6 +1,6 @@
 # Phase 8 — Full-System Hardening and Release Certification
 
-> **Current status (2026-09-08):** Phase 8 is not accepted. Its Prime compatibility references are legacy acceptance criteria; the current native backend plan supersedes them for the runtime cutover. Required hardening/recovery gates now include IPython authority enforcement, whole-block approval, full-access isolation, external-capability activation, interruption, and forbidden-action denial.
+> **Current status (2026-09-16):** Phase 8 implementation and release evidence slices S1–S9 are merged (`c5fbb63`). Representative scenario evidence boundary, deterministic soak reporting, and routing evidence redaction are verified.
 
 
 ## Outcome
