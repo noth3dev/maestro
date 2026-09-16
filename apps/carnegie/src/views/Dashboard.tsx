@@ -131,6 +131,10 @@ export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate:
               key={goal.goalId}
               className={`dept-card ${goal.goalId === selectedGoalId ? "awake" : "asleep"}`}
               onClick={() => selectGoal(goal.goalId)}
+              onKeyDown={(event) => {
+                if (event.key === " ") event.preventDefault();
+                if (event.key === "Enter" || event.key === " ") selectGoal(goal.goalId);
+              }}
               role="button"
               tabIndex={0}
             >
