@@ -728,6 +728,31 @@ describe("command argument autocomplete", () => {
     expect(optionValue).toBeNull();
   });
 
+  it("does not treat non-path tilde values as file completion", async () => {
+    const calls: boolean[] = [];
+    const provider = createSlashCommandAutocompleteProvider({
+      getSuggestions(_lines, _cursorLine, _cursorCol, options) {
+        calls.push(options.force ?? false);
+        return options.force
+          ? Promise.resolve({ items: [{ value: "~/draft", label: "~/draft" }], prefix: "~/draft" })
+          : Promise.resolve(null);
+      },
+      applyCompletion: () => ({ lines: [], cursorLine: 0, cursorCol: 0 }),
+    });
+    const signal = new AbortController().signal;
+
+    const nonPath = "/conversation turn --text ~draft";
+    expect(await provider.getSuggestions([nonPath], 0, nonPath.length, { signal, force: true })).toBeNull();
+    expect(calls).toEqual([false]);
+
+    calls.length = 0;
+    const homePath = "/conversation turn --text ~/draft";
+    expect((await provider.getSuggestions([homePath], 0, homePath.length, { signal, force: true }))?.items).toEqual([
+      { value: "~/draft", label: "~/draft" },
+    ]);
+    expect(calls).toEqual([false, true]);
+  });
+
   it("keeps parser-supported leading-whitespace slash commands on command completion", async () => {
     const provider = createSlashCommandAutocompleteProvider(
       new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),

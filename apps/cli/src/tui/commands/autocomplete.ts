@@ -28,7 +28,7 @@ function slashArgumentText(lines: string[], cursorLine: number, cursorCol: numbe
 function looksLikeFileValue(textBeforeCursor: string): boolean {
   const lastSpace = Math.max(textBeforeCursor.lastIndexOf(" "), textBeforeCursor.lastIndexOf("\t"));
   const currentToken = textBeforeCursor.slice(lastSpace + 1);
-  return currentToken.includes("/") || currentToken.startsWith(".") || currentToken.startsWith("~");
+  return currentToken.includes("/") || currentToken.startsWith(".") || currentToken === "~" || currentToken.startsWith("~/");
 }
 
 /**
