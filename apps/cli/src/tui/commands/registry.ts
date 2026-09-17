@@ -49,6 +49,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "mission-bundle create": ["--council-id", "--department-id", "--item-id", "--bundle-json", "--command-id"],
   "mission-bundle get": ["--council-id", "--department-id", "--plan-version", "--item-id"],
   "worker spawn": ["--council-id", "--department-id", "--worker-json", "--command-id"],
+  "metronome scan": ["--goal-id"],
   "metronome challenge": ["--goal-id", "--reason", "--finding-ids", "--evidence-references", "--command-id"],
   "metronome correct": ["--challenge-id", "--correction-request"],
   "metronome resolve": ["--challenge-id", "--reason", "--command-id"],

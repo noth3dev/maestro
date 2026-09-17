@@ -142,6 +142,12 @@ describe("command argument autocomplete", () => {
     expect(git?.getArgumentCompletions?.("department-branch --coun")).toEqual([expect.objectContaining({ value: "--council-id " })]);
   });
 
+  it("suggests the Goal scope for Metronome scans", () => {
+    const metronome = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "metronome");
+    expect(metronome?.getArgumentCompletions?.("scan --")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+    expect(metronome?.getArgumentCompletions?.("scan --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+  });
+
   it("suggests Metronome challenge Goal, reason, evidence, and idempotency inputs", () => {
     const metronome = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "metronome");
     expect(metronome?.getArgumentCompletions?.("challenge --")).toEqual(
