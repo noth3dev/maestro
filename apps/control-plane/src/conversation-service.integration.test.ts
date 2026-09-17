@@ -119,7 +119,7 @@ describeDatabase("conversation service PostgreSQL integration", () => {
     await expect(restarted.recover?.()).resolves.toMatchObject({ recovered: 1, markedUnknown: 0 });
     await expect(restarted.turn(conversation.conversationId, { projectId, text: "follow up" }, operator, randomUUID())).resolves.toMatchObject({ turn: { content: "integration answer" } });
 
-    expect(fixture.messages()).toEqual(["user", "assistant", "user"]);
+    expect(fixture.messages()).toEqual(["system", "user", "assistant", "user"]);
   });
 
   it("serializes concurrent retries for one idempotency key", async () => {
