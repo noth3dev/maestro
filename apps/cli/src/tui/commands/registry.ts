@@ -51,6 +51,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "worker spawn": ["--council-id", "--department-id", "--worker-json", "--command-id"],
   "worker get": ["--worker-id"],
   "worker accept": ["--worker-id", "--reason"],
+  "events list": ["--after"],
   "models use": ["--model"],
   "model use": ["--model"],
   "concertmaster-report generate": ["--goal-id", "--command-id"],
