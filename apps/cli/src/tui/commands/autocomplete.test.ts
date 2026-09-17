@@ -1,4 +1,5 @@
 import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
+import type { AutocompleteItem } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 import { CommandRegistry, createCommandRegistry } from "./registry.js";
 import { createCommandAutocompleteItems, createSlashCommandAutocompleteProvider } from "./autocomplete.js";
@@ -743,6 +744,19 @@ describe("command argument autocomplete", () => {
 
     const absolutePath = await provider.getSuggestions(["/tmp"], 0, 4, { signal, force: true });
     expect(absolutePath?.items.map((item) => item.value)).toContain("/tmp/");
+    const absoluteDirectory = absolutePath?.items.find((item) => item.value === "/tmp/");
+    expect(absoluteDirectory).toBeDefined();
+    if (absolutePath === undefined || absoluteDirectory === undefined) throw new Error("expected absolute path completion");
+    expect(provider.applyCompletion(["/tmp"], 0, 4, absoluteDirectory, absolutePath.prefix)).toMatchObject({
+      lines: ["/tmp/"],
+      cursorLine: 0,
+      cursorCol: 5,
+    });
+    expect(provider.applyCompletion(["  /tmp suffix"], 0, 6, absoluteDirectory, absolutePath.prefix)).toMatchObject({
+      lines: ["  /tmp/ suffix"],
+      cursorLine: 0,
+      cursorCol: 7,
+    });
 
     const indented = await provider.getSuggestions(["  /go"], 0, 5, { signal, force: true });
     const goal = indented?.items.find((item) => item.value === "goal");
@@ -754,6 +768,28 @@ describe("command argument autocomplete", () => {
       cursorLine: 0,
       cursorCol: 8,
     });
+  });
+
+  it("does not intercept nested absolute paths or non-root custom provider applies", () => {
+    const calls: Array<{ item: AutocompleteItem; prefix: string }> = [];
+    const provider = createSlashCommandAutocompleteProvider({
+      getSuggestions: async () => null,
+      applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+        calls.push({ item, prefix });
+        return { lines, cursorLine, cursorCol };
+      },
+    });
+    const nestedItem = { value: "/tmp/src/", label: "src/" };
+    const nestedResult = provider.applyCompletion(["/tmp/src"], 0, 8, nestedItem, "/tmp/src");
+    expect(nestedResult.lines).toEqual(["/tmp/src"]);
+    expect(calls).toEqual([{ item: nestedItem, prefix: "/tmp/src" }]);
+
+    const nonRootItem = { value: "/tmp/", label: "tmp/" };
+    provider.applyCompletion(["/goal --repository-path /tmp"], 0, 28, nonRootItem, "/tmp");
+    expect(calls).toEqual([
+      { item: nestedItem, prefix: "/tmp/src" },
+      { item: nonRootItem, prefix: "/tmp" },
+    ]);
   });
 
   it("gates root command probes before absolute path fallback", async () => {

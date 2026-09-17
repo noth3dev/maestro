@@ -291,6 +291,29 @@ export function createSlashCommandAutocompleteProvider(provider: AutocompletePro
         return { ...syntheticResult, lines: mappedLines };
       }
 
+      const normalizedSlash = normalizeSlashContext(lines, cursorLine, cursorCol);
+      const beforePrefix = textBeforeCursor.slice(0, Math.max(0, textBeforeCursor.length - prefix.length));
+      const trimmedTextBeforeCursor = textBeforeCursor.trimStart();
+      const isAbsoluteRootPath = normalizedSlash !== undefined
+        && slashArgumentText(lines, cursorLine, cursorCol) === undefined
+        && trimmedTextBeforeCursor.startsWith("/")
+        && !/[ \t]/.test(trimmedTextBeforeCursor)
+        && beforePrefix.trim() === ""
+        && prefix.startsWith("/")
+        && !prefix.slice(1).includes("/")
+        && item.value.startsWith(prefix)
+        && isPathShapedValue(item.value)
+        && item.label.endsWith("/") === item.value.endsWith("/");
+      if (isAbsoluteRootPath) {
+        return provider.applyCompletion(
+          lines,
+          cursorLine,
+          cursorCol,
+          { ...item, value: item.value.slice(1) },
+          prefix.slice(1),
+        );
+      }
+
       const optionPrefix = slashOptionPrefix(lines, cursorLine, cursorCol, item, prefix);
       return provider.applyCompletion(lines, cursorLine, cursorCol, item, optionPrefix ?? prefix);
     },
