@@ -42,7 +42,7 @@ function slashOptionPrefix(
 }
 
 function isPathShapedValue(value: string): boolean {
-  return value.includes("/") || value.startsWith(".") || value === "~" || value.startsWith("~/");
+  return value.includes("/") || value.includes("\\") || value.startsWith(".") || value === "~" || value.startsWith("~/");
 }
 
 function activeQuotedValue(textBeforeCursor: string): string | undefined {

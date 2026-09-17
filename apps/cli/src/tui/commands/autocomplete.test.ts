@@ -776,6 +776,35 @@ describe("command argument autocomplete", () => {
     expect(calls).toEqual([false]);
   });
 
+  it("falls back for Windows-style path separators", async () => {
+    const calls: boolean[] = [];
+    const provider = createSlashCommandAutocompleteProvider({
+      getSuggestions(_lines, _cursorLine, _cursorCol, options) {
+        calls.push(options.force ?? false);
+        return options.force
+          ? Promise.resolve({ items: [{ value: "path", label: "path" }], prefix: "path" })
+          : Promise.resolve(null);
+      },
+      applyCompletion: () => ({ lines: [], cursorLine: 0, cursorCol: 0 }),
+    });
+    const signal = new AbortController().signal;
+    const windowsPaths = [
+      String.raw`/git goal-branch --repository-path C:\repo\src`,
+      String.raw`/git goal-branch --repository-path src\file`,
+      String.raw`/git goal-branch --repository-path "C:\repo\src`,
+    ];
+
+    for (const path of windowsPaths) {
+      expect(await provider.getSuggestions([path], 0, path.length, { signal, force: true })).not.toBeNull();
+      expect(calls).toEqual([false, true]);
+      calls.length = 0;
+    }
+
+    const plainText = "/conversation turn --text hello world";
+    expect(await provider.getSuggestions([plainText], 0, plainText.length, { signal, force: true })).toBeNull();
+    expect(calls).toEqual([false]);
+  });
+
   it("preserves the action when applying slash option completion", async () => {
     const provider = createSlashCommandAutocompleteProvider(
       new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),
