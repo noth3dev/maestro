@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mapError } from "./api-error.js";
 import Fastify, { type FastifyInstance } from "fastify";
+import type { EventCursor } from "@maestro/contracts";
 import type { AccountLoginStore, OperatorAuthentication, OperatorContext } from "@maestro/persistence";
 import type { PersonaInspectionService } from "./persona-inspection-service.js";
 
