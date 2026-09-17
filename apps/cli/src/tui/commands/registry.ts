@@ -73,7 +73,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "certifications list": ["--goal-id"],
   "certification list": ["--goal-id"],
   "git status": ["--goal-id"],
-  "git goal-branch": ["--repository-path", "--branch-name", "--base-revision"],
+  "git goal-branch": ["--goal-id", "--repository-path", "--branch-name", "--base-revision", "--command-id"],
   "git department-branch": ["--council-id", "--department-id", "--command-id"],
   "git worker-worktree": ["--worker-id", "--worktree-path", "--command-id"],
   "git goal-revision": ["--goal-id"],

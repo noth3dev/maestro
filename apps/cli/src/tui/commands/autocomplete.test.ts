@@ -106,15 +106,19 @@ describe("command argument autocomplete", () => {
     expect(workers?.getArgumentCompletions?.("list --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
   });
 
-  it("suggests goal branch repository and revision inputs", () => {
+  it("suggests goal branch scope, branch, and idempotency inputs", () => {
     const git = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "git");
     expect(git?.getArgumentCompletions?.("goal-branch --")).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({ value: "--goal-id " }),
         expect.objectContaining({ value: "--repository-path " }),
         expect.objectContaining({ value: "--branch-name " }),
         expect.objectContaining({ value: "--base-revision " }),
+        expect.objectContaining({ value: "--command-id " }),
       ]),
     );
+    expect(git?.getArgumentCompletions?.("goal-branch --goal")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+    expect(git?.getArgumentCompletions?.("goal-branch --command")).toEqual([expect.objectContaining({ value: "--command-id " })]);
     expect(git?.getArgumentCompletions?.("goal-branch --repo")).toEqual([expect.objectContaining({ value: "--repository-path " })]);
   });
 
