@@ -506,6 +506,11 @@ describe("command argument autocomplete", () => {
     expect(evidence?.getArgumentCompletions?.("capture --c")).toEqual(expect.arrayContaining([expect.objectContaining({ value: "--content-base64 " }), expect.objectContaining({ value: "--correlation-id " })]));
   });
 
+  it("does not suggest an ignored project scope for full-access selection", () => {
+    const capability = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "capability");
+    expect(capability?.getArgumentCompletions?.("select-full-access-mode --p")).toEqual([]);
+  });
+
   it("does not suggest ignored project scope for evidence actions", () => {
     const evidence = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "evidence");
     for (const action of ["capture", "list", "bundle"]) {
