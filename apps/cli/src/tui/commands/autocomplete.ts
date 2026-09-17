@@ -6,6 +6,7 @@ const options: Record<string, readonly string[]> = {
   "critical-action request": ["--goal-id", "--action", "--target", "--policy-version", "--budget-effect-cents", "--command-id"],
   "goal create": ["--project-id", "--contract-id", "--command-id"],
   "task-contract create": ["--contract-id", "--substance-json", "--command-id"],
+  "task-contract amend": ["--contract-id", "--expected-version", "--substance-json", "--command-id"],
   "task-contract get": ["--contract-id"],
   "task-contract confirm": ["--contract-id", "--version", "--content-hash"],
   "goal get": ["--goal-id", "--project-id"],
