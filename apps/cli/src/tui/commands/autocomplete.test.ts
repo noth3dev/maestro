@@ -446,6 +446,17 @@ describe("command argument autocomplete", () => {
     expect(conversation?.getArgumentCompletions?.("create --m")).toEqual([expect.objectContaining({ value: "--model " })]);
   });
 
+  it("does not suggest an ignored project scope for conversation creation", () => {
+    const conversation = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "conversation");
+    expect(conversation?.getArgumentCompletions?.("create --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--goal-id " }),
+        expect.objectContaining({ value: "--model " }),
+      ]),
+    );
+    expect(conversation?.getArgumentCompletions?.("create --p")).toEqual([]);
+  });
+
   it("does not suggest an ignored project scope for conversation turns", () => {
     const conversation = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "conversation");
     expect(conversation?.getArgumentCompletions?.("turn --")).toEqual(
