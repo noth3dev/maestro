@@ -28,5 +28,5 @@ export function createCommandAutocompleteItems(registry: CommandRegistry): Slash
     },
   }));
   const models = commands.find((command) => command.name === "models");
-  return models === undefined ? commands : [...commands, { ...models, name: "model" }];
+  return models === undefined || commands.some((command) => command.name === "model") ? commands : [...commands, { ...models, name: "model" }];
 }

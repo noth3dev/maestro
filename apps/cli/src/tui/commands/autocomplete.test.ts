@@ -678,4 +678,16 @@ describe("command argument autocomplete", () => {
       expect.objectContaining({ value: "--preview-needed " }),
     ]);
   });
+
+  it("does not duplicate the singular model autocomplete command", () => {
+    const autocomplete = createCommandAutocompleteItems(createCommandRegistry());
+    const modelCommands = autocomplete.filter((item) => item.name === "model");
+    expect(modelCommands).toHaveLength(1);
+    expect(modelCommands[0]?.getArgumentCompletions?.("use --")).toEqual([expect.objectContaining({ value: "--model " })]);
+
+    const modelsOnly = new CommandRegistry([
+      { name: "models", description: "models", actions: [{ name: "use", kind: "write", description: "use", options: ["--model"] }] },
+    ]);
+    expect(createCommandAutocompleteItems(modelsOnly).filter((item) => item.name === "model")).toHaveLength(1);
+  });
 });
